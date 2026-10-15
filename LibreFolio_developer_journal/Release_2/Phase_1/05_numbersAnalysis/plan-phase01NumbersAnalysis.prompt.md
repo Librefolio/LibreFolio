@@ -439,7 +439,7 @@ niente `./dev.py` nudo, niente `server --force`, niente altri checkout).
   catalogo dei Tool sotto carico supera i 2 s di `ToolRoute.ingress_timeout_ms`, `schemas/tools.py:83`), dopo CP-1,
   a priorità bassa: la riga va nella sezione J al prossimo checkpoint.
 
-### CP-1 — il PAC in pacchetti 🚧 (2026-10-14)
+### CP-1 — il PAC in pacchetti 🧊 (2026-10-14)
 
 Via del coordinatore dopo il commit di J-0 (`faa8ce01b`): CP-1 come proposto. Le patch vanno sul modulo dove la chiamata
 legge il nome (C4), con il controllo AST; i nomi letti fra moduli diventano pubblici; i due cicli dell'evaluator si
@@ -496,9 +496,138 @@ rompono con moduli comuni dai nomi brevi (C1).
 > - `mkdocs build` stretto: 0 avvisi; `check-links`: 95 validi; `check_source_paths.py`: 5, come la base.
 > - `git diff --check` pulito; indice uguale a `HEAD`; porta 6185 libera.
 
-#### Checkpoint A 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+#### Checkpoint A ✅ (2026-10-15) — committato dal coordinatore
 
 - Delta: 3 file spostati (cancellati al vecchio percorso, nuovi al nuovo), 3 `__init__.py` nuovi, 48 modificati
   (11 dell'app, 18 di test e diagnostica, il runner, lo skill `devpy-i18n`, 2 pagine dev, un commento TS, 13 pagine
   della devWiki, questo piano).
-- B (il taglio) parte dopo il commit di A, con lo SHA dal coordinatore.
+- Commit del coordinatore sul ramo di J: `34a609aeb` (`refactor(pac): move planner modules into packages`: 3 rinomine
+  R100, 3 aggiunti, 47 modificati, codice e devWiki insieme) e `c0e83cb1a` (`docs(journal): J CP-1A, PAC rename`).
+- Via per B con quattro indicazioni: `TODO_FUTURI.md:874` e `:2207` li aggiorna J in B; la somiglianza si controlla
+  con `cmp` o `git diff --no-index`, mai con l'indice; nella guardia dello strato i prefissi restano di pacchetto (anche
+  per `portfolio_service` in CP-8); dopo il checkpoint di B il coordinatore aggiorna la base (contiene A1
+  `769cc31cb`) e J valida la revisione combinata.
+
+#### B — taglio ✅ (2026-10-15)
+
+> **Note implementazione** (strumenti AST in `/tmp/libreFolio_j/`, sola lettura del repo fino all'`apply`; copie dei
+> tre file prima del taglio in `/tmp/libreFolio_j/pre_split/`):
+> - **Metodo**: `split.py <spec> plan|apply` taglia per definizione (righe dell'AST, commenti sopra la definizione
+>   inclusi, bande di sezione tolte), scrive i moduli con i soli import che servono e la mappa nome → modulo
+>   (`maps/<spec>.json`); `importers.py` riscrive chi importa; `mute_patch.py` controlla le patch; `text_sweep.py` e
+>   `pkg_sweep.py` cercano vecchi nomi e percorsi nel testo. Poi `ruff --select F401,I001 --fix` e black.
+> - **Prima del taglio**, 7 variabili locali rinominate perché avevano il nome di una funzione che diventa pubblica
+>   (solo nodi `Name` dentro la funzione, mai keyword né attributi): nella sorgente `asset_key` → `asset_ref` in
+>   `_build_planner_assets`, `_build_planner_prices`, `_build_planner_classifications`, `broker_key` → `broker_ref` in
+>   `_build_planner_brokers`; nell'evaluator `source_selected` → `selected_amount` in `_funding_upper_bounds`,
+>   `current_invested` → `invested_value` e `selected_funding` → `selected_value` in `_evaluate_economic_state` (le
+>   keyword `current_invested=`/`selected_funding=` restano).
+> - **Sorgente**, `services/pac_allocator/source/` (1 621 righe → 9 file): `portfolio_allocation_source` (ingresso:
+>   errori, provenienza, controllo del proprietario, `build_portfolio_planner_source`; 351), `keys` (114), `loaders`
+>   (107), `entities` (333), `classifications` (205), `wac` (304), `fx_quotes` (126), `distribution` (174).
+>   32 nomi letti fra moduli diventano pubblici. Gli import pigri restano pigri (`wac.py:95` `compute_wac_iterative`,
+>   `distribution.py:60` `PortfolioCalculationEngine`), come le stringhe di contratto (`source_ref=…`).
+> - **Evaluator**, `services/pac_allocator/evaluation/` (3 754 righe → 12 file): `evaluator` (ingresso; 490),
+>   `errors` (19), `keys` (76), `scenario` (412), `reachability` (116), `bounds` (300), `references` (624),
+>   `economics` (847), `facts` (631), `policy` (341), `candidates` (96). 39 nomi diventano pubblici; le costanti
+>   `_EXACT_ZERO/ONE/TWO` restano private, una copia per modulo che le legge (convenzione di `ledger.py`).
+> - **Schemi**, `schemas/pac_allocator/` (2 522 righe → 9 file, `pac_allocator.py` sparisce): `base` (274),
+>   `request` (414), `exact` (128), `issues` (122), `evidence` (208), `rows` (544), `solutions` (313), `results`
+>   (644). 11 nomi diventano pubblici (`exact_fraction`, `validate_weight_availability`, `OBJECTIVE_SIGN_DOMAINS`, …);
+>   nessuna classe rinominata, quindi OpenAPI e impronte dei Tool invariati.
+> - Grafo dei moduli senza cicli in tutti e tre i pacchetti; ogni modulo si importa da solo; importare i tre
+>   pacchetti non carica `pyscipopt` (lo carica `planner` → `solver`, come prima).
+> - **Chi importa**: 27 file riscritti dallo strumento (`from <modulo vecchio> import …` diviso per modulo
+>   proprietario, nomi rinominati anche nell'uso); 4 tornano identici dopo ruff e black (`compiler.py`, `solver.py`,
+>   `test_pac_planner_proof.py`, `test_pac_planner_solver.py`), `test_portfolio_api.py` e `portfolio_api.py` sono
+>   riportati a `HEAD` (vedi «Fuori pista» e i cancelli): ne restano 21 modificati. Alias di modulo: `EV.` → import diretti da `errors`;
+>   in `test_pac_planner_schemas.py` l'alias `pac_schemas` sparisce (24 nomi in import diretti) e il `getattr` sui tre
+>   cataloghi di motivi legge il modulo `base` (`pac_schema_base`), dove stanno; in `test_portfolio_allocation_source.py`
+>   alias `source_<modulo>` per i nomi spostati.
+> - **Patch (C4)**: 41 controllate dall'AST (cicli sulle tuple di nomi espansi), 0 mute. Restano sull'ingresso quelle
+>   dei nomi che l'ingresso legge (stringhe rinominate dove il nome è diventato pubblico, anche nelle tuple dei cicli);
+>   4 cambiano modulo: `_load_latest_planner_fx_rows` → `fx_quotes` (2), `_load_current_wac_fx_rows` → `wac` (2).
+>   I `_ObserveIn`/`_CancelIn` dell'evaluator cercano il nome della funzione nello stack: `_build_constraint_refs` →
+>   `build_constraint_refs` (3 stringhe).
+> - **Guardia D-J18** (`test-author`, sincrono, corsia 6185): `test_services/test_pac_planner_engine_boundaries.py`,
+>   34 test, registrato in `PAC_PLANNER_CORE_TEST_PATHS` (descrizione dell'azione aggiornata). Il motore (28 file:
+>   `pac_allocator/**` senza `source/`, più `tool_plugins/pac_allocator/**`) non importa
+>   `backend.app.services.pac_allocator.source`, `sqlalchemy`, `sqlmodel` né `backend.app.db`; `sqlmodel` e l'intero
+>   `backend.app.db` allargano dichiaratamente la decisione (`db.models`) alla regola di pacchetto. Autocontrolli: 16
+>   forme vietate e 8 permesse sintetiche, selezione su un albero di prova, presenza dei moduli noti, controllo
+>   positivo sulla sorgente vera (`loaders.py`, `fx_quotes.py` importano il database), rosso su una copia in memoria.
+> - **Testo**: `TODO_FUTURI.md:874` (→ `schemas/pac_allocator/rows.py`) e `:2207` (→ `evaluation/bounds.py`); lo
+>   skill `devpy-i18n` e il gate i18n (`evaluation/references.py:52`, dove sta `_constraint_ref`; la fixture sintetica
+>   segue: `REFERENCES_PY`); `app-state.md:276` (→ `exact.py`); il commento di `result/model.ts:338` (→ `rows.py`); il
+>   runner (`print_info` del pacchetto `source/`); commenti e docstring di `compiler`, `constraints`, `objectives`,
+>   `planner_report`, `solver` e di 6 test; 11 righe «Source files» in 11 pagine della devWiki (C6; una divisa in
+>   due), ognuna verso il modulo che definisce ciò che cita. I tre `__init__.py` hanno ora la mappa dei moduli, come `financial_math`.
+>
+> **⚠️ Fuori pista**:
+> - **Niente modulo «validazione»**: il ciclo politica ↔ evaluator annunciato al via è una ricorsione mutua, non una
+>   cucitura. Una vista con estensione SELL incorpora una base solo-acquisto che va valutata, quindi
+>   `build_exact_policy_view`, `_require_feasible_invest_only_baseline`, `_validated_policy_decisions`,
+>   `_validate_policy_view` ed `evaluate_exact_candidate` formano una componente fortemente connessa e restano insieme
+>   in `evaluator.py`. Fuori vanno i mattoni della vista (`policy.py`) e i controlli di contratto del candidato
+>   (`candidates.py`, il nome breve al posto di «validazione»).
+> - **Black su un file preesistente**: lanciato sui file toccati, black ha riformattato anche il debito di formato di
+>   `test_portfolio_api.py` (P-9). La mia modifica lì non cambiava nulla (l'import dall'ingresso resta valido): file
+>   riportato al contenuto di `HEAD`, diff vuoto.
+> - **Gate i18n rosso al primo giro mirato**: rinominata la costante della fixture (`EVALUATOR_PY` → `REFERENCES_PY`)
+>   ne avevo mancato il terzo uso (`NameError`); corretto, 195 verdi. Da allora ruff gira su tutti i file toccati dopo
+>   ogni passo sul testo.
+> - **Prosa della devWiki**: in un primo momento avevo aggiornato anche i tre passi di prosa lasciati in A; li ho
+>   riportati com'erano per tenere la regola di A (C6 riguarda le tabelle). Resta la riga J-4 del backlog.
+> - `ruff check backend scripts` dà 154 errori, tutti preesistenti in `scripts/test_runner/*`; il perimetro di
+>   `dev.py lint` è `backend/`, pulito.
+> - **Primo `all-backend` rosso su un cancello d'altri** (01:12–01:32): `utils gate-plugin-layout`, regola (c), vieta in
+>   ogni stringa sotto `backend/test_scripts` il nome puntato del pacchetto di un plugin; la guardia lo usava come
+>   valore atteso in `_EXPECTED_PACKAGES` (`tool_plugins/pac_allocator/plugin.py` → il suo pacchetto). `test-author`
+>   ha tolto quella voce (un modulo semplice si risolve come `evaluation/evaluator.py`, che resta), senza aggirare il
+>   cancello; `pac-planner-core` 264 e `gate-plugin-layout` 33 verdi. Il resto del giro era uguale alla base, più i 34
+>   test della guardia.
+> - **Due righe della devWiki perse nella ricerca**: `check_source_paths.py` ha dato 6 invece di 5. Le righe di
+>   `decisions/pac-contract-compacted-before-release.md:71` e `decisions/pac-fx-one-rate-map-direct-conversions.md:75`
+>   erano nel log della ricerca, ma fuori dalle ultime 80 righe che avevo letto (`tail`). Corrette (→ `request.py` e
+>   `base.py`; → `request.py` e `rows.py`); di nuovo 5, lo stesso insieme della base. Da allora leggo il log intero.
+>
+> **Cancelli di B** (15/10, 00:50–01:59; log in `/tmp/libreFolio_j/`):
+> - **Equivalenza AST** (`equiv.py`): le 409 definizioni di primo livello dei tre file (49 sorgente, 109 evaluator, 251
+>   schemi) stanno ognuna in un solo modulo nuovo, con AST identico dopo le rinomine pubbliche; nessun nome nuovo
+>   oltre agli import e alle copie di `_EXACT_*`. Le 7 rinomine locali sono neutre: con le variabili riportate al nome
+>   di prima, l'AST dei due file è quello di `HEAD`; la copia degli schemi prima del taglio è `HEAD` byte per byte.
+> - Grep dei vecchi percorsi e dei vecchi nomi (`text_sweep.py`, log intero): zero; restano 44 omonimi privati di
+>   altri moduli (`_asset_key`/`_cash_key` nei BRIM, `_fx_pair_key` ricavato in `constraints`/`normalize`, l'aiuto
+>   `_fx_rate` dei test, importato da `test_pac_planner_evaluator`).
+> - Patch: 41 controllate, 0 mute. Import: i 27 moduli nuovi o tagliati si importano; i tre pacchetti non caricano
+>   `pyscipopt`.
+> - 17 selettori mirati (`cp1b_targeted/summary.txt`): `pac-planner-core` 264 (230 + 34 della guardia), `-evaluator`
+>   170, `-oracle` 24, `-policies` 50, `-proof` 30, `-report` 42, `-service` 80, `-solver` 40, `-wire-numbers` 39,
+>   `portfolio-allocation-source` 89, `tools-registry` 109, `financial-math` 212; `schemas pac-planner` 552;
+>   `api pac-planner-tool` 12, `api tools` 7, `api portfolio` 51; `utils gate-i18n-usage` 195 (dopo la correzione);
+>   `utils gate-plugin-layout` 33.
+> - **`all-backend`** (01:39–01:59, `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600`, l'override documentato, per non cadere in
+>   J-2 mentre il server ricostruiva frontend e sito): 7/7, «ALL BACKEND TESTS PASSED»; 23 invocazioni, **12 999
+>   passed, 28 skipped, 0 failed**: identiche alla base tranne la prima (`services`, 6 436 → 6 470), cioè i 34 test
+>   della guardia.
+> - `dev.py api sync`: `generated.ts`, `generated-tools.ts`, `tool-contract-map.generated.ts` e
+>   `tool-contracts.openapi.json` identici alla base (impronta dei Tool `202402e5…`); `openapi.json` differisce solo
+>   in `info.version` (`v1.2.0-43-gc0e83cb1a-dirty`): rimessa la stringa della base, l'hash torna `13025306…`.
+> - `dev.py lint`: pulito. Black sui file toccati: pulito, tranne `test_i18n_usage_gate.py` col delta di `HEAD`
+>   (debito preesistente). Prettier su `model.ts`: pulito. Codice morto: 36 reperti come la base, cambiano solo
+>   righe (`normalize.py`, l'ingresso della sorgente).
+> - `mkdocs build` stretto: 0 avvisi, 3 012 URL relativi risolti; `check-links`: 95 validi; `check_source_paths.py`:
+>   5, lo stesso insieme della base.
+> - `dev.py test check-orphans`: ogni test registrato è raggiungibile da un'azione `all` (264 file del backend).
+> - Dopo i cancelli, `api/v1/portfolio_api.py` è tornato al contenuto di `HEAD`: il suo diff era di sola forma (lo
+>   strumento aveva riunito l'import dall'ingresso togliendo la virgola finale; AST identico a `HEAD`), un conflitto
+>   possibile in meno con A. Le prove valgono: il file provato aveva lo stesso AST.
+> - `git diff --check` pulito; indice vuoto; porta 6185 libera.
+
+#### Checkpoint B 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+
+- Delta: 26 file nuovi (25 moduli, la guardia), 1 cancellato (`schemas/pac_allocator/pac_allocator.py`), 47
+  modificati (15 dell'app, 14 di test e diagnostica, il runner, lo skill `devpy-i18n`, una pagina dev, un commento TS,
+  `TODO_FUTURI.md`, 11 pagine della devWiki, il backlog, questo piano).
+- Backlog, sezione J: G-8 (dal coordinatore) e J-4 (prosa della devWiki).
+- Dopo il commit: il coordinatore aggiorna la base (con A1 `769cc31cb`) e J valida la revisione combinata.
