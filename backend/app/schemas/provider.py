@@ -201,8 +201,8 @@ class FAProviderConfigBase(StrictModel):
     @model_validator(mode="after")
     def validate_provider_params_with_plugin(self):
         """Validate provider_params using the plugin's validate_params method."""
-        from backend.app.services.asset_source import AssetSourceError  # noqa: PLC0415 — lazy import / avoid circular
-        from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: PLC0415 — avoid circular import
+        from backend.app.services.assets.base import AssetSourceError  # noqa: PLC0415 — lazy import / avoid circular
+        from backend.app.services.assets.registry import AssetProviderRegistry  # noqa: PLC0415 — avoid circular import
 
         provider = AssetProviderRegistry.get_provider_instance(self.provider_code)
         if not provider:

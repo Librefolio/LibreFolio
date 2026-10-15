@@ -60,7 +60,7 @@ La [Guida alla teoria finanziaria](../../financial-theory/instruments/transactio
 
 ### 🔗 Transazioni abbinate {: #composite-transactions }
 
-Un'operazione abbinata viene registrata come due transazioni collegate, che il modulo mostra come una sola, con un lato **Da** e un lato **A**. Ogni lato ha la propria data, e la freccia **Inverti lati** capovolge la direzione.
+Un'operazione abbinata viene registrata come due transazioni collegate, che il modulo mostra come una sola, con un lato **Da** e un lato **A**. Ogni lato ha la propria data, e la freccia **Inverti lati** capovolge la direzione. In un cambio valuta le due date di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.
 
 | Tipo | Cosa registra | Teoria |
 |------|-----------------|--------|

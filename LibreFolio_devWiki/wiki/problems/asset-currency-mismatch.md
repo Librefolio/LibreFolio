@@ -54,4 +54,4 @@ Without this design, portfolio totals could be silently calculated in mixed curr
 |------|------|
 | PriceHistory model | `backend/app/db/models.py` |
 | Asset model | `backend/app/db/models.py` |
-| FX conversion service | `backend/app/services/fx.py` |
+| FX conversion service | `backend/app/services/fx/conversion.py` |

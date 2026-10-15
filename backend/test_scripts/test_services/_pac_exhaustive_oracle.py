@@ -32,10 +32,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import product as _cartesian_product
 
-from backend.app.services.pac_allocator.evaluator import (
-    ExactEvaluatorError,
-    evaluate_exact_candidate,
-)
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
+from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -122,7 +120,7 @@ def _ordered_objective_refs(view: ExactPolicyView) -> tuple[ObjectiveRef, ...]:
     carries unique contiguous ordinals starting at one, but that check
     does not by itself guarantee storage order matches ordinal order —
     this sorts explicitly rather than trusting tuple position, so a future
-    refactor of `_build_objective_refs` cannot silently break the
+    refactor of `build_objective_refs` cannot silently break the
     lexicographic order used here.
     """
     return tuple(sorted(view.objectives, key=lambda ref: ref.ordinal))

@@ -16,18 +16,21 @@ from urllib.parse import parse_qs, urlparse
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 try:
     from borsa_italiana_scraping import (

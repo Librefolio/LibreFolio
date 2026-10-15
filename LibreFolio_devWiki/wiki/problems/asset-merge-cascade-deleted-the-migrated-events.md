@@ -52,8 +52,8 @@ double quotes inside a `Field(description=…)`, so a quote there produced inval
 
 | Role | Path |
 |------|------|
-| Merge service | `backend/app/services/asset_sources/crud.py` (`merge_assets`) |
-| Merge endpoint | `backend/app/api/v1/assets.py` |
+| Merge service | `backend/app/services/assets/crud.py` (`merge_assets`) |
+| Merge endpoint | `backend/app/api/v1/assets/crud.py` |
 | Foreign keys | `backend/app/db/models.py` (`AssetEvent.provider_assignment_id`, `Transaction.asset_event_id`) |
 | Tests AM-006, AM-009 | `backend/test_scripts/test_db/test_asset_merge.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` |

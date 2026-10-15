@@ -10,7 +10,16 @@ The system is based on three key components:
 2. **Plugin Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`, `SignalPluginRegistry`, `ToolPluginRegistry`).
 3. **Registration Decorator**: `@register_provider` for provider systems or `@register_plugin` for non-provider plugin systems.
 
-The registries and both decorators live in `backend/app/services/provider_registry.py`. The one exception is `ToolPluginRegistry`, in `backend/app/services/tools/registry.py`, which builds on the same base class.
+Each family keeps its registry in its own runtime package:
+
+- `AssetProviderRegistry` in `backend/app/services/assets/registry.py`
+- `FXProviderRegistry` in `backend/app/services/fx/registry.py`
+- `BRIMProviderRegistry` in `backend/app/services/brim/registry.py`
+- `SignalPluginRegistry` in `backend/app/services/signals/registry.py`
+- `RiskAnalyticRegistry` in `backend/app/services/risk/registry.py`
+- `ToolPluginRegistry` in `backend/app/services/tools/registry.py`
+
+`backend/app/services/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
 
 ### 🗺️ High-Level Flow
 

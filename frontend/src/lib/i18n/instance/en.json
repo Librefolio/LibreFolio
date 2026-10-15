@@ -1,0 +1,32 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Instance notices"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Sessions are signed with a key set by the administrator.",
+        "ephemeral": "No session signing key is set: every restart signs every user out.",
+        "short": "The session signing key from {source} is {length} characters long: use at least {minimum} random characters.",
+        "unreadable": "The session signing key cannot be read: {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Every secret is set in one place only.",
+        "found": "Set both directly and through a file: {variables}. The direct value wins and the file is ignored."
+      },
+      "instanceKey": {
+        "ok": "The instance key is usable.",
+        "unusable": "The instance key cannot be used: {reason}",
+        "permissions": "{path} is open to other users: the folder should be 0700 and the file 0600."
+      },
+      "sessionCookie": {
+        "ok": "The session cookie is Secure whenever the browser uses HTTPS.",
+        "never": "The session cookie is also sent over plain HTTP (SESSION_COOKIE_SECURE=never)."
+      },
+      "logLevel": {
+        "ok": "The log level suits production.",
+        "verbose": "The log level is {log_level}: the log records operational detail; INFO is enough in production."
+      }
+    }
+  }
+}

@@ -110,7 +110,7 @@ invent balancing rows.
 | Role | Path |
 |------|------|
 | Upload, list, access, parse, and duplicate endpoints | `backend/app/api/v1/brokers.py` |
-| File metadata and broker-specific storage | `backend/app/services/brim_provider.py` |
+| File metadata and broker-specific storage | `backend/app/services/brim/brim_provider.py` |
 | Upload/parse DTOs and fake-ID contract | `backend/app/schemas/brim.py` |
 | Multi-file broker assignment UI | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |

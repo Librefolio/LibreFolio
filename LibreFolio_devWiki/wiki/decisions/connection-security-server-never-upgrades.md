@@ -54,11 +54,11 @@ behind a reverse proxy even that is a header anyone can forge.
 | Verdict (`assessConnection`, `classifyHost`) | `frontend/src/lib/utils/security/connectionSecurity.ts` |
 | Store | `frontend/src/lib/stores/app/connectionSecurityStore.ts` |
 | Indicator (sidebar shield, admin cookie line) | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
-| Endpoint `GET /system/connection` | `backend/app/api/v1/system.py` |
+| Endpoint `GET /system/connection` | `backend/app/api/v1/system/connection.py` |
 | Response schema | `backend/app/schemas/system.py` |
 | Address classes (never returned) | `backend/app/utils/runtime/network.py` |
 | Cookie `Secure` decision | `backend/app/api/v1/auth.py` |
-| Cookie mode setting | `backend/app/config.py` |
+| Cookie mode setting | `backend/app/config/__init__.py` |
 | E2E | `frontend/e2e/layout/connection-security.spec.ts` |
 | User doc | `mkdocs_src/docs/user/connection-security.en.md` |
 | Admin doc (checking a deployment, since 2026-10-12) | `mkdocs_src/docs/admin/connection_checks.en.md` |

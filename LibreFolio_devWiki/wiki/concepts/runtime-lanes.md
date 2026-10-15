@@ -57,7 +57,7 @@ write: [[problems/fast-forward-blocked-by-a-dirty-file]].
 | `server --port --data-dir`; gallery `--test-port` | `dev.py` |
 | `configure_test_runtime`, readiness identity | `scripts/cli_base.py` |
 | `test --test-port --data-dir` | `scripts/test_runner/_cli.py` |
-| `validate_test_data_dir` | `backend/app/config.py` |
+| `validate_test_data_dir` | `backend/app/config/__init__.py` |
 | Tests (propagation, guards, readiness, ownership) | `backend/test_scripts/test_utilities/test_runtime_isolation.py` |
 | Skill note on `PIPENV_CUSTOM_VENV_NAME` | `.github/skills/devpy-tools/devpy/SKILL.md` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md` |

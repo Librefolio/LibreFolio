@@ -65,12 +65,9 @@ from typing import Callable
 
 import pytest
 
-from backend.app.services.pac_allocator.evaluator import (
-    ExactEvaluatorError,
-    build_exact_policy_view,
-    evaluate_exact_candidate,
-    exact_decision_id,
-)
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (

@@ -28,9 +28,7 @@ lib/components/assets/ScheduledInvestmentEditor.svelte	107	rgb(209 213 219)	rgb(
 lib/components/assets/providerProbe.ts	0	rgba(255,255,255,0.2)
 lib/components/auth/AskAdminModal.svelte	27
 lib/components/auth/DonationPopupModal.svelte	28	#ffffff
-lib/components/auth/ForgotPasswordCard.svelte	17	#ffffff
-lib/components/auth/LoginCard.svelte	20	#ffffff
-lib/components/auth/RegisterCard.svelte	28	#ffffff
+lib/components/auth/ForgotPasswordCard.svelte	4
 lib/components/auth/UpdateAvailableModal.svelte	25	#334155×2	#e2e8f0×2
 lib/components/brokers/BrokerCard.svelte	68
 lib/components/brokers/BrokerDiscoveryCard.svelte	9
@@ -212,8 +210,6 @@ lib/components/ui/feedback/Tooltip.svelte	0	#1f2937	#61666f	#93c5fd	rgb(0 0 0/0.
 lib/components/ui/input/DistributionEditor.svelte	30
 lib/components/ui/input/ExactDecimalInput.svelte	10
 lib/components/ui/input/ExactQuantityInput.svelte	0	oklch(0.637 0.237 25.331/0.7)	oklch(0.765 0.177 163.223/0.7)
-lib/components/ui/input/PasswordInput.svelte	10
-lib/components/ui/input/PasswordStrength.svelte	24
 lib/components/ui/input/TagInput.svelte	19	#334155×2	#e2e8f0×2
 lib/components/ui/media/AssetPickerModal.svelte	0	#059669	#10b981×6	#143326	#1a2332	#1a4031×6	#1f2937×4	#374151×12	#4b5563×5	#6b7280×6	#9ca3af×7	#d1d5db×3	#dc2626	#e5e7eb×9	#f3f4f6×7	#f9fafb	rgba(0,0,0,0.5)	rgba(255,255,255,0.6)	white×6
 lib/components/ui/media/FileEditModal.svelte	0	#059669	#10b981×2	#111827×2	#143326	#1a4031×2	#374151×10	#4b5563×4	#6b7280×4	#9ca3af×3	#d1d5db×6	#d97706×3	#dc2626	#e5e7eb×4	#f3f4f6×4	#f59e0b×2	#f9fafb	#fbbf24	#fecaca	#fef2f2	rgba(220,38,38,0.1)	rgba(220,38,38,0.3)	rgba(245,158,11,0.1)	rgba(245,158,11,0.2)	white×3
@@ -316,6 +312,5 @@ routes/(app)/fx/[pair]/+page.svelte	169
 routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
-routes/+error.svelte	11
-routes/+page.svelte	5
+routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
