@@ -375,8 +375,8 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   «Da» e «A» (`TransactionFormModal.svelte:1645`, `:1693`), un suggerimento: di solito coincidono, e si separano quando
   il broker accredita la nuova valuta in un altro giorno. La stessa frase nella guida (`user/transactions/form.*.md`).
   Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 31.
-  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): il suggerimento nel form
-    (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    il suggerimento nel form (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
 - **C-90 · «Testa configurazione» dice che è solo una prova** — minimo; utente C, chat del 04/09. Accanto al risultato
   dello storico, una riga: la prova legge gli ultimi giorni, e alla creazione dell'asset LibreFolio scarica tutto lo
   storico disponibile. Oggi lo dice solo la guida (`user/assets/create-edit.en.md:67`). Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 11.
@@ -395,6 +395,17 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Non è un rosso; da solo il test passa senza avvisi. Dominio dell'AI Export: a J dopo il CP-1, con la skill
   `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
   «Revisione combinata `123c21efc`», passo 6.
+  - 15/10: non riprodotto nella `all-backend` di J sulla revisione `b17f8fb85` (13 810 passed, nessun avviso).
+- **C-94 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — basso, infrastruttura;
+  J, 14/10 (era J-2), con una nota del coordinatore. In un worktree nuovo il primo `all-backend` cade anche dopo
+  `npm ci`: prima di uvicorn `dev.py server --test` fa la build di debug del frontend (~4 min) e quella del sito, se
+  mancano, dentro `STARTUP_TIMEOUT` (`scripts/test_runner/_server.py:48`), con lo stdout in `DEVNULL` (`:274-275`).
+  Lo stesso succede dopo un merge che cambia il frontend o la doc. Rimedio di oggi, scritto in
+  `.github/copilot-instructions.md`: `front build --debug` e `mkdocs build` prima della run, oppure
+  `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600`. Cura proposta: le build prima che parta il tempo massimo, con un messaggio
+  che dica cosa sta costruendo. Nota: senza `node_modules` il runner arriva a `npx` attraverso `generate-api`, e
+  dovrebbe fermarsi subito. Il runner è condiviso: va assegnato a una sessione. Dettagli: piano J, §10
+  «`all-backend` — la base».
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -569,10 +580,11 @@ sezione T, e P-7 (chiudere le issue #32 e #35) è un compito del rilascio, non d
 - **P-15 · Altre etichette inglesi scritte nel codice** — basso; test-author di P (11/10). `DataEditor`: «Date», i
   contatori «modified/deleted/new», un `aria-label`, «Reset layout»; `BrokerSharingPanel:832`: «max». Dettagli: idem,
   8.1 e 8.
-  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): i contatori e l'`aria-label` della levetta delle righe
-    vecchie in `DataEditor`, «Help» e «Close» di `DataImportModal` (W-B8). «Date» era già `common.date`. Restano
-    «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y
-    (decisione Q6 del piano 04).
+  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    i contatori e l'`aria-label` della levetta delle righe vecchie in `DataEditor`, «Help» e «Close» di
+    `DataImportModal` (W-B8). «Date» era già `common.date`. Restano «Reset layout»
+    (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y (decisione Q6 del
+    piano 04).
 
 ## T · Matematica finanziaria e riordino (43)
 
@@ -1713,8 +1725,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
     stesso problema sotto il titolo del saldo.
   - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
-  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): visto a schermo, poi il form divide i problemi per codice
-    come il bulk editor (`isBulkBalanceIssue`).
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    visto a schermo, poi il form divide i problemi per codice come il bulk editor (`isBulkBalanceIssue`).
 
 ## 09 · Feedback e backlog strutturale
 
@@ -2185,7 +2197,37 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 
 ## J · Numeri e analisi (fase 01)
 
-Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md).
+Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md). Righe scritte da J
+il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 scritte il 15/10, nel checkpoint CP-1.
+
+- **J-1 · Copie della matematica comune fuori dall'inventario del 43** — basso; J, 14/10 (analisi). Ognuna va nel
+  lotto che unifica la sua famiglia:
+  - `risk/metrics.py:741` (giorni di calendario → osservazioni, con 365) → U4a, CP-10;
+  - `portfolio_service.py:824` (G/L % della posizione) → U4b, CP-4;
+  - `series_preparation.py:184` (fattore di cambio ricavato dal close) → U1, CP-11;
+  - `fx.py:717` (inversione del tasso nella catena delle rotte) → U1, nei file di X dopo il suo PL4 (D-J17);
+  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
+  - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
+    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+
+  Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
+- ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
+  dal coordinatore il 15/10 (runner condiviso), come C-94.
+- **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
+  parte»), ripresa da J, che ora possiede il rischio. `risk/quant/quantlib_worker.py:116,195` e
+  `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
+  essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
+  [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
+- **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
+  assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
+  `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
+  «about plugin diagnostics» è andata in rosso nella galleria. Proposte di G: un limite proprio per il catalogo, oppure
+  un catalogo in cache. Prima un rosso che lo riproduca. Dettagli: piano J, §10 «Checkpoint J-0».
+- **J-4 · Prosa della devWiki con i percorsi del PAC di prima del riordino** — basso, documentazione; J, 15/10 (CP-1).
+  C6 riguarda le tabelle «Source files», aggiornate in CP-1; restano tre passi di prosa al presente che citano i file
+  com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,
+  `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
+  J, §10 «A — rinomina», «Restano di proposito».
 
 ## Z · Sospensione e risveglio (fase 01)
 
