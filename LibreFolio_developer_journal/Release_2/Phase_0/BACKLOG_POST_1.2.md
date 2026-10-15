@@ -2368,6 +2368,8 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     test che lascia aperta una connessione aiosqlite creata nel thread principale ha un ERROR al proprio teardown, con
     lo stack di creazione; elenco esplicito `AIOSQLITE_LEAK_EXCEPTIONS`, vuoto. Self-test in `utils
     gate-aiosqlite-leak` (9). `all-backend --workers 2` verde senza rapporti. Dettagli: piano J, §10 «J-6».
+  - In `dev_release2` con `e2cb55054` (J-6 `b49a54645`); la regola è la n. 7 di
+    `.github/instructions/backend-testing.instructions.md`.
 
 ## Z · Sospensione e risveglio (fase 01)
 

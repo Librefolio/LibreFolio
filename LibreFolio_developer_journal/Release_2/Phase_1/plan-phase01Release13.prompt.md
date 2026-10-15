@@ -1057,3 +1057,24 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > traduzione delle pagine admin). Note per gli altri: a Z, per Z2, `/system/ready`, `/system/health` e `/system/info`
 > anonimo non contano come attività dell'utente; ad A, `signed_in_user` chiama `get_current_user` direttamente, quindi
 > un override in `dependency_overrides` non arriva a `/system/info`. Poi CP5b dopo la finestra della galleria, e CP6.
+
+### J-6, guardia di suite sulle connessioni aiosqlite, integrato ✅ (2026-10-15, 07:45)
+
+> **Note implementazione**: `e2cb55054`, merge di `e6016fca7` su `2c699f85c` (J-6 `b49a54645`). Una fixture
+> autouse nel `conftest.py` condiviso: un test che lascia aperta una connessione aiosqlite creata da lui, nel thread
+> principale, va in ERROR al proprio teardown, con lo stack di creazione. Elenco delle eccezioni esplicito e vuoto;
+> self-test in `utils gate-aiosqlite-leak` (9). Base aggiornata dal coordinatore in `c7a2b050e`, con un conflitto nel
+> backlog (la chiusura di J-5 accanto a J-6) risolto tenendo le due righe. Validazione di J sul fuso: `all-backend
+> --workers 2` 14 199 passed, 29 skipped, 0 failed, nessun rapporto della guardia; raccolta +9, i soli self-test.
+> Senza nuovo controllo: dopo la validazione sono entrati solo la versione fissata nelle gallerie e i record. La
+> regola è la n. 7 di `.github/instructions/backend-testing.instructions.md`, con il testo proposto da J. Fragilità
+> segnalata da test-author: cinque file dell'AI Export creano motori in memoria senza `dispose()`; passano perché non
+> eseguono SQL, e se un giorno lo faranno la guardia nominerà il test. Niente CHANGELOG: è interno ai test. Il lavoro di
+> J autorizzato dopo il CP-1 è chiuso (C-93, G-8, J-6); CP-2 e seguenti aspettano le decisioni 26–30.
+
+### W E0 committato, FE8a annunciato (2026-10-15, 07:55)
+
+> **Note implementazione**: E0 (`692fbae39`: eventi distinti per data e tipo nel CSV e nel selettore della data,
+> X-R9, W-B15), base aggiornata in `2bf015afa`; entra dopo la finestra della galleria. FE8a (tagli delle tre modali
+> delle transazioni) annunciato al coordinatore colori, che ha dato via libera: nessun loro annuncio aperto, T li
+> converte nell'ondata W4 sui pezzi già tagliati. Annuncio aperto nella tabella del §7 (`2c699f85c`).
