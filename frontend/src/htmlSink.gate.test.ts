@@ -65,7 +65,7 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/components/ui/display/CurrencyAmount.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
     {file: 'src/routes/(app)/dashboard/+page.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/transactions/modals/TransactionBulkModal.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/components/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},

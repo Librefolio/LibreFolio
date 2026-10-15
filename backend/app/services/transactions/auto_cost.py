@@ -93,30 +93,14 @@ class TransactionAutoCostMixin:
                 )
                 continue
 
-            # Get asset currency
-            asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
-            asset_currency = asset_result.scalar_one_or_none() or "USD"
-
             # Extract currency hint from cost_basis_override when mode is auto
             ccy_hint: str | None = None
             if getattr(schema_item, "cost_basis_override", None) is not None:
                 ccy_hint = schema_item.cost_basis_override.code
 
-            # Compute WAC (session sees all flushed rows)
-            wac_result = await compute_wac_iterative(
-                self.session,
-                broker_id=source_broker_id,
-                asset_id=db_tx.asset_id,
-                as_of_date=as_of_date,
-                asset_currency=asset_currency,
-                excluded_tx_ids=excluded,
-                target_currency_override=ccy_hint,
-            )
-
-            # Write cost_basis_override on the DB row
-            if wac_result.wac:
-                db_tx.cost_basis_override = wac_result.wac.amount
-                db_tx.cost_basis_currency = wac_result.wac.code
+            # Compute WAC (session sees all flushed rows) and write it on the DB row
+            wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded, as_of_date), ccy_hint)
+            self._write_auto_cost(db_tx, wac_result)
 
             # Build response item (reuse WACPreviewResultItem with batch-context fields)
             is_detail = getattr(schema_item, "cost_basis_mode", None) == "auto-detail"
@@ -135,6 +119,33 @@ class TransactionAutoCostMixin:
             )
 
         return results if results else None
+
+    async def _auto_cost(self, db_tx: Transaction, source: tuple[int, list[int], date_type], ccy_hint: str | None = None) -> WACPreviewResultItem:
+        """The Auto cost basis of ``db_tx``: the average cost of the pool ``source`` names (``_auto_cost_source``).
+
+        Writes nothing (``_write_auto_cost`` does). ``delete_by_broker`` calls it too, for a receiving TRANSFER
+        leg without a cost basis, before it changes any row.
+        """
+        source_broker_id, excluded, as_of_date = source
+        asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
+        asset_currency = asset_result.scalar_one_or_none() or "USD"
+        return await compute_wac_iterative(
+            self.session,
+            broker_id=source_broker_id,
+            asset_id=db_tx.asset_id,
+            as_of_date=as_of_date,
+            asset_currency=asset_currency,
+            excluded_tx_ids=excluded,
+            target_currency_override=ccy_hint,
+        )
+
+    @staticmethod
+    def _write_auto_cost(db_tx: Transaction, wac_result: WACPreviewResultItem) -> None:
+        """Write an Auto cost on ``db_tx``: the override and its currency together, and only when the average
+        exists — a missing conversion leaves the row without a cost basis."""
+        if wac_result.wac:
+            db_tx.cost_basis_override = wac_result.wac.amount
+            db_tx.cost_basis_currency = wac_result.wac.code
 
     async def _find_created_tx_for_wac(
         self,

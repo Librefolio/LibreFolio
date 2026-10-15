@@ -6,7 +6,8 @@
 
 Application pages and routing structure. All authenticated routes are under `(app)/`. The build is
 a static SPA: SSR is off in the root `+layout.ts` (FastAPI serves the static files), and only the
-login page is prerendered.
+login page is prerendered; the other routes, the public link pages included, are served through the
+SPA fallback.
 
 ## 🗺️ Page Structure
 
@@ -17,6 +18,10 @@ frontend/src/routes/
 ├── +page.svelte              # Login page (public)
 ├── +page.ts                  # prerender = true
 ├── +error.svelte             # Error page
+├── invite/
+│   └── +page.svelte          # Invitation link page (public, /invite#token=…)
+├── reset-password/
+│   └── +page.svelte          # Password-reset link page (public, /reset-password#token=…)
 ├── (app)/                    # Authenticated routes
 │   ├── +layout.svelte        # App shell: auth check, bootstrap/onboarding gate, sidebar, header, guide host
 │   ├── +layout.ts            # ssr = false, prerender = false
@@ -57,10 +62,21 @@ frontend/src/routes/
 ### 🔐 Login Page (`/`)
 
 - Public access
-- **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals)
+- **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals), inside
+  `AuthPageFrame`
+- **Register here** only while the instance accepts anyone (`registration_mode` `open`)
 - Animated background with waves and chart lines
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login
+
+### 🔗 Account Link Pages (`/invite`, `/reset-password`)
+
+- Public access, not prerendered: the SPA fallback serves them
+- The token of the link travels in the fragment (`#token=…`) and leaves the address bar on load
+- `/invite` opens **RegisterCard** in invitation mode; `/reset-password` opens
+  **ResetPasswordCard**; a link that cannot be used shows **LinkStatusCard**
+- Both end on the login page, with a success message
+- Details: [Account Link Pages](../components/features/auth.md#link-pages)
 
 ### 👋 Welcome (`/welcome`)
 

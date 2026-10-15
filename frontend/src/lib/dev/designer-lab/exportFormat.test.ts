@@ -280,6 +280,93 @@ describe('buildExport', () => {
     });
 });
 
+describe('buildExport — a colour role, used through the inline aliases of `@theme inline`', () => {
+    const ROLE = '--lf-surface-card';
+    const TOKENS = 'src/lib/theme/tokens.css';
+    const alias = (name: string, role: string, line: number) => ({name, defs: [{file: 7, name, value: `var(${role})`, line, zone: 'css-file' as const, selector: null, theme: 'both' as const, scope: 'scoped' as const, inline: true, alias_of: role}], uses: 0, files: {}, use_sites: []});
+    // The files of every catalogue of this file, plus 7: the stylesheet of the roles.
+    const roles = catalogOf({
+        files: [...CATALOG.files, TOKENS],
+        css_vars: [
+            ...CATALOG.css_vars,
+            alias('--color-lf-card', ROLE, 160),
+            alias('--color-lf-muted', '--lf-text-muted', 161),
+            alias('--color-lf-surface', ROLE, 162),
+            {
+                name: ROLE,
+                defs: [
+                    {file: 7, name: ROLE, value: '#f5f5f4', line: 35, zone: 'css-file', selector: ':root, html.light, .light', theme: 'both', scope: 'root'},
+                    {file: 7, name: ROLE, value: '#1c1917', line: 110, zone: 'css-file', selector: 'html.dark, .dark', theme: 'dark', scope: 'root'},
+                ],
+                uses: 2,
+                files: {'0': 1, '7': 1},
+                use_sites: [
+                    [0, 80, '.panel'],
+                    [7, 75, ':root, .light, .dark'],
+                ],
+            },
+        ],
+        palette: [
+            ...CATALOG.palette,
+            {
+                var: '--color-lf-card',
+                role: ROLE,
+                uses: 3,
+                dark: 0,
+                classes: {'bg-lf-card': 2, 'hover:border-lf-card/50': 1},
+                files: {'5': 1, '6': 2},
+                occ: [
+                    [6, 30, 0],
+                    [5, 12, 1],
+                    [6, 31, 0],
+                ],
+            },
+            {var: '--color-lf-muted', role: '--lf-text-muted', uses: 1, dark: 0, classes: {'text-lf-muted': 1}, files: {'1': 1}, occ: [[1, 5, 0]]},
+            {var: '--color-lf-surface', role: ROLE, uses: 1, dark: 0, classes: {'bg-lf-surface': 1}, files: {'6': 1}, occ: [[6, 40, 0]]},
+        ],
+    });
+    const ROLE_CHANGE = make({layer: 'css-var', target: ROLE, scope: 'both', from: '#f5f5f4', to: '#ffffff'});
+    const exportOn = (changes: LabChange[]) => buildExport(stateOf(changes), roles, APP, [], NOW);
+
+    it('exports the role with the classes of every alias standing for it, each occurrence with the class written there', () => {
+        expect(only(exportOn([ROLE_CHANGE]))).toEqual({
+            id: 'css-var:--lf-surface-card@both',
+            layer: 'css-var',
+            scope: 'both',
+            preview: true,
+            target: ROLE,
+            from: '#f5f5f4',
+            to: '#ffffff',
+            // 4 class uses + 2 `var()` reads, in 4 files: TransactionsTable and Badge for the classes, app.css and the
+            // stylesheet of the roles for the reads. `text-lf-muted` stands for another role.
+            impact: {uses: 6, files: 4, classes: {'bg-lf-card': 2, 'hover:border-lf-card/50': 1, 'bg-lf-surface': 1}},
+            // The class at each place is `Object.keys(classes)[classIndex]` of its alias.
+            occurrences: [
+                {file: TX_TABLE, line: 30, raw: 'bg-lf-card'},
+                {file: BADGE, line: 12, raw: 'hover:border-lf-card/50'},
+                {file: TX_TABLE, line: 31, raw: 'bg-lf-card'},
+                {file: TX_TABLE, line: 40, raw: 'bg-lf-surface'},
+            ],
+            // The role's own definitions, never the aliases'.
+            definitions: [
+                {file: TOKENS, line: 35, selector: ':root, html.light, .light', theme: 'both', value: '#f5f5f4'},
+                {file: TOKENS, line: 110, selector: 'html.dark, .dark', theme: 'dark', value: '#1c1917'},
+            ],
+        });
+    });
+
+    it('still exports the occurrences of a palette variable by place alone, with no `raw`', () => {
+        const gray = only(exportOn([VAR]));
+        expect(gray.impact).toEqual({uses: 4, files: 3, classes: {'text-gray-500': 2, 'dark:bg-gray-500': 1}});
+        expect(gray.occurrences).toEqual([
+            {file: DATA_TABLE, line: 10},
+            {file: DATA_TABLE, line: 20},
+            {file: BADGE, line: 4},
+        ]);
+        expect(gray.occurrences.filter((o) => 'raw' in o)).toEqual([]);
+    });
+});
+
 describe('renderMarkdown', () => {
     const lines = (md: string) => md.split('\n');
 

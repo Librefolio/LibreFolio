@@ -13,7 +13,8 @@ Covers:
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
-- GET /api/v1/system/instance: public, no session; {profile} live (the lane's default) and in-process (a profile set)
+- GET /api/v1/system/instance: public, no session; {profile, accounts} live (the lane's default profile) and in-process
+  (a profile set)
 - GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database), 503 with the same body
   in-process, 200 and 503 in OpenAPI
 """
@@ -817,8 +818,9 @@ class TestConnectionSecurityInProcess:
 # ============================================================================
 #
 # What the app reads at startup, before anyone signs in: public by design, the same for
-# whoever asks, so behind no session. One field today, the profile from LIBREFOLIO_PROFILE
-# (selfhosted unless set). Live on the lane's backend for the lane's default, in-process for
+# whoever asks, so behind no session. Two fields today: the profile from LIBREFOLIO_PROFILE
+# (selfhosted unless set), and accounts, the registration mode and whether a variable locks it.
+# Live on the lane's backend for the lane's default, in-process for
 # a profile set through the environment, which the lane's server cannot be given from here.
 # The Settings field itself (default, normalisation, refusal) is in test_config_misc.py.
 
@@ -862,18 +864,22 @@ class TestInstanceConfigLive:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
     async def test_anyone_gets_the_public_configuration(self, test_server, forged_cookie):
-        """No session, or a session cookie the server never issued: 200 and exactly {"profile": "selfhosted"}."""
+        """No session, or a session cookie the server never issued: 200 and exactly the declared fields, the default profile beside accounts."""
         async with httpx.AsyncClient() as client:
             if forged_cookie:
                 client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
             response = await client.get(INSTANCE_URL, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"GET /system/instance is public: expected 200 without a valid session, got {response.status_code}: {response.text}"
-        assert response.json() == {"profile": "selfhosted"}, f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+        body = response.json()
+        assert set(body) == {"profile", "accounts"} and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+        assert (
+            set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
+        ), f"accounts must be exactly the registration mode and whether it is locked (the mode is the lane's shared row, not pinned here): {response.text}"
 
 
 def _instance_app() -> FastAPI:
-    """The system router in an app of this test, as test_container_registry.py builds one; no session override, none needed."""
+    """The system router in an app of this test, as test_container_registry.py builds one; no override: accounts reads the global settings through the app's own database session, the lane's database here."""
     app = FastAPI()
     app.include_router(system_module.router, prefix="/api/v1")
     return app
@@ -897,7 +903,11 @@ class TestInstanceConfigInProcess:
             response = await client.get("/api/v1/system/instance")
 
         assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
-        assert response.json() == {"profile": profile}, f"LIBREFOLIO_PROFILE={configured!r} must be answered as exactly {{'profile': {profile!r}}}: {response.text}"
+        body = response.json()
+        assert set(body) == {"profile", "accounts"} and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts and nothing else: {response.text}"
+        assert (
+            set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
+        ), f"accounts must be exactly the registration mode and whether it is locked: {response.text}"
 
 
 # ============================================================================
