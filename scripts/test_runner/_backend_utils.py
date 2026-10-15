@@ -235,7 +235,7 @@ def utils_gate_plugin_i18n_ownership(verbose: bool = False, test_names: list = N
 def utils_gate_event_loop_io(verbose: bool = False, test_names: list = None) -> bool:
     """Test the event-loop gate: no API async handler calls a synchronous BRIM file-store function directly."""
     print_section("Utils: Event Loop BRIM I/O Gate")
-    print_info("Testing: backend/app/api/v1/**/*.py against the synchronous functions of backend/app/services/brim_provider.py")
+    print_info("Testing: backend/app/api/v1/**/*.py against the synchronous functions of backend/app/services/brim/brim_provider.py")
     print_info("Tests: a direct call in an async def is flagged; asyncio.to_thread(fn, ...), nested def/lambda bodies, awaited coroutines and sync handlers are not; every import form is followed; the scan reaches the store's importers")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_event_loop_brim_io_gate.py", test_names)
     return run_command(cmd, "Event loop BRIM I/O gate tests", verbose=verbose)
@@ -508,7 +508,7 @@ Tests for utility modules and helper functions:
         "gate-event-loop-io",
         utils_gate_event_loop_io,
         name="Event Loop BRIM I/O Gate",
-        desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
+        desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases are in-memory strings. No DB, no server, no network, no writes.
         isolation="pure",

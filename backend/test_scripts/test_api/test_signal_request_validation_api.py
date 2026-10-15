@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.app.api.v1.assets.prices import query_prices_bulk
-from backend.app.api.v1.fx import convert_currency_bulk
+from backend.app.api.v1.fx.currencies import convert_currency_bulk
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXConversionRequest
 from backend.app.schemas.signals import SignalRequest

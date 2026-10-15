@@ -64,6 +64,6 @@ all use it — the wizard used to hold its own 50.
 | Icon cache and candidates | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
 | The reactive chain | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The component | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
-| `detection_priority` bands | `backend/app/services/brim_provider.py` |
+| `detection_priority` bands | `backend/app/services/brim/brim_provider.py` |
 | Backend test of the constant | `backend/test_scripts/test_external/test_brim_providers.py` |
 | User guide, «Portal URL» | `mkdocs_src/docs/user/brokers/index.en.md` |

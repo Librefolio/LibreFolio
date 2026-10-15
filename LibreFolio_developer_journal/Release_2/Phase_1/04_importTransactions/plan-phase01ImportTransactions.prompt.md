@@ -792,3 +792,279 @@ di `dev_release2` a `05c21b2b6` (A3: frontend di Settings e login, cataloghi `au
    transactions-modals` 25, `front-asset asset-data-editor` 26 (sulle rotte degli eventi spostate da X), `front-fx
    fx-csv-import` 21, `front-fx fx-editor` 4.
 6. ✅ **`mkdocs build`** stretto verde; `git diff --check` pulito; porta 6184 libera (04:04).
+
+   > **Note implementazione (coordinatore, 15/10 ~04:06)**: K1 in `dev_release2` con l'avanzamento veloce a `d915c869f`;
+   > record in `0229dbc6a` (CHANGELOG con le 4 righe; chiuse O-12, C-89, V-38, W-B8 e la parte W di P-15; I-10 S3 chiusa
+   > senza codice nel README del 38; W-B13 spostata nella sezione X). Il mio ramo è avanzato a `0229dbc6a`, pulito.
+   > `ui/data-editor` ora è di T (avvisato, con la nota su `asset-data-editor.spec.ts:384`).
+
+### W4 — CP6–CP7, PL5: `services/brim/` ⏳ (2026-10-15) — CP6 🧊 checkpoint inviato, FROZEN
+
+**Via del coordinatore** (15/10 ~04:06): «Via per W4 (`services/brim/`, PL5: rinomina, poi taglio con la guardia;
+aggiorna le due costanti del cancello `gate-event-loop-io`; `applyTo`, skill, guida U-B8). W3 (`api/v1/brokers/`) e
+W5–W6 (`uploads.py`) aspettano un commit del coordinatore su quei file, e git non segue il codice spostato. Se W4 finisce prima, passa a K2 o W7. Le run pesanti di W4 vanno chiuse prima delle
+08:45, o fatte dopo l'avviso di fine della finestra della galleria.» Base: HEAD `0229dbc6a`, pulito, porta libera (04:06).
+
+**Forma** (piano 43, P2.1; §6 del piano generale, C1 e «Regole di ogni lotto di riordino»): `brim_provider.py` è
+rinominato **e** tagliato, quindi due checkpoint in fila.
+
+- **CP6, rinomina**: `brim_provider.py`, `brim_report_sets.py`, `brim_parse_pool.py`, `brim_gap_fix.py` →
+  `services/brim/`, stessi nomi (C1), accanto al `registry.py` di X; riferimenti di app, test, runner, script,
+  `coverage_analysis` (prefisso del pacchetto, come per transazioni e broker), doc per sviluppatori, `.github` (`applyTo`
+  `backend/app/services/brim/**`, skill `brim-plugin`), devWiki (C6), commenti di `frontend/src/lib/utils/brim/`; le due
+  costanti del cancello `gate-event-loop-io`; U-B8 (il passo «Capacity table» della guida). Nessun cambio di
+  comportamento; JSON di `api schema` identici.
+  - Eccezione: la docstring dell'enum `IdentifierType` (`backend/app/db/models.py:127`) cita
+    `backend/app/services/brim_provider.py` ed è pubblicata nell'OpenAPI; resta com'è per tenere lo schema identico,
+    come X ha lasciato `asset_source.py` nella stessa docstring. Residuo nel backlog.
+- **CP7, taglio**: `services/brim/brim_provider.py` per tema (piano 43: contratto, file e lock, report set, parsing,
+  candidati, duplicati; moduli nuovi con nomi brevi, C1), con lo stato di modulo (`_BROKER_LOCKS`) in un modulo solo, le
+  patch dei test sul modulo che definisce, e la guardia contro le patch mute (C4).
+
+**Passi CP6**:
+
+1. ✅ **Spostamento e riscrittura** (04:08–04:10): `mv` (non `git mv`: lo stage è del coordinatore) di
+   `brim_provider.py`, `brim_report_sets.py`, `brim_parse_pool.py`, `brim_gap_fix.py` in `backend/app/services/brim/`;
+   `/tmp/libreFolio_w4a_rename.py --apply`: 96 file, 146 riferimenti (forme puntata, con le barre, e `from
+   backend.app.services import <moduli BRIM>`; nessuna riga d'import mescolava moduli BRIM e altri). Lo scarto fra il
+   `grep` dei vecchi percorsi e la prova a secco era la sola `models.py`, esclusa apposta.
+
+   > **⚠️ Fuori pista**: la regola dell'import non vede le sorgenti scritte dentro le stringhe (`\n` letterale dopo
+   > l'import) né una docstring spezzata su due righe: nel cancello `gate-event-loop-io` 5 casi di controllo e la
+   > docstring sono rimasti sulla forma vecchia, e i controlli sarebbero caduti (il modulo legato non era più quello
+   > sorvegliato). Corretti a mano, con la forma relativa `from ...services.brim import brim_provider` e la costante
+   > `BRIM_PROVIDER` (percorso per componenti).
+2. ✅ **A mano**: `scripts/coverage_analysis.py` col prefisso di pacchetto `backend/app/services/brim/` (HIGH) e
+   `services/brim/` fra i servizi del nucleo, come transazioni e broker (non tocca `brim_providers/`);
+   `.github/instructions/backend-providers-brim.instructions.md`, `applyTo` →
+   `backend/app/services/brim_providers/**,backend/app/services/brim/**`; la skill `brim-plugin` dice ora da dove vengono
+   `BRIMProvider` e `BRIMProviderRegistry` (`services/brim/`: contratto in `brim_provider.py`, registro in
+   `registry.py`; il contratto andrà in `base.py` col taglio); **U-B8**: tolto il passo 3 «Capacity table» della guida
+   (`brim_plugin_guide.md`, la tabella «Importer Capabilities» non c'è più) e rinumerati i passi seguenti (3 Nav,
+   4 Validate, 5 Developer providers overview); nessun altro riferimento a quella tabella in `mkdocs_src/docs`.
+3. ✅ **Prove a secco e statiche** (04:10–04:16):
+   - vecchi percorsi: 0 in `backend/` (salvo la docstring esclusa di `models.py:127`), `scripts/`, `dev.py`, `.github/`,
+     `mkdocs_src/docs/developer/`, devWiki, `frontend/src/lib/utils/brim/`; `check_source_paths.py` 5, come prima;
+   - import: `backend.app.main` e i 4 moduli si importano; il registro BRIM scopre 33 plugin;
+   - patch dei test (`/tmp/libreFolio_merge_patch_guard.py backend.app.services.brim`): 7 siti, tutti efficaci;
+   - somiglianza col file di base: `brim_provider.py` 100 % (nessuna riga cambiata), `brim_report_sets.py` 99,56 %,
+     `brim_parse_pool.py` 99,31 %, `brim_gap_fix.py` 99,15 %;
+   - `ruff check --select I --fix` sui 64 file Python toccati (46 blocchi d'import riordinati: il percorso nuovo cambia
+     l'ordine, soprattutto nei plugin), poi `ruff` pulito; `black` invariato (la sola `coverage_analysis.py`, già fra i 29
+     file sporchi della base); `lint --dead-code` senza reperti nuovi (i due di `brim_provider.py` col percorso nuovo; il
+     resto delle differenze da I1 viene dagli spostamenti di X e H);
+   - **`api schema` identico** a quello di `0229dbc6a` (OpenAPI e contratti dei Tool; riferimento esportato da un albero
+     `git archive` in `/tmp/libreFolio_w_ref_0229/`).
+4. ✅ **Selettori del dominio** (04:12–04:13): `services brim-provider-base` 37, `brim-parse-pool` 8, `brim-report-sets`
+   259, `brim-gap-fix` 99; `utils gate-event-loop-io` 14, `gate-plugin-layout` 33, `gate-plugin-i18n-ownership` 45.
+5. ✅ **`all-backend`** (04:13–04:27, `--workers 2`; log `/tmp/libreFolio_w4a_all_backend.log`, unità in
+   `/tmp/libreFolio_w4a_testlog/`): **7/7 verdi, 13 749 passed, 28 skipped, 0 failed**. Non ho una run completa della
+   base `0229dbc6a` (il coordinatore la fa coprire dalla run di J su `1d1c7e67d`, stesso codice): i conteggi li provo con
+   la raccolta, file per file, dei 17 file di test toccati dalla rinomina, uguali alla base (1 876 test da tutte e due le
+   parti, `pytest --collect-only` nell'albero `git archive 0229dbc6a` e nel worktree). La raccolta intera dell'albero di
+   base non si fa in `/tmp`: alcuni test leggono file fuori da `backend/` e `scripts/` (doc, workflow).
+6. ✅ **Doc**: `mkdocs build` stretto verde, `check-links` 95 validi; `git diff --check` pulito; porta 6184 libera
+   (04:30). Prettier pulito sui due commenti di `frontend/src/lib/utils/brim/`.
+
+   > **Note implementazione**: CP6 pronto il 15/10 alle 04:30: rinomina pura, schema identico, stessi test.
+   >
+   > **Disegno di CP7 (taglio)**, dalla mappa AST (`/tmp/libreFolio_w4b_map.txt`) e dai chiamanti
+   > (`/tmp/libreFolio_w4b_callers.txt`). Con C1 e C4 (la classe resta nel suo file col suo nome),
+   > `services/brim/brim_provider.py` tiene il contratto: `BRIMProvider`, `BRIMParseError`, `BRIMSetRequiredError`,
+   > `TEXT_ENCODINGS`. Così i 38 plugin non cambiano. Escono per tema:
+   > - `storage.py`: cartella e firma, lock e stato `_BROKER_LOCKS*`, sidecar, salvataggio, elenco, lettura, spostamenti,
+   >   cancellazioni, `_update_metadata`, `_iter_metadata_paths`, `_unlink_report_set_references`;
+   > - `combined_files.py`: i file combinati dei report set (`write_combined_csv`, `save_combined_file`,
+   >   `find_reusable_combined`, `read_combine_summary`, `_members_key`). Nome breve diverso da `brim_report_sets.py`,
+   >   per non avere due moduli «report_sets»;
+   > - `parsing.py`: `parse_file`, `check_file_with_plugin`, `_check_path`, `_refusal_message`, `_relocated_path`;
+   > - `candidates.py`: la ricerca degli asset, singola e in blocco;
+   > - `duplicates.py`: `detect_tx_duplicates`.
+   >
+   > Dipendenze in un solo verso (storage ← combined_files, parsing; nessun ciclo). Le patch dei test
+   > (`get_broker_reports_dir`, `detection_signature`) vanno su `storage`, e solo `storage` chiama
+   > `get_broker_reports_dir` direttamente. Il cancello `gate-event-loop-io` sorveglia i moduli sincroni (storage,
+   > combined_files, parsing).
+   >
+   > Volume: circa 18 righe in `api/v1/brokers.py`, 8 in `brim_report_sets.py`, 1 in `auth.py`, 1–2 in
+   > `brim_parse_pool.py`, circa 150 riferimenti nei test.
+
+### Revisione combinata `370189b3d` (W4 CP6 + H `web_link_finder`, J CP-1) ✅ (2026-10-15) — 🧊 FROZEN
+
+CP6 committato dal coordinatore come `548a0688d` (98 file; git abbina le 4 rinomine al 98–100 %; il suo controllo AST:
+56 file con soli import, negli altri 8 cambiano solo stringhe di percorso) e `7066176cf` (journal); base aggiornata col
+merge `370189b3d` di `dev_release2` a `209e4a6f0`. Sul fuso il coordinatore ha già verificato: 0 import irrisolti, 0
+patch mute (`patch_effect.py` di J), nessun percorso nuovo nelle guardie D-J18. Controllo leggero chiesto, senza
+`all-backend`. **CP7 aspetta un commit del coordinatore su `brokers.py`** (lo stesso che aspetta W3): dopo l'ingresso
+di CP6 si passa a **W7**, poi K2.
+
+1. ✅ **Base** (04:34): HEAD `370189b3d` (genitori `7066176cf`, `209e4a6f0`), pulito, porta libera.
+2. ✅ **`services config-package`**: 567 passed. Il conteggio è quello di `209e4a6f0`: 481 casi, uno per modulo di
+   `backend/app` fuori da `config/`, più 86 test fissi. La rinomina sposta 4 moduli senza aggiungerne né toglierne; cambiano
+   solo i 4 id dei parametri, da `services/brim_<x>.py` a `services/brim/brim_<x>.py`. I 6 id sotto `services/brim/` sono i
+   miei 4 più `__init__.py` e `registry.py` di X.
+3. ✅ `utils gate-event-loop-io` 14, `services brim-provider-base` 37.
+4. ✅ **`pytest --collect-only`** contro `209e4a6f0` (albero `git archive` di `backend`, `scripts`, `pyproject.toml`,
+   `dev.py` e `pytest.ini` in `/tmp/libreFolio_w_ref_209e/`): **13 881 test da tutte e due le parti, identici file per
+   file (270 file)**.
+
+   > **⚠️ Fuori pista**: senza `pytest.ini` l'albero estratto stampa la raccolta in un altro formato, e senza `dev.py`
+   > `test_dev_port_check.py` non si raccoglie. Con i due file la raccolta è completa.
+5. ✅ **`api schema`** contro `209e4a6f0`: OpenAPI e contratti dei Tool identici.
+6. ✅ `git diff --check` pulito; porta 6184 libera (04:37).
+
+   > **⚠️ Fuori pista (segnalato dal coordinatore)**: la riscrittura di CP6 ha cambiato anche un riferimento storico. La
+   > docstring di `backend/test_scripts/test_services/test_brim_report_sets.py` dice `git show
+   > v1.1.0:backend/app/services/brim/brim_provider.py`, ma nella v1.1.0 il file stava in `services/brim_provider.py`.
+   > Lo correggo nel prossimo lotto (W7). Scansione delle righe aggiunte da `548a0688d` con un percorso nuovo accanto a
+   > un'ancora storica (`git show`, versioni, SHA): è l'unico caso. L'altro riscontro, `architecture.md`, parla del
+   > commit del database, non di git.
+
+   > **Note implementazione (coordinatore, 15/10 ~04:38)**: CP6 in `dev_release2` con l'avanzamento veloce a `155d9b050`;
+   > record in `0902524e5`; il mio ramo è avanzato lì, pulito.
+
+### W7 — schemi delle transazioni come pacchetto (C3) ⏳ (2026-10-15) — W7a 🧊 checkpoint inviato, FROZEN
+
+**Via del coordinatore** (15/10 ~04:38): «Via per W7 (schemi delle transazioni come pacchetto, C3), con la docstring di
+`test_brim_report_sets.py`; poi K2. `schemas/transactions.py` è importato da altre sessioni: nell'handoff elenca gli
+importatori fuori dal tuo dominio. Dalle ~08:45, al mio avviso, niente `all-backend` né build pesanti fino all'avviso di
+fine.» Base: HEAD `0902524e5`, pulito, porta libera (04:38).
+
+**Forma** (C3 e il precedente di X, `schemas/assets/`): `backend/app/schemas/transactions.py` (1 371 righe) diventa il
+pacchetto `backend/app/schemas/transactions/`, con un `__init__.py` di sola docstring (nessun barile), il modulo
+`transactions.py` per il nucleo (validatori, create, read, update con i gruppi di scambio, query, delete) e i moduli per
+tema tagliati da lì: `batch.py` (batch unificato, codici e problemi di validazione, voci split/promote del batch),
+`event_suggest.py`, `promotion.py` (promozione dei trasferimenti e promote-suggest), `type_metadata.py` (metadati dei tipi).
+L'hub `schemas/__init__.py` resta e continua a esportare i nomi pubblici, dai moduli che li definiscono. Il nucleo è
+circa il 48 % del file, sulla soglia di somiglianza di git: per non avere un file insieme rinominato e tagliato, **due
+checkpoint**:
+
+- **W7a, rinomina**: `schemas/transactions.py` → `schemas/transactions/transactions.py`, il pacchetto col suo
+  `__init__.py`, l'hub (riga della docstring, import sotto `TYPE_CHECKING`, chiave `"transactions.transactions"` di
+  `_EXPORT_GROUPS`, come `"assets.assets"`), gli importatori, la doc, la devWiki; in più la docstring storica di
+  `test_brim_report_sets.py` (`git show v1.1.0:backend/app/services/brim_provider.py`).
+- **W7b, taglio**: i moduli per tema, con la prova AST dei corpi alla lettera, gli importatori sul modulo che definisce e
+  l'hub per modulo.
+
+**Importatori**: tutti di W nell'app (48 file: router delle transazioni, servizi delle transazioni, BRIM, i 33 plugin,
+`schemas/brim.py`, l'hub); nessuno passa dall'hub per i nomi TX; nei test 16 importazioni dirette in 13 file, tutte su
+BRIM, transazioni e broker, salvo `test_schemas/test_schema_computed_fields.py` (comune ai domini degli schemi).
+
+**Passi W7a**:
+
+1. ✅ **Rinomina** (04:40): `mv` di `backend/app/schemas/transactions.py` in `backend/app/schemas/transactions/transactions.py`
+   (somiglianza 100 %, nessuna riga cambiata); `backend/app/schemas/transactions/__init__.py` di sola docstring (elenco dei
+   moduli, come `schemas/assets/__init__.py`); `/tmp/libreFolio_w7a_rename.py --apply`: 87 file, 99 riferimenti (forma
+   puntata, idempotente, e percorso con le barre); l'hub `schemas/__init__.py` con la riga della docstring
+   (`transactions/: … transactions.py (…)`), l'import sotto `TYPE_CHECKING` e la chiave `"transactions.transactions"`;
+   la docstring storica di `test_brim_report_sets.py` torna a `git show v1.1.0:backend/app/services/brim_provider.py`.
+   - Fuori dal mio dominio, una sola riga: il commento di `backend/app/services/files/static_uploads.py:65` (di H), che
+     cita il percorso di `EVENT_COMPATIBLE_TYPES`.
+2. ✅ **Prove statiche** (04:41–04:45):
+   - `backend.app.main` si importa; l'hub esporta ancora i nomi TX in modo pigro (`from backend.app.schemas import
+     TXCreateItem` è la classe del modulo nuovo); vecchi percorsi: 0 in `backend/`, `scripts/`, `dev.py`, `.github/`,
+     `mkdocs_src/docs/developer/`, devWiki e `frontend/src/`; `check_source_paths.py` 5, come prima;
+   - `ruff --select I --fix` senza cambi (il percorso nuovo non sposta l'ordine), `ruff` e `black` puliti sui 65 file Python
+     toccati; `lint --dead-code` senza reperti nuovi (l'unica differenza da CP6 è lo spostamento di J,
+     `pac_allocator/source/portfolio_allocation_source.py`); guardia delle patch su `backend.app.schemas.transactions`:
+     0 siti;
+   - **`api schema` identico** a `0902524e5` (OpenAPI e contratti dei Tool, riferimento da un albero `git archive` in
+     `/tmp/libreFolio_w_ref_0902/`);
+   - **`pytest --collect-only`** contro `0902524e5`: identico file per file su 270 file, salvo `test_config_package.py`
+     567 → 568: la guardia ha un caso per modulo di `backend/app`, e il pacchetto aggiunge il suo `__init__.py` (l'id
+     `schemas/transactions.py` diventa `schemas/transactions/__init__.py` e `schemas/transactions/transactions.py`).
+3. ✅ **Selettori** (04:42–04:45): `schemas transactions` 75, `services config-package` 568, `services brim-report-sets` 259,
+   `api transactions` 26, `utils gate-plugin-layout` 33.
+4. ✅ **`all-backend`** (04:45–05:00, `--workers 2`; unità in `/tmp/libreFolio_w7a_testlog/`): **7/7 verdi, 13 871 passed,
+   28 skipped, 0 failed**. Rispetto alla run di CP6 cambia solo quello che porta la base (`web_link_finder` di H, CP-1 di
+   J) più il caso nuovo di `config-package`; la run conta 17 test in più della raccolta (unità ripetute), come in CP6.
+   `mkdocs build` stretto verde, `check-links` 95; `git diff --check` pulito; porta libera (05:01).
+
+   > **Note implementazione**: W7a pronto il 15/10 alle 05:01: rinomina pura, schema identico, raccolta identica salvo
+   > il caso del nuovo `__init__.py`.
+
+   > **Note implementazione (coordinatore, 15/10 ~05:03)**: W7a committato come `00a19bf72` (`R100` più l'`__init__`
+   > nuovo; 59 file con soli import, negli altri 5 solo hub, docstring e una stampa) e `f71a77e03` (journal). Via per W7b
+   > sopra W7a, **senza aggiornare la base adesso** (X CP3 e A4 chiudono le loro run sulla base `0902524e5`): W7a entra
+   > insieme a W7b, in due commit separati; al checkpoint di W7b il coordinatore aggiorna la base e io valido una volta
+   > sola la revisione combinata, con `all-backend`.
+
+**Passi W7b** (taglio), sopra `f71a77e03`:
+
+1. ✅ **Taglio** (05:05, `/tmp/libreFolio_w7b_cut.py`): ogni nodo di primo livello si porta dietro i commenti e i banner
+   che lo precedono; i moduli nuovi hanno una docstring, il blocco d'import originale (poi `ruff --select F401,I --fix`: 64
+   import inutili tolti) e gli import fra moduli; `black`.
+   - `transactions.py` (661 righe) tiene 12 nodi: `EVENT_COMPATIBLE_TYPES`, `validate_tags_list`, `tags_to_csv`,
+     `validate_transaction_business_rules`, `TXCreateItem`, `TXReadItem`, `SWAP_GROUPS`, `get_swap_group`,
+     `_swap_group_codes`, `TXUpdateItem`, `TXQueryParams`, `TXDeleteItem`;
+   - `batch.py` (192): il commento degli stati con `TXItemStatus` e `TXBatchOperation`, `TXDeleteResult`, `TXMixedBatch`,
+     `TXBatchResultItem`, `TXBatchResponse`, `TXValidationCode`, `TXValidationCodeInfo`, `VALIDATION_CODE_METADATA`,
+     `TXValidationIssue`, `TXSplitBatchItem`, `TXPromoteBatchItem`;
+   - `event_suggest.py` (55): le tre classi di `POST /transactions/events/suggest`;
+   - `promotion.py` (96): `TXTransferPromoteRequest`/`Response`, `TXPromoteSuggestInput`/`Candidate`/`Response`;
+   - `type_metadata.py` (429): da `SignType` a `EVENT_TYPE_METADATA`, con `_swap_group_codes` dal nucleo e i codici di
+     validazione da `batch`.
+   - Dipendenze in un solo verso (`transactions` ← `batch` ← `type_metadata`; `event_suggest` e `promotion` da soli).
+2. ✅ **Prova alla lettera** (`/tmp/libreFolio_w7b_verbatim.py`): 46 nodi di primo livello, 46 identici al testo
+   originale (`ast.get_source_segment`), nessuno perso né in più.
+3. ✅ **Importatori** (`/tmp/libreFolio_w7b_importers.py`): 12 file riscritti sul modulo che definisce ogni nome;
+   a mano l'import con `# noqa: PLC0415` di `test_transaction_schemas.py` e l'hub, cioè l'import sotto `TYPE_CHECKING`
+   e `_EXPORT_GROUPS` per modulo (`transactions.batch`, `transactions.transactions`, `transactions.type_metadata`), coi
+   due commenti dell'elenco; docstring dell'hub e del pacchetto. I file altrui (`test_schema_computed_fields.py`, il
+   commento di H in `static_uploads.py`) non cambiano: importano o citano solo nomi del nucleo.
+4. ✅ **Doc**: 8 righe della devWiki (tabelle «Source files» e un elenco: F-097, F-046, `batch-only-split-promote`,
+   `unified-batch-pipeline`, `server-driven-type-rules`, `static-metadata-export`, `promote-respects-asset-event-link`,
+   `phase07-part4-round5-server-type-rules`) e il commento di `transactionTypeStore.test.ts` sul modulo che definisce;
+   `check_source_paths.py` 5.
+5. ✅ **Prove** (05:06–05:12):
+   - `backend.app.main` si importa; i 21 nomi TX dell'hub vengono dal modulo che li definisce; gli schemi di
+     `TXBatchResponse` e `TXTypesResponse` si generano; `TX_TYPE_METADATA` ha 12 tipi; nessun import da riscrivere;
+   - `ruff` e `black` puliti sui 19 file Python toccati; codice morto uguale a W7a; guardia delle patch: 0 siti;
+   - **`api schema` identico** a `0902524e5` (OpenAPI e contratti dei Tool);
+   - **`pytest --collect-only`**: 13 886 test, identici a `0902524e5` file per file, salvo `test_config_package.py` 567 →
+     572 (un caso per modulo: il `__init__.py` di W7a più i 4 moduli nuovi);
+   - corsia: `schemas transactions` 75, `services config-package` 572, `services transaction` 66, `api transactions` 26,
+     `transactions-validate` 11, `events-suggest` 9, `batch-split-promote` 35, `transfer-promotion` 3,
+     `transactions-wac` 20, `tx-balance-walk` 9.
+   - `all-backend` sulla revisione combinata, dopo l'aggiornamento della base del coordinatore.
+
+   > **Note implementazione (coordinatore, 15/10 ~05:13)**: W7b committato come `e28aad42f` (28 file: 4 nuovi, 24
+   > modificati; il suo controllo AST: 59/59 nomi identici fra il nucleo di prima e i 5 moduli) e `b60e91d83` (journal).
+
+### Revisione combinata `304e6d176` (W7a + W7b + A4) ✅ (2026-10-15) — 🧊 FROZEN
+
+Base aggiornata dal coordinatore col merge `304e6d176` di `dev_release2` a `be2ad6573` (A4: migrazione 005,
+`account_tokens`, colonne nuove di `users`, `token_service`); merge pulito, senza file fusi in automatico. Sul fuso il
+coordinatore ha verificato 0 import irrisolti e 0 patch mute. X CP3 è ancora in validazione: se entra prima di W7, un
+secondo aggiornamento con un controllo leggero (cambi e schemi delle transazioni sono domini separati).
+
+1. ✅ **Base** (05:17): HEAD `304e6d176` (genitori `b60e91d83`, `be2ad6573`), pulito, porta libera.
+2. ✅ **Build**: `front build --debug` verde (svelte-check 0 errori, 0 avvisi); `mkdocs build` stretto verde (05:19).
+3. ✅ **`api schema` contro `be2ad6573`** (albero `git archive` in `/tmp/libreFolio_w_ref_be2a/`): OpenAPI e contratti dei
+   Tool identici.
+4. ✅ **`pytest --collect-only` contro `be2ad6573`**: 13 971 → 13 976; identico su 272 file salvo `test_config_package.py`
+   568 → 573, un caso per ciascuno dei 5 moduli nuovi del pacchetto (gli id `schemas/transactions.py` →
+   `schemas/transactions/{__init__,batch,event_suggest,promotion,transactions,type_metadata}.py`).
+5. ✅ **`all-backend`** (05:19–05:32, `--workers 2`; unità in `/tmp/libreFolio_w7m_testlog/`): **7/7 verdi, 13 965 passed,
+   28 skipped, 0 failed**; la run conta 17 test in più della raccolta (le unità ripetute), come nelle run precedenti.
+6. ✅ `git diff --check` pulito; porta 6184 libera (05:33).
+
+   > **Preparazione di K2** (solo lettura, appunti fuori dal repo): la parte (a), i codici dei rifiuti di DEGIRO e del
+   > Generic CSV, e L6 non toccano `brokers.py` né `uploads.py`; le parti (b), il 400 strutturato del parse, e (c), il
+   > codice `preview_unreadable_workbook`, passano da `brokers.py:1010-1013`, `:717-719` e `uploads.py:292-295`, i file
+   > che aspettano il commit del coordinatore. Proposta: K2a ora, K2b dopo quel commit.
+
+   > **Note implementazione (coordinatore, 15/10 ~05:34)**: piano committato come `2afede53a`; X CP3 entrato alle 05:30
+   > (cambi tagliati in `services/fx/` e `api/v1/fx/`, API identica). Ultimo aggiornamento di base: merge `f0b1ab58b` di
+   > `dev_release2` a `5d21f2d85`, pulito. K2: divisione approvata (K2a subito dopo l'ingresso di W7; K2b dopo il commit
+   > del coordinatore su `brokers.py` e `uploads.py`; per `file_preview.py` accordo con H attraverso il coordinatore).
+
+### Controllo leggero di `f0b1ab58b` (W7 + X CP3) ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Base** (05:34): HEAD `f0b1ab58b` (genitori `2afede53a`, `5d21f2d85`), pulito, porta libera.
+2. ✅ **`api schema` contro `5d21f2d85`**: OpenAPI e contratti dei Tool identici.
+3. ✅ **`pytest --collect-only` contro `5d21f2d85`**: 13 976 → 13 981; identico su 272 file salvo `test_config_package.py`
+   573 → 578 (i 5 moduli nuovi del pacchetto, come nelle prove precedenti).
+4. ✅ **`services config-package`**: 578 passed = 492 casi per modulo di `backend/app` fuori da `config/` (487 a
+   `5d21f2d85`, più i 5 del pacchetto: 6 id sotto `schemas/transactions/` al posto di `schemas/transactions.py`) e 86
+   test fissi. Porta libera.

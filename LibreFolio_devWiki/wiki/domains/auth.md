@@ -44,6 +44,12 @@ graph LR
 
 - [[decisions/prod-test-data-separation]] — Auth works identically in prod and test environments; the test server runs on a separate port with its own isolated SQLite DB, so auth tests never touch prod user records.
 - F-065 JWT Cookie Auth (see [[features/F-065]]) — using HttpOnly cookies (not Authorization header) avoids XSS token theft; stateless JWT avoids session store complexity in multi-worker Docker deployments.
+- Single-use account tokens (release 1.3, workstream A, lot A4, 15/10/2026) — invitations, password-reset links,
+  email verification and the admin setup link share one table, `account_tokens`, and one service. Only the SHA-256
+  of a token is stored, each token has one purpose, and it is spent by one conditional UPDATE, so two requests
+  cannot both spend it. The service never commits: spending an invitation and creating its account fail together.
+  Migration `005_accounts_invites` adds the table with plain `ALTER TABLE`/`CREATE TABLE`, never a batch on
+  `users`: with `PRAGMA foreign_keys=ON` a batch rebuild cascades deletes into every child table.
 
 ## Known problems / limitations
 
@@ -62,4 +68,7 @@ No planned features in this domain. The auth foundation is intentionally minimal
 | Auth service | `backend/app/services/accounts/auth_service.py` |
 | User service | `backend/app/services/accounts/user_service.py` |
 | Auth store (frontend) | `frontend/src/lib/stores/app/auth.ts` |
-| DB model (User, UserRole) | `backend/app/db/models.py` |
+| DB model (User, UserRole, AccountToken) | `backend/app/db/models.py` |
+| Account token service | `backend/app/services/accounts/token_service.py` |
+| Migration of the accounts schema | `backend/alembic/versions/005_accounts_invites.py` |
+| Account tokens mkdocs | `mkdocs_src/docs/developer/architecture/security.md` |

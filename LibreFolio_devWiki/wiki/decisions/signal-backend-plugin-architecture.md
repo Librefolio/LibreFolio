@@ -50,7 +50,7 @@ The July brainstorm that put the signals first in Release 2: [[sources/release2-
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
 | Asset adapter | `backend/app/services/assets/price_query.py` |
-| FX adapter | `backend/app/api/v1/fx.py` |
+| FX adapter | `backend/app/api/v1/fx/currencies.py` |
 | Frontend catalog/renderer | `frontend/src/lib/charts/signals/catalogMapper.ts`, `backendRenderer.ts` |
 | Bulk request/result mapping | `frontend/src/lib/charts/signals/requestBuilder.ts`, `resultMapper.ts` |
 | Execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import List, Optional
 
-from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_service import TransactionService
 
 
