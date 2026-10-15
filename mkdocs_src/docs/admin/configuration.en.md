@@ -94,14 +94,15 @@ users start from the **Default Currency** in [Global Settings](settings.md).
 
 ## 🔐 Secrets {: #secrets }
 
-Three options are secrets: keep them as private as the database. Each one can be written in `.env` or
+Four options are secrets: keep them as private as the database. Each one can be written in `.env` or
 read from a file.
 
 | Secret | From a file | What it is |
 | --- | --- | --- |
 | `JWT_SECRET` | `JWT_SECRET_FILE` | The key that signs login sessions, in the main options above. |
 | `LIBREFOLIO_INSTANCE_KEY` | `LIBREFOLIO_INSTANCE_KEY_FILE` | The [instance key](#instance-key). Not set: LibreFolio creates one in the data directory. |
-| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the other two, a file that cannot give it does not stop the server: it only turns the web search off. |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
+| `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 
 ### 📄 Secrets in Files {: #secret-files }
 
@@ -124,6 +125,9 @@ and out of the container's environment.
   file that cannot give the key does not stop the server: the search goes on without the web search,
   with a warning in the log (`web_link_finder: …; disabling`), and the providers' own search keeps
   working.
+- `LIBREFOLIO_SMTP_PASSWORD_FILE` is read only when `LIBREFOLIO_SMTP_HOST` is set. Like the web-search
+  key file, a file that cannot give the password does not stop the server: email stays off, with an
+  error in the log (`Email configuration cannot be used: email stays off`).
 - LibreFolio reads these variables from its environment: `./dev.py` and Docker Compose
   (`env_file: .env`) put the values of `.env` there, so `.env` works with both.
 
