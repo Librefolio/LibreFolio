@@ -27,7 +27,7 @@ Design invariants:
   exactly like the report's ``period_income`` accumulation, so a co-owned
   broker contributes only the user's economic share.
 - **Honest FX.** Conversion to the target currency uses the shared
-  ``backend.app.services.fx.fx.convert_bulk`` (unlimited backward-fill), preserving
+  ``backend.app.services.fx.conversion.convert_bulk`` (unlimited backward-fill), preserving
   the rate date and backward-fill flag as provenance. A row whose rate is
   missing keeps its native amount, sets ``target_amount=None`` and carries a
   machine-readable ``conversion_reason`` - a missing rate is **never** coerced
@@ -75,7 +75,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 
 # Only these two ledger types are realized cash income (see `TransactionType`).
 _INCOME_TYPES: frozenset[TransactionType] = frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST})

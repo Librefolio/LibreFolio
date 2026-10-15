@@ -1276,3 +1276,206 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - `dev.py mkdocs build`: exit 0, perché il merge cambia due pagine e il server ricostruisce il sito dentro i 300 s.
 > - E2E: `front-utility auth` **29**, `front-utility settings` **45**, `front-transaction tx-broker-access` **5**.
 > - Tutti i conteggi sono quelli attesi dal coordinatore. `git diff --check` pulito, porta 6182 libera.
+>
+> **Esito**: il coordinatore ha integrato A3 in `dev_release2` con un avanzamento veloce a `90491071d`, che contiene
+> questo journal. Sopra ha messo il suo commit di record `0ddd296a0`, con le 3 righe nel CHANGELOG. Il ramo è
+> avanzato a `0ddd296a0`.
+
+### A4 — migrazione 005, modelli e token (CP A4) — in corso
+
+#### A4.0 — Via, base e taglio ✅ (2026-10-15)
+> Via del coordinatore (15/10, ~03:19), alla lettera: «**Via per A4**: migrazione 005 e token. La parte delle
+> sessioni (`sv`) aspetta il CP3 di H.» Base `0ddd296a0`, worktree pulito, porta 6182 libera.
+>
+> **Taglio**: l'ho chiesto io (needs_input, 03:25), il coordinatore ha approvato alle 03:3x.
+> - **A4 solo backend**: 005 con la tabella `account_tokens` e le colonne nuove di `users`, i modelli e
+>   `token_service`.
+>   - **`registration_mode` passa in A5**, con la sua migrazione **006** (conversione di `enable_registration`), il
+>     codice, l'interfaccia, la doc e la galleria.
+>   - Motivo: cambiare nome alla riga obbliga a cambiare insieme codice e dati, frontend compreso, e il blocco da
+>     variabile ha bisogno di `/system/instance` (CP4 di H).
+> - **Catena**: le impostazioni dei plugin di X diventano la **007**. Regola C7 aggiornata nel piano generale
+>   (`ed29f77c2`): chi entra dopo riallinea `down_revision` all'aggiornamento di base.
+> - **`email_verified_at`**: `NULL` sugli utenti esistenti, senza riempimento. Come trattarli quando si attiva
+>   `require_email_verification` lo decide E, nella logica e non nei dati.
+> - **Ingresso**: prima delle 08:45 se `all-backend` è verde entro allora; altrimenti dopo la finestra della galleria.
+> - **Per A5**: toccherà `e2e/layout/theme-roles.spec.ts` del programma colori, da segnalare nell'handoff.
+
+#### A4.1 — Disegno verificato sul codice ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Migrazione `005_accounts_invites`** (20 caratteri), `down_revision = 004_release_1_2_0_schema`.
+>   - Segue la 004: `ALTER TABLE users ADD COLUMN` grezzo e idempotente (controllo con `PRAGMA table_info`), mai un
+>     batch su `users`; `op.create_table` per la tabella nuova; `ALTER TABLE … DROP COLUMN` nel downgrade.
+>   - Le migrazioni girano con `foreign_keys=ON`: il listener delle `PRAGMA` è globale su `Engine`
+>     (`db/session.py`).
+>   - `users`: `session_version INTEGER NOT NULL DEFAULT 0`, `email_verified_at DATETIME NULL`,
+>     `last_seen_version VARCHAR(40) NULL`. `session_version` entra già adesso, anche se la sua logica (`sv`)
+>     aspetta il CP3 di H, così A non ha bisogno di un'altra migrazione.
+>   - `account_tokens`:
+>     - `purpose` (CHECK sui 4 scopi); `token_hash` (SHA-256 esadecimale, unico); `user_id` (FK, CASCADE);
+>       `email`; `grants_admin`; `created_by_user_id` (FK, SET NULL); `created_at`, `expires_at`, `consumed_at`,
+>       `revoked_at`; `consumed_by_user_id` (FK, SET NULL);
+>     - indici su `(purpose, expires_at)` e su `user_id`.
+>   - Niente AUTOINCREMENT: il censimento D1 del developer è di 6 tabelle, e `test_autoincrement_schema.py` lo fissa.
+>     Gli id non si riusano comunque: i token non si cancellano, si consumano o si revocano. Solo la cancellazione
+>     di un utente toglie, a cascata, i suoi token di reset, verifica e setup.
+> - **Modelli**: `AccountTokenPurpose` (StrEnum) e `AccountToken`; tre campi nuovi su `User`, senza
+>   `server_default`, come `login_count`.
+> - **`services/accounts/token_service.py`**:
+>   - `issue_token`, `inspect_token`, `consume_token`, `revoke_tokens`, `hash_token`, `token_path`, `DEFAULT_TTL`;
+>   - scadenze: invito 7 giorni, reset 30 minuti, setup 72 ore, verifica dell'email 24 ore (E può cambiarla);
+>   - flush senza commit: il consumo di un invito e la creazione dell'utente stanno in una sola transazione del
+>     chiamante;
+>   - il consumo atomico è un solo `UPDATE … WHERE` con `rowcount == 1`. Il DB è in WAL con `busy_timeout`.
+>   - Le date: `utcnow()` ha il fuso, SQLite le rilegge senza, e `ensure_utc()` le normalizza.
+> - **Test che il cambio rompe**: `db_schema_validate.py::test_onboarding_migration_chain_has_exactly_one_head_at_004`
+>   fissa la head alla 004. Va riscritto per controllare solo che la head sia una, così regge anche la 006 e la 007.
+> - **vulture**: finché A5 non chiama `token_service`, le sue funzioni finiscono nel gruppo «referenced only by
+>   tests». È uno stato di passaggio, da dichiarare nell'handoff.
+>
+> **Aggiornamento del coordinatore (15/10, ~03:47)**: H CP3 è in `dev_release2` (`d08d9358f`) e arriva nella mia base
+> all'aggiornamento del checkpoint di A4. Regole per una variabile d'ambiente nuova (guardie `services config-package`
+> e `services config-env-example`):
+> - si legge solo in `backend/app/config/accounts.py`, con un accessore;
+> - un segreto si chiama `LIBREFOLIO_*` e si legge con `env_secret()`, così vale anche `NOME_FILE`;
+> - la variabile va in `.env.example`, nella sezione account, come riga commentata col default.
+>
+> Per `sv`: CP3 legge il segreto JWT anche da `JWT_SECRET_FILE`, e un valore vuoto o di soli spazi vale come assente.
+> Quindi `sv` si fa **dopo** l'aggiornamento di base che porta CP3, sui file di `auth_service` già toccati da H, come
+> secondo passo di A4 con un suo checkpoint.
+
+#### A4.2 — Test rossi (`test-author`) ✅ (2026-10-15)
+> **Note implementazione**:
+>
+> | File | Test | Prima dell'implementazione |
+> |---|---|---|
+> | nuovo `test_db/test_migration_005_accounts.py` (`db migration-005`, anche in `db all`) | 25 | tutti rossi: revisione assente, colonne e tabella mancanti |
+> | nuovo `test_services/test_account_tokens.py` (`services account-tokens`) | 64 | errore di raccolta: `AccountToken` non esiste |
+> | `test_db/db_schema_validate.py` (contratto B) | 17 | verdi |
+>
+> - Le due voci nuove sono `isolation="pure"`, con la ragione scritta: ogni DB è un file privato sotto `tmp_path` e
+>   non c'è server.
+> - **Contratto B**: il test della head ora si chiama
+>   `test_migration_chain_has_exactly_one_head_and_004_keeps_its_parent`. Controlla una head sola e il genitore della
+>   004, senza nominare la head, così regge la 006 e la 007.
+> - **Migrazione**:
+>   - Alembic gira nel processo del test, sempre con `-x sqlalchemy.url=`. Un listener rifiuta ogni file diverso dal
+>     DB temporaneo e controlla che `PRAGMA foreign_keys` sia 1 in ogni passo.
+>   - L'«installazione 1.2» è lo schema reale della v1.1.0 con le sue righe (`_install_v110` di
+>     `test_post_migration`), portata alla 004, con `run_post_migration_fixes` e con righe scritte solo dalla 1.2.
+> - **Prova dei test**: `test-author` ha scritto un'implementazione di riferimento fuori dal repo, che li passa
+>   tutti (89), e 27 sue versioni con un difetto ciascuno, tutte prese da almeno un test. Fra i difetti: un batch su
+>   `users` nel downgrade, un consumo non atomico, il confine della scadenza sbagliato di uno, un commit nel servizio,
+>   il token in chiaro nei log, modello e migrazione disallineati.
+
+#### A4.3 — Implementazione ✅ (2026-10-15)
+> **Note implementazione** (bozze scritte in `/tmp/libreFolio_a4_drafts/` durante il rosso, poi copiate):
+> - `backend/alembic/versions/005_accounts_invites.py`: le colonne di `users` con `ALTER TABLE` idempotente, poi
+>   `account_tokens` con `op.create_table` e gli indici con `CREATE INDEX IF NOT EXISTS`. Così un'esecuzione
+>   interrotta fra la tabella e un indice si può ripetere. Il downgrade fa `DROP TABLE` e `DROP COLUMN`.
+> - `backend/app/db/models.py`: `AccountTokenPurpose`, `AccountToken` con indici nominati in `__table_args__` (niente
+>   `index=True`, che `create_all` duplicherebbe), tre campi su `User`.
+> - `backend/app/services/accounts/token_service.py`:
+>   - `consume_token` e `revoke_tokens` sono un solo `UPDATE` condizionato ciascuno;
+>   - `_find` rilegge sempre dal DB (`populate_existing`), così la riga restituita non è mai una copia vecchia della
+>     sessione;
+>   - la scadenza si confronta con `ensure_utc` in Python e con le date SQL in UTC nel DB;
+>   - log strutturati senza token, né in chiaro né come hash.
+> - ruff e black puliti.
+
+#### A4.4 — Test verdi ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a4_green.sh`, corsia 6182):
+> - `services account-tokens`: **64** passati. `db migration-005`: **25** passati.
+> - `db create` (rifà il DB della corsia alla head), poi:
+>   - `db validate`: 17;
+>   - `db autoincrement-schema`: 4, quindi niente AUTOINCREMENT su `account_tokens`;
+>   - `db post-migration`: 37, l'upgrade della 1.1 ora passa anche dalla 005;
+>   - `db referential-integrity`: 17;
+>   - `db model-validators`: 36;
+>   - `db populate-reset`: 25.
+> - **API invariata**: lo schema OpenAPI esportato (113 percorsi, 586 schemi) non contiene nessuno dei nomi nuovi
+>   (`session_version`, `email_verified_at`, `last_seen_version`, `AccountToken`, `token_hash`, `grants_admin`, gli
+>   scopi). Nessun endpoint espone il modello `User`, quindi non serve `api sync`.
+> - **vulture** (`dev.py lint --dead-code --scope backend`): 5 reperti nuovi, le funzioni pubbliche di
+>   `token_service` nel gruppo «referenced only by tests». È lo stato di passaggio previsto: le chiama A5. Gli altri
+>   reperti c'erano già.
+
+#### A4.5 — Doc per sviluppatori (`docs-writer`) e devWiki ✅ (2026-10-15)
+> **Note implementazione**:
+> - `architecture/database/index.md`: la riga della 005 nella tabella della catena delle migrazioni. H, in
+>   `dev_release2`, tocca solo la tabella dei file della cartella dati, più in basso.
+> - `architecture/database/users_access.md`:
+>   - schema ER con `ACCOUNT_TOKEN` e le sue tre relazioni con `USER`;
+>   - le tre colonne nuove di `USER`;
+>   - sezione nuova `ACCOUNT_TOKEN` (`#account-token`): colonne, CHECK, unicità, azioni delle chiavi esterne e
+>     perché, indici, perché niente AUTOINCREMENT, cosa prova `db migration-005`.
+> - `architecture/security.md`: sezione nuova «🎟️ Single-use Account Tokens» (`#account-tokens`), fra «Endpoint
+>   Protection» e «Output Escaping». In `dev_release2` H ha inserito le sue sezioni prima di «Endpoint Protection»,
+>   quindi l'unione resta pulita.
+>   - Contenuto: generazione e hash, tabella di scopi, durate e link, stato e consumo atomico, revoca, transazioni e
+>     log.
+>   - Dice che oggi nessun endpoint usa il servizio e che le pagine `/invite`, `/reset-password`, `/setup` e
+>     `/verify-email` non esistono ancora.
+> - devWiki `domains/auth.md`: una decisione (token monouso, hash, consumo atomico, niente batch su `users`) e 3
+>   righe «Source files». `check_source_paths.py` trova i soliti 5 percorsi generati.
+>
+> **⚠️ Fuori pista**:
+> - La docstring della 005 diceva che gli id dei token non si riusano mai. Non è esatto: la cancellazione di un
+>   account toglie i suoi token, e se erano gli ultimi i loro id tornano. Mai per un invito, che non ha account.
+>   Corretta. La pagina `users_access.md` lo dice già.
+> - `patterns/alembic.md` presenta il batch come la via normale, senza avvertire della cascata con `foreign_keys=ON`.
+>   La pagina è di tutti: aggiunta ad A-7 nel backlog e segnalata al coordinatore.
+
+#### A4.6 — Validazione del checkpoint ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a4_validate.sh`, corsia 6182, dalle 04:20 alle 04:43):
+> - `dev.py mkdocs build`: exit 0. `mkdocs check-links`: 95 link validi.
+> - `check-orphans`: 366 unitari, 118 E2E, **267** file backend (265 più i 2 nuovi), tutti registrati e
+>   raggiungibili da `all`.
+> - **`all-backend`**: uscita 0, **7/7 categorie**, 22 min.
+>   - 24 righe di riepilogo pytest: **13 556 passati, 28 saltati, 0 falliti**.
+>   - In A3.8, su `35f1e0a16`, erano 13 440. A4 aggiunge 89 test (64 più 25); gli altri vengono da W I1, entrato nel
+>     frattempo e non misurato a parte.
+> - `git diff --check` pulito, porta 6182 libera.
+> - Frontend non toccato: niente `front check`, build o E2E.
+
+### Checkpoint A4 (CP A4, migrazione e token) 🧊 (2026-10-15, notte) — FROZEN, in attesa del commit del coordinatore
+> - **Delta** sulla base `0ddd296a0`, non in stage:
+>   - 4 file nuovi;
+>   - 7 file di codice, test, runner, doc e devWiki modificati;
+>   - in più questo piano e la sezione A del backlog.
+> - **Conflitti attesi con `dev_release2`** (`0229dbc6a`): nessuno testuale.
+>   - `models.py`: lì la riga 700 (`Asset`), qui le righe 353, 391 e 510.
+>   - `db_schema_validate.py`: lì la riga 286, qui le 533–560.
+>   - `_backend_services.py`: lì le righe 712 e 1173, qui le 445 e 1055.
+>   - `security.md` e `database/index.md`: H inserisce in punti lontani dai miei.
+> - **Commit proposti**:
+>   1. `feat(accounts): migration 005 and account tokens`;
+>   2. `docs(journal): A4 progress, A backlog`.
+> - **Dopo il commit**: l'aggiornamento di base porta il CP3 di H. Poi viene la parte `sv` di A4, con un suo
+>   checkpoint.
+>
+> **Esito**: il coordinatore ha committato `75a8af5a7` (`feat(accounts): migration 005 and account tokens`, 12 file) e
+> `a170c68c0` (journal). Prima del commit ha corretto un'attribuzione nella docstring della 005 e in
+> `database/users_access.md`: `email_verified_at` a `NULL` è una «coordinator decision», non del developer, perché
+> l'ha decisa lui sulla mia proposta.
+>
+> Poi ha aggiornato la base con il merge `3ebf4c043` di `dev_release2` a `0902524e5`. Il merge porta H CP3 (segreti da
+> `*_FILE`, chiave d'istanza, guardie `config-package` e `config-env-example`), X CP2b, W K1, il lotto
+> `web_link_finder` di H, J CP-1 e W4 CP6 (BRIM in `services/brim/`).
+> - Unione automatica di 6 file: `models.py`, `db_schema_validate.py`, `_backend_services.py`, `security.md`,
+>   `database/index.md` e il backlog.
+> - Catena delle migrazioni lineare 004 → 005.
+> - Su `patterns/alembic.md` (A-7): la corregge chi tocca per primo una migrazione su una tabella referenziata.
+
+#### A4.7 — Validazione completa della revisione combinata `3ebf4c043` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a4c_validate.sh`, corsia 6182, dalle 04:46 alle 05:14, tutto exit 0):
+> - `dev.py front build --debug`: svelte-check 0/0. `dev.py mkdocs build`: exit 0. Entrambi prima di `all-backend`, per
+>   l'avvio del server.
+> - `services account-tokens`: **64**. `db migration-005`: **25**. `db create`, poi `db validate` **17** e
+>   `db post-migration` **37**.
+> - `services config-package`: **568** passati; la scansione ora comprende `token_service.py`, che non legge
+>   l'ambiente. `services config-env-example`: **36**.
+> - `check-orphans`: 367 unitari, 118 E2E e 272 file backend, tutti registrati e raggiungibili.
+> - **`all-backend`**: uscita 0, **7/7 categorie**, 24 min. 24 righe di riepilogo pytest: **13 960 passati,
+>   28 saltati, 0 falliti**.
+> - `git diff --check` pulito, porta 6182 libera, worktree pulito prima di questa nota.

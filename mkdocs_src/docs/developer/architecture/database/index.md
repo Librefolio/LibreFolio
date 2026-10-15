@@ -67,6 +67,7 @@ The chain is linear:
 | `002_identifier_other_json_list.py` | `002_identifier_other_json_list` | `001_initial` | Data only: `assets.identifier_other` becomes a JSON list |
 | `003_scheduler_timezone.py` | `5b1333fa6b07` | `002_identifier_other_json_list` | Data only: the stored scheduler sync times move from UTC to `scheduler_timezone` wall-clock time |
 | `004_release_1_2_0_schema.py` | `004_release_1_2_0_schema` | `5b1333fa6b07` | `assets.is_benchmark` and the two onboarding progress tables |
+| `005_accounts_invites.py` | `005_accounts_invites` | `004_release_1_2_0_schema` | `users.session_version`, `users.email_verified_at` and `users.last_seen_version`, and the [`account_tokens`](users_access.md#account-token) table of single-use account links |
 
 !!! warning "The revision id is the contract, not the filename"
 
@@ -162,7 +163,7 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | `sqlite/app.db.pre-<fix ids>-<UTC>.bak` | `db/post_migration/` | Backup kept after a failed fix |
 | `custom-uploads/<uuid>.<ext>` + `<uuid>.json` | `services/files/static_uploads.py` | Uploaded file and its sidecar: `id`, `original_name`, `extension`, `mime_type`, `size_bytes`, `uploaded_at`, `uploaded_by_user_id`, `description` ([File Upload](../../frontend/components/core-ui/file-upload.md)) |
 | `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/files/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |
-| `broker_reports/` | `services/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
+| `broker_reports/` | `services/brim/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
 | `logs/librefolio.log` | `logging_config.py` | structlog `JSONRenderer` lines; `TimedRotatingFileHandler` (`when="W0"`, `utc=True`, `backupCount=52`) whose rotator gzips each archive to `librefolio.log.<date>.gz` |
 | `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, written then renamed; a missing or corrupt file means a fresh state |
 | `secrets/instance.key` | `services/platform/instance_key.py` | The [instance key](../security.md#instance-key), only when neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE` is set. Created by the first `derive_key()` call, not by `ensure_data_dirs()`: `secrets.token_urlsafe(32)` and a newline (43 characters, 44 bytes), folder `0700`, file `0600`. Published with a hard link so that the first key wins, then never rewritten; a file that goes missing is generated again, see the [known limitation](../security.md#instance-key). `validate_test_data_dir()` keeps a test root from aliasing it |

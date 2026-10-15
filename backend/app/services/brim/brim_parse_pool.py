@@ -46,7 +46,7 @@ from typing import Optional
 import structlog
 
 from backend.app.schemas.brim import BRIMParseOutput
-from backend.app.services import brim_provider
+from backend.app.services.brim import brim_provider
 
 logger = structlog.get_logger(__name__)
 

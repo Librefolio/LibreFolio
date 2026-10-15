@@ -170,7 +170,7 @@ def services_pac_planner_service(verbose: bool = False, test_names: list = None)
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX conversion service logic."""
     print_section("Services: FX Conversion Logic")
-    print_info("Testing: backend/app/services/fx/fx.py convert() function")
+    print_info("Testing: backend/app/services/fx/conversion.py (convert_bulk)")
     print_info("Scenarios: Identity, Direct, Inverse, Roundtrip, Different Dates, Forward-fill")
     print_info("Safety: Verifies test database usage before modifying data")
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
@@ -414,7 +414,7 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
-    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py")
     print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
@@ -443,6 +443,16 @@ def services_user_profile(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "User profile service tests", verbose=verbose)
 
 
+def services_account_tokens(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the single-use account tokens: invites, password resets, e-mail verification, admin setup."""
+    print_section("Services: Account Tokens")
+    print_info("Testing: backend/app/services/accounts/token_service.py")
+    print_info("Tests: hash-only storage, one purpose per token, expiry boundary, atomic single use, revocation, caller-owned transaction, no plaintext in logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_tokens.py", test_names)
+    return run_command(cmd, "Account token service tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """Test edge cases and regression scenarios for transactions."""
     print_section("Services: Transaction Edge Cases")
@@ -466,7 +476,7 @@ def services_global_settings(verbose: bool = False, test_names: list = None) -> 
 def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX core helpers."""
     print_section("Services: FX Core Helpers")
-    print_info("Testing: backend/app/services/fx/fx.py (core functions not covered by fx-conversion)")
+    print_info("Testing: backend/app/services/fx/ (core functions not covered by fx-conversion)")
     print_info("Tests: normalize_rate, upsert_rates_bulk, delete_rates_bulk, _count_actual_changes")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_core.py", test_names)
@@ -486,7 +496,7 @@ def services_static_uploads(verbose: bool = False, test_names: list = None) -> b
 def services_brim_parse_error(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMParseError exception class."""
     print_section("Services: BRIM Parse Error")
-    print_info("Testing: backend/app/services/brim_provider.py (BRIMParseError)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (BRIMParseError)")
     print_info("Tests: Constructor, message/details attributes, exception hierarchy")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error.py", test_names)
@@ -496,7 +506,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -542,7 +552,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -552,7 +562,7 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
-    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
     print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
@@ -767,9 +777,9 @@ def services_file_preview(verbose: bool = False, test_names: list = None) -> boo
 
 
 def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
-    """Test FX pair-sync orchestration branches in services/fx/fx.py."""
+    """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
-    print_info("Testing: backend/app/services/fx/fx.py")
+    print_info("Testing: backend/app/services/fx/sync.py")
     print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
@@ -1075,6 +1085,16 @@ Note: No backend server required.
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
+    add_test(
+        cat,
+        "account-tokens",
+        services_account_tokens,
+        name="Account Tokens",
+        desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
     add_test(
         cat,

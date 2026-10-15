@@ -779,7 +779,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
 >   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
-> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
@@ -881,8 +881,8 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
 > Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
 >
-> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano il merge
-> dell'hotfix in `dev_release2`, che tocca `brokers.py`, `uploads.py` e `main.py`.
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
 
 ### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
 
@@ -905,3 +905,47 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
 > risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
 > nella sezione C; C-93 non si è ripresentato.
+
+### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
+> plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
+> tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
+> `brokers.py` e `uploads.py`; intanto W7 e K2.
+
+### A4, migrazione 005 e token monouso, integrato ✅ (2026-10-15, 05:20)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e476d2ed4` (A4 `75a8af5a7`, base aggiornata con H CP3,
+> X CP2b, W K1, il lotto di H, J CP-1 e W4 in `3ebf4c043`). Migrazione 005 (`005_accounts_invites`, dopo la 004):
+> tabella `account_tokens` (solo lo SHA-256, uno scopo per token, scadenza, consumo e revoca) e tre colonne di `users`
+> (`session_version`, `email_verified_at` a `NULL` senza riempimento, `last_seen_version`), con `ALTER TABLE` semplice:
+> un batch ricostruirebbe `users` e con `foreign_keys=ON` cancellerebbe a cascata. `token_service` con consumo atomico.
+> Validazione di A sulla revisione combinata: `all-backend` 13 960 passed, 28 skipped, 0 failed; `db migration-005`
+> 25, `account-tokens` 64, `config-package` 568. Prima del commit il coordinatore ha corretto un'attribuzione: la
+> scelta su `email_verified_at` è sua, non del developer. Nessuna riga nel CHANGELOG: non c'è ancora niente di
+> visibile. Poi A4b, la versione di sessione `sv` (D-A17).
+
+### X CP3, i cambi per tema, integrato ✅ (2026-10-15, 05:30)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `8000aba5a`. CP3 `b991d5e26` (PL4): `services/fx/fx.py` →
+> `base`, `storage`, `conversion`, `sync`; `api/v1/fx.py` → `api/v1/fx/` (`providers`, `currencies`). Nessuna rinomina
+> a −M95 %. Controllo del coordinatore sull'AST: 32/32 e 20/20 definizioni identiche. Validazione di X: run completa
+> sulla revisione con J CP-1 e W4 (`d1ef3ddeb`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
+> `api schema` identici. Sopra A4 (`9a3ba752a`) controllo leggero: guardia 573, raccolta e schema identici.
+>
+> **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
+> solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
+> X-R8, proposta: cache di 24 ore dell'elenco delle valute dei fornitori, con l'ultimo elenco noto in caso d'errore.
+
+### W7, gli schemi delle transazioni come pacchetto, integrato ✅ (2026-10-15, 05:40)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1cd7300f3`. Due commit, perché il nucleo resta sotto la
+> soglia di somiglianza di git: W7a `00a19bf72`, la rinomina pura (`R100`) di `schemas/transactions.py` in
+> `schemas/transactions/transactions.py`; W7b `e28aad42f`, il taglio in `batch`, `event_suggest`, `promotion` e
+> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`304e6d176`)
+> `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
+> e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
+> coordinatore su `brokers.py` e `uploads.py`.

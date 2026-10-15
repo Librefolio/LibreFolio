@@ -2097,7 +2097,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     HttpOnly. Si sistema in A4 (sessioni).
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
     segnalata al coordinatore.
-  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5».
+  - Trovata in A4 (15/10): `architecture/patterns/alembic.md` presenta il batch come modo normale di cambiare una
+    tabella in SQLite, e il suo esempio di CHECK usa `op.batch_alter_table('transaction')`. Non avverte che, con
+    `foreign_keys=ON`, il batch ricostruisce la tabella e cancella a cascata le righe delle tabelle figlie: è il
+    motivo per cui la 004 e la 005 lo evitano. Il nome della tabella è anche sbagliato: è `transactions`. La pagina è
+    di tutti: segnalata al coordinatore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5» e «A4.5».
 - **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
   lingua mostra l'inglese — basso; programma colori (15/10).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
@@ -2113,14 +2118,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1).
-  La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
-  descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
-  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
+- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+  CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
+  funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
+  un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
+  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
 - **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
-  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Dettagli:
+  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
+  `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
 - **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
@@ -2128,16 +2136,64 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
   del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», CP2b.
+- **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
+  minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
+  un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
+  nessun codice di `services/fx/` la fa (`base.py` dichiara solo la proprietà `multi_unit_currencies`). Preesistente al
+  riordino. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3.
+- **X-R5 · Commenti e docstring con i percorsi tolti da CP2a, CP2b e CP3** — minimo; X, 15/10 (validazione di
+  `d1ef3ddeb`). Un grep più largo di quelli dei lotti (nomi di file nudi, nomi puntati dentro le docstring, il frontend e
+  `TODO_FUTURI.md`) trova 16 righe che citano un percorso che non c'è più; erano tutte già nel mio ramo prima del merge
+  (nessuna arriva dalle altre sessioni). Solo testo: nessuna è in `openapi.json` né cambia comportamento.
+  - Backend: `asset_source_providers/scheduled_investment/plugin.py:33-34` (`schemas.assets.FA…` → `schemas.assets.assets`,
+    CP2b); `services/assets/core.py:15` («fx.py» → `services/fx/`, CP3); `test_api/test_fx_compress_errors.py:1` (→
+    `api/v1/fx/currencies.py`, CP3); `test_services/test_fx_core.py:5` (→ `services/fx/storage.py` e `sync.py`, CP3).
+  - Frontend: `e2e/assets/asset-modal.spec.ts:526` («asset_source.py» → `services/assets/provider_management.py`, CP2a);
+    `e2e/fixtures/galleryOfflineData.ts:62` (→ `api/v1/fx/providers.py`, CP3); `e2e/fixtures/galleryProviderCompare.ts:40`
+    e `galleryReportSets.ts:398` («asset_sources/search.py» → `services/assets/search.py`, CP2a);
+    `components/assets/ScheduledInvestmentEditor.svelte:75`, `:81`, `:89` (→ `schemas/assets/assets.py`, CP2b);
+    `stores/app/auth.test.ts:574` (→ `api/v1/assets/crud.py`, CP2b); `stores/reference/fxRoutesStore.test.ts:8` («fx.py» →
+    `services/fx/sync.py`, `sync_pairs_bulk`, CP3).
+  - `TODO_FUTURI.md:1121` (→ `schemas/assets/assets.py`) e `:2067` (→ `services/assets/price_query.py:149`).
+  Decisione del coordinatore (15/10): nel lotto CP3b, compresi `auth.test.ts:574` (lo avvisa lui ad A) e le 2 righe di
+  `TODO_FUTURI.md`; restano fuori i due commenti di `AssetModal` (X-R3, FE5) e le 3 fixture della galleria, che sono di G e
+  il coordinatore gira al coordinatore colori. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
+- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+  `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
+  accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
+  (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
+  timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
+  `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
+  `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
+  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base.
+- **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
+  da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
+  `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
+  rimando. Nel lotto CP3b (docs-writer). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base.
+- **X-R8 · `GET /fx/providers` chiede alla BCE l'elenco delle valute a ogni richiesta** — piccolo, prodotto; X, 15/10
+  (preparazione del CP3b). `list_providers` (`api/v1/fx/providers.py:97-101`) chiama `get_supported_currencies` di ogni
+  fornitore pubblico; quello della BCE (`fx_providers/ecb/plugin.py:95`) fa una richiesta HTTP senza cache, con 30 s di
+  timeout: ogni apertura dell'elenco aspetta la BCE, e senza rete la BCE compare con zero valute (l'errore resta nel log).
+  Il CP3b toglie la rete dai test che controllano le valute; le chiamate senza filtro (elenco completo, `MANUAL` nascosto)
+  restano, e sul server vanno comunque alla BCE. Proposta del coordinatore (15/10; il developer può cambiarla): una cache
+  dell'elenco delle valute dei fornitori, valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout
+  breve. In un lotto di X dopo il CP3b. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
 - **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
-  `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe
-  ~139-143) rende una lista vuota. Va contro la regola dei test senza rete. Da sistemare con il CP3 (PL4, router dei cambi)
-  o prima. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
-
+  `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx/providers.py`
+  (`list_providers`, righe ~97-101 dal CP3) rende una lista vuota. Va contro la regola dei test senza rete. Non nel CP3,
+  che è un riordino puro (`openapi.json` e test invariati): lotto di solo test CP3b, approvato dal coordinatore il 15/10,
+  dopo l'ingresso del CP3 e prima del CP4. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2a e CP3.
 - **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
   il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
   `button[aria-label="Close"]`; con P-15 l'etichetta viene da `common.close`, quindi il selettore regge solo in
-  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
+  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1; nel lotto CP3b, con W-B9. Dettagli: piano 04,
+  §12, K1 passo 4.
 
 ## W · Import e transazioni (fase 01)
 
@@ -2189,6 +2245,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
 - ↪ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — spostata nella sezione X
   dal coordinatore il 15/10 (spec di X).
+- **W-B14 · La docstring di `IdentifierType` cita percorsi vecchi, ed è nell'OpenAPI** — minimo, doc; W, 15/10 (W4,
+  CP6). `backend/app/db/models.py:127` dice ancora `backend/app/services/brim_provider.py` (ora `services/brim/`), accanto
+  a `services/asset_source.py` e `schemas/assets.py` di X. La docstring diventa la descrizione dell'enum nell'OpenAPI,
+  quindi un lotto di riordino, che vuole lo schema identico, non la tocca. Cura: un lotto che accetta la differenza
+  nella descrizione, insieme a X per le sue due righe. Dettagli: piano 04, §12, W4.
 
 ## J · Numeri e analisi (fase 01)
 

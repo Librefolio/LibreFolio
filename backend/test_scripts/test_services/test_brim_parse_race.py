@@ -35,7 +35,7 @@ import pytest
 
 from backend.app.config import get_version
 from backend.app.schemas.brim import BRIMCombinedTable, BRIMDerivedRef, BRIMFileInfo, BRIMFileStatus, BRIMParseOutput
-from backend.app.services import brim_provider
+from backend.app.services.brim import brim_provider
 
 
 class _MovingPlugin:
