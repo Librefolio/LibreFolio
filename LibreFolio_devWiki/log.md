@@ -3538,3 +3538,20 @@ file operation, like the other entries of 15/10.
 Filed: [[decisions/asset-event-saves-all-or-nothing]], [[problems/provider-event-dated-today-not-synced]],
 [[problems/select-list-under-the-sticky-table-header]], [[problems/testing-library-events-prop-read-as-mount-option]].
 Graph: not updated (P-6); graphify is not available in this worktree.
+
+## [2026-10-15] file | Category axes under zoom, and the AI Export button — workstream Y, lot Y8
+Y's lot Y8 closed two items the wiki still listed as open, and taught one ECharts rule.
+
+- 47-1: on a phone, a zoomed category axis kept the compact `interval` computed for every point. The policy now takes
+  the visible count (`visiblePointCountFromZoom`, read from the event), and `LineChart`, `CandlestickChart` and
+  `PriceChartFull` merge `categoryAxisLabelPatch()` once the gesture settles.
+- The rule: a `setOption` merge keeps every key the patch omits, so the patch always sets `interval: 'auto'`. Filed as a
+  row of [[concepts/echarts-chart-gotchas]].
+- 48-1: the AI Export trigger and the Dashboard's `sync-button` use `gap-1.5 px-2.5`, like the other toolbars.
+
+Pages updated: [[problems/line-chart-axes-lost-the-day]], [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]],
+[[concepts/echarts-chart-gotchas]] and their index rows. `check_source_paths.py` gives 5 missing (8 occurrences) before
+and after, all pre-existing.
+
+Filed: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.

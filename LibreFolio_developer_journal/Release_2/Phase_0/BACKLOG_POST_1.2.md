@@ -3226,10 +3226,13 @@ da Y il 15/10.
 - **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
   T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
   le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
-- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
-  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
-  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
-  Y8. Dettagli: piano di Y, §2.
+- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (commit al checkpoint di Y8): un `$effect`, a ogni
+  caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in percentuale, e torna al `%` quando li
+  ritrova, salvo una scelta esplicita nel frattempo. Rosso prima in `GrowthChart.test.ts` («% view without % data,
+  after every load»); provata in Vitest, non ancora nel browser. Era: basso; Y, 15/10 (analisi). Il ripiego da % ad Abs
+  scattava solo per la vista % ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo
+  o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
+  Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
 - **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
   verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
@@ -3264,3 +3267,13 @@ da Y il 15/10.
   - È un'inversione di livello: la UI generica dipende da una feature.
   - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
   - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
+- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
+  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+  `PriceChartFull.svelte:612`.
+  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
+    proprio contro gli scatti sui grafici con anni di dati giornalieri.
+  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
+  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
+    o rinviata come le etichette.
+  - Dettagli: piano di Y, §7 «Y8 — passo 3».
