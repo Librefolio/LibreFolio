@@ -38,6 +38,11 @@
         "ok": "Los correos viajan cifrados, o el correo está desactivado.",
         "localPlain": "Los correos van sin cifrar a un servidor de la red local.",
         "plain": "Los correos, sus enlaces y la contraseña SMTP viajan sin cifrar a un servidor fuera de la red local: pon LIBREFOLIO_SMTP_TLS en starttls o tls."
+      },
+      "links": {
+        "ok": "Los correos pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL está definida, o el correo está desactivado.",
+        "missing": "LIBREFOLIO_PUBLIC_URL no está definida: el correo funciona, pero ninguno con enlace (contraseña olvidada, invitación, restablecimiento) puede salir.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL no es una dirección http:// o https://: no puede salir ningún correo con enlace."
       }
     },
     "budget": {
