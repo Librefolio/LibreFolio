@@ -2585,3 +2585,57 @@ dell'esempio già a 60 (120 investiti, 180 di valore), come diceva J-11.
   («waits for … point 47»): pagina di W, la aggiorna la sua conversione.
 - Conflitti previsti con `dev_release2` `de349d4c3`: nessuno testuale (backlog e runner in punti separati).
 - Stato: handoff FROZEN mandato al coordinatore (15/10, ~23:50); porta 6185 libera.
+
+#### Checkpoint CP-16 ✅ (2026-10-15) — committato dal coordinatore (`335fb89cf`, journal `206bbabc3`)
+
+- CP-4d in `dev_release2` col treno 64 (merge `40f44f364`, registri `45499dec4`), con la riga 🐛 MWRR nel CHANGELOG.
+- **Aggiornamento di base 7** — merge di `dev_release2` `de349d4c3`, HEAD `b7d1a2bb7`, pulito (backlog e
+  `_frontend_utility.py` fusi da soli). Dentro: T+DV, W3-a dei colori, H CP-U1, X-RL, E5a, W-B20.
+- **Regola della notte** (coordinatore, 23:49): una decisione del developer va al coordinatore in 3-4 righe con la
+  proposta per prima, e il punto si mette in pausa; una scelta tecnica nel mio perimetro la decido io, annotata come
+  «Decisione notturna, da rivedere»; slot pesanti chiesti, checkpoint FROZEN come sempre.
+- **J-17** nella lista del developer per il mattino, con la proposta; il punto 3 (CP-12) e il debito di traduzione
+  restano nel backlog.
+- **Ingresso, prove leggere** (15/10, 23:50–23:56, una alla volta, `nice -n 10`, carico 19–32): `dev.py api sync`
+  (nessun file tracciato cambiato), `dev.py front check` (svelte-check 0 errori, 0 avvisi), `front-utility core-unit` 168
+  file / 5 661 test, `theme-roles.mjs --check` («Colour gates: clean»), `services roi-fifo-utils` 706,
+  `services lots-analysis-pure` 129, `api portfolio` 51. Resta `all-backend --workers 2` sullo slot 1, quando il
+  coordinatore lo assegna.
+
+#### CP-15 — analisi sulla base `b7d1a2bb7` (15/10, 23:57–00:10, sola lettura, durante `all-backend`)
+
+Il disegno qui sopra regge sul codice d'oggi. Verificato:
+- `native_balances(movements, as_of=None)` e `cash_movement_from_transaction(tx, *, share=1)` sono in
+  `native_cash.py:89,424` (N1 di W). `cash_movement_from_transaction` salta le righe senza valuta; `native_balances`
+  tiene le linee a zero, che `control_totals` toglie.
+- La regola del motore per le quantità: `daily_state.py:184-187`, ogni riga con asset e quantità ≠ 0.
+- `Transaction` non ha cancellazioni logiche; `quantity` e `amount` sono `Numeric(18, 6)` non nulli. Su SQLite
+  SQLAlchemy li legge come Decimal a 6 decimali: la somma in Python è esatta, quella in SQL passerebbe dai float.
+- La guardia dello strato vieta servizi, API e funzioni, e ammette `db.models`. Il «punto di lettura con nome» (regola
+  1) è una convenzione, documentata in 4 posti: docstring di `financial_math/__init__.py`, `financial-math.instructions.md`
+  (tabella e regola 1), mappa di `backend.instructions.md`, `developer/backend/financial_math.md` (albero, punti di
+  lettura, tabella dei test).
+- `QUANTITY_DUST_THRESHOLD` ora sta in `services/platform/data_quality_thresholds.py` (H): non serve a CP-15, che tiene
+  ogni residuo.
+- In `dev_release2` nessuno chiama ancora l'API (B2 usa un sostituto della stessa forma).
+
+**Decisioni notturne, da rivedere** (scelte tecniche nel mio perimetro):
+1. `to_json()` dà un dict pronto per JSON (la forma concordata con B: `version`, `cash`, `quantities`, Decimal come
+   testo canonico); `from_json(data)` lo riceve. B lo mette nel manifest col suo `json.dumps`. Glielo scrivo
+   all'integrazione.
+2. Lettura a blocchi da 5 000 righe per chiave (`id > ultimo ORDER BY id LIMIT`): lineare, nessun `OFFSET`.
+3. Somme in un contesto decimale locale a precisione alta con `Inexact` intrappolato: mai un arrotondamento muto.
+4. Test in `test_financial_math/test_ledger_totals.py`, nell'unità pura `services financial-math`. Il test su file usa
+   un SQLite in `tmp_path` con un engine suo, chiuso alla fine (guardia J-6), senza toccare DB o server condivisi.
+   Le parità restano pure: quantità contro il fold del costo medio a quota 1, cassa contro `NativeCash.balances()` con
+   `convert_bulk` sostituito.
+
+**Ordine**: rossi (test-author), modulo, doc nei 4 posti, cancelli (il file nuovo e `services financial-math`).
+Peso basso; nessuna suite pesante propria.
+
+**✅ Ingresso CP-16, `all-backend --workers 2`** (slot 1, 15/10 23:57 → 16/10 00:38, `nice -n 10`, carico all'avvio 26):
+7/7 categorie verdi; passate parallele 16 306 passed, 4 skipped, 0 failed, più la passata consolidata per categoria,
+verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso SSL di MathJax è la VPN. Porta 6185 libera.
+- **⚠️ Fuori pista**: il primo lancio (23:57:24) è uscito in 4 s con exit 2, perché avevo messo `--workers 2` dopo la
+  categoria (`dev.py test … all-backend --workers 2`): l'opzione va prima, con `--test-port` e `--data-dir`. Nessun
+  test partito, nessun dato toccato; rilanciato subito.
