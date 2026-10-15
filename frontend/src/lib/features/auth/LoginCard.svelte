@@ -62,7 +62,7 @@
             <!-- Error Message -->
             {#if $authError}
                 <div class="bg-lf-danger-soft border border-lf-danger-line text-lf-danger-on-soft px-4 py-2 rounded-lg text-sm" data-testid="login-error">
-                    {'key' in $authError ? $_($authError.key) : $authError.message}
+                    {$_($authError.key)}
                 </div>
             {/if}
 

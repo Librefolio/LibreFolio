@@ -177,19 +177,20 @@ def _ensure_test_users() -> bool:
 
     print_info("Ensuring E2E test users exist...")
 
+    # Only e2e_test_admin is an administrator: the others are ordinary users (backlog 38, L12).
     users = [
-        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!"),
-        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
-        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!"),
-        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!"),
-        ("e2e_user_bob", "bob@test.example.com", "BobPass123!"),
-        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!"),
-        ("e2e_user_dave", "dave@test.example.com", "DavePass123!"),
-        ("e2e_user_eve", "eve@test.example.com", "EvePass123!"),
+        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!", "create-user"),
+        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!", "create-superuser"),
+        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!", "create-user"),
+        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!", "create-user"),
+        ("e2e_user_bob", "bob@test.example.com", "BobPass123!", "create-user"),
+        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!", "create-user"),
+        ("e2e_user_dave", "dave@test.example.com", "DavePass123!", "create-user"),
+        ("e2e_user_eve", "eve@test.example.com", "EvePass123!", "create-user"),
     ]
 
-    for username, email, password in users:
-        result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", "create-superuser", username, email, password], capture_output=True, text=True)
+    for username, email, password, command in users:
+        result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", command, username, email, password], capture_output=True, text=True)
         # The CLI exits 1 on failure and reports on stdout ("Username already taken",
         # "Email already registered"): an existing user is fine, anything else is not.
         output = f"{result.stdout}\n{result.stderr}".lower()

@@ -52,6 +52,11 @@
     "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
     "invalidInput": "Données non valides",
     "loginFailed": "La connexion a échoué",
-    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver."
+    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver.",
+    "loginServerUnreachable": "Le serveur ne répond pas : vérifiez votre connexion et réessayez dans un instant.",
+    "loginServerError": "Le serveur a rencontré une erreur : réessayez dans un instant et, si cela se reproduit, prévenez un administrateur.",
+    "tooManyAttempts": "Trop de tentatives de connexion : patientez quelques minutes et réessayez.",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   }
 }

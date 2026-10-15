@@ -2001,6 +2001,29 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È vicina a I-06 del backlog 38.
 
   Dettagli: piano H, §14 «CP1 passo 0» e «Fuori pista 3».
+- **H-3 · Una chiave d'istanza persa dopo il primo uso sembra un primo uso** — medio-basso; H, revisione di sicurezza di
+  CP3 (15/10).
+  - Se `secrets/instance.key` sparisce, per esempio con un ripristino senza `secrets/`, `derive_key` ne genera una
+    nuova senza avvisi.
+  - Ciò che la vecchia chiave cifrava resta illeggibile, e i dati nuovi si cifrano con una chiave che non sta in nessun
+    backup.
+  - Cura proposta: al primo uso, un valore di controllo della chiave nel DB (per esempio un HMAC con la chiave derivata
+    `instance.key-check.v1`). Se il valore c'è, `derive_key` non genera mai una chiave e rifiuta una chiave diversa.
+  - Serve il DB: si fa con X e B al loro primo uso di `derive_key`. Oggi la doc admin chiede di ripristinare
+    `secrets/` insieme ai dati.
+  - Note di progetto per X e B:
+    - una chiave per istanza, mai la stessa su più istanze;
+    - un backup cifrato con una chiave derivata non deve contenere anche `secrets/`;
+    - una chiave configurata è casuale, non una passphrase.
+
+  Dettagli: piano H, §14 «CP3 passo 2».
+- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+  minimo; H, 15/10.
+  - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
+  - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
+  - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
+
+  Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
 
 ## A · Account e accessi (fase 01)
 
@@ -2031,8 +2054,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
     `test_portfolio_api.py`, `test_portfolio_wac.py`.
   - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
-  - `user_cli.py` si sistema con A5, che ne tocca i comandi.
-  - Dettagli: idem, «A1.6».
+  - ✅ **`user_cli.py` chiuso il 15/10** con A3, che ne tocca i comandi (L12): black, W293 e PLC0415, più il C901
+    portato dal comando nuovo (ora una tabella). Restano gli altri tre file, fuori dal dominio di A.
+  - Dettagli: idem, «A1.6» e «A3.3».
 - **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; A
   (15/10).
   - Quattro copie delle stesse cinque regole: `ui/input/PasswordStrength.svelte`, `settings/PasswordChangeModal.svelte`,
@@ -2040,6 +2064,26 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
+- **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
+  - `architecture/access_control.md:116-123`:
+    - dice che `set_user_admin()` non controlla l'ultimo admin, ma da `2fb8b8502` l'ultimo admin attivo non si
+      declassa né si disattiva;
+    - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
+      giusta.
+    - Si allinea con A6, che riscrive le regole dell'admin.
+  - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+  - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
+    HttpOnly. Si sistema in A4 (sessioni).
+  - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
+    segnalata al coordinatore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5».
+- **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
+  lingua mostra l'inglese — basso; programma colori (15/10).
+  - Probabile causa: `lib/stores/app/language.ts`, `init()`.
+  - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
+    locale del browser `it-IT`).
+  - Dettagli: idem, «A3.0».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2053,10 +2097,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
   descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
-- **X-R2 · Il vecchio percorso degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a). Le docstring
-  di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:123`) citano ancora `asset_source.py`,
-  tolto nel CP2a. Il testo finisce in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima).
-  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
+  `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
+  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
+- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
+  generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
+  per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b.
 - **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
   `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe

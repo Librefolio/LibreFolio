@@ -16,17 +16,19 @@ from urllib.parse import parse_qs, urlparse
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAssetPatchItem,
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.assets.core import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 

@@ -1040,7 +1040,7 @@ def populate_asset_provider_assignments(session: Session):
         ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
         # Scheduled Investment — BTP Italia with interest schedule.
-        # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
+        # Schema: FAScheduledInvestmentSchedule (see schemas/assets/assets.py). Periods
         # must be contiguous + non-overlapping. `asset_events` is optional.
         # Config: DAILY maturation + generate_interest=False → smooth growing line
         # (no auto-coupon reset). Useful for visual regression testing and to

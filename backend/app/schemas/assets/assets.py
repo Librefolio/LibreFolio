@@ -42,6 +42,7 @@ from typing import Dict, List, Optional
 from pydantic import ConfigDict, Field, field_validator
 
 from backend.app.db.models import AssetType, IdentifierType
+from backend.app.schemas.assets.events import FAAssetEventPoint
 
 # Import from common and prices modules
 from backend.app.schemas.common import (
@@ -53,7 +54,7 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.asset.geo import normalize_country_keys
 from backend.app.utils.asset.identifier import normalize_other_identifiers

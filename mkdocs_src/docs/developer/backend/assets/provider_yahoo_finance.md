@@ -92,7 +92,7 @@ During sync, the provider generates:
 - **`SPLIT` events** from `ticker.splits` — split date + ratio value (e.g., `4.0` for a 4:1 split).
 
 Event acquisition and parsing are best-effort and independent. Events that are returned are
-persisted by `assets/price_store.py::_upsert_asset_events()`, keyed by
+persisted by `assets/event_store.py::_upsert_asset_events()`, keyed by
 `provider_assignment_id`.
 
 ---
