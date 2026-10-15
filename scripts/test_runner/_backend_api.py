@@ -493,6 +493,28 @@ def api_auth(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Auth API tests", verbose=verbose)
 
 
+def api_registration(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the registration API tests: modes, invitations, inspect, password reset, the public accounts block, the locked setting."""
+    print_section("Registration API Tests")
+    print_info("Testing POST /auth/register (invite_token), POST /auth/tokens/inspect, POST /auth/password-reset, GET /system/instance accounts, PATCH /settings/global/bulk lock")
+    print_info("In-process on private databases where a mode, a variable or a limit is needed; on the lane's server only what changes nothing global")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_registration_api.py", test_names)
+    return run_command(cmd, "Registration API tests", verbose=verbose)
+
+
+def api_users_admin(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the users admin API tests: invitations, accounts and usage, PATCH with its guards, reset links, sessions, onboarding reset, logs."""
+    print_section("Users Admin API Tests")
+    print_info("Testing GET/POST /users/invites, DELETE /users/invites/{id}, GET /users, PATCH /users/{id}, POST /users/{id}/password-reset-link, /sessions/revoke, /onboarding/reset")
+    print_info("In-process on private databases where a mode, a variable, a limit or the last administrator is needed; on the lane's server only the case's own accounts and tokens")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_users_admin_api.py", test_names)
+    return run_command(cmd, "Users admin API tests", verbose=verbose)
+
+
 def api_profile(verbose: bool = False, test_names: list = None) -> bool:
     """Run Profile Update API endpoint tests."""
     print_section("Profile Update API Tests")
@@ -765,7 +787,15 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
     add_test(api, "brim-scalable", api_brim_scalable, name="BRIM Scalable API", desc="Scalable broker + overnight account: transfers merged and re-imported as duplicates, one-broker cash")
-    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.enable_registration, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
+    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
+    # Write-scoped, no exclusive_because: every case that needs another registration mode, an accounts variable or a
+    # user limit runs in-process on a private database (the lane's server is another process, its row is shared); on the
+    # lane's server only cases that leave the mode alone, each with its own account and tokens, deleted afterwards.
+    add_test(api, "registration", api_registration, name="Registration API", desc="Register with invitations by mode, tokens/inspect, password-reset, instance accounts block, registration_mode locked by the variable")
+    # Write-scoped, no exclusive_because: the mode, the limit, the public and billing URLs and «the last administrator» are
+    # tested in-process on private databases; on the lane's server each case acts only on accounts it registers (its
+    # administrator promoted through user_service) and on their tokens, never counts the lane, and deletes them afterwards.
+    add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
     add_test(

@@ -560,7 +560,7 @@ class GlobalSetting(SQLModel, table=True):
     Predefined keys:
     - session_ttl_hours: Session cookie TTL in hours (int, default: 24)
     - max_file_upload_mb: Max file upload size in MB (int, default: 10)
-    - enable_registration: Allow new user registration (bool, default: true)
+    - registration_mode: Who may create an account: open, invite or disabled (string, default: open)
     """
 
     __tablename__ = "global_settings"

@@ -453,6 +453,16 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_registration(verbose: bool = False, test_names: list = None) -> bool:
+    """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
+    print_section("Services: Registration")
+    print_info("Testing: backend/app/services/accounts/registration_service.py, backend/app/config/accounts.py, the registration_mode setting")
+    print_info("Tests: the four variables, the effective mode (variable over row, invalid closes), usage, invitations, every register_user branch, the limit under a race, bcrypt off the loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_registration_service.py", test_names)
+    return run_command(cmd, "Registration service tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -477,7 +487,7 @@ def services_global_settings(verbose: bool = False, test_names: list = None) -> 
     """Test GlobalSettingsService."""
     print_section("Services: Global Settings Service")
     print_info("Testing: backend/app/services/accounts/global_settings_service.py")
-    print_info("Tests: Type conversion, DB reads with defaults, TTL/upload/registration getters")
+    print_info("Tests: Type conversion, DB reads with defaults, TTL/upload getters, the registration_mode row")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_global_settings_service.py", test_names)
     return run_command(cmd, "Global settings service tests", verbose=verbose)
@@ -1107,6 +1117,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "registration",
+        services_registration,
+        name="Registration",
+        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The variables are set with monkeypatch in this process, and "once per process" in a child Python on a
+        # private file; the race holds two connections to that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "session-version",
         services_session_version,
         name="Session Version",
@@ -1122,7 +1143,7 @@ Note: No backend server required.
         services_global_settings,
         name="Global Settings",
         desc="Type conversion, DB reads, TTL getters",
-        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds enable_registration, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
+        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds registration_mode, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
     )
     add_test(
         cat,
