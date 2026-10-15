@@ -556,9 +556,9 @@ fermati all'handoff, porta verificata libera.
 
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
-  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | **X, FE5b (`AssetModal`), dal 15/10 alle 08:20** (via libera del coordinatore colori; m1 214, nessun letterale). La pagina (FE5c) dopo il lotto di Z sul polling |
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
   | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | **Y, FE6a (taglio sul posto in moduli `.ts` puri), dal 15/10 alle 12:47** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
 ## 8. Traguardi, in ordine di dipendenza
@@ -1219,3 +1219,32 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **⚠️ Fuori pista**: avevo detto al developer che la pipeline di rilascio rifà i test; non è così: fa build, controlli
 > della documentazione, galleria e immagini. Il giro completo sull'hotfix (`utils all`, `api auth`) lo faccio dopo la
 > finestra della galleria.
+
+### Y e Z avviati, decisioni 19–25 girate (2026-10-15, 12:40–12:50)
+
+> **Note implementazione**: su delega del developer («Sì: avvia tu Y (i due tagli) e Z (Z6a subito, Z1 quando decido il
+> 31)») approvati i piani di Y e Z, base `1e9e567f7`. Y: Y1 (taglio di `GrowthChart`, FE6a, annunciato e accettato dal
+> coordinatore colori) e Y2 (`DataTable`, da annunciare); D-Y1…D-Y9 decise dal coordinatore; D-Y10…D-Y12 (C-85, 54-1,
+> difetto 5 del PAC) vanno nel file delle decisioni. Z: Z6a (prove su C-49); Z1 aspetta il punto 31. Decisioni del
+> developer girate alla lettera: 19 a X (scraper fuori dalla ricerca nel profilo gestito, assegnabili a mano con un
+> avviso), 20–25 a W (20 subito in E1: errore e «Modifica questo»/«Usa questo»/«Annulla», niente «Crea comunque»; 23:
+> i tipi sconosciuti già salvati si cancellano); E1 di W autorizzato, la parte sull'export degli eventi dopo B0.
+
+### Finestra delle dipendenze e treni 32–35 (2026-10-15, 13:05–14:45)
+
+> **Note implementazione**: chiusa la finestra della galleria (13:01). Il carico della macchina è salito a 84, poi a
+> 110–139, per troppe prove «leggere» in parallelo (categorie Vitest con un worker per core, build, svelte-check) più le
+> gallerie del programma colori. Regole nuove: al massimo 3 suite pesanti sulla macchina, 2 della 1.3 e 1 del programma
+> colori, assegnate dai coordinatori; le categorie Vitest contano come pesanti; le corsie non in integrazione lanciano
+> solo test di file singoli. Finestra delle dipendenze (13:08–13:36): tutte le corsie ferme, il developer ha installato
+> `cryptography` (lock: + `cryptography 50.0.2`, `pycparser` 3.0 → 3.11), commit `dc9a5d232`.
+> Treni: 32 `dc9a5d232` (dipendenze); 33 H CP5b+CP6 (`83eaa5a28`, validato da H sulla revisione combinata:
+> `all-backend` 12 725, core-unit 4 407, component-unit 3 240, E2E auth/app-start-auth/settings); 34 X FE5b, X-R11a,
+> X-R1/R2, D-X4 (`ec0dc7ebd`, validato da X su `2fb577588`, che differisce solo per `Pipfile`; due rossi di
+> `asset-browse` da saturazione, la spec da sola 8/8; sull'albero H+X `npm run check` 0/0 dopo `api sync`); 35 E1
+> (`f46a93ffd`, validato nella corsia del coordinatore: email-* 516, config-package 639). Basi aggiornate e committate:
+> A (`246863005`), X (`2fb577588`), E (`fc99e9bfe`), W (`06459c1b3`), H riattaccato (`aa0e3a49a`); Y in corso.
+> Checkpoint committati: B0 (`be6206c0d`), B1 (`d37736d05`), E1 (`918e8d4f0`), W E1c (`87a034a89`), Y1 (`374dcca8a`).
+>
+> **⚠️ Fuori pista**: `--resolve` del cricchetto dei colori perde un `~accept` presente da un solo lato (R-8); ripetuto
+> l'`--accept` D3 di `themeStore.ts` nei merge di X e W, con l'ok del coordinatore colori (TC-7 di T per la cura).

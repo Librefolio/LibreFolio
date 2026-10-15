@@ -2,7 +2,7 @@
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth, authError, isAuthLoading} from '$lib/stores/app/auth';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import {goto} from '$app/navigation';
     import {Lock, User} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
@@ -20,9 +20,9 @@
     let username = '';
     let password = '';
 
-    // Public settings: whether registration is open decides the register link below.
+    // The public configuration of the instance: whether anyone may register decides the register link below.
     onMount(() => {
-        void globalSettings.load();
+        void instanceConfig.load();
     });
 
     async function handleSubmit() {
@@ -54,7 +54,7 @@
         <form class="space-y-5" data-testid="login-form" on:submit|preventDefault={handleSubmit}>
             <!-- Success Message (from registration) -->
             {#if successMessage}
-                <div class="bg-lf-success-soft border border-lf-success-line text-lf-success-on-soft px-4 py-2 rounded-lg text-sm">
+                <div class="bg-lf-success-soft border border-lf-success-line text-lf-success-on-soft px-4 py-2 rounded-lg text-sm" data-testid="login-success">
                     {successMessage}
                 </div>
             {/if}
@@ -107,8 +107,8 @@
                 {/if}
             </button>
 
-            <!-- Register Link: hidden only once the instance says registration is closed; unknown keeps it -->
-            {#if $globalSettings.enable_registration !== false}
+            <!-- Register Link: only while anyone may register; until the instance answers, its default (open) keeps it -->
+            {#if instanceConfig.config.accounts.registration_mode === 'open'}
                 <div class="text-center pt-2 text-xs text-lf-secondary">
                     <span>{$_('auth.noAccount')} </span>
                     <button class="font-bold text-lf-link hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
