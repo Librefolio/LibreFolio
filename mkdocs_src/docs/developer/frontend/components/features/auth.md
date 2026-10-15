@@ -21,10 +21,21 @@ The `LoginCard` handles user authentication via username/email and password.
 - **Input**: Username or Email field; the value is trimmed before the login call.
 - **Password**: Password field with visibility toggle (via `PasswordInput`).
 - **State**: Uses `$lib/stores/app/auth` (`auth.login()`, `authError`, `isAuthLoading`) to manage loading state and errors.
-    - `authError` holds `{key}`: `auth.invalidCredentials` for every 401 (one message, so the form never reveals
-      whether an account exists), `auth.invalidInput` for a 422, `auth.loginFailed` for a non-axios failure;
-      `LoginCard` translates the key with `$_()` when drawn, so it follows a language change on screen.
-    - Any other axios error (another status, network error, timeout) gives `{message}`, its own text, verbatim.
+    - `authError` holds `{key}` and nothing else (`AuthError` in `$lib/types/user.ts`): a catalogue
+      key that the store's `loginErrorKey(status, body)` picks from the HTTP status of the failure:
+        - 401, whatever the body says → `auth.invalidCredentials`: one message, so the form never
+          reveals whether an account exists;
+        - 403 carrying `ACCOUNT_DISABLED` (only the right password of a disabled account gets it) →
+          `auth.accountDisabled`;
+        - 422 → `auth.invalidInput`; 429 → `auth.tooManyAttempts` (the backend sets no login limit of
+          its own: a throttling proxy in front of it may answer 429);
+        - no response at all (network error, timeout), or a 502, 503 or 504 →
+          `auth.loginServerUnreachable`; any other 5xx → `auth.loginServerError`;
+        - any other status (a 403 without the code included), and a failure that is not an axios
+          error → `auth.loginFailed`.
+    - `LoginCard` always draws `$_(key)`, so the message follows a language change on screen. The
+      transport's own text (axios's *Network Error*, *Request failed with status code 500*) never
+      reaches the user: it is English whatever the language.
 - **Props**: `redirectTo` (default `/dashboard`), `successMessage` (shown after a registration),
   `onAuthenticated(requestedPath)` — when given, it replaces the plain `goto(redirectTo)` after a
   successful login (the login page uses it for the [onboarding gate](#post-login-onboarding-gate)).
@@ -35,7 +46,7 @@ The `LoginCard` handles user authentication via username/email and password.
 
 ```svelte
 <script>
-  import LoginCard from '$lib/components/auth/LoginCard.svelte';
+  import LoginCard from '$lib/features/auth/LoginCard.svelte';
 </script>
 
 <LoginCard
@@ -68,7 +79,7 @@ The `RegisterCard` handles new user registration with client-side validation.
 
 ```svelte
 <script>
-  import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
+  import RegisterCard from '$lib/features/auth/RegisterCard.svelte';
 </script>
 
 <RegisterCard
@@ -143,7 +154,11 @@ A reusable input component for passwords.
 
 ### ⚡ Features
 
-- **Toggle Visibility**: Eye icon to show/hide password (the toggle button is out of the tab order).
+- **Toggle Visibility**: Eye button to show/hide the password, named after what a press does: its
+  `aria-label` and `title` are `$_('auth.showPassword')` while the field is masked and
+  `$_('auth.hidePassword')` while it shows the text. The button is in the tab order and carries no
+  `aria-pressed` on purpose: a toggle whose name changes must not also report a pressed state
+  (WAI-ARIA APG, Button pattern), or a screen reader announces both.
 - **Styling**: Consistent styling with error state support (`hasError`).
 - **Attributes**: `autocomplete` (`current-password` by default, `new-password`, `off`, `on`),
   `id`, `name`, `testId`, `placeholder`, `disabled`; `id` and `name` are omitted when empty.

@@ -20,10 +20,7 @@ from backend.app.schemas.risk import (
     RiskReturnBasis,
     RiskScopeKind,
 )
-from backend.app.services.provider_registry import (
-    RiskAnalyticRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
@@ -42,6 +39,7 @@ from backend.app.services.risk.quant.spawn_worker import (
     SpawnWorkerRemoteError,
     SpawnWorkerTimeoutError,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class PortfolioOptimizationParams(BaseModel):

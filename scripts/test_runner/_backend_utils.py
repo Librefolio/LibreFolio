@@ -109,7 +109,7 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
-    print_info("Testing: backend/app/services/asset_source.py (core cache + _run_provider_in_thread)")
+    print_info("Testing: backend/app/services/assets/core.py (core cache + _run_provider_in_thread)")
     print_info("Tests: Thread isolation, timeout, caches (history/current/metadata/search), probe bypass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_provider_core_cache.py", test_names)
     return run_command(cmd, "Provider core cache tests", verbose=verbose)
@@ -191,7 +191,7 @@ def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
     """Test dev.py inside the image's file set (no backend/test_scripts) and the image's HEALTHCHECK port."""
     print_section("Utils: dev.py in the Docker image")
     print_info("Testing: dev.py on a copy of the image's /app tree (tmp_path), Dockerfile HEALTHCHECK vs CMD vs compose")
-    print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB")
+    print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB, the role user create and create-user give an account (L12)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_image.py", test_names)
     return run_command(cmd, "dev.py image tests", verbose=verbose)
 
@@ -230,6 +230,24 @@ def utils_gate_plugin_i18n_ownership(verbose: bool = False, test_names: list = N
     print_info("Tests: R1 fragment keys in their plugin's space, R2 declared keys of an exclusive space in its fragment, R3 no fragment key in another plugin's space or declared by another plugin, R4 every key under an exclusive space in its fragment (tools aside)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py", test_names)
     return run_command(cmd, "Plugin i18n ownership gate tests", verbose=verbose)
+
+
+def utils_gate_event_loop_io(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the event-loop gate: no API async handler calls a synchronous BRIM file-store function directly."""
+    print_section("Utils: Event Loop BRIM I/O Gate")
+    print_info("Testing: backend/app/api/v1/**/*.py against the synchronous functions of backend/app/services/brim/brim_provider.py")
+    print_info("Tests: a direct call in an async def is flagged; asyncio.to_thread(fn, ...), nested def/lambda bodies, awaited coroutines and sync handlers are not; every import form is followed; the scan reaches the store's importers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_event_loop_brim_io_gate.py", test_names)
+    return run_command(cmd, "Event loop BRIM I/O gate tests", verbose=verbose)
+
+
+def utils_gate_aiosqlite_leak(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the aiosqlite leak guard the shared conftest runs around every backend test (J-6)."""
+    print_section("Utils: aiosqlite Leak Gate")
+    print_info("Testing: backend/test_scripts/test_aiosqlite_guard.py, the autouse _aiosqlite_leak_guard of backend/test_scripts/conftest.py")
+    print_info("Tests: C-93 shape reported until disposed, closed connections tracked but not reported, other threads untracked, no attribution before a window, exceptions at nodeid boundaries, loud failure without aiosqlite's _connection, a child pytest under the real conftest")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py", test_names)
+    return run_command(cmd, "aiosqlite leak gate tests", verbose=verbose)
 
 
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
@@ -367,7 +385,7 @@ Tests for utility modules and helper functions:
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
-    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
+    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version: LF_APP_VERSION when set, else git describe in a checkout, else VERSION, else unknown; get_version_info")
     add_test(
         cat,
         "coverage-js-adapter",
@@ -419,7 +437,7 @@ Tests for utility modules and helper functions:
         "dev-cli-image",
         utils_dev_cli_image,
         name="dev.py in the Docker image",
-        desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user and db run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
+        desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user and db run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the role of a created account (L12): user create is an administrator by default and with --role admin, an ordinary account with --role user even alone in an empty DB, an unknown role an argparse error that creates nobody, and user_cli.py create-user an ordinary account (❌ and exit 1 on a weak password or a taken username) while create-superuser stays an administrator; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
         # A copy of the image tree and a temporary DB under tmp_path, dev.py in
         # subprocesses: no lane DB, no server, no network, no repo writes.
         isolation="pure",
@@ -492,6 +510,27 @@ Tests for utility modules and helper functions:
         name="Plugin i18n Ownership Gate",
         desc="Each plugin's translations live in its own i18n/ fragment, judged by the metadata its registry publishes: a plugin's space is brimPlugins.<code> (the code being its folder), assets.providerParams.<provider code>, the parent of a signal's display_name_key or of a risk analytic's name_i18n_key, or exactly a tool's name_i18n_key and description_i18n_key (FX plugins have none), and it is exclusive when no other plugin has it; R1 every fragment key lies in its plugin's space; R2 every key a plugin declares in its exclusive space (display_name_key, description_key, name_i18n_key, description_i18n_key, label_key, x-i18n-key, x-tooltip-key, the BRIM name and description) lives in its fragment; R3 no fragment key lies in another plugin's space or is declared by another plugin; R4 every catalogue key under an exclusive space lives in that plugin's fragment, tools aside; every rule proven both ways on synthetic trees, and a sentinel fails on a published key field the gate does not read",
         # Imports the registries (discovery instantiates the plugins) and reads what they publish; synthetic trees under tmp_path. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-event-loop-io",
+        utils_gate_event_loop_io,
+        name="Event Loop BRIM I/O Gate",
+        desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
+        # ast and filesystem reads of the repository's sources, never imported; the control
+        # cases are in-memory strings. No DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-aiosqlite-leak",
+        utils_gate_aiosqlite_leak,
+        name="aiosqlite Leak Gate",
+        desc="No backend test leaves open an aiosqlite connection it created: the shared conftest's autouse guard tracks every connection born in the main thread during a test (weak references, creation stack followed across SQLAlchemy's greenlet) and fails that test at its own teardown if one is still open and not excused by the explicit, reasoned AIOSQLITE_LEAK_EXCEPTIONS (empty); proven as presences: the C-93 shape (in-memory engine queried, session closed, engine not disposed) is reported with a stack reaching the test and cleared by dispose; connections closed by async with, dispose or a NullPool session are tracked but not reported; a connection born in another thread is not tracked, one born before a window is not attributed to it; an exception excuses its own nodeid at a boundary only, and an entry without a prefix or a reason is refused; a tracked object without aiosqlite's private _connection fails loudly; install wraps once and the conftest's window surrounds every test; a child pytest loading the real conftest errors the leaking test, and only it, at its teardown",
+        # Private in-memory aiosqlite databases, a worker thread of its own, and a child pytest that loads
+        # the real conftest on a synthetic file under tmp_path: no lane DB beyond the conftest's own session
+        # read (as in every pytest process), no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

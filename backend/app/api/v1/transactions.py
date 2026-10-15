@@ -26,26 +26,12 @@ from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.transactions import (
-    EVENT_TYPE_METADATA,
-    TX_TYPE_METADATA,
-    TXBatchResponse,
-    TXCreateItem,
-    TXEventSuggestRequestItem,
-    TXEventSuggestResultItem,
-    TXMixedBatch,
-    TXPromoteBatchItem,
-    TXPromoteSuggestInput,
-    TXPromoteSuggestResponse,
-    TXQueryParams,
-    TXReadItem,
-    TXSplitBatchItem,
-    TXTransferPromoteRequest,
-    TXTransferPromoteResponse,
-    TXTypesResponse,
-    TXUpdateItem,
-)
-from backend.app.services.transaction_service import TransactionService
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.event_suggest import TXEventSuggestRequestItem, TXEventSuggestResultItem
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -192,6 +178,7 @@ async def commit_transactions(
 async def query_transactions(
     broker_id: Optional[int] = Query(None, gt=0, description="Filter by broker"),
     asset_id: Optional[int] = Query(None, gt=0, description="Filter by asset"),
+    asset_event_id: Optional[int] = Query(None, gt=0, description="Only transactions linked to this asset event (reverse lookup)"),
     types: Optional[List[TransactionType]] = Query(None, description="Filter by types"),
     date_start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -212,7 +199,8 @@ async def query_transactions(
 
     When `ids` is provided, results are returned in the exact input order
     (useful for preserving client-side sort); other filters besides access
-    are ignored.
+    are ignored. `asset_event_id` is the reverse lookup of an asset event:
+    the transactions linked to it.
     """
     date_range = None
     if date_start:
@@ -223,6 +211,7 @@ async def query_transactions(
     params = TXQueryParams(
         broker_id=broker_id,
         asset_id=asset_id,
+        asset_event_id=asset_event_id,
         types=types,
         date_range=date_range,
         tags=tags,

@@ -16,8 +16,8 @@ from backend.app.schemas.prices import (
     FAPricePoint,
     FAPriceQueryResult,
 )
-from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.series_preparation import (
     observed_annualization,
     prepare_asset_series_set,

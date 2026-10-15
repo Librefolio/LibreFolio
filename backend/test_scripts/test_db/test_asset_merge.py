@@ -45,7 +45,8 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.db.session import get_async_engine
-from backend.app.services.asset_source import AssetCRUDService, AssetSourceError
+from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.crud import AssetCRUDService
 
 # =============================================================================
 # FIXTURES

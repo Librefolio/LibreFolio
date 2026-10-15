@@ -184,7 +184,14 @@
       "edited": "Modificado",
       "deleted": "Eliminado",
       "appended": "Nuevo"
-    }
+    },
+    "counter": {
+      "edited": "{n, plural, one {# modificado} other {# modificados}}",
+      "deleted": "{n, plural, one {# eliminado} other {# eliminados}}",
+      "appended": "{n, plural, one {# nuevo} other {# nuevos}}"
+    },
+    "staleShow": "{n, plural, one {Mostrar # fila obsoleta} other {Mostrar # filas obsoletas}}",
+    "staleHide": "{n, plural, one {Ocultar # fila obsoleta} other {Ocultar # filas obsoletas}}"
   },
   "datePicker": {
     "presets": {

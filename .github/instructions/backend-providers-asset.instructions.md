@@ -1,20 +1,20 @@
 ---
-applyTo: "backend/app/services/asset_source_providers/**,backend/app/services/asset_source.py"
+applyTo: "backend/app/services/asset_source_providers/**,backend/app/services/assets/**"
 ---
 
 # Asset Source Providers
 
 ## Architecture
 
-All asset providers extend `AssetSourceProvider` (abstract base in `asset_source.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
+All asset providers extend `AssetSourceProvider` (abstract base in `assets/base.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
 
 ### Base Class
 
-The abstract base class `AssetSourceProvider` is defined in `backend/app/services/asset_source.py`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
+The abstract base class `AssetSourceProvider` is defined in `backend/app/services/assets/base.py`, with `AssetSourceError`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
 
 ### Thread Isolation
 
-All provider calls go through `_run_provider_in_thread()` in `asset_source.py` — each call runs in a dedicated thread with its own event loop. Providers can use **sync I/O directly** (no `asyncio.to_thread()` needed inside providers).
+All provider calls go through `_run_provider_in_thread()` in `assets/core.py` — each call runs in a dedicated thread with its own event loop. Providers can use **sync I/O directly** (no `asyncio.to_thread()` needed inside providers).
 
 ### Cache Core (5 caches)
 
@@ -44,7 +44,8 @@ All provider calls go through `_run_provider_in_thread()` in `asset_source.py` �
 1. Create the folder `backend/app/services/asset_source_providers/my_provider/` with `__init__.py` (the provider's
    docstring only, no re-export) and `plugin.py` (the code); helpers private to it go beside as `_*.py`
 2. Extend `AssetSourceProvider`
-3. Decorate with `@register_provider(AssetProviderRegistry)`
+3. Decorate with `@register_provider(AssetProviderRegistry)` (`AssetProviderRegistry` from `services/assets/registry.py`, the
+   decorator from `services/provider_registry.py`)
 4. Implement required abstract methods
 5. Set `params_schema` property if provider needs extra config. Its UI texts (`assets.providerParams.my_provider.*`) live
    in the provider's own `i18n/` fragment: `./dev.py i18n add <key> --en … --it … --fr … --es …

@@ -11,6 +11,78 @@ This section documents the components used for the Settings pages (User Preferen
 
 The settings system uses a modular architecture based on a common layout and reusable field components.
 
+### 🗂️ Tab registry {: #tab-registry }
+
+The tabs of the Settings page are a registry: `SETTINGS_TABS` in
+`lib/features/settings/settingsTabs.ts`. `routes/(app)/settings/+page.svelte` names no tab itself:
+it draws the bar and the active body from that list. Each entry is a `SettingsTab`:
+
+| Field | Role |
+|---|---|
+| `id` | The `?tab=` value that opens the tab, and the suffix of its `settings-tab-{id}` test id |
+| `labelKey` | Catalogue key of the label, drawn as `$_(labelKey)` on the tab and in the heading shown on a phone |
+| `icon` | Lucide icon of the tab button |
+| `order` | Position in the bar, left to right |
+| `component` | The tab body |
+| `visible?(ctx)` | Who sees the tab; when absent, everyone does |
+| `props?(ctx)` | Props spread on the body |
+| `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
+
+`ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
+(`$auth.user?.is_superuser ?? false`). The registry holds four tabs:
+
+| `id` | `order` | Body | Visible to | Extras |
+|---|---|---|---|---|
+| `profile` | 10 | `ProfileTab` | everyone | — |
+| `preferences` | 20 | `PreferencesTab` | everyone | — |
+| `about` | 30 | `AboutTab` | everyone | — |
+| `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
+
+The page is the runtime of the registry, written in Svelte 5 runes:
+
+- **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
+  sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
+  with the labels hidden on a phone (`hideLabelOnMobile`).
+- **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
+  when the auth store changes, the body on screen receives the new props.
+- **Active tab**: the first visible tab, unless `?tab=<id>` names a visible one. The choice runs in
+  `$effect.pre`, so the tab that `?tab=` names is the first body mounted: the default body never
+  mounts, not even for an instant. Clicking a tab does not rewrite the URL, so a `?tab=` value is
+  applied once: a later page update that keeps it does not take back the tab the user picked, while
+  a new value is applied again. An unknown id, or the id of a tab this user cannot see, is ignored;
+  a `?tab=` naming a tab that becomes visible later (the user is promoted while on the page) is
+  applied when the tab appears. If the active tab stops being visible, the first visible tab opens.
+
+**Adding a tab** takes one entry in `SETTINGS_TABS`, plus the import of its body. For example, a
+tab only administrators see (`UsersTab` and `settings.users` stand for your own body and key):
+
+```ts
+import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
+import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
+
+export const SETTINGS_TABS: readonly SettingsTab[] = [
+    // profile (10), preferences (20), about (30)
+    {id: 'users', labelKey: 'settings.users', icon: Users, order: 40, component: UsersTab, visible: (ctx) => ctx.isSuperuser},
+    // admin (100, alignEnd)
+];
+```
+
+- **`order`**: a free number between the neighbours. The orders leave gaps, so no other tab is
+  renumbered; here 40 puts the tab after About, in the left-hand group. Every `order` is unique.
+- **`visible`**: `(ctx) => ctx.isSuperuser` keeps the tab out of a regular user's bar altogether,
+  and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
+- **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
+- **`alignEnd`**: one tab carries it, today `admin`. A tab with a higher `order` (above 100) joins
+  the right-hand group, after Admin.
+- **`id` and `labelKey`**: the `id` is unique, made of lowercase letters, digits and dashes, and
+  starts with a letter; the `labelKey` is a sentence in all four catalogues.
+- **Tests**: `lib/features/settings/settingsTabs.test.ts` pins the content of the registry through
+  its `TODAY` table, so the new tab adds its row there in the same change (with a `vi.mock` of its
+  body module, like today's four), and the cases that list today's tabs by name follow it; the same
+  file checks the ids, the orders and the labels in the four catalogues.
+  `routes/(app)/settings/page.tabs.test.ts` tests the page on a registry of its own and does not
+  change.
+
 ### 📐 SettingsLayout
 
 The `SettingsLayout` component provides the structural shell for all settings tabs.
@@ -40,7 +112,7 @@ Manages user-specific settings (Language, Currency, Theme) and hosts the **Onboa
 described below. Its categories are `display` (Language), `currency` (Default Currency),
 `appearance` (Theme) and `onboarding`, plus *All Settings* when none is selected.
 
-**Logic** (`lib/components/settings/tabs/PreferencesTab.svelte`):
+**Logic** (`lib/features/settings/tabs/PreferencesTab.svelte`):
 
 1. **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
 2. **State Tracking**:
@@ -78,7 +150,7 @@ is due, what a replay does once it runs, where its position is kept — are expl
 
 **What it lists.** The section reads `onboarding.progress?.flows`, the per-user progress that the
 app bootstrap loads from `GET /api/v1/settings/onboarding`: one `OnboardingProgressItem` for each
-of the **15** flows of `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`;
+of the **15** flows of `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`;
 enum `OnboardingFlow` in `backend/app/db/models.py`). The section sorts them into collapsible
 groups; *Setup* and *Core tour* start open:
 
@@ -148,9 +220,10 @@ System-wide configuration with lock toggle:
 - Scheduler configuration and new-user defaults
 - Other app-wide settings
 
-The Settings page shows this tab to every user, but only a superuser can change it: the page
-passes `canEdit={isSuperuser}` (`routes/(app)/settings/+page.svelte`), and without `canEdit` the
-tab shows a read-only indicator instead of the lock toggle and the bulk Save/Undo/Reset actions.
+The Settings page shows this tab to every user, but only a superuser can change it: its entry in
+the [tab registry](#tab-registry) has no `visible` and passes `canEdit` through
+`props: (ctx) => ({canEdit: ctx.isSuperuser})`, and without `canEdit` the tab shows a read-only
+indicator instead of the lock toggle and the bulk Save/Undo/Reset actions.
 
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
@@ -204,8 +277,8 @@ Both components take callback props (`onsaveAll`, `onundoAll`, `onresetAll` on t
 
 ```svelte
 <script lang="ts">
-  import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
-  import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+  import SettingsLayout from '$lib/features/settings/SettingsLayout.svelte';
+  import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
 
   let original = $state('option1');
   let value = $state('option1');

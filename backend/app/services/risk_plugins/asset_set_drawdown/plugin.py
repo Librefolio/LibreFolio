@@ -13,7 +13,7 @@ from backend.app.schemas.risk import (
     RiskReturnBasis,
     RiskScopeKind,
 )
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_scope_series,
     require_joint_baseline,
@@ -21,6 +21,7 @@ from backend.app.services.risk.analytic_helpers import (
 )
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext
 from backend.app.services.risk.metrics import drawdown_episodes
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetDrawdownParams(BaseModel):

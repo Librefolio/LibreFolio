@@ -121,7 +121,7 @@ graph TD
 | Provider registry | `backend/app/services/provider_registry.py` |
 | Tool platform | `backend/app/services/tools/registry.py` |
 | Tool plugins pattern | `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md` |
-| Thread isolation + 5-layer cache | `backend/app/services/asset_source.py` |
+| Thread isolation + 5-layer cache | `backend/app/services/assets/core.py` |
 | Zodios client | `frontend/src/lib/api/` |
 | TimeSeriesStore | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | EditBuffer | `frontend/src/lib/stores/core/EditBuffer.ts` |

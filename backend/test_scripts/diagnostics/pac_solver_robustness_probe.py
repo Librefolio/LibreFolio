@@ -36,7 +36,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.setdefault("LIBREFOLIO_TEST_MODE", "1")
 
-from backend.app.schemas.pac_allocator import PAC_PLAN_INPUT_ADAPTER, _exact_fraction  # noqa: E402
+from backend.app.schemas.pac_allocator.exact import exact_fraction
+from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER  # noqa: E402
 from backend.app.services.pac_allocator.planner import plan_pac_allocation  # noqa: E402
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, realistic_make  # noqa: E402
 
@@ -67,7 +68,7 @@ def _published_vector(result: object) -> Vector | None:
     solution = getattr(result, "primary_solution", None)
     if solution is None:
         return None
-    return tuple(_exact_fraction(stage.value) for stage in solution.objectives.stages)
+    return tuple(exact_fraction(stage.value) for stage in solution.objectives.stages)
 
 
 def run_variant(name: str, budget: float) -> dict:

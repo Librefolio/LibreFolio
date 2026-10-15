@@ -13,8 +13,8 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.acquired import (
     conditional_drawdown_at_risk,
     drawdown_at_risk,
@@ -34,6 +34,7 @@ from backend.app.services.risk.metrics import (
     annualized_volatility,
     summarize_drawdown,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetKpiParams(BaseModel):

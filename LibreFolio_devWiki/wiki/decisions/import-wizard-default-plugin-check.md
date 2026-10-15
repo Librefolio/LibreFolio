@@ -74,7 +74,7 @@ only report sets.
 
 | Role | Path |
 |------|------|
-| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim_provider.py` |
+| `cannot_parse_detail`, `check_file_with_plugin` | `backend/app/services/brim/brim_provider.py` |
 | `BRIMRefusal`, `BRIMPluginCheck` | `backend/app/schemas/brim.py` |
 | The `plugin-check` endpoint | `backend/app/api/v1/brokers.py` |
 | `findDefaultPluginMismatch`, `resolveParseRefusalMessage` | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |

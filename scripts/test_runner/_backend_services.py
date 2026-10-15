@@ -90,6 +90,7 @@ RISK_SERVICE_TEST_PATHS = (
 PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_exact.py",
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+    "backend/test_scripts/test_services/test_pac_planner_engine_boundaries.py",
 )
 PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
 PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
@@ -102,7 +103,7 @@ PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_pla
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
-    """Test exact PAC/Rebalancer primitives, models, and normalization."""
+    """Test exact PAC/Rebalancer primitives, models, normalization, and the engine's data boundary."""
     print_section("Services: PAC/Rebalancer Exact Core")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
     if test_names:
@@ -169,7 +170,7 @@ def services_pac_planner_service(verbose: bool = False, test_names: list = None)
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX conversion service logic."""
     print_section("Services: FX Conversion Logic")
-    print_info("Testing: backend/app/services/fx.py convert() function")
+    print_info("Testing: backend/app/services/fx/conversion.py (convert_bulk)")
     print_info("Scenarios: Identity, Direct, Inverse, Roundtrip, Different Dates, Forward-fill")
     print_info("Safety: Verifies test database usage before modifying data")
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
@@ -181,7 +182,7 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test Asset Source service logic."""
     print_section("Services: Asset Source Logic")
-    print_info("Testing: backend/app/services/asset_source.py")
+    print_info("Testing: backend/app/services/assets/")
     print_info("Tests: Helper functions, Provider assignment, Synthetic yield")
     print_info("Note: Test assets automatically created and cleaned up")
 
@@ -192,7 +193,7 @@ def services_asset_source(verbose: bool = False, test_names: list = None) -> boo
 def services_asset_source_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Smoke test: Asset Source refresh orchestration."""
     print_section("Services: Asset Source Refresh (smoke)")
-    print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
+    print_info("Testing: backend/app/services/assets/refresh.py bulk refresh orchestration (smoke)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_refresh.py", test_names)
     return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
@@ -402,7 +403,7 @@ def services_synthetic_yield_integration(verbose: bool = False, test_names: list
 def services_transaction(verbose: bool = False, test_names: list = None) -> bool:
     """Test TransactionService CRUD operations, balance validation, and link resolution."""
     print_section("Services: Transaction Service")
-    print_info("Testing: backend/app/services/transaction_service.py")
+    print_info("Testing: backend/app/services/transactions/transaction_service.py")
     print_info("Tests: CRUD, balance validation, link resolution, balance queries")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_service.py", test_names)
@@ -413,7 +414,7 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
-    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py")
     print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
@@ -424,7 +425,7 @@ def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> 
 def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     """Test BrokerService CRUD operations, initial balances, and flag validation."""
     print_section("Services: Broker Service")
-    print_info("Testing: backend/app/services/broker_service.py")
+    print_info("Testing: backend/app/services/brokers/broker_service.py")
     print_info("Tests: CRUD, initial deposits, get_summary, flag validation")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_broker_service.py", test_names)
@@ -435,11 +436,31 @@ def services_broker(verbose: bool = False, test_names: list = None) -> bool:
 def services_user_profile(verbose: bool = False, test_names: list = None) -> bool:
     """Test user profile update service."""
     print_section("Services: User Profile")
-    print_info("Testing: backend/app/services/user_service.py (update_profile)")
+    print_info("Testing: backend/app/services/accounts/user_service.py (update_profile)")
     print_info("Tests: Update username/email, uniqueness validation, error handling")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_profile.py", test_names)
     return run_command(cmd, "User profile service tests", verbose=verbose)
+
+
+def services_account_tokens(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the single-use account tokens: invites, password resets, e-mail verification, admin setup."""
+    print_section("Services: Account Tokens")
+    print_info("Testing: backend/app/services/accounts/token_service.py")
+    print_info("Tests: hash-only storage, one purpose per token, expiry boundary, atomic single use, revocation, caller-owned transaction, no plaintext in logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_tokens.py", test_names)
+    return run_command(cmd, "Account token service tests", verbose=verbose)
+
+
+def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
+    """Test session revocation through the session version (the sv claim of the session cookie)."""
+    print_section("Services: Session Version")
+    print_info("Testing: auth_service.py (SessionClaims, sv), api/v1/auth.py (get_current_user), user_service.py (end_sessions, reset/active/admin)")
+    print_info("Tests: claims round trip, cookies without sv at version 0, untrusted tokens never raise, another version refused, raised by one only by reset/deactivate/demote, bcrypt off the loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_session_version.py", test_names)
+    return run_command(cmd, "Session version tests", verbose=verbose)
 
 
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
@@ -455,7 +476,7 @@ def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
 def services_global_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test GlobalSettingsService."""
     print_section("Services: Global Settings Service")
-    print_info("Testing: backend/app/services/global_settings_service.py")
+    print_info("Testing: backend/app/services/accounts/global_settings_service.py")
     print_info("Tests: Type conversion, DB reads with defaults, TTL/upload/registration getters")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_global_settings_service.py", test_names)
@@ -465,17 +486,28 @@ def services_global_settings(verbose: bool = False, test_names: list = None) -> 
 def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX core helpers."""
     print_section("Services: FX Core Helpers")
-    print_info("Testing: backend/app/services/fx.py (core functions not covered by fx-conversion)")
+    print_info("Testing: backend/app/services/fx/ (core functions not covered by fx-conversion)")
     print_info("Tests: normalize_rate, upsert_rates_bulk, delete_rates_bulk, _count_actual_changes")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_core.py", test_names)
     return run_command(cmd, "FX core helpers tests", verbose=verbose)
 
 
+def services_fx_catalog(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cached supported-currency catalog of the FX providers (X-R8)."""
+    print_section("Services: FX Provider Currency Catalog")
+    print_info("Testing: backend/app/services/fx/catalog.py (get_supported_currencies_cached, behind GET /fx/providers)")
+    print_info("Tests: 24 h cache and copies, last known list on failure/timeout, 5-minute retry delay, one fetch per event loop, cache panel")
+    print_info("Fake providers only — no network, no database, no server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_catalog.py", test_names)
+    return run_command(cmd, "FX provider currency catalog tests", verbose=verbose)
+
+
 def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
     """Test static uploads service."""
     print_section("Services: Static Uploads")
-    print_info("Testing: backend/app/services/static_uploads.py")
+    print_info("Testing: backend/app/services/files/static_uploads.py")
     print_info("Tests: File save/list/get/delete, security validation, user filtering")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_uploads.py", test_names)
@@ -485,7 +517,7 @@ def services_static_uploads(verbose: bool = False, test_names: list = None) -> b
 def services_brim_parse_error(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMParseError exception class."""
     print_section("Services: BRIM Parse Error")
-    print_info("Testing: backend/app/services/brim_provider.py (BRIMParseError)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (BRIMParseError)")
     print_info("Tests: Constructor, message/details attributes, exception hierarchy")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error.py", test_names)
@@ -495,7 +527,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -505,14 +537,14 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
-    print_info("Testing: backend/app/services/settings_service.py")
+    print_info("Testing: backend/app/services/accounts/settings_service.py")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_settings_service.py", test_names)
     return run_command(cmd, "Settings service tests", verbose=verbose)
 
 
 def services_current_price_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
-    """Test F.2/F.3 unit helper `_extend_ohlc_bounds` in asset_source."""
+    """Test F.2/F.3 unit helper `_extend_ohlc_bounds` in assets.price_query."""
     print_section("Services: Current Price Bootstrap (F.2/F.3)")
     print_info("Testing OHLC widening helper used by /assets/prices/current side-effect")
 
@@ -541,7 +573,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -551,7 +583,7 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
-    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
     print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
@@ -592,7 +624,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
-    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Testing: backend/app/services/pac_allocator/source/")
     print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
 
     cmd = _build_pytest_cmd(
@@ -614,7 +646,7 @@ def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) 
 def services_asset_source_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
-    print_info("Testing: backend/app/services/asset_source.py (bulk_upsert_prices, get_prices_bulk, list_assets)")
+    print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
     print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
@@ -642,7 +674,7 @@ def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -
 def services_scheduler_state(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler state persistence (load/save/atomic/corrupt)."""
     print_section("Services: Scheduler State Persistence")
-    print_info("Testing: backend/app/services/scheduler/state.py")
+    print_info("Testing: backend/app/services/platform/scheduler/state.py")
     print_info("Tests: load/save, atomic write, corrupt/partial JSON recovery")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_state.py", test_names)
     return run_command(cmd, "Scheduler state persistence tests", verbose=verbose)
@@ -651,7 +683,7 @@ def services_scheduler_state(verbose: bool = False, test_names: list = None) -> 
 def services_scheduler_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings parsing (_parse_times, _parse_days)."""
     print_section("Services: Scheduler Settings Parsing")
-    print_info("Testing: backend/app/services/scheduler/settings.py")
+    print_info("Testing: backend/app/services/platform/scheduler/settings.py")
     print_info("Tests: _parse_times, _parse_days — pure functions, no DB")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings.py", test_names)
     return run_command(cmd, "Scheduler settings parsing tests", verbose=verbose)
@@ -660,7 +692,7 @@ def services_scheduler_settings(verbose: bool = False, test_names: list = None) 
 def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler due-check logic (due_current_price, due_history_sync)."""
     print_section("Services: Scheduler Due-Check Logic")
-    print_info("Testing: backend/app/services/scheduler/scheduler.py")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py")
     print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
     return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
@@ -669,7 +701,7 @@ def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bo
 def services_scheduler_leader(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler leader election (mocked psutil)."""
     print_section("Services: Scheduler Leader Election")
-    print_info("Testing: backend/app/services/scheduler/leader.py")
+    print_info("Testing: backend/app/services/platform/scheduler/leader.py")
     print_info("Tests: SL-001..007 — single/multi-worker, zombie, PID1, --reload, exception safe")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_leader.py", test_names)
     return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
@@ -694,17 +726,65 @@ def services_brim_versioning(verbose: bool = False, test_names: list = None) -> 
 
 
 def services_config_misc(verbose: bool = False, test_names: list = None) -> bool:
-    """Test config.get_data_dir test-mode/env-override branches."""
+    """Test config.get_data_dir test-mode/env-override branches and the LIBREFOLIO_PROFILE setting."""
     print_section("Services: Config Helpers")
-    print_info("Testing: backend/app/config.py (get_data_dir)")
+    print_info("Testing: backend/app/config/__init__.py (get_data_dir, LIBREFOLIO_PROFILE)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_misc.py", test_names)
     return run_command(cmd, "Config helper tests", verbose=verbose)
+
+
+def services_config_package(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the config package: env vars read only in backend/app/config/, section accessors keep their semantics."""
+    print_section("Services: Config Package")
+    print_info("Testing: backend/app/config/ (env reads, section accessors)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_package.py", test_names)
+    return run_command(cmd, "Config package tests", verbose=verbose)
+
+
+def services_config_secrets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test secrets given as NAME or NAME_FILE: precedence, file rules and errors, secrets set twice."""
+    print_section("Services: Config Secrets")
+    print_info("Testing: backend/app/config/__init__.py (env_secret, read_secret_file, secrets_set_twice)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_secrets.py", test_names)
+    return run_command(cmd, "Config secrets tests", verbose=verbose)
+
+
+def services_config_instance_key(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance key: HKDF-SHA256, key sources, first-use generation, never replaced, race between processes."""
+    print_section("Services: Instance Key")
+    print_info("Testing: backend/app/services/platform/instance_key.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_instance_key.py", test_names)
+    return run_command(cmd, "Instance key tests", verbose=verbose)
+
+
+def services_config_audit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup configuration checks: states, no secret in results, startup stops on a broken configured secret."""
+    print_section("Services: Configuration Checks")
+    print_info("Testing: backend/app/services/platform/config_audit.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_audit.py", test_names)
+    return run_command(cmd, "Configuration checks tests", verbose=verbose)
+
+
+def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
+    print_section("Services: .env.example Guard")
+    print_info("Testing: .env.example against backend/app/, Settings and the compose files")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
+    return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
+def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
+    print_section("Services: Instance Readiness")
+    print_info("Testing: backend/app/services/platform/readiness.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
+    return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
     """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
     print_section("Services: Donation Popup")
-    print_info("Testing: backend/app/services/donation_popup_service.py")
+    print_info("Testing: backend/app/services/accounts/donation_popup_service.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_popup_service.py", test_names)
     return run_command(cmd, "Donation popup service tests", verbose=verbose)
 
@@ -712,7 +792,7 @@ def services_donation_popup(verbose: bool = False, test_names: list = None) -> b
 def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Test date sentinel resolution (min/max/passthrough, broker filter)."""
     print_section("Services: Date Sentinel Resolution")
-    print_info("Testing: backend/app/services/date_sentinel.py (resolve_date_sentinels)")
+    print_info("Testing: backend/app/services/platform/date_sentinel.py (resolve_date_sentinels)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_date_sentinel.py", test_names)
     return run_command(cmd, "Date sentinel tests", verbose=verbose)
 
@@ -720,15 +800,15 @@ def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bo
 def services_file_preview(verbose: bool = False, test_names: list = None) -> bool:
     """Test file preview service helpers (CSV/Excel/text detection)."""
     print_section("Services: File Preview Helpers")
-    print_info("Testing: backend/app/services/file_preview.py")
+    print_info("Testing: backend/app/services/files/file_preview.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_file_preview.py", test_names)
     return run_command(cmd, "File preview tests", verbose=verbose)
 
 
 def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
-    """Test FX pair-sync orchestration branches in services/fx.py."""
+    """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
-    print_info("Testing: backend/app/services/fx.py")
+    print_info("Testing: backend/app/services/fx/sync.py")
     print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
@@ -745,7 +825,7 @@ def services_provider_registry_misc(verbose: bool = False, test_names: list = No
 def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log read/rotate helpers."""
     print_section("Services: Scheduler Job Log Helpers")
-    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Testing: backend/app/services/platform/scheduler/joblog.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_misc.py", test_names)
     return run_command(cmd, "Scheduler job log tests", verbose=verbose)
 
@@ -753,7 +833,7 @@ def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = Non
 def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> bool:
     """Test the two scheduler job bodies end to end, with the bulk calls doubled."""
     print_section("Services: Scheduler Job Bodies")
-    print_info("Testing: backend/app/services/scheduler/jobs.py")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py")
     print_info("Tests: _classify_job_status, run_current_price_refresh, run_history_sync")
     print_info("get_current_prices_bulk / bulk_refresh_prices / sync_pairs_bulk doubled — no provider calls, no price writes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_jobs.py", test_names)
@@ -763,7 +843,7 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
 def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log entry builders and the append/rotate/read round trip."""
     print_section("Services: Scheduler Job Log Builders")
-    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Testing: backend/app/services/platform/scheduler/joblog.py")
     print_info("Tests: append/rotate/read round trip, build_current_price_entry, build_history_sync_entry, StrEnum guard")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_builders.py", test_names)
     return run_command(cmd, "Scheduler job log builder tests", verbose=verbose)
@@ -772,7 +852,7 @@ def services_scheduler_joblog_builders(verbose: bool = False, test_names: list =
 def services_scheduler_settings_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings local-time-to-UTC conversion."""
     print_section("Services: Scheduler Settings TZ Conversion")
-    print_info("Testing: backend/app/services/scheduler/settings.py (_local_times_to_utc)")
+    print_info("Testing: backend/app/services/platform/scheduler/settings.py (_local_times_to_utc)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings_misc.py", test_names)
     return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
 
@@ -831,7 +911,7 @@ def services_borsa_italiana_funds(verbose: bool = False, test_names: list = None
 def services_web_link_finder(verbose: bool = False, test_names: list = None) -> bool:
     """Test web_link_finder unit behaviour + search orchestration augmentation."""
     print_section("Services: Web Link Finder")
-    print_info("Testing: backend/app/services/web_link_finder.py")
+    print_info("Testing: backend/app/services/assets/web_link_finder.py")
     print_info("External engine mocked — no live ddgs/network call")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_web_link_finder.py", test_names)
@@ -933,7 +1013,7 @@ Note: No backend server required.
         "pac-planner-core",
         services_pac_planner_core,
         name="PAC/Rebalancer Exact Core",
-        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping, typed issue precedence and the engine's data boundary (no database, no planner source)",
         isolation="pure",
     )
     add_test(
@@ -1034,6 +1114,26 @@ Note: No backend server required.
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
+    add_test(
+        cat,
+        "account-tokens",
+        services_account_tokens,
+        name="Account Tokens",
+        desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "session-version",
+        services_session_version,
+        name="Session Version",
+        desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
+        isolation="pure",
+    )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
     add_test(
         cat,
@@ -1050,6 +1150,16 @@ Note: No backend server required.
         name="FX Core Helpers",
         desc="normalize_rate, upsert/delete bulk, changes",
         exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
+    )
+    add_test(
+        cat,
+        "fx-catalog",
+        services_fx_catalog,
+        name="FX Provider Currency Catalog",
+        desc="Supported currencies cached 24 h and handed out as copies, last known list on failure or timeout, 5-minute retry delay, one fetch per provider and event loop, listed in the cache panel",
+        # PURE: fake providers only, no session and no server. The one shared surface is this process's
+        # fx_provider_currencies cache and last known lists, which an autouse fixture empties before and after each test.
+        isolation="pure",
     )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
@@ -1128,7 +1238,13 @@ Note: No backend server required.
         # without ever calling save_state(), so nothing global is written.
         isolation="read",
     )
-    add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
+    add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches, LIBREFOLIO_PROFILE validation")
+    add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
+    add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
+    add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
+    add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")

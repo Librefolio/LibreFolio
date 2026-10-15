@@ -68,7 +68,8 @@ flowchart TB
 |---|---|
 | `signal_runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
 | `signal_plugins/base.py` | Define the plugin contract and build static catalog metadata. |
-| `provider_registry.py` | Discover plugin folders, validate definitions, and reject duplicate codes. |
+| `signals/registry.py` | `SignalPluginRegistry`: validate definitions and reject duplicate codes. |
+| `provider_registry.py` | Discover plugin folders (shared by every plugin registry). |
 | `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
 | `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
@@ -490,11 +491,9 @@ from backend.app.schemas.signals import (
     SignalViewTransform,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import (
-    SignalPluginRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class TypicalPriceParams(BaseModel):

@@ -208,7 +208,7 @@
         <div class="flex items-center gap-2">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
             {#if helpContent}
-                <button aria-label="Help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
+                <button aria-label={$t('csvImport.helpTitle')} data-testid="data-import-modal-help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
                     <HelpCircle size={18} />
                 </button>
             {/if}
@@ -217,7 +217,7 @@
             {#if headerActions}
                 {@render headerActions()}
             {/if}
-            <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
+            <button aria-label={$t('common.close')} data-testid="data-import-modal-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
         </div>
     </div>
 
@@ -284,7 +284,7 @@
             {/if}
         </div>
         <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
+            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" data-testid="data-import-cancel" onclick={requestClose}>{$t('common.cancel')}</button>
             <button
                 class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 data-domain-error={domainError ? 'true' : 'false'}
@@ -302,4 +302,4 @@
 </ModalBase>
 
 <!-- Confirm discard modal (stacked above) -->
-<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('common.discardImport')} warning={true} />
+<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} testId="data-import-discard-confirm" title={$t('common.discardImport')} warning={true} />

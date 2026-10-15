@@ -48,6 +48,6 @@ exports never get the shortened variant.
 | Signal param + warmup | `backend/app/services/signal_plugins/drawdown/plugin.py` |
 | Warmup contract | `backend/app/schemas/signals.py` (`SignalWarmupRequirement.full_history`) |
 | Plan aggregation | `backend/app/services/signal_service.py` (`requires_full_history`) |
-| Fetch window | `backend/app/services/asset_source.py` (`get_prices_bulk`) |
+| Fetch window | `backend/app/services/assets/price_query.py` (`get_prices_bulk`) |
 | AI Export full-history call | `backend/app/services/ai_export/components/drawdown_context.py` |
-| Sentinel resolution | `backend/app/services/date_sentinel.py` |
+| Sentinel resolution | `backend/app/services/platform/date_sentinel.py` |

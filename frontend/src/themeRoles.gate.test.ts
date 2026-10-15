@@ -441,8 +441,8 @@ describe('the grammar of the roles, on synthetic sources', () => {
         const source = ['<div class="bg-[#123456]"></div>', '<div class="bg-[var(--lf-surface-card)] ring-[color-mix(in_oklab,var(--lf-focus)_40%,transparent)]"></div>', '<div class="text-[13px] w-[#123456]"></div>', '<div class="text-[var(--color-libre-green)]"></div>'].join('\n');
         expect(caught(SVELTE, source)).toEqual(['G4 1  bg-[#123456]', 'G4 4  text-[var(--color-libre-green)]']);
         const brand = "export const reddit = 'bg-[#ff4500] hover:bg-[#e03d00]';";
-        expect(caught('lib/components/support/supportLinks.ts', brand), 'a file in ARBITRARY_ALLOWED').toEqual([]);
-        expect(caught('lib/components/support/otherLinks.ts', brand), 'the same source in any other file').toEqual(['G4 1  bg-[#ff4500]', 'G4 1  hover:bg-[#e03d00]']);
+        expect(caught('lib/features/support/supportLinks.ts', brand), 'a file in ARBITRARY_ALLOWED').toEqual([]);
+        expect(caught('lib/features/support/otherLinks.ts', brand), 'the same source in any other file').toEqual(['G4 1  bg-[#ff4500]', 'G4 1  hover:bg-[#e03d00]']);
     });
 
     it('G4 sees a colour inside an arbitrary value written with `_` for spaces', () => {
@@ -475,7 +475,7 @@ describe('the tree: the colour gates', () => {
     it('reads every production source of src, and no test, mock or declaration (positive control)', () => {
         const sources = listSources();
         expect(sources.length, 'a walk of the wrong directory finds far fewer').toBeGreaterThan(300);
-        expect(sources).toEqual(expect.arrayContaining(['routes/+layout.svelte', 'routes/+error.svelte', 'lib/utils/colors.ts', 'lib/components/support/supportLinks.ts']));
+        expect(sources).toEqual(expect.arrayContaining(['routes/+layout.svelte', 'routes/+error.svelte', 'lib/utils/colors.ts', 'lib/features/support/supportLinks.ts']));
         expect(sources.filter((rel) => /\.(test|spec)\.ts$|(^|\/)__(tests|mocks)__\/|\.d\.ts$/.test(rel))).toEqual([]);
         expect(scan.sources, 'the scan reads what the walk lists').toEqual(sources);
     });

@@ -49,14 +49,13 @@ LAYER_PACKAGE = "backend.app.services.financial_math"
 # "signal_runtime", "signal_service" and every other "signal_*" module.
 FORBIDDEN_PREFIXES = (
     "backend.app.services.portfolio_service",
-    "backend.app.services.broker_service",
-    "backend.app.services.transaction_service",
+    "backend.app.services.brokers",
+    "backend.app.services.transactions",
     "backend.app.services.lots_analysis_service",
     "backend.app.api",
     "backend.app.services.ai_export",
     "backend.app.services.risk",
     "backend.app.services.pac_allocator",
-    "backend.app.services.portfolio_allocation_source",
     "backend.app.services.signal",
 )
 
@@ -141,8 +140,8 @@ def _files_at(path: Path) -> list[Path]:
 # Every shape (a) must reject, written from inside ``financial_math.lots``: (source, line, module it binds).
 _FORBIDDEN_SHAPES = (
     ("import backend.app.services.portfolio_service", 1, "backend.app.services.portfolio_service"),
-    ("import backend.app.services.broker_service as brokers", 1, "backend.app.services.broker_service"),
-    ("import backend.app.services.fx, backend.app.services.transaction_service", 1, "backend.app.services.transaction_service"),
+    ("import backend.app.services.brokers.broker_service as brokers", 1, "backend.app.services.brokers.broker_service"),
+    ("import backend.app.services.fx.conversion, backend.app.services.transactions.transaction_service", 1, "backend.app.services.transactions.transaction_service"),
     ("from backend.app.services.lots_analysis_service import LotsAnalysisService", 1, "backend.app.services.lots_analysis_service"),
     ("from backend.app.api.v1 import portfolio", 1, "backend.app.api.v1"),
     ("from backend.app import api", 1, "backend.app.api"),
@@ -150,22 +149,22 @@ _FORBIDDEN_SHAPES = (
     ("from backend.app.services.risk.service import RiskService", 1, "backend.app.services.risk.service"),
     ("from backend.app.services import fx, risk_plugins", 1, "backend.app.services.risk_plugins"),
     ("from backend.app.services.pac_allocator.planner import plan", 1, "backend.app.services.pac_allocator.planner"),
-    ("from backend.app.services.portfolio_allocation_source import build_snapshot", 1, "backend.app.services.portfolio_allocation_source"),
+    ("from backend.app.services.pac_allocator.source.portfolio_allocation_source import build_snapshot", 1, "backend.app.services.pac_allocator.source.portfolio_allocation_source"),
     ("from backend.app.services.signal_service import SignalService", 1, "backend.app.services.signal_service"),
     ("from backend.app.services.signal_plugins import base", 1, "backend.app.services.signal_plugins"),
     ("import backend.app.services.signal_runtime", 1, "backend.app.services.signal_runtime"),
     ("from ...portfolio_service import PortfolioService", 1, "backend.app.services.portfolio_service"),
     ("from ... import risk", 1, "backend.app.services.risk"),
     ("def load():\n    from backend.app.services.portfolio_service import PortfolioService\n", 2, "backend.app.services.portfolio_service"),
-    ("from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from backend.app.services.broker_service import BrokerService\n", 4, "backend.app.services.broker_service"),
+    ("from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from backend.app.services.brokers.broker_service import BrokerService\n", 4, "backend.app.services.brokers.broker_service"),
 )
 
 # What the layer may import, from the same package: none of it may be flagged.
 _ALLOWED_SHAPES = (
-    "from backend.app.services.fx import convert_bulk",
+    "from backend.app.services.fx.conversion import convert_bulk",
     "from backend.app.services import fx",
-    "from backend.app.services.settings_service import get_effective_base_currency",
-    "from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD",
+    "from backend.app.services.accounts.settings_service import get_effective_base_currency",
+    "from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD",
     "import backend.app.utils.runtime.cache",
     "from backend.app.db.models import Transaction",
     "from backend.app.schemas.portfolio import LotAnalysisType",

@@ -18,6 +18,7 @@ else `~/LibreFolio_visual_review`.
 |---|---|
 | `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json` and the log |
 | `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `browse` (HTML pages, light and dark side by side) |
+| `live_price_check.py` | Checks, in the lane's backend log, that no live-price request reached the backend while a snapshot was captured (exit 1: capture again) |
 | `build_designer_package.py` | Offline package for the designer: `APRI_QUI.html`, `desktop.html`, `mobile.html`, `note_designer.txt`, images, zip |
 | `build_review_notes.py` | The team's Markdown working notes: navigation per shot, role vocabulary, decisions |
 | `designer_live.sh` | Test server with the gallery's data on its own lane (default port 6160), reachable from the local network |
@@ -44,6 +45,10 @@ else `~/LibreFolio_visual_review`.
 - A busy port stops the scripts. Never use `--force`.
 - **Compare captures of the same day only.** The test database is generated from `date.today()`, so
   snapshots of different days differ by construction (axes, ranges, values). `diff` warns when the dates differ.
+- **The app version is pinned.** The sidebar, the changelog and the About tab show the build's version, which is
+  `git describe` by default and so differs between any two commits. `gallery_snapshot.sh` exports
+  `LF_APP_VERSION` (default `v0.0.0-review`) and rebuilds the frontend in debug mode first when the checkout's
+  build does not carry it (`build.log` in the snapshot). `meta.json` records it as `app_version`.
 - A full gallery takes about **31–34 min** at 10 workers and about **500 MB** (four languages).
   A `diff` of two full snapshots takes about 3.5 min. The designer package weighs about 120 MB per language.
 
@@ -55,10 +60,18 @@ Two captures of the same commit show what changes on its own:
 scripts/visual_review/gallery_snapshot.sh base-r1
 scripts/visual_review/gallery_snapshot.sh base-r2
 W=/Users/ea_enel/Documents/00_My/LibreFolio_subRepo/LibreFolio_visual_review   # the default work dir on the developer's machine
+pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/base-r1 $W/snapshots/base-r2   # must exit 0
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/base-r1 $W/snapshots/base-r2 \
     --out $W/diffs/noise --emit-masks
 pipenv run python -m scripts.visual_review.gallery_tool stability $W/diffs/noise   # stability.md / .json
 ```
+`live_price_check.py` reads the lane's backend log (`<data dir>/logs/librefolio.log`, found through each
+snapshot's `meta.json`) for the time of each capture. If a live-price request reached the backend, it asked a
+provider and rewrote today's candle in the shared test database, so every later shot of that asset changed: the
+script exits `1` and the capture must be taken again. That happened once on 14/10/2026, before the gallery left
+each page ahead of dropping its offline guard. Exit `2` means the log cannot vouch for the capture: wrong log, or a
+log without DEBUG lines.
+
 Every shot gets a class:
 
 | Class | Meaning |
@@ -75,6 +88,7 @@ Capture the reference and the candidate on the **same day**. They may run in par
 ```bash
 scripts/visual_review/gallery_snapshot.sh ref                                   # target checkout, lane 6150
 scripts/visual_review/gallery_snapshot.sh cand --checkout <worktree> --port 6151 --data-dir /tmp/librefolio-r2-x
+pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/ref $W/snapshots/cand   # must exit 0
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/ref $W/snapshots/cand --out $W/diffs/ref__vs__cand \
     --ignore-masks $W/diffs/noise/masks --stability $W/diffs/noise/stability.json
 open $W/diffs/ref__vs__cand/index.html       # A | B | changed pixels in red; likely-real changes first

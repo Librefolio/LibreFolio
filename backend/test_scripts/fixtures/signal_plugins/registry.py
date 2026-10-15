@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class FixtureSignalPluginRegistry(SignalPluginRegistry):

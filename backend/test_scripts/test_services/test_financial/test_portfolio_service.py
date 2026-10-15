@@ -40,7 +40,7 @@ from backend.app.schemas.portfolio import (
     PortfolioReportQuery,
     StalePriceAsset,
 )
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio_service import (

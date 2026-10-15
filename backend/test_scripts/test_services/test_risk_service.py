@@ -45,9 +45,8 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -57,6 +56,7 @@ from backend.app.services.risk.base import (
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import annualized_sharpe, annualized_sortino, beta, pearson_correlation
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,

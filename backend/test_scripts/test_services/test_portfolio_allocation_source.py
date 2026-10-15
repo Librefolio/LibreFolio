@@ -26,11 +26,17 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceResponse,
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import portfolio_allocation_source as source
 from backend.app.services import portfolio_service
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.financial_math.portfolio import engine as portfolio_engine
 from backend.app.services.financial_math.portfolio.models import DailyPositionState, ValuationSource
+from backend.app.services.pac_allocator.source import classifications as source_classifications
+from backend.app.services.pac_allocator.source import distribution as source_distribution
+from backend.app.services.pac_allocator.source import entities as source_entities
+from backend.app.services.pac_allocator.source import fx_quotes as source_fx_quotes
+from backend.app.services.pac_allocator.source import loaders as source_loaders
+from backend.app.services.pac_allocator.source import portfolio_allocation_source as source
+from backend.app.services.pac_allocator.source import wac as source_wac
 
 AS_OF = date(2026, 9, 15)
 CAPTURED_AT = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)
@@ -523,14 +529,14 @@ async def test_builder_authorizes_every_broker_before_all_private_reads(
         return _no_holdings_distribution(kwargs["scenario_asset_ids"])
 
     monkeypatch.setattr(source, "_load_selected_owner_accesses", authorize)
-    monkeypatch.setattr(source, "_load_holding_rows", holdings)
+    monkeypatch.setattr(source, "load_holding_rows", holdings)
     monkeypatch.setattr(source, "_load_planner_assets", assets)
-    monkeypatch.setattr(source, "_load_cash_by_broker", cash)
-    monkeypatch.setattr(source, "_load_latest_prices", prices)
-    monkeypatch.setattr(source, "_build_planner_classifications", classifications)
-    monkeypatch.setattr(source, "_build_planner_wac_contexts", wac)
-    monkeypatch.setattr(source, "_build_planner_fx_quotes", fx)
-    monkeypatch.setattr(source, "_build_planner_current_distribution", current_distribution)
+    monkeypatch.setattr(source, "load_cash_by_broker", cash)
+    monkeypatch.setattr(source, "load_latest_prices", prices)
+    monkeypatch.setattr(source, "build_planner_classifications", classifications)
+    monkeypatch.setattr(source, "build_planner_wac_contexts", wac)
+    monkeypatch.setattr(source, "build_planner_fx_quotes", fx)
+    monkeypatch.setattr(source, "build_planner_current_distribution", current_distribution)
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
 
     await source.build_portfolio_planner_source(
@@ -566,13 +572,13 @@ async def test_mixed_allowed_and_denied_broker_scope_is_atomic(
     private_async = {
         name: AsyncMock(side_effect=AssertionError(f"{name} ran before auth"))
         for name in (
-            "_load_holding_rows",
+            "load_holding_rows",
             "_load_planner_assets",
-            "_load_cash_by_broker",
-            "_load_latest_prices",
-            "_build_planner_wac_contexts",
-            "_build_planner_fx_quotes",
-            "_build_planner_current_distribution",
+            "load_cash_by_broker",
+            "load_latest_prices",
+            "build_planner_wac_contexts",
+            "build_planner_fx_quotes",
+            "build_planner_current_distribution",
         )
     }
     classifications = MagicMock(side_effect=AssertionError("classification read ran before auth"))
@@ -580,7 +586,7 @@ async def test_mixed_allowed_and_denied_broker_scope_is_atomic(
         monkeypatch.setattr(source, name, spy)
     monkeypatch.setattr(
         source,
-        "_build_planner_classifications",
+        "build_planner_classifications",
         classifications,
     )
 
@@ -686,7 +692,7 @@ async def test_missing_explicit_asset_fails_atomically(monkeypatch):
     )
     monkeypatch.setattr(
         source,
-        "_load_holding_rows",
+        "load_holding_rows",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
@@ -697,11 +703,11 @@ async def test_missing_explicit_asset_fails_atomically(monkeypatch):
     downstream = {
         name: AsyncMock(side_effect=AssertionError(f"{name} ran after missing Asset"))
         for name in (
-            "_load_cash_by_broker",
-            "_load_latest_prices",
-            "_build_planner_wac_contexts",
-            "_build_planner_fx_quotes",
-            "_build_planner_current_distribution",
+            "load_cash_by_broker",
+            "load_latest_prices",
+            "build_planner_wac_contexts",
+            "build_planner_fx_quotes",
+            "build_planner_current_distribution",
         )
     }
     for name, spy in downstream.items():
@@ -735,7 +741,7 @@ async def test_empty_asset_scope_emits_no_asset_holding_price_classification_or_
     )
     monkeypatch.setattr(
         source,
-        "_load_holding_rows",
+        "load_holding_rows",
         AsyncMock(return_value=[(7, 11, Decimal("9"))]),
     )
 
@@ -788,7 +794,7 @@ async def test_explicit_unheld_global_asset_keeps_identity_price_and_classificat
     )
     monkeypatch.setattr(
         source,
-        "_load_holding_rows",
+        "load_holding_rows",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
@@ -798,7 +804,7 @@ async def test_explicit_unheld_global_asset_keeps_identity_price_and_classificat
     )
     monkeypatch.setattr(
         source,
-        "_load_latest_prices",
+        "load_latest_prices",
         AsyncMock(return_value={11: price}),
     )
 
@@ -845,7 +851,7 @@ async def test_explicit_unheld_global_asset_keeps_identity_price_and_classificat
 def test_inactive_unheld_explicit_asset_stays_visible_with_typed_issue():
     issues = []
     inactive_asset = _asset(31, active=False)
-    rows = source._build_planner_assets(
+    rows = source_entities.build_planner_assets(
         [inactive_asset],
         held_asset_ids=set(),
         explicit_asset_selection=True,
@@ -865,7 +871,7 @@ def test_inactive_unheld_explicit_asset_stays_visible_with_typed_issue():
     ]
 
     held_issues = []
-    held_rows = source._build_planner_assets(
+    held_rows = source_entities.build_planner_assets(
         [inactive_asset],
         held_asset_ids={31},
         explicit_asset_selection=False,
@@ -1021,7 +1027,7 @@ def test_holdings_preserve_exact_custody_economic_share_and_provenance():
             _broker(8, name="Same Broker Name"),
         ),
     }
-    rows = source._build_planner_holdings(
+    rows = source_entities.build_planner_holdings(
         [
             (8, 20, Decimal("-3.5000")),
             (7, 20, Decimal("12.3400")),
@@ -1076,7 +1082,7 @@ def test_cash_preserves_each_native_broker_currency_and_negative_issue():
     access_8 = _access(8, share="0")
     issues = []
 
-    rows = source._build_planner_cash_balances(
+    rows = source_entities.build_planner_cash_balances(
         [(access_7, broker_7), (access_8, broker_8)],
         cash_by_broker={
             7: {
@@ -1130,7 +1136,7 @@ async def test_latest_saved_price_query_is_bounded_by_as_of_and_never_refreshes(
     saved = _price(11, on=date(2026, 9, 14))
     session = _QueuedReadSession(_Rows(scalar_values=[saved]))
 
-    prices = await source._load_latest_prices(
+    prices = await source_loaders.load_latest_prices(
         session,
         candidate_asset_ids={11},
         as_of_date=AS_OF,
@@ -1150,7 +1156,7 @@ def test_saved_price_rows_preserve_quote_facts_and_make_missing_basis_explicit()
     missing = _asset(12, currency="EUR", quote_base_quantity=None)
     issues = []
 
-    rows = source._build_planner_prices(
+    rows = source_entities.build_planner_prices(
         [priced, missing],
         prices={
             11: _price(
@@ -1205,7 +1211,7 @@ def test_valid_saved_classification_is_exact_sorted_and_does_not_leak_raw_json()
     )
     issues = []
 
-    rows = source._build_planner_classifications([asset], issues=issues)
+    rows = source_classifications.build_planner_classifications([asset], issues=issues)
     dumped = [row.model_dump(mode="json") for row in rows]
     by_dimension_category = {(row["dimension"], row["category_id"]): row for row in dumped}
 
@@ -1219,7 +1225,7 @@ def test_valid_saved_classification_is_exact_sorted_and_does_not_leak_raw_json()
     assert "sector_area" not in serialized
     assert "geographic_area" not in serialized
     assert "distribution" not in serialized
-    repeated = source._build_planner_classifications([asset], issues=[])
+    repeated = source_classifications.build_planner_classifications([asset], issues=[])
     assert [row.classification_id for row in repeated] == [row.classification_id for row in rows]
     assert {row.provenance_id for row in repeated} == {"source:market-data"}
 
@@ -1304,7 +1310,7 @@ def test_missing_and_invalid_saved_classifications_emit_typed_placeholders(
     expected_field,
 ):
     issues = []
-    rows = source._build_planner_classifications(
+    rows = source_classifications.build_planner_classifications(
         [_asset(11, classification_params=classification_params)],
         issues=issues,
     )
@@ -1366,7 +1372,7 @@ async def test_wac_context_of_an_asset_with_an_invalid_currency_is_a_typed_copy_
     monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
     issues = []
 
-    rows = await source._build_planner_wac_contexts(
+    rows = await source_wac.build_planner_wac_contexts(
         _QueuedReadSession(),
         holding_rows=[(7, 11, Decimal("3"))],
         selected_asset_ids={11},
@@ -1405,10 +1411,10 @@ async def test_saved_fx_prefill_returns_the_direct_saved_rate_for_a_canonical_pa
 ):
     saved = _fx(on=date(2026, 9, 10), rate="1.25", source_name="MANUAL_FX")
     loader = AsyncMock(return_value={("EUR", "USD"): saved})
-    monkeypatch.setattr(source, "_load_latest_planner_fx_rows", loader)
+    monkeypatch.setattr(source_fx_quotes, "_load_latest_planner_fx_rows", loader)
     issues = []
 
-    rows = await source._build_planner_fx_quotes(
+    rows = await source_fx_quotes.build_planner_fx_quotes(
         object(),
         request_pairs=["EUR/USD"],
         as_of=AS_OF,
@@ -1451,13 +1457,13 @@ async def test_saved_fx_missing_invalid_and_no_chaining_are_explicit(
     expected_code,
 ):
     monkeypatch.setattr(
-        source,
+        source_fx_quotes,
         "_load_latest_planner_fx_rows",
         AsyncMock(return_value=saved_rows),
     )
     issues = []
 
-    rows = await source._build_planner_fx_quotes(
+    rows = await source_fx_quotes.build_planner_fx_quotes(
         object(),
         request_pairs=["EUR/JPY"],
         as_of=AS_OF,
@@ -1482,7 +1488,7 @@ async def test_no_fx_prefill_rows_or_database_read_when_no_pairs_requested():
     session = _QueuedReadSession()
     issues = []
 
-    rows = await source._build_planner_fx_quotes(
+    rows = await source_fx_quotes.build_planner_fx_quotes(
         session,
         request_pairs=[],
         as_of=AS_OF,
@@ -1739,7 +1745,7 @@ async def test_wac_contexts_call_canonical_runtime_sequentially_and_keep_fiscal_
 
     monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
     issues = []
-    rows = await source._build_planner_wac_contexts(
+    rows = await source_wac.build_planner_wac_contexts(
         object(),
         holding_rows=[
             (8, 20, Decimal("2")),
@@ -1842,7 +1848,7 @@ async def test_wac_fx_evidence_is_exact_deterministic_and_deduplicated(
         source_name="MANUAL_WAC_FX",
     )
     monkeypatch.setattr(
-        source,
+        source_wac,
         "_load_current_wac_fx_rows",
         AsyncMock(
             return_value={
@@ -1853,7 +1859,7 @@ async def test_wac_fx_evidence_is_exact_deterministic_and_deduplicated(
     )
     issues = []
 
-    rows = await source._build_planner_wac_contexts(
+    rows = await source_wac.build_planner_wac_contexts(
         object(),
         holding_rows=[(7, 11, Decimal("4"))],
         selected_asset_ids={11},
@@ -1903,7 +1909,7 @@ async def test_wac_fx_revalidation_loads_latest_saved_row_per_transaction_cutoff
         _Rows(scalar_values=[old, future, replacement]),
     )
 
-    rows = await source._load_current_wac_fx_rows(
+    rows = await source_wac._load_current_wac_fx_rows(
         session,
         windows={
             (
@@ -1941,7 +1947,7 @@ async def test_warm_wac_result_with_changed_saved_fx_fails_closed(
         source_name="CHANGED_AFTER_CACHE",
     )
     monkeypatch.setattr(
-        source,
+        source_wac,
         "_load_current_wac_fx_rows",
         AsyncMock(
             return_value={
@@ -1952,7 +1958,7 @@ async def test_warm_wac_result_with_changed_saved_fx_fails_closed(
     )
     issues = []
 
-    rows = await source._build_planner_wac_contexts(
+    rows = await source_wac.build_planner_wac_contexts(
         object(),
         holding_rows=[(7, 11, Decimal("4"))],
         selected_asset_ids={11},
@@ -2369,7 +2375,7 @@ async def test_current_distribution_engine_scope_is_the_sorted_owner_broker_set(
     session = object()
     issues = []
 
-    distribution = await source._build_planner_current_distribution(
+    distribution = await source_distribution.build_planner_current_distribution(
         session,
         user_id=41,
         broker_ids=[9, 7],
