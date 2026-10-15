@@ -17,7 +17,8 @@ Plan 06 of Z, section «Z7 — disegno», contract X5 (and D-Z7-2, D-Z7-3); impl
    ``error_details``; another failure carries neither.
 5. Search: a refused or paused provider is listed in ``providers_with_errors`` and logged at INFO, never as a
    traceback; a query cached before the pause is still answered; the SSE ``provider_error`` event carries
-   ``error_code`` and ``retry_after``, the event of another error does not.
+   ``error_code`` (``RATE_LIMITED``) and ``retry_after``. The event of another ``AssetSourceError`` carries that error's
+   own ``error_code`` and never ``retry_after``; the event of an error that is no ``AssetSourceError`` carries neither.
 
 In process, never on the shared backend. Each test gets a private ``Cooldowns`` on a fake clock, without jitter, in
 place of ``provider_cooldown.PROVIDER_COOLDOWNS``, the two pause variables set with ``monkeypatch``, and — when it needs
@@ -624,6 +625,27 @@ async def test_the_search_stream_event_of_another_error_carries_no_refusal_field
     (error,) = [event for event in events if event["event"] == "provider_error"]
     assert error.keys() == {"event", "provider_code", "error"}
     assert error["provider_code"] == "mockprov"
+
+
+@pytest.mark.asyncio
+async def test_the_search_stream_event_of_another_provider_error_keeps_its_own_code(private_db: AsyncEngine, monkeypatch: pytest.MonkeyPatch, cooldowns: Cooldowns):
+    """XRL-R21 — contract 5 (decision N7): a search failing with an ``AssetSourceError`` of its own code: the event
+    carries that ``error_code`` beside its message, never ``retry_after``; no pause follows."""
+
+    async def down(self, query):
+        raise AssetSourceError("the search backend is down (testing)", "SEARCH_ERROR")
+
+    monkeypatch.setattr(MockProvider, "search", down)
+
+    events = await _sse(AssetSearchService.search_stream(_unique("xrl-search-error"), provider_codes=["mockprov"]))
+
+    (error,) = [event for event in events if event["event"] == "provider_error"]
+    (done,) = [event for event in events if event["event"] == "done"]
+    assert error.keys() == {"event", "provider_code", "error", "error_code"}
+    assert (error["provider_code"], error["error_code"]) == ("mockprov", "SEARCH_ERROR")
+    assert error["error"], "the raw message stays"
+    assert (done["providers_queried"], done["providers_with_errors"]) == (["mockprov"], ["mockprov"])
+    assert _state(cooldowns) == {}, "an error of the provider's own is no refusal: no pause"
 
 
 if __name__ == "__main__":
