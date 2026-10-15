@@ -128,6 +128,12 @@ The empty file `app.db.post-migration.lock`, next to the database, makes the run
 
 The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given to a new one. While converting a database, it deletes the report folders of brokers that no longer exist, so that a new broker cannot inherit them.
 
+The second fix, **`orphan_pair_halves`**, repairs, once, the transfers that an earlier broker deletion left without their other half on the brokers that remain:
+
+- 📈 Securities received from the deleted broker become an opening position at their transfer cost, starting on the transfer date. That broker's capital then counts them at that cost instead of their market value on arrival, so its gain also counts what they gained before the transfer. When no cost was recorded, they stay without one and the app reports an acquisition without a purchase cost: enter the cost in the transaction.
+- 💶 Cash transfers with the deleted broker become deposits or withdrawals: capital and gain do not change.
+- ⏳ Transfers that sent securities **to** the deleted broker are left as they are for now: the log lists them at every start.
+
 ??? tip "⌨️ Run the fixes by hand — to preview them or retry a failed one"
 
     **Stop the server** first (the script does not check it), then run from the project root:
@@ -141,6 +147,8 @@ The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker,
     ```
 
     The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
+
+    To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers left as they are. The script shows warnings only: the line for each transaction changed is written by the server, when the repair runs at its start (with `LOG_LEVEL` at `INFO`, the default).
 
 🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
 

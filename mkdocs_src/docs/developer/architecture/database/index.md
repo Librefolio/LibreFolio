@@ -131,6 +131,48 @@ databases get it from `001_initial.py`; the fix converts existing ones, once.
   once the fix is verified, renamed back if it fails: the first broker created afterwards may
   reuse `<n>` once, and must not inherit them.
 
+The second fix, `orphan_pair_halves` (`orphan_pair_halves.py`), converts the half of a pair whose
+partner is gone. Until 1.3, deleting a broker left the other half of each pair it had with another
+broker as a `TRANSFER`, `CASH_TRANSFER` or `FX_CONVERSION` without its partner: its link cleared
+(`related_transaction_id` NULL) or, when foreign keys were off, naming a row that no longer exists.
+The FIFO lots refuse such a `TRANSFER` (`TRANSFER_PAIR_MISSING`), and the Dashboard counts it as
+capital at its market value on its date. Since 1.3, `delete_by_broker()` converts that half as it
+deletes the broker ([Broker Deletion](../../backend/transactions/service.md#broker-deletion)); this
+fix converts, once, the halves already in a database.
+
+- `detect()` writes nothing. It selects the rows of the three paired types whose link is NULL or
+  names a missing row, and the rows of any other type whose link names a missing row. A row whose
+  partner exists is never selected.
+- It converts a half as a split of the pair leaves it (`STANDALONE_TYPES`, the values of
+  `TransactionService.SPLIT_TYPE_MAP`). A received `TRANSFER` (positive quantity) becomes an
+  `ADJUSTMENT` with its quantity, asset, cost basis and its currency. When no cost basis was
+  recorded it stays without one, since the sender is gone: `MISSING_COST_BASIS` until the user
+  enters it (the 1.3 deletion writes the sender's Auto cost instead). A `CASH_TRANSFER` or
+  `FX_CONVERSION` becomes a `WITHDRAWAL` when its amount is negative, a `DEPOSIT` otherwise, without
+  asset. The link goes, `updated_at` moves to now, every other column stays.
+- It leaves the giving leg of a `TRANSFER` (negative quantity) as it is: counted, not changed, until
+  the developer answers point 47 of release 1.3, since an `ADJUSTMENT` taking units out without a
+  cost would read them as destroyed. It also leaves a row whose quantity or amount sign cannot be
+  read, and the rows of other types (an `ADJUSTMENT` can carry a link). Each of these keeps its
+  type, and loses its link only when that link names a missing row, so that the run's
+  `foreign_key_check` can pass.
+- Its own checks, on top of the common ones: no convertible half left, and each row it changed has
+  its expected type and no link.
+- Its detection logs whenever it finds such a row, dry runs included, even with nothing to change: a
+  WARNING with `count` (every row found), `conversions` (the ids per `TYPE->TYPE`),
+  `without_cost_basis`, `unlinked_only`, `left_giving_transfer_legs` and `left_unreadable_sign`.
+  It comes back at every start while a giving leg, or a row of unreadable sign, remains; with
+  nothing left to change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
+  per row changed — *Transaction without its pair converted* or *… unlinked* — with
+  `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
+  `asset_id`, `cost_basis`, `cost_basis_currency`, `missing_cost_basis` and `former_partner_id`
+  (the missing row the link named, `null` when the link was already cleared). The offline script
+  does not call `configure_logging()`: Python's last-resort handler prints the WARNING on stderr,
+  and the INFO lines, *Post-migration fixes applied and verified* included, are dropped.
+
+`./dev.py test db post-migration-orphan-pairs`
+(`backend/test_scripts/test_db/test_post_migration_orphan_pairs.py`) pins this contract.
+
 The admin side (log lines, the offline run) is in [Command-Line Tools](../../../admin/cli_tools.md).
 
 ### 📏 `asset_type` and `transactions.type` lengths {: #enum-column-length }
