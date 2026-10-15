@@ -40,6 +40,7 @@ except ImportError:  # pragma: no cover - not POSIX: runs are not serialised the
 from backend.app.config import PROJECT_ROOT, get_settings
 from backend.app.db.post_migration.autoincrement import AUTOINCREMENT_TABLES, AutoincrementFix
 from backend.app.db.post_migration.base import FixContext, PostMigrationError, PostMigrationFix, PostMigrationReport
+from backend.app.db.post_migration.orphan_pair_halves import OrphanPairHalfFix
 from backend.app.logging_config import get_logger
 
 __all__ = ["AUTOINCREMENT_TABLES", "FIXES", "PostMigrationReport", "configured_sqlite_path", "run_post_migration_fixes"]
@@ -121,7 +122,7 @@ def _apply_one(conn: sqlite3.Connection, fix: PostMigrationFix, anomaly: Any, ct
 
 
 # The fixes, in the order they run. A new fix is appended, never inserted before an older one.
-FIXES: tuple[PostMigrationFix, ...] = (AutoincrementFix(),)
+FIXES: tuple[PostMigrationFix, ...] = (AutoincrementFix(), OrphanPairHalfFix())
 
 
 def _apply_pending(conn: sqlite3.Connection, pending: list[tuple[PostMigrationFix, Any]], ctx: FixContext) -> None:
