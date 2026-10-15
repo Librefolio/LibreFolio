@@ -1,6 +1,7 @@
 {
   "email": {
     "tab": {
+      "label": "Email",
       "title": "Email",
       "intro": "LibreFolio can send emails through an SMTP server, set up by whoever runs the instance. Email is optional: without it, everything else works."
     },

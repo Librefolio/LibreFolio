@@ -27,6 +27,9 @@ secret file.
 - **Never shown.** No page of the interface shows the server, the port, the user, the sender or the
   password: [Settings › Email](#email-tab) only says whether email works and, when it does not,
   which variable to fix.
+- **Public: only whether email is ready.** `/api/v1/system/instance`, which anyone who can reach the
+  server may read, says whether this instance can send email: `"email": {"available": true}` when
+  the state is **Ready**, `false` otherwise. Nothing else about email is there.
 - **Read from the environment.** `./dev.py` and Docker Compose (`env_file: .env`) put the values of
   `.env` there, so these variables go in `.env` like the other [options](configuration.md).
 - **Restart after a change.** With Docker Compose, run `docker compose up -d`:
@@ -192,14 +195,15 @@ Replace `smtp.example.com`, the addresses and the password with your own, then r
     - The relay delivers the mail: it must be allowed to send for the domain of
       `LIBREFOLIO_SMTP_FROM`.
     - `none` sends in clear: use it only towards your own machine or network. Towards any other
-      server, Settings › Email shows a [warning](#security).
+      server, Settings › Email and the start log show a [warning](#security).
 
 ---
 
 ## 🖥️ Settings › Email {: #email-tab }
 
-Open **Settings** (gear icon in the sidebar), then the **Email** tab. It is for administrators
-only. The book icon at its top opens this page.
+Open **Settings** (gear icon in the sidebar), then the **Email** tab, after **Admin** (on a phone,
+the tab with the envelope icon). Only administrators see it. The book icon at its top opens this
+page.
 
 ### 🚦 The State {: #state }
 
@@ -254,8 +258,8 @@ Problems come in two kinds:
   ([Sending Errors](#sending-errors)).
 
 A configuration that cannot be used turns email off, nothing more: the server starts as usual and
-everything else works. LibreFolio logs it once per server process, the first time it reads the
-email configuration: opening Settings › Email is enough ([What the Log Says](#logs)).
+everything else works. The start log already names the variable at fault, right after
+`Starting LibreFolio`, and so does the tab ([What the Log Says](#logs)).
 
 ### ⚙️ Configuration Problems {: #configuration-problems }
 
@@ -300,9 +304,16 @@ the page and, if it lasts, look at the log.
 The log is `logs/librefolio.log` in the data folder, and the server also prints it to its console:
 `docker compose logs librefolio` with Docker ([Filesystem Structure](filesystem.md)).
 
+At every start, right after `Starting LibreFolio`, the server checks its configuration, email
+included (*Startup Checks* in [Configuration](configuration.md)). A configuration that cannot be
+used shows there in two lines, the first two below, and `none` towards a server outside your local
+network in a warning. Neither stops the start.
+
 | The log says | Level | When |
 | --- | --- | --- |
-| `Email configuration cannot be used: email stays off` | `error` | A variable cannot be used. Once per server process and problem, with `variable`, `problem` (the code) and `reason`: the rule it breaks, or why the password file cannot be read. |
+| `Email configuration cannot be used: email stays off` | `error` | A variable cannot be used. Each server process logs it once, at startup, with `variable`, `problem` (the code) and `reason`: the rule it breaks, or why the password file cannot be read. |
+| `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` | `error` | At startup, after the line above, with `check` set to `email.smtp`: the startup checks report the same problem. |
+| `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | `warning` | At startup, with `check` set to `email.smtp_encryption`: `none` towards a server outside your local network, which the line names ([Security Notes](#security)). |
 | `Email sent` | `info` | The server accepted an email; `kind` is `test` for the test email. |
 | `Email not sent` | `warning` | The server refused the email or did not answer: `code`, as in [Sending Errors](#sending-errors), and `detail`, the server's own reply, the most precise clue. |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | The hourly limit stopped an email; `retry_after` is in seconds. |
@@ -323,7 +334,7 @@ is masked too, such as `550 5.1.1 <***@example.com>: Recipient address rejected`
 - **`none` sends everything in clear**: the messages, their links and the SMTP password. Keep it for
   a relay on your own machine or network. Towards any other server, Settings › Email shows a
   warning: *Emails, their links and the SMTP password travel unencrypted to a server outside the
-  local network*.
+  local network*; the start log has one too ([What the Log Says](#logs)).
 - **Keep the password in a secret file** (`LIBREFOLIO_SMTP_PASSWORD_FILE`) that only the user
   running LibreFolio can read, out of `.env` and out of the data folder. Use an app password, or an
   account just for LibreFolio, that you can revoke on its own.

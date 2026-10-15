@@ -42,8 +42,15 @@ The contract pinned here:
    - no answer holds the SMTP password, the host, the user, the sender nor the server's own words.
 4. Both routes read the configuration — and the file of ``LIBREFOLIO_SMTP_PASSWORD_FILE`` — off the event loop: the
    status is a plain ``def`` (FastAPI's thread pool), ``send_email`` reads it through ``asyncio.to_thread``.
+5. ``GET /system/instance`` carries ``email: {available}``, public — no session —: ``true`` exactly when the configuration
+   can be used (a host set and every variable usable, plain text to a public host included), ``false`` when email is
+   off, invalid (a bad port, a bad host) or its password file cannot be read. It never holds the host, the port, the
+   user, the sender, the Reply-To, the password nor the path of a password file, resolves no name, never contacts the
+   server, and reads the configuration — the password file included — off the event loop (``asyncio.to_thread``). An
+   answer built without ``email`` serializes ``{"available": false}``, and the OpenAPI does not require it.
 
-In-process: the real routers of auth and email, mounted under the API prefix as ``api/v1/router.py`` mounts them, in an
+In-process: the real routers of auth and email, and the instance route of the system router (``instance_router``, under
+``/system``), mounted under the API prefix as ``api/v1/router.py`` mounts them, in an
 app of this test whose ``get_session_generator`` opens sessions on a private SQLite file under ``tmp_path`` (NullPool,
 disposed at teardown) holding the default global settings. Accounts are written as rows with a real bcrypt hash at cost
 4 (``auth_service.BCRYPT_ROUNDS``), sign in through ``POST /auth/login`` and keep their cookie in an
@@ -80,11 +87,14 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.api.v1 import email as email_api
+from backend.app.api.v1.system import instance as instance_api
 from backend.app.config import API_V1_PREFIX
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import GlobalSetting, User, UserSettings
 from backend.app.db.session import get_session_generator
+from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
+from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts import auth_service
 from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
 from backend.app.services.email import delivery, flows, smtp
@@ -98,6 +108,7 @@ LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
 STATUS = f"{API_V1_PREFIX}/email/status"
 SEND_TEST = f"{API_V1_PREFIX}/email/test"
+INSTANCE = f"{API_V1_PREFIX}/system/instance"
 BASE_URL = "http://test"
 #: ``request.url.netloc`` of a request sent to BASE_URL: the instance the test email names.
 INSTANCE_LABEL = "test"
@@ -273,10 +284,11 @@ class _Private:
 
 
 def _app(engine: AsyncEngine) -> FastAPI:
-    """The real routers of auth and email, mounted under the API prefix as ``api/v1/router.py`` mounts them; ``get_session_generator`` opens sessions on ``engine``."""
+    """The real routers of auth and email, and the instance route of the system router, mounted under the API prefix as ``api/v1/router.py`` mounts them; ``get_session_generator`` opens sessions on ``engine``."""
     app = FastAPI()
     for router in (auth_api.router, email_api.router):
         app.include_router(router, prefix=API_V1_PREFIX)
+    app.include_router(instance_api.instance_router, prefix=f"{API_V1_PREFIX}/system")
 
     async def private_session() -> AsyncIterator[AsyncSession]:
         async with AsyncSession(engine, expire_on_commit=False) as session:
@@ -1001,3 +1013,102 @@ async def test_both_routes_read_the_configuration_off_the_event_loop(private: _P
     assert on_the_loop == {"GET /email/status": [], "POST /email/test": []}, f"configuration reads on the event loop: {on_the_loop}"
     assert [message.user for message in fake.messages] == [SMTP_USER_NAME]
     print_success(f"status {len(status_reads)} read(s), test {len(test_reads)} read(s), none on the loop")
+
+
+# =============================================================================
+# 5. GET /system/instance: email.available
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("variables", "available"),
+    [
+        pytest.param({}, False, id="off-nothing-set"),
+        pytest.param({**PUBLIC_CONFIGURATION, "host": None}, False, id="off-everything-else-set"),
+        pytest.param(PUBLIC_CONFIGURATION, True, id="ready-starttls"),
+        pytest.param({**PUBLIC_CONFIGURATION, "tls": "none"}, True, id="ready-plain-to-a-public-host"),
+        pytest.param({**PUBLIC_CONFIGURATION, "password": None, "password_file": PASSWORD_IN_FILE}, True, id="ready-password-in-a-file"),
+        pytest.param({**PUBLIC_CONFIGURATION, "port": "65536"}, False, id="invalid-port"),
+        pytest.param({**PUBLIC_CONFIGURATION, "host": f"smtp://{PUBLIC_HOST}"}, False, id="invalid-host"),
+        pytest.param({**PUBLIC_CONFIGURATION, "password": None, "password_file": MISSING_FILE}, False, id="unreadable-password-file"),
+    ],
+)
+async def test_anyone_reads_whether_email_is_available_and_nothing_else_of_it(private: _Private, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, network: list[str], variables: dict[str, str | None], available: bool) -> None:
+    """EMA-019 — contract 5: without a session, ``GET /system/instance`` answers 200 with ``email`` exactly ``{"available": available}``, a bool — ``true`` for a usable configuration, plain text to a public host included, ``false`` when email is off (even with every other variable set), invalid or its password file cannot be read —; its raw JSON holds neither the host, the port, the user, the password, the sender, the Reply-To nor the folder of a password file, and no name was resolved."""
+    print_section(f"EMA-019: /system/instance, available={available}")
+    _configure(monkeypatch, variables, tmp_path)
+
+    async with _browser(private) as client:
+        response = await client.get(INSTANCE)
+
+    assert response.status_code == 200, f"GET /system/instance is public: {response.status_code} {response.text}"
+    email = response.json().get("email")
+    assert email == {"available": available} and type(email["available"]) is bool, f"email must be exactly {{'available': {available}}}: {response.text}"
+    leaked = _leaks(response.text, {**NOT_IN_A_STATUS, "the folder of the password file": str(tmp_path)})
+    assert leaked == [], f"the public configuration holds {leaked}: {response.text}"
+    assert network == [], f"the public configuration resolved {network}"
+    print_success(f"email {email}, nothing of the configuration")
+
+
+@pytest.mark.asyncio
+async def test_the_public_configuration_never_contacts_the_smtp_server(private: _Private, monkeypatch: pytest.MonkeyPatch, network: list[str]) -> None:
+    """EMA-020 — contract 5: email ready towards a running fake on the loopback: ``available`` is ``true`` and the fake accepted no connection — whether email is available is read from the configuration, never by trying the server."""
+    print_section("EMA-020: /system/instance never contacts the server")
+
+    with FakeSmtpServer() as fake:
+        _point_at(monkeypatch, fake)
+        async with _browser(private) as client:
+            response = await client.get(INSTANCE)
+
+    assert response.status_code == 200 and response.json().get("email") == {"available": True}, f"{response.status_code} {response.text}"
+    assert (fake.connections, network) == (0, []), f"the public configuration connected ({fake.connections}) or resolved {network}"
+    print_success("available, no connection")
+
+
+@pytest.mark.asyncio
+async def test_the_public_configuration_reads_the_password_file_off_the_event_loop(private: _Private, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """EMA-021 — contract 5: the password comes from ``LIBREFOLIO_SMTP_PASSWORD_FILE``; every read of it (``delivery.smtp_password``, wrapped) during ``GET /system/instance`` happens on a thread that is not the loop's and runs no loop; the answer is ``available``.
+
+    Barrier first: the route read the password at least once through ``delivery.smtp_password`` — otherwise «none on
+    the loop» would hold for a route that never read it there.
+    """
+    print_section("EMA-021: /system/instance reads the configuration off the event loop")
+    password_file = tmp_path / "zq-smtp-password"
+    password_file.write_text(f"{SMTP_PASSWORD}\n", encoding="utf-8")
+    loop_thread = threading.get_ident()
+    reads: list[tuple[int, bool]] = []
+    read_password = delivery.smtp_password
+
+    def recording_password() -> str | None:
+        reads.append((threading.get_ident(), _loop_running()))
+        return read_password()
+
+    monkeypatch.setattr(delivery, "smtp_password", recording_password)
+    _configure(monkeypatch, {**PUBLIC_CONFIGURATION, "password": None, "password_file": str(password_file)})
+
+    async with _browser(private) as client:
+        response = await client.get(INSTANCE)
+
+    assert response.status_code == 200 and response.json().get("email") == {"available": True}, f"{response.status_code} {response.text}"
+    assert reads, "barrier: GET /system/instance never read the password through delivery.smtp_password"
+    on_the_loop = [(thread, running) for thread, running in reads if thread == loop_thread or running]
+    assert on_the_loop == [], f"{len(on_the_loop)} of {len(reads)} configuration reads ran on the event loop: the password file must be read through asyncio.to_thread"
+    print_success(f"{len(reads)} read(s), none on the loop")
+
+
+def test_an_answer_built_without_email_says_email_is_off_and_the_openapi_does_not_require_it() -> None:
+    """EMA-022 — contract 5: ``InstanceConfigResponse(profile=..., accounts=...)`` without ``email`` serializes ``email`` as ``{"available": false}`` — an answer that forgets it, or a client reading an older server, says nothing can be sent —; and in the OpenAPI of the route the response schema lists ``email`` without requiring it."""
+    print_section("EMA-022: email defaults to off and is optional in the OpenAPI")
+    answer = InstanceConfigResponse(profile="selfhosted", accounts=AccountsInstanceConfig(registration_mode="open", registration_locked=False))
+    app = FastAPI()
+    app.include_router(instance_api.instance_router, prefix=f"{API_V1_PREFIX}/system")
+
+    document = app.openapi()
+
+    assert answer.model_dump(mode="json")["email"] == {"available": False}, answer.model_dump(mode="json")
+    reference = document["paths"][INSTANCE]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    schema = document["components"]["schemas"][reference.rsplit("/", 1)[-1]]
+    assert "email" in schema["properties"], f"the response schema must declare email: {schema}"
+    assert "email" not in schema.get("required", []), f"email must stay optional in the OpenAPI: {schema.get('required')}"
+    print_success(f"email {answer.model_dump(mode='json')['email']}; required: {schema.get('required')}")
