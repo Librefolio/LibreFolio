@@ -29,7 +29,7 @@ put back exactly as it was after every test that registers the fake. All data is
 synthetic: no value comes from a real bank export.
 
 Phase A2 (second half of this file) is written red-first the same way, through
-``_sets`` for the new service module ``backend.app.services.brim_report_sets`` and
+``_sets`` for the new service module ``backend.app.services.brim.brim_report_sets`` and
 the ``phase="A2"`` lookups for the additions to the schemas, the contract and the
 storage. It covers:
 
@@ -110,10 +110,10 @@ from backend.app.db.models import Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMFileInfo, BRIMFileStatus, BRIMNotice, BRIMParseOutput, BRIMParseResponse, BRIMPluginInfo
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services import brim_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim import brim_provider
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 
 BROKER_ID = 42
 OTHER_BROKER_ID = 43
@@ -192,10 +192,10 @@ def _schema(name: str, phase: str = "A1") -> Any:
 
 
 def _service(name: str, phase: str = "A1") -> Any:
-    """A new function or exception from ``backend.app.services.brim_provider``."""
+    """A new function or exception from ``backend.app.services.brim.brim_provider``."""
     found = getattr(brim_provider, name, None)
     if found is None:
-        _missing(f"backend.app.services.brim_provider.{name} does not exist", phase)
+        _missing(f"backend.app.services.brim.brim_provider.{name} does not exist", phase)
     return found
 
 
@@ -1322,7 +1322,7 @@ class TestListFilesReportSetFields:
 # =============================================================================
 
 A2 = "A2"
-SETS_MODULE = "backend.app.services.brim_report_sets"
+SETS_MODULE = "backend.app.services.brim.brim_report_sets"
 HISTORY_TAG = "danske_bank"
 OTHER_ACCOUNT = "fake-custody-account-0002"
 FAKE_PROVIDER_NAME = "Fake two-role report set (tests)"
@@ -1423,7 +1423,7 @@ def _sets_module() -> Optional[ModuleType]:
 
 
 def _sets(name: str) -> Any:
-    """A function or exception of the new service module ``backend.app.services.brim_report_sets``."""
+    """A function or exception of the new service module ``backend.app.services.brim.brim_report_sets``."""
     module = _sets_module()
     if module is None:
         _missing(f"{SETS_MODULE} does not exist", A2)

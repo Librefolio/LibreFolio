@@ -42,7 +42,7 @@ before release, zero anomalies found in existing data.
 ## Source files
 | File |
 |------|
-| `backend/app/schemas/transactions.py` |
+| `backend/app/schemas/transactions/transactions.py` |
 | `backend/app/services/transactions/batch_edits.py` |
 | `backend/test_scripts/test_db/audit_transaction_signs.py` |
 | `backend/test_scripts/test_api/test_transactions_validate.py` |

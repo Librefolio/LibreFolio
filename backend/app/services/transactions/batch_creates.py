@@ -11,14 +11,8 @@ from sqlalchemy import select
 
 from backend.app.db.models import Asset, AssetType, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import (
-    TXBatchResultItem,
-    TXPromoteBatchItem,
-    TXValidationCode,
-    TXValidationIssue,
-    tags_to_csv,
-    validate_transaction_business_rules,
-)
+from backend.app.schemas.transactions.batch import TXBatchResultItem, TXPromoteBatchItem, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.transactions import tags_to_csv, validate_transaction_business_rules
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 

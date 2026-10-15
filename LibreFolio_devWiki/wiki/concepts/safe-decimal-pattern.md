@@ -38,7 +38,7 @@ Pydantic V2's `model_dump(mode='json')` uses `str()` for Decimal serialization. 
 Currently adopted in:
 - `backend/app/schemas/common.py` — type definition + `Currency.amount`
 - `backend/app/schemas/brokers.py` — `BRAssetHolding` fields (`quantity`, `average_cost_per_unit`, `current_price`, `unrealized_pnl_percent`)
-- `backend/app/schemas/transactions.py` — `TXReadItem` fields (`quantity`, `cost_basis_override`, `value`)
+- `backend/app/schemas/transactions/transactions.py` — `TXReadItem` fields (`quantity`, `cost_basis_override`, `value`)
 
 **Not yet adopted** (lower risk but should be migrated when touched):
 - `backend/app/schemas/prices.py`
@@ -69,6 +69,6 @@ When adding new Decimal fields to response schemas, use `SafeDecimal` from the s
 |------|------|
 | Type definition | `backend/app/schemas/common.py` (L50–66) |
 | Broker schema adoption | `backend/app/schemas/brokers.py` |
-| Transaction schema adoption | `backend/app/schemas/transactions.py` |
+| Transaction schema adoption | `backend/app/schemas/transactions/transactions.py` |
 | Bandaid removal | `backend/app/services/brokers/summary.py` |
 
