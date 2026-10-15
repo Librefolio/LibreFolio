@@ -34,9 +34,12 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 /**
  * The ECharts stand-in — a recorder, not a renderer — answering every call the chart and its helpers make on an
  * instance, and keeping every `setOption` payload. `graphic.LinearGradient` is the main series' fill: kept as its
- * arguments.
+ * arguments. `on` keeps the handlers it is given and `emit` calls them, as ECharts does when the user acts (47-1);
+ * event names are compared in lower case, as ECharts registers them. No case emits but the 47-1 ones.
  */
 const {chartInstances, echartsModule} = vi.hoisted(() => {
+    type Handler = (params?: unknown) => void;
+
     interface FakeChart {
         setOptionCalls: Array<{option: Record<string, unknown>}>;
         setOption: (option: Record<string, unknown>) => void;
@@ -45,8 +48,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getHeight: () => number;
         getDom: () => unknown;
         getZr: () => {on: () => void; off: () => void};
-        on: () => void;
-        off: () => void;
+        /** `on(event, handler)` or `on(event, query, handler)`: the handler is the last argument. */
+        on: (event: string, ...rest: unknown[]) => void;
+        off: (event: string, handler?: unknown) => void;
+        /** Calls every handler registered for `event` with `params` (47-1). */
+        emit: (event: string, params?: unknown) => void;
+        /** How many handlers are registered for `event`: the precondition that an emitted event reaches the chart (47-1). */
+        handlerCount: (event: string) => number;
         dispatchAction: () => void;
         resize: () => void;
         containPixel: () => boolean;
@@ -60,6 +68,7 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
     function createFakeChart(dom: unknown): FakeChart {
         let merged: Record<string, unknown> = {};
         let disposed = false;
+        const handlers = new Map<string, Handler[]>();
         const chart: FakeChart = {
             setOptionCalls: [],
             setOption(option) {
@@ -71,8 +80,21 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
             getHeight: () => 400,
             getDom: () => dom,
             getZr: () => ({on: () => {}, off: () => {}}),
-            on: () => {},
-            off: () => {},
+            on(event, ...rest) {
+                const handler = rest[rest.length - 1];
+                if (typeof handler !== 'function') return;
+                const name = event.toLowerCase();
+                handlers.set(name, [...(handlers.get(name) ?? []), handler as Handler]);
+            },
+            off(event, handler) {
+                const name = event.toLowerCase();
+                handlers.set(name, handler === undefined ? [] : (handlers.get(name) ?? []).filter((entry) => entry !== handler));
+            },
+            emit(event, params) {
+                // A copy: a handler that unregisters itself must not make its neighbour skip.
+                for (const handler of [...(handlers.get(event.toLowerCase()) ?? [])]) handler(params);
+            },
+            handlerCount: (event) => handlers.get(event.toLowerCase())?.length ?? 0,
             dispatchAction: () => {},
             resize: () => {},
             containPixel: () => false,
@@ -241,5 +263,88 @@ describe('LineChart — the days its tooltip writes, in the house notation of th
         const headers = NOT_DAYS.map((category) => axisTooltipAt(category, [{seriesName: 'EUR', value: 10}])[0]);
 
         expect(headers, 'a category that is not a day was rewritten as a day').toEqual(NOT_DAYS);
+    });
+});
+
+/**
+ * 47-1 — the category labels follow the zoomed window.
+ *
+ * A full-size LineChart sizes its compact x labels on every point: on an 800 px panel a year of daily prices is labelled
+ * one point in 34 (`interval` 33). Zoomed to about a month, the same interval leaves the window with its two forced edge
+ * labels and nothing between, because the chart's `dataZoom` handler only re-aims its arrows. After the fix, once a zoom
+ * settles (debounced), the chart reads the window off the event's own params and sets the window's labels:
+ * `setOption({xAxis: {axisLabel: policy.axisLabel}})` with the window's compact policy, or
+ * `{xAxis: {axisLabel: {interval: 'auto', formatter}}}` when the window is not compact.
+ *
+ * Driven through the recorder: the case emits the event ECharts emits for a user's zoom, then advances fake timers past
+ * any debounce. Fake timers are installed only after the first draw, which the barrier awaits on real ones.
+ */
+describe('LineChart — the category labels follow the zoomed window (47-1)', () => {
+    /** The 365 days of 2025, one price a day. */
+    const YEAR: LineDataPoint[] = Array.from({length: 365}, (_day, index) => ({date: new Date(Date.UTC(2025, 0, 1 + index)).toISOString().slice(0, 10), value: 100 + (index % 17)}));
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    /** The `xAxis.axisLabel` a `setOption` payload carries, the axis given as an object or as the first of an array. */
+    function xAxisLabelOf(option: Record<string, unknown>): Record<string, unknown> | undefined {
+        const xAxis = option.xAxis;
+        const axis = (Array.isArray(xAxis) ? xAxis[0] : xAxis) as {axisLabel?: Record<string, unknown>} | undefined;
+        return axis?.axisLabel;
+    }
+
+    /** Mounts a full-size LineChart over YEAR on an 800 px panel, and waits for its first draw. */
+    async function mountYear() {
+        // The panel is 800 px wide however the chart measures it: its box (file-level beforeEach), its client and offset
+        // widths here, the instance's `getWidth()` in the recorder.
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+        vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800);
+        render(LineChart, {props: {data: YEAR, currency: 'EUR'}});
+        await drawnOver(YEAR.map((point) => point.date));
+        const chart = chartInstances.at(-1);
+        if (!chart) throw new Error('LineChart never created its chart');
+        // Precondition: the first draw labels the whole year, compact, one point in 34 (ceil(364 / 11) − 1).
+        expect(xAxisLabelOf(lastDraw())?.interval, 'precondition: 365 points on 800 px are labelled one every 34').toBe(33);
+        // Precondition: the chart listens to dataZoom, so the event a case emits reaches it.
+        expect(chart.handlerCount('dataZoom'), 'precondition: the chart registered a dataZoom handler').toBeGreaterThan(0);
+        return chart;
+    }
+
+    /** Zooms as ECharts reports a user's zoom, then lets it settle: a second of fake time, well past any debounce. */
+    async function zoomAndSettle(chart: (typeof chartInstances)[number], params: unknown): Promise<void> {
+        vi.useFakeTimers();
+        chart.emit('dataZoom', params);
+        await vi.advanceTimersByTimeAsync(1_000);
+    }
+
+    /** The x-axis labels the chart set after call `since`: the last one is what the user reads. */
+    const labelsSetSince = (chart: (typeof chartInstances)[number], since: number) =>
+        chart.setOptionCalls
+            .slice(since)
+            .map(({option}) => xAxisLabelOf(option))
+            .filter((label) => label !== undefined);
+
+    it('relabels the axis at the window’s interval once a zoom to 34 of the 365 days settles: one label every 3 points (interval 2)', async () => {
+        // Why: the reported defect. 0–9 % of 364 steps is indices 0..33, 34 points: 736 / 34 ≈ 21.6 px a point, still
+        // compact, and the 12-label budget over 34 points gives ceil(33 / 11) − 1 = 2.
+        const chart = await mountYear();
+        const since = chart.setOptionCalls.length;
+
+        await zoomAndSettle(chart, {batch: [{start: 0, end: 9}]});
+
+        expect(labelsSetSince(chart, since).at(-1)?.interval, 'the x labels the chart set once the zoom settled').toBe(2);
+    });
+
+    it('hands the labels back to ECharts once a zoom to 20 of the 365 days settles: the window is not compact (interval auto, with a formatter)', async () => {
+        // Why: the other branch. 0–5 % of 364 steps is indices 0..19, 20 points: 736 / 20 = 36.8 px a point, so ECharts may
+        // place the labels itself, named by the policy's formatter.
+        const chart = await mountYear();
+        const since = chart.setOptionCalls.length;
+
+        await zoomAndSettle(chart, {batch: [{start: 0, end: 5}]});
+
+        const last = labelsSetSince(chart, since).at(-1);
+        expect({interval: last?.interval, formatter: typeof last?.formatter}, 'the x labels the chart set once the zoom settled').toEqual({interval: 'auto', formatter: 'function'});
     });
 });

@@ -1,6 +1,6 @@
 # 👤 Users & Access Control
 
-Manages authentication, user preferences, onboarding progress, single-use account tokens, and the sharing of brokers between users.
+Manages authentication, user preferences, onboarding progress, single-use account tokens, the sharing of brokers between users, and the stored values of the plugin settings.
 
 ## 📐 ER Diagram
 
@@ -15,6 +15,8 @@ erDiagram
     USER |o--o{ ACCOUNT_TOKEN : "has tokens (user_id)"
     USER |o--o{ ACCOUNT_TOKEN : "created (created_by_user_id)"
     USER |o--o{ ACCOUNT_TOKEN : "consumed (consumed_by_user_id)"
+    USER ||--o{ PLUGIN_USER_SETTING : "has plugin settings"
+    USER |o--o{ PLUGIN_SYSTEM_SETTING : "last wrote (updated_by_user_id)"
 
     USER {
         int id PK
@@ -75,6 +77,30 @@ erDiagram
         datetime revoked_at "nullable"
         int consumed_by_user_id FK "nullable, ON DELETE SET NULL"
     }
+
+    PLUGIN_SYSTEM_SETTING {
+        int id PK
+        string family "asset, fx"
+        string plugin_code
+        string field_key
+        text value_json "nullable, a plain value as JSON"
+        blob secret_ciphertext "nullable, an encrypted secret"
+        string key_id "nullable, 32 hex characters"
+        datetime updated_at
+        int updated_by_user_id FK "nullable, ON DELETE SET NULL"
+    }
+
+    PLUGIN_USER_SETTING {
+        int id PK
+        int user_id FK "ON DELETE CASCADE"
+        string family "asset, the only family with user fields"
+        string plugin_code
+        string field_key
+        text value_json "nullable, a plain value as JSON"
+        blob secret_ciphertext "nullable, an encrypted secret"
+        string key_id "nullable, 32 hex characters"
+        datetime updated_at
+    }
 ```
 
 ## 📋 Tables
@@ -121,6 +147,55 @@ startup seeding creates `registration_mode` with its default, `open`. The downgr
 so an interrupted run can be repeated. `./dev.py test db migration-006`
 (`backend/test_scripts/test_db/test_migration_006_registration.py`) covers both directions, the metadata and the
 idempotence, on temporary databases.
+
+### 🏢 `PLUGIN_SYSTEM_SETTING` {: #plugin-system-setting }
+
+Table `plugin_system_settings`, created by migration `007_plugin_settings`: one row per plugin setting of the whole
+instance (a `system` field), written by an administrator. What the plugins declare, and how the values are resolved,
+encrypted and delivered to a call, is in [Plugin Settings](../patterns/plugin_settings.md).
+
+- 🏷️ **`family`** (`VARCHAR(16)`), **`plugin_code`** and **`field_key`** (`VARCHAR(64)`): the field, `UNIQUE (family,
+  plugin_code, field_key)` (`uq_plugin_system_settings_field`). `family` is `asset` or `fx`.
+- 📝 **`value_json`** (`TEXT`, nullable): a plain value, as JSON.
+- 🔐 **`secret_ciphertext`** (`BLOB`, nullable): a secret, encrypted with AES-256-GCM under a key derived from the
+  [instance key](../security.md#instance-key) and bound to its row.
+- 🗝️ **`key_id`** (`VARCHAR(32)`, nullable): the id of the key that encrypted the secret, 32 hex characters. A changed
+  instance key shows as another id, without decrypting anything.
+- ⏱️ **`updated_at`** (`DATETIME NOT NULL`): when the value last changed.
+- 🧾 **`updated_by_user_id`** (nullable): the administrator who wrote it.
+
+Two `CHECK` constraints keep each row consistent:
+
+| Constraint | Expression | Meaning |
+|------------|------------|---------|
+| `ck_plugin_system_settings_one_value` | `(value_json IS NULL) <> (secret_ciphertext IS NULL)` | Exactly one of the plain value and the ciphertext |
+| `ck_plugin_system_settings_key_id` | `(secret_ciphertext IS NULL) = (key_id IS NULL)` | A `key_id` if and only if there is a ciphertext |
+
+`updated_by_user_id` references `users.id` with `ON DELETE SET NULL`: deleting that administrator keeps the value and
+forgets who wrote it. A value given by an environment variable is never stored here: a variable that is set wins over
+the row. Clearing a field deletes its row. Rows of fields that no plugin declares any more stay, ignored.
+
+### 🙋 `PLUGIN_USER_SETTING` {: #plugin-user-setting }
+
+Table `plugin_user_settings`, created by the same migration: one row per user and plugin setting of that user (a
+`user` field), written by that user only. No endpoint shows these rows to anyone else, an administrator included. The
+same columns as `plugin_system_settings`, without `updated_by_user_id`, plus:
+
+- 👤 **`user_id`** (`NOT NULL`): the owner. It references `users.id` with `ON DELETE CASCADE`: the rows go with the
+  account. It is part of the row the encryption binds a secret to, so a ciphertext copied to another user's row does
+  not decrypt.
+
+`UNIQUE (user_id, family, plugin_code, field_key)` (`uq_plugin_user_settings_field`), and the same two checks:
+`ck_plugin_user_settings_one_value` and `ck_plugin_user_settings_key_id`.
+
+Two tables rather than one with a nullable `user_id`: in SQLite NULLs never collide in a `UNIQUE` constraint, so one
+table would need two partial unique indexes, which nothing else in the schema uses. The unique constraints are the
+only indexes: their leading columns serve the reads of one plugin's rows and, in `plugin_user_settings`, of one user's
+rows and the cascade. The ids are plain `INTEGER PRIMARY KEY`, without `AUTOINCREMENT`: no row id leaves the backend.
+
+Migration `007_plugin_settings` creates both tables empty: no setting existed before. The downgrade drops them, and
+the values and secrets in them are lost. Each direction checks before it acts, so a run that stopped half way can be
+run again.
 
 ### 🔑 `BROKER_USER_ACCESS`
 
@@ -242,6 +317,7 @@ into no other table), an upgrade interrupted half way, and that `SQLModel.metada
 - 👥 [Users & Roles (Architecture)](../users_and_brokers.md) — Authentication flow, session management, user roles
 - 🔐 [Access Control (RBAC)](../access_control.md) — Permission matrix for Owner/Editor/Viewer
 - ⚙️ [Settings System](../settings.md) — Global vs user settings, fallback logic
+- 🧩 [Plugin Settings](../patterns/plugin_settings.md) — What the plugins declare, and how the values of `plugin_system_settings` and `plugin_user_settings` are resolved, encrypted and delivered
 - 🎟️ [Single-use Account Tokens](../security.md#account-tokens) — How the tokens of `account_tokens` are issued, checked, spent and revoked
 - ✉️ [Registration, Invitations and the Admin API](../access_control.md#registration) — Who may register, the user limit, invitations and reset links
 - 🚪 [From login to the first guide](../../frontend/onboarding.md#layout-gate) — How the app loads onboarding progress, sends the user to Welcome while it is due, and completes or skips it

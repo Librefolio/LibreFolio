@@ -110,6 +110,9 @@ read from a file.
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` | The token of the hosting panel that backs up the instance: see [Hosting for Others](hosting_providers.md#panel-backups). Like the web-search key, a file that cannot give it does not stop the server: the panel's backup routes answer `503`. |
 
+A plugin may have secrets of its own, such as the API key of a paid data source: see
+[Plugin Settings](#plugin-settings).
+
 ### 📄 Secrets in Files {: #secret-files }
 
 Add `_FILE` to the name of a secret and give the path of a file that holds it. This is how Docker and
@@ -214,6 +217,96 @@ the data directory. Give every instance its own key: never share one key between
 
 ---
 
+## 🧩 Plugin Settings {: #plugin-settings }
+
+A plugin can ask for settings of its own: the API key of a paid data source, a region, a
+preference. No plugin shipped with LibreFolio asks for one today; a plugin you add may. A setting is
+one of two kinds:
+
+- **Instance-wide**: one value for the whole instance, which only an administrator can save. Every
+  user can read a plain value, and of a secret one, such as an API key, only whether it is set.
+- **Personal**: each user's own value, which only that user can save and read. Administrators never
+  see it.
+
+An instance-wide setting can also be given by an environment variable, in `.env` or in the
+container's environment like the other options; a personal one cannot. The plugins that have
+settings, with the keys of their settings, are listed by `GET /api/v1/settings/plugins` to any
+signed-in user.
+
+### 🏷️ The Variables {: #plugin-variables }
+
+LibreFolio builds the name of the variable from the kind of plugin, the plugin's code and the
+setting's key:
+
+```text
+LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
+```
+
+- `<KIND>` is `ASSET` for a price provider and `FX` for an exchange-rate provider.
+- The whole name is in uppercase, and every character other than a letter or a digit becomes `_`:
+  the `api_key` setting of the price provider `my_provider` is
+  `LIBREFOLIO_PLUGIN_ASSET_MY_PROVIDER_API_KEY`.
+- For a secret setting, a plugin may also accept the variable it read before it had settings, so
+  that an existing install keeps working. When both are set, the name above wins.
+- Each variable also has a `_FILE` form, the path of a file that holds the value, such as a Docker
+  secret. The file is read as in [Secrets in Files](#secret-files), but one that cannot be read never
+  stops the server: see below.
+
+### 🔒 A Variable Locks the Setting {: #plugin-variable-lock }
+
+While its variable is set, a setting takes its value from there, and nobody can change it from
+inside LibreFolio: a save is refused (`LOCKED_BY_ENV`), and a value saved earlier is ignored until
+you remove the variable and restart.
+
+- A wrong value, one the setting does not accept or a `_FILE` that cannot be read, still locks the
+  setting, and the plugin is then not configured: LibreFolio refuses every request to it, even when
+  the setting is optional, until you fix the variable. It never falls back to the saved value or to
+  the plugin's default. The log says why, with a warning once per server process:
+  `Plugin setting variable invalid: the plugin is not configured until it is fixed`, with the
+  variable and the reason, never the value. Fix the value, then restart.
+- In the [managed profile](hosting_providers.md#managed-profile), a setting locked by a variable is
+  not shown at all, and a save to it is refused as if it did not exist: the hosting provider sets it,
+  and the instance's administrators and users never see it.
+
+### 🔐 Saved Secrets and the Instance Key {: #plugin-secrets }
+
+A setting saved inside LibreFolio is kept in the database. A secret one is first encrypted
+(AES-256-GCM) with a key derived from the [instance key](#instance-key), and is never shown again,
+not even to whoever saved it: LibreFolio only says whether it is set. A value given by a variable,
+secret or not, is never saved in the database.
+
+If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
+reports them as unreadable, and never uses a wrong value: enter them again.
+
+If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
+the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
+instead. Until you fix it:
+
+- every saved secret is reported as unreadable, and the plugins run without them: a plugin that needs
+  one answers that it is not configured;
+- secrets given by variables keep working;
+- a new secret cannot be saved;
+- the log has one more error, the first time each server process needs a saved secret:
+  `Plugin secrets unreadable: the instance key cannot be used (see the configuration checks)`.
+
+Fix the file, or restore it from a backup, and the saved secrets come back. A new key does not bring
+them back: they would have to be entered again.
+
+!!! warning "🗄️ The database and the key in one folder"
+
+    The database (`sqlite/app.db`) and the instance key that LibreFolio generates
+    (`secrets/instance.key`) are in the same [data directory](filesystem.md): whoever gets both, the
+    folder itself or a copy of it, can read every saved secret.
+
+    - Keep the data directory, and every copy of it, private.
+    - Better, give the instance key from a secret store, with `LIBREFOLIO_INSTANCE_KEY_FILE` (a
+      Docker secret) or `LIBREFOLIO_INSTANCE_KEY`: LibreFolio then never writes it to the data
+      directory. If LibreFolio has already created `secrets/instance.key`, use its content as the
+      value, as [The Instance Key](#instance-key) explains: another key would make the saved secrets
+      unreadable.
+
+---
+
 ## 🩺 Startup Checks {: #startup-checks }
 
 Right after its `Starting LibreFolio` line, the server checks its configuration. It changes nothing:
@@ -232,6 +325,8 @@ each finding is one line of the log, at its level, with the name of the check in
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 | ❌ `error` | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` (`check` is `email.smtp`) | Email is off, nothing else is: fix the variable the line names, then restart. What each code means: [Configuration Problems](email.md#configuration-problems). The server starts anyway. |
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
+| ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
+| ⚠️ `warning` | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Write the address with `http://` or `https://` and a host name, without user name, password, `?` or `#`, such as `https://librefolio.example.com`, then restart: see [Email](email.md). |
 
 Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
@@ -245,6 +340,47 @@ A `LIBREFOLIO_BLOCKED` or `LIBREFOLIO_DELETION_DATE` value that LibreFolio canno
 start, and a blocked instance logs a warning at every start,
 `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`: see
 [Hosting for Others](hosting_providers.md#block-variables).
+
+---
+
+## ⏹️ Stopping the Server {: #shutdown }
+
+When the server is asked to stop, it must be done within a time limit, the **shutdown budget**:
+8 seconds unless you change it, counted from the signal (SIGTERM from `docker stop`,
+`docker compose down` or a restart; SIGINT from Ctrl+C). Most of the time users notice nothing,
+except restarts that are quicker and cleaner.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` | `8` | The shutdown budget, in seconds: a whole number from `2` to `600`, or `0` for no limit, as before release 1.3. A value that cannot be used does not stop the server, unlike the main options: the log says `Shutdown budget setting cannot be used: the default applies`, and the budget stays at 8 seconds. |
+| `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` | 3/8 of the budget | How many seconds uvicorn, the web server, waits for the requests in flight: `3` with the default budget. The Docker image and `./dev.py server` work it out from the budget. A value you set yourself wins: keep it below the budget, which still counts for the whole stop. |
+
+The budget is spent in this order:
+
+1. **Requests in flight**: the web server accepts no new ones and gives those already running 3/8 of
+   the budget, 3 seconds by default. Then it cancels those still running, such as a long broker
+   import: what they had not saved yet is rolled back, so they can simply be repeated once
+   LibreFolio is back.
+2. **The server's own work**: the scheduled syncs, the worker processes, the caches… stop one after
+   the other, each within the time left. The last step ends the child processes still running
+   (broker imports, risk simulations, Tools), so none outlives the server.
+3. **When the budget runs out**: if anything still holds the server, it ends anyway, with exit
+   status 1, and its log says what was still running: `Shutdown budget exhausted: ending the process`.
+
+!!! warning "🐳 Give the container more time than the budget"
+
+    Docker gives a container 10 seconds to stop by default, then kills it: the default budget of
+    8 seconds fits. If you raise `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, give the container at least
+    2 seconds more: set `stop_grace_period` on the `librefolio` service of `docker-compose.yml`, keep
+    the rest of the service as it is, then run `docker compose up -d`.
+
+    ```yaml
+    services:
+      librefolio:
+        stop_grace_period: 32s  # for LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=30
+    ```
+
+    Otherwise Docker kills the server after 10 seconds, whatever its budget.
 
 ---
 
@@ -273,8 +409,8 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **Open** unless an administrator changed it. Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. On a new instance, `invite` and `disabled` leave the login page without **Register here**: see [Who Can Sign Up](settings.md#registration) to create the first administrator. |
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
-| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. LibreFolio gives it to administrators only, with the numbers of the user limit, and the block page of a [blocked instance](hosting_providers.md#instance-block) shows it to them as **Manage subscription**. |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
 An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
 LibreFolio stays on the safe side, and writes an error to its log the first time each server
@@ -285,7 +421,7 @@ process needs the value: `Invalid account configuration`, with the variable and 
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
 | `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
-| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored: links show the path only, and the [command line](cli_tools.md#invite) says why under each link | `links show the bare path until it is fixed` |
+| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored, as if it were not set: the [command line](cli_tools.md#invite) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address. No email with a link goes out, and while email works the start log has a [warning](#startup-checks) too ([Email](email.md)) | `links show the bare path until it is fixed` |
 | `LIBREFOLIO_BILLING_URL` without `http://` or `https://` | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
 
 ### 📏 When the Instance Is Full {: #user-limit }
@@ -317,8 +453,8 @@ updates. All these variables are optional: uncomment a line of `.env.example` to
 | `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` needs no setup. `apikey` is reserved for a paid search service and returns no results yet. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | Search region. `wt-wt` (worldwide) keeps national sites such as Borsa Italiana from being pushed down. Examples: `it-it`, `us-en`. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | Engines that `ddgs` queries: `auto` rotates them for the widest coverage; a list such as `google,bing,duckduckgo` gives steadier results. |
-| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Time limit of one search, in seconds. |
-| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Most links returned by one search. |
+| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Time limit of one search, in seconds: at least `1`. Any other value means the default. |
+| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Most links returned by one search: a whole number, at least `1`. Any other value means the default. |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _empty_ | Key for the `apikey` engine. `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` reads it from a file instead: see [Secrets](#secrets). |
 
 ??? tip "🔁 Results change between attempts — when a known asset is sometimes not found"
@@ -342,6 +478,12 @@ With Docker Compose, the `environment:` block of `docker-compose.yml` wins over 
 `HOST`, `LIBREFOLIO_DATA_DIR` and, inside the container, `PORT=6040` (your `PORT` still sets the host
 port). See [Advanced Docker](docker_advanced.md#resolution-priority).
 
+For a [plugin setting](#plugin-settings), from the highest priority to the lowest: its variable
+(`LIBREFOLIO_PLUGIN_…` before the plugin's older name for it, each before its `_FILE` form), the
+value saved inside LibreFolio, then the plugin's default. A variable with a wrong value still wins,
+and leaves the plugin not configured. A personal setting has no variable: the user's saved value,
+then the default.
+
 ---
 
 ## 📂 Where the Data Goes
@@ -363,3 +505,5 @@ port). See [Advanced Docker](docker_advanced.md#resolution-priority).
   values are loaded
 - 🔒 For developers: **[Security Architecture](../developer/architecture/security.md)** — Secrets,
   the instance key and the startup checks
+- 🧩 For developers: **[Plugin Settings](../developer/architecture/patterns/plugin_settings.md)** —
+  How plugins declare settings, and how secrets are protected

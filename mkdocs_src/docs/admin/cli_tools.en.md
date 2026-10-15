@@ -50,6 +50,8 @@ pipenv run ./dev.py server --force
 
 These commands write straight to the database, so they also work while the server is running.
 
+In the app, administrators manage the other accounts and the invitations from the **Users** tab of **Settings**: see [Users & Invitations](users.md). The commands below need no browser: use them on a headless server, or to go past the [user limit](configuration.md#user-limit).
+
 ### ➕ Create and List Users
 
 ```bash
@@ -85,7 +87,7 @@ The command prints a link that works once, for 7 days. Send it to the person: th
 - 🔒 The secret part of the link comes after `#`: browsers never send that part to the server, so it does not end up in server or proxy logs. Send the link whole.
 - 🚪 Invitations work while **Registration** is **Open** or **By invitation**. While it is **Closed**, the command stops with the error `Registration is disabled: invitations cannot be created` and exits with `1`, and the links already sent do not work either.
 - 📏 An invitation takes a place of the [user limit](configuration.md#user-limit) until it is used or revoked, or expires. At the limit, the command warns, then creates the invitation anyway.
-- ⏳ There is no command to cancel an invitation: a link nobody used stops working after 7 days. An administrator can revoke it sooner through the API: `GET /api/v1/users/invites` lists the pending invitations, `DELETE /api/v1/users/invites/<id>` revokes one.
+- ⏳ There is no command to cancel an invitation: a link nobody used stops working after 7 days. An administrator can revoke it sooner with **Revoke** in the [Users](users.md#open-invitations) tab, or through the API: `GET /api/v1/users/invites` lists the pending invitations, `DELETE /api/v1/users/invites/<id>` revokes one.
 
 ### 🔑 Reset a Password or Lock an Account
 

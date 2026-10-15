@@ -28,7 +28,9 @@ vi.hoisted(() => {
     vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
 });
 
+import {get} from 'svelte/store';
 import {waitLocale} from 'svelte-i18n';
+import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getBrokerColor} from '$lib/utils/broker/brokerColors';
@@ -60,6 +62,9 @@ import {
     applySharedZoomWindow,
     type EventMarkerKind,
 } from './lotGanttChartHelpers';
+// O-16: the module itself too, so the helpers still to come are read as properties: a named import of an export that
+// does not exist yet would fail every case of this file, not only theirs.
+import * as ganttHelpers from './lotGanttChartHelpers';
 
 afterAll(() => {
     vi.unstubAllGlobals();
@@ -218,6 +223,138 @@ describe('formatQuantity — without a locale, the interface language (M-18)', (
             quantities.map((value) => formatQuantity(value)),
             'without a locale, an Italian UI must read Italian quantities',
         ).toEqual(italian);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// O-16 — the tooltip's quantity line, in the plural its digits read
+// ---------------------------------------------------------------------------
+//
+// The Gantt tooltip glued a fixed word to the formatted quantity (`LotGanttChart.svelte`, `buildTooltip`): «1 shares»,
+// «0,5 shares». After the fix a pure helper, `lotQuantityLine(t, input)`, builds the line from two ICU plural keys,
+// `brokers.lots.tooltip.quantityClosed` (count 0) and `brokers.lots.tooltip.quantityOpen`, and takes the open line's
+// `count` from the digits shown, never from the double (i18n rule 6): `quantityPluralCount(value, locale?)`, beside
+// `formatQuantity` and with its options, is the integer part shown plus 0.5 when a fraction is shown, and NaN for a value
+// that is not finite. A masked quantity counts NaN, which every locale reads as `other`: the noun must not reveal a
+// hidden 1. Both helpers are read off the module namespace (see the imports). The translated lines are asserted as
+// text on purpose: the translation of a plural is the subject here.
+
+describe('quantityPluralCount — the plural count of a quantity as formatQuantity shows it (O-16)', () => {
+    /** The helper, after the precondition that it exists. */
+    function pluralCount(value: number, locale: string): number {
+        expect(typeof ganttHelpers.quantityPluralCount, 'lotGanttChartHelpers exports quantityPluralCount').toBe('function');
+        return ganttHelpers.quantityPluralCount(value, locale);
+    }
+
+    it.each([
+        {value: 1, locale: 'en', count: 1},
+        {value: 3, locale: 'en', count: 3},
+        {value: 0.5, locale: 'fr', count: 0.5},
+        {value: 1.5, locale: 'it', count: 1.5},
+    ])('$value in $locale counts $count: the integer part shown, plus one half when a fraction is shown', ({value, locale, count}) => {
+        expect(pluralCount(value, locale)).toBe(count);
+    });
+
+    it('counts 1.0000001 as 1 in en: six fraction digits round its fraction away, so it is shown «1»', () => {
+        expect(formatQuantity(1.0000001, 'en'), 'control: the digits shown').toBe('1');
+        expect(pluralCount(1.0000001, 'en')).toBe(1);
+    });
+
+    it('counts 1.0004 as 1.5 in en: its fourth fraction digit is shown, so the count keeps a fraction (beyond the cases of the brief)', () => {
+        // Why: the case that tells the digits shown from the double. Intl.PluralRules rounds what it is handed to three
+        // fraction digits, so the raw 1.0004 would be read as one, next to a figure that shows a fraction.
+        expect(formatQuantity(1.0004, 'en'), 'control: the digits shown').toBe('1.0004');
+        expect(new Intl.PluralRules('en').select(1.0004), 'control: the double itself is read as one').toBe('one');
+        expect(pluralCount(1.0004, 'en')).toBe(1.5);
+    });
+
+    it('reads the integer part of a grouped French quantity whole: 1234.5 counts 1234.5', () => {
+        // Why: French writes 1234.5 with a group separator, so the integer is shown in two parts; the count reads both.
+        const groups = new Intl.NumberFormat('fr', {minimumFractionDigits: 0, maximumFractionDigits: 6}).formatToParts(1234.5).filter((part) => part.type === 'group');
+        expect(groups, 'control: French groups the integer part of 1234.5').toHaveLength(1);
+        expect(pluralCount(1234.5, 'fr')).toBe(1234.5);
+    });
+
+    it('counts NaN, which every locale reads as other, for a value that is not finite', () => {
+        expect([NaN, Infinity, -Infinity].map((value) => pluralCount(value, 'en'))).toEqual([NaN, NaN, NaN]);
+    });
+});
+
+describe('lotQuantityLine — the tooltip quantity line, worded by an ICU plural (O-16)', () => {
+    /** The translate function the helper takes: the app's own (`$_`, svelte-i18n), as the chart passes it. */
+    type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
+
+    interface QuantityLineInput {
+        closed: boolean;
+        open: number;
+        openText: string;
+        originalText: string;
+        masked: boolean;
+    }
+
+    /** What a masked quantity shows (`maskableQuantity`): the input texts of a masked line. */
+    const MASK = '•••';
+
+    /** Switches the UI language as LanguageSelector does, and answers the app's translate function in it. */
+    async function speak(lang: 'en' | 'it' | 'fr' | 'es'): Promise<Translate> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        return get(_);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await speak('en');
+    });
+
+    /** The helper, after the precondition that it exists. */
+    function quantityLine(t: Translate, input: QuantityLineInput): string {
+        expect(typeof ganttHelpers.lotQuantityLine, 'lotGanttChartHelpers exports lotQuantityLine').toBe('function');
+        return ganttHelpers.lotQuantityLine(t, input);
+    }
+
+    /** A closed lot: nothing open, `originalText` at the start. */
+    const closedLot = (originalText: string): QuantityLineInput => ({closed: true, open: 0, openText: '0', originalText, masked: false});
+    /** An open lot of 10, `open` of them still open, shown as `openText`. */
+    const openLot = (open: number, openText: string): QuantityLineInput => ({closed: false, open, openText, originalText: '10', masked: false});
+    /** An open lot under privacy: both quantities masked, `open` still the real one. */
+    const maskedLot = (open: number): QuantityLineInput => ({closed: false, open, openText: MASK, originalText: MASK, masked: true});
+
+    it.each([
+        {lang: 'en', what: 'closed', input: closedLot('10'), line: '10 → 0 shares'},
+        {lang: 'en', what: '1 open', input: openLot(1, '1'), line: '1 share open out of 10'},
+        {lang: 'en', what: '3 open', input: openLot(3, '3'), line: '3 shares open out of 10'},
+        {lang: 'en', what: 'masked, 1 open: plural', input: maskedLot(1), line: `${MASK} shares open out of ${MASK}`},
+        {lang: 'it', what: 'closed', input: closedLot('10'), line: '10 → 0 quote'},
+        {lang: 'it', what: '1 open', input: openLot(1, '1'), line: '1 quota aperta su 10'},
+        {lang: 'it', what: '3 open', input: openLot(3, '3'), line: '3 quote aperte su 10'},
+        {lang: 'fr', what: 'closed: 0 is singular in French', input: closedLot('10'), line: '10 → 0 part'},
+        {lang: 'fr', what: '1 open', input: openLot(1, '1'), line: '1 part ouverte sur 10'},
+        {lang: 'fr', what: '0.5 open: singular in French', input: openLot(0.5, '0,5'), line: '0,5 part ouverte sur 10'},
+        {lang: 'fr', what: '3 open', input: openLot(3, '3'), line: '3 parts ouvertes sur 10'},
+        {lang: 'fr', what: 'masked, 1 open: plural', input: maskedLot(1), line: `${MASK} parts ouvertes sur ${MASK}`},
+        {lang: 'es', what: 'closed', input: closedLot('10'), line: '10 → 0 participaciones'},
+        {lang: 'es', what: '1 open', input: openLot(1, '1'), line: '1 participación abierta de 10'},
+        {lang: 'es', what: '3 open', input: openLot(3, '3'), line: '3 participaciones abiertas de 10'},
+    ] as const)('$lang, $what: «$line»', async ({lang, input, line}) => {
+        const t = await speak(lang);
+        expect(quantityLine(t, input)).toBe(line);
+    });
+
+    it('en: 1.0000001 open, shown «1», reads the singular: the count comes from the digits shown (rule 6)', async () => {
+        // Note: this case alone does not tell the digits shown from the double. Intl.PluralRules rounds 1.0000001 to three
+        // fraction digits too, so a count read off the double would also be singular here; the 1.0004 case below separates them.
+        const t = await speak('en');
+        expect(formatQuantity(1.0000001), 'control: the digits the tooltip shows').toBe('1');
+        expect(new Intl.PluralRules('en').select(1.0000001), 'control (the note above): the double itself is read as one too').toBe('one');
+        expect(quantityLine(t, openLot(1.0000001, '1'))).toBe('1 share open out of 10');
+    });
+
+    it('en: 1.0004 open, shown «1.0004», reads the plural, where a count read off the double would be singular (rule 6, beyond the cases of the brief)', async () => {
+        const t = await speak('en');
+        expect(formatQuantity(1.0004), 'control: the digits the tooltip shows').toBe('1.0004');
+        expect(new Intl.PluralRules('en').select(1.0004), 'control: the double itself is read as one').toBe('one');
+        expect(quantityLine(t, openLot(1.0004, '1.0004'))).toBe('1.0004 shares open out of 10');
     });
 });
 

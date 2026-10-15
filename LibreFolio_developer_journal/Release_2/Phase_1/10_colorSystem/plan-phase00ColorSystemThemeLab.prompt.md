@@ -139,6 +139,37 @@
 
   Dettagli nell'analisi, §6.
 
+## 🔎 Review unica del developer (15/10 sera): T-8b, T-8c e DV
+
+- **Una review e un ingresso** per T e DV, su richiesta del developer: ramo combinato `ec1ddba96` nel ramo di T, cioè T
+  più il target `4294ba12a` più DV `ebd1dfff6`. T è il proprietario d'integrazione.
+- **Esito (22:08):**
+  - tema e cornice tutti corretti;
+  - il meccanismo dei grafici funziona: colori costanti, sfumature dei sottotipi;
+  - il problema è la lista dei colori.
+- **Testuale:** «dividere il lavoro in 2: la parte tecnica, prendendo a casa le cose che ancora mancano, come il pac, e
+  la parte di design, che per ora accettiamo, ma scrivi un report dettagliato che mandiamo alla designer [...] fatto
+  questo, mergia il lavoro fatto, correggi gli aspetti tecnici e avanza sulle altre wave».
+- **Design, alla designer:** pacchetto `LibreFolio_visual_review/package/grafici-giro3-2026-10-15.zip`, punti 2.1–2.9.
+  - I verdi visti vengono dalle sue tabelle, applicate alla lettera da DV: Crowdfunding e Finanziari verde acqua; Obbligazione e Servizi pubblici ciano; Beni di consumo oliva; Liquidità salvia.
+  - Anche la scala della mappa (6 verdi), la sequenza dello storico geografico e quella della semi-ciambella vengono da lei.
+  - Il centro della correlazione è il pannello, con 1,1:1 sulla card.
+  - Chiesta una lista definitiva.
+- **Tecnico:**
+  - **TD-1 (DV):** PAC, «Esposizioni — ideale vs reale». `PAC_EXPOSURE_BAR_COLORS` è ancora il verde vecchio `#1A4031` e il fluo `#00D681`: «reale» va nel colore della categoria della riga, «ideale» in un grigio neutro, tooltip compreso. La lista di revisione diceva il contrario: errore del coordinatore.
+  - **TD-2 (T, W3 e W5):** i verdi e i rossi fluo dei KPI vengono da `toneClasses.ts` e passano a `--lf-gain`/`--lf-loss`. `timingEffectColor` (`chartColorScales.ts`) ha `rgba(22,163,74)`/`rgba(220,38,38)` fissi e va ricavato dagli stessi ruoli.
+  - **TD-3 (T, W5):** sfondi e pulsanti della card «Allocazione Patrimoniale» sui ruoli (nota della designer del giro 2).
+  - **TD-4 (T):** dopo l'ingresso, le ondate W1–W3 (prerequisiti soddisfatti), poi W4–W6.
+- **Ingresso unico:** `dev_release2` = `a0915bef9` (15/10, 22:55), merge di `dd4be16ad`. Il CHANGELOG lo scrive la 1.3
+  (`2be2f067c`).
+- **D-T27, la notte del 15/10.** Testuale: «il tuo obiettivo è finire la migrazione e fattorizzazione dei colori, cercando
+  comunque di seguire le direttive della designer, e poi a giochi fatti, possiamo sempre tornare e modificare solo i
+  colori».
+  - Stanotte i lotti validati entrano senza l'OK del developer per lotto: D-T21 è sospesa fino alla sua revisione del
+    mattino.
+  - La revisione si fa con `review/notte-15-16/cosa-guardare.md` (cartella di sessione del coordinatore), con l'anteprima
+    6160 aggiornata e con la galleria di fine notte confrontata con G-13.
+
 ## 🛤️ Workstream e corsie
 
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
@@ -147,9 +178,9 @@
 | L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2`: fino a L-9 con `9d57aa4c0`, L-10 (il Lab modifica i ruoli di T) con `87755fe2a`, il banner del Lab in `dev.py` con `a4d1884b4`, il cursore dell'opacità con `c96a62268` (validato sul fuso `47e33997b`). Prossimo, L-16: nel Lab i ruoli di T-8 dopo l'ingresso di T, poi il livello `category` dopo DV |
 | G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **piano della 56 chiuso il 15/10** (DoD con `g-final3`): integrato fino a G-9 (`1470bd693`) e alla chiusura (`243c8c9ff`); G-10 risolta da H (`b4533a949`); G-11 aperta, peso basso. Rivede in sola lettura gli scatti nuovi della 1.3 (`settings/email` di E2b: OK; `settings/users` di A6b; `settings/backup-ready` di B). G-13: la nuova coppia di riferimento dopo T e le tre schede |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori`, ramo `preview-colori-t8b` = `e0c88bbc3` (T-8b), per la revisione del developer (D-T20) |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | T-1 e T-2 **integrati**. Sul ramo: T-3, T-5, T-6, T-7, T-8 con T-4 (`68c990b35`), T-8b (`312748dcc`, D-T23…D-T26), merge di base `a74185670`, validazione `e0c88bbc3` tutta verde. Entra dopo l'OK del developer sull'anteprima (D-T20). In corso: il margine alto di `AuthPageFrame` sul telefono (OK della 1.3) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | approvato il 15/10 (D-T22). S1 `8b8571f9a`; checkpoint 2 (S2–S8, DV-2) `c5bca76ae`; merge di base `0182d890d` col golden verificato; DV-6 `fb59c7bec`. Prossimo: un merge di base, poi le prove 1–7 nello slot |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori`, ramo `preview-colori-t8c-dv` = `ec1ddba96`; a fine notte va sull'ultimo `dev_release2` |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato con DV** in `dev_release2` (`a0915bef9`, 15/10): T-1…T-8c, validazione combinata, baseline stretta (m1 11.026, m2 83). Ora le ondate: W3-a (TD-2), TD-3, W3-b, W3-c+d, poi W1 e W2 nei gruppi I1–I6 (D-T27) |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato** con T (`a0915bef9`): GR1–GR5, DV-2, DV-6. Ora TD-1 (le barre del PAC); dopo, S9 (gli indicatori). I colori aspettano la lista definitiva della designer (pacchetto `grafici-giro3`) |
 
 Superfici condivise e relativi proprietari:
 

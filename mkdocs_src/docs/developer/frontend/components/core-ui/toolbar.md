@@ -13,6 +13,7 @@ graph TD
     PT -.->|used by| BD["Broker Detail"]
     PT -.->|used by| AL["Assets List/Detail"]
     PT -.->|used by| FX["FX List/Detail"]
+    TB -.->|used by| ST["Settings<br/><small>scrollable</small>"]
 
     style RL fill:#e3f2fd,stroke:#1565c0
     style PT fill:#e8f5e9,stroke:#2e7d32
@@ -89,6 +90,20 @@ Each page passes its own `thresholds` object to `<PageToolbar>` — there's no s
 Some languages render the same UI string much longer than others (e.g. French "Vue d'ensemble" vs. shorter equivalents). Instead of hiding a label the moment it doesn't fit, `labelShrink.ts` computes a continuous **linear scale factor** (not a handful of fixed discrete sizes) from real measured geometry and shrinks every label in a group uniformly (down to a 75% floor for readability) — labels only disappear entirely once the independent `labelHideActions`/`labelHideTabs` threshold is crossed.
 
 Used by both `TabBar.svelte` (own `shrinkLabelsToFit` prop) and `PageToolbar.svelte`'s Actions zone (generic — reads `button > span` labels directly, no per-page wiring required).
+
+## ↔️ Scrollable tab bar {: #tabbar-scrollable }
+
+`scrollable` is an opt-in prop of `TabBar` (`lib/components/ui/tabs/TabBar.svelte`), default `false`: the other bars (`PageToolbar`, Files, the risk panel, the asset data editor) keep their markup. Only the [Settings page](../features/settings.md#tab-registry) passes it: an administrator sees seven tabs there, each button keeps its natural width above `sm`, and the card around the bar is `overflow-hidden`, so in a long language or a medium-width window the last tabs would be cut off at the card's edge.
+
+With it, the tab row (`role="tablist"`) sits inside a horizontal scroll container (`data-testid="tab-bar-scroller"`, `overflow-x-auto`, thin scrollbar):
+
+- **The row is `min-w-full w-max`**: never narrower than the bar, so a tab's `ml-auto` (the Settings right-hand group, `alignEnd`) still pushes it right while the tabs fit; wider than the bar, and scrolling, when they do not.
+- **The active tab stays whole in view**: `revealActiveTab()` moves only the scroller's `scrollLeft`, never the page, just enough to show it — on a change of tab (click, `activeTab` prop, `?tab=` on load), when the bar or the row resizes (a `ResizeObserver` on both), and when the labels change (a language switch). A tab reached with the keyboard is brought into view by the browser's own focus scrolling.
+
+Neither existing prop does the job:
+
+- **Not `shrinkLabelsToFit`**: it compares each label with its own button's box, which at natural width always holds it, so nothing ever shrinks — and even at the 75% floor, seven labelled tabs do not fit in 640 px.
+- **Not `fillWidth`**: it stretches every tab to an equal share of the bar, leaving no free space for `ml-auto` to push the right-hand group over.
 
 ## 📐 "Justified" Center alignment
 

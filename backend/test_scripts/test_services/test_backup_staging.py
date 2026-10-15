@@ -11,10 +11,11 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     (0600), which ``read_report`` gives back equal to the report returned. The report says what the manifest says; it
     names the active administrators of the copy, sorted; it expires 24 hours after the check. ``remove_stage`` removes
     the copy; a stage that is a link, or a file, is unlinked and never followed.
-(c) An older backup, at the revision just before the head, upgraded for real once for the module: ``action ==
-    "upgrade"``, ``migrations`` the revisions after the backup's up to the head, oldest first, each with the first line
-    of its description, as the migration files themselves say (read here with ``ast``, not through Alembic); the copy
-    is at the head and its data converted; tables before (the manifest's counts) and after (the copy's).
+(c) An older backup, at ``005_accounts_invites`` (pinned by name: the revision just before ``006_registration_mode``,
+    whose data conversion is checked), upgraded for real once for the module: ``action == "upgrade"``, ``migrations``
+    the revisions after the backup's up to the head, oldest first, each with the first line of its description, as the
+    migration files themselves say (read here with ``ast``, not through Alembic); the copy is at the head and its data
+    converted; tables before (the manifest's counts) and after (the copy's, those the upgrade created included).
     ``_revision_plan`` gives, for every revision of the history, the migrations after it.
 (d) Without an active administrator: ``blockers == ["no_administrator"]``, not restorable, the report still written.
 (e) Refusals: every ``StagingError`` code. After each, no stage left, the lock free, a message holding no path, the
@@ -33,8 +34,8 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
 (j) The warnings: ``rows_changed`` with the post-migration fix that removed rows (``event_types``),
     ``foreign_key_violations`` for the backup's own broken references, ``foreign_key_violations_added`` for new ones.
 
-Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at the
-revision before it), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
+Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
+``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
 are the product's: the upgrade of a copy that succeeds, and one that fails on the copy (a trigger refuses any change of
 its revision). Every other failure is simulated in this process, for one test: ``staging.subprocess`` (an ``alembic``
 that ends badly, times out or cannot start), ``staging._upgrade``, ``staging.run_post_migration_fixes``, ``staging.os``
@@ -180,8 +181,25 @@ def migration_chain() -> list[AppliedMigration]:
 
 CHAIN = migration_chain()
 HEAD = CHAIN[-1].revision
-#: The revision just before the head: an older backup's.
-OLDER = CHAIN[-2].revision
+
+
+def position(revision: str) -> int:
+    """Where ``revision`` stands in ``CHAIN``. A revision this module pins that is gone fails at import, loudly."""
+    revisions = [migration.revision for migration in CHAIN]
+    if revision not in revisions:
+        raise AssertionError(f"the revision {revision!r} this module pins is not among this LibreFolio's migrations: {revisions}")
+    return revisions.index(revision)
+
+
+#: The migration whose data conversion the real upgrade of an older backup is checked by (``enable_registration``
+#: becomes ``registration_mode``), and the revision just before it, which every older backup of this module is at. Both
+#: pinned by name: a new migration moves the head, never them.
+CONVERSION = "006_registration_mode"
+OLDER = "005_accounts_invites"
+if position(CONVERSION) != position(OLDER) + 1:
+    raise AssertionError(f"{OLDER} must be the revision just before {CONVERSION}")
+#: What the upgrade of an older backup applies: every migration after ``OLDER`` up to the head, oldest first.
+AFTER_OLDER = CHAIN[position(OLDER) + 1 :]
 
 #: The accounts of the backups of this module, in the order they are inserted: (username, is_active, is_superuser).
 ACCOUNTS = (("zoe_admin", 1, 1), ("bob_user", 1, 0), ("olga_former_admin", 0, 1), ("ada_admin", 1, 1))
@@ -289,7 +307,8 @@ def break_not_null(database: Path, rows: int) -> None:
 
 
 def stamp_head(database: Path) -> None:
-    """What an upgrade leaves in ``alembic_version``: the head (the older backup differs from it by data only)."""
+    """What an upgrade leaves in ``alembic_version``: the head. The simulated upgrades only stamp it: none of the cases
+    that use them needs the schema of the head."""
     execute(database, f"UPDATE alembic_version SET version_num = '{HEAD}'")
 
 
@@ -419,7 +438,7 @@ def build_into(data: Path, work: Path, name: str = "librefolio-backup-test.zip")
 
 @dataclass(frozen=True)
 class Databases:
-    """Two real databases made by ``alembic upgrade``: at this LibreFolio's head, and at the revision before it."""
+    """Two real databases made by ``alembic upgrade``: at this LibreFolio's head, and at ``OLDER``."""
 
     head: Path
     older: Path
@@ -462,7 +481,7 @@ def head_archive(databases, tmp_path_factory) -> BuiltArchive:
 
 @pytest.fixture(scope="module")
 def older_archive(databases, tmp_path_factory) -> BuiltArchive:
-    """The same backup, at the revision before the head: what the simulated upgrades start from."""
+    """The same backup, at ``OLDER``: what the simulated upgrades start from."""
     built = archive_of(databases, tmp_path_factory.mktemp("older-archive"), databases.older)
     assert (built.manifest.alembic_revision, built.warnings) == (OLDER, ()), f"precondition: a clean archive at {OLDER}: {built.manifest.alembic_revision}, {built.warnings}"
     return built
@@ -522,7 +541,7 @@ def upgraded(databases, tmp_path_factory) -> Upgraded:
     with pytest.MonkeyPatch.context() as patch:
         configured = configure(patch, root / "configured-data-dir")
         data = make_data_dir(root / "data", databases.older)
-        # What the last migration converts (006): an instance open to sign-ups stays open after it.
+        # What CONVERSION converts: an instance open to sign-ups stays open after it.
         execute(data / DATABASE_ENTRY, f"INSERT INTO global_settings (key, value, value_type, description, updated_at) VALUES ('enable_registration', 'true', 'bool', 'Allow new user registration', '{CREATED}')")
         built = build_into(data, root / "work")
         archive_sha256 = sha256(built.path.read_bytes())
@@ -844,15 +863,17 @@ def test_an_older_backup_is_upgraded_on_the_copy(upgraded):
     print_section("An older backup")
     report = upgraded.report
     assert (report.action, report.backup.alembic_revision, report.head_revision) == ("upgrade", OLDER, HEAD), f"a backup at {OLDER} is upgraded to {HEAD}: {report.action}"
-    assert report.migrations == CHAIN[-1:], f"the migrations after the backup's (the revision before the head), oldest first, each with its first line: {report.migrations}"
+    assert report.migrations == AFTER_OLDER, f"the migrations after {OLDER} up to the head, oldest first, each with its first line: {report.migrations}"
     copy = stage_dir(upgraded.instance, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
     assert revisions_of(copy) == [HEAD], f"the copy is at the head: {revisions_of(copy)}"
-    assert rows_of(copy, "SELECT key, value FROM global_settings ORDER BY key") == [("registration_mode", "open")], "the migration ran on the copy: enable_registration became registration_mode"
+    assert rows_of(copy, "SELECT key, value FROM global_settings ORDER BY key") == [("registration_mode", "open")], f"{CONVERSION} ran on the copy: enable_registration became registration_mode"
     manifest_tables = upgraded.archive.manifest.database.tables
-    assert {name: rows.before for name, rows in report.tables.items()} == manifest_tables, f"before: the rows the manifest counts: {report.tables}"
-    copy_tables = {name: rows_of(copy, f'SELECT count(*) FROM "{name}"')[0][0] for name in report.tables}
-    assert {name: rows.after for name, rows in report.tables.items()} == copy_tables, f"after: the rows of the upgraded copy: {report.tables}"
-    assert (report.warnings, report.post_migration_fixes, report.administrators, report.restorable) == ([], [], ADMINISTRATORS, True), f"no rows changed, nothing to fix: {report.warnings}"
+    names = [row[0] for row in rows_of(copy, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+    copy_tables = {name: rows_of(copy, f'SELECT count(*) FROM "{name}"')[0][0] for name in names}
+    expected = {name: TableRows(before=manifest_tables.get(name), after=copy_tables.get(name)) for name in manifest_tables.keys() | copy_tables.keys()}
+    assert report.tables == expected, f"every table: before, the rows the manifest counts (none for a table the upgrade created); after, the copy's: {report.tables}"
+    assert report.warnings == (["rows_changed"] if any(rows.before != rows.after for rows in expected.values()) else []), f"rows_changed exactly when a table's rows differ, a table created included: {report.warnings}"
+    assert (report.post_migration_fixes, report.administrators, report.restorable) == ([], ADMINISTRATORS, True), f"nothing to fix, restorable: {report.post_migration_fixes}"
     print_success(f"{OLDER} → {HEAD}: {[m.revision for m in report.migrations]}")
 
 
@@ -1076,7 +1097,7 @@ def table_differs(tmp, base, databases):
 
 
 def revision_differs(tmp, base, databases):
-    """The manifest says the revision before the head; the database is at the head."""
+    """The manifest says an older revision; the database is at the head."""
     return pack(tmp / "revision.zip", entries_of(base), base.manifest.model_copy(update={"alembic_revision": OLDER}))
 
 
@@ -1404,7 +1425,7 @@ UPGRADE_FAILURES = [
 @pytest.mark.parametrize("outcome", UPGRADE_FAILURES)
 def test_an_upgrade_that_fails_ends_late_or_cannot_start_is_refused(instance, older_archive, monkeypatch, outcome):
     monkeypatch.setattr(staging, "subprocess", AlembicStandIn(outcome))
-    count = len(CHAIN) - 1 - [migration.revision for migration in CHAIN].index(OLDER)
+    count = len(AFTER_OLDER)
     error, progress = refused(older_archive.path, instance)
     assert error.code == "upgrade_failed", f"upgrade_failed, not {error.code}"
     assert progress.events[-1] == ("upgrading", 0, count) and progress.phases == ["checking", "unpacking", "upgrading"], f"the upgrade began and never ended: {progress.events}"

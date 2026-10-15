@@ -4,6 +4,10 @@ Each plugin family keeps its registry in its own runtime package (developer deci
 ``services/fx/registry.py``, ``services/brim/registry.py``, ``services/signals/registry.py``,
 ``services/risk/registry.py`` and ``services/tools/registry.py``. This module holds what they share: the folder-per-plugin
 discovery, the registration rules and the ``register_provider`` / ``register_plugin`` decorators.
+
+A registry whose plugins may declare settings names its family in ``settings_family()`` (``asset``, ``fx``); a plugin
+whose ``settings_fields`` do not pass ``validate_declaration``, or whose environment variable is already another
+plugin's (``claim_env_variables``), is refused at registration, like one that fails to import.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
+from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
 
 logger = get_logger(__name__)
 
@@ -118,6 +123,7 @@ class AbstractPluginRegistry:
     def register(cls, plugin_class: Type) -> None:
         """Validate and register one plugin class."""
         cls._validate_plugin_class(plugin_class)
+        cls._validate_settings_declaration(plugin_class)
         code = cls._get_registration_code(plugin_class)
         if not isinstance(code, str) or not code.strip():
             raise ValueError(f"Plugin class must define a non-empty {cls._get_plugin_code_attr()} attribute")
@@ -127,10 +133,12 @@ class AbstractPluginRegistry:
         if existing is not None and existing is not plugin_class:
             same_definition = existing.__module__ == plugin_class.__module__ and existing.__qualname__ == plugin_class.__qualname__
             if same_definition:
+                cls._claim_settings_variables(plugin_class, code)
                 storage[code] = plugin_class
                 return
             if cls._reject_duplicate_codes():
                 raise DuplicatePluginCodeError(f"Duplicate plugin code '{code}' in {existing.__module__}.{existing.__qualname__} and {plugin_class.__module__}.{plugin_class.__qualname__}")
+        cls._claim_settings_variables(plugin_class, code)
         storage[code] = plugin_class
 
     @classmethod
@@ -265,6 +273,40 @@ class AbstractPluginRegistry:
     def _validate_plugin_class(cls, plugin_class: Type) -> None:
         if not isinstance(plugin_class, type):
             raise TypeError("Registry entries must be classes")
+
+    @classmethod
+    def settings_family(cls) -> str | None:
+        """The family name of the plugin settings (``asset``, ``fx``), or ``None`` when its plugins declare none yet."""
+        return None
+
+    @classmethod
+    def _validate_settings_declaration(cls, plugin_class: Type) -> None:
+        """Refuse a plugin whose ``settings_fields`` are invalid for this family (``plugin_settings/fields.py``)."""
+        fields = getattr(plugin_class, "settings_fields", ())
+        if not fields:
+            return
+        family = cls.settings_family()
+        if family is None:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: the plugins of {cls.__name__} cannot declare settings")
+        try:
+            validate_declaration(fields, family=family)
+        except SettingsDeclarationError as error:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: {error}") from None
+
+    @classmethod
+    def _claim_settings_variables(cls, plugin_class: Type, code: str) -> None:
+        """Reserve the environment variables of the plugin's fields; refuse it when one is another plugin's.
+
+        Called last, right before the plugin is stored: a refused claim leaves it unregistered. A plugin without fields
+        drops the claims a previous class of the same code made.
+        """
+        family = cls.settings_family()
+        if family is None:
+            return
+        try:
+            claim_env_variables(family, code, getattr(plugin_class, "settings_fields", ()))
+        except SettingsDeclarationError as error:
+            raise SettingsDeclarationError(f"{plugin_class.__qualname__}: {error}") from None
 
     @classmethod
     def _get_storage_attribute(cls) -> str:

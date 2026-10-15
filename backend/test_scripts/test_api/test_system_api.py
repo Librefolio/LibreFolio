@@ -877,7 +877,7 @@ class TestInstanceConfigLive:
         assert (
             set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
         ), f"accounts must be exactly the registration mode and whether it is locked (the mode is the lane's shared row, not pinned here): {response.text}"
-        assert set(body["email"]) == {"available"} and isinstance(body["email"]["available"], bool), f"email must be exactly whether the instance can send emails (the lane's configuration, not pinned here): {response.text}"
+        assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
 
 
 def _instance_app() -> FastAPI:
@@ -910,7 +910,7 @@ class TestInstanceConfigInProcess:
         assert (
             set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
         ), f"accounts must be exactly the registration mode and whether it is locked: {response.text}"
-        assert set(body["email"]) == {"available"} and isinstance(body["email"]["available"], bool), f"email must be exactly whether the instance can send emails: {response.text}"
+        assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
 
 
 # ============================================================================
