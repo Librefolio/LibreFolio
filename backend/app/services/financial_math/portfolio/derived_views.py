@@ -20,7 +20,7 @@ from backend.app.services.financial_math.average_cost import (
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
-from backend.app.utils.asset.sector import SECTOR_EMOJI
+from backend.app.utils.asset.sector import sector_emoji
 
 
 def build_cost_positions(
@@ -216,7 +216,7 @@ class DerivedViewsBuilder:
                     "name": name,
                     "value": (amt / total * 100).quantize(Decimal("0.01")),
                     "amount": amt,
-                    "emoji": SECTOR_EMOJI.get(name) if use_sector_emoji else None,
+                    "emoji": sector_emoji(name) if use_sector_emoji else None,
                 }
                 for name, amt in sorted(d.items(), key=lambda x: -x[1])
             ]

@@ -36,16 +36,19 @@
  * **How a label is asserted without pinning one.** Every expected label is computed when it is
  * asserted, in the language the app is in (Italian; French after the switch): its words from the shipped
  * catalogue through the same `$_` the block uses, a country's flag and name from the reference data this
- * file feeds the country cache with, a sector's emoji from the sector cache itself. `expectedLabel`
- * restates the contract once, and the harness proves the restatement can fail: every label differs from
- * its id, every dimension from «Asset», and the switch's subjects from one language to the other.
+ * file feeds the country cache with, a sector's emoji from the answer this file feeds the sector cache
+ * with. `expectedLabel` restates the contract once, and the harness proves the restatement can fail:
+ * every label differs from its id, every dimension from «Asset», and the switch's subjects from one
+ * language to the other.
  *
  * **The reference caches are the real ones**, fed through the two utility endpoints of `$lib/api` (a
  * partial mock: the rest of the module is the real one). Before each case the country cache holds
  * English names, a language no case runs in, so an Italian or French name on screen can only come from
  * the block loading the names of its own language — as the legacy panel does (`ensureCountriesLoaded`
- * per language, then a counter that redraws the labels). The emoji the sectors endpoint answers are the
- * sector cache's own fallbacks, so whether the block loads the sectors moves no expectation.
+ * per language, then a counter that redraws the labels). The sectors endpoint answers real emoji, the
+ * backend's own, and the sector cache has none until it loads them (since DV no emoji is written in the
+ * frontend): a sector row matches its label only once the block has loaded the sectors and redrawn.
+ * Nothing else in this file loads them.
  *
  * **Today** every case below is red except the harness. The switch cases fail first on their Italian
  * barrier, for want of any label at all; their own subject — the redraw — is exercised once labels exist.
@@ -115,7 +118,6 @@ import type {RiskQueryRequest, RiskScenarioDimension} from '$lib/risk/riskReques
 import type {RiskResultMetadata, RiskStressOutput} from '$lib/risk/riskTypes';
 import {currentLanguage} from '$lib/stores/app/language';
 import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
-import {getSectorEmoji} from '$lib/stores/reference/sectorStore';
 import {createRiskPanelController, type RiskControllerInputs, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {sectorI18nKey} from '$lib/utils/assetTypes';
@@ -154,13 +156,33 @@ const COUNTRIES: Readonly<Record<string, {iso2: string; flag: string; names: Rea
     USA: {iso2: 'US', flag: '🇺🇸', names: {en: 'United States', it: 'Stati Uniti', fr: 'États-Unis', es: 'Estados Unidos'}},
 };
 
-/** The sectors the sectors endpoint lists. */
-const SECTOR_KEYS = ['Financials', 'Health Care', 'Technology', 'Energy', 'Other'];
 /**
- * Their emoji, read from the sector cache before anything has loaded it — its own fallbacks — so the
- * endpoint answers what the cache would say anyway, and no expectation depends on the block loading it.
+ * The sectors endpoint's answer, as the backend writes it (`SectorListResponse`): the sectors it lists with their
+ * emoji — the backend's own glyphs (`SECTOR_EMOJI`, `backend/app/utils/asset/sector.py`) — the two allocation buckets,
+ * and the glyph of a key it lists nowhere. A fresh copy per call: the cache keeps what it is handed.
  */
-const SECTOR_EMOJI: Readonly<Record<string, string>> = Object.fromEntries(SECTOR_KEYS.map((key) => [key, getSectorEmoji(key)]));
+function sectorsAnswer() {
+    return {
+        items: [
+            {key: 'Financials', emoji: '🏦'},
+            {key: 'Health Care', emoji: '🏥'},
+            {key: 'Technology', emoji: '💻'},
+            {key: 'Energy', emoji: '⚡'},
+            {key: 'Other', emoji: '📦'},
+        ],
+        buckets: [
+            {key: 'Liquidity', emoji: '💰'},
+            {key: 'Unknown', emoji: '❓'},
+        ],
+        fallback_emoji: '❓',
+    };
+}
+
+/** The emoji the sector cache answers for a key once it holds `sectorsAnswer()`: a listed one, or the fallback. */
+function answeredSectorEmoji(key: string): string {
+    const answer = sectorsAnswer();
+    return [...answer.items, ...answer.buckets].find((entry) => entry.key === key)?.emoji ?? answer.fallback_emoji;
+}
 
 // ---------------------------------------------------------------------------
 // Answers, written the way `risk_plugins/stress/plugin.py::_hypothetical` writes them
@@ -410,7 +432,7 @@ function expectedLabel(bucket: string, dimension: Dimension): string {
     if (dimension === 'asset_class') return shipped(`assets.types.${bucket}`) ?? bucket;
     if (dimension === 'sector') {
         const name = shipped(`sectors.${sectorI18nKey(bucket)}`);
-        return name === null ? bucket : `${getSectorEmoji(bucket)} ${name}`;
+        return name === null ? bucket : `${answeredSectorEmoji(bucket)} ${name}`;
     }
     const country = COUNTRIES[bucket];
     return country ? `${country.flag} ${country.names[lang()]}` : bucket;
@@ -614,7 +636,7 @@ beforeEach(async () => {
             items: Object.entries(COUNTRIES).map(([iso3, country]) => ({iso3, iso2: country.iso2, name: country.names[language] ?? country.names.en, flag_emoji: country.flag})),
         };
     });
-    reference.sectors.mockReset().mockImplementation(async () => ({items: SECTOR_KEYS.map((key) => ({key, emoji: SECTOR_EMOJI[key]}))}));
+    reference.sectors.mockReset().mockImplementation(async () => sectorsAnswer());
     await primeCountries();
 });
 
@@ -681,6 +703,19 @@ describe('L4Shock — the harness itself', () => {
         // A country name on screen proves a load of its language only if the primed one names it otherwise.
         const names = COUNTRIES.ITA.names;
         expect(new Set([names[PRIMED], names[UI], names[SWITCH_TO]]).size, 'premise: the primed, the UI and the switch language name ITA alike').toBe(3);
+    });
+
+    it('answers the sectors endpoint as the backend does, the generated contract accepting it, with an emoji for every sector a case names', () => {
+        // The cases only ever see the sector cache through the block, so the answer is checked here, not through the cache:
+        // loading the cache from this harness would let a block that never loads the sectors pass.
+        expect(schemas.SectorListResponse.safeParse(sectorsAnswer()).success, 'the sectors answer fails the generated SectorListResponse: the cache would read it otherwise than the app').toBe(true);
+        // Until the block loads the sectors a row has no emoji: every expected sector label carries one, so such a row cannot match.
+        const named = ['Financials', 'Health Care'];
+        expect(
+            named.filter((sector) => !sectorsAnswer().items.some((item) => item.key === sector && item.emoji.trim() !== '')),
+            'a sector the cases name is not listed with an emoji of its own',
+        ).toEqual([]);
+        expect(new Set(named.map(answeredSectorEmoji)).size, 'the sectors the cases name carry two different emoji: a label cannot borrow another sector’s').toBe(named.length);
     });
 
     it('tells every label from its id, every dimension from «Asset», and the switch’s subjects from one language to the other', () => {

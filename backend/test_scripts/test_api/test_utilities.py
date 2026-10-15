@@ -2,7 +2,7 @@
 Tests for utilities API endpoints.
 
 Tests the /api/v1/utilities endpoints:
-- GET /utilities/sectors - List standard financial sectors
+- GET /utilities/sectors - List standard financial sectors, with the allocation buckets and the fallback emoji
 - GET /utilities/countries - List all countries with ISO codes and flag emoji
 - GET /utilities/currencies/normalize - Normalize currency name/code/symbol
 """
@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.utils.asset.sector import SECTOR_EMOJI
+from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI, SECTOR_EMOJI_FALLBACK
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 
@@ -77,6 +77,22 @@ def _assert_emoji_from_shared_map(items: list[dict]) -> None:
         assert item["emoji"] == SECTOR_EMOJI[item["key"]], f"{item['key']}: the endpoint says {item['emoji']!r}, SECTOR_EMOJI says {SECTOR_EMOJI[item['key']]!r}"
 
 
+def _assert_buckets_and_fallback(data: dict) -> None:
+    """The allocation buckets and the fallback glyph come with the sectors, and the buckets stay out of the sectors.
+
+    The frontend keeps no emoji map of its own (DV-2): from this response it reads the glyph of every sector, of the two
+    buckets the portfolio engine adds beside them (the cash, the holdings without a sector) and of a key outside both
+    lists. The buckets are never a sector an asset can be classified in, so they never reach ``items``, which feeds the
+    sector selects.
+    """
+    assert "buckets" in data, f"no 'buckets' in the response: {sorted(data)}"
+    assert data["buckets"] == [{"key": bucket, "emoji": SECTOR_EMOJI[bucket]} for bucket in ALLOCATION_BUCKETS]
+    assert "fallback_emoji" in data, f"no 'fallback_emoji' in the response: {sorted(data)}"
+    assert data["fallback_emoji"] == SECTOR_EMOJI_FALLBACK, f"the endpoint's fallback is {data['fallback_emoji']!r}, SECTOR_EMOJI_FALLBACK is {SECTOR_EMOJI_FALLBACK!r}"
+    leaked = [item["key"] for item in data["items"] if item["key"] in ALLOCATION_BUCKETS]
+    assert not leaked, f"allocation buckets listed among the sectors: {leaked}"
+
+
 @pytest.mark.asyncio
 async def test_list_sectors_with_other(test_server):
     """Test 1: GET /utilities/sectors - Include 'Other'."""
@@ -117,6 +133,7 @@ async def test_list_sectors_with_other(test_server):
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
         _assert_emoji_from_shared_map(data["items"])
+        _assert_buckets_and_fallback(data)
 
         print_info(f"  Found {len(data['items'])} sectors")
         print_success("✓ Sectors list with Other returned correctly")
@@ -140,6 +157,7 @@ async def test_list_sectors_without_other(test_server):
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
         _assert_emoji_from_shared_map(data["items"])
+        _assert_buckets_and_fallback(data)
 
         print_info(f"  Found {len(data['items'])} sectors (excluding Other)")
         print_success("✓ Sectors list without Other returned correctly")
