@@ -21,7 +21,8 @@
  *
  * The `order` numbers are not the contract, only their sequence: the cases compare ids in the order
  * the helper gives them, never a number. The `TODAY` table below is the registry's content; a
- * workstream that adds a tab adds its row there, in the same change.
+ * workstream that adds a tab adds its row there, in the same change. A tab that only administrators
+ * see carries `adminOnly` in its row: workstream B's `backup` is the first one.
  *
  * Why the four tab modules are mocked. Each tab body imports the API client, the stores and their own
  * children, so importing the real modules would make this file depend on everything they reach (and
@@ -39,7 +40,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
-import {Info, Shield, Sliders, User} from 'lucide-svelte';
+import {DatabaseBackup, Info, Shield, Sliders, User} from 'lucide-svelte';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -54,6 +55,7 @@ const bodies = vi.hoisted(() => {
         preferences: body('PreferencesTab.svelte'),
         about: body('AboutTab.svelte'),
         admin: body('GlobalSettingsTab.svelte'),
+        backup: body('BackupTab.svelte'),
     };
 });
 
@@ -61,6 +63,7 @@ vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: bodies
 vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: bodies.preferences}));
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: bodies.about}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: bodies.admin}));
+vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: bodies.backup}));
 
 import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
 
@@ -73,12 +76,13 @@ const CONTEXTS: [string, SettingsTabContext][] = [
     ['an administrator', ADMIN],
 ];
 
-/** Today's four tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module. */
+/** Today's tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module; `adminOnly` for those only an administrator sees. */
 const TODAY = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, component: bodies.profile},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, component: bodies.preferences},
     {id: 'about', labelKey: 'settings.about', icon: Info, component: bodies.about},
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, component: bodies.admin},
+    {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, component: bodies.backup, adminOnly: true},
 ];
 
 /** What an id must look like to be a `?tab=` value and a test-id suffix as it is. */
@@ -98,7 +102,7 @@ function registryTab(id: string): SettingsTab {
     return tab as SettingsTab;
 }
 
-describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
+describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
     it('every id is unique and URL-safe: it is the ?tab= value and the suffix of settings-tab-{id}', () => {
         const ids = SETTINGS_TABS.map((tab) => tab.id);
 
@@ -119,15 +123,15 @@ describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
         expect(new Set(orders).size, `no order is carried twice: ${orders.join(', ')}`).toBe(orders.length);
     });
 
-    it('holds exactly profile, preferences, about and admin: a new tab adds its row to TODAY', () => {
-        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s four tabs: a tab added (or lost) on the way changes what every user sees').toEqual(TODAY.map((tab) => tab.id).sort());
+    it('holds exactly the tabs of TODAY: a new tab adds its row there', () => {
+        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s tabs: a tab added (or lost) on the way changes what users see').toEqual(TODAY.map((tab) => tab.id).sort());
     });
 
-    it.each(CONTEXTS)('%s sees profile, preferences, about and admin, in this order', (_label, ctx) => {
+    it.each(CONTEXTS)('%s sees today’s tabs in this order, the administrators’ ones only as an administrator', (_label, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'the four tabs of today, left to right, whoever is signed in: admin is visible to everyone',
-        ).toEqual(TODAY.map((tab) => tab.id));
+            'today’s tabs, left to right: admin is visible to everyone, backup to administrators only',
+        ).toEqual(TODAY.filter((tab) => !tab.adminOnly || ctx.isSuperuser).map((tab) => tab.id));
     });
 
     it.each(TODAY)('$id: labelled $labelKey, drawn with its lucide icon, rendering its own tab module', ({id, labelKey, icon, component}) => {
@@ -158,6 +162,21 @@ describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
         expect(admin.visible?.(ADMIN) ?? true, 'an administrator sees the admin tab').toBe(true);
         expect(admin.props?.(USER), 'a user may read the global settings, not change them').toEqual({canEdit: false});
         expect(admin.props?.(ADMIN), 'an administrator may change them').toEqual({canEdit: true});
+    });
+
+    it('backup is for administrators only: no props, no alignEnd, right after admin in the right-hand group', () => {
+        const backup = registryTab('backup');
+
+        expect(backup.visible, 'backup says who may see it: without visible() every user would').toBeTypeOf('function');
+        expect(backup.visible?.(USER) ?? true, 'a user does not see the backup tab: the archive holds every user’s data').toBe(false);
+        expect(backup.visible?.(ADMIN) ?? true, 'an administrator sees the backup tab').toBe(true);
+        expect(backup.props, 'backup is rendered with no props').toBeUndefined();
+        expect(backup.alignEnd, 'backup starts no group of its own: admin starts the right-hand one').toBeFalsy();
+
+        const ids = visibleSettingsTabs(SETTINGS_TABS, ADMIN).map((tab) => tab.id);
+        const adminAt = ids.indexOf('admin');
+        expect(adminAt, `premise: an administrator sees admin: ${ids.join(', ')}`).toBeGreaterThanOrEqual(0);
+        expect(ids[adminAt + 1], `backup comes right after admin, in the right-hand group admin starts: ${ids.join(', ')}`).toBe('backup');
     });
 
     it('only admin takes props, and only admin starts the right-hand group (alignEnd)', () => {
