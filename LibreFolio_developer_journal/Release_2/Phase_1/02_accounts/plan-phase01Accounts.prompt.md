@@ -3293,3 +3293,81 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - Base `5e21149e5`; 28 file tracciati modificati, 21 nuovi; `git diff --check` pulito; la porta 6182 è libera.
 > - **Ancora aperto**: lo slot della galleria (catture e diff di `settings/users`); dopo, la revisione di G in sola
 >   lettura.
+> - **Committato dal coordinatore** (15/10, sera): `3706a7e19` feat, `1577663c1` test, `38cb2c513` docs, `c576a0499`
+>   gallery, `0b8bb863e` journal. Lo scatto `settings/users` passa a G per la revisione; il doppio lancio lo fa G-13.
+
+#### A6b.7 — Aggiornamento di base (`f242cd6f4`): B, E2, J CP-4, Z6b, W E1b e N2, Y2, L ✅ (2026-10-15)
+> - Il coordinatore ha aperto il merge di `dev_release2` (`00aa2ab3c`): 6 conflitti, tutti risolti tenendo i due lati.
+>   Ho messo in stage solo quei file; il commit del merge è suo, `f242cd6f4`.
+>   1. `settingsTabs.ts`: un solo import lucide; gli import di `UsersTab`, `BackupTab` ed `EmailSettingsTab`; le righe
+>      users 110, backup 120, email 130.
+>   2. `settingsTabs.test.ts`: tenuto il disegno di E, `CONTEXTS` per contesto, con `users` nella lista
+>      dell'amministratore; tolti il mio `adminOnly` e `todayFor`.
+>      - In `TODAY`, `bodies` e `vi.mock` ci sono le tre schede; STAB-01/02 e i casi di backup ed email restano.
+>      - Le intestazioni sono unite.
+>   3. `page.tabs.test.ts`: i tre `vi.mock`.
+>   4. `_frontend_utility.py`: la lista con le mie 4 righe e `EmailSettingsTab.test.ts`. Le due `desc` le ho ricomposte
+>      dall'antenato comune, con le aggiunte di E e poi le mie; il registro dice «users (order 110), backup and email for
+>      administrators only».
+>   5. `admin/configuration.en.md`: `PUBLIC_URL` è mia. In `BILLING_URL`, **Manage subscription** compare nella scheda
+>      Utenti e nella pagina di blocco di H. Nessuna riga doppia nuova: i doppioni ci sono già in entrambi i genitori,
+>      perché la variabile sta sia nella tabella delle variabili sia in quella dei valori sbagliati.
+>   6. Dev `settings.md`: **sette** schede (il coordinatore aveva scritto sei, poi l'ha confermato) e i tre ordini nel
+>      punto `alignEnd`.
+> - **Fuori pista — il caso di B riadattato**: «backup comes **right** after admin» (`ids[adminAt + 1]`) con users a 110
+>   in mezzo sarebbe rosso. Ora dice «backup comes after admin, in the right-hand group» (`indexOf('backup') > adminAt`).
+>   L'ordine esatto resta fissato dal caso `CONTEXTS`. Il coordinatore approva: è la correzione di significato giusta.
+> - Prova prima dello stage: Vitest `settingsTabs` e `page.tabs` 41 ✅, prettier pulito, le due righe di nav (Email di
+>   E2b, Users) in `mkdocs.yml`.
+> - **Validazione della revisione combinata** (in corso, `/tmp/libreFolio_a6b/merge_validation.sh`): `api sync`,
+>   `front check`, Vitest (`settingsTabs`, `page.tabs`, `ProfileTab`, `UsersTab`), `db populate`, E2E `admin-users` e
+>   `settings`, `mkdocs build`, `check-orphans`. `core-unit` va nello slot 1, dopo J.
+
+### A6d — Decisione 36: registrazione su invito per le istanze nuove, impostazioni globali solo con il login — in attesa del via (dopo l'ingresso di A6b)
+
+#### A6d.0 — Analisi e risposte del coordinatore ✅ (2026-10-15)
+> **La decisione 36** (dal coordinatore):
+> 1. **Registrazione**: il default diventa «su invito»; «aperta» solo per scelta dell'admin, segnalata nel pannello
+>    Sicurezza. Il primo account resta creabile finché l'istanza non ne ha nessuno. Le istanze già «aperte» tengono la
+>    loro scelta, con l'avviso. Se il default cambia, serve una riga ⚠️ nel CHANGELOG.
+> 2. **Impostazioni globali solo con il login**, dopo aver verificato che la configurazione pubblica di H porti fuori
+>    tutto quello che serve alla pagina di login.
+> 3. **Restano visibili** i nomi dei broker e degli utenti, e le email; la ricerca degli utenti non cambia.
+>
+> **Lo stato trovato** (sola lettura, 15/10):
+> - il default di oggi è `open` (`GLOBAL_SETTINGS_DEFAULTS`); la 006 converte solo dove c'è `enable_registration`;
+> - il primo account il backend lo crea admin in ogni modalità, ma con `invite`/`disabled` il login nasconde
+>   «Register here»;
+> - `GET /settings/global` e `/global/{key}` sono pubbliche. Il frontend le legge solo da loggato (`appBootstrap`, le
+>   schede Preferenze e Globali, la pagina Files); le pagine pubbliche leggono solo `/system/instance`. Quindi non c'è
+>   niente da spostare.
+>
+> **Il disegno approvato**:
+> 1. **Default `invite`** in `GLOBAL_SETTINGS_DEFAULTS`, più una migrazione di soli dati, idempotente: se manca la riga
+>    `registration_mode` e `users` ha almeno un account, scrive `open`. Così nessuna istanza esistente cambia in
+>    silenzio.
+>    - **Numero**: la 007 è di X (`007_plugin_settings`, CP10), che entra prima. La mia sarà la **008**, o il primo
+>      numero libero: prima di scriverla controllo la testa di Alembic su `dev_release2`.
+> 2. **`accounts.first_account_open`** in `/system/instance`: nessun account e, con A7, nessun bootstrap F02.
+>    `LoginCard` mostra «Register here» anche in `invite`/`disabled` quando è vero.
+>    - Pubblico va bene (coordinatore): che un'istanza sia vuota lo si scopre comunque provando a registrarsi, e dura
+>      pochi minuti; nel cloud F02 lo spegne. **Va scritto nella doc di sicurezza.**
+> 3. **L'avviso «registrazione aperta»** arriva con A8 (scheda Sicurezza). Fino ad allora lo dice la doc.
+> 4. **Impostazioni globali**: `get_current_user` sulle due GET; la scrittura resta admin.
+>    - Il test (`test_instance_block.py`, il parametro `/settings/global` fra le rotte pubbliche) e la docstring di
+>      `instance_block.py` di H li faccio io, dichiarati (CP2b di H non tocca quel file).
+>    - Da controllare: `test_settings_api.py`, `test_registration_api.py`, `test_uploads_api.py`, `security.md` e le
+>      E2E che leggono le impostazioni globali.
+> 5. **CHANGELOG ⚠️** approvato: le istanze nuove partono su invito (il primo account si registra comunque); le
+>    esistenti tengono la loro scelta; le impostazioni globali solo per chi ha fatto il login.
+>
+> **Ordine dei lotti**: A6d, poi A6c, poi A7 e A8.
+> **Backlog**: A-17 (KeePassXC, Email prima di Username), basso, dopo T-8b dei colori.
+> - **Validazione della revisione combinata `f242cd6f4`** (in fila con `nice -n 10`; log in
+>   `/tmp/libreFolio_a6b/logs/merge/`):
+>   - `api sync` ✅; `front check` 0 errori, 0 avvisi;
+>   - Vitest `settingsTabs`, `page.tabs`, `ProfileTab` e `UsersTab`: 151 ✅;
+>   - `db populate --force` ✅;
+>   - E2E `admin-users` 10 ✅ e `settings` 46 ✅, con `--workers 2`;
+>   - `mkdocs build` ✅; `check-orphans` ✅.
+>   - Resta `core-unit`, nello slot 1 dopo J, quando lo dà il coordinatore.
