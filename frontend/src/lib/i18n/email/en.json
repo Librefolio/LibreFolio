@@ -82,6 +82,31 @@
       "TIMEOUT": "The SMTP server did not answer in time.",
       "SEND_FAILED": "The SMTP server did not take the message."
     },
-    "loadError": "The state of email could not be read."
+    "loadError": "The state of email could not be read.",
+    "verification": {
+      "page": {
+        "checking": "Verifying your email address…",
+        "expired": "This link has expired. Sign in with your username and password: you will be offered a new link.",
+        "consumed": "This link has already been used. If your account is active, sign in.",
+        "revoked": "This link no longer works: sign in to ask for a new one.",
+        "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, sign in to ask for a new one.",
+        "missing": "This link is incomplete: open it again from the email.",
+        "error": "The link could not be checked: try again."
+      },
+      "verified": "Your email address is verified, {username}: you can sign in.",
+      "loginRequired": "Your email address is not verified yet: open the link in the email we sent you, then sign in.",
+      "resend": "Send the link again",
+      "resending": "Sending…",
+      "resent": "A new link is on its way: check your inbox, and the spam folder. Older links no longer work.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "The username or the password is not right: check them in the form above.",
+        "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Your account is already active: sign in.",
+        "USER_LIMIT_REACHED": "Your link has expired, and this instance is full now: ask its administrator.",
+        "ACCOUNT_DISABLED": "This account is disabled: ask the administrator of this instance.",
+        "unavailable": "The email cannot be sent right now: try again later, or ask the administrator of this instance.",
+        "generic": "The link could not be sent: try again."
+      }
+    }
   }
 }
