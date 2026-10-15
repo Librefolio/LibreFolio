@@ -49,7 +49,10 @@ The page is the runtime of the registry, written in Svelte 5 runes:
 
 - **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
   sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
-  with the labels hidden on a phone (`hideLabelOnMobile`).
+  with the labels hidden on a phone (`hideLabelOnMobile`). The bar is also `scrollable`: tabs that
+  do not fit the card (an administrator sees seven) scroll sideways instead of being clipped by its
+  `overflow-hidden`, and the active tab stays whole in view (see
+  [Scrollable tab bar](../core-ui/toolbar.md#tabbar-scrollable)).
 - **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
   when the auth store changes, the body on screen receives the new props.
 - **Active tab**: the first visible tab, unless `?tab=<id>` names a visible one. The choice runs in
