@@ -293,7 +293,7 @@ The following are the `ToolPlatformPolicy` defaults declared in `backend/app/sch
 | Request body / response body | 1 MiB / 1,088 KiB (four 256 KiB results plus a 64 KiB envelope reserve) |
 | Parameters per item / result per item | 128 KiB / 256 KiB |
 | JSON nesting depth | 32 |
-| Ingress / shared queue budget | 2 s / 5 s |
+| Compute ingress / shared queue budget | 2 s / 5 s |
 | Engine budget (one claimed engine window) | 30 s |
 | Hard job budget, including startup | 45 s |
 | Cooperative soft budget / output reserve | 44 s / 1 s |
@@ -307,7 +307,7 @@ A `ToolOperationPolicy` declares its own values. A field the plugin omits takes 
 
 For example, the `plan` operation of `PacAllocatorTool` (`backend/app/services/tool_plugins/pac_allocator/plugin.py`) declares 256 KiB of parameters and 512 KiB of results. The clamp caps them at the platform's 128 KiB and 256 KiB (`max_parameter_bytes` and `max_result_bytes` in `effective_operation`). Its time budgets equal the platform defaults (30 s engine, 44 s soft, 45 s hard, 5 s queue and cleanup, 59 s request, 65 s client), so its server bound has no slack: a request budget one millisecond lower would make the service unavailable.
 
-The catalogue and diagnostics routes run under a 20 s request budget. A compute request runs under the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
+The catalogue and diagnostics routes declare no request body, so they have no ingress phase (`ToolRoute` in `backend/app/api/v1/tools.py`): their 20 s request budget, capped by the platform `request_timeout_ms`, starts with the request and covers authentication. A compute request opens under the 2 s ingress window, which bounds receiving, decoding, and validating its envelope together with the dependencies resolved with it, authentication included. Its deadline then moves to the batch's request budget: the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
 
 Each job also runs under its `memory_limit_bytes`. On Linux, when the API process's own cgroup-v2 directory is writable and enables the memory controller for its children, every job gets a private child cgroup holding that hard limit (`cgroup_v2_hard`). Otherwise the supervisor sums the resident memory of the owned process tree while it waits for the worker, at most 50 ms apart (`process_tree_observed`); a non-POSIX host reports `unavailable`. A breach ends the item with `memory_limit`. The mode in use appears in diagnostics under `capabilities.memory` (`backend/app/services/tools/resources.py`).
 
