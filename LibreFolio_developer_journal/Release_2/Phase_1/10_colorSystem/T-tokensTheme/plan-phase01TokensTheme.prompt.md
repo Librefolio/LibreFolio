@@ -37,6 +37,9 @@ e le tue integrazioni».
 | D-T12 | Istruzioni per gli agenti, solo in tre punti: la sezione «Design System» di `.github/instructions/frontend.instructions.md`, la riga «Dark mode» di `.github/copilot-instructions.md` e la skill nuova `.github/skills/design-tools/theme-roles/`. Il coordinatore le rivede al checkpoint |
 | D-T13 | Barra di robustezza della password: 3 ruoli (0–1 errore, 2 avviso, 3–4 successo) |
 | D-T14 | Card di accesso con `border-lf-subtle` nei due temi; poi decide la designer |
+| D-T15 | (15/10, supera D-T2) «Barra laterale neutra, come scrive la designer: #EDF0EE / #111615; il verde #1B4334 resta per l'header del login e i pulsanti». Palette del giro 2: «Pietra e Salvia» / «Ardesia e Salvia»; lo sfondo pagina vale anche per l'app |
+| D-T16 | (15/10, chiude Q1) «Verde focus: riempimento #236B4D / #429E79, segno nel colore della card (6,1:1 in chiaro, 5,3:1 in scuro)»: ruoli `--lf-checked` e `--lf-on-checked` |
+| D-T3 confermata | (15/10) «Solo le ondate W1–W6, come da D-T3: chi non è migrato resta visibilmente vecchio»: niente ponte, né sulle regole globali dello scuro di `app.css` né sulle tabelle di R |
 
 **Vincoli:**
 - **Fino alle 22:45 del 14/10:** solo scrittura. Niente `npm ci`, build, test né server: G misura la gallery. Dopo,
@@ -143,6 +146,14 @@ flowchart LR
 ### T-5 · Sfondo del login, dopo l'ingresso di G
 
 - `ui/AnimatedBackground.svelte`: `--lf-surface-page` e i nuovi `--lf-art-*`. Le opacità si tarano con la designer.
+
+### T-6 · Palette del giro 2 e barra laterale neutra (D-T15, D-T16)
+
+- `tokens.css`: i valori di «Pietra e Salvia» e «Ardesia e Salvia»; ruoli nuovi `--lf-surface-sidebar`, `--lf-checked`,
+  `--lf-on-checked`; `--lf-surface-app` derivato dallo sfondo pagina; correzioni minime di contrasto (politica D-T6).
+- Barra laterale neutra, controllo della connessione sui ruoli di stato, box dei requisiti sulla superficie
+  secondaria, colline del login ritarate.
+- Niente ponte (D-T3 confermata): i componenti non migrati restano come sono.
 
 ### W1–W6 · Ondate di migrazione (sotto-agenti)
 
@@ -336,7 +347,7 @@ sono applicate. Prima di ogni lotto, il coordinatore sceglie per le domande che 
 
 | # | Dove | Domanda | Proposta provvisoria |
 |---|---|---|---|
-| Q1 | checkbox, radio, interruttore acceso, giorno o preset selezionato, segmento attivo (`CheckMenu`, `AssetPickerPanel`, `CalendarMonth`, `DateRangePicker`, `ViewModeToggle`, `SettingToggle`) | Che colore ha un controllo selezionato? Su `action` il riempimento è a 2,10:1 sulla card scura, sotto i 3:1 di WCAG 1.4.11; e `focus` col testo chiaro sopra è a 2,63:1 | due ruoli derivati: `--lf-checked` = focus e `--lf-on-checked` = card (6,03:1 in chiaro, 5,13:1 in scuro, in entrambe le coppie). **Blocca W1-a, W1-b, W1-c e W2-e1**: serve la risposta, o l'OK alla proposta, prima di W1 |
+| Q1 | checkbox, radio, interruttore acceso, giorno o preset selezionato, segmento attivo (`CheckMenu`, `AssetPickerPanel`, `CalendarMonth`, `DateRangePicker`, `ViewModeToggle`, `SettingToggle`) | Che colore ha un controllo selezionato? Su `action` il riempimento è a 2,10:1 sulla card scura, sotto i 3:1 di WCAG 1.4.11; e `focus` col testo chiaro sopra è a 2,63:1 | **chiusa, D-T16 (15/10):** riempimento `bg-lf-checked` (focus), segno `text-lf-on-checked` (card), 6,17:1 in chiaro e 5,32:1 in scuro. W1 non è più bloccata |
 | Q2 | interruttore spento | Traccia e pomello | traccia `bg-lf-input` (3,43:1 e 3,37:1; `neutral` è a 1,37:1 e 1,25:1), pomello `bg-lf-on-action` (sulla traccia accesa scura è a 2,63:1: lo stato lo dicono traccia e posizione) |
 | Q3 | pulsanti pieni distruttivi e d'avviso (`ProfileTab`, `SupportActions`) | L'hover di `danger`, `warning` e `donate` pieni | `hover:bg-lf-danger/90` e simili; oppure `--lf-danger-hover`, come `action-hover` |
 | Q4 | stato «modificato» delle impostazioni, oggi arancio (`SettingActions`, `SettingBulkActions`, `SettingNumber`) | È un avviso o uno stato a sé? | i ruoli `warning` |
@@ -422,9 +433,9 @@ Blocchi per lotto:
 
 | Lotto | Casi particolari da scrivere nel prompt |
 |---|---|
-| W1-a | Opzione evidenziata nella lista: `bg-lf-selected`. Bordo del campo `border-lf-input`, aperto `ring-lf-focus border-lf-focus`. Spunte e caselle selezionate (`CheckMenu`): `bg-lf-checked text-lf-on-checked` se Q1 è decisa, altrimenti l'elemento resta legacy per intero |
-| W1-b | `FxProviderSelect`: il `#fbbf24` dentro l'HTML del tooltip resta (Q10). Gli stati delle righe dei provider (`emerald`, `blue`, `amber`) vanno sui ruoli di stato. Le caselle di `AssetPickerPanel` come in W1-a (Q1) |
-| W1-c | Il giorno di `CalendarMonth` è un elemento solo, assemblato da `getDayClasses`: con Q1 decisa, selezionato e capi dell'intervallo `bg-lf-checked !text-lf-on-checked`, intervallo `bg-lf-selected`, in sospeso `bg-lf-checked/50`, oggi `ring-lf-focus`, giorni fuori mese e futuri `text-lf-muted`; senza Q1 il giorno resta legacy per intero. Lo stesso per il preset attivo di `DateRangePicker` e il segmento attivo di `ViewModeToggle` |
+| W1-a | Opzione evidenziata nella lista: `bg-lf-selected`. Bordo del campo `border-lf-input`, aperto `ring-lf-focus border-lf-focus`. Spunte e caselle selezionate (`CheckMenu`): `bg-lf-checked text-lf-on-checked` (D-T16) |
+| W1-b | `FxProviderSelect`: il `#fbbf24` dentro l'HTML del tooltip resta (Q10). Gli stati delle righe dei provider (`emerald`, `blue`, `amber`) vanno sui ruoli di stato. Le caselle di `AssetPickerPanel` come in W1-a (D-T16) |
+| W1-c | Il giorno di `CalendarMonth` è un elemento solo, assemblato da `getDayClasses`: selezionato e capi dell'intervallo `bg-lf-checked !text-lf-on-checked` (D-T16), intervallo `bg-lf-selected`, in sospeso `bg-lf-checked/50`, oggi `ring-lf-focus`, giorni fuori mese e futuri `text-lf-muted`. Lo stesso per il preset attivo di `DateRangePicker` e il segmento attivo di `ViewModeToggle` |
 | W1-d | `ExactQuantityInput`: i due `oklch(… / 0.7)` diventano `color-mix(in oklab, var(--lf-danger) 70%, transparent)` e lo stesso con `--lf-success`. `TagInput`: le variabili `--badge-*` ricadono sui ruoli |
 | W1-e | Pannello `var(--lf-surface-card)`, fondale `var(--lf-surface-overlay)`; via la regola scura. L'ombra resta letterale fino a Q8 |
 | W1-f1 | Gli stati della sync vanno sui ruoli di stato; le classi che arrivano da `syncHelpers` e dalle tabelle di R non si toccano |
@@ -434,7 +445,7 @@ Blocchi per lotto:
 | W2-d | Il viola resta (Q11); neutri e stati sì |
 | W2-c | `supportLinks.ts`: restano solo i colori dei marchi (eccezione); i neutri si convertono. Il `#ffffff` della donazione diventa `bg-lf-logo` |
 | W2-e2 | I pallini di stato vanno sui ruoli di stato, il grigio resta (Q5) |
-| W2-e1 | L'interruttore: traccia accesa `bg-lf-checked`, spenta `bg-lf-input`, pomello `bg-lf-on-action` (Q1, Q2); senza risposta resta legacy per intero. Il badge `setting-badge` (ambra, per esempio «Coming soon») va su `warning-soft` e `warning-on-soft`, come oggi; l'arancio di «modificato» resta (Q4) |
+| W2-e1 | L'interruttore: traccia accesa `bg-lf-checked` (D-T16), spenta `bg-lf-input`, pomello `bg-lf-on-action` (Q2: senza risposta, l'interruttore resta legacy per intero). Il badge `setting-badge` (ambra, per esempio «Coming soon») va su `warning-soft` e `warning-on-soft`, come oggi; l'arancio di «modificato» resta (Q4) |
 | W2-f1 | Le icone decorative restano (Q12). Il pulsante distruttivo: `bg-lf-danger text-lf-on-status`, e l'hover provvisorio `hover:bg-lf-danger/90` (Q3), sennò resta legacy per intero. Il logo: `bg-lf-logo` al posto dello `style` |
 | W2-f2 | I pallini di stato vanno su `bg-lf-success`, `bg-lf-warning`, `bg-lf-danger` |
 | W2-f3 | Nessun caso particolare |
@@ -443,7 +454,7 @@ Blocchi per lotto:
 
 - 16 lotti di sotto-agenti e 2 gallery.
 - Ogni lotto passa per T con 3 o 4 esecuzioni in serie nella corsia: gate, `component-unit` mirato, 1–5 azioni E2E.
-- Da coordinare: 10 lotti su 16 chiedono il via a una sessione (X, W, H, Z, J, A); Q1 va chiusa prima di W1.
+- Da coordinare: 10 lotti su 16 chiedono il via a una sessione (X, W, H, Z, J, A). Q1 è chiusa da D-T16 (15/10).
 
 ### B6 · Pulizia
 
@@ -457,7 +468,8 @@ Blocchi per lotto:
 | 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `2018fd853`, integrato con `4e024dfe8` |
 | 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `a73eb7eda`, integrato con `d80b986bf` |
 | 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
-| 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ pronto il 15/10, FROZEN in attesa del commit |
+| 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
+| 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ pronto il 15/10, FROZEN in attesa del commit |
 
 ## Avanzamento
 
@@ -779,3 +791,122 @@ Blocchi per lotto:
 > - **Copertura della gallery:** l'AI Export e `ServerUnreachable` non hanno scene. Per W2-b e W2-d servono scatti
 >   miei o una scena di G.
 > - **Stima dell'analisi bassa:** §4.5 diceva ~700 e ~1.300 classi; sono 1.085 e 1.501.
+
+### T-6 — ✅ 15/10/2026 (palette del giro 2, barra neutra; checkpoint 5)
+
+> **Avvio** (coordinatore, 11:41): il developer e la designer chiedono, testuale, di «aggiornare subito le
+> impostazioni… per vedere come va e poi elencare i colori che sono rimasti fuori». Palette «Pietra e Salvia» (chiaro)
+> e «Ardesia e Salvia» (scuro); D-T15 rende neutra la barra laterale. Durante il lavoro arrivano D-T16 (Q1) e la
+> conferma di D-T3 (niente ponte). Base `2c7553e0b`.
+>
+> **Note implementazione:**
+> - **`lib/theme/tokens.css`:**
+>   - i valori della tabella della designer sui ruoli esistenti;
+>   - ruolo nuovo `--lf-surface-sidebar` (`#EDF0EE`/`#111615`, utility `bg-lf-sidebar`);
+>   - `--lf-surface-app` passa ai derivati: `var(--lf-surface-page)`, perché «sfondo pagina» vale anche per l'app;
+>   - D-T16: `--lf-checked` = focus e `--lf-on-checked` = card, con le utility;
+>   - tolti i valori scuri del box dei requisiti del giro 1 (`success-soft`, `-line`, `-on-soft`): il box ora sta
+>     sulla superficie secondaria.
+> - **Correzioni minime di contrasto** (politica D-T6: solo la luminosità OKLCH, col valore della designer in commento):
+>
+>   | Ruolo | Tema | Designer | Corretto | Perché |
+>   |---|---|---|---|---|
+>   | `--lf-text-muted` (e placeholder) | chiaro | `#6E7A74` | `#616D67` | 3,75:1 sul pannello, 4,08:1 sulla pagina |
+>   | `--lf-border-input` | chiaro | `#B2BEB8` | `#7E8984` | 1,61–1,92:1, sotto i 3:1 di un controllo |
+>   | `--lf-text-muted` (e placeholder) | scuro | `#687570` | `#7F8C87` | 3,31:1 sul pannello |
+>   | `--lf-border-input` | scuro | `#313F3A` | `#606F6A` | 1,44–1,72:1 |
+>   | `--lf-danger` | scuro | `#F43F5E` | `#F84361` | 4,33:1 sul pannello |
+>   | `--lf-info` | scuro | `#3B82F6` | `#3F86FA` | 4,32:1 sul pannello |
+>
+>   Senza le correzioni, 46 coppie su 180 erano sotto soglia; con le correzioni, 0. Le coppie della barra laterale
+>   sono comprese.
+> - **Barra laterale** (`layout/Sidebar.svelte`, solo classi):
+>   - `bg-lf-sidebar text-lf-primary` e un bordo destro `border-lf-subtle`: la barra e l'app sono quasi uguali,
+>     1,05:1 in chiaro e 1,04:1 in scuro;
+>   - voci inattive `text-lf-secondary hover:bg-lf-hover hover:text-lf-primary`;
+>   - voce attiva, provvisoria: `bg-lf-panel text-lf-link border-r-4 border-lf-focus` (link sul pannello 5,36:1 e 4,84:1;
+>     barra focus sulla barra laterale 5,58:1 e 5,57:1);
+>   - divisori `border-lf-subtle`; avatar `bg-lf-panel` con `text-lf-muted`; nome `text-lf-primary`, email e versione
+>     `text-lf-muted`; logout `bg-lf-panel hover:bg-lf-neutral`.
+> - **`layout/ConnectionSecurityIndicator.svelte`:**
+>   - livelli sicuro `text-lf-success`, rete locale `text-lf-warning` (il testo dice che il traffico è leggibile),
+>     non sicuro `text-lf-danger`;
+>   - il resto su `hover`, `danger-soft`, `secondary`, `panel` e `warning-soft`/`warning-on-soft`;
+>   - m1 7 → 0: la voce «stati sulla barra verde» di TC-2 è chiusa.
+> - **`ui/input/PasswordStrength.svelte`:** box `bg-lf-panel border-lf-subtle`, titolo `text-lf-primary`, requisito
+>   soddisfatto ✓ `text-lf-success` col testo `text-lf-secondary`. La card di accesso ha già la fascia verde col logo
+>   del render (T-2).
+> - **Colline del login, provvisorie:**
+>   - chiaro: la salvia del giro 1 al 25, 18 e 12%, e la linea nel marchio al 30%, che dà `#B2C0BA`, il colore della
+>     linea del suo render (`#B3BEB8`);
+>   - scuro: colline = superficie secondaria `#1B2421`, bordo generale `#222C28` e un misto `#171E1C`, come le fasce del
+>     suo render (`#1A2521`, `#24302C`); linea = `#687570` al 60%.
+> - **Documentazione:** la skill `theme-roles` e la sezione «Design System» con `bg-lf-sidebar` e `bg-lf-checked`; il
+>   marchio resta solo sulla testata della card di accesso.
+> - **Non toccati (D-T3 confermata):** `app.css` e le tabelle di R.
+>
+> **Rimasti fuori: ruoli che la tabella del giro 2 non copre, coi valori provvisori usati** (chiaro / scuro)
+>
+> | Ruolo | Valore | Da dove |
+> |---|---|---|
+> | `--lf-surface-app` | `#F3F5F3` / `#0D1110` | = sfondo pagina (coordinatore) |
+> | `--lf-surface-hover` | `#E8ECE9` / `#1B2421` | = superficie secondaria; sulla barra laterale si vede appena (1,04:1 e 1,15:1) |
+> | `--lf-surface-neutral` (tracce, scheletri, chip) | `#D8E0DC` / `#222C28` | = bordo generale |
+> | `--lf-surface-inverse` / `--lf-text-on-inverse` (tooltip) | `#1C2420` su `#FAFBFA` / `#EDF2F0` su `#151B19` | = testo primario e card |
+> | `--lf-surface-overlay` (fondale delle modali) | `#0D1110` al 60% | = pagina scura |
+> | `--lf-surface-logo` | `#FFFFFF` | invariato |
+> | `--lf-link`, `--lf-checked` | = focus | D-T16 per `checked` |
+> | `--lf-selected` | focus al 12% | derivato |
+> | `--lf-on-brand`, `--lf-on-action`, `--lf-on-status`, `--lf-on-checked` | card in chiaro; primario (brand, azione) e card (stati, checked) in scuro | derivati |
+> | `--lf-action-hover` chiaro | `#1E4F3B` | provvisorio: azione al 70% verso il focus. Nello scuro c'è il suo `#28634E` |
+> | Tinte degli stati, ricetta 8/25/60 in chiaro, 6/22/37 in scuro | successo `#E9F0EB` `#C5DACC` `#21553B` / `#192420` `#223E32` `#B7E8CF`; avviso `#F3EEE8` `#E3D2C1` `#66451D` / `#20221C` `#403622` `#F3D5AE`; errore `#F9ECEA` `#F5CBC8` `#813130` / `#221F1D` `#432828` `#FAB9BA`; info `#E8EFFB` `#C1D7FC` `#1A4A97` / `#182124` `#1E3144` `#ADCCF7` | provvisori (fondo, bordo, testo) |
+> | `--lf-gain`, `--lf-loss`, `--lf-donate` | = successo, errore, avviso | D-T del giro 1 |
+> | `--lf-art-*` | vedi sopra | provvisori |
+>
+> **Domande per la designer (giro 3)**
+> - **N1 · Barra laterale:** la voce attiva (pannello, testo e barretta nel verde focus) e l'hover, che sulla barra
+>   chiara quasi non si vede. Il bordo destro che separa la barra dall'app.
+> - **N2 · Barra del titolo della PWA:** D-T2 la legava alla barra laterale. Con D-T15 segue la barra neutra
+>   (`#EDF0EE`/`#111615`) o resta verde marchio? Serve a T-4.
+> - **N3 · Bordo della card di accesso in scuro:** nel suo render è un filo chiaro (≈ `#7F8883`); noi usiamo
+>   `border-lf-subtle` (`#222C28`, D-T14).
+> - **N4 · Sottotitolo «Crea un account»:** compare ancora nel render della registrazione; T-2 l'ha tolto su sua
+>   richiesta del giro 1.
+> - **N5 · Le sei correzioni di contrasto:** soprattutto il bordo dei campi, che diventa molto più scuro.
+> - **N6 · Colline e linee scure**, e i pallini sulle linee del render, che restano fuori.
+> - **Ancora aperte da W1/W2:** Q2–Q13 (interruttore spento, hover pieni distruttivi, «modificato», pallino neutro,
+>   codice e terminale, `mark`, ombre, coachmark, avviso nel tooltip, viola dell'AI Export, icone decorative,
+>   fondale). Q1 è chiusa da D-T16.
+>
+> **Test di `test-author`:**
+> - `e2e/layout/theme-roles.spec.ts`, sempre 9 test per progetto:
+>   - (a) il box dei requisiti = `--lf-surface-panel` col bordo `--lf-border-subtle`; ogni requisito soddisfatto ha ✓ =
+>     `--lf-success` e testo `--lf-text-secondary`;
+>   - (b) `--lf-surface-app` = `--lf-surface-page`; barra laterale = `--lf-surface-sidebar`, testo `--lf-text-primary`,
+>     bordo destro `--lf-border-subtle`; voce attiva (`nav-dashboard`) pannello, `--lf-link` e barretta `--lf-focus`;
+>     voce inattiva `--lf-text-secondary`; icona della connessione nel ruolo del suo livello, etichetta
+>     `--lf-text-secondary`.
+> - `themeTokens.gate.test.ts`:
+>   - C3 con la superficie della barra laterale fra le superfici, e fra gli sfondi di `link` e `focus`;
+>   - coppie D-T16: il segno sul riempimento a 4,5:1, il riempimento su card, pannello, campo e barra a 3:1;
+>   - commento di C1 aggiornato: oggi lo scuro non ridefinisce alcun derivato.
+>
+>   Restano 51/51 test: le coppie nuove girano dentro i test di C3.
+> - Descrizione dell'azione `theme-roles` del runner.
+>
+> **Evidenze, corsia 6155, in serie, tutte verdi:**
+> - `core-unit` 4.291, `component-unit` 3.225, `onboarding-component-unit` 441;
+> - E2E `theme-roles` 18/18, `connection-security` 8, `auth` 29;
+> - `front check` 0/0; Prettier verde; `tsc` E2E con i soli 2 errori di prima;
+> - `--check` pulito, con `ConnectionSecurityIndicator` sotto il record (m1 11.185 → 11.178). Niente `--update`, come
+>   chiesto dal coordinatore.
+> - **16 scatti** in `files/T6-shots/`:
+>   - accesso, registrazione compilata, dashboard, impostazioni;
+>   - chiaro e scuro, desktop 1440×900 e mobile;
+>   - animazioni ferme a 3,6 s.
+>
+> **Fuori pista:**
+> - **D-T16 e D-T3 arrivate a metà lavoro:** ruoli `checked`/`on-checked` aggiunti, Q1 chiusa nel paragrafo di W1/W2.
+>   Niente ponte: `app.css` e le tabelle di R restano come sono.
+> - **Ricetta delle tinte in scuro:** provata 8/25/40, tenuta quella del giro 1, 6/22/37, che chiede una correzione
+>   minore del testo attenuato (`#7F8C87` invece di `#818E89`).

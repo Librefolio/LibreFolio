@@ -100,12 +100,12 @@
 
 <!-- Sidebar -->
 <nav
-    class="fixed left-0 top-0 h-screen bg-lf-brand text-lf-on-brand flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
+    class="fixed left-0 top-0 h-screen bg-lf-sidebar text-lf-primary border-r border-lf-subtle flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
     <!-- Logo Header -->
-    <div class="p-4 flex items-center border-b border-lf-on-brand/10 {collapsed ? 'justify-center' : 'justify-between'}">
+    <div class="p-4 flex items-center border-b border-lf-subtle {collapsed ? 'justify-center' : 'justify-between'}">
         <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle" use:guideAnchor={'nav.toggle.desktop'}>
             <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
@@ -116,7 +116,7 @@
         </button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-lf-on-brand/10 rounded-lg" on:click={closeSidebar}>
+            <button class="lg:hidden p-2 hover:bg-lf-hover rounded-lg" on:click={closeSidebar}>
                 <X size={20} />
             </button>
         {/if}
@@ -138,7 +138,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
+						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -156,7 +156,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-lf-on-brand/20"></div>
+        <div class="my-3 mx-4 border-t border-lf-subtle"></div>
 
         <!-- Market Data Group -->
         <ul>
@@ -172,7 +172,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
+						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -190,7 +190,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-lf-on-brand/20"></div>
+        <div class="my-3 mx-4 border-t border-lf-subtle"></div>
 
         <!-- Files & Settings Group -->
         <ul>
@@ -206,7 +206,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
+						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -225,10 +225,10 @@
     </div>
 
     <!-- Bottom Section -->
-    <div class="border-t border-lf-on-brand/10 {collapsed ? 'p-2' : 'p-4'} space-y-2">
+    <div class="border-t border-lf-subtle {collapsed ? 'p-2' : 'p-4'} space-y-2">
         <!-- User Avatar & Info -->
         <a
-            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-lf-on-brand/10 transition-colors
+            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-lf-hover transition-colors
                 {collapsed ? 'justify-center' : ''}"
             data-testid="sidebar-user-avatar"
             href="/settings"
@@ -236,18 +236,18 @@
             title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
         >
             {#if avatarUrl}
-                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-lf-on-brand/30 flex-shrink-0" />
+                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-lf-subtle flex-shrink-0" />
             {:else}
-                <div class="w-8 h-8 rounded-full bg-lf-on-brand/20 flex items-center justify-center flex-shrink-0">
-                    <User size={16} class="text-lf-on-brand/70" />
+                <div class="w-8 h-8 rounded-full bg-lf-panel flex items-center justify-center flex-shrink-0">
+                    <User size={16} class="text-lf-muted" />
                 </div>
             {/if}
             {#if !collapsed}
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-lf-on-brand truncate">
+                    <div class="text-sm font-medium text-lf-primary truncate">
                         {$auth.user?.username || $_('common.user')}
                     </div>
-                    <div class="text-xs text-lf-on-brand/70 truncate">
+                    <div class="text-xs text-lf-muted truncate">
                         {$auth.user?.email || ''}
                     </div>
                 </div>
@@ -257,7 +257,7 @@
         <!-- Logout Button -->
         <button
             class="w-full flex items-center justify-center px-4 py-2
-				bg-lf-on-brand/10 hover:bg-lf-on-brand/20 rounded-lg transition-all text-sm
+				bg-lf-panel hover:bg-lf-neutral rounded-lg transition-all text-sm
 				{collapsed ? '' : 'space-x-2'}"
             data-testid="logout-button"
             on:click={handleLogout}
@@ -274,7 +274,7 @@
 
         <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
-            <button type="button" class="w-full text-center text-lf-on-brand/70 hover:text-lf-on-brand text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
+            <button type="button" class="w-full text-center text-lf-muted hover:text-lf-primary text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
                 {APP_VERSION}
             </button>
         {/if}

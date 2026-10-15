@@ -20,68 +20,70 @@
  *   - Gates: src/themeRoles.gate.test.ts (ratchet on the legacy classes, grammar of the roles) and
  *     src/themeTokens.gate.test.ts (this file: both themes, the utility table, the contrast pairs).
  *
- * Values: the designer's round 1 (14/10/2026), as sRGB hex (decision D-T5). A derived role is built from her values
- * only. The minimal contrast corrections (D-T6) change the OKLCH lightness alone; each keeps her value in a comment, to
- * be confirmed in her round 2.
+ * Values: the designer's round 2 (15/10/2026), «Pietra e Salvia» (light) and «Ardesia e Salvia» (dark), as sRGB hex
+ * (decision D-T5); the sidebar is neutral (decision D-T15). A derived role is built from her values only, and the
+ * roles her table does not cover are marked «provisional». A minimal contrast correction changes the OKLCH lightness
+ * alone and keeps her value in a comment, to be confirmed by her (policy D-T6).
  *
  * Plan: LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md
  */
 
-/* ===== Light theme: «caldo naturale» ===== */
+/* ===== Light theme: «Pietra e Salvia» ===== */
 :root,
 html.light,
 .light {
     /* Surfaces */
-    --lf-surface-app: #f1ede3; /* the app behind the shell: sidebar, header and pages sit on it (D-T2) */
-    --lf-surface-page: #f7f4ed; /* a standalone page: login, error, offline, splash */
-    --lf-surface-card: #fbf8f1; /* cards, modals, menus */
-    --lf-surface-panel: #eee9de; /* the secondary surface: panels, table heads, boxes inside a card */
-    --lf-surface-field: #fbf8f1; /* the inside of an input */
+    --lf-surface-page: #f3f5f3; /* the page: the app behind the shell, login, error, offline, splash */
+    --lf-surface-sidebar: #edf0ee; /* the sidebar, neutral (D-T15) */
+    --lf-surface-card: #fafbfa; /* cards, modals, menus */
+    --lf-surface-panel: #e8ece9; /* the secondary surface: panels, the password-requirements box, insides of a card */
+    --lf-surface-field: #ffffff; /* the inside of an input */
 
     /* Text */
-    --lf-text-primary: #292d27;
-    --lf-text-secondary: #555c53;
-    --lf-text-muted: #636b61; /* designer #687066: 4.38:1 on app, 4.23:1 on panel (D-T6) */
+    --lf-text-primary: #1c2420;
+    --lf-text-secondary: #4a5550;
+    --lf-text-muted: #616d67; /* placeholders, inactive icons, disabled text. Designer #6E7A74: 3.75:1 on panel (D-T6) */
 
     /* Borders */
-    --lf-border-subtle: #ddd5c7; /* borders and dividers */
-    --lf-border-input: #8f8573; /* designer #B9AE9B: 1.81–2.06:1, under the 3:1 of a control (D-T6) */
+    --lf-border-subtle: #d8e0dc; /* borders and dividers */
+    --lf-border-input: #7e8984; /* designer #B2BEB8: 1.61–1.92:1, under the 3:1 of a control (D-T6) */
 
     /* Brand and interaction */
-    --lf-brand: #1b4334; /* the green of the login header, the sidebar and the PWA title bar (D-T2) */
+    --lf-brand: #1b4334; /* the green of the login header (D-T15) */
     --lf-on-brand: var(--lf-surface-card);
     --lf-action: #1b4334; /* the primary button */
-    --lf-action-hover: #245a46; /* derived: half a tone lighter, the dark theme's action */
+    --lf-action-hover: color-mix(in oklab, var(--lf-action) 70%, var(--lf-focus)); /* provisional: toward the focus green */
     --lf-on-action: var(--lf-surface-card);
     --lf-focus: #236b4d; /* focus rings and active links */
 
     /* Status */
-    --lf-success: #17784d; /* designer #18794E: 4.47:1 on panel (D-T6) */
-    --lf-warning: #895000;
-    --lf-danger: #b42332;
-    --lf-info: #145dee; /* designer #155EEF: 4.47:1 on panel (D-T6) */
+    --lf-success: #18794e;
+    --lf-warning: #9a5b00;
+    --lf-danger: #c82838;
+    --lf-info: #155eef;
 
-    /* Recipe of the status tints below (derived, awaiting the designer) */
+    /* Recipe of the status tints below (provisional) */
     --lf-tint-soft: 8%;
     --lf-tint-line: 25%;
     --lf-tint-on-soft: 60%;
 
     /* Login illustration (ui/AnimatedBackground.svelte): variables only, no utility. Each layer's strength is the alpha
-       of its colour, so the Designer Lab tunes colour and strength in one value */
-    --lf-art-hill-1: color-mix(in oklab, #9caf9c 25%, transparent); /* designer: keep today's sage hills, as they are */
+       of its colour, so the Designer Lab tunes colour and strength in one value (provisional) */
+    --lf-art-hill-1: color-mix(in oklab, #9caf9c 25%, transparent); /* the sage hills of round 1, kept */
     --lf-art-hill-2: color-mix(in oklab, #9caf9c 18%, transparent);
     --lf-art-hill-3: color-mix(in oklab, #9caf9c 12%, transparent);
-    --lf-art-line: color-mix(in oklab, var(--lf-brand) 15%, transparent); /* the chart lines: the brand at today's 15% */
+    --lf-art-line: color-mix(in oklab, var(--lf-brand) 30%, transparent); /* the line of her render */
 }
 
 /* ===== Derived roles: the same recipe in both themes ===== */
 :root,
 .light,
 .dark {
+    --lf-surface-app: var(--lf-surface-page); /* round 2: one background for the app and the standalone pages */
     --lf-surface-hover: var(--lf-surface-panel);
     --lf-surface-neutral: var(--lf-border-subtle); /* tracks, skeletons, neutral chips */
     --lf-surface-inverse: var(--lf-text-primary); /* tooltips */
-    --lf-surface-overlay: color-mix(in oklab, #0f1412 60%, transparent); /* modal backdrops: the dark page, 60% */
+    --lf-surface-overlay: color-mix(in oklab, #0d1110 60%, transparent); /* modal backdrops: the dark page, 60% */
     --lf-surface-logo: #ffffff; /* the tile behind the logo */
 
     --lf-text-placeholder: var(--lf-text-muted); /* designer: the muted text is for placeholders and disabled text */
@@ -89,6 +91,8 @@ html.light,
 
     --lf-link: var(--lf-focus); /* designer: «Focus, link attivi» */
     --lf-selected: color-mix(in oklab, var(--lf-focus) 12%, transparent);
+    --lf-checked: var(--lf-focus); /* a selected control: checkbox, radio, switch on, selected day or preset (D-T16) */
+    --lf-on-checked: var(--lf-surface-card); /* its mark, in the card colour: 6.1:1 and 5.3:1 (D-T16) */
     --lf-on-status: var(--lf-surface-card); /* text on a solid status colour */
 
     --lf-gain: var(--lf-success);
@@ -109,55 +113,50 @@ html.light,
     --lf-info-on-soft: color-mix(in oklab, var(--lf-info) var(--lf-tint-on-soft), var(--lf-text-primary));
 }
 
-/* ===== Dark theme: «Notte nel Bosco» — after the derived block, so that it wins on a `.dark` subtree ===== */
+/* ===== Dark theme: «Ardesia e Salvia» — after the derived block, so that it wins on a `.dark` subtree ===== */
 html.dark,
 .dark {
     /* Surfaces */
-    --lf-surface-app: #131a17;
-    --lf-surface-page: #0f1412;
-    --lf-surface-card: #171f1c;
-    --lf-surface-panel: #1e2824;
-    --lf-surface-field: #121815;
+    --lf-surface-page: #0d1110;
+    --lf-surface-sidebar: #111615;
+    --lf-surface-card: #151b19;
+    --lf-surface-panel: #1b2421;
+    --lf-surface-field: #0f1413;
 
     /* Text */
-    --lf-text-primary: #eae6df;
-    --lf-text-secondary: #a8b0a8;
-    --lf-text-muted: #848f87; /* designer #758078: 3.70:1 on panel, 3.73:1 in the password box (D-T6) */
+    --lf-text-primary: #edf2f0;
+    --lf-text-secondary: #9ba8a2;
+    --lf-text-muted: #7f8c87; /* designer #687570: 3.31:1 on panel (D-T6) */
 
     /* Borders */
-    --lf-border-subtle: #26312c;
-    --lf-border-input: #64736b; /* designer #38463F: 1.53–1.81:1, under the 3:1 of a control (D-T6) */
+    --lf-border-subtle: #222c28;
+    --lf-border-input: #606f6a; /* designer #313F3A: 1.44–1.72:1, under the 3:1 of a control (D-T6) */
 
     /* Brand and interaction */
     --lf-brand: #1b4334;
     --lf-on-brand: var(--lf-text-primary);
-    --lf-action: #245a46;
-    --lf-action-hover: #2d6e56;
+    --lf-action: #215240;
+    --lf-action-hover: #28634e;
     --lf-on-action: var(--lf-text-primary);
-    --lf-focus: #469e76;
+    --lf-focus: #429e79;
 
     /* Status */
-    --lf-success: #3dd68c;
-    --lf-warning: #f5a623;
-    --lf-danger: #f25f5c;
-    --lf-info: #5899fa;
+    --lf-success: #36d399;
+    --lf-warning: #f59e0b;
+    --lf-danger: #f84361; /* designer #F43F5E: 4.33:1 on panel (D-T6) */
+    --lf-info: #3f86fa; /* designer #3B82F6: 4.32:1 on panel (D-T6) */
 
-    /* Recipe of the status tints (derived, awaiting the designer) */
+    /* Recipe of the status tints (provisional; the round-1 recipe) */
     --lf-tint-soft: 6%;
     --lf-tint-line: 22%;
     --lf-tint-on-soft: 37%;
 
-    /* Login illustration: the designer's deep fir greens and her line colour, at full strength as in her render. The
-       strengths are a first proposal, to tune with her on the gallery (TC-2) */
-    --lf-art-hill-1: #14241e;
-    --lf-art-hill-2: #192e26;
-    --lf-art-hill-3: #1f382f;
-    --lf-art-line: #284238;
-
-    /* The designer's own password-requirements box (round 1): her values win over the recipe */
-    --lf-success-soft: #1a2822;
-    --lf-success-line: #284237;
-    --lf-success-on-soft: #b8d8c8;
+    /* Login illustration (provisional): the hills of her render are her secondary surface and her general border, the
+       line her muted text */
+    --lf-art-hill-1: var(--lf-surface-panel);
+    --lf-art-hill-2: var(--lf-border-subtle);
+    --lf-art-hill-3: color-mix(in oklab, var(--lf-surface-panel) 70%, var(--lf-surface-page));
+    --lf-art-line: color-mix(in oklab, #687570 60%, transparent);
 }
 
 /* ===== Utilities: role → Tailwind colour (bg-lf-*, text-lf-*, border-lf-*, ring-lf-*…) ===== */
@@ -165,6 +164,7 @@ html.dark,
     /* Surfaces */
     --color-lf-app: var(--lf-surface-app);
     --color-lf-page: var(--lf-surface-page);
+    --color-lf-sidebar: var(--lf-surface-sidebar);
     --color-lf-card: var(--lf-surface-card);
     --color-lf-panel: var(--lf-surface-panel);
     --color-lf-field: var(--lf-surface-field);
@@ -194,6 +194,8 @@ html.dark,
     --color-lf-focus: var(--lf-focus);
     --color-lf-link: var(--lf-link);
     --color-lf-selected: var(--lf-selected);
+    --color-lf-checked: var(--lf-checked);
+    --color-lf-on-checked: var(--lf-on-checked);
 
     /* Status */
     --color-lf-success: var(--lf-success);

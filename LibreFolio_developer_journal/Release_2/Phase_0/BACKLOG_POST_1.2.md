@@ -1989,18 +1989,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **TC-2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
   - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
     dei tooltip, tinte di avviso, errore e informazione.
-  - **Stati sulla barra verde** (T-3, 15/10): i colori di stato del chiaro sono scuri e sul verde sparirebbero. Le icone
-    di `ConnectionSecurityIndicator` restano legacy finché la designer non sceglie fra un sotto-albero `.dark` sulla
-    barra (che sfugge al Lab) e ruoli dedicati «stato su marchio».
+  - ✅ **Stati sulla barra verde** (T-3, 15/10): chiusa da D-T15 (15/10). La barra laterale è neutra, e le icone di
+    `ConnectionSecurityIndicator` sono sui ruoli di stato (T-6).
   - Da decidere con lei:
     - guadagno e perdita distinti da successo ed errore;
     - l'info `#155EEF`, molto saturo;
     - le opacità delle colline del login in scuro;
     - palette categoriale e colori dei grafici.
   - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
-  - **Domande di W1 e W2** (15/10, notte): Q1–Q13 nel piano di T, sezione W1–W6, «Ruoli che mancano». Q1 (colore di
-    un controllo selezionato: su `action` è a 2,10:1 sulla card scura) blocca W1: serve la risposta, o l'OK alla
-    proposta provvisoria, prima del primo lotto.
+  - **Domande di W1 e W2** (15/10, notte): Q1–Q13 nel piano di T, sezione W1–W6, «Ruoli che mancano». Q1 è chiusa da
+    D-T16 (15/10): un controllo selezionato è `bg-lf-checked` (focus) col segno `text-lf-on-checked` (card).
+  - **Giro 2, «Pietra e Salvia»** (15/10, T-6): la palette è applicata. I ruoli che la sua tabella non copre, i valori
+    provvisori e le correzioni minime di contrasto sono nel piano di T, passo T-6.
 
   Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
 - **TC-3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.

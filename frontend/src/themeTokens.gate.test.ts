@@ -18,16 +18,17 @@
  * tokens.css holds the four blocks of `TOKEN_BLOCKS` and nothing else — the module's parser throws on any other
  * block — and none of them is empty.
  *   C1  the light and the dark block declare the same base roles. The dark block may also override a derived role
- *       (today the designer's password box: `--lf-success-soft`, `--lf-success-line`, `--lf-success-on-soft`), but
- *       never declares a role of its own; and no role is both base and derived;
+ *       (none does today: round 2 retired the designer's dark password box, which did), but never declares a role
+ *       of its own; and no role is both base and derived;
  *   C2  every utility of the table is `--color-lf-<name>: var(--lf-…)` of a role declared in the light or the
  *       derived block; every name is distinct; every utility resolves to a colour in both themes — and so does every
  *       role of the light, derived and dark blocks, utility or not, the tint recipe excepted (`--lf-tint-*`, the
  *       shares of a mix: `8%`). The login illustration (`--lf-art-*`) has no utility: its one component reads it
  *       with var(), where nothing but this check would see a role that does not resolve;
- *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3), 3:1 for the
- *       border of a field, the focus ring and a status mark on its own tint (WCAG 1.4.11). A pair under its minimum
- *       is red unless `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's decision, not ours;
+ *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3) and for the
+ *       mark of a selected control (D-T16), 3:1 for the border of a field, the focus ring, a status mark on its own
+ *       tint and the fill of a selected control (WCAG 1.4.11). A pair under its minimum is red unless
+ *       `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's decision, not ours;
  *   C4  every class the legacy remap rewrites (`html.dark .bg-white` …) is still written by a production source: a
  *       rule whose class lost its last use is dead, and leaves app.css in the change that removed that use.
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
@@ -226,7 +227,7 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const STATUSES = ['success', 'warning', 'danger', 'info'];
-const SURFACES = ['surface-app', 'surface-page', 'surface-card', 'surface-panel', 'surface-field'];
+const SURFACES = ['surface-app', 'surface-page', 'surface-sidebar', 'surface-card', 'surface-panel', 'surface-field'];
 
 interface ContrastPair {
     foreground: string;
@@ -239,21 +240,26 @@ const pairs = (foregrounds: string[], backgrounds: string[], min: number): Contr
 
 /**
  * What the roles promise, in both themes. Text reaches 4.5:1 (WCAG 1.4.3) on every surface it is set on; the border
- * of a field, the focus ring and a status mark on its own tint reach 3:1 (WCAG 1.4.11).
+ * of a field, the focus ring and a status mark on its own tint reach 3:1 (WCAG 1.4.11). The neutral sidebar (D-T15) is
+ * one of those surfaces, and the link and the focus border of its active item are checked on it too. A selected
+ * control (D-T16: checkbox, radio, switch on, selected day or preset): its fill, --lf-checked, reaches 3:1 on every
+ * surface it sits on, and its mark, --lf-on-checked, is held to the text minimum on the fill, as the decision quotes it.
  */
 const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['text-primary', 'text-secondary', 'text-muted', 'text-placeholder'], SURFACES, TEXT),
-    ...pairs(['link'], ['surface-app', 'surface-page', 'surface-card', 'surface-panel'], TEXT),
+    ...pairs(['link'], ['surface-app', 'surface-page', 'surface-sidebar', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(STATUSES, SURFACES, TEXT),
     ...pairs(['donate'], ['surface-app', 'surface-page'], TEXT),
     ...STATUSES.flatMap((status) => pairs([`${status}-on-soft`, 'text-muted', 'text-primary'], [`${status}-soft`], TEXT)),
     ...pairs(['on-brand'], ['brand'], TEXT),
     ...pairs(['on-action'], ['action', 'action-hover'], TEXT),
     ...pairs(['on-status'], STATUSES, TEXT),
+    ...pairs(['on-checked'], ['checked'], TEXT),
     ...pairs(['text-on-inverse'], ['surface-inverse'], TEXT),
     ...pairs(['border-input'], SURFACES, NON_TEXT),
-    ...pairs(['focus'], ['surface-app', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
+    ...pairs(['focus'], ['surface-app', 'surface-sidebar', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
     ...STATUSES.flatMap((status) => pairs([status], [`${status}-soft`], NON_TEXT)),
+    ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field', 'surface-sidebar'], NON_TEXT),
 ];
 
 interface KnownException {
