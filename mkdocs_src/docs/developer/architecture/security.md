@@ -163,8 +163,8 @@ curl -b cookies.txt -X POST \
 
 ### 📄 Secrets from Files {: #secrets-from-files }
 
-Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` and
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` today, is read by `env_secret(name)` in
+Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
 `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
@@ -192,6 +192,9 @@ The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
 does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
+Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
+it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged and, from a later lot,
+shown to administrators ([Email Service](../backend/email.md#config-state)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -282,7 +285,7 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `check_id` | Not `ok` when | Severity |
 |------------|---------------|----------|
 | `platform.jwt_secret` | Neither `JWT_SECRET` nor `JWT_SECRET_FILE` is set, blank counting as not set: one key per start, the default | `info` |
-| `platform.jwt_secret` | The secret is shorter than 32 characters (`JWT_SECRET_MIN_LENGTH`); the summary names its origin (`configured_jwt_secret_origin()`): `The session signing key from JWT_SECRET is … characters long: …`, or `from JWT_SECRET_FILE (<path>)` | `warning` |
+| `platform.jwt_secret` | The secret is shorter than 32 characters (`JWT_SECRET_MIN_LENGTH`); the summary names its origin (`configured_jwt_secret_origin()`): `The session signing key from JWT_SECRET is … characters long: …`, or `from JWT_SECRET_FILE (<path>)` | `warning`; `error` with `LIBREFOLIO_PROFILE=managed`, where `log_configuration_audit()` stops the startup first |
 | `platform.jwt_secret` | `JWT_SECRET_FILE` cannot give its secret | `error` |
 | `platform.secrets_set_twice` | A secret is set both as `NAME` and as `NAME_FILE`, neither blank (`secrets_set_twice()`) | `warning` |
 | `platform.instance_key` | `instance_key_status()` reports a `problem`: the key cannot be used, including a generated key file out of reach (`cannot be reached (Permission denied)`) | `error` |
@@ -294,10 +297,16 @@ At startup, the lifespan of `backend/app/main.py` runs `log_configuration_audit(
 (`asyncio.to_thread`), right after the `Starting LibreFolio` line:
 
 1. `configured_jwt_secret()`: an unreadable `JWT_SECRET_FILE` raises `SecretFileError`. In practice
-   the import of `auth_service.py` has already failed on it.
-2. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+   the import of `auth_service.py` has already failed on it. With `LIBREFOLIO_PROFILE=managed`, a
+   configured secret shorter than `JWT_SECRET_MIN_LENGTH` raises `WeakSecretError`; in the
+   self-hosted profile it stays the `warning` of the table above.
+2. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
+   they cannot read raises `ValueError`. On a blocked instance, a warning
+   `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`, with `deletion_date`, goes to
+   the log: see [Instance Block](#instance-block).
+3. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-3. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+4. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
@@ -319,8 +328,12 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
+| `/settings/global`, `/settings/global/{key}` | GET | Global settings, read only: changing them needs an administrator |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
+
+On an instance blocked by its hosting provider, the public endpoints outside its short list answer
+`401`: see [Instance Block](#instance-block).
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -358,13 +371,91 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (including onboarding progress), System diagnostics (`/system/plugin-diagnostics`), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie.
+All other endpoints — including Auth (profile, password), Settings (including onboarding progress), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie.
 
 !!! info "📁 Files are protected too"
 
     Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed.
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
+
+### 🚧 Instance Block {: #instance-block }
+
+A hosting provider blocks an instance with `LIBREFOLIO_BLOCKED`; the administrator's side is
+[Hosting for Others](../../admin/hosting_providers.md#instance-block). `backend/app/config/platform.py`
+reads both variables from the process environment, never through `Settings`, and they work in every
+profile:
+
+- `instance_blocked()`: `1`, `true`, `yes` and `on` block, `0`, `false`, `no` and `off` do not, in any
+  case; unset or blank is not blocked; any other value raises `ValueError`.
+- `instance_deletion_date()`: `LIBREFOLIO_DELETION_DATE`, an optional ISO date shown on the block
+  page; any other value raises `ValueError`.
+
+`log_configuration_audit()` reads both at startup, so a value they cannot read stops the server (see
+[Configuration Checks](#configuration-checks)).
+
+**The guard.** `refuse_when_blocked` (`backend/app/api/v1/instance_block.py`) is a dependency of the
+`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked)])` in
+`backend/app/api/v1/router.py`, so it covers every API route (`APIRoute`) under it, today's and
+tomorrow's. FastAPI gives no router dependency to a plain `Route`, a `WebSocketRoute` or a `Mount`, so
+none of them belongs under `/api/v1`. FastAPI hands
+a dependency the endpoint function of the matched route (`request.scope["endpoint"]`), not its full
+path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint functions:
+
+| Endpoints | Functions | For |
+|-----------|-----------|-----|
+| `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
+| `DELETE /auth/users/me` | `auth.delete_own_account` | Deleting one's own account; the block page has no button for it yet |
+| `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
+| `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
+| `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
+
+**The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
+with the request's own database session (FastAPI caches the dependency), then refuses:
+
+- **without a valid session**: the `401` of `get_current_user()`;
+- **with a valid session**: `423 Locked`, with the code `INSTANCE_BLOCKED_CODE`:
+
+    ```json
+    {"detail": {"code": "instance_blocked", "message": "This instance is blocked by its hosting provider"}}
+    ```
+
+**What a caller without a session can tell.** Only signed-in users get the `423`. A caller without a
+valid session gets these answers:
+
+| Routes | Not blocked | Blocked |
+|--------|-------------|---------|
+| Protected routes outside the list | `401` | The same `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| The routes of the list | Their usual answer | The same answer |
+
+- The protected routes and the routes of the list do not reveal the block: `/system/instance`,
+  `/system/info` and `/system/ready` answer as on any other instance.
+- The public routes outside the list answer `401` only while the instance is blocked. From them, a
+  caller without a session can tell that the instance is blocked, and nothing more: they return no
+  data.
+
+On an instance that is not blocked, the guard returns at once and leaves the session unused. On a
+blocked one it runs before the route's own dependencies and before the body is validated: a signed-in
+caller of a refused route gets the `423` even with an invalid body, never a `422`.
+
+**`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
+on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`,
+and `deletion_date`, `null` without a date. A workstream that owns part of the block page adds one
+field there and fills it in `block.py` with one call to its service.
+
+**Changing the list.** The list is short on purpose. The full backup for the administrator and the
+scheduled wake-up join it, one line each, when their routes exist; any other addition goes through the
+developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
+pins the list by name and by route, checks that every API route under `/api/v1` resolves
+`refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
+documentation, so an addition, or a route the guard does not reach, shows in review.
+
+**Outside the guard.** Routes outside the `/api/v1` router, such as the built web app, `/mkdocs` and
+FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
+covered: the browser still loads the app, which turns the first `423` into the block page (see
+[Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
+HTTP, so its jobs keep running.
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 

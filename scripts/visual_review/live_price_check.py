@@ -12,8 +12,8 @@ The backend's log (`<data dir>/logs/librefolio.log`, JSON lines at DEBUG level i
 step of that path. This script reads, from each snapshot's meta.json, when the capture started, how long it took
 and which lane data directory it used, and counts the live-price lines the log holds for that time window.
 
-Run from the repository root (standard library only, Python 3.11+):
-    python3 scripts/visual_review/live_price_check.py <work>/snapshots/<label> [<work>/snapshots/<label2> ...]
+Run from the repository root with the project venv, like the other visual review tools (standard library only):
+    pipenv run python -m scripts.visual_review.live_price_check <work>/snapshots/<label> [<work>/snapshots/<label2> ...]
         [--log <data dir>/logs/librefolio.log]   # default: the data_dir written in each meta.json
         [--show 20]                              # matching lines to print per snapshot
 
