@@ -1,7 +1,7 @@
 """``dev.py db current|upgrade|downgrade|migrate|check [path]`` must act on ``path`` (N, R2 P0, plan 28_fxDashboardSync/plan-phase00DbPathArgument).
 
 The defect: ``dev.py`` hands Alembic the path only as ``DATABASE_URL`` in its environment. Without
-``-x sqlalchemy.url=``, ``backend/alembic/env.py`` uses ``get_settings().DATABASE_URL``, which ``backend/app/config.py``
+``-x sqlalchemy.url=``, ``backend/alembic/env.py`` uses ``get_settings().DATABASE_URL``, which ``backend/app/config/__init__.py``
 recomputes from the data directory, overwriting the environment's value. Every command thus works on the configured
 database while printing the path it was given, and ``db downgrade <copy>`` rolls the configured one back. ``db check``
 runs ``backend/test_scripts/verify_db_check_constraints.py``, which does not exist.
@@ -168,7 +168,7 @@ def isolated_env(configured: Path, test_lane: Path) -> dict[str, str]:
 
 
 def make_sandbox(directory: Path) -> Sandbox:
-    """A sandbox in ``directory``. Its test data dir passes the checks ``backend/app/config.py`` applies, before any child starts."""
+    """A sandbox in ``directory``. Its test data dir passes the checks ``backend/app/config/__init__.py`` applies, before any child starts."""
     root = directory.resolve()
     configured, test_lane = root / "configured", root / "test-lane"
     validate_test_data_dir(test_lane, production_data_dir=configured)

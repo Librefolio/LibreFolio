@@ -2,14 +2,15 @@
 
 The Asset system in LibreFolio manages financial instruments (Stocks, ETFs, Bonds, Crypto, etc.), fetches their prices from external providers, and maintains their metadata.
 
-## 📦 Canonical Package and Compatibility
+## 📦 Package Layout and Imports
 
-Asset pricing services live in `backend/app/services/asset_sources/`. Each module owns one
+Asset pricing services live in `backend/app/services/assets/`. Each module owns one
 responsibility:
 
 | Module | Responsibility |
 |--------|----------------|
 | `core.py` | Provider contract and shared infrastructure: `AssetSourceProvider`, `AssetSourceError`, history start-date types, the five cache singletons, provider-parameter hashing, error sanitization, the OHLC guard, and `_run_provider_in_thread`. |
+| `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price and event upserts/deletes, currency-change market-data wipes, OHLC integrity checks, and bounded write chunks. |
@@ -17,31 +18,31 @@ responsibility:
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution. |
+| `web_link_finder.py` | The last-resort web lookup of `search.py`: an external metasearch engine that turns a query into candidate provider-domain URLs (see [Asset Search & Link-Finder](search_link_finder.md)). |
 | `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, store, query, and refresh operation mixins. |
+| `market_calendar.py` | Market holidays and the rule that tells a stored carry from a quote, shared by risk and by the signal price query (see [Market Calendar](../risk/architecture.md#market-calendar)). |
 
 These are behavioral boundaries, not only file boundaries: `refresh.py` orchestrates remote
 acquisition, `price_store.py` owns reusable price/event persistence primitives, and
 `price_query.py` owns database-backed reads plus the separate live-quote path.
 
-`backend/app/services/asset_sources/__init__.py` exposes the canonical public objects.
-`backend/app/services/asset_source.py` remains a thin Release 2 compatibility facade: it
-re-exports those same class, error, type, and service objects rather than wrapping, copying, or
-subclassing them.
+`backend/app/services/assets/__init__.py` holds only a docstring: the package re-exports
+nothing, and no compatibility facade exists.
 
-!!! info "Canonical imports and legacy compatibility"
+!!! info "Import from the defining module"
 
-    New code should import the provider base class and error from
-    `backend.app.services.asset_sources.core`. The thread runner and all cache patch points also
-    belong to that module. Existing public imports from
-    `backend.app.services.asset_source` remain supported during Release 2 and resolve to the
-    identical objects.
+    Import every name from the module that defines it: the provider base class and error from
+    `backend.app.services.assets.core`, which also owns the thread runner and all cache patch
+    points; `AssetSourceManager` from `backend.app.services.assets.manager`; `AssetCRUDService`
+    from `backend.app.services.assets.crud`; and `AssetSearchService` from
+    `backend.app.services.assets.search`.
 
 ## 🧱 Core Components
 
 ### 1️⃣ `AssetSourceProvider` (Plugin Base Class)
 
-Abstract base class for all asset pricing plugins, canonically defined in
-`backend/app/services/asset_sources/core.py`. Each provider auto-registers via
+Abstract base class for all asset pricing plugins, defined in
+`backend/app/services/assets/core.py`. Each provider auto-registers via
 `@register_provider(AssetProviderRegistry)`.
 
 | Property / Method | Required | Default | Description |
@@ -69,7 +70,7 @@ Abstract base class for all asset pricing plugins, canonically defined in
 
 ### 2️⃣ `AssetSourceManager`
 
-The stable manager class in `asset_sources/manager.py` composes the responsibility-specific
+The stable manager class in `assets/manager.py` composes the responsibility-specific
 operation mixins:
 
 - **Provider Assignment**: Link an asset to a provider (e.g., "AAPL" → "yfinance").
@@ -273,7 +274,7 @@ reports `valuation_source = LAST_TRADE_PRICE`.
 
 ## ⚡ Cache & Performance
 
-- **Canonical cache ownership**: `asset_sources/core.py` owns the history, current, metadata,
+- **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
 - **`_asset_current_cache`**: caches provider current-value results. The live-query path keys by

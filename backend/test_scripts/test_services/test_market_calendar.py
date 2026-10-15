@@ -47,7 +47,7 @@ import pytest_asyncio
 import QuantLib as ql
 from structlog.testing import capture_logs
 
-MODULE = "backend.app.services.market_calendar"
+MODULE = "backend.app.services.assets.market_calendar"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -484,7 +484,7 @@ BOUNDARY_PROBE = textwrap.dedent("""
     import json
     import sys
 
-    import backend.app.services.market_calendar as market_calendar
+    import backend.app.services.assets.market_calendar as market_calendar
 
     imported_with_the_module = "QuantLib" in sys.modules
 

@@ -45,7 +45,7 @@ from backend.app.schemas.transactions import (
     TXTypesResponse,
     TXUpdateItem,
 )
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)

@@ -57,7 +57,7 @@ class MyResponse(BaseModel):
 
 ## Related Cleanup
 
-The introduction of `SafeDecimal` allowed removing a redundant `.normalize()` bandaid in `backend/app/services/broker_service.py` that was masking the problem rather than fixing serialization at the schema layer.
+The introduction of `SafeDecimal` allowed removing a redundant `.normalize()` bandaid in `backend/app/services/brokers/broker_service.py` that was masking the problem rather than fixing serialization at the schema layer.
 
 ## Prevention
 
@@ -70,5 +70,5 @@ When adding new Decimal fields to response schemas, use `SafeDecimal` from the s
 | Type definition | `backend/app/schemas/common.py` (L50–66) |
 | Broker schema adoption | `backend/app/schemas/brokers.py` |
 | Transaction schema adoption | `backend/app/schemas/transactions.py` |
-| Bandaid removal | `backend/app/services/broker_service.py` |
+| Bandaid removal | `backend/app/services/brokers/summary.py` |
 

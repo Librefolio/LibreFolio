@@ -23,7 +23,7 @@ import pytest
 
 from backend.app.api.v1 import uploads as uploads_api
 from backend.app.config import get_settings
-from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 

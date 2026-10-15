@@ -61,8 +61,8 @@ import pytest
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, is_fake_asset_id
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
