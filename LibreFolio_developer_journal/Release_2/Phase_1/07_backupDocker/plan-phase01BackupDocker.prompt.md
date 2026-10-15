@@ -1762,6 +1762,53 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `PUT …/panel/jobs`) risponde 405, e l'OpenAPI elenca le rotte comunque. Il «404 come se non ci fossero» vale per le
 >   4 operazioni servite. Nessun effetto sulla sicurezza: il codice è pubblico.
 
+### Base `10697e618`, prove d'ingresso e decisioni 40–43 (2026-10-15, 20:12-20:25) ✅
+
+> - **B8 committato dal coordinatore**: `663e858f1` (`feat(backup): panel token for instance backups`) e `1f8385c0d`
+>   (journal). Il testo del CHANGELOG va bene. La precondizione nuova nel test di H gliela comunica il coordinatore
+>   all'ingresso.
+> - **Base aggiornata da lui**: merge di `dev_release2` `b4597efad`, senza conflitti; HEAD `10697e618`. Dentro ci sono
+>   CP2b di H (i passi d'avvio in `lifecycle.py`), N2 di W, L, le decisioni e i registri. Dei file di B8 cambia solo
+>   `.env.example`, con la sezione di Z sullo spegnimento: H non ha toccato `instance_block.py` dopo B8, e le 21 voci
+>   restano intere.
+> - **Prove d'ingresso** (20:13-20:21, una alla volta, `nice -n 10`, carico 67; riepilogo in
+>   `/tmp/libreFolio_b_entry_10697_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 59 (5 min 43 s: la corsia rifà la build del frontend dopo il merge) |
+>   | `api instance-block` | 60 |
+>   | `api backup` | 23 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | 421 Vitest, 315 backend |
+>
+>   Porta 6187 libera; in `.jobs` solo `.lock`.
+> - **Decisioni 40–43** (file delle decisioni, righe «Decisione (15/10)» nella mia base). Cambiano il disegno di B2 e
+>   B3:
+>   - **40, approvata con tre precisazioni** (developer, 17:18: «direi che le tue proposte per la 40 lato mio sono
+>     tutte ok», «ok nell'usare la data»):
+>     - `JWT_SECRET` non cambia e non va nel backup;
+>     - il DB ripristinato registra l'ora del ripristino, e ogni cookie emesso prima viene rifiutato, qualunque sia il
+>       segreto. Il `+1` su `session_version` del §3.6 non basta, perché i numeri possono coincidere: serve l'ora,
+>       accanto al controllo `sv` di `auth.py`;
+>     - l'anteprima (B2) elenca per nome gli admin del backup, con l'avviso «dopo il ripristino entri con uno di
+>       questi, con la password di allora». Senza nessun admin nel backup, il ripristino si blocca;
+>     - recupero dell'admin: «password dimenticata» via email (E), o l'assistenza con `dev.py user reset-link`. Una
+>       riga nella doc del ripristino. Un pulsante del pannello che chiede il link all'istanza va nel backlog.
+>   - **41, approvata con una modifica**: la copia fatta prima del ripristino serve solo a tornare indietro. Si cancella
+>     se il primo avvio va bene; se fallisce, LibreFolio rimette da solo i dati di prima. Cambia il §3.4: niente
+>     `pre-restore` scaricabile dalla scheda, e niente `GET`/`DELETE …/pre-restore`.
+>   - **42, respinta**: dalla UI si ripristinano solo i backup di LibreFolio, con `manifest.json`. Cade D-B5, quindi
+>     niente archivi «a mano». Il passaggio dalla 1.2 alla 1.3 resta l'aggiornamento sul posto. La prova «revisione
+>     più vecchia» si fa con un archivio di LibreFolio con un DB a una revisione precedente.
+>   - **43, approvata**: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `0` = senza limite (il default del self-hosted), 500 nel
+>     profilo gestito.
+>
+>   Il messaggio del coordinatore delle 20:12 dice «41–43 ancora aperte», ma è più vecchio di quanto sembri: è delle
+>   17:18, prima delle righe «Decisione» del treno 45 (17:40-18:10), che le danno decise.
+> - **Prossimo**: lo scatto `settings/backup-ready`, con la checklist di G. Lo slot della galleria lo chiede il
+>   coordinatore; il doppio lancio lo farà probabilmente la coppia G-13, come per Users ed Email.
+
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
 > **Metodo**: per non mescolare B1 con il checkpoint di B0, la bozza sta in una copia dell'albero di B0 in `/tmp`
