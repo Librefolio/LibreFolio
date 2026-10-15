@@ -9,6 +9,7 @@ from pydantic import Field, RootModel, model_validator
 
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.common import StrictModel
+from backend.app.schemas.email import EmailInstanceConfig
 from backend.app.utils.runtime.network import ClientClass
 
 
@@ -113,6 +114,7 @@ class InstanceConfigResponse(StrictModel):
 
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
     accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
+    email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
 
 
 class InstanceBlockResponse(StrictModel):
