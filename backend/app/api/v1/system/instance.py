@@ -5,14 +5,18 @@ configuration adds one field there, typed with a model of its own schemas, and f
 service. Everything here is public and the same for whoever asks: nothing private, nothing that depends on a session.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
+from backend.app.schemas.email import EmailInstanceConfig
 from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts.registration_service import effective_registration_mode
+from backend.app.services.email.delivery import email_available
 
 instance_router = APIRouter()
 
@@ -24,4 +28,6 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
     return InstanceConfigResponse(
         profile=get_settings().LIBREFOLIO_PROFILE,
         accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked),
+        # The email configuration may come from a password file: read off the event loop.
+        email=EmailInstanceConfig(available=await asyncio.to_thread(email_available)),
     )
