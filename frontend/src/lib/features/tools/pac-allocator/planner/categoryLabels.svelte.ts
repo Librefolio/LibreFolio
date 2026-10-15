@@ -19,7 +19,9 @@ export function exposureCategoryLabel(tr: PlannerTranslate, dimension: ExposureD
     }
     if (dimension === 'sector') {
         const text = tr(`sectors.${sectorI18nKey(raw)}`, {default: ''});
-        return text === '' ? raw : `${getSectorEmoji(raw)} ${text}`;
+        if (text === '') return raw;
+        const emoji = getSectorEmoji(raw);
+        return emoji ? `${emoji} ${text}` : text;
     }
     // An unknown code comes back with an empty alpha-2 and a white flag: show the code instead.
     const country = findCountry(raw);
