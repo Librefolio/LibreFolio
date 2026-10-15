@@ -1070,6 +1070,10 @@ la fa Import e transazioni, sopra quella regola.
 - **Alternative**: scheletri grigi al posto dei dati; una barra sottile in cima alla pagina.
 - **Per chi usa già LibreFolio**: vede sempre i dati di prima mentre arrivano i nuovi.
 
+Nota dev: no non mi piace che i dati vengano sporcati o che compare un badge per ora farei che nelle pagine, quando si cambia il periodo temporale il pulsante di aggiorna diventa grigio e l'icona inizia a ruotare, come fosse stata premuta, e questa cosa in tutte le pagine che hanno l'aggiorna, tanto i dati di query sono sempre in cima.
+
+La vera domanda che ti faccio è, ci sono pagine in cui questo non è possibile e se si, in quelle cosa potremmo riusare per evitare di essere invasivi?
+
 #### 49. La liquidità negativa nel grafico dell'allocazione — 🟡 (54-1, D-Y11)
 - **Oggi**: con un saldo di liquidità negativo, le quote positive sommano più di 100 %. Il grafico dell'allocazione nel
   tempo ha l'asse fermo a 100 e taglia la cima; tooltip e torta scartano le voci negative, quindi la liquidità negativa
@@ -1078,6 +1082,7 @@ la fa Import e transazioni, sopra quella regola.
   torta restano le quote positive, con una nota «liquidità negativa: −X».
 - **Alternativa**: Numeri e analisi la toglie dal totale nel backend, e il grafico non la vede.
 - **Per chi usa già LibreFolio**: tocca solo chi ha liquidità negativa.
+nota dev: parliamo del grafico a torta vero? o cosa?
 
 #### 50. Il PAC sul telefono (difetto 5) — 🟢 (D-Y12)
 - **Oggi**: sul telefono la tabella dei target del PAC non sta nella larghezza: i nomi sono tagliati, gli input Target %
@@ -1085,6 +1090,11 @@ la fa Import e transazioni, sopra quella regola.
 - **Proposta**: prima la cura generale delle tabelle sul telefono (C-38, la colonna «Azioni» e quella di selezione
   fisse in `DataTable`); se non basta, un layout da telefono apposta per il PAC.
 - **Per chi usa già LibreFolio**: niente.
+
+nota dev: intanto facciamo la cura generale, ho anche altre note di problemi che avevo preso, se non basta poi ne riparliamo e vedremo.
+
+**Decisione (15/10)**: approvata la cura generale delle tabelle sul telefono (C-38, lotto Y7). Il layout da telefono
+apposta per il PAC si decide dopo, se non basta, insieme alle altre note del developer.
 
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
