@@ -59,9 +59,9 @@ several files become one import without changing the single-file plugins.
 
 | Role | Path |
 |------|------|
-| Set service (`collect_members`, `preview_set`, `combine_set`, `apply_history`) | `backend/app/services/brim_report_sets.py` |
-| Gap fix (`compute_gap_fix`) | `backend/app/services/brim_gap_fix.py` |
-| Plugin hooks (`report_roles`, `detect_role`, `describe_member`, `combine`) | `backend/app/services/brim_provider.py` |
+| Set service (`collect_members`, `preview_set`, `combine_set`, `apply_history`) | `backend/app/services/brim/brim_report_sets.py` |
+| Gap fix (`compute_gap_fix`) | `backend/app/services/brim/brim_gap_fix.py` |
+| Plugin hooks (`report_roles`, `detect_role`, `describe_member`, `combine`) | `backend/app/services/brim/brim_provider.py` |
 | `BRIMReportRole`, `batch_id`, `combined_into` | `backend/app/schemas/brim.py` |
 | Upload with `batch_id`; `/sets/preview`, `/sets/combine`, `/gap-fix` | `backend/app/api/v1/brokers.py` |
 | Danske Bank set plugin | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |

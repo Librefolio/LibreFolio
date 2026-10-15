@@ -239,7 +239,7 @@ source of every module of the layer with `ast` — it imports none of them: no d
 server — and fails when:
 
 - a module imports an orchestration service, the API, AI Export, risk (`risk_plugins`
-  included), PAC (`pac_allocator`, `portfolio_allocation_source`) or signals (every `signal*`
+  included), PAC (`pac_allocator`, its planner source in `pac_allocator/source/` included) or signals (every `signal*`
   module), [rule 2](#layer-rules). Every import counts, a lazy one inside a function or one
   under `if TYPE_CHECKING:` included; the infrastructure (`fx`, `settings_service`,
   `data_quality_thresholds`, `utils`, `db`, `schemas`) and the layer's own modules stay

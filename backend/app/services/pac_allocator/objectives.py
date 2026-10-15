@@ -2,8 +2,8 @@
 
 Scope: PAC ``proportional`` policy, ``primary`` purpose only — the same
 scope as ``constraints.py`` (see that module's docstring and Step3
-§16.6/§16.9). Builds the exact cascade evaluator.py's ``_objective_value_map``
-uses for this purpose, confirmed from ``_build_objective_refs``/
+§16.6/§16.9). Builds the exact cascade ``evaluation/facts.py``'s ``objective_value_map``
+uses for this purpose, confirmed from ``evaluation/references.py``'s ``build_objective_refs``/
 ``_objective_codes``:
 
     fixed_l2 -> shortfall -> route_priority -> explicit_cost -> active_order_rows
@@ -16,7 +16,7 @@ Each builder returns an ``ObjectiveStage`` (a name plus the linear/quadratic
 SCIP expression to *minimize* for that stage). The actual lexicographic
 re-optimization loop (solve stage N, pin its optimum, move to stage N+1) is
 ``solver.py``'s job (Step3 Stage 3) — this module only produces the ordered
-list of stage expressions, mirroring ``_objective_value_map``'s formulas one
+list of stage expressions, mirroring ``objective_value_map``'s formulas one
 for one so that a stage's SCIP-reported value and the Decimal-exact replay
 value agree up to the float/exact projection error.
 """
@@ -37,7 +37,7 @@ from backend.app.services.pac_allocator.constraints import (
     planning_fx_rate,
     valuation_rate,
 )
-from backend.app.services.pac_allocator.evaluator import exact_decision_id
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import ExactOrderRoute, ExactPlannerScenario, ExactPolicyView
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
@@ -73,8 +73,8 @@ class ObjectiveInputs:
     single all-zero-candidate probe evaluation (``compiler.py``'s job to
     obtain, via the public ``evaluate_exact_candidate`` — never re-derived,
     since ``fixed_reference``/``target_value`` depend on ``_can_reach_buy``/
-    ``_source_reachability``, private reachability algorithms this module
-    must not duplicate).
+    ``source_reachability`` (``evaluation/reachability.py``), reachability algorithms
+    internal to the evaluator that this module must not duplicate).
     """
 
     target_value_by_asset: dict[str, float]
@@ -191,7 +191,7 @@ def build_explicit_cost_stage(model: Model, scenario: ExactPlannerScenario, fact
         total = total + execution_margin_loss
 
         for pool_currency in _buy_pool_currencies_for_route(scenario, facts, route, quote_currency):
-            # f"{route_id}:{currency}" mirrors evaluator._fx_debit_key exactly (private helper, re-derived not imported).
+            # f"{route_id}:{currency}" mirrors evaluation.keys.fx_debit_key exactly (an evaluator internal, re-derived not imported).
             fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
             debit_expr = facts.currency_quantum[pool_currency] * fx_decision
             effective_rate = planning_fx_rate(facts, pool_currency, quote_currency)

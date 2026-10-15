@@ -90,6 +90,7 @@ RISK_SERVICE_TEST_PATHS = (
 PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_exact.py",
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+    "backend/test_scripts/test_services/test_pac_planner_engine_boundaries.py",
 )
 PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
 PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
@@ -102,7 +103,7 @@ PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_pla
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
-    """Test exact PAC/Rebalancer primitives, models, and normalization."""
+    """Test exact PAC/Rebalancer primitives, models, normalization, and the engine's data boundary."""
     print_section("Services: PAC/Rebalancer Exact Core")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
     if test_names:
@@ -413,7 +414,7 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
-    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py")
     print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
@@ -485,7 +486,7 @@ def services_static_uploads(verbose: bool = False, test_names: list = None) -> b
 def services_brim_parse_error(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMParseError exception class."""
     print_section("Services: BRIM Parse Error")
-    print_info("Testing: backend/app/services/brim_provider.py (BRIMParseError)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (BRIMParseError)")
     print_info("Tests: Constructor, message/details attributes, exception hierarchy")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error.py", test_names)
@@ -495,7 +496,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -541,7 +542,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -551,7 +552,7 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
-    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
     print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
@@ -592,7 +593,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
-    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Testing: backend/app/services/pac_allocator/source/")
     print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
 
     cmd = _build_pytest_cmd(
@@ -973,7 +974,7 @@ Note: No backend server required.
         "pac-planner-core",
         services_pac_planner_core,
         name="PAC/Rebalancer Exact Core",
-        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping, typed issue precedence and the engine's data boundary (no database, no planner source)",
         isolation="pure",
     )
     add_test(

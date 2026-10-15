@@ -77,7 +77,7 @@ e vincoli, ma in produzione oracolo non deve MAI essere usato e si assume che la
 
 | Role | Path |
 |------|------|
-| Exact replay | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact replay | `backend/app/services/pac_allocator/evaluation/evaluator.py` |
 | Solver cascade and stage statuses | `backend/app/services/pac_allocator/solver.py` |
 | Proof objects | `backend/app/services/pac_allocator/proof.py` |
 | Replay rejection → `execution_failed` | `backend/app/services/pac_allocator/planner.py` |
