@@ -2637,6 +2637,20 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - KeePassXC prende come nome utente il campo subito prima della password, e in `RegisterCard` quel campo è Email.
   - Possibile cura: Email prima di Username, nella registrazione e nella pagina d'invito che usa la stessa scheda.
     Attenzione a T-8b dei colori, che tocca le stesse schede di accesso: si fa dopo il suo ingresso.
+- **A-18 · Il registro delle schede importa i corpi: ogni scheda nuova costringe a un `vi.mock` in più** — basso;
+  E-6, segnalato da E tramite il coordinatore (15/10).
+  - `settingsTabs.ts` importa il componente di ogni scheda. I test che usano il registro vero (`settingsTabs.test.ts`,
+    `routes/(app)/settings/page.tabs.test.ts`) devono rendere inerte ogni corpo con un `vi.mock`. Tocca B, E, X e A.
+  - **Opzione 1, caricamento pigro**: `load: () => import('…')` al posto di `component`; la pagina rende
+    `{#await tab.load()}`. In più ogni scheda da amministratore diventa un pezzo di JS separato. I test che leggono
+    solo id e ordini non importano più nessun corpo.
+  - **Opzione 2, registro senza corpi**: `settingsTabsMeta.ts` (id, etichetta, icona, ordine, `visible`, `props`,
+    `alignEnd`) più una mappa id → componente usata solo dalla pagina.
+  - **Non entra in A6b**: cambia il rendering della pagina e le asserzioni dei test di B ed E, e A6b è già validato.
+    Proposta: un lotto breve e coordinato, quando le schede di B, E e X sono tutte dentro, con
+    `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
+  - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
+    come `galleryEmail.ts`.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
