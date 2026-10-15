@@ -359,7 +359,7 @@ statement (37336 / 3224 / 91.36 %), 38 min 52 s → 31 min 03 s. The parallel pa
 by the serial WRITE-GLOBAL remainder, not by the balancing.
 
 Compare coverage **per file**, not on the total: the two live-network provider modules
-(`asset_source.py`, `borsa_italiana/plugin.py`) vary by a handful of statements between runs depending on
+(`services/assets/`, `borsa_italiana/plugin.py`) vary by a handful of statements between runs depending on
 what the remote site returns, so the total carries ~0.01 % of noise that would otherwise be
 indistinguishable from lost data. Every other module is reproducible exactly.
 

@@ -70,8 +70,8 @@ graph TD
 
 | Role | Path |
 |------|------|
-| FX API | `backend/app/api/v1/fx.py` |
-| FX service / abstract base | `backend/app/services/fx.py` |
+| FX API | `backend/app/api/v1/fx/` |
+| FX service / abstract base | `backend/app/services/fx/` |
 | FX providers | `backend/app/services/fx_providers/` |
 | DB model (FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | FX pages | `frontend/src/routes/(app)/fx/` |

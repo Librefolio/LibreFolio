@@ -214,10 +214,10 @@ transaction payload; the wizard never commits directly.
 | Full asset edit loader | `frontend/src/lib/components/assets/assetEditData.ts` |
 | Classification PATCH diff | `frontend/src/lib/components/assets/assetPayload.ts` |
 | Asset create/edit and nested modal orchestration | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| Backend classification PATCH semantics | `backend/app/services/asset_source.py` |
+| Backend classification PATCH semantics | `backend/app/services/assets/crud.py` |
 | BRIM routes and final duplicate endpoint | `backend/app/api/v1/brokers.py` |
 | BRIM DTOs and positive fake-ID range | `backend/app/schemas/brim.py` |
-| Local candidate matching | `backend/app/services/brim_provider.py` |
+| Local candidate matching | `backend/app/services/brim/brim_provider.py` |
 | Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
 | Bulk handoff, stable drafts, and display sorting | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Bulk issue mapping and chronological comparator | `frontend/src/lib/utils/transactions/bulkDisplay.ts` |

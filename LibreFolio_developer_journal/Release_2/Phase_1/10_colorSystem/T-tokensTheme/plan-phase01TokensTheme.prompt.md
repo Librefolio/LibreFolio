@@ -133,6 +133,12 @@ flowchart LR
 - Splash e palette di `offline.html` sui valori dei ruoli.
 - Il gate della meta di R: `PAIR` e (d) su `--lf-brand`.
 - Nuovo `staticThemeMirrors.gate.test.ts`.
+- **Il cricchetto e `themeStore.ts`** (coordinatore, 14/10 sera):
+  - nel merge di base di R, la sua correzione D3 (`#156534` → `#166534`) è entrata con
+    `--accept lib/stores/app/themeStore.ts --reason …D3…`, perché per il multinsieme m2 era uno scambio;
+  - in T-4 la coppia della meta cambia di nuovo (`#1b4334` nei due temi): stesso percorso, con un `--accept`
+    motivato D-T2 nel commit di T-4;
+  - da lì il gate `themeColorMeta` di R passa a T.
 
 ### T-5 · Sfondo del login, dopo l'ingresso di G
 
@@ -174,8 +180,8 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 
 | # | Contenuto | Stato |
 |---|---|---|
-| 1 | T-0, T-1 con il diff del CSS compilato | ✅ pronto il 14/10, FROZEN in attesa del commit |
-| 2 | T-2, poi integrazione subito: A aspetta | ⏳ |
+| 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `2018fd853`, integrato con `4e024dfe8` |
+| 2 | T-2, poi integrazione subito: A aspetta | ✅ pronto il 14/10, FROZEN in attesa del commit |
 | 3 | T-3 con la gallery completa | ⏳ |
 
 ## Avanzamento
@@ -246,3 +252,80 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 >   - il client API (`dev.py api sync`) e il catalogo i18n;
 >   - `backend/data/prod/`, creato dall'import in-process dell'app durante `api sync`;
 >   - `scripts/test_runner/.campaign.json`.
+>
+> **Checkpoint 1:** commit `2018fd853` del coordinatore, 12 file. Merge di base `4e024dfe8`, con il `793395913` della
+> 1.3. `dev_release2` = `4e024dfe8`, entrato con un fast-forward: il cricchetto vale per tutti dal 14/10 sera.
+
+### T-2 — ✅ 14/10/2026 (checkpoint 2)
+
+> **Note implementazione:**
+> - **Primitivi** (anche in `settings/PasswordChangeModal`, che li riusa):
+>   - `PasswordInput`: nuova prop `icon` (icona lucide decorativa, `aria-hidden`, `data-testid="<testId>-icon"`) e
+>     ruoli per campo, bordo, errore, focus e placeholder;
+>   - `PasswordStrength`: barra a 3 stati (D-T13); box dei requisiti sulla famiglia `success`
+>     (`data-testid="password-requirements"`); ogni regola con `data-testid="password-rule-<key>"` e `data-passed`;
+>     ✓ e ✗ restano, quindi l'informazione non dipende dal colore.
+> - **Card:**
+>   - `LoginCard`, `RegisterCard`: icone `User`, `Mail` e `Lock`, grigie, che diventano del colore del testo
+>     primario al focus (`group-focus-within`); card `bg-lf-card border-lf-subtle` (D-T14); testata `bg-lf-brand`;
+>     pulsanti `bg-lf-action` con l'hover vero (prima `hover:bg-opacity-90`, che in v4 non esiste); link
+>     `text-lf-link`;
+>   - nella `RegisterCard` via il sottotitolo; `dev.py i18n remove "auth.registerTitle" -f` nelle 4 lingue, poi
+>     `i18n check` strict verde (4.360 chiavi).
+> - **Con l'OK di A, solo classi colore:**
+>   - `ForgotPasswordCard`;
+>   - il link del caffè di `routes/+page.svelte`, ora `text-lf-donate` (avviso).
+> - **Di T:** `routes/+error.svelte`.
+> - **Cricchetto** (R5), 7 file in calo:
+>
+>   | File | m1 |
+>   |---|---|
+>   | Login | 20 → 0 |
+>   | Register | 28 → 0 |
+>   | Forgot | 17 → 4 |
+>   | `PasswordInput` | 10 → 0 |
+>   | `PasswordStrength` | 24 → 0 |
+>   | `+error` | 11 → 0 |
+>   | `+page` | 5 → 1 |
+>
+>   Più un `#ffffff` in meno in ciascuna card, il riquadro del logo ora su `bg-lf-logo`.
+> - **Restano legacy, di proposito:**
+>   - il blocco terminale di Forgot (`bg-gray-800 text-green-400`, scuro nei due temi): nessun ruolo «codice»,
+>     e A ne cambierà il contenuto con F13;
+>   - il «Loading…» di `+page.svelte`, fuori dalla barra in alto e quindi di A.
+>
+> **Evidenze:**
+> - **Test di `test-author`:**
+>   - `PasswordInput.test.ts` ed estensioni di `LoginCard.test.ts` e `RegisterCard.test.ts`: icone `aria-hidden`
+>     dentro il campo, nessun `auth.registerTitle`;
+>   - `PasswordStrength.test.ts`, nuovo: `data-passed` per regola, ✓ contro ✗, barra 0→4;
+>   - E2E `e2e/layout/theme-roles.spec.ts`, nuova, azione `front-utility theme-roles`: in chiaro e in scuro confronta
+>     card, bordo, campo, focus, placeholder, pulsante e box dei requisiti con il valore del ruolo risolto dal browser
+>     (una sonda per ruolo, nessun hex). In scuro prova le esenzioni di P1.
+> - **Esecuzioni nella corsia 6155**, in serie:
+>   - unità 149/149 (i 6 file toccati, gate compresi);
+>   - `theme-roles` 8/8 (desktop e mobile);
+>   - `auth` 29/29; `settings` 45/45 (la modale di cambio password riusa i due primitivi);
+>   - `component-unit` 3.162, `core-unit` 4.245, `onboarding-component-unit` 437, tutti verdi.
+> - **Controlli:**
+>   - `front check` 0/0; Prettier verde; `i18n check` strict verde;
+>   - `tsc -p tsconfig.e2e.json`: 2 errori, entrambi in file che T non tocca (`e2e/onboarding-tour.spec.ts`,
+>     `src/lib/types/files.ts`); nessuno nella spec nuova.
+> - **Cricchetto:** `--update` stringe la baseline, m1 11.435 → 11.325 e m2 1.785 → 1.782, solo i 7 file migrati;
+>   `--check` pulito.
+> - **28 scatti** in `files/T2-shots/` della sessione T:
+>   - login, login con focus, registrazione vuota, compilata e debole, password dimenticata, 404;
+>   - in chiaro e scuro, desktop 1280×800 e mobile 430×932;
+>   - lingua italiana, corsia 6155, build di debug del server.
+> - **Per la designer:**
+>   - in scuro lo sfondo del login è ancora quello vecchio (`#11151c`, colline `#00ff9a`), perché è di G fino al
+>     suo ingresso: va in T-5;
+>   - il terminale di Forgot resta ardesia;
+>   - il link del caffè in chiaro è `#895000` (avviso, 5,95:1), più bruno dell'arancio del render, che col colore di
+>     oggi era a 3:1.
+>
+> **⚠️ Fuori pista:**
+> - **Corsia nuova:** `/tmp/librefolio-r2-t` non esisteva. `test db populate --force --clean` sulla sola cartella
+>   della corsia, come prevede il piano (E2E e scatti). Lo snapshot del DB è in `.testLog/00_archive/`, ignorato.
+> - **Il server di test ricostruisce il frontend all'avvio** (api sync, check, build di debug): circa 2 minuti prima
+>   di rispondere.

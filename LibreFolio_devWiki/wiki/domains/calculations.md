@@ -86,8 +86,8 @@ No open problems in F-056, F-057 or F-058: they are implemented and correct. The
 | FIFO engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Financial math layer (rule and module map) | `backend/app/services/financial_math/__init__.py` |
 | Native cash (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
-| Currency conversion | `backend/app/services/fx.py` |
-| FX conversion API | `backend/app/api/v1/fx.py` |
+| Currency conversion | `backend/app/services/fx/conversion.py` |
+| FX conversion API | `backend/app/api/v1/fx/currencies.py` |
 | ROI utilities (TWRR/MWRR) | `backend/app/services/financial_math/returns.py` |
 | PAC allocator engine | `backend/app/services/pac_allocator/planner.py` |
 | DB models (Transaction, FxRate, FxConversionRoute) | `backend/app/db/models.py` |

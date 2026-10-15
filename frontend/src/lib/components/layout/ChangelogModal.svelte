@@ -14,7 +14,7 @@
     import {marked} from 'marked';
     import {onDestroy, tick} from 'svelte';
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
-    import AskAdminModal from '$lib/components/auth/AskAdminModal.svelte';
+    import AskAdminModal from '$lib/features/update-check/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {CHANGELOG_REMOTE_URL, baseLanguage, localizedChangelog, type ChangelogChapter, type ChangelogSection, type DisplayedChapter} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';

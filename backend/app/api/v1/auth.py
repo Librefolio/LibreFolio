@@ -27,16 +27,17 @@ from backend.app.schemas.auth import (
     UpdateProfileRequest,
     UpdateProfileResponse,
 )
-from backend.app.services import brim_provider, settings_service, user_service
-from backend.app.services.auth_service import (
+from backend.app.services.accounts import settings_service, user_service
+from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
     hash_password,
     verify_password,
     verify_password_or_dummy,
 )
-from backend.app.services.donation_popup_service import record_login_and_maybe_show_popup
-from backend.app.services.global_settings_service import get_session_ttl_hours, is_registration_enabled
+from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
+from backend.app.services.accounts.global_settings_service import get_session_ttl_hours, is_registration_enabled
+from backend.app.services.brim import brim_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -74,6 +75,27 @@ def get_session_cookie(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE_NAME)
 
 
+async def _session_ttl_hours(session: AsyncSession) -> int:
+    """The session lifetime from the global settings, or 24 hours when they cannot be read."""
+    try:
+        return await get_session_ttl_hours(session)
+    except Exception as e:
+        logger.warning("Failed to read session TTL from DB, using default 24h", error=str(e))
+        return 24
+
+
+def _issue_session_cookie(response: Response, http_request: Request, user: User, ttl_hours: int) -> None:
+    """Set the session cookie: a JWT of the account's current session version, lasting ``ttl_hours``."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=create_jwt_token(user.id, ttl_hours, user.session_version),
+        max_age=ttl_hours * 60 * 60,
+        httponly=SESSION_COOKIE_HTTPONLY,
+        samesite=SESSION_COOKIE_SAMESITE,
+        secure=session_cookie_secure(http_request),
+    )
+
+
 async def get_current_user(request: Request, session: AsyncSession = Depends(get_session_generator)) -> User:
     """
     Dependency to get current authenticated user.
@@ -84,19 +106,24 @@ async def get_current_user(request: Request, session: AsyncSession = Depends(get
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user_id = decode_jwt_token(token)
+    claims = decode_jwt_token(token)
 
-    if not user_id:
+    if claims is None:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
 
     # Fetch user from database using service
-    user = await user_service.get_user_by_id(session, user_id)
+    user = await user_service.get_user_by_id(session, claims.user_id)
 
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
     if not user.is_active:
         raise HTTPException(status_code=401, detail="User account is disabled")
+
+    # A password change or reset, a deactivation or a demotion raises the account's session version:
+    # a token of an earlier version is refused, whichever device holds it.
+    if claims.session_version != user.session_version:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
 
     return user
 
@@ -139,26 +166,7 @@ async def login(
     session.add(user)
     await session.commit()
 
-    # Get session TTL from global settings (with fallback)
-    try:
-        ttl_hours = await get_session_ttl_hours(session)
-    except Exception as e:
-        logger.warning("Failed to read session TTL from DB, using default 24h", error=str(e))
-        ttl_hours = 24
-
-    # Create JWT token with dynamic TTL
-    token = create_jwt_token(user.id, ttl_hours)
-
-    # Set session cookie (max_age in seconds)
-    cookie_max_age = ttl_hours * 60 * 60
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=token,
-        max_age=cookie_max_age,
-        httponly=SESSION_COOKIE_HTTPONLY,
-        samesite=SESSION_COOKIE_SAMESITE,
-        secure=session_cookie_secure(http_request),
-    )
+    _issue_session_cookie(response, http_request, user, await _session_ttl_hours(session))
 
     logger.info("User logged in", user_id=user.id, username=user.username)
 
@@ -242,13 +250,16 @@ async def register(request: AuthRegisterRequest, session: AsyncSession = Depends
 @router.post("/change-password", response_model=ChangePasswordResponse)
 async def change_password(
     request: ChangePasswordRequest,
+    response: Response,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
     """
     Change password for the currently authenticated user.
 
-    Requires the current password for verification.
+    Requires the current password for verification. Every other session of the account ends; this one
+    receives a new session cookie in the response, and carries on.
     """
     # Verify current password
     if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
@@ -259,12 +270,14 @@ async def change_password(
     if request.current_password == request.new_password:
         raise HTTPException(status_code=400, detail="New password must be different from current password")
 
-    # Update password
+    # Update password, and end every session of the account: this one gets a new cookie below.
     current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
+    user_service.end_sessions(current_user)
     session.add(current_user)
     await session.commit()
+    _issue_session_cookie(response, http_request, current_user, await _session_ttl_hours(session))
 
-    logger.info("Password changed", user_id=current_user.id, username=current_user.username)
+    logger.info("Password changed, other sessions ended", user_id=current_user.id, username=current_user.username)
 
     return ChangePasswordResponse(message="Password changed successfully")
 

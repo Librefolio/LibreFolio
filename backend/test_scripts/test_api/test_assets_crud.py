@@ -24,7 +24,7 @@ from backend.app.schemas import (
     FAinfoResponse,
     FASectorArea,
 )
-from backend.app.schemas.assets import FAAssetPatchItem
+from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
@@ -973,7 +973,7 @@ async def test_list_asset_providers(test_server):
             assert "volume_kind" in provider, "Provider should have 'volume_kind'"
 
         # Note: `mockprov` is intentionally hidden from the public /assets/provider
-        # list (see backend/app/api/v1/assets.py::list_providers). It remains usable
+        # list (see backend/app/api/v1/assets/providers.py::list_providers). It remains usable
         # internally by tests that reference it by code, but must NOT appear here.
         mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
         assert mock_provider is None, "mockprov must be hidden from the public provider list"
@@ -1674,7 +1674,7 @@ async def test_list_held_flags_read_positions_through_the_portfolio_dust_thresho
 # .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
 # params per subfield, not fully replace it: an unrelated field patch must
 # leave it alone, and an explicit null on one subfield must clear only that
-# subfield, never the whole block. See backend/app/services/asset_source.py
+# subfield, never the whole block. See backend/app/services/assets/crud.py
 # ~ patch_assets_bulk (prepared patch_dict + per-field merge loop).
 # ============================================================================
 

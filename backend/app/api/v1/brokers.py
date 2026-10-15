@@ -81,19 +81,19 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
-from backend.app.services import brim_gap_fix, brim_provider, brim_report_sets
-from backend.app.services.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
-from backend.app.services.broker_service import BROKER_NAME_RECOVERY, BrokerService
-from backend.app.services.file_preview import (
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
+from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_sets
+from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_report_sets import BRIMSetError, BRIMSetIncomplete
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
+from backend.app.services.files.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
-from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = get_logger(__name__)
 
@@ -692,7 +692,7 @@ async def get_brim_file_preview(
     """Get structured preview data for a BRIM file."""
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
@@ -764,7 +764,7 @@ async def download_file(
     """
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 

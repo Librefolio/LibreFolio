@@ -8,7 +8,7 @@ LibreFolio relies on a robust and segmented store architecture. Given the comple
 
 The Store Client System is divided into **5 Macro-Categories**, each with its own dedicated documentation page:
 
-1. **[App & UI State](app-state.md)**: Manages global UX elements (Authentication, Settings, Theme, Navigation, Toasts).
+1. **[App & UI State](app-state.md)**: Manages global UX elements (Authentication, Settings, Theme, Navigation, Toasts, Instance configuration and notices).
 2. **[Reference State](reference-state.md)**: Stores dictionaries and basic CRUD entities (Brokers, Assets, Currencies) synced with the backend.
 3. **[Domain & Feature State](domain-state.md)**: Heavy computational and business logic stores (Portfolio report cache, FX graph routing, Transaction ledger).
 4. **[Registries & Caches](registries.md)**: Dynamic stores that spawn sub-stores per entity (Asset Prices, FX Rates, Image Previews).

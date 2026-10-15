@@ -58,6 +58,15 @@ In Docker, `.env` reaches the container through `env_file`, and the `environment
 - 🌍 **`environment`**: the Docker-specific `LIBREFOLIO_DATA_DIR` (container path) and `HOST=0.0.0.0`; leave them as they are.
 - 🩺 **`healthcheck`**: polls `GET /api/v1/system/health` every 30 seconds.
 
+!!! tip "📈 Monitoring LibreFolio: `/api/v1/system/ready`"
+
+    The health check only tells Docker that the server answers. To know whether LibreFolio can actually serve requests, point a monitor such as **Uptime Kuma**, an orchestrator or a hosting panel at `GET /api/v1/system/ready`, for example `http://your-server:6040/api/v1/system/ready` (with your `PORT` if you changed it). It needs no sign-in, and the status code is all a monitor needs:
+
+    - **`200`**: ready. The database answers, and its structure matches this version of LibreFolio: `{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}`.
+    - **`503`**: not ready. `status` is `not_ready`, and `checks` shows what is not `ok`: `database` is `unreachable` when the database does not answer; `migrations` is `mismatch` when the database is at another migration than this version of LibreFolio expects, and `unknown` when it cannot tell, for example while the database is `unreachable`.
+
+    The answer never includes error details: LibreFolio writes them to its log (`docker compose logs librefolio`) as `Instance not ready`, once each time the state changes. `db current` shows the migration the database is at ([Apply Migrations](cli_tools.md#apply-migrations)).
+
 ### 💾 Data Directory: `LibreFolio-data/`
 
 A **bind mount** directory next to the Compose file, holding the SQLite database, custom uploads, broker reports and log files. It survives container stop, restart and removal, and you back it up straight from the host.

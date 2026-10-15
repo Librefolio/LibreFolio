@@ -206,8 +206,9 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 6. Testi e igiene: errori di rete al login in inglese (O-15), occhio della password
    (K-17), utenti E2E creati admin (L12). Se c'è spazio: «Novità dalla tua ultima
    versione» (C-54).
-7. Migrazione Alembic 005 (token e inviti, modalità di registrazione, versione del
-   token di sessione, `email_verified_at` già pronto per E).
+7. Migrazione Alembic 005 in A4, solo backend (tabella `account_tokens`, colonne nuove di `users`,
+   `email_verified_at` già pronto per E, `NULL` sugli utenti esistenti); 006 in A5, la conversione di
+   `enable_registration` in `registration_mode`, con il suo codice e la sua interfaccia (coordinatore, 15/10).
 
 ### X · Plugin, asset e ricerca
 
@@ -237,7 +238,7 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
      revisione di sicurezza a fine lavoro;
    - primo uso: justETF e Borsa Italiana con paese e valuta preferiti (feedback
      dell'utente C); traduzioni dei plugin montati a runtime se servono (U-B1);
-   - migrazione Alembic 006; dipendenza nuova `cryptography` (finestra delle dipendenze,
+   - migrazione Alembic 007; dipendenza nuova `cryptography` (finestra delle dipendenze,
      §6).
 4. Ordine dei fornitori nella ricerca (F21): priorità e livello (premium, community)
    dichiarati dal plugin e sovrascrivibili; premium in testa con badge; «Non lo trovi?
@@ -348,12 +349,12 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Profilo gestito (F05) | H, A, X | interruttore e sola lettura (H); popup, aggiornamenti, link, limite utenti (A); elenchi dei fornitori (X) | no | `LIBREFOLIO_PROFILE`, `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED`, `LIBREFOLIO_FX_PROVIDERS_ALLOWED`, `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_READ_ONLY` | pytest per ogni default e per la sola lettura su ogni metodo; Vitest dei link; E2E dell'avviso | medio |
 | Disclaimer e link legali (F09) | A | onboarding, login e registrazione, Informazioni, modello dell'AI Export | no | `LIBREFOLIO_TOS_URL`, `LIBREFOLIO_PRIVACY_URL` | Vitest; controllo del testo nell'export | piccolo |
 | Admin iniziale (F02) | A | servizi account, `auth.py`, pagina `/setup` | no | `LIBREFOLIO_ADMIN_EMAIL`, `LIBREFOLIO_ADMIN_USERNAME` (admin), `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN(_FILE)` | pytest: idempotenza, token monouso e scaduto | piccolo |
-| Inviti e utenti (F13) | A | servizi account, router utenti admin, scheda Utenti, pagina d'invito | sì (005) | `LIBREFOLIO_REGISTRATION=disabled\|invite\|open` | pytest del ciclo di vita dei token; Vitest; E2E invito → registrazione e reset | medio-grande |
+| Inviti e utenti (F13) | A | servizi account, router utenti admin, scheda Utenti, pagina d'invito | sì (005, 006) | `LIBREFOLIO_REGISTRATION=disabled\|invite\|open` | pytest del ciclo di vita dei token; Vitest; E2E invito → registrazione e reset | medio-grande |
 | Email (F04) | E | servizio email nuovo, modelli nelle 4 lingue, flussi di A | no (campi già in 005) | `LIBREFOLIO_SMTP_HOST`, `_PORT`, `_USER`, `_PASSWORD(_FILE)`, `_FROM`, `_TLS`, limite di invii | server SMTP finto; E2E del reset | medio |
 | Backup e ripristino (F01) | B | servizio di backup, `api/v1/backup.py` (oggi 501), avvio (ripristino in attesa), CLI, scheda Backup, guida | no | limite di caricamento per il ripristino; eventuale token per scaricare i backup (§10) | pytest: andata e ritorno, revisione vecchia e nuova, percorsi nell'archivio; E2E stessi totali | grande |
 | Litestream (F25) | B | `Dockerfile`, `entrypoint.sh`, doc Docker avanzato | no | destinazione della replica, credenziali (`_FILE`), chiave SSE-C facoltativa | prova Docker con replica su cartella o S3 locale; SIGTERM attraverso la catena | medio |
 | Avvio e risveglio (F07) | Z | scheduler, avvio, `wake-sync`, stato «Aggiornamento prezzi…» | no | `LIBREFOLIO_WAKE_TOKEN(_FILE)`, jitter, attesa sui 429, tempo massimo di spegnimento | pytest del prossimo orario (fusi e ora legale), spegnimento entro il limite; E2E dello stato | medio |
-| Impostazioni dei plugin | X | contratti delle famiglie, archivio delle impostazioni, API, zona in Impostazioni, «Configura» | sì (006) | sovrascritture per campo da variabile o `*_FILE` | pytest: scope, cifratura, segreti mai restituiti, blocco da env; Vitest del modulo generato; E2E | grande |
+| Impostazioni dei plugin | X | contratti delle famiglie, archivio delle impostazioni, API, zona in Impostazioni, «Configura» | sì (007) | sovrascritture per campo da variabile o `*_FILE` | pytest: scope, cifratura, segreti mai restituiti, blocco da env; Vitest del modulo generato; E2E | grande |
 | Ordine dei fornitori (F21) | X | contratto dell'asset, ricerca in streaming, `AssetSearchAutocomplete`, `AssetModal` | no | eventuale priorità da configurazione | pytest dell'ordine; Vitest dei gruppi; E2E della ricerca | medio |
 
 ## 6. Regole comuni
@@ -402,8 +403,9 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
   di `dev.py api schema`.
 - **C6 — devWiki.** Le tabelle «Source files» le aggiorna la sessione che sposta i file, nello stesso lotto;
   `check_source_paths.py` non deve peggiorare.
-- **C7 — Migrazioni.** 005 di A (account e inviti), 006 di X (impostazioni dei plugin), poi le correzioni dei dati di
-  W. Chi integra dopo riallinea `down_revision` all'aggiornamento di base.
+- **C7 — Migrazioni.** 005 e 006 di A (A4: token e colonne degli utenti; A5: `registration_mode`), 007 di X
+  (impostazioni dei plugin), poi le correzioni dei dati di W. Chi integra dopo riallinea `down_revision` all'aggiornamento
+  di base, e se entra prima di una migrazione con il numero più basso prende quel numero (coordinatore, 15/10).
 
 ### Superfici condivise: un solo scrittore
 
@@ -415,7 +417,7 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Scheduler | H lo sposta, poi è di Z |
 | Registro delle schede di Impostazioni | A; B e X aggiungono la loro scheda con una riga |
 | File Docker | H fino al lotto operativo, poi B |
-| Catena delle migrazioni Alembic | ordine assegnato dal coordinatore: 005 A, 006 X; chi integra dopo rimette `down_revision` all'aggiornamento di base |
+| Catena delle migrazioni Alembic | ordine assegnato dal coordinatore: 005 e 006 A, 007 X; chi integra dopo rimette `down_revision` all'aggiornamento di base |
 | Client API generato | rigenerato con `./dev.py api sync` da chi integra, mai unito a mano |
 | Cataloghi i18n | ognuno scrive solo le sorgenti del proprio sottosistema; i cataloghi generati si ricostruiscono |
 | Catalogo del runner dei test | ognuno le voci del proprio dominio, in aggiunta; i test speculari (TS1), se decisi, a H |
@@ -531,6 +533,12 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
+- **Avvisi di merge: file del programma colori** (richiesta del coordinatore colori, 15/10). Ogni avviso di merge in
+  `dev_release2` elenca i file toccati sotto `scripts/visual_review/`, `frontend/scripts/theme/`,
+  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts`, `scripts/test_runner/_frontend_utility.py` e
+  `Phase_1/10_colorSystem/`, anche quando cambia solo un commento: G, R e T li modificano nei loro checkpoint. Prima
+  dell'avviso, il coordinatore 1.3 li cerca con `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `_frontend_utility.py` si è aggiunto il 15/10, dopo A3, su richiesta del coordinatore colori.
 - **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
   della 1.3 blocchi il tag.
   - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
@@ -548,8 +556,8 @@ fermati all'handoff, porta verificata libera.
 
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
-  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | nessuno |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | nessuno |
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | **X, FE5b (`AssetModal`), dal 15/10 alle 08:20** (via libera del coordinatore colori; m1 214, nessun letterale). La pagina (FE5c) dopo il lotto di Z sul polling |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
   | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
@@ -754,3 +762,399 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > Programma colori: finestra della galleria domani, 15/10, dalle 09:00, per circa 2 ore. Nella finestra, niente suite
 > complete né build pesanti nelle corsie della 1.3; inizio e fine li conferma il coordinatore colori. G-8 (catalogo dei
 > Tool oltre i 2 s sotto carico, `schemas/tools.py:83`) va a J, dopo il suo primo checkpoint.
+
+### Primo treno: A1 integrato ✅ (2026-10-15, 00:40)
+
+> **Note implementazione**:
+> - checkpoint committati sui rami dei figli:
+>   - J-0 (`faa8ce01b`);
+>   - A1 (`b53dfd705`, `fc66f19c8`, validazione `29ee87484`);
+>   - W CP1 (`9a44bdcec`, `64e3d0a7d`);
+>   - H CP1 (`a52018fd7`, `7366c0355`).
+> - Ogni base misurata con `all-backend`: 12 965 passati, 28 saltati.
+> - Entra per primo A1, il primo validato sulla revisione combinata con `dev_release2` (T-1, T-2, G). Merge
+>   `769cc31cb`, albero uguale alla simulazione, codice identico alla revisione validata.
+> - H segue: l'aggiornamento di base è aperto con 6 conflitti d'import, che H risolve nel suo worktree.
+>
+> **Fuori pista**:
+> - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
+>   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
+> - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
+> - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
+>
+> **Aggiornamento (00:55)**: entra anche H CP1 (`6a605904c`). Prima l'aggiornamento di base con A1: H ha risolto 6
+> conflitti d'import e rivalidato (`all-backend` uguale alla base). Il CP2 di H si divide:
+> - CP2a: pacchetto `config/`, letture d'ambiente e `api/v1/system/`, senza tagliare `main.py`;
+> - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
+>
+> Così CP3 (segreti) e CP4 (configurazione pubblica) non aspettano più la release.
+
+### Riordino del backend: sette lotti integrati ✅ (2026-10-15, 02:20)
+
+> **Note implementazione**: in `dev_release2`, nell'ordine:
+> - A1 (`769cc31cb`);
+> - H CP1 (`6a605904c`);
+> - A2, il frontend in `lib/features/` (`76e61889b`);
+> - W1 e W2, transazioni e broker per tema (`998fd2701`);
+> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`60f8a35ce`);
+> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`64a5a3fe7`).
+>
+> Ogni ingresso dopo un aggiornamento di base e la validazione della revisione combinata nel worktree del figlio:
+> - `all-backend` uguale alla base, più i test nuovi;
+> - `api schema` invariato;
+> - ricerca dei vecchi percorsi a zero;
+> - per X, anche la ricerca degli import vecchi che si fondono senza conflitto.
+>
+> **Fuori pista**:
+> - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
+> - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.
+
+### W I1, integrità, integrato ✅ (2026-10-15, 03:01)
+
+> **Note implementazione**: `dc7e4e48e`, merge di `625e3dacc` su `ae998da78`. Il commit è creato con `git commit-tree`
+> sull'albero della simulazione (`1153296e3`), così l'avviso al coordinatore colori porta già lo SHA; poi
+> `merge --ff-only`. Validazione di W sulla revisione combinata `123c21efc`:
+> - `all-backend` 13 458 passed, 28 skipped, 0 failed;
+> - `api schema` cambia solo `asset_event_id` di `GET /api/v1/transactions`.
+>
+> CHANGELOG `[Unreleased]` aggiornato; chiuse V-23, C-79, la ricerca inversa di C-65, L5 e C-3; W-B9 nella sezione X.
+>
+> **Fuori pista**: due avvisi di aiosqlite sotto carico in un test dell'AI Export, non rossi: C-93, a J.
+
+### A3, schede di Settings e accesso, integrato ✅ (2026-10-15, 03:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `90491071d` (A3 `755eaa27d` e journal, base aggiornata con
+> W I1 in `d851c39bc`). Registro delle schede di Settings, O-15 (errori di login come chiavi di catalogo), K-17
+> (`PasswordInput` da tastiera, nome tradotto), L12 (`user_cli.py create-user`, `dev.py user create … --role`).
+> Validazione di A:
+> - revisione `35f1e0a16` completa: `all-backend` 13 440 passed, 28 skipped, 0 failed; E2E auth 29, settings 45,
+>   app-start-auth 3, onboarding-guides 24;
+> - revisione `d851c39bc` mirata dopo W I1: build e `front check` 0/0; core-unit 4 261, component-unit 3 192;
+>   `theme-roles` pulito; `check-orphans` 265 file backend; `dev-cli-image` 39, `gate-event-loop-io` 14; E2E auth
+>   29, settings 45, `tx-broker-access` 5.
+>
+> Chiusure di O-15, K-17 e L12 nel README del 38, scritte da A; CHANGELOG con tre righe. Il controllo di L12 sul DB
+> di test popolato: `populate_mock_data.py` crea già come utenti normali tutti tranne `e2e_test_admin`, e nessuna
+> spec entra come alice…eve.
+>
+> **Ordine dei prossimi ingressi** (deciso dal coordinatore, 15/10 03:25): X CP2b prima di J CP-1. X ha la coda
+> più lunga (CP3 e CP4, e gli eventi che passano a W), mentre il CP-2 di J aspetta comunque le decisioni del
+> developer. La risoluzione statica degli import sull'albero combinato X + W I1 + A3 + J dà 0 irrisolti su 9 459
+> nomi; J valida poi una sola volta, sopra X.
+
+### H CP3, segreti e chiave d'istanza, integrato ✅ (2026-10-15, 03:50)
+
+> **Note implementazione**: `d08d9358f`, merge di `751bf9ab3` su `ed29f77c2`. Quattro commit di H: due correzioni in
+> commit separati (`8f9e8f018`, un segreto vuoto o di soli spazi vale come assente; `7640313a4`, una corsia di test
+> usa segreti suoi), poi CP3 (`54fd32def`: `env_secret()` con `*_FILE`, chiave d'istanza e `derive_key`, controlli
+> all'avvio, `.env.example` completo) e il journal. Aggiornamento di base `751bf9ab3` con X CP1/CP2a, W I1 e A3: due
+> conflitti additivi risolti da H (`main.py`, `test_dev_cli_image.py`). Validazione di H sulla revisione combinata:
+> `all-backend` 12 125 passed, 3 skipped, 0 failed; `api schema` invariato; `config-package` 475.
+>
+> **Ordine**: H era pronto prima di X, quindi entra prima; X lo assorbe con un controllo leggero (guardia delle
+> letture d'ambiente sui suoi moduli nuovi, raccolta, `api schema`). La run completa sulla combinazione X + H la fa
+> J, che aggiorna la base sopra tutti e due.
+
+### X CP2b, asset per tema e router per risorsa, integrato ✅ (2026-10-15, 04:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `92b42d796`. CP2b è `870c9956f` (124 file): rinomina pura
+> `schemas/assets.py` → `schemas/assets/assets.py` (R099, l'unica coppia di git) e tagli nello stesso commit (§6,
+> opzione 1); `services/assets/core` → `base` + `core`, `price_store` → `price_store` + `currency_change` +
+> `event_store`, `api/v1/assets.py` → pacchetto per risorsa, schemi degli eventi in `schemas/assets/events.py`.
+> Controllo indipendente del coordinatore sull'AST: definizioni spostate identiche, salvo docstring, percorsi e 6
+> richiami a `EventStoreOperations`; 50 file con soli import, 8 rivisti a mano. Validazione di X: revisione
+> `eb245b624` (con W I1 e A3) `all-backend` 13 476 passed, 28 skipped, 0 failed; 139 rotte e `api schema`
+> identici; poi, sopra H CP3 (`92b42d796`), controllo leggero: guardia 485 (+10, i moduli nuovi), raccolta, schema
+> e rotte identici.
+>
+> Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
+> 15/10. Le impostazioni dei plugin di X diventano la migrazione 007.
+
+### W K1, chiarezza, integrato ✅ (2026-10-15, 04:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `d915c869f` (K1 `532a1fd9c`, base aggiornata con A3, H CP3
+> e X CP2b in `1d1c7e67d`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
+> titolo), P-15 parte W e W-B8 (testi tradotti dell'editor dei dati). I-10 S3 chiusa senza codice, per decisione del
+> coordinatore: il contratto documentato permette di cancellare gli eventi automatici. Validazione di W sulla
+> revisione combinata: build 0/0, `i18n check` stretto, `core-unit` 4 266, `component-unit` 3 198, `tx-unit` 887,
+> `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
+> Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
+>
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
+
+### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
+> di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
+> eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
+> passed, 3 skipped, 0 failed sulla sua base; sopra X CP2b, controllo leggero (guardia 540 = 530 + 12 − 2, raccolta,
+> `api schema`, `mkdocs build` stretto). Le note su `web_link_finder` per X le gira il coordinatore.
+
+### J CP-1, il PAC per tema, integrato ✅ (2026-10-15, 04:35)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e1fbc801f`. CP-1A (rinomina) e CP-1B (taglio del PAC e
+> guardia dei confini D-J18, allargata a `sqlmodel` e `backend.app.db`), poi quattro aggiornamenti di base. Sulla
+> revisione `b17f8fb85` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
+> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`b8d604086`,
+> con W K1 e il lotto di H) un controllo leggero: guardia 567, raccolta +61, API identica.
+>
+> **Strumenti nuovi per i merge**, scritti da J: `patch_effect.py` (bersagli di `patch`/`monkeypatch` che nessuno
+> legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
+> risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
+> nella sezione C; C-93 non si è ripresentato.
+
+### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
+> plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
+> tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
+> `brokers.py` e `uploads.py`; intanto W7 e K2.
+
+### A4, migrazione 005 e token monouso, integrato ✅ (2026-10-15, 05:20)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e476d2ed4` (A4 `75a8af5a7`, base aggiornata con H CP3,
+> X CP2b, W K1, il lotto di H, J CP-1 e W4 in `3ebf4c043`). Migrazione 005 (`005_accounts_invites`, dopo la 004):
+> tabella `account_tokens` (solo lo SHA-256, uno scopo per token, scadenza, consumo e revoca) e tre colonne di `users`
+> (`session_version`, `email_verified_at` a `NULL` senza riempimento, `last_seen_version`), con `ALTER TABLE` semplice:
+> un batch ricostruirebbe `users` e con `foreign_keys=ON` cancellerebbe a cascata. `token_service` con consumo atomico.
+> Validazione di A sulla revisione combinata: `all-backend` 13 960 passed, 28 skipped, 0 failed; `db migration-005`
+> 25, `account-tokens` 64, `config-package` 568. Prima del commit il coordinatore ha corretto un'attribuzione: la
+> scelta su `email_verified_at` è sua, non del developer. Nessuna riga nel CHANGELOG: non c'è ancora niente di
+> visibile. Poi A4b, la versione di sessione `sv` (D-A17).
+
+### X CP3, i cambi per tema, integrato ✅ (2026-10-15, 05:30)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `8000aba5a`. CP3 `b991d5e26` (PL4): `services/fx/fx.py` →
+> `base`, `storage`, `conversion`, `sync`; `api/v1/fx.py` → `api/v1/fx/` (`providers`, `currencies`). Nessuna rinomina
+> a −M95 %. Controllo del coordinatore sull'AST: 32/32 e 20/20 definizioni identiche. Validazione di X: run completa
+> sulla revisione con J CP-1 e W4 (`d1ef3ddeb`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
+> `api schema` identici. Sopra A4 (`9a3ba752a`) controllo leggero: guardia 573, raccolta e schema identici.
+>
+> **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
+> solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
+> X-R8, proposta: cache di 24 ore dell'elenco delle valute dei fornitori, con l'ultimo elenco noto in caso d'errore.
+
+### W7, gli schemi delle transazioni come pacchetto, integrato ✅ (2026-10-15, 05:40)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1cd7300f3`. Due commit, perché il nucleo resta sotto la
+> soglia di somiglianza di git: W7a `00a19bf72`, la rinomina pura (`R100`) di `schemas/transactions.py` in
+> `schemas/transactions/transactions.py`; W7b `e28aad42f`, il taglio in `batch`, `event_suggest`, `promotion` e
+> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`304e6d176`)
+> `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
+> e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
+> coordinatore su `brokers.py` e `uploads.py`.
+
+### X CP3b, test dei cambi senza rete, integrato ✅ (2026-10-15, 06:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `63a1f675c` (CP3b `cea5ce859`). W-B9: il contratto e i
+> filtri dei fornitori di cambi provati su FED e BOE, che hanno elenchi statici; la SNB va anch'essa in rete, quindi
+> resta con la BCE in `test_external` (scostamento motivato dalla decisione delle 05:20, che citava anche la SNB).
+> W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
+> Validazione di X: `api fx` 21/21 anche senza rete; raccolta identica sopra W7. W-B15 (un selettore per testo in una
+> spec di W) nella sezione di W; X-R9 con il FE4.
+
+### J C-93, connessioni aiosqlite lasciate aperte, integrato ✅ (2026-10-15, 06:05)
+
+> **Note implementazione**: `c412f8dad`, merge di `3a03a1b2c` su `c81670354`. Causa trovata con la skill
+> `test-triage`: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite, e un GC in un thread con un loop corrente
+> chiuso ne uccideva il thread di lavoro; pytest attribuiva l'avviso al test in corso, estraneo. Curato nei test.
+> Validazione di J sulla revisione con A4, X CP3 e W7: `services ai-export` 1 025, raccolta +4; prima `all-backend
+> --workers 2` con la sonda: 0 connessioni aperte. **Senza nuovo controllo di J** dopo X CP3b: nessun file in comune
+> salvo il backlog, test da entrambe le parti, controlli statici del coordinatore puliti.
+>
+> J-5 (un loop chiuso lasciato come corrente in `services/assets/core.py`) passa a X, dopo il CP4; J-6 (una guardia
+> di suite per le connessioni aperte) a J, dopo G-8.
+
+### H CP4, `/system/instance` e area degli avvisi, integrato ✅ (2026-10-15, 06:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1b3eb54c7`. Cinque commit di H: la rinomina pura
+> `api/v1/system.py` → `api/v1/system/__init__.py` (`c43ea0460`, R100), il taglio per risorsa (`27a29af09`, 16/16
+> definizioni identiche al controllo del coordinatore), l'endpoint pubblico `GET /api/v1/system/instance` con
+> `LIBREFOLIO_PROFILE` (`42af16d54`), lo store `instanceConfig`, il registro e l'area `InstanceNotices` nel layout
+> (`2069c75cd`), il journal. Validazione di H sulla revisione con J CP-1, W4 e A4: E2E 181 verdi (comprese le spec che
+> contano le richieste), `all-backend` 12 343 passed, 3 skipped, 0 failed; senza avvisi l'area non disegna niente, e
+> la galleria resta invariata. Sopra X CP3, W7, X CP3b e J C-93: controllo leggero (guardia 584, raccolta, `api
+> schema` con il solo endpoint nuovo, build e `core-unit`). CHANGELOG con l'endpoint; `LIBREFOLIO_PROFILE` con CP6.
+
+### J G-8, il catalogo dei Tool sotto carico, integrato ✅ (2026-10-15, 06:30)
+
+> **Note implementazione**: `c75f08101`, merge di `47e0f9eec` su `6d67fdaac` (fix `6ce5ea180`). FastAPI risolve
+> `get_current_user` prima che l'endpoint sposti la scadenza, quindi il login del catalogo girava dentro la finestra
+> d'ingresso di 2 s: sotto carico 503. Le rotte senza corpo partono con il loro budget di 20 s; il compute tiene la
+> finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
+> tocca il router dei Tool. Entra prima della galleria delle 09:00, così la misura finale di G ne tiene conto; la
+> riga G-8 nella sezione G è chiusa dal coordinatore. CHANGELOG con una riga in «🐛 Fixed».
+
+### X CP4, gli schemi degli asset per tema, integrato ✅ (2026-10-15, 06:40)
+
+> **Note implementazione**: `7f4618494`, merge di `805f2f112` su `78043417` (CP4 `b31ae0fce`). `schemas/assets/assets.py`
+> (1 001 righe, l'unico modulo di schemi di X sopra la soglia di C3) cede `metadata.py` e `scheduled_investment.py`;
+> via l'`__all__` che faceva da barile. Controllo del coordinatore sull'AST: 49/49 nomi identici. Validazione di X:
+> `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
+> in comune con J C-93, H CP4 e J G-8, controlli statici del coordinatore puliti. `schemas/fx.py` e gli altri restano
+> interi, sotto soglia. Poi J-5 e X-R8.
+
+### W K2a, rifiuti a codice e L6, integrato ✅ (2026-10-15, 06:50)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `62c964242` (K2a `0eac8e1b6`, base aggiornata con J C-93,
+> H CP4, J G-8 e X CP4 in `388a20f65`). C-70 parte a: DEGIRO e il Generic CSV rifiutano con codici tradotti nel
+> wizard (7 chiavi `importWizard.parseRefusal.*`); L6: il 400 del parse nomina plugin e file con i nomi visibili.
+> Validazione di W: `all-backend` 14 027 passed, 28 skipped, 0 failed sulla base `58be885a9`; sopra il fuso, controllo
+> leggero con le E2E `tx-import-broker-mismatch` e `tx-import-degiro` sul layout nuovo di H. CHANGELOG con due righe.
+> C-95 nuova (l'albero degli schemi nelle istruzioni). W prepara E1 in sola lettura; K2b, CP7, W3 e W5–W6 aspettano
+> un commit del coordinatore su `brokers.py` e `uploads.py`.
+
+### A4b, versione di sessione, integrato ✅ (2026-10-15, 07:05)
+
+> **Note implementazione**: `dbf89cdd5`, merge di `3d6ecb2fe` su `e7cf1ae80` (A4b `3ac4114d5`, decisione D-A17). Il
+> JWT porta `sv`, la versione di sessione dell'account; un token senza `sv` vale 0, quindi l'aggiornamento non
+> disconnette nessuno. Il cambio della password alza la versione e riemette il cookie del dispositivo corrente; un
+> reset da CLI, una disattivazione o un declassamento la alzano. A-3 chiusa (bcrypt in un thread); la voce «🔑
+> Sessioni» passa da `TODO_FUTURI.md` a `TODO_Completati.md`. Validazione di A sulla revisione con X CP3, W7, X CP3b,
+> J C-93 e H CP4: `all-backend` 14 046 passed, 28 skipped, 0 failed; E2E auth 29, settings 46, con un test nuovo che
+> invia davvero il cambio password e prova il secondo dispositivo. **Senza nuovo controllo di A** dopo J G-8, X CP4 e
+> W K2a: nessun test nuovo conia token (quelli dei Tool sostituiscono `get_current_user`); `models.py`,
+> `TODO_FUTURI.md` e il backlog si fondono da soli; controlli statici puliti. CHANGELOG con due righe in «🔄 Changed».
+
+### X J-5, il loop chiuso nel thread dei fornitori, integrato ✅ (2026-10-15, 07:20)
+
+> **Note implementazione**: `743fca514`, merge di `cb0bac88d` su `ee5d81a6f` (J-5 `7794e2fb0`). Una riga in
+> `services/assets/core.py`: `asyncio.set_event_loop(None)` prima di `loop.close()`, come `asyncio.Runner.close()`;
+> un test di test-author, rosso prima e verde dopo. Validazione di X: `all-backend` 14 003 passed, 29 skipped,
+> 0 failed sulla base `786f3e216` (lo skip in più è lo scraper CSS di Borsa Italiana a mercato chiuso). Senza nuovo
+> controllo di X: con W K2a e A4b condivide solo il backlog; controlli statici puliti. Niente CHANGELOG: non si
+> vede da fuori. Poi X-R8 (cache di 24 ore degli elenchi delle valute dei fornitori).
+
+### B, Backup e Docker, avviata in sola analisi (2026-10-15, 07:10)
+
+> **Note implementazione**: sessione `5618ecee`, worktree `e-alfy-miniature-telegram`, corsia 6187 +
+> `/tmp/librefolio-r13-b`, base `ee5d81a6f` (fast-forward da `origin/dev_release2`, file dell'agente presente).
+> Condizione del §4 soddisfatta: segreti e configurazione di H sono in `dev_release2` dal CP3. Nodi affidati
+> all'analisi: i segreti nello zip (specifica F01, D-X2, note di H-3), dove vive il backup dell'istanza rispetto agli
+> export per asset di `backup.py`, l'aggancio all'avvio dopo il CP2b di H, le decisioni 6–9 del §10, come si prova
+> lo scambio all'avvio. E parte dopo il checkpoint A5a (inviti), Y dopo il lotto B dei colori.
+
+### H CP5a, prontezza e versione, integrato ✅ (2026-10-15, 07:30)
+
+> **Note implementazione**: `9deb0ea08`, merge di `5d1242ae5` su `4fdc0d9c5`. Commit di H: `e8ceda504`
+> (`GET /system/ready`: 200 se il DB risponde ed è alla head delle migrazioni, 503 altrimenti, un codice per
+> controllo; `/system/info` senza sessione risponde solo `app_version`, decisione 15), `6e78b8c96` (R2: in un checkout
+> vince `git describe`; prima di tutto `LF_APP_VERSION`, come in `vite.config.ts`; `pyproject.toml` a 0.0.0, metà di
+> C-84), `d80c0a091` (la head delle migrazioni si legge in un thread, non nel ciclo di eventi: correzione chiesta dal
+> coordinatore all'handoff), più i log. Base aggiornata con G-8, X CP4, W K2a e A4b in `cf6f08856`. Validazione di
+> H: `all-backend` 12 436 passed, 3 skipped, 0 failed sulla base `6d67fdaac`; sopra il fuso, controllo leggero
+> (`platform-readiness` 14, `api system` 116, `api auth` 60, `session-revocation` 3, `utils version` 51,
+> `config-package` 592, `config-env-example` 36, `check-orphans`, `mkdocs build` stretto, `check-links` 95; `api
+> schema` con le sole aggiunte di CP5a). X J-5 entrato nel frattempo tocca solo file di X: niente nuovo controllo.
+> Il client generato non è versionato: si rifà alla prossima build in ogni corsia (avvisato il coordinatore colori).
+> CHANGELOG con tre righe; R2 chiusa (sezione 09 e piano d'origine), C-84 per metà; H-5 nuova (debito di
+> traduzione delle pagine admin). Note per gli altri: a Z, per Z2, `/system/ready`, `/system/health` e `/system/info`
+> anonimo non contano come attività dell'utente; ad A, `signed_in_user` chiama `get_current_user` direttamente, quindi
+> un override in `dependency_overrides` non arriva a `/system/info`. Poi CP5b dopo la finestra della galleria, e CP6.
+
+### J-6, guardia di suite sulle connessioni aiosqlite, integrato ✅ (2026-10-15, 07:40)
+
+> **Note implementazione**: `e2cb55054`, merge di `e6016fca7` su `2c699f85c` (J-6 `b49a54645`). Una fixture
+> autouse nel `conftest.py` condiviso: un test che lascia aperta una connessione aiosqlite creata da lui, nel thread
+> principale, va in ERROR al proprio teardown, con lo stack di creazione. Elenco delle eccezioni esplicito e vuoto;
+> self-test in `utils gate-aiosqlite-leak` (9). Base aggiornata dal coordinatore in `c7a2b050e`, con un conflitto nel
+> backlog (la chiusura di J-5 accanto a J-6) risolto tenendo le due righe. Validazione di J sul fuso: `all-backend
+> --workers 2` 14 199 passed, 29 skipped, 0 failed, nessun rapporto della guardia; raccolta +9, i soli self-test.
+> Senza nuovo controllo: dopo la validazione sono entrati solo la versione fissata nelle gallerie e i record. La
+> regola è la n. 7 di `.github/instructions/backend-testing.instructions.md`, con il testo proposto da J. Fragilità
+> segnalata da test-author: cinque file dell'AI Export creano motori in memoria senza `dispose()`; passano perché non
+> eseguono SQL, e se un giorno lo faranno la guardia nominerà il test. Niente CHANGELOG: è interno ai test. Il lavoro di
+> J autorizzato dopo il CP-1 è chiuso (C-93, G-8, J-6); CP-2 e seguenti aspettano le decisioni 26–30.
+
+### W E0 committato, FE8a annunciato (2026-10-15, 07:55)
+
+> **Note implementazione**: E0 (`692fbae39`: eventi distinti per data e tipo nel CSV e nel selettore della data,
+> X-R9, W-B15), base aggiornata in `2bf015afa`; entra dopo la finestra della galleria. FE8a (tagli delle tre modali
+> delle transazioni) annunciato al coordinatore colori, che ha dato via libera: nessun loro annuncio aperto, T li
+> converte nell'ondata W4 sui pezzi già tagliati. Annuncio aperto nella tabella del §7 (`2c699f85c`).
+
+### B, analisi consegnata; punti 38–43 per il developer (2026-10-15, 08:05)
+
+> **Note implementazione**: analisi di B (13 sezioni, nella cartella della sessione `5618ecee`, `plan.md`; andrà in
+> `07_backupDocker/` al primo via). Zip con la forma della cartella dei dati (`VACUUM INTO`, elenco d'inclusione
+> esplicito, `manifest.json`); ripristino sempre su una copia (revisione più nuova o sconosciuta rifiutata, più
+> vecchia migrata sulla copia), conferma con backup automatico, scambio per rinomine all'avvio con giornale e ritorno
+> indietro, uscita ordinata; sessioni chiuse; Litestream v0.5 spento finché la variabile è vuota. Nessuna migrazione,
+> nessuna dipendenza nuova con la busta cifrata (`cryptography`, già nella finestra di X). Lotti B0–B9 più la
+> revisione finale; percorso minimo per il cloud B1 → B2 → B3 → B5 (+B4) → B7. Scelte per il developer nei punti
+> 38–43 del file delle decisioni; quelle di coordinamento lì sotto: B0 (divisione di `backup.py`) entra prima di E1
+> di W; `backup_service.py` → `series_export.py`; prova «stessi totali» in un sottoprocesso; M-1 alla fine.
+> Richieste a H (passi d'avvio di CP2b, percorsi dell'isolamento, funzioni di `instance_key.py` per H-3), ad A (una
+> riga nel registro delle schede), a X (ricifratura nel CP10), a J (totali di controllo in sola lettura): le gira il
+> coordinatore al via. B resta in modo piano, fermo, senza messaggi accodati.
+>
+> **Fuori pista**: nel file delle decisioni la riga delle migrazioni (§3) diceva ancora «la 006 delle impostazioni dei
+> plugin»: riallineata alla C7 (005 e 006 di A, 007 di X).
+
+### W E0, gli eventi per data e tipo, integrato ✅ (2026-10-15, 07:51)
+
+> **Note implementazione**: `d226bc69e`, merge di `2326624c1` su `989991f78` (E0 `692fbae39`). `CsvColumnDef.matchKey`:
+> nel CSV degli eventi due righe sono doppioni solo con la stessa data e lo stesso tipo (la riga 38 di
+> `EventDataImportModal.svelte`, di X, scritta da W col via del coordinatore); il selettore della data blocca solo i
+> giorni con un evento dello stesso tipo. Più i due test-id di X-R9 in `DataImportModal.svelte` e W-B15. Validazione
+> di W sul fuso `2bf015afa`: build, `core-unit` con la guardia dei colori, `component-unit`, E2E `asset-data-editor`,
+> `fx-csv-import`, `fx-editor`, `tx-bulk-operations`, `mkdocs build` stretto. Entrato prima della finestra della
+> galleria, su richiesta del coordinatore colori, così R, L e T non devono rifondere; dopo la validazione erano entrati
+> solo la guardia di J-6 e dei record, nessun file frontend. CHANGELOG con una riga; chiuse I-11 a e d (README del 38)
+> e W-B15; X-R9 fatta per la parte di W (restano a X le quattro righe della spec, con il FE4).
+
+### Decisioni di coordinamento della mattina (2026-10-15, 08:10)
+
+> - **H CP6, il blocco dell'istanza**: `router.py` (la riga della dipendenza) e `zodios-client.ts` (il ramo 423) concessi
+>   ad H. Niente cancellazione dell'account nella pagina di blocco finché A non estrae il dialogo da `ProfileTab.svelte`
+>   (l'API resta permessa); il reset della password resta fuori dai permessi, come nella decisione 12. Dalla revisione di
+>   sicurezza di H: da fuori, chi non ha sessione può capire che l'istanza è bloccata, perché le rotte pubbliche fuori
+>   dall'elenco rispondono 401; nessun dato esce. Scelta (a): resta così, con la garanzia scritta più stretta. L'altra
+>   strada, aggiungere all'elenco le GET pubbliche di soli dati di riferimento, non chiuderebbe il segnale (la
+>   registrazione resta) e cambierebbe l'elenco deciso dal developer.
+> - **W FE8a**: taglio del template in figli con props esplicite; stato, effetti e handler restano nel padre. Cartelle
+>   `components/transactions/{form,bulk,wizard}/` (`wizard/` confluisce in `import/` con FE8b). Tre sotto-checkpoint.
+>   Lo stato in una classe resta fuori dalla 1.3.
+> - **J C-94**: `dev.py server --build-only` prima del tempo massimo, nel server condiviso dei test e, col via del
+>   coordinatore colori, anche in `dev.py mkdocs gallery`, con `LF_APP_VERSION` passata alla build. Senza
+>   `node_modules`, `dev.py` si ferma subito, senza `npx`. La doppia build (produzione per le categorie frontend, debug
+>   per il server) va in J-7.
+> - **Finestra della galleria**: 5 gallerie complete in fila (r1, r2, le candidate di R, L e T), fino alle 12:30 circa.
+>   Dopo: prima R e L, poi i lotti della 1.3 (H CP5b, H CP6, FE8a, A5), poi T.
+
+### X-R8, le valute dei fornitori dei cambi in cache, integrato ✅ (2026-10-15, 08:18)
+
+> **Note implementazione**: `173ba19e2`, merge di `849c98dda` su `1dac6b326` (X-R8 `1dfd4e657`). `services/fx/catalog.py`:
+> l'elenco delle valute di ogni fornitore resta 24 ore nella cache `fx_provider_currencies` (visibile nel pannello
+> delle cache); un fornitore che fallisce o supera i 5 s risponde con l'ultimo elenco noto, riprovato dopo 5 minuti.
+> API invariata. Validazione di X: `all-backend` 14 119 passed sulla base `4fdc0d9c5`; sul fuso `38b913df3` (con H
+> CP5a, J-6, W E0) controllo leggero con la guardia di J-6 attiva: `fx-catalog` 8, `api fx-unit` 29, `api fx` 21,
+> `config-package` 593, `check-orphans`, `openapi.json` identico, `mkdocs build` stretto. Entrato prima delle 08:45:
+> dalle 08:45 alla fine delle gallerie r1 e r2 (verso le 10:15), che girano nel checkout principale, `dev_release2`
+> resta fermo (richiesta del coordinatore colori). CHANGELOG con una riga. La docstring con `services/fx.py` in
+> `api/v1/fx/providers.py` è X-R1: cambia `openapi.json`, la corregge X col CP6. Poi FE5b (taglio di `AssetModal`,
+> annuncio aperto nel §7).
+
+### E, Email, avviata in sola analisi; checkpoint sui rami dei figli (2026-10-15, 08:40)
+
+> **Note implementazione**: sessione `877410cd`, worktree `e-alfy-stunning-fortnight`, corsia 6188 +
+> `/tmp/librefolio-r13-e`, base `380a3e768`. Condizione del §4 soddisfatta: i token monouso di A4 sono in
+> `dev_release2`, e il contratto di inviti e reset è nel checkpoint A5a (`2d4708578`, sul ramo di A), che E legge con
+> `git show`. Nodi affidati all'analisi: invio fuori dal ciclo di eventi, server SMTP finto per i test, link senza
+> `LIBREFOLIO_PUBLIC_URL`, enumerazione, limite di invii, lingua, avvisi di configurazione, blocco dell'istanza.
+>
+> Committati sui rami dei figli, non integrati: A5a (`7da2cd9a2`: migrazione 006, inviti, `registration_mode`, API
+> admin, CLI; l'aggiornamento di base è aperto nel worktree di A con un conflitto in `test_system_api.py`, che risolve
+> A), W FE8a-1 (`8a62cea7f`: il form delle transazioni tagliato per sezione), X FE5b-1 (`37532d558`: `AssetModal` in sei
+> pezzi). Entrano dopo la finestra della galleria, dopo R e L. Decisione su A-9: la corsia dei test toglie le quattro
+> variabili di account, come fa già con i segreti (in A5b). `billing_url` nella pagina di blocco: lotto piccolo di H
+> dopo l'ingresso di A5.
+>
+> **Finestra della galleria**: dalle 08:45 a fine r2 (verso le 10:15) `dev_release2` resta fermo; poi i lotti solo
+> backend possono rientrare con l'avviso, quelli frontend dopo la fine della finestra (verso le 12:30).

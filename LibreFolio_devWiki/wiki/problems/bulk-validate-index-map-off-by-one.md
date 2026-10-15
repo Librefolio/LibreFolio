@@ -70,4 +70,4 @@ last, which is the opposite of what sorting by status is for.
 | Validation path (1116, 1170) and commit path (1397) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Operation resolution | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
 | Sibling defect (`sortFn`) | `frontend/src/lib/components/table/types.ts`, `TableBody.svelte` |
-| Commit service | `backend/app/services/transaction_service.py` |
+| Commit service | `backend/app/services/transactions/transaction_service.py` |

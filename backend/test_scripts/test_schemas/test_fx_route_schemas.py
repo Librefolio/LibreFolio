@@ -207,7 +207,7 @@ class TestFXRouteResponseEnvelopes:
 
 def test_route_openapi_separates_request_and_response_metadata():
     """Mount only the router; no real app startup, client, session, or fetch."""
-    from backend.app.api.v1 import fx as fx_api  # noqa: PLC0415 — router import only for this OpenAPI contract
+    from backend.app.api.v1.fx import providers as fx_api  # noqa: PLC0415 — router import only for this OpenAPI contract
 
     app = FastAPI()
     app.include_router(fx_api.router_providers)
