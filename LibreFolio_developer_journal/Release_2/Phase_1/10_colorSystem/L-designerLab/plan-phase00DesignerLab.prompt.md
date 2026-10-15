@@ -862,3 +862,68 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 > - le **45 definizioni `--color-lf-*` di `@theme inline`** compaiono come variabili `scoped` senza effetto a runtime, vicoli ciechi (L-10 (2)).
 >
 > L-10 è ora dovuta: «appena T-1 entra nella tua base». Si fa dopo la gallery candidata del coordinatore, che gira nella mia corsia sul mio checkout, e richiede il suo via.
+
+## ✅ Gallery candidata di L e ⏳ validazione del fuso con R (15/10/2026)
+
+- **Candidata della gallery** (coordinatore, 11:00–11:31, corsia di L, Lab presente nella build di debug ma mai aperto, contro r1 con le maschere r1↔r2): **passa il cancello**.
+  - 2360 immagini identiche, 464 cambiate; solo 10 oltre il rumore del loro scatto, nessuna dovuta al Lab:
+    - 8 `files/static-grid`: orario di caricamento e miniatura del DB della corsia, le stesse di R;
+    - 1 `brim-report-sets`: il nome casuale dell'account demo;
+    - 1 `detail-signals-macd` mobile it chiaro: menu degli indicatori ancora aperto, un problema di tempi della gallery, girato a G.
+  - **Il Lab chiuso è neutro.**
+- **Fuso con R:** `eeeb467f4`, padri `c0556a240` e `ed9fb6996`; R è entrato in `dev_release2` (lotti A–D, `sw.js`, documenti). 133 file, nessuno del Lab.
+  - R ha creato `lib/theme/**`: tabelle dei grafici `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`, `drawnColors.ts`; token di componente `--lf-cmp-*` in `components/{table,media,files,dialogs}.css` su `:root`; `themeMode.ts` come unico lettore del tema.
+  - Tre gate nuovi (`themeModeReads`, `themeComponentTokens`, `themeColorMeta`): esentano i percorsi del Lab (decisione D7 di R).
+- **Validazione** (`/tmp/libreFolio_L8_validate.sh`, 11:49–11:55, copia negli artefatti):
+
+| Passo | Esito |
+|---|---|
+| `dev.py api sync` | exit 0, `git status` 0 righe |
+| unit del Lab | **15 file, 394/394** |
+| `npm run check` | **0 errori, 0 avvisi** |
+| gate `src/*.gate` + `(app)/layout.gate` | **10 file, 162/162** |
+| `theme-roles.mjs --check` | clean |
+| release | 0 file col marcatore, 0 con catalogo o indice; stub di 488 B (`17.DTSZtGfH.js`) |
+| `front-designer-lab all` (1 worker) | **2 rosse**, 9 verdi; Vitest 394/394 |
+| `e2e` a 4 worker | **le stesse 2 rosse**, 9 verdi |
+| `check-orphans` | exit 0 (e2e 121, unit 391, backend 277) |
+| parità scanner/`color_inventory.py` | **identica** dopo lo spostamento dei letterali di R: hex 1291/1291, funzioni 238/238; file 1080, classi 10490, custom 764, definizioni 217 → **945** (token `--lf-cmp-*`), `var()` 1324 su 833 |
+| porta 6152 a fine giro | libera |
+
+> **⚠️ Fuori pista: due spec E2E rotte da R-3, non dal Lab.** L'intestazione di DataTable ora legge `var(--lf-cmp-datatable-header-text)`, definita in `lib/theme/components/table.css:24`, e `DataTable.svelte` non contiene più `#64748b`.
+> - **Spec del selettore:** pretendeva `rule-literal`; il Lab classifica giustamente `var`.
+> - **Test di export:** pretendeva un'occorrenza in `DataTable.svelte`.
+> - **Il Lab regge la nuova struttura:** il test L2 dal vivo passa, quindi L2 riscrive anche i token `--lf-cmp-*` su `:root` (`applyRule` passa a `replaceLiterals` per una proprietà personalizzata senza modifica di variabile). L3 passa sulle tabelle `lib/theme/chart*.ts`, che lo scanner classifica come file di grafici. `drawnColors.ts`, colori fuori da CSS ed ECharts, resta senza anteprima, ed è corretto.
+> - **Correzione affidata a `test-author`** (11:58), solo su `frontend/e2e/designer-lab/**`. Le attese si ricavano a runtime:
+>   - tipo coerente coi fatti della scheda dell'app, letti da `lf-designer-lab/pick`;
+>   - un candidato di binding in `DataTable.svelte` qualunque sia il tipo;
+>   - export verificato con `verify-export.mjs`: nessuna occorrenza mancante.
+>
+>   R e T continuano a migrare (T cambia ora i valori dei ruoli).
+> - **Coordinatore avvisato alle 11:57** con l'esito parziale e il tempo previsto.
+>
+> **✅ Correzione degli E2E (12:17, `test-author`), solo `frontend/e2e/designer-lab/`:**
+> - **`lab-helpers.ts`:**
+>   - `pickedFacts()` legge il `result` da `lf-designer-lab/pick`;
+>   - `verifyExport()` scrive l'export in `testInfo.outputPath(…)` e lancia `verify-export.mjs --json` con `execFileSync(process.execPath, …)`, timeout 30 s;
+>   - `opaqueKeysOf()` chiede le chiavi dei colori al browser, cioè a un canvas, non al parser del Lab.
+> - **Spec del selettore:**
+>   - il tipo si ricava dalla dichiarazione vincitrice provata dalla scheda dell'app, con le regole documentate. La scheda «Elemento» deve dare lo stesso tipo: due moduli, `describe.ts` e `pickView.ts`, verificati uno contro l'altro;
+>   - se la vincitrice legge una variabile, la catena del Lab parte da lì;
+>   - nell'export, `anchor.source` = {tipo mostrato, selettore vincitore, variabile};
+>   - deve esserci un candidato di binding (`matched-rule`, `class-use` o `var-use`) in `DataTable.svelte`, qualunque sia il tipo.
+> - **Test di export:**
+>   - le occorrenze della modifica css-literal sono letterali del colore cambiato, alfa a parte;
+>   - `verify-export` legge 3 modifiche, 0 mancanti, exit 0, occorrenze in posizione maggiori di 0;
+>   - non si controlla `catalog_hash_match`: una modifica di `src` durante il giro cambierebbe l'hash, non l'export.
+>   - Sull'export prodotto: 877 occorrenze in posizione, 0 spostate, 0 mancanti; `#64748b` ha 18 occorrenze in `dialogs.css`, `files.css`, `media.css` e `table.css`.
+>   - Controprova: con la vecchia attesa `DataTable.svelte:1608 #64748b` il verificatore esce con 1 e la segnala mancante.
+> - **Esiti dell'agente:**
+>   - `picker` 3/3; `live` 7/7;
+>   - `--fresh-run` `e2e` 11/11 a 1 worker e a 4 worker, due volte;
+>   - `unit` 394/394; `check-orphans` exit 0;
+>   - `tsc` sugli e2e: solo i due errori noti fuori dal Lab; Prettier pulito.
+> - **Conferma mia sul codice finale:** `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run front-designer-lab all` → **exit 0**, Playwright **11/11** (24,3 s), Vitest **394/394**, 5 azioni ✓, «Frontend build is up to date».
+> - Porta 6152 libera alle 12:19:51. `frontend/build` resta la build di debug delle 11:53.
+> - **Dipendenze dalle prossime ondate di T** (W4 transazioni, B6 pulizia di P1, W6 DataTable, W5 ponte sRGB): elencate nella voce **L-13** del backlog. Ogni rottura sarà esplicita.
+> - **L-10** dopo l'ingresso di L, con il suo checkpoint. Il progetto è pronto negli artefatti di sessione (`files/L-validate-2026-10-15/L-10-design.md`). Va aggiunto l'helper E2E per le utility di ruolo (L-13, W4). Attenzione: T sta cambiando i valori dei ruoli con la nuova palette del developer, e i test li leggono a runtime.
