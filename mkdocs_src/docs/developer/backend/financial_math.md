@@ -47,6 +47,7 @@ backend/app/services/financial_math/
 ├── __init__.py              docstring only: the rule and the module map
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
+├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series), annualization, period rebasing, G/L ratio
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
@@ -104,6 +105,80 @@ Callers derive their views from the result with `DerivedViewsBuilder` (`derived_
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
 
+### 🧾 Ledger Control Totals {: #ledger-totals }
+
+`ledger_totals.py` reduces the transaction ledger to its control totals — the cash of every
+broker in each currency and the quantity of every position — read from the rows alone, with no
+price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest
+and, after a restore, compares them with the totals recomputed on the restored database.
+
+| Name | Contract |
+|------|----------|
+| `CONTROL_TOTALS_VERSION` | `1`. It names the method — what is summed and how it is written — so a change to either bumps it: totals of another version are not comparable |
+| `ControlTotals(version, cash, quantities)` | Frozen dataclass with slots, compared by value. `cash` holds `(broker_id, currency, balance)` lines and `quantities` `(broker_id, asset_id, quantity)` lines, each sorted by its key, with no zero line: an absent line is zero |
+| `position_quantities(transactions, as_of=None)` | Pure. `{broker_id: {asset_id: quantity}}` over the rows dated on or before `as_of` (every row when `None`), by the portfolio engine's rule: every row with an asset and a non-zero quantity, whatever its type. Like `native_balances()`, it keeps a line whose rows cancel out, at zero |
+| `control_totals(transactions)` | Pure. The cash is `native_balances()` over `cash_movement_from_transaction()` of every row (a row without a currency moves no cash), the quantities are `position_quantities()`. The sums are exact: they run in a local decimal context that raises `decimal.Inexact` instead of rounding, and leave the caller's context as it was |
+| `compute_control_totals(session)` | Async. The totals of the whole ledger `session` reads: a named read point of the layer ([rule 1](#layer-rules)) |
+
+`compute_control_totals()` reads through the session it is given and nothing else: only the
+columns the totals need (`id`, `type`, `date`, `broker_id`, `asset_id`, `currency`, `amount`,
+`quantity`), in keyset blocks of `_BLOCK_SIZE` (5,000) rows by primary key. It sums in Python,
+never with an SQL `SUM`: on SQLite a `Numeric` column goes through a float. It reads no price,
+rate or setting, makes no network call, never asks for today's date and keeps no module cache,
+so it can run on a session opened on another SQLite file — a backup's copy of the database — in
+the same process as the live one.
+
+`to_json()` writes the version, then the lines in order, with the keys below; for the reference
+ledger of the tests:
+
+```json
+{
+  "version": 1,
+  "cash": [
+    {"broker_id": 1, "currency": "EUR", "balance": "278.5"},
+    {"broker_id": 1, "currency": "USD", "balance": "545.5"},
+    {"broker_id": 2, "currency": "EUR", "balance": "107"},
+    {"broker_id": 2, "currency": "USD", "balance": "510"}
+  ],
+  "quantities": [
+    {"broker_id": 1, "asset_id": 10, "quantity": "1"},
+    {"broker_id": 2, "asset_id": 10, "quantity": "4"},
+    {"broker_id": 2, "asset_id": 11, "quantity": "0.000001"}
+  ]
+}
+```
+
+Every amount is canonical decimal text — plain notation without trailing zeros (`"510"`, not
+`"510.000000"`; `"100"`, not `"1E+2"`), `"0"` for zero, never `"-0"` — so one ledger has one
+text. `ControlTotals.from_json(data)` is the inverse of `to_json()` and raises `ValueError` for
+another version or a malformed document. Read `version` before calling it: totals of another
+version are not comparable, which is not the same as a difference.
+
+What the totals promise their caller:
+
+- **The whole instance.** Every broker at 100% and every row, whatever its date: no user, share
+  or scope.
+- **Blind to the row type.** A migration that reclassifies the halves of a `TRANSFER` as
+  `ADJUSTMENT`s, or those of a `CASH_TRANSFER` as a `WITHDRAWAL` and a `DEPOSIT`, changes
+  nothing; nor do a row's date, its transaction id or the order the rows are read in.
+- **A difference means a row lost, added or altered** in broker, asset, currency, amount or
+  quantity.
+- **Dust is kept.** A quantity at or below `QUANTITY_DUST_THRESHOLD`
+  (`services/platform/data_quality_thresholds.py`), which the Dashboard does not list as a
+  holding, keeps its line: a control total sees every unit.
+- **No cost basis.** `cost_basis_override` is never read: a cost basis depends on rates and on
+  the WAC and FIFO rules, and carrying it would bump the version at every change of those rules.
+- **Ids local to the instance.** Lines are keyed by `broker_id` and `asset_id`, which mean
+  something only inside one instance: the totals compare a restore of the whole instance with
+  its own backup.
+
+`test_ledger_totals.py`, in `test_services/test_financial_math/` (`services financial-math`),
+pins this contract on a reference ledger — each promise above, the canonical text, the exact
+sums, the parity with the average-cost fold and `native_balances()` — and runs
+`compute_control_totals()` on private SQLite files under `tmp_path`, several in one process, as
+a restore check reads them. Its static guard parses the module's source: no SQL `SUM`, no
+settings, module cache, FX service, price, rate or clock.
+
 ---
 
 ## 🧱 Layer Rules {: #layer-rules }
@@ -141,7 +216,9 @@ flowchart LR
    acquisition itself, at its own date, in one batched call. A calculation reads its own data
    from the database only at named points: the portfolio engine (`portfolio/engine.py`, with
    `load_configured_fx_pair_sets()` in `portfolio/data_quality.py` for the configured FX
-   routes) and the Yield on Cost loaders (`yield_on_cost.py`).
+   routes), the Yield on Cost loaders (`yield_on_cost.py`) and the
+   [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
+   is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.
@@ -277,7 +354,7 @@ builders and the analysis' data-quality report (see
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py` and the layer guard; a pure unit |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -302,6 +379,7 @@ builders and the analysis' data-quality report (see
 | `portfolio/` | [The portfolio package at work](#portfolio-package); its data-quality report in [Data Quality Banner](../frontend/data-quality-banner.md); its cache in [FX Architecture](fx/architecture.md#portfolio-cache-invalidation) | [Portfolio Engine — Mathematical Model](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md) |
 | `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md) |
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
+| `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
 
 ---
 
