@@ -1,7 +1,7 @@
 """
 Sector normalization utilities.
 
-Provides ENUM-based sector classification and validation for financial assets.
+Provides ENUM-based sector classification and validation for financial assets, and the one map of sector emoji.
 """
 
 from enum import StrEnum
@@ -116,6 +116,45 @@ class FinancialSector(StrEnum):
             List of sector names
         """
         return [sector.value for sector in cls]
+
+
+# The two allocation buckets the portfolio engine adds on its own, beside the sectors: the cash and the holdings without
+# a sector. Never a sector an asset can be classified in, so never offered in a sector select.
+LIQUIDITY_BUCKET = "Liquidity"
+UNKNOWN_BUCKET = "Unknown"
+ALLOCATION_BUCKETS: tuple[str, ...] = (LIQUIDITY_BUCKET, UNKNOWN_BUCKET)
+
+# The emoji of a sector: the one map behind every view that shows one, the `/utilities/sectors` list and the
+# allocation views of the portfolio engine, which used to keep a copy each and disagreed on four keys. Besides the
+# sectors it names the two allocation buckets. Values: the designer's round 2 (15/10/2026), the same glyphs in the pie
+# and in the history.
+SECTOR_EMOJI: dict[str, str] = {
+    FinancialSector.INDUSTRIALS: "🏭",
+    FinancialSector.TECHNOLOGY: "💻",
+    FinancialSector.FINANCIALS: "🏦",
+    FinancialSector.CONSUMER_DISCRETIONARY: "🛍️",
+    FinancialSector.HEALTH_CARE: "🏥",
+    FinancialSector.REAL_ESTATE: "🏠",
+    FinancialSector.BASIC_MATERIALS: "⛏️",
+    FinancialSector.ENERGY: "⚡",
+    FinancialSector.CONSUMER_STAPLES: "🛒",
+    FinancialSector.TELECOMMUNICATION: "📡",
+    FinancialSector.UTILITIES: "💡",
+    FinancialSector.CORPORATE_BONDS: "🏢",
+    FinancialSector.GOVERNMENT_BONDS: "🏛️",
+    FinancialSector.OTHER: "📦",
+    LIQUIDITY_BUCKET: "💰",
+    UNKNOWN_BUCKET: "❓",
+}
+
+# The glyph of a key outside the map: the one of the unclassified bucket, so an unexpected key reads as unclassified.
+# With every sector and bucket mapped, only a key outside the enum gets it.
+SECTOR_EMOJI_FALLBACK = SECTOR_EMOJI[UNKNOWN_BUCKET]
+
+
+def sector_emoji(key: str) -> str:
+    """The emoji of a sector or an allocation bucket, and the fallback for a key outside the map."""
+    return SECTOR_EMOJI.get(key, SECTOR_EMOJI_FALLBACK)
 
 
 def normalize_sector(sector_name: str) -> str:

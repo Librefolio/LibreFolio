@@ -12,7 +12,6 @@
     "missingFx": "Faltan tipos de cambio para {count} par(es) — los totales pueden estar incompletos",
     "navIncomplete": "NAV incompleto para {count} día(s) entre {date_from} y {date_to}",
     "mwrrNotAvailable": "MWRR no se puede calcular para este período",
-    "mwrrSeriesUnreliable": "Gráfico MWRR no disponible: serie diverge en {divergence_pp}pp del valor esperado {summary_cum}% (primera divergencia: {first_bad_date})",
     "archivedAsset": "Este activo está archivado — no actualizado por el planificador",
     "rangeBeforeData": "Datos disponibles desde {date}",
     "fxPairMissing": "Par FX no configurado — conversión no disponible",
