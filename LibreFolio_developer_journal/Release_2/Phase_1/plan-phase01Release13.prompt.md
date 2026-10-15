@@ -1058,7 +1058,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > anonimo non contano come attività dell'utente; ad A, `signed_in_user` chiama `get_current_user` direttamente, quindi
 > un override in `dependency_overrides` non arriva a `/system/info`. Poi CP5b dopo la finestra della galleria, e CP6.
 
-### J-6, guardia di suite sulle connessioni aiosqlite, integrato ✅ (2026-10-15, 07:45)
+### J-6, guardia di suite sulle connessioni aiosqlite, integrato ✅ (2026-10-15, 07:40)
 
 > **Note implementazione**: `e2cb55054`, merge di `e6016fca7` su `2c699f85c` (J-6 `b49a54645`). Una fixture
 > autouse nel `conftest.py` condiviso: un test che lascia aperta una connessione aiosqlite creata da lui, nel thread
@@ -1096,3 +1096,34 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **Fuori pista**: nel file delle decisioni la riga delle migrazioni (§3) diceva ancora «la 006 delle impostazioni dei
 > plugin»: riallineata alla C7 (005 e 006 di A, 007 di X).
+
+### W E0, gli eventi per data e tipo, integrato ✅ (2026-10-15, 07:51)
+
+> **Note implementazione**: `d226bc69e`, merge di `2326624c1` su `989991f78` (E0 `692fbae39`). `CsvColumnDef.matchKey`:
+> nel CSV degli eventi due righe sono doppioni solo con la stessa data e lo stesso tipo (la riga 38 di
+> `EventDataImportModal.svelte`, di X, scritta da W col via del coordinatore); il selettore della data blocca solo i
+> giorni con un evento dello stesso tipo. Più i due test-id di X-R9 in `DataImportModal.svelte` e W-B15. Validazione
+> di W sul fuso `2bf015afa`: build, `core-unit` con la guardia dei colori, `component-unit`, E2E `asset-data-editor`,
+> `fx-csv-import`, `fx-editor`, `tx-bulk-operations`, `mkdocs build` stretto. Entrato prima della finestra della
+> galleria, su richiesta del coordinatore colori, così R, L e T non devono rifondere; dopo la validazione erano entrati
+> solo la guardia di J-6 e dei record, nessun file frontend. CHANGELOG con una riga; chiuse I-11 a e d (README del 38)
+> e W-B15; X-R9 fatta per la parte di W (restano a X le quattro righe della spec, con il FE4).
+
+### Decisioni di coordinamento della mattina (2026-10-15, 08:10)
+
+> - **H CP6, il blocco dell'istanza**: `router.py` (la riga della dipendenza) e `zodios-client.ts` (il ramo 423) concessi
+>   ad H. Niente cancellazione dell'account nella pagina di blocco finché A non estrae il dialogo da `ProfileTab.svelte`
+>   (l'API resta permessa); il reset della password resta fuori dai permessi, come nella decisione 12. Dalla revisione di
+>   sicurezza di H: da fuori, chi non ha sessione può capire che l'istanza è bloccata, perché le rotte pubbliche fuori
+>   dall'elenco rispondono 401; nessun dato esce. Scelta (a): resta così, con la garanzia scritta più stretta. L'altra
+>   strada, aggiungere all'elenco le GET pubbliche di soli dati di riferimento, non chiuderebbe il segnale (la
+>   registrazione resta) e cambierebbe l'elenco deciso dal developer.
+> - **W FE8a**: taglio del template in figli con props esplicite; stato, effetti e handler restano nel padre. Cartelle
+>   `components/transactions/{form,bulk,wizard}/` (`wizard/` confluisce in `import/` con FE8b). Tre sotto-checkpoint.
+>   Lo stato in una classe resta fuori dalla 1.3.
+> - **J C-94**: `dev.py server --build-only` prima del tempo massimo, nel server condiviso dei test e, col via del
+>   coordinatore colori, anche in `dev.py mkdocs gallery`, con `LF_APP_VERSION` passata alla build. Senza
+>   `node_modules`, `dev.py` si ferma subito, senza `npx`. La doppia build (produzione per le categorie frontend, debug
+>   per il server) va in J-7.
+> - **Finestra della galleria**: 5 gallerie complete in fila (r1, r2, le candidate di R, L e T), fino alle 12:30 circa.
+>   Dopo: prima R e L, poi i lotti della 1.3 (H CP5b, H CP6, FE8a, A5), poi T.

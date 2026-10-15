@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
 - The Tools catalogue and the plugin diagnostics in Settings › About no longer fail with "Tool request deadline exceeded" when the server is busy: their request budget now covers sign-in too.
 - A parse that a plugin refuses names the plugin and the file as you know them, not the plugin code and the stored file id.
+- Asset data editor: an events CSV with events of different types on the same day (a dividend and a split) imports them all, instead of leaving them out as duplicates; a new event can move to a day that holds only an event of another type.
 - In a source checkout the app version follows `git describe` again: a `VERSION` file left by an earlier Docker build no longer hides newer commits.
 
 ---
