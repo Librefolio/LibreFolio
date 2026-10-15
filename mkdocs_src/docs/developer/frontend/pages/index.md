@@ -247,16 +247,20 @@ frontend/src/routes/
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">
 </div>
 
-- **4 tabs** from the tab registry (`SETTINGS_TABS`, see
+- **5 tabs** from the tab registry (`SETTINGS_TABS`, see
   [Settings Components](../components/features/settings.md#tab-registry)): Profile, Preferences,
-  About, Admin (global settings). `?tab=<id>` opens a tab the user can see, from the first render;
-  an unknown or hidden id is ignored, and a value is applied once, so a page update that keeps it
-  does not take back a tab the user clicked
-- **ProfileTab**: Avatar editing via AssetPickerModal, username display
+  About, Admin (global settings) and Users, which only a superuser sees. `?tab=<id>` opens a tab
+  the user can see, from the first render; an unknown or hidden id is ignored, and a value is
+  applied once, so a page update that keeps it does not take back a tab the user clicked
+- **ProfileTab**: Avatar editing via AssetPickerModal, username and email editing, account
+  deletion through `AccountDeletionDialog`
 - **PreferencesTab**: Language, currency, theme, and the Onboarding category (guide replays —
   see [Settings Components](../components/features/settings.md))
 - **GlobalSettingsTab**: visible to every user, editable only by a superuser, behind an edit lock
 - **AboutTab**: Version info (from Git tag), system info
+- **UsersTab**: superusers only — the accounts of the instance and the open invitations, with the
+  invitation, reset-link and deletion dialogs (see
+  [Settings Components](../components/features/settings.md#userstab))
 - **PasswordChangeModal** from profile
 - Mobile responsive with dropdown category selector
 

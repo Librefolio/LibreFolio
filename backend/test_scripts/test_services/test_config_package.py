@@ -28,7 +28,8 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     ``LIBREFOLIO_WEB_LINK_FINDER_ENABLED`` unset is on and set but empty is off; the engine is stripped and lowercased, a
     blank one being the empty string; region and backend are stripped and fall back to their default when blank; the
     timeout and the maximum are what ``float()`` and ``int()`` read, the caller's default when unset, blank or refused
-    (``0`` and ``nan`` are kept, ``5.0`` is no integer). The API key is stripped and, as every secret now, may come from
+    (``5.0`` is no integer) — and, changed on purpose since (X-R6), when below 1, or for the timeout not finite:
+    ``0``, a negative value, ``nan`` and ``inf`` give the default, ``1`` is kept. The API key is stripped and, as every secret now, may come from
     ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``. ``LF_APP_VERSION``, read since through ``frozen_app_version()``, is the
     version as set, stripped, and ``None`` when unset or blank. The variables of the instance block (CP6) are new, so
     their semantics are the ones decided for them: ``LIBREFOLIO_BLOCKED`` unset or blank is not blocked, ``1``, ``true``,
@@ -53,7 +54,6 @@ nothing; it is one test over the whole dictionary, so an empty one passes instea
 from __future__ import annotations
 
 import ast
-import math
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -592,16 +592,18 @@ def test_web_link_finder_ddgs_option_is_stripped_or_its_default(monkeypatch, acc
         pytest.param("  ", 7.5, id="blank-is-the-default"),
         pytest.param("2.5", 2.5, id="2.5"),
         pytest.param(" 3 ", 3.0, id="spaces-around-and-a-float"),
-        pytest.param("0", 0.0, id="0-kept"),
-        pytest.param("-1", -1.0, id="negative-kept"),
+        pytest.param("1", 1.0, id="1-the-smallest-kept"),
+        pytest.param("0.5", 7.5, id="below-1-is-the-default"),
+        pytest.param("0", 7.5, id="0-is-the-default"),
+        pytest.param("-1", 7.5, id="negative-is-the-default"),
         pytest.param("1e1", 10.0, id="exponent"),
-        pytest.param("nan", math.nan, id="nan-kept"),
-        pytest.param("inf", math.inf, id="inf-kept"),
+        pytest.param("nan", 7.5, id="nan-is-the-default"),
+        pytest.param("inf", 7.5, id="inf-is-the-default"),
         pytest.param("six", 7.5, id="not-a-number-is-the-default"),
     ],
 )
-def test_web_link_finder_timeout_is_what_float_reads(monkeypatch, value, expected):
-    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``: ``float()`` of the stripped value, the caller's default when unset, blank or refused."""
+def test_web_link_finder_timeout_is_what_float_reads_when_finite_and_at_least_1(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``: ``float()`` of the stripped value when finite and at least 1 (X-R6: a timeout under a second meant none); the caller's default when unset, blank, refused, below 1 or not finite."""
     _set_variable(monkeypatch, LINK_FINDER + "TIMEOUT", value)
     timeout = web_link_finder_timeout(7.5)
     # repr() tells nan from nan as == cannot, and 3.0 from 3
@@ -616,14 +618,15 @@ def test_web_link_finder_timeout_is_what_float_reads(monkeypatch, value, expecte
         pytest.param("", 9, id="empty-is-the-default"),
         pytest.param("3", 3, id="3"),
         pytest.param(" 7 ", 7, id="spaces-around"),
-        pytest.param("0", 0, id="0-kept"),
-        pytest.param("-2", -2, id="negative-kept"),
+        pytest.param("1", 1, id="1-the-smallest-kept"),
+        pytest.param("0", 9, id="0-is-the-default"),
+        pytest.param("-2", 9, id="negative-is-the-default"),
         pytest.param("5.0", 9, id="5.0-is-no-integer"),
         pytest.param("five", 9, id="not-a-number-is-the-default"),
     ],
 )
-def test_web_link_finder_max_results_is_what_int_reads(monkeypatch, value, expected):
-    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_MAX``: ``int()`` of the stripped value, the caller's default when unset, blank or refused."""
+def test_web_link_finder_max_results_is_what_int_reads_when_at_least_1(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_MAX``: ``int()`` of the stripped value when at least 1 (X-R6: ``0`` returned one URL all the same); the caller's default when unset, blank, refused or below 1."""
     _set_variable(monkeypatch, LINK_FINDER + "MAX", value)
     maximum = web_link_finder_max_results(9)
     assert (maximum, type(maximum)) == (expected, int), f"{LINK_FINDER}MAX={value!r} must give {expected!r}, web_link_finder_max_results gave {maximum!r}"

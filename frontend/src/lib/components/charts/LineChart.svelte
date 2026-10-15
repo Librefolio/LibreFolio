@@ -28,7 +28,8 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -153,6 +154,39 @@
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
     let responsiveXAxisCompact = false;
+    /** The last zoom window, and the timer that re-spaces the x labels on it once the gesture settles (47-1). Plain variables: the teardown reads them. */
+    let lastZoomEvent: unknown = null;
+    let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** How many of the drawn categories the last zoom left visible; undefined before any zoom. */
+    function zoomedCategoryCount(): number | undefined {
+        return visiblePointCountFromZoom(lastZoomEvent, currentRenderedData.length) ?? undefined;
+    }
+
+    function scheduleZoomedAxisLabels(event: unknown) {
+        lastZoomEvent = event;
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        zoomLabelTimer = setTimeout(() => {
+            zoomLabelTimer = null;
+            applyZoomedAxisLabels();
+        }, ZOOM_LABEL_SETTLE_MS);
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || compact || currentRenderedData.length === 0) return;
+        const visibleCount = zoomedCategoryCount();
+        if (visibleCount === undefined) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: currentRenderedData.map((point) => point.date),
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount,
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
+    }
 
     const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
@@ -208,6 +242,8 @@
         resizeObserver = null;
         chartOptionSet = false;
         currentRenderedData = [];
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        lastZoomEvent = null;
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -271,11 +307,12 @@
                     values: currentRenderedData.map((point) => point.date),
                     locale: uiLocale(),
                     axisType: 'category',
+                    visibleCount: zoomedCategoryCount(),
                 });
                 const wasCompact = responsiveXAxisCompact;
                 responsiveXAxisCompact = policy.compact;
                 if (policy.axisLabel) {
-                    chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                    chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                 } else if (wasCompact) {
                     renderChart();
                 }
@@ -357,9 +394,10 @@
                 });
             }
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
-            chartInstance.on('dataZoom', () => {
+            // Recompute arrow rotations when zoom changes (aspect ratio shifts), and re-space the x labels on the window
+            chartInstance.on('dataZoom', (event: unknown) => {
                 if (chartInstance) updateArrowRotations(chartInstance);
+                scheduleZoomedAxisLabels(event);
             });
         }
 
@@ -610,11 +648,30 @@
         for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
+        // Preserve user zoom state across re-renders (adding signals, toggling options).
+        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
+        // Read before the axis policy, so the labels are spaced on the window about to be restored (47-1).
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            try {
+                const opt = chartInstance.getOption() as any;
+                if (opt?.dataZoom?.[0]) {
+                    const dz = opt.dataZoom[0];
+                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
+                        savedZoom = {start: dz.start, end: dz.end};
+                    }
+                }
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        const restoredZoomCount = savedZoom && !compact ? visiblePointCountFromZoom(savedZoom, dates.length) : null;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: restoredZoomCount ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 
@@ -790,23 +847,6 @@
 
         // Single pass: render everything at once — no visualMap needed
         // (baseline coloring is handled by segmented series above)
-
-        // Preserve user zoom state across re-renders (adding signals, toggling options).
-        // Without this, setOption({...}, true) replaces dataZoom and resets scroll position.
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            try {
-                const opt = chartInstance.getOption() as any;
-                if (opt?.dataZoom?.[0]) {
-                    const dz = opt.dataZoom[0];
-                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
-                        savedZoom = {start: dz.start, end: dz.end};
-                    }
-                }
-            } catch (_) {
-                /* ignore */
-            }
-        }
 
         chartInstance.setOption(option, true);
         chartOptionSet = true;

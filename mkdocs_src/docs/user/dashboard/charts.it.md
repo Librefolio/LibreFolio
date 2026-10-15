@@ -8,7 +8,7 @@ Sotto le schede KPI, il grafico **Crescita del portafoglio** e il pannello **All
 
 Il grafico di crescita mostra come è evoluto il tuo portafoglio nel periodo selezionato: l'interruttore **Abs / % / P&L** nell'angolo in alto a destra permette di passare tra valori assoluti, tassi di rendimento e il denaro effettivamente guadagnato.
 
-Il grafico ricorda la tua ultima vista, inclusa la sotto-vista P&L, in questo browser e per ciascun utente, e la condivide con le pagine dei broker. Parte su **Abs**. Senza dati sui tassi di rendimento, **%** è in grigio e disattivata e il grafico mostra **Abs**; la tua scelta viene ripristinata la prossima volta che apri il grafico con dati da disegnare.
+Il grafico ricorda la tua ultima vista, inclusa la sotto-vista P&L, in questo browser e per ciascun utente, e la condivide con le pagine dei broker. Parte su **Abs**. Senza dati sui tassi di rendimento, **%** è in grigio e disattivata e il grafico mostra **Abs**, ma conserva la tua scelta: **%** torna non appena ci sono dati da disegnare — quando cambi periodo o broker, o la prossima volta che apri il grafico — a meno che nel frattempo tu non scelga un'altra vista.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Modalità assoluta" alt="Grafico della crescita — Modalità assoluta">
