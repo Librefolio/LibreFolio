@@ -73,12 +73,11 @@ from backend.app.services.asset_source_providers.yahoo_finance import plugin as 
 from backend.app.services.assets import core as asset_source_core
 from backend.app.services.assets import price_query as price_query_module
 from backend.app.services.assets import price_store as price_store_module
-from backend.app.services.assets import refresh as refresh_module
 from backend.app.services.assets import search as search_module
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.provider_management import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import (
@@ -1917,7 +1916,9 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         def validate_params(self, params):
             return None
 
-    original_get_provider_instance = refresh_module.AssetProviderRegistry.get_provider_instance
+    # Patched on the registry class itself: refresh reaches it through core.configured_provider, which looks the
+    # provider up on this same class (refresh no longer imports the registry, so it is no attribute of that module).
+    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
 
     def _patched_get_provider_instance(cls, code: str, **kwargs):
         if code == "partialprov":
@@ -1925,7 +1926,7 @@ async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
         return original_get_provider_instance.__func__(cls, code, **kwargs)
 
     monkeypatch.setattr(
-        refresh_module.AssetProviderRegistry,
+        AssetProviderRegistry,
         "get_provider_instance",
         classmethod(_patched_get_provider_instance),
     )
