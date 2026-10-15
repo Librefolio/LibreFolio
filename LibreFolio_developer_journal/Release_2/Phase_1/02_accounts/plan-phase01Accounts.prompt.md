@@ -2905,3 +2905,505 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Backlog**: in A-10, la sezione «Accounts and Sign-ups» di `admin/configuration` manca del tutto in IT, FR ed
 >   ES (debito di A, confermato dal coordinatore). A-14 è passato a W, A-15 ad H.
 > - `all-backend`: nella validazione di A6b, prima del suo ingresso (coordinatore).
+
+### A6b — frontend di A6: scheda Utenti, eliminazione, verifica dell'indirizzo — consegnato (handoff d'ingresso, 15/10 sera)
+
+#### A6b.0 — Via, base e vincoli ✅ (2026-10-15)
+> - **A6a è entrato**: `dev_release2` = `1840ebd62` (merge di `5e21149e5`); CHANGELOG `ca4ec658e`.
+> - **Via del coordinatore ad A6b** (15/10, 17:18). Base `5e21149e5`, già quella giusta.
+> - **Colori**:
+>   - `ProfileTab` e i componenti nuovi passano prima da A;
+>   - classi colore solo con i ruoli `*-lf-*`;
+>   - niente `--split` per i file nati da zero;
+>   - il pulsante rosso è `bg-lf-danger text-lf-on-status`.
+>   - La riga di `ProfileTab` nella baseline è ancora sul percorso vecchio
+>     (`lib/components/settings/tabs/ProfileTab.svelte 180`): il gate accoppia i file spostati per nome.
+> - **File di altri**:
+>   - B ha messo la riga Backup in `settingsTabs.ts` e nel suo test (`adminOnly` nella riga di `TODAY`). Entra a breve:
+>     all'aggiornamento di base tengo le due righe;
+>   - E aggiungerà la riga Email.
+> - **Prove pesanti**: `all-backend` ed E2E di A6b nello slot pesante, da chiedere al coordinatore.
+> - **Ricognizione** (due `explore`, 15/10):
+>   - non esistono un menu, una tabella, un aiuto per gli appunti o un costruttore di link riusabili: A6b ne fa di
+>     piccoli, solo con i ruoli;
+>   - `ModalBase` ha `trapFocus` opzionale;
+>   - `ConfirmModal` non ha un campo da digitare;
+>   - nessun file di `features/settings/` usa ancora i ruoli `lf-*`;
+>   - il delete di `ProfileTab` è inline, senza `ModalBase` né focus trap;
+>   - i suoi `data-testid` (`profile-delete-*`, `delete-account-button`) li usano
+>     `e2e/brokers/account-deletion.spec.ts`, `e2e/settings.spec.ts` e `ProfileTab.test.ts`.
+
+#### A6b.1 — Contratto ✅ (2026-10-15)
+> **File nuovi** (solo ruoli `lf-*`, Svelte 5 runes):
+> - `features/settings/tabs/UsersTab.svelte`: la scheda.
+> - `features/settings/users/`:
+>   - `UserRow.svelte`: la riga, con il pannello delle azioni che si apre e si chiude;
+>   - `InvitationsList.svelte`;
+>   - `InviteDialog.svelte`;
+>   - `ResetLinkDialog.svelte`;
+>   - `LinkShare.svelte`;
+>   - `linkShare.ts`: puro;
+>   - `addressProbe.ts`;
+>   - `linkShareActions.ts`: il registro per E;
+>   - `accountErrors.ts`.
+> - `features/settings/AccountDeletionDialog.svelte`: condiviso da `ProfileTab` e dalla scheda Utenti.
+>
+> **Registro**:
+> - `{id:'users', labelKey:'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) =>
+>   ctx.isSuperuser}`.
+> - Sta dopo `admin` (100, `alignEnd`), nel gruppo di destra delle schede da amministratore. Va controllato che
+>   l'ordine non coincida con quelli di B ed E.
+> - `TODAY` del test riceve la riga.
+>
+> **La scheda** (`users-tab`, con `data-busy` e `aria-busy`): carica `GET /users` e `GET /users/invites` in
+> parallelo, e ricarica dopo ogni azione.
+> - **Uso**: `users-usage` con `data-used` e `data-max` (vuoto senza limite). Testo «N / max», oppure «N account» senza
+>   limite.
+>   - «Gestisci abbonamento» (`users-billing-link`, esterno, `rel="noopener noreferrer"`) solo con `usage.billing_url`.
+> - **Limite raggiunto** (`max_users` impostato e `used >= max_users`): banner `users-limit-banner`, con il link
+>   all'abbonamento se c'è. Il pulsante «Invita» è spento con `data-disabled-reason="limit"`.
+> - **Registrazione chiusa** (`instanceConfig.config.accounts.registration_mode === 'disabled'`): «Invita» spento con
+>   `data-disabled-reason="registration-disabled"` e il suggerimento `users-invite-blocked`:
+>   - se la modalità viene da `LIBREFOLIO_REGISTRATION`, la nomina;
+>   - altrimenti rimanda alla scheda Impostazioni globali.
+> - **Account** (`users-accounts`): una riga `users-row` per account, con `data-user-id`, `data-username`,
+>   `data-active`, `data-admin`, `data-protected` e `data-self` (`"true"`/`"false"`).
+>   - Mostra nome utente, email, badge Admin e Disattivato, data di creazione.
+>   - `users-row-toggle` (`aria-expanded`) apre il pannello delle azioni.
+>   - Riga propria: niente azioni, il suggerimento `users-self-hint` e un link a `?tab=profile`.
+> - **Azioni** (pulsanti con `disabled` e `data-disabled-reason`; i motivi, in ordine: `protected`, `last-admin`,
+>   `limit`, `demote-first`):
+>
+>   | Azione | Quando | Cosa fa |
+>   |---|---|---|
+>   | `users-action-deactivate` | attivo | conferma, poi `PATCH {is_active:false}` |
+>   | `users-action-reactivate` | inattivo | `PATCH {is_active:true}`; spenta con `limit` quando l'istanza è piena |
+>   | `users-action-promote` | non admin | conferma, poi `PATCH {is_superuser:true}` |
+>   | `users-action-demote` | admin | conferma, poi `PATCH {is_superuser:false}` |
+>   | `users-action-reset-link` | sempre | apre `ResetLinkDialog` |
+>   | `users-action-sign-out` | sempre | conferma, poi `POST /users/{id}/sessions/revoke` |
+>   | `users-action-restart-guides` | sempre | conferma, poi `POST /users/{id}/onboarding/reset` con corpo `null` (tutti i flussi) |
+>   | `users-action-delete` | non admin | apre `AccountDeletionDialog` in modo admin; per un admin è spenta con `demote-first` |
+>
+>   - `last-admin`: disattivare o declassare l'unico admin attivo della lista. Il backend resta l'autorità (409
+>     `LAST_ADMIN`).
+>   - `protected`: `row.protected`, che spegne disattiva, declassa ed elimina.
+>   - Le conferme usano `ConfirmModal` (`users-confirm`).
+> - **Inviti** (`users-invites`): riga `users-invite-row` con `data-invite-id`, `data-email` e `data-admin`. Mostra
+>   email (o «—»), ruolo, creazione e scadenza; la revoca è `users-invite-revoke`, con conferma.
+>
+> **Finestra dell'invito** (`users-invite-dialog`, `ModalBase` con `trapFocus`):
+> 1. **Modulo**: `users-invite-email` (facoltativo), `users-invite-admin` (`grants_admin`), `users-invite-create`,
+>    `users-invite-cancel`.
+>    - Gli errori `REGISTRATION_DISABLED` e `USER_LIMIT_REACHED` compaiono inline in `users-invite-error`, con
+>      `data-error-code`.
+> 2. **Link**: `LinkShare` con `purpose="invite"` e scadenza «7 giorni»; si chiude con `users-invite-done`, che
+>    ricarica la lista.
+>
+> **Finestra del reset** (`users-reset-dialog`): conferma («i link di prima smettono di funzionare»), poi
+> `users-reset-create` → `LinkShare` con `purpose="password_reset"` (30 minuti), poi `users-reset-close`.
+>
+> **`LinkShare`** (`link-share`, `data-purpose`): props `purpose`, `path`, `url` (o null), `expiresAt` e `context`
+> (`{username?, email?, userId?}`).
+> - **Base precompilata**: se `url` finisce con `path`, la parte che precede; altrimenti `window.location.origin`. È
+>   il prefill di D-A3: `LIBREFOLIO_PUBLIC_URL` quando c'è, altrimenti l'indirizzo del browser.
+> - `link-share-address` è modificabile; il link (`link-share-link`, in sola lettura) è la base normalizzata più
+>   `path`.
+> - **Verifica** solo se la base normalizzata è diversa da quella precompilata, dopo 500 ms senza digitare.
+>   - Stato in `link-share-probe` con `data-state`: `idle`, `checking`, `match`, `mismatch`, `unverifiable` o
+>     `invalid`.
+>   - Tornare alla base precompilata riporta a `idle`. Un indirizzo non http(s) dà `invalid` e spegne la copia.
+>   - Negli altri stati il link si copia sempre (decisione D-A3).
+> - **Copia** (`link-share-copy`): `navigator.clipboard`; se non è disponibile, il testo resta selezionato nel campo.
+>   Toast ed evento `accounts.link.copied` con `{purpose}`.
+> - **Registro per E** (`linkShareActions.ts`):
+>   - `LINK_SHARE_ACTIONS: LinkShareAction[]`, vuoto oggi, con `{id, component, visible?(ctx)}`;
+>   - `LinkShare` mostra in `link-share-actions` ogni azione visibile, con le props `{link, purpose, context}`;
+>   - E aggiunge «Spedisci per email» con una riga.
+>
+> **`addressProbe.ts`**:
+> - `normalizeBase(input)`: toglie gli spazi; solo URL `http`/`https` senza query né fragment; toglie le barre finali e
+>   tiene un eventuale prefisso di percorso. Restituisce `null` se non è valido.
+> - `probeUrl(base, nonce)` → `${base}/api/v1/auth/address-probe?nonce=${encodeURIComponent(nonce)}`.
+> - `checkAddress(base, {issueNonce, fetchImpl = fetch, timeoutMs = 8000})`, che restituisce `match`, `mismatch` o
+>   `unverifiable`:
+>   - prende il nonce con `POST /users/address-probe` dal client Zodios: un errore dà `unverifiable`;
+>   - poi `fetchImpl(probeUrl, {method:'GET', credentials:'omit', cache:'no-store', referrerPolicy:'no-referrer',
+>     signal})`, **senza `headers`**: è una richiesta CORS semplice, perché un preflight lo rifiuterebbe il
+>     `CORSMiddleware` (H);
+>   - `ok` con `match === true` → `match`; `ok` con `match === false` → `mismatch`; tutto il resto → `unverifiable`
+>     (errore di rete o CORS, stato non 200, JSON non valido, timeout, contenuto misto, permesso di rete locale).
+>
+> **`AccountDeletionDialog`** (`ModalBase` con `trapFocus`):
+> - Props: `open`, `mode: 'self' | 'admin'`, `account {id, username, is_active}`, `testIdPrefix` (`profile-delete` o
+>   `users-delete`), `onClose`, `onDeleted(result)`, `onDeactivate?` (solo admin).
+> - **All'apertura** carica l'anteprima: `GET /auth/users/me/deletion-preview` per sé, `GET /users/{id}/deletion-preview`
+>   per l'admin. `${p}-dialog` porta `data-busy`.
+> - **In modo admin, con l'account attivo**, la prima scelta è «Disattiva invece» (`${p}-deactivate`): tiene tutto e
+>   si annulla. Poi l'eliminazione.
+> - **Anteprima** (`${p}-preview`):
+>   - `${p}-broker-deleted`, con `data-broker-id` e `data-transactions`: i broker che spariscono con le loro
+>     transazioni;
+>   - `${p}-broker-left`, con `data-broker-id` e `data-role`: i broker da cui sparisce solo l'accesso;
+>   - `${p}-unpaired`, con `data-count`, quando `transfers_unpaired > 0`: la frase V-3, provvisoria e concordata con
+>     W.
+> - **Conferma** col nome utente: `${p}-confirm-input` sblocca `${p}-confirm`, rosso, `bg-lf-danger
+>   text-lf-on-status`. `${p}-cancel` annulla; `${p}-error` porta `data-error-code`.
+> - **In `ProfileTab`** sostituisce il dialogo inline, con gli stessi `data-testid` (`profile-delete-dialog`,
+>   `-confirm-input`, `-cancel`, `-confirm`; il pulsante `delete-account-button` resta). L'esito resta quello di oggi:
+>   `auth.logout()` e `goto('/')`.
+>
+> **Errori** (`accountErrors.ts`: `detail.error_code` → chiave i18n):
+> - i codici: `LAST_ADMIN`, `USER_LIMIT_REACHED` (con `billing_url` se c'è), `REGISTRATION_DISABLED`,
+>   `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`;
+> - 404: l'account non c'è più, e la lista si ricarica;
+> - 500 dell'eliminazione: «non è stato eliminato niente»;
+> - altrimenti un messaggio generico;
+> - sempre un toast d'errore ed `accounts.action.failed` con `{action, code}`.
+>
+> **Eventi** (`notify`, `area.thing.past-tense`):
+> - con toast: `accounts.user.sessions-revoked`, `accounts.user.onboarding-reset`, `accounts.user.deleted` (con
+>   `brokers_deleted`), `accounts.reset-link.created`, `accounts.link.copied`;
+> - senza toast: `accounts.user.deactivated`, `reactivated`, `promoted`, `demoted`, `accounts.invite.created`,
+>   `accounts.invite.revoked`, `accounts.address.checked` (con `{state}`).
+>
+> **i18n** (sorgenti in `lib/i18n/settings/`, EN, IT, FR ed ES): `settings.users` (l'etichetta della scheda),
+> `settings.usersTab.*`, `settings.linkShare.*` e `settings.accountDeletion.*`. Per sé restano le chiavi
+> `settings.deleteAccount*` di oggi.
+>
+> **Prove** (rossi dai `test-author`, li lancio io):
+> - **V1, Vitest puri** (`core-unit`): `linkShare.test.ts`, `addressProbe.test.ts`, e la riga Utenti in
+>   `settingsTabs.test.ts`.
+> - **V2, Vitest di componente** (`component-unit`): `LinkShare`, `InviteDialog`, `UsersTab`,
+>   `AccountDeletionDialog`, e `ProfileTab.test.ts` adattato.
+> - **E1, E2E** `e2e/settings/admin-users.spec.ts` (`front-utility admin-users`), da `e2e_test_admin` su account usa e
+>   getta:
+>   - disattiva e riattiva, promuovi e declassa;
+>   - link di reset;
+>   - invito creato e revocato;
+>   - verifica dell'indirizzo sull'origine alternativa della corsia (`localhost` contro `127.0.0.1`: `match`, il vero
+>     percorso CORS) e su una porta chiusa (`unverifiable`);
+>   - eliminazione con anteprima e conferma digitata.
+> - **E2, A-12**: i selettori di `e2e/settings.spec.ts`.
+>
+> **Doc** (`docs-writer`, solo EN):
+> - una pagina admin «Utenti», nuova con una riga di nav da dichiarare, oppure una sezione di `admin/settings`;
+> - la sezione «Delete Account» di `user/settings/profile`;
+> - `admin/cli_tools`, che rimanda alla scheda;
+> - per gli sviluppatori, `frontend/components/features/settings.md`, con il titolo di A-7.
+>
+> **Galleria**: uno scatto della scheda Utenti con dati finti (`page.route` su `/users` e `/users/invites`), nel file
+> di G: da concordare.
+>
+> **Fuori da A6b**: la scheda Sicurezza (A8), le regole della password (A6c), F02 (A7), le traduzioni della doc
+> (A-10).
+>
+> **Risposte del coordinatore** (15/10, ~17:40):
+> 1. **Ordine delle schede**: Users 110 va bene; Backup di B = 120 (già nel suo ramo); Email di E = 130. Al merge si
+>    tengono tutte le righe.
+> 2. **Doc**: una pagina nuova, `admin/users.en.md`, perché è una funzione centrale per chi amministra un'istanza nel
+>    cloud. La riga nella nav di `mkdocs.yml` e quella di `nav_translations` le scrivo io e le dichiaro all'handoff.
+>    Anche E2b aggiunge una riga di nav: si tengono entrambe.
+> 3. **Galleria**: `gallery.spec.ts` è dei colori. Il coordinatore lo chiede al loro coordinatore, insieme allo scatto
+>    Backup di B. Intanto non lo tocco.
+> 4. **Frase V-3**: girata a W, che la corregge.
+> 5. **Aggancio `linkShareActions.ts`**: girato a E così com'è.
+> 6. **Runner**: solo righe in aggiunta, dichiarate.
+
+#### A6b.2 — Test rossi (sei `test-author` in parallelo, solo scrittura) e bozza dell'implementazione ✅ (2026-10-15)
+> - Il contratto, in inglese per i `test-author`, è nel file di sessione `a6b_contract_en.md`: è la stessa cosa di
+>   A6b.1.
+> - **Gli autori**:
+>   - V1, Vitest puri: `linkShare`, `addressProbe` e la riga in `settingsTabs`;
+>   - V2: `LinkShare`, `InviteDialog`, `ResetLinkDialog`;
+>   - V3: `UsersTab`;
+>   - V4: `AccountDeletionDialog` e `ProfileTab.test`;
+>   - E1: E2E `settings/admin-users.spec.ts`;
+>   - E2: A-12 in `settings.spec.ts` e `SettingControls.test.ts`.
+> - **E2 (A-12)** ✅:
+>   - `settings.spec.ts` (+63/−27): `beforeEach` su `data-busy`; sblocco via `settings-lock-toggle`; righe per chiave
+>     (`global-setting-session_ttl_hours` + `spinbutton`); `setting-save` e `setting-undo` nella riga; prova della sola
+>     lettura per il non admin.
+>   - `SettingControls.test.ts` (+29): il segnaposto «Coming soon» (`disabled` con `badge`) e un controllo normale.
+>   - Serve un aggancio nel prodotto: `data-testid="settings-readonly-indicator"` sul segno di sola lettura di
+>     `GlobalSettingsTab`. Senza, i due test «non admin» restano rossi.
+> - **Bozza dell'implementazione** in `/tmp/libreFolio_a6b/`: 12 file nuovi, `apply_a6b.py` per `ProfileTab`,
+>   `settingsTabs.ts` e `GlobalSettingsTab` (l'aggancio di E2), `a6b_i18n.py` per 107 chiavi in ciascuna delle 4 lingue.
+>   - Prova a secco su una copia `git archive` (`dry_run.sh`): si applica pulita; build del catalogo,
+>     `svelte-kit sync`, `svelte-check` 0 errori e 0 avvisi; colori `theme-roles --check` puliti (`ProfileTab` sotto il
+>     suo record); prettier pulito.
+> - **Rapporti degli autori** (tutti in ordine, nessun test eseguito da loro tranne prettier):
+>   - V1: `linkShare.test.ts` (25), `addressProbe.test.ts` (64), `settingsTabs.test.ts` (+60/−16; `UsersTab` mockato
+>     come gli altri, riga `adminOnly`).
+>   - V2: `users/LinkShare.component.test.ts` (22), `InviteDialog.test.ts` (10), `ResetLinkDialog.test.ts` (8).
+>     **Fuori pista**: il nome `LinkShare.component.test.ts`, perché il disco non distingue le maiuscole e
+>     `LinkShare.test.ts` coinciderebbe con `linkShare.test.ts`.
+>   - V3: `tabs/UsersTab.test.ts` (54 casi, con un piccolo server finto dietro l'API).
+>   - V4: `AccountDeletionDialog.test.ts` (49) e `ProfileTab.test.ts` (9 casi sulla cancellazione).
+>   - E1: `e2e/settings/admin-users.spec.ts` (10 casi, AUSR-E-01…10).
+> - **Correzioni della bozza** dai rapporti:
+>   - `LinkShare` copia con `writeTextToClipboard`, perché `clipboardSink.gate.test.ts` lo impone;
+>   - il debounce riparte a ogni tasto;
+>   - `data-expires-at` su `link-share-expires`.
+> - **Fuori pista — regressione evitata** (segnalata da V4): l'unico admin che elimina il proprio account riceve 400
+>   con una frase e senza `error_code`. Il vecchio dialogo la mostrava; con la mappa dei codici sarebbe diventata un
+>   errore generico. `accountErrors.ts` ora mostra la frase del server per un 400/409 senza codice
+>   (`accountErrorText`). Il codice vero è una voce nuova del backlog (A-16).
+> - **Rossi** (Vitest, 10 file, `--maxWorkers 2`, prima dell'implementazione), per il motivo giusto:
+>   - 7 file falliscono all'import, perché i moduli non esistono;
+>   - `settingsTabs`: 5 falliti e 14 passati (manca la riga `users`);
+>   - `ProfileTab`: 8 falliti (l'anteprima non viene chiesta) e 48 passati;
+>   - `SettingControls` verde (copertura, non un rosso).
+>   - **Non lanciati**: i rossi E2E (`admin-users`, `settings`). La scheda non esiste, quindi falliscono per forza;
+>     le E2E vanno nello slot pesante del coordinatore.
+> - **Registrazioni nel runner** (`_frontend_utility.py`, solo righe in aggiunta):
+>   - `core-unit`: +2 file;
+>   - `component-unit`: +5 file;
+>   - `front_admin_users` + `add_test(..., "admin-users", ...)`.
+
+#### A6b.3 — Implementazione ✅ (2026-10-15)
+> - `apply_a6b.py`: 12 file nuovi; `ProfileTab` (`AccountDeletionDialog` al posto del dialogo inline, −69 righe);
+>   `settingsTabs.ts` (riga `users`, 110); `GlobalSettingsTab` (`data-testid="settings-readonly-indicator"`).
+> - `a6b_i18n.py`: 107 chiavi in EN, IT, FR ed ES. `settings.deleteAccountFailed`, rimasta senza uso, è stata tolta
+>   con `dev.py i18n remove`.
+> - **Fuori pista**: `src/routes/(app)/settings/page.tabs.test.ts` usa il registro vero e rende inerti i corpi delle
+>   schede. Senza il suo `vi.mock` per `UsersTab.svelte`, caricava la scheda vera e non trovava `DEFAULT_LOCALE` nel
+>   mock di i18n. Ho aggiunto una riga, sul modello delle altre (B farà lo stesso per Backup) e corretto il commento
+>   («the four» → «the»). Ora 18 passati.
+> - `mkdocs.yml`: «Users & Invitations: admin/users.md» sotto «⚙️ System Configuration», più le tre righe di
+>   `nav_translations`. Da dichiarare all'handoff.
+
+#### A6b.4 — Prove leggere ✅ (2026-10-15)
+> - Vitest sui 10 file: **394 passati**, al primo colpo.
+> - Gate Vitest: `clipboardSink`, `htmlInterpolation`, `htmlSink`, `themeRoles`, `themeTokens`,
+>   `themeComponentTokens`, `themeModeReads` e `flagFont` verdi; `page.tabs` verde dopo il mock.
+> - `theme-roles.mjs --check` pulito. Prettier pulito su `features/settings` e `i18n/settings`.
+> - `i18n check` pulito (4529 chiavi, strict). `i18n audit`: nessuna traduzione mancante; l'unica chiave senza uso
+>   era `deleteAccountFailed`, ora tolta.
+> - knip (`lint --dead-code --scope frontend`): niente nei file di A6b; i risultati sono di prima.
+> - `front check` (svelte-check): 18 errori di tipo, tutti in `AccountDeletionDialog.test.ts` (i mock di V4), verde a
+>   runtime. Richiesta a V4 la sola correzione dei tipi.
+> - V4 ha corretto i tipi (`ReturnType<typeof vi.fn>` ovunque, 4 righe): **`front check` 0 errori, 0 avvisi**;
+>   `AccountDeletionDialog.test.ts` 49 passati.
+> - Chiesto lo slot pesante (15/10, ~18:3x): `all-backend`; `front-utility core-unit` e `component-unit`; le E2E una
+>   alla volta con `--workers 2`: `admin-users`, `settings`, `front-user account-deletion`, `auth`, `auth-links`,
+>   `app-start-auth`, `theme-roles`.
+> - **Frase V-3 definitiva di W** (via coordinatore, 15/10 18:15): EN e IT di W, FR ed ES tradotte da me, in
+>   `settings.accountDeletion.unpaired`, con i plurali ICU.
+>   - Prova con `intl-messageformat`, `count` 1 e 3, nelle 4 lingue: si formatta (anche con gli apostrofi francesi e
+>     italiani). `i18n check` strict: 4528 chiavi.
+>   - Nota di W: con la decisione 47 anche le metà in uscita diventeranno rettifiche, in un lotto di J e W più avanti;
+>     allora W aggiorna la frase.
+>   - **Fuori pista**: l'app in italiano dice «transazioni» (122 volte) e non «movimenti». Le mie 5 stringhe IT
+>     (`deactivate.message`, `warningAdmin`, `deactivateText`, `brokersDeleted`, `transactions`) sono allineate.
+> - **Scatto della galleria `settings/users`**: le regole e la checklist di G sono nel file di sessione del
+>   coordinatore (`gallery-shot-rules.md`). Lo scrive un `test-author` (`gallery.spec.ts`, solo aggiunte):
+>   - dati fissi via `page.route` (GET `/users` e `/users/invites`), corpi validati con `schemas.*.parse`;
+>   - l'id vero dell'admin da `/auth/me`, per il badge «Tu»; una riga aperta;
+>   - desktop con `extendScreenToBlock`.
+>   - Date assolute, quindi l'orologio non serve. Le catture A/B e il diff vanno nello slot della galleria (in coda
+>     dopo L, T-8b e DV).
+> - **Slot pesante 2, mio** (coordinatore, 15/10 ~18:25). Sequenza in `/tmp/libreFolio_a6b/slot.sh`, log in
+>   `/tmp/libreFolio_a6b/logs/slot/`, tutto con `nice -n 10`:
+>   1. `all-backend`;
+>   2. `front-utility core-unit`, poi `component-unit`;
+>   3. `db populate --force`;
+>   4. le E2E con `--workers 2`, una alla volta: `admin-users`, `settings`, `front-user account-deletion`, `auth`,
+>      `auth-links`, `app-start-auth`, `theme-roles`.
+> - **Risposta a E** (Email, decisione 45, 15/10 18:20): riusa `users/addressProbe.ts` così com'è.
+>   - `normalizeBase` + `checkAddress` (`match | mismatch | unverifiable`), con il nonce passato da fuori.
+>   - Il contenuto misto lo controlla E prima della chiamata; un `signal` facoltativo lo può aggiungere E, in aggiunta e
+>     dichiarato.
+>   - `LIBREFOLIO_PUBLIC_URL` il browser non lo legge: viene da `url` nelle risposte dei link. Per la scheda Email la
+>     fonte è il suo `/email/status`, oppure un campo in `/system/instance` (H), se lo decide il coordinatore.
+
+#### A6b.5 — Doc (`docs-writer`, EN) e scatto della galleria ✅ (2026-10-15; il doppio lancio dello scatto è di G-13)
+> - **Galleria** (`test-author`): `gallery.spec.ts` +63/−0. L'import di `schemas` (L138) e il test
+>   `'users - all languages and themes'` (L2121–2181) dopo `profile tab`: 16 scatti `{desktop,mobile}/{en,it,fr,es}/
+>   {light,dark}/settings/users`.
+>   - Corpi fissi validati con `schemas.*.parse`.
+>   - Rotte con un predicato sul `pathname`, solo GET, il resto `fallback()`.
+>   - L'id vero dell'admin da `/auth/me` (sola lettura).
+>   - In più: il conteggio delle righe finte (4 account e 2 inviti), che prova che la foto mostra il mock e non la
+>     corsia; la riga di `marco` chiusa prima del clic, aperta dopo.
+>   - Mobile da verificare alle catture: se il clic sposta lo scroll, serve `frameTarget`.
+>   - Ora locale: le date sono assolute, quindi due catture sulla stessa macchina coincidono.
+> - **Doc, prima passata** (6 file):
+>   - nuovo `admin/users.en.md` (`#open-the-tab`, `#places`, `#accounts`, `#actions`, `#action-off`, `#invitations`,
+>     `#open-invitations`, `#reset-links`, `#server-address`, `#delete`);
+>   - `user/settings/profile.en.md` «Delete Account»;
+>   - `admin/cli_tools.en.md`;
+>   - `admin/settings.en.md`;
+>   - dev `frontend/components/features/settings.md`, con A-7: titolo «🌍 GlobalSettingsTab (read by everyone, edited
+>     by administrators)» e ancora esplicita `#globalsettingstab-admin-only` per i link vecchi;
+>   - `security.md#address-probe` («In the app»).
+>   - Scelta giusta del docs-writer: nessun link verso ancore che esistono solo in inglese (A-10), perché la pagina
+>     nuova senza traduzioni farebbe fallire il build strict nelle altre lingue.
+>   - Protezione: oggi `account_protection` restituisce `None` ovunque; la pagina dice che «Protected» è riservato
+>     all'admin pagante (A7).
+> - **Doc, seconda passata** (in corso), per la deriva trovata: `admin/configuration.en.md` (righe `BILLING_URL` e
+>   `PUBLIC_URL`), `user/settings/index.en.md` e `developer/frontend/pages/index.md` («four tabs»), `admin/index.en.md`,
+>   `test-walkthrough/front-utility.md` (`admin-users`), `components/index.md`.
+> - **Doc, seconda passata** ✅ (6 file):
+>   - `admin/configuration.en.md`: righe `PUBLIC_URL` e `BILLING_URL`, più la riga `PUBLIC_URL` della tabella dei
+>     valori sbagliati;
+>   - `user/settings/index.en.md`: cinque schede, Utenti solo per gli admin;
+>   - `developer/frontend/pages/index.md`: 5 schede, `UsersTab`, `ProfileTab` corretto;
+>   - `admin/index.en.md`: la pagina nuova e la frase d'introduzione;
+>   - `test-walkthrough/front-utility.md`: `#admin-users`, 10 casi;
+>   - `components/index.md`.
+>   - Il docs-writer ha controllato in sola lettura 229 link e ancore: tutti si risolvono.
+> - Le descrizioni del runner (`core-unit`, `component-unit`) ora nominano la scheda Utenti e i suoi moduli:
+>   cambiano solo le stringhe `desc`.
+> - **Debito di traduzione** (A-10, nessun timbro): `admin/users` è nuova; sono cambiate le sezioni di `profile`,
+>   `cli_tools`, `settings`, `configuration` (la cui sezione Accounts manca già in IT, FR ed ES), `admin/index` e
+>   `user/settings/index`.
+
+#### A6b.6 — Slot pesante 2: validazione di A6a + A6b ✅ (2026-10-15, 18:22–19:45)
+> Base `5e21149e5` (= A6a entrato), nella corsia 6182, con `nice -n 10`; log in `/tmp/libreFolio_a6b/logs/slot/`.
+>
+> | Prova | Esito |
+> |---|---|
+> | `all-backend` | ✅ 7/7 categorie (external, db, services, utils, schema, api, e2e), 51 min 50 s |
+> | `front-utility core-unit` | prima ❌ 1 su 4728 (vedi sotto); dopo la cura ✅ 4728 su 152 file |
+> | `front-utility component-unit` | ✅ 3561 su 134 file |
+> | `db populate --force` | ✅ |
+> | E2E `admin-users` (`--workers 2`) | ✅ 10 (52 s) |
+> | E2E `settings` | ✅ 46 (A-12 compreso) |
+> | E2E `front-user account-deletion` | ✅ 1 (i `profile-delete-*` di `ProfileTab` tengono) |
+> | E2E `auth`, `auth-links`, `app-start-auth`, `theme-roles` | ✅ 33, 9, 3, 8 |
+>
+> - **Fuori pista — difetto trovato da `catalogIcuLocale.test.ts`** (verdetto: *defect*, mio):
+>   - `settings.accountDeletion.transactions` era identico in EN e FR. svelte-i18n compila un messaggio una volta sola,
+>     con la lingua di chi lo chiede per primo, e il francese avrebbe preso le regole plurali inglesi (in francese lo
+>     0 è singolare).
+>   - **Cura**: un caso `=0` diverso in ogni lingua («no transactions», «nessuna transazione», «aucune transaction»,
+>     «ninguna transacción»).
+>   - I gate i18n (`src/lib/i18n`, 3 file, 30 test) sono verdi; poi `core-unit` intero verde.
+>   - **Lezione**: dopo un cambio di testi ICU, lanciare `vitest run src/lib/i18n`, perché `i18n check` non vede questo
+>     caso.
+> - Avviso di ambiente nelle E2E: il build non scarica MathJax dal CDN (`CERTIFICATE_VERIFY_FAILED`). Non è di A6b.
+> - **Dopo lo slot**: `mkdocs build` strict ✅; `check-links` 95 ✅; `tsc -p tsconfig.e2e.json` ✅ con i soli 2 errori di
+>   base (`e2e/onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
+> - **Galleria**: le catture A/B di `settings/users` (desktop e mobile), il diff, `live_price_check` e i controlli i18n
+>   negli scatti restano allo slot della galleria (in coda).
+> - Backlog: A-7 (titolo del dev `settings.md`) e A-12 chiuse; A-10 con le pagine di A6b; A-16 nuova.
+
+### Checkpoint A6b (frontend) 🧊 (2026-10-15, ~19:50) — FROZEN, in attesa del commit del coordinatore
+> - Base `5e21149e5`; 28 file tracciati modificati, 21 nuovi; `git diff --check` pulito; la porta 6182 è libera.
+> - **Ancora aperto**: lo slot della galleria (catture e diff di `settings/users`); dopo, la revisione di G in sola
+>   lettura.
+> - **Committato dal coordinatore** (15/10, sera): `3706a7e19` feat, `1577663c1` test, `38cb2c513` docs, `c576a0499`
+>   gallery, `0b8bb863e` journal. Lo scatto `settings/users` passa a G per la revisione; il doppio lancio lo fa G-13.
+
+#### A6b.7 — Aggiornamento di base (`f242cd6f4`): B, E2, J CP-4, Z6b, W E1b e N2, Y2, L ✅ (2026-10-15)
+> - Il coordinatore ha aperto il merge di `dev_release2` (`00aa2ab3c`): 6 conflitti, tutti risolti tenendo i due lati.
+>   Ho messo in stage solo quei file; il commit del merge è suo, `f242cd6f4`.
+>   1. `settingsTabs.ts`: un solo import lucide; gli import di `UsersTab`, `BackupTab` ed `EmailSettingsTab`; le righe
+>      users 110, backup 120, email 130.
+>   2. `settingsTabs.test.ts`: tenuto il disegno di E, `CONTEXTS` per contesto, con `users` nella lista
+>      dell'amministratore; tolti il mio `adminOnly` e `todayFor`.
+>      - In `TODAY`, `bodies` e `vi.mock` ci sono le tre schede; STAB-01/02 e i casi di backup ed email restano.
+>      - Le intestazioni sono unite.
+>   3. `page.tabs.test.ts`: i tre `vi.mock`.
+>   4. `_frontend_utility.py`: la lista con le mie 4 righe e `EmailSettingsTab.test.ts`. Le due `desc` le ho ricomposte
+>      dall'antenato comune, con le aggiunte di E e poi le mie; il registro dice «users (order 110), backup and email for
+>      administrators only».
+>   5. `admin/configuration.en.md`: `PUBLIC_URL` è mia. In `BILLING_URL`, **Manage subscription** compare nella scheda
+>      Utenti e nella pagina di blocco di H. Nessuna riga doppia nuova: i doppioni ci sono già in entrambi i genitori,
+>      perché la variabile sta sia nella tabella delle variabili sia in quella dei valori sbagliati.
+>   6. Dev `settings.md`: **sette** schede (il coordinatore aveva scritto sei, poi l'ha confermato) e i tre ordini nel
+>      punto `alignEnd`.
+> - **Fuori pista — il caso di B riadattato**: «backup comes **right** after admin» (`ids[adminAt + 1]`) con users a 110
+>   in mezzo sarebbe rosso. Ora dice «backup comes after admin, in the right-hand group» (`indexOf('backup') > adminAt`).
+>   L'ordine esatto resta fissato dal caso `CONTEXTS`. Il coordinatore approva: è la correzione di significato giusta.
+> - Prova prima dello stage: Vitest `settingsTabs` e `page.tabs` 41 ✅, prettier pulito, le due righe di nav (Email di
+>   E2b, Users) in `mkdocs.yml`.
+> - **Validazione della revisione combinata** (in corso, `/tmp/libreFolio_a6b/merge_validation.sh`): `api sync`,
+>   `front check`, Vitest (`settingsTabs`, `page.tabs`, `ProfileTab`, `UsersTab`), `db populate`, E2E `admin-users` e
+>   `settings`, `mkdocs build`, `check-orphans`. `core-unit` va nello slot 1, dopo J.
+
+#### A6b.8 — Slot pesante 1: `core-unit` della revisione combinata e handoff d'ingresso ✅ (2026-10-15, 20:25–20:35)
+> - HEAD `e66334205` (A6b `3706a7e19`…`0b8bb863e`, merge `f242cd6f4`, journal `97fb199f1`, commento della galleria
+>   `0cf135997`, journal `e66334205`), worktree pulito. Lo slot 1 me l'ha dato il coordinatore alle 20:25.
+> - `nice -n 10 … dev.py test --test-port 6182 --data-dir /tmp/librefolio-r13-a front-utility core-unit`:
+>   ✅ **5139 su 157 file**, 1 min 32 s (log `/tmp/libreFolio_a6b/logs/entry/core_unit.log`). Il rosso noto di
+>   `htmlInterpolation.gate.test.ts` non compare: nella mia base la chiave `email.problems.SMTP_FROM_INVALID` è già
+>   quella corretta da E2 («angle brackets», senza `<`), e il gate è nel giro e passa.
+> - Previsione d'ingresso, in sola lettura: `git merge-tree --write-tree dev_release2 (b4597efad) HEAD` → **nessun
+>   conflitto** (albero `d59a9d0c8`). Due file toccati dai due lati, uniti da soli e riletti:
+>   - `security.md`: H (CP2b) a L320 e L697 (i riferimenti a `main.py` → `services/platform/`), io a L627 (il
+>     paragrafo «In the app»); l'ancora `#address-probe-cors` del mio rimando resta;
+>   - `BACKLOG_POST_1.2.md`: sezioni diverse.
+>   - Dopo `00aa2ab3c` il mio ramo non tocca file del backend: le patch di H su `test_post_migration.py` non lo toccano.
+> - Porta 6182 libera (`lsof` vuoto). Artefatti ignorati: `.testLog/` (con `00_archive/test-db_20261015_202730.tar.xz`
+>   dello snapshot del runner).
+> - Handoff d'ingresso mandato; stato **FROZEN** fino all'ingresso e al via di A6d.
+
+### A6d — Decisione 36: registrazione su invito per le istanze nuove, impostazioni globali solo con il login — in attesa del via (dopo l'ingresso di A6b)
+
+#### A6d.0 — Analisi e risposte del coordinatore ✅ (2026-10-15)
+> **La decisione 36** (dal coordinatore):
+> 1. **Registrazione**: il default diventa «su invito»; «aperta» solo per scelta dell'admin, segnalata nel pannello
+>    Sicurezza. Il primo account resta creabile finché l'istanza non ne ha nessuno. Le istanze già «aperte» tengono la
+>    loro scelta, con l'avviso. Se il default cambia, serve una riga ⚠️ nel CHANGELOG.
+> 2. **Impostazioni globali solo con il login**, dopo aver verificato che la configurazione pubblica di H porti fuori
+>    tutto quello che serve alla pagina di login.
+> 3. **Restano visibili** i nomi dei broker e degli utenti, e le email; la ricerca degli utenti non cambia.
+>
+> **Lo stato trovato** (sola lettura, 15/10):
+> - il default di oggi è `open` (`GLOBAL_SETTINGS_DEFAULTS`); la 006 converte solo dove c'è `enable_registration`;
+> - il primo account il backend lo crea admin in ogni modalità, ma con `invite`/`disabled` il login nasconde
+>   «Register here»;
+> - `GET /settings/global` e `/global/{key}` sono pubbliche. Il frontend le legge solo da loggato (`appBootstrap`, le
+>   schede Preferenze e Globali, la pagina Files); le pagine pubbliche leggono solo `/system/instance`. Quindi non c'è
+>   niente da spostare.
+>
+> **Il disegno approvato**:
+> 1. **Default `invite`** in `GLOBAL_SETTINGS_DEFAULTS`, più una migrazione di soli dati, idempotente: se manca la riga
+>    `registration_mode` e `users` ha almeno un account, scrive `open`. Così nessuna istanza esistente cambia in
+>    silenzio.
+>    - **Numero**: la 007 è di X (`007_plugin_settings`, CP10), che entra prima. La mia sarà la **008**, o il primo
+>      numero libero: prima di scriverla controllo la testa di Alembic su `dev_release2`.
+> 2. **`accounts.first_account_open`** in `/system/instance`: nessun account e, con A7, nessun bootstrap F02.
+>    `LoginCard` mostra «Register here» anche in `invite`/`disabled` quando è vero.
+>    - Pubblico va bene (coordinatore): che un'istanza sia vuota lo si scopre comunque provando a registrarsi, e dura
+>      pochi minuti; nel cloud F02 lo spegne. **Va scritto nella doc di sicurezza.**
+> 3. **L'avviso «registrazione aperta»** arriva con A8 (scheda Sicurezza). Fino ad allora lo dice la doc.
+> 4. **Impostazioni globali**: `get_current_user` sulle due GET; la scrittura resta admin.
+>    - Il test (`test_instance_block.py`, il parametro `/settings/global` fra le rotte pubbliche) e la docstring di
+>      `instance_block.py` di H li faccio io, dichiarati (CP2b di H non tocca quel file).
+>    - Da controllare: `test_settings_api.py`, `test_registration_api.py`, `test_uploads_api.py`, `security.md` e le
+>      E2E che leggono le impostazioni globali.
+> 5. **CHANGELOG ⚠️** approvato: le istanze nuove partono su invito (il primo account si registra comunque); le
+>    esistenti tengono la loro scelta; le impostazioni globali solo per chi ha fatto il login.
+>
+> **Ordine dei lotti**: A6d, poi A6c, poi A7 e A8.
+> **Backlog**: A-17 (KeePassXC, Email prima di Username), basso, dopo T-8b dei colori.
+> - **Validazione della revisione combinata `f242cd6f4`** (in fila con `nice -n 10`; log in
+>   `/tmp/libreFolio_a6b/logs/merge/`):
+>   - `api sync` ✅; `front check` 0 errori, 0 avvisi;
+>   - Vitest `settingsTabs`, `page.tabs`, `ProfileTab` e `UsersTab`: 151 ✅;
+>   - `db populate --force` ✅;
+>   - E2E `admin-users` 10 ✅ e `settings` 46 ✅, con `--workers 2`;
+>   - `mkdocs build` ✅; `check-orphans` ✅.
+>   - Resta `core-unit`, nello slot 1 dopo J, quando lo dà il coordinatore.
+
+#### Nota del coordinatore — `main.py` congelato (15/10, 20:05)
+> - `backend/app/main.py` è congelato fino all'ingresso di CP2b di H. CP2b lo divide in `services/platform/`:
+>   `lifecycle.py` (avvio e spegnimento), `middleware.py`, `static_site.py` e `database_bootstrap.py`.
+> - **Per A**: A6d non tocca l'avvio (default in `schemas/settings.py`, migrazione 008, `LoginCard`, le due GET). A7
+>   (admin iniziale F02 all'avvio) e A8 (controlli di sicurezza all'avvio) aspettano CP2b; dopo basta una riga nel
+>   modulo giusto.
+> - **Rosso preesistente noto** (coordinatore, 15/10 20:08): in `dev_release2`, quindi anche nella mia base dopo il
+>   merge, `htmlInterpolation.gate.test.ts` è rosso sulla chiave `email.problems.SMTP_FROM_INVALID` di E2, che contiene
+>   `<`. E lo corregge. Se compare in `core-unit` lo segnalo come preesistente; ogni altro rosso va guardato.
+> - **Verdetto di G sullo scatto `settings/users`** (`c576a0499`, 15/10 20:09): **ok, può entrare**. Il merge di
+>   `gallery.spec.ts` con E2b è pulito. Le note non bloccanti:
+>   1. il commento citava «(G-10)», che riguarda l'ordine degli avatar: ora rimanda a `registerGalleryAccount`
+>      (`galleryReportSets.ts`). Solo il commento cambia; prettier è pulito;
+>   2. «(admin)» nel titolo: tenuto com'è, `'users - all languages and themes'`, come dice la checklist di G e per
+>      non cambiare il filtro;
+>   3. corpi e rotte in `fixtures/galleryUsers.ts`: rimandato ad A-18, quando lo scatto si ricontrolla comunque.
+>   - `tsc -p tsconfig.e2e.json` sulla revisione combinata (HEAD `97fb199f1`, con il client generato dal mio
+>     `api sync`): i soli 2 errori di base (`e2e/onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).

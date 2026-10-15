@@ -7,8 +7,9 @@
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {Calendar, Camera, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
+    import {Calendar, Camera, Key, Mail, Pencil, PencilOff, Save, Undo, User} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/features/settings/PasswordChangeModal.svelte';
+    import AccountDeletionDialog from '$lib/features/settings/AccountDeletionDialog.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
@@ -38,8 +39,6 @@
 
     // Delete account modal state
     let showDeleteModal = false;
-    let deleteConfirmText = '';
-    let deleting = false;
 
     // Avatar state
     let originalAvatarUrl: string | null = null;
@@ -88,7 +87,6 @@
     $: hasAnyChanges = usernameModified || emailModified || avatarModified;
 
     // Check if delete confirmation matches username
-    $: canDelete = deleteConfirmText === $currentUser?.username;
 
     function toggleLock() {
         if (!isLocked && hasAnyChanges) {
@@ -259,28 +257,15 @@
         }
     }
 
-    async function handleDeleteAccount() {
-        if (!canDelete) return;
-        debug.log('ProfileTab', 'handleDeleteAccount');
-
-        deleting = true;
-        error = null;
-
-        try {
-            await zodiosApi.delete_own_account_api_v1_auth_users_me_delete(undefined, {});
-            await auth.logout();
-            goto('/');
-        } catch (e: unknown) {
-            debug.error('ProfileTab', 'handleDeleteAccount failed', e);
-            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
-            error = detail || (e instanceof Error ? e.message : $_('settings.deleteAccountFailed'));
-            deleting = false;
-        }
+    // The dialog deleted the account: its session is gone, back to the start page
+    async function handleAccountDeleted() {
+        debug.log('ProfileTab', 'account deleted');
+        await auth.logout();
+        goto('/');
     }
 
     function closeDeleteModal() {
         showDeleteModal = false;
-        deleteConfirmText = '';
     }
 </script>
 
@@ -542,53 +527,9 @@
     </div>
 {/if}
 
-<!-- Delete Account Confirmation Modal -->
-{#if showDeleteModal}
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_label_has_associated_control a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={closeDeleteModal} on:keydown={(e) => e.key === 'Escape' && closeDeleteModal()} role="dialog" data-testid="profile-delete-dialog" aria-modal="true" tabindex="-1">
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
-            <div class="flex items-center gap-3 mb-4">
-                <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                    <Trash2 size={24} class="text-red-600 dark:text-red-400" />
-                </div>
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
-                    {$_('settings.deleteAccountConfirm')}
-                </h2>
-            </div>
-
-            <p class="text-gray-600 dark:text-gray-300 mb-4">
-                {$_('settings.deleteAccountWarning')}
-            </p>
-
-            <div class="mb-4">
-                <label for="delete-confirm-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {$_('settings.typeUsernameToConfirm').replace('{username}', $currentUser?.username || '')}
-                </label>
-                <input
-                    id="delete-confirm-input"
-                    data-testid="profile-delete-confirm-input"
-                    type="text"
-                    bind:value={deleteConfirmText}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder={$currentUser?.username}
-                />
-            </div>
-
-            <div class="flex justify-end gap-3">
-                <button on:click={closeDeleteModal} data-testid="profile-delete-cancel" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                    {$_('common.cancel')}
-                </button>
-                <button on:click={handleDeleteAccount} disabled={!canDelete || deleting} data-testid="profile-delete-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    {#if deleting}
-                        {$_('common.deleting')}
-                    {:else}
-                        {$_('settings.deleteAccountPermanently')}
-                    {/if}
-                </button>
-            </div>
-        </div>
-    </div>
+<!-- Delete Account: what the deletion would take, then the username typed (AccountDeletionDialog, shared with the Users tab) -->
+{#if showDeleteModal && $currentUser}
+    <AccountDeletionDialog account={{id: $currentUser.id, username: $currentUser.username, is_active: true}} mode="self" onClose={closeDeleteModal} onDeleted={handleAccountDeleted} open testIdPrefix="profile-delete" />
 {/if}
 
 <!-- Avatar Image Picker (AssetPicker + ImageEditModal combined) -->

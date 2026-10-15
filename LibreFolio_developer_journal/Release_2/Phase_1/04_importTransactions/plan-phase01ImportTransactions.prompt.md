@@ -2094,7 +2094,7 @@ del 15/10 12:30–12:44):
    > **34**, `api account-deletion` **6**, `api assets-events` **37**; `services broker` **65**, `services config-package`
    > **642**. Porta 6184 libera. Pronto all'ingresso.
 
-### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ⏳ (2026-10-15)
+### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ✅ (2026-10-15) — 🧊 FROZEN
 
 **Richiesta** (coordinatore, 15/10 ~16:30, dopo il punto 46). Il developer, in chat alle 16:12, alla lettera: «sarei
 daccordo a metterci una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare bonifiche o
@@ -2119,7 +2119,59 @@ vecchi, o una metà convertita da `orphan_pair_halves`): rifiutarla finché non 
 modifica delle sole note via API; il disegno proposto la applica alla creazione e alla modifica che **tocca** tipo,
 quantità o costo, e lo verifico contro quello che fanno il modulo e il Bulk.
 
-**Passi**: 1. ✅ analisi e disegno al coordinatore (16:40); 2. rossi (test-author); 3. cura; 4. prove; 5. doc e CHANGELOG.
+**Passi**: 1. ✅ analisi e disegno al coordinatore (16:40); 2. ✅ rossi (test-author, 18:43–19:15); 3. ✅ cura (18:52, più il
+collegamento all'evento alle 19:16); 4. ✅ prove; 5. ✅ doc; CHANGELOG proposto nell'handoff (19:30).
+> **Via a N2** (coordinatore, 18:15, dopo l'ingresso di E1b: `dev_release2` = `fecf88c1a`, CHANGELOG `f0d2c77e2`; il mio
+> ramo in pari per avanzamento veloce, HEAD `f0d2c77e2`, pulito). Rossi chiesti a un test-author nuovo (18:16: (a) la
+> modifica delle sole note e dei soli tag di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo, (b) i
+> metadati come fonte con `TX_TYPE_METADATA` modificato nel test; le guardie). **Cura pronta, non applicata**
+> (`/tmp/libreFolio_w_n2_fix.py`, dry run ok): `cost_basis_required(type, quantity)` in `type_metadata.py`, usata da
+> `_requires_cost_basis`; `stored_cost_fields` nel contesto del batch, fotografato al caricamento delle righe
+> (`_load_existing_transactions`) con `cost_fields(tx)` = tipo, quantità, costo e valuta; `_check_update_cost_basis`
+> controlla solo se la modifica cambia quei valori o nomina una `cost_basis_mode`.
+> **Rossi visti** (test-author, poi io, 18:43–18:51): nuovo `test_services/test_transaction_cost_basis_rule.py` (azione
+> `services transaction-cost-basis-rule`, registrata dopo `transaction`): **10 rossi / 51 verdi** — (a) le modifiche di
+> sole note (`description`), soli tag e sola data di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo
+> (oggi `costBasisRequired`), (b) `_requires_cost_basis` con un campo dei metadati cambiato nel test (ADJUSTMENT e
+> TRANSFER ricevuto resi `optional`, BUY reso `required_qty_pos`) e la creazione senza costo quando i metadati la rendono
+> facoltativa; guardie: creazioni rifiutate sulla loro riga, quantità −5→+5 e unità in più senza costo, `manual` senza
+> costo, cambio di tipo (con `SWAP_GROUPS` modificato nel test: nessun gruppo reale porta a un tipo che chiede il costo),
+> note su una riga con costo, Auto con media (100 EUR), una promozione con modifica delle note nello stesso batch (resta
+> rifiutata), parametrico tipo × segno (−, 0, +) uguale ai metadati. API (`test_transactions_batch_split_promote.py`,
+> B4.1, dati vecchi scritti con `legacy_cost_rows.main()`): **rossa** (modifica delle sole note rifiutata con
+> `costBasisRequired`, update 1 e 2). **Cura applicata** (18:52, `/tmp/libreFolio_w_n2_fix.py --apply`, `ruff`/`black`
+> puliti). Reperti del test-author: (1) togliere il costo con una modifica non si può esprimere (`cost_basis_override:
+> null` vale «invariato»): il modulo che svuota un costo manuale manda `null` e il backend tiene il vecchio → W-B30; (2)
+> la regola 12 di `validate_transaction_business_rules` (`costBasisModeIncompatible`) è una seconda copia scritta a mano
+> (TRANSFER e ADJUSTMENT con quantità > 0); leggerla dai metadati porterebbe un import circolare
+> (`type_metadata` importa `transactions`) → W-B31.
+> **Verdi** (18:52–18:59, `nice -n 10`, una alla volta): `services transaction-cost-basis-rule` **61/61**, `services
+> transaction` **66**, `services broker` **65**, `services orphan-transfer-numbers` **19**; `db populate --force --clean`;
+> `api batch-split-promote` **36** (B4.1 compresa), `api transactions` **26**, `api transactions-validate` **11**, `api
+> transactions-wac` **20**; `test check-orphans` pulito; `git diff --check` pulito; porta libera. Nessuno schema cambiato:
+> niente `api sync`, nessun file del frontend toccato. Doc sviluppatore in corso (docs-writer).
+> **⚠️ Fuori pista — un buco della mia cura, trovato dal docs-writer** (19:15): `cost_fields()` non contava il
+> collegamento all'evento. Un'ADJUSTMENT +qty legata a uno SPLIT e salvata in Auto resta senza costo per disegno
+> (`auto_cost.py:70-90`): prima di N2 ogni sua modifica non Auto era rifiutata, dopo la cura una modifica che la
+> **scollega** soltanto (`asset_event_id: 0`, quello che manda `buildUpdateDiff`) passava e lasciava un acquisto di costo
+> ignoto. Cura: `asset_event_id` dentro `cost_fields()` (cambiare o togliere il collegamento conta come toccare il costo),
+> con il rosso prima (test-author); `/tmp/libreFolio_w_n2_link_fix.py` (dry run ok), che toglie anche dalla docstring di
+> `cost_basis_required` la frase «l'app e l'API applicano una sola regola» (il modulo sceglie dove mostrare il costo dal
+> nome del tipo, `TransactionFormModal.svelte:744`, `TxFormSingleSection.svelte:294,316`). Residui annotati per
+> l'handoff, non curati: il testo `warningAdjustment` («non si può salvare senza») e il controllo lato client restano più
+> severi dell'API per le righe vecchie; `fieldsFromTx()` del Bulk sceglie il lato dal collegamento e non dal segno.
+> **Fatto** (19:15–19:27): test-author, nuova classe `TestSplitLinkedAdjustment` (6 test: la riga legata a uno SPLIT
+> costruita come fa l'app, in Auto; scollegarla o legarla a un PRICE_ADJUSTMENT senza costo → rifiutato; note e tag →
+> committati; cambio di collegamento con un costo → committato); **rossi visti: 2 / 65 verdi** (scollega, ricollega);
+> `/tmp/libreFolio_w_n2_link_fix.py --apply` (`asset_event_id` in `cost_fields`, le docstring); **verdi**:
+> `services transaction-cost-basis-rule` **67/67**, `transaction` **66**, `broker` **65**; `api batch-split-promote`
+> **36**, `transactions` **26**, `transactions-validate` **11**, `transactions-wac` **20**; `ruff`/`black` puliti; porta
+> libera. **Doc** (docs-writer, solo sviluppatore EN, niente stamp): `developer/frontend/data-quality-banner.md:176`,
+> `developer/frontend/components/features/transaction-form.md:227-240` (anche due frasi già sbagliate prima di N2: «salta
+> solo le creazioni consumate da una promozione», da `d7c148564`; «costo zero», da `bdec709d2`),
+> `developer/backend/transactions/wac.md:528-550` e `:655-657`, `split_promote.md:211-212`. **Prove della doc** (19:28,
+> `nice -n 15`, carico 36): `mkdocs build` stretto, 0 avvisi (43 s, 3 036 URL), `check-links` 95 validi. `git diff
+> --check` pulito. Handoff FROZEN di N2 (19:30).
 Ordine dei lotti (coordinatore, 16:30): **E1b, poi N2, poi W-B20**; FE8b sul suo binario. Ogni prova pesante: slot dal
 coordinatore. Scopo delle modifiche (coordinatore, 16:30): la regola vale alla creazione e per le modifiche che toccano
 tipo, quantità, segno o costo; note, tag e descrizione di una riga vecchia senza costo restano modificabili.
@@ -2178,3 +2230,13 @@ change to its type, quantity or cost still needs one.»
   in `mkdocs_src/docs/developer/architecture/access_control.md` la frase «The last OWNER cannot remove themselves»
   contraddice la sezione «Self-Management» e `leave_broker`: correggerla secondo il codice). FE8b sul suo binario.
 - Il rischio di Apple condivisa a data fissa in `asset-event-delete` → **W-B29** nel backlog W.
+- **Coda aggiornata** (coordinatore, 18:15): N2 → **i file dei broker visibili solo a chi ha la vista sul broker**
+  (decisione 36, `Phase_1/decisioni-analisi-20261014.md` § 36: «File dei broker (report, estratti): lista, anteprima e
+  scarico solo a chi ha almeno la vista su quel broker»; i file comuni e personali sono di Piattaforma, registrazione e
+  impostazioni di Account e accessi) → W-B20 → A-14. W-B26 lo assegna il coordinatore.
+  > **Prima lettura per la decisione 36** (18:59, solo lettura): le rotte BRIM dei file (`api/v1/brokers.py:653-870`:
+  > lista, info, anteprima, scarico, ultimo parse, controllo del plugin, parse, cancellazione) controllano già l'accesso
+  > al broker con `_get_brim_file_with_access` (`:120-140`) e la lista filtra per broker accessibili. **Ma** il controllo
+  > c'è solo `if file_info.target_broker_id and not current_user.is_superuser`: un file **senza** `target_broker_id` è
+  > aperto a ogni utente con il login, anche la cancellazione (il `min_role=EDITOR` salta) — W-B3 confermata. Da
+  > chiarire nell'analisi: quando nasce un file senza broker, chi l'ha caricato (se è registrato), e cosa fa la lista.

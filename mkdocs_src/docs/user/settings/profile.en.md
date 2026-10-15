@@ -48,18 +48,19 @@ After confirmation, your session remains active — you do not need to log in ag
 
 ### 🗑️ Delete Account
 
-The **Delete Account** button permanently removes your account and its settings. To confirm, you must type your **username** in the dialog. The deletion is immediate: you are logged out and returned to the login page.
+The **Delete Account** button permanently removes your account and its settings. Its dialog first shows what your deletion would take with it, then asks you to type your **username**. **Delete Permanently** acts at once: you are logged out and returned to the login page.
 
-Your brokers follow the same rule as [leaving a shared broker](../brokers/sharing.md):
+Your brokers follow the same rule as [leaving a shared broker](../brokers/sharing.md), and the dialog lists them before you confirm:
 
-- a broker you are the **only Owner** of is deleted, with all its transactions and imported report files — also for the users you shared it with;
-- any other broker stays for its other users: only your access is removed.
+- **Deleted, with all their transactions and files**: the brokers you are the **only Owner** of, each with its number of transactions. Their imported report files go too, and they disappear also for the users you shared them with. Without any, the dialog says *No broker is deleted.*;
+- **Shared brokers that stay (only the access goes)**: every other broker you can open, with your role on it. It stays for its other users: only your access is removed;
+- a warning when transactions on other brokers are halves of transfers with the brokers that go: they stay, without their other half (a received transfer becomes an adjustment at its cost).
 
-If the deletion fails for a technical reason, nothing is deleted.
+If the dialog cannot load that list, it does not let you delete: close it and try again. If the deletion fails for a technical reason, nothing is deleted.
 
 !!! warning "Irreversible"
 
-    Deleting your account cannot be undone. If you are the **only administrator** of the instance, deletion is refused — promote another user first.
+    Deleting your account cannot be undone. If you are the **only active administrator** of the instance, the deletion is refused: first make another account an administrator, from the [Users](../../admin/users.md) tab.
 
 ---
 

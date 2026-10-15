@@ -140,12 +140,13 @@ async def search_stream(query: str, provider_codes=None, hints: Optional[list[st
 provider's.
 
 ```python
-async def find_candidate_urls(query: str, allowed_domains: list[str], *, max_results: int = 5, path_hint: str | None = None) -> list[str]
+async def find_candidate_urls(query: str, allowed_domains: list[str], *, max_results: int | None = None, path_hint: str | None = None) -> list[str]
 def is_enabled() -> bool
 ```
 
 - **Best-effort**: any failure (rate-limit, network error, missing optional
   dependency) yields `[]` and is never fatal.
+- **`max_results`**: `None`, the default, takes `LIBREFOLIO_WEB_LINK_FINDER_MAX` (5 when unset).
 - **Async-safe**: the engine's synchronous `search()` runs inside `asyncio.to_thread`; short
   timeout, small TTL cache, domain-filtered hits, structured logs.
 - **Pluggable engine**: the default `DdgsEngine` wraps the [`ddgs`](https://pypi.org/project/ddgs/)
@@ -170,8 +171,8 @@ The variables are read in `backend/app/config/plugins.py`, from the process envi
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | `""` | Path of a file holding the API key instead: the key is a secret, read by `env_secret()` ([Secrets from Files](../../architecture/security.md#secrets-from-files)), so a blank value counts as unset. Read only when the `apikey` engine is built: a file that cannot give the key makes `_build_engine()` log `web_link_finder: <error>; disabling` and return no engine, so the search returns `[]` and the server keeps running. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | ddgs region (e.g. `wt-wt` worldwide, `it-it`). The worldwide default avoids US bias so IT pages aren't down-ranked. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | ddgs backend(s): `auto` rotates/aggregates, or a comma list (e.g. `google,bing`). |
-| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds. |
-| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Max candidate URLs returned. |
+| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds, read as a `float`: at least 1. Unset, blank, not a number, not finite or below 1: the default. `ddgs` takes whole seconds, so a fraction is rounded up (`math.ceil`): `1.5` gives 2. |
+| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Max candidate URLs returned, read as an `int`: at least 1. Unset, blank, not a whole number or below 1: the default. |
 
 ### 🕰️ Transport history (why `ddgs`)
 
