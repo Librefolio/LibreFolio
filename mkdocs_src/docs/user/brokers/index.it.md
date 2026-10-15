@@ -46,7 +46,7 @@ La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) n
 ## ✏️ Modifica o elimina un broker
 
 - **Modifica** — la matita sulla scheda del broker, oppure **Modifica** nella barra degli strumenti del broker. Proprietari ed Editor possono modificare un broker.
-- **Elimina** — il cestino sulla scheda del broker. Solo un Proprietario può eliminare un broker. Se contiene ancora transazioni, LibreFolio indica quante e offre **Vai alle transazioni** o **Elimina broker e transazioni**, che le elimina anch'esse.
+- **Elimina** — il cestino sulla scheda del broker. Solo un Proprietario può eliminare un broker. Se contiene ancora transazioni, LibreFolio indica quante e offre **Vai alle transazioni** o **Elimina broker e transazioni**, che le elimina anch'esse. Gli asset che aveva trasferito a un altro broker, anche condiviso, restano lì come posizione d'apertura al loro costo di trasferimento, a partire dalla data del trasferimento: il guadagno di quel broker conta quindi anche quanto avevano guadagnato prima del trasferimento. I giroconti con un altro broker lì diventano un deposito o un prelievo.
 
 ---
 
