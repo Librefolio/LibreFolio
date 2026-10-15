@@ -15,7 +15,12 @@ declare global {
             showDonationPopup: () => void;
             showUpdateModal: () => void;
         };
+        /** Designer Lab hook, published by its client in debug builds only. See $lib/dev/designer-lab/client.ts. */
+        __lfDesignerLab?: import('$lib/dev/designer-lab/types').LabHook;
     }
+
+    /** Designer Lab switch, replaced at build time (vite.config.ts): true in debug builds and `vite dev`, false in release. */
+    const __LF_DESIGNER_LAB__: boolean;
 }
 
 export {};

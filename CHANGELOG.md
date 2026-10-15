@@ -54,6 +54,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-10-15
+
+A security release: update every 1.2.0 installation, and any older one, as soon as you can.
+
+### 🐛 Fixed
+
+#### 🔒 Security
+
+- The server keeps every file it serves inside the folder it belongs to. A crafted address could make the pages of the app and of the documentation return files from elsewhere on the server, without signing in; this was possible since v0.4.24. The plugin icons, which already had a check, now use the same stricter one.
+- Uploaded files and broker reports open in the browser only as content that cannot run. The text preview of an uploaded file is always plain text, and a broker report opens in place only when it is a PDF, a PNG, JPEG, GIF, WebP or BMP picture, plain text, CSV or JSON; every other type is downloaded. Before, a signed-in user could upload a web page that ran for another user who opened its preview.
+- A `JWT_SECRET` made only of spaces no longer signs sessions. With `docker run --env-file`, a line `JWT_SECRET=   ` became the signing key, and anyone could forge a session; such a value now counts as unset, like an empty one. A real `JWT_SECRET` is used as before, so nobody is signed out.
+
+---
+
 ## [1.2.0] - 2026-10-14
 
 What 1.2 adds to 1.1:

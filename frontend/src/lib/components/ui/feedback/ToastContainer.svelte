@@ -12,13 +12,9 @@
     import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
-    const variantStyles: Record<ToastVariant, string> = {
-        success: 'bg-emerald-600 text-white',
-        error: 'bg-red-600 text-white',
-        warning: 'bg-amber-500 text-white',
-        info: 'bg-blue-500 text-white',
-    };
+    const variantStyles: Record<ToastVariant, string> = STATUS_TONES.toast;
 
     const variantIcons: Record<ToastVariant, typeof AlertTriangle> = {
         success: CheckCircle,

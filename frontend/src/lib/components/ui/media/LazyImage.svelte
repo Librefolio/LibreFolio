@@ -9,6 +9,7 @@
      */
 
     import {cachePreview, extractFileIdFromUrl, getCachedPreview, parsePreviewWidth} from '$lib/stores/files/imagePreviewCache';
+    import {IMAGE_PLACEHOLDER_COLORS} from '$lib/theme/drawnColors';
 
     interface Props {
         /** Normal mode: direct image URL */
@@ -39,23 +40,23 @@
     // Placeholder SVGs
     const placeholders: Record<string, string> = {
         generic: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <path d="M30 65 L50 40 L70 65" stroke="#9ca3af" stroke-width="3" fill="none"/>
-            <circle cx="35" cy="35" r="8" fill="#9ca3af"/>
+            <rect width="100" height="100" fill="${IMAGE_PLACEHOLDER_COLORS.background}"/>
+            <path d="M30 65 L50 40 L70 65" stroke="${IMAGE_PLACEHOLDER_COLORS.shape}" stroke-width="3" fill="none"/>
+            <circle cx="35" cy="35" r="8" fill="${IMAGE_PLACEHOLDER_COLORS.shape}"/>
         </svg>`,
         avatar: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <circle cx="50" cy="35" r="18" fill="#9ca3af"/>
-            <ellipse cx="50" cy="85" rx="30" ry="25" fill="#9ca3af"/>
+            <rect width="100" height="100" fill="${IMAGE_PLACEHOLDER_COLORS.background}"/>
+            <circle cx="50" cy="35" r="18" fill="${IMAGE_PLACEHOLDER_COLORS.shape}"/>
+            <ellipse cx="50" cy="85" rx="30" ry="25" fill="${IMAGE_PLACEHOLDER_COLORS.shape}"/>
         </svg>`,
         broker: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb"/>
-            <rect x="20" y="25" width="60" height="50" rx="5" stroke="#9ca3af" stroke-width="3" fill="none"/>
-            <path d="M35 50 h30 M35 60 h20" stroke="#9ca3af" stroke-width="3"/>
+            <rect width="100" height="100" fill="${IMAGE_PLACEHOLDER_COLORS.background}"/>
+            <rect x="20" y="25" width="60" height="50" rx="5" stroke="${IMAGE_PLACEHOLDER_COLORS.shape}" stroke-width="3" fill="none"/>
+            <path d="M35 50 h30 M35 60 h20" stroke="${IMAGE_PLACEHOLDER_COLORS.shape}" stroke-width="3"/>
         </svg>`,
         icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-            <rect width="100" height="100" fill="#e5e7eb" rx="10"/>
-            <circle cx="50" cy="50" r="25" stroke="#9ca3af" stroke-width="3" fill="none"/>
+            <rect width="100" height="100" fill="${IMAGE_PLACEHOLDER_COLORS.background}" rx="10"/>
+            <circle cx="50" cy="50" r="25" stroke="${IMAGE_PLACEHOLDER_COLORS.shape}" stroke-width="3" fill="none"/>
         </svg>`,
     };
 
