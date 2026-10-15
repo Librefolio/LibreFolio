@@ -128,6 +128,7 @@ import {
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
+import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -136,6 +137,7 @@ import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-a
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage} from './assets/assets-helpers';
+import {schemas} from '../src/lib/api/generated';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';
@@ -2064,6 +2066,29 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('backup ready (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Backup tab with a finished backup on offer: the lane never runs a real backup, so the job the
+            // card follows is stored and answered, before any navigation, by galleryBackup.ts — done, 46.0 MB, no warning.
+            // Neither the download nor the delete is ever pressed.
+            const viewport = getViewport(testInfo);
+            await serveGalleryBackupJob(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                await navigateTo(page, '/settings?tab=backup');
+                await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // The job is read after the card is drawn: the card says when it is in (data-busy).
+                await waitForSettled(page.getByTestId('backup-download-card'), 15_000);
+                await expectGalleryBackupReady(page);
+                await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the email shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-ready`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'backup-ready');
+                await restoreTallScreen(page);
+            });
+        });
+
         test('about tab - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             await login(page, TEST_ADMIN);
@@ -2136,6 +2161,69 @@ test.describe('Gallery Screenshots', () => {
                 // profile down to its rounded bottom edge — `profile-tab` alone stops inside the card's padding.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/profile`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'profile');
+                await restoreTallScreen(page);
+            });
+        });
+
+        // The Users tab (lot A6b, administrators only), one account's actions open. Both lists are fixed bodies, answered on
+        // this page only: the lane's accounts and invitations change with every test that registers its own (the gallery's
+        // too, registerGalleryAccount in galleryReportSets.ts), so the real lists would draw another picture on every run.
+        // The admin's row keeps the admin's real account, read from
+        // /auth/me: the tab tells the signed-in account's row («You», no actions) by its id. Another account is open, so the
+        // picture shows what an administrator can do to it. Every date is drawn absolute (formatDateTime): no clock is set.
+        test('users - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            // A read, nothing written: the signed-in admin, through the page's own session (its cookies, the config's baseURL).
+            const admin = schemas.AuthMeResponse.parse(await (await page.request.get('/api/v1/auth/me')).json()).user;
+            // 5 places taken: the 3 active accounts and the 2 open invitations. `/billing` is a path of the app, never opened:
+            // it draws the «Manage subscription» link.
+            const usage = {used: 5, max_users: 10, billing_url: '/billing'};
+            const accountRows = [
+                {id: admin.id, username: admin.username, email: admin.email, is_active: true, is_superuser: true, created_at: '2026-01-12T09:30:00Z', protected: false},
+                {id: 9101, username: 'anna.rossi', email: 'anna.rossi@example.com', is_active: true, is_superuser: true, created_at: '2026-02-03T18:05:00Z', protected: false},
+                {id: 9102, username: 'marco', email: 'marco@example.com', is_active: true, is_superuser: false, created_at: '2026-03-21T07:45:00Z', protected: false},
+                {id: 9103, username: 'giulia.b', email: 'giulia.b@example.com', is_active: false, is_superuser: false, created_at: '2026-04-09T12:00:00Z', protected: false},
+            ];
+            const inviteRows = [
+                {id: 7201, grants_admin: false, email: 'luca@example.com', created_at: '2026-10-10T08:15:00Z', expires_at: '2026-10-17T08:15:00Z', created_by_user_id: admin.id},
+                {id: 7202, grants_admin: true, email: null, created_at: '2026-10-12T16:40:00Z', expires_at: '2026-10-19T16:40:00Z', created_by_user_id: admin.id},
+            ];
+            // Checked here against the generated schemas the client validates with: a body Zodios refuses leaves the tab empty,
+            // without an error — this fails now, with Zod's message.
+            const accounts = schemas.AdminUserListResponse.parse({items: accountRows, usage});
+            const invites = schemas.InviteListResponse.parse({items: inviteRows, usage});
+            // Before the tab's first load (the sign-in lands on the dashboard, which asks neither path). Each answers its own
+            // path for GET only; anything else falls back — to the gallery's guard and filters, then the backend.
+            await page.route(
+                (url) => url.pathname === '/api/v1/users',
+                (route) => (route.request().method() === 'GET' ? route.fulfill({json: accounts}) : route.fallback()),
+            );
+            await page.route(
+                (url) => url.pathname === '/api/v1/users/invites',
+                (route) => (route.request().method() === 'GET' ? route.fulfill({json: invites}) : route.fallback()),
+            );
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as for Preferences: the page applies ?tab=users once the admin's tab is drawn.
+                await navigateTo(page, '/settings?tab=users');
+                await expect(page.getByTestId('settings-tab-users')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // Both lists are in: the tab says so with data-busy (UsersTab, `load`).
+                const usersTab = page.getByTestId('users-tab');
+                await waitForSettled(usersTab, 15_000);
+                // The fixed lists, not the lane's: a route that missed would leave the real ones on screen, and the shot green.
+                await expect(usersTab.getByTestId('users-row'), 'the Users tab does not show the fixed accounts').toHaveCount(accountRows.length, {timeout: 5_000});
+                await expect(usersTab.getByTestId('users-invite-row'), 'the Users tab does not show the fixed invitations').toHaveCount(inviteRows.length, {timeout: 5_000});
+                await freezeAnimations(page);
+                // One account open, so the picture shows its actions. Every load draws the rows closed (UserRow, `expanded`).
+                const toggle = usersTab.locator('[data-testid="users-row"][data-username="marco"]').getByTestId('users-row-toggle');
+                await expect(toggle, "marco's row starts closed").toHaveAttribute('aria-expanded', 'false', {timeout: 5_000});
+                await toggle.click();
+                await expect(toggle, "marco's actions are open").toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as for the Profile tab.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/users`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'users');
                 await restoreTallScreen(page);
             });
         });

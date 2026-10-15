@@ -22,7 +22,9 @@ import type {ConfigurableAxisDescriptor} from './chartCoreHelpers';
 import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel, type AxisLabelTranslator} from './axisLabelHelpers';
 import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
-import {axisLabelFont, axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight, type AxisLabelMeasure, type ResponsiveXAxisFormatter} from './responsiveXAxis';
+import {axisLabelFont, axisLabelMeasure, buildResponsiveXAxisPolicy, categoryAxisLabelPatch, timeAxisGridRight, type AxisLabelMeasure, type ResponsiveXAxisFormatter} from './responsiveXAxis';
+// 47-1: the module itself too, so an export still to come is read as a property (a missing one fails its own cases only).
+import * as responsiveXAxis from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildTooltipDivider, type TooltipTheme} from './echartsTooltipHelpers';
 import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
@@ -1503,6 +1505,190 @@ describe('canonical overlay axis and reference helpers', () => {
             expect.soft(lastExtent.right, `${lastExtent.described} — the last label ends inside the ${width}px chart`).toBeLessThanOrEqual(width);
         });
 
+        describe('the visible window of a zoomed category axis (47-1)', () => {
+            // 47-1: in compact mode the category label `interval` is computed on ALL the values, and no chart recomputes it
+            // when the user zooms, so a window of 33 daily points out of 365 keeps the 365-point interval — one label every
+            // 34 points — and shows only its two forced edge labels. The fix: `visibleCount`, when given, replaces
+            // `values.length` in the compact decision (`usableWidth / pointCount < 24`) and in the label interval, while the
+            // formatter still names every value of `values`, built with that interval; `visiblePointCountFromZoom` reads the
+            // window off a dataZoom event. All at 800 px: 736 usable after the default 64 px padding, a budget of 12 labels
+            // (56 px each). Expected texts come from Intl, never from literals.
+
+            /** The 365 days of 2025: daily points, and a year crossed by none of them. */
+            const YEAR = isoDays('2025-01-01', '2025-12-31');
+
+            /** The decision a compact category policy makes, in one object, so a red names all of it at once. */
+            const decisionOf = (policy: ReturnType<typeof buildResponsiveXAxisPolicy>) => ({compact: policy.compact, maxLabels: policy.maxLabels, interval: policy.axisLabel?.interval});
+
+            it('sizes the labels on every value without visibleCount: 365 points at 800px are compact, 12 labels, one every 34 points (guard)', () => {
+                // Why: the call every chart makes today must not move. ceil(364 / 11) − 1 = 33.
+                expect(YEAR).toHaveLength(365);
+                expect(decisionOf(buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category'}))).toEqual({compact: true, maxLabels: 12, interval: 33});
+            });
+
+            it('sizes the compact interval on the visible window: 33 of 365 points at 800px are labelled one every 3 points (interval 2)', () => {
+                // Why: the reported defect. 736 / 33 ≈ 22 px a point, under 24, so still compact, but the 12 labels now spread
+                // over the 33 points shown: ceil(32 / 11) − 1 = 2, where the whole axis would give 33.
+                const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 33});
+
+                expect(decisionOf(policy)).toEqual({compact: true, maxLabels: 12, interval: 2});
+            });
+
+            it('leaves compact mode when the visible window is wide enough: 20 of 365 points at 800px get no compact axisLabel', () => {
+                // Why: 736 / 20 = 36.8 px a point, over 24, and 736 px is over 480, so ECharts may place the labels itself.
+                const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 20});
+
+                expect({compact: policy.compact, axisLabel: policy.axisLabel}).toEqual({compact: false, axisLabel: undefined});
+                expect(typeof policy.formatter, 'a non-compact policy still carries its label formatter (plan 47, C3)').toBe('function');
+            });
+
+            it('names every value of the axis with the window’s interval: on a 3-point stride no label is a bare month', () => {
+                // Why: the formatter decides month-or-day from the stride. On a 34-point stride every two neighbouring labels
+                // fall in different months, so the regular ones read as bare months ("Jan", "Feb"); on the window's 3-point
+                // stride they share a month, so every label of the year keeps its day. Only the mismatches are listed.
+                const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 33});
+                const formatter = compactFormatter(policy);
+                const notADay = YEAR.flatMap((date, index) => {
+                    const label = formatter(date, index);
+                    return label === compactLabel('en-US', 'dm', date) ? [] : [`${date} → ${label}`];
+                });
+
+                expect(notADay, 'labels that do not name their day').toEqual([]);
+                expect(policy.formatter, 'one formatter, the same at the top level and in the axisLabel').toBe(formatter);
+            });
+
+            describe('visiblePointCountFromZoom — how many points a dataZoom event shows', () => {
+                /** The helper, read off the module namespace: a named import of an export that does not exist yet would take every case of this file down with it. */
+                function visibleCount(event: unknown, pointCount: number): number | null {
+                    expect(typeof responsiveXAxis.visiblePointCountFromZoom, 'responsiveXAxis exports visiblePointCountFromZoom').toBe('function');
+                    return responsiveXAxis.visiblePointCountFromZoom(event, pointCount);
+                }
+
+                // A window in data indices counts both ends; one in percent covers every index it touches,
+                // floor(start / 100 × (n − 1)) to ceil(end / 100 × (n − 1)); the result is clamped to [1, n].
+                it.each([
+                    {name: 'batch, percent 50..100 of 365', event: {batch: [{start: 50, end: 100}]}, pointCount: 365, expected: 183},
+                    {name: 'percent 0..100 of 365', event: {start: 0, end: 100}, pointCount: 365, expected: 365},
+                    {name: 'indices 10..42', event: {startValue: 10, endValue: 42}, pointCount: 365, expected: 33},
+                    {name: 'batch, indices before percent', event: {batch: [{start: 0, end: 100, startValue: 10, endValue: 42}]}, pointCount: 365, expected: 33},
+                    {name: 'percent past the end, clamped', event: {start: 0, end: 150}, pointCount: 365, expected: 365},
+                    {name: 'reversed indices, clamped', event: {startValue: 42, endValue: 10}, pointCount: 365, expected: 1},
+                    {name: 'no window', event: {}, pointCount: 365, expected: null},
+                    {name: 'no point on the axis', event: {start: 0, end: 50}, pointCount: 0, expected: null},
+                ])('$name → $expected', ({event, pointCount, expected}) => {
+                    expect(visibleCount(event, pointCount)).toBe(expected);
+                });
+            });
+
+            describe('categoryAxisLabelPatch — the x-axis labels a zoom or a resize merges', () => {
+                // 47-1: a zoom or a resize re-spaces the labels with `setOption({xAxis: {axisLabel: patch}})`, a merge, and ECharts
+                // keeps every stored key a merge does not name. So the patch always names `interval` (the window's step, or 'auto'
+                // when it needs none), and a window that leaves compact mode also names the keys the compact policy overrides, at
+                // the values that let ECharts place the labels itself.
+
+                it('carries a compact window’s axisLabel whole, its step included: 34 of 365 points at 800px merge interval 2', () => {
+                    // Why: 736 / 34 ≈ 21.6 px a point, under 24, so compact; ceil(33 / 11) − 1 = 2.
+                    const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 34});
+                    const axisLabel = responsiveAxisLabel(policy);
+                    const patch = categoryAxisLabelPatch(policy);
+
+                    expect(decisionOf(policy), 'precondition').toEqual({compact: true, maxLabels: 12, interval: 2});
+                    expect(patch, 'every key of the policy’s axisLabel, at its value').toMatchObject(axisLabel);
+                    expect(patch.formatter, 'the policy’s own formatter, not a copy').toBe(axisLabel.formatter);
+                    expect(patch.interval, 'the window’s step').toBe(2);
+                });
+
+                it('names the step even when a compact window needs none: 4 of 365 points at 300px merge interval auto (the stale-step guard)', () => {
+                    // Why: a phone zoomed in to 4 days. 236 usable px are under 480, so compact, and the budget of 4 labels (56 px
+                    // each) covers the 4 points, so the policy sets no step. A merge that named none would keep the step of the
+                    // window before; 'auto' hands the spacing back to ECharts.
+                    const policy = buildResponsiveXAxisPolicy({width: 300, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 4});
+                    const axisLabel = responsiveAxisLabel(policy);
+                    const patch = categoryAxisLabelPatch(policy);
+
+                    expect(decisionOf(policy), 'precondition').toEqual({compact: true, maxLabels: 4, interval: undefined});
+                    expect(Object.keys(axisLabel), 'precondition: the policy names no step at all').not.toContain('interval');
+                    expect(patch.interval, 'the step, named all the same').toBe('auto');
+                    expect(patch, 'the rest is the policy’s axisLabel').toMatchObject(axisLabel);
+                });
+
+                it('hands a wide window’s labels back to ECharts: 20 of 365 points at 800px merge interval auto, the formatter and the defaults compact mode overrides', () => {
+                    // Why: 736 / 20 = 36.8 px a point, so not compact, and the policy has no axisLabel to carry. The patch keeps its
+                    // formatter (plan 47, C3) and resets what the compact policy overrides: the step to 'auto', overlap hiding off,
+                    // and null, which ECharts reads as its own default, for the forced edge labels and the aligned last one. The
+                    // compact `rotate: 0` is ECharts' default already.
+                    const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 20});
+
+                    expect({compact: policy.compact, axisLabel: policy.axisLabel}, 'precondition').toEqual({compact: false, axisLabel: undefined});
+                    expect(categoryAxisLabelPatch(policy)).toStrictEqual({interval: 'auto', formatter: policy.formatter, hideOverlap: false, showMinLabel: null, showMaxLabel: null, alignMaxLabel: null});
+                });
+
+                /** Asserts the x axis' axisLabel, as `getOption()` returns it, holds each key of `expected` at its value: one comparison, so a red names them all, and an absent key reads `undefined` where a stored null reads `null`. */
+                function expectStoredXAxisLabel(chart: echarts.ECharts, expected: Record<string, unknown>, message: string): void {
+                    const stored = (chart.getOption() as {xAxis?: Array<{axisLabel?: Record<string, unknown>}>}).xAxis?.[0]?.axisLabel;
+                    if (!stored) throw new Error('getOption() holds no xAxis[0].axisLabel');
+                    expect(Object.fromEntries(Object.keys(expected).map((key) => [key, stored[key]])), message).toEqual(expected);
+                }
+
+                /**
+                 * A server-side ECharts with the year on a category axis, labelled as a chart labels it on its first draw: by the
+                 * policy of the whole axis, one label every 34 points (interval 33). Handed to `run`, then disposed.
+                 */
+                function withWholeYearAxis(run: (chart: echarts.ECharts) => void): void {
+                    const policy = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category'});
+                    const chart = echarts.init(null, undefined, {
+                        renderer: 'svg',
+                        ssr: true,
+                        width: 800,
+                        height: 240,
+                    });
+
+                    try {
+                        chart.setOption({
+                            animation: false,
+                            xAxis: {type: 'category', data: YEAR, axisLabel: {fontSize: 11, formatter: policy.formatter, ...policy.axisLabel}},
+                            yAxis: {type: 'value'},
+                            series: [{type: 'line', data: YEAR.map((_, index) => index)}],
+                        });
+                        expectStoredXAxisLabel(chart, {interval: 33, formatter: policy.formatter}, 'precondition: the step of the whole axis is stored');
+                        run(chart);
+                    } finally {
+                        chart.dispose();
+                    }
+                }
+
+                it('re-spaces the step a real ECharts stores: 33, then 2 for 34 of 365 points, then auto with the defaults back for 20 (SSR)', () => {
+                    // Why: the charts' merge, replayed. They pass {lazyUpdate: true}, which defers the redraw only: `setOption` merges
+                    // into the model before it reads the flag, so getOption() returns the same axisLabel. Merged eagerly here, so that
+                    // the render below lays out the merged labels.
+                    const zoomed = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 34});
+                    const wide = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 20});
+
+                    withWholeYearAxis((chart) => {
+                        chart.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(zoomed)}});
+                        expectStoredXAxisLabel(chart, {interval: 2, formatter: zoomed.formatter}, 'after the patch of 34 of 365 points');
+
+                        chart.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(wide)}});
+                        // A merged null is stored as null, not dropped: the key is there, at ECharts' own default.
+                        expectStoredXAxisLabel(chart, {interval: 'auto', formatter: wide.formatter, hideOverlap: false, showMinLabel: null, showMaxLabel: null, alignMaxLabel: null}, 'after the patch of 20 of 365 points');
+                        expect(chart.renderToSVGString(), 'the merged labels lay out').toMatch(/^<svg\b/);
+                    });
+                });
+
+                it('keeps the stored step through a merge that names none: the wide patch without its interval leaves 33 (negative control, SSR)', () => {
+                    // Why: the ECharts rule the patch answers. The merge replaces every key it names (the formatter, overlap hiding)
+                    // and keeps the one it does not, so a window merged without a step would show the step of the window before.
+                    const wide = buildResponsiveXAxisPolicy({width: 800, values: YEAR, locale: 'en-US', axisType: 'category', visibleCount: 20});
+                    const withoutInterval = Object.fromEntries(Object.entries(categoryAxisLabelPatch(wide)).filter(([key]) => key !== 'interval'));
+
+                    withWholeYearAxis((chart) => {
+                        chart.setOption({xAxis: {axisLabel: withoutInterval}});
+                        expectStoredXAxisLabel(chart, {interval: 33, formatter: wide.formatter, hideOverlap: false}, 'the keys merged are replaced, the step not named stays');
+                    });
+                });
+            });
+        });
+
         describe('timeAxisGridRight — the right inset for the last time label (plan 52, C1)', () => {
             // Plan 52, C1: `grid.containLabel` reserves the x labels' height, never the half-width a centred label overhangs
             // past the plot's right edge. A time axis ends exactly on the last day of the data (or of the zoom) and ECharts
@@ -1821,6 +2007,9 @@ describe('canonical overlay axis and reference helpers', () => {
         ['LotComparisonChart', new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url)],
         ['LotWacPriceChart', new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
     ] as const;
+
+    /** The zoomable category charts (47-1): their labels follow the zoomed window, and their resize merges `categoryAxisLabelPatch(policy)`. */
+    const ZOOM_RELABEL_CHARTS = new Set<(typeof RESPONSIVE_X_AXIS_CHARTS)[number][0]>(['LineChart', 'CandlestickChart', 'PriceChartFull']);
 
     describe('responsive X-axis adoption contract', () => {
         describe('Growth logical range preservation', () => {
@@ -2546,7 +2735,15 @@ describe('canonical overlay axis and reference helpers', () => {
             // Why (re-pin, plan 52 C1): the import now carries the inset helpers too (`timeAxisGridRight`, `axisLabelMeasure`), so the pin asks for the policy among the names, not alone.
             expect(source).toMatch(/import\s+\{[^}]*\bbuildResponsiveXAxisPolicy\b[^}]*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
             expect(source).toMatch(/\bbuildResponsiveXAxisPolicy\s*\(/);
-            expect(source).toMatch(/if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{[\s\S]*?axisLabel:\s*policy\.axisLabel/);
+            // Why (re-pin, Y8 47-1): the three zoomable category charts merge `categoryAxisLabelPatch(policy)` on resize: it always sets
+            // `interval` (the window's step, or 'auto'), so a step left by a previous window or width cannot survive the merge.
+            if (ZOOM_RELABEL_CHARTS.has(name)) {
+                expect(source).toMatch(/import\s+\{[^}]*\bcategoryAxisLabelPatch\b[^}]*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
+                expect(source).toMatch(/if \(policy\.axisLabel\) \{[^}]*?\.setOption\(\{xAxis:\s*\{\s*axisLabel:\s*categoryAxisLabelPatch\(policy\)\s*\}\s*\}/);
+                expect(source, `${name}: no x-axis merge takes the bare policy.axisLabel`).not.toMatch(/axisLabel:\s*policy\.axisLabel\b/);
+            } else {
+                expect(source).toMatch(/if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{[\s\S]*?axisLabel:\s*policy\.axisLabel/);
+            }
             // Why (re-pin, S7): GrowthChart's ladder (P&L Candles and Income) owns its category
             // x axis, so applyFullOption builds the shared policy for the time axis only
             // (`ladderActive ? null : buildResponsiveXAxisPolicy(…)`) and merges it through `?.`.
@@ -2563,6 +2760,158 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
                 expect(source).toMatch(/formatter: xAxisPolicy\.formatter,\s*\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\)/);
             }
+        });
+
+        describe('the zoomable category charts re-space their labels on the zoomed window (47-1)', () => {
+            // 47-1: the compact label `interval` was computed on every point and no dataZoom path recomputed it, so a chart zoomed in
+            // on a phone kept the step of its whole axis and showed only its two forced edge labels. These pins hold each link of the
+            // fix, chart by chart, so none can be dropped in silence. LineChart.test.ts drives LineChart's path end to end; the policy
+            // and the window reader are unit-tested in «responsive X-axis policy».
+
+            /** The two charts that read the window off the dataZoom event itself, behind a debounce of their own. */
+            const EVENT_RELABEL_CHARTS = [
+                ['LineChart', new URL('./LineChart.svelte', import.meta.url)],
+                ['CandlestickChart', new URL('./CandlestickChart.svelte', import.meta.url)],
+            ] as const;
+
+            /** A `getOption(` call: it deep-clones the whole option, so the zoom functions read the event or the logical range instead. */
+            const GET_OPTION_CALL = /\bgetOption\s*\(/;
+
+            /** `import {…, name, …} from '…responsiveXAxis'`, whatever the other names and their order. */
+            function importsFromResponsiveXAxis(name: string): RegExp {
+                return new RegExp(`import\\s+\\{[^}]*\\b${name}\\b[^}]*\\}\\s+from\\s+['"][^'"]*responsiveXAxis['"]`);
+            }
+
+            /** `code` without its comments: a comment that names a call is not the call. Cut at `//`, so it assumes no string holds one. */
+            function withoutComments(code: string): string {
+                return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+            }
+
+            /**
+             * The code of `function fn(…) {…}` in `source`, comments removed. The body is the first block after the name, braces
+             * balanced by `blockAfter` (further down this describe), which holds while the signature carries no brace: none of the
+             * functions read here takes or returns an object type. Throws, naming the chart, when the declaration is missing.
+             */
+            function functionCode(source: string, chart: string, fn: string): string {
+                const body = blockAfter(source, `function ${fn}(`, '{');
+                if (body === undefined) throw new Error(`${chart}: function ${fn}() not found`);
+                return withoutComments(body);
+            }
+
+            /** The chart's `on('dataZoom', (…) => {…})` handler: the name of its parameter ('' when it takes none) and its code. */
+            function dataZoomHandler(source: string, chart: string): {param: string; code: string} {
+                const head = source.match(/\.on\(\s*['"]dataZoom['"]\s*,\s*\(\s*(\w*)[^)]*\)\s*=>\s*\{/);
+                const body = head ? blockAfter(source, head[0].slice(0, -1), '{') : undefined;
+                if (!head || body === undefined) throw new Error(`${chart}: no on('dataZoom', (…) => {…}) handler found`);
+                return {param: head[1], code: withoutComments(body)};
+            }
+
+            /** The first of `steps` not found in `code` after the one before it; null when they all come, in that order. */
+            function firstStepOutOfOrder(code: string, steps: ReadonlyArray<readonly [string, RegExp]>): string | null {
+                let from = 0;
+                for (const [step, pattern] of steps) {
+                    const match = pattern.exec(code.slice(from));
+                    if (!match) return step;
+                    from += match.index + match[0].length;
+                }
+                return null;
+            }
+
+            it.each(EVENT_RELABEL_CHARTS)('%s re-spaces its labels on the window a zoom leaves visible, once the gesture pauses', (name, path) => {
+                const source = readFileSync(path, 'utf8');
+                const handler = dataZoomHandler(source, name);
+                const schedule = functionCode(source, name, 'scheduleZoomedAxisLabels');
+                const count = functionCode(source, name, 'zoomedCategoryCount');
+                const apply = functionCode(source, name, 'applyZoomedAxisLabels');
+                const cleanup = functionCode(source, name, 'cleanup');
+                const scheduleParam = source.match(/function scheduleZoomedAxisLabels\(\s*(\w+)/)?.[1];
+                if (!scheduleParam) throw new Error(`${name}: scheduleZoomedAxisLabels() takes no event`);
+
+                for (const helper of ['visiblePointCountFromZoom', 'ZOOM_LABEL_SETTLE_MS']) {
+                    expect(source, `${name}: imports ${helper} from responsiveXAxis`).toMatch(importsFromResponsiveXAxis(helper));
+                }
+                // The handler passes its own event on: the window is read from it.
+                expect(handler.param, `${name}: the dataZoom handler takes its event`).not.toBe('');
+                expect(handler.code, `${name}: the dataZoom handler hands its event to scheduleZoomedAxisLabels`).toMatch(new RegExp(`\\bscheduleZoomedAxisLabels\\(\\s*${handler.param}\\s*\\)`));
+                // The debounce keeps the event where the count reads it, and relabels once the gesture has paused.
+                expect(schedule, `${name}: scheduleZoomedAxisLabels keeps the event`).toMatch(new RegExp(`\\blastZoomEvent\\s*=\\s*${scheduleParam}\\b`));
+                expect(count, `${name}: zoomedCategoryCount reads the kept event`).toMatch(/\bvisiblePointCountFromZoom\(\s*lastZoomEvent\s*,/);
+                expect(schedule, `${name}: every tick cancels the pending relabel before arming the next`).toMatch(/\bclear(?:Timer|Timeout)\(\s*zoomLabelTimer\s*\)[\s\S]*?\bzoomLabelTimer\s*=\s*setTimeout\(/);
+                expect(schedule, `${name}: the relabel runs once no tick has come for ZOOM_LABEL_SETTLE_MS`).toMatch(/\bzoomLabelTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[^}]*\bapplyZoomedAxisLabels\(\);[^}]*\},\s*ZOOM_LABEL_SETTLE_MS\s*\)/);
+                // The relabel sizes the policy on the visible count and merges it through the patch that resets the step.
+                expect(apply, `${name}: applyZoomedAxisLabels counts the visible window`).toMatch(/\bvisibleCount\s*[=:]\s*zoomedCategoryCount\(\)/);
+                expect(apply, `${name}: applyZoomedAxisLabels sizes the policy on it`).toMatch(/buildResponsiveXAxisPolicy\(\{[^}]*\bvisibleCount\b[^}]*\}\)/);
+                expect(apply, `${name}: applyZoomedAxisLabels merges categoryAxisLabelPatch(policy)`).toMatch(/\.setOption\(\{xAxis:\s*\{\s*axisLabel:\s*categoryAxisLabelPatch\(policy\)\s*\}\s*\}/);
+                // A resize keeps the window's spacing. Its policy is the one an `if (policy.axisLabel)` branch follows.
+                expect(source, `${name}: the resize policy counts the visible window`).toMatch(/buildResponsiveXAxisPolicy\(\{[^}]*\bvisibleCount:\s*zoomedCategoryCount\(\)[^}]*\}\);[^}]*?if \(policy\.axisLabel\) \{/);
+                expect(cleanup, `${name}: cleanup() cancels a pending relabel`).toMatch(/\bclear(?:Timer|Timeout)\(\s*zoomLabelTimer\s*\)/);
+                // The window comes from the event, never from the chart. renderChart() is not checked: it reads the zoom it restores.
+                for (const [fn, code] of [
+                    ['zoomedCategoryCount', count],
+                    ['scheduleZoomedAxisLabels', schedule],
+                    ['applyZoomedAxisLabels', apply],
+                ] as const) {
+                    expect(code, `${name}: ${fn} reads no getOption()`).not.toMatch(GET_OPTION_CALL);
+                }
+            });
+
+            it.each(EVENT_RELABEL_CHARTS)('%s sizes the labels of a full re-render on the zoom it is about to restore', (name, path) => {
+                // A full re-render (a refresh, a theme or an overlay change) replaces the option, then restores the zoom. Sized on
+                // every point, its labels showed the whole axis's step until the restored zoom's event re-spaced them 120 ms later.
+                const source = readFileSync(path, 'utf8');
+                const render = functionCode(source, name, 'renderChart');
+                const countedWhen = render.match(/const restoredZoomCount = ([^;?]+?)\s*\?\s*visiblePointCountFromZoom\(\s*savedZoom\s*,\s*dates\.length\s*\)\s*:\s*null;/)?.[1];
+                const restoredWhen = render.match(/if \(([^)]+)\) \{\s*chartInstance\.dispatchAction\(\{\s*type:\s*'dataZoom',\s*start:\s*savedZoom\.start,\s*end:\s*savedZoom\.end\b/)?.[1];
+                if (countedWhen === undefined) throw new Error(`${name}: renderChart() counts no saved zoom (const restoredZoomCount = … ? visiblePointCountFromZoom(savedZoom, dates.length) : null;)`);
+                if (restoredWhen === undefined) throw new Error(`${name}: renderChart() restores no saved zoom (if (…) { chartInstance.dispatchAction({type: 'dataZoom', start: savedZoom.start, end: savedZoom.end…`);
+
+                expect(
+                    firstStepOutOfOrder(render, [
+                        ['reads the zoom on screen into savedZoom', /\blet savedZoom\b[\s\S]*?\bsavedZoom = \{/],
+                        ['counts the window it will restore', /\bconst restoredZoomCount = /],
+                        ['sizes the labels on that count', /\bconst xAxisPolicy = buildResponsiveXAxisPolicy\(\{(?=[^}]*\bvalues:\s*dates\b)(?=[^}]*\bvisibleCount:\s*restoredZoomCount\b)/],
+                        ['replaces the option', /\bchartInstance\.setOption\(\s*option\s*,\s*true\s*\);/],
+                        ['then restores the zoom', /\bchartInstance\.dispatchAction\(\{\s*type:\s*'dataZoom'/],
+                    ]),
+                    `${name}: renderChart() — the first step missing, or out of order`,
+                ).toBeNull();
+                // The window counted is the window restored (LineChart restores none while compact).
+                expect(countedWhen.replace(/\s+/g, ' ').trim(), `${name}: restoredZoomCount is counted under the condition the zoom is restored under`).toBe(restoredWhen.replace(/\s+/g, ' ').trim());
+            });
+
+            it('PriceChartFull re-spaces its labels on the settled window through its resolution debounce, and renders them on the zoom it draws', () => {
+                // No debounce of its own: the dataZoom handler already arms the 200 ms resolution recompute, which reads the settled
+                // logical range once. A new resolution redraws, sized on the zoom it draws; a kept one redraws nothing, so the labels
+                // are re-spaced right there.
+                const name = 'PriceChartFull';
+                const source = readFileSync(new URL('./PriceChartFull.svelte', import.meta.url), 'utf8');
+                const handler = dataZoomHandler(source, name);
+                const recompute = functionCode(source, name, 'scheduleResolutionRecompute');
+                const count = functionCode(source, name, 'visibleCategoryCount');
+                const apply = functionCode(source, name, 'applyZoomedAxisLabels');
+                const render = functionCode(source, name, 'renderChart');
+                const keptResolution = blockAfter(recompute, 'if (nextResolution !== resolution)', '} else {');
+                if (keptResolution === undefined) throw new Error(`${name}: scheduleResolutionRecompute() has no branch for a kept resolution (if (nextResolution !== resolution) {…} else {…})`);
+
+                expect(source, `${name}: imports visiblePointCountFromZoom from responsiveXAxis`).toMatch(importsFromResponsiveXAxis('visiblePointCountFromZoom'));
+                expect(handler.code, `${name}: the dataZoom handler arms the resolution debounce`).toMatch(/\bscheduleResolutionRecompute\(\)/);
+                expect(keptResolution, `${name}: a kept resolution re-spaces the labels on the settled window`).toMatch(/\bapplyZoomedAxisLabels\(\)/);
+                expect(count, `${name}: visibleCategoryCount takes the window off the logical range`).toMatch(/\bcomputeZoomWindow\([^;]*\blogicalRange\s*\)/);
+                expect(count, `${name}: visibleCategoryCount counts that window`).toMatch(/\bvisiblePointCountFromZoom\(/);
+                expect(apply, `${name}: applyZoomedAxisLabels sizes the policy on the visible count`).toMatch(/buildResponsiveXAxisPolicy\(\{[^}]*\bvisibleCount:\s*visibleCategoryCount\(\)[^}]*\}\)/);
+                expect(apply, `${name}: applyZoomedAxisLabels merges categoryAxisLabelPatch(policy)`).toMatch(/\.setOption\(\{xAxis:\s*\{\s*axisLabel:\s*categoryAxisLabelPatch\(policy\)\s*\}\s*\}/);
+                expect(render, `${name}: the render sizes the labels on the zoom window it draws`).toMatch(/\bconst xAxisPolicy = buildResponsiveXAxisPolicy\(\{[^}]*\bvisibleCount:\s*visiblePointCountFromZoom\(\s*zoomWindow\s*,\s*dates\.length\s*\)/);
+                expect(render, `${name}: the render draws that zoom window`).toMatch(/\bdataZoom:\s*\[\{[^}]*\bstart:\s*zoomWindow\.start,\s*end:\s*zoomWindow\.end\b/);
+                expect(source, `${name}: the resize policy counts the visible window`).toMatch(/buildResponsiveXAxisPolicy\(\{[^}]*\bvisibleCount:\s*visibleCategoryCount\(\)[^}]*\}\);[^}]*?if \(policy\.axisLabel\) \{/);
+                // The window comes from the logical range, never from the chart. renderChart() and the debounce body are not checked:
+                // the debounce reads the settled range once through getOption(), by design.
+                for (const [fn, code] of [
+                    ['visibleCategoryCount', count],
+                    ['applyZoomedAxisLabels', apply],
+                ] as const) {
+                    expect(code, `${name}: ${fn} reads no getOption()`).not.toMatch(GET_OPTION_CALL);
+                }
+            });
         });
 
         it('routes every GrowthChart compact-to-desktop data update through a full x-axis replacement with the current zoom window', () => {
@@ -2882,9 +3231,13 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(restoreGuard).toBeGreaterThan(replacement);
             expect(restoreAction).toBeGreaterThan(restoreGuard);
 
-            const capture = renderChart.slice(captureStart, replacement);
+            const capture = blockAfter(renderChart.slice(captureGuard), 'if (chartOptionSet && chartInstance)', '{');
+            // Why (re-pin, Y8 47-1): the capture moved above the x-axis policy, which sizes the labels on the zoom it restores, so a
+            // slice up to `replacement` spanned the whole option build. The capture is now the body of its guard, braces balanced.
+            if (capture === undefined) throw new Error('CandlestickChart saved-zoom capture guard not closed');
             const restoration = renderChart.slice(restoreGuard, renderChart.indexOf('updateArrowRotations(chartInstance);', restoreGuard));
             expect(renderChart).toContain('dataZoom: buildDataZoom(actualShowVolume ? [0, 1] : [0]),');
+            expect(capture).toContain('const currentOption = chartInstance.getOption()');
             expect(capture).toContain('const currentZoom = currentOption.dataZoom?.[0];');
             expect(capture).toContain("if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number')");
             expect(capture).toContain('start: currentZoom.start');

@@ -29,6 +29,7 @@ from sqlmodel import delete, select
 
 from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
+from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx import sync as fx_service
 from backend.app.services.fx.sync import _is_date_within_sync_range, sync_pairs_bulk
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
@@ -217,6 +218,9 @@ class TestSyncPairsBulk:
             return provider
 
         monkeypatch.setattr(fx_service.FXProviderRegistry, "get_provider_instance", get_provider)
+        # Provider, currencies and range; since CP10 a 4th element closes the key, the provider's settings fingerprint
+        # (fx/runtime.settings_cache_part). It is built after each sync: ``provider`` is the very object
+        # configure_instance binds, since the patched lookup hands it out.
         cache_key = ("MOCKFX", frozenset({"GBP", "JPY"}), (start_date, end_date))
 
         try:
@@ -226,6 +230,8 @@ class TestSyncPairsBulk:
 
                 for expected_changes in (2, 0):
                     response = await sync_pairs_bulk(session, pairs=["GBP-JPY"], date_range=(start_date, end_date))
+                    full_key = cache_key + (fx_runtime.settings_cache_part(provider),)
+                    assert full_key[3], "MOCKFX declares settings: the key's 4th element is their fingerprint, never empty"
                     result = next(item for item in response.results if item.pair == "GBP-JPY")
                     assert response.success_count == 1
                     assert response.total_points_changed == expected_changes
@@ -241,7 +247,7 @@ class TestSyncPairsBulk:
                     ]
                     assert {"is_chain", "providers_used"}.isdisjoint(result.model_dump())
                     fetch.assert_awaited_once()
-                    assert cache_key in cached_values
+                    assert full_key in cached_values
 
                     async with AsyncSession(engine) as verify_session:
                         stored = (await verify_session.execute(select(FxConversionRoute).where(FxConversionRoute.id == route.id))).scalar_one()
@@ -253,7 +259,7 @@ class TestSyncPairsBulk:
                         }
 
             assert cache.get.call_count == 2
-            assert all(call.args == (cache_key,) for call in cache.get.call_args_list)
+            assert all(call.args == (full_key,) for call in cache.get.call_args_list)
             cache.set.assert_called_once()
             assert fetch.await_args.args[0] == (start_date, end_date)
             assert set(fetch.await_args.args[1]) == {"GBP", "JPY"}

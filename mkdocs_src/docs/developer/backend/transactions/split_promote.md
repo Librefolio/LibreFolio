@@ -208,7 +208,8 @@ create or update in Auto that the promote makes the receiving side averages its
 partner's broker, as of the partner's date and without the partner's outgoing leg.
 
 `validate_cost_basis()` then checks the receiving side like any other row: a new
-row as a create and a saved row also in `updates[]` as that update, both unless in
+row as a create and a saved row also in `updates[]` as that update (the promote
+changes its type, so even an update of its notes alone is checked), both unless in
 Auto; any other saved row without a cost basis gets `costBasisRequired` on
 operation `promote`, with the promote's index and `ref_id` set to that row. See
 [WAC & Cost Basis](wac.md#promote-boundary).
