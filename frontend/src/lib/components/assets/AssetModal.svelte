@@ -926,6 +926,7 @@
                 name: $t('common.name'),
                 type: $t('common.type'),
                 currency: $t('common.currency'),
+                description: $t('common.description'),
                 sector: $t('common.sectorDistribution'),
                 geographic: $t('common.geoDistribution'),
             });
