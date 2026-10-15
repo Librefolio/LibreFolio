@@ -1,0 +1,786 @@
+"""The test server's builds run before its startup timeout, and a tree without node_modules stops before npx (C-94).
+
+``dev.py server --test`` builds what it serves before it binds: the frontend in debug (``auto_build_frontend``, or
+``cmd_fe_build`` under ``--rebuild``), the MkDocs site, the JS cache. ``SharedTestServer.start()`` launched it with its
+output on DEVNULL and started ``STARTUP_TIMEOUT`` right after the ``Popen``, so a rebuild after a merge (minutes)
+counted against the startup timeout, invisibly; the gallery's Playwright ``webServer`` had the same problem. And
+without ``frontend/node_modules`` the frontend build went on to ``npx svelte-check`` and to ``npm run generate-api``,
+which calls ``npx openapi-zod-client``: npx then fetches from the registry instead of running the locked version.
+
+The contracts held here:
+
+* ``dev.py server --build-only`` runs the server's pre-bind steps, in today's order and mode, and returns their verdict
+  without checking the port, running a command or exec'ing uvicorn; the runner's prerequisites command is such a run;
+* ``cmd_fe_build`` and ``cmd_api_client`` first check ``frontend/node_modules/.bin`` for the tools they call, and stop
+  with exit 1, naming what is missing and ``npm ci``, before any npm or npx call;
+* ``SharedTestServer.start()`` checks the port, then runs ``dev.py server --test --build-only`` in the foreground, its
+  output visible, with the runner's own environment (not the coverage wiring the server gets), and only then spawns
+  the backend and starts ``STARTUP_TIMEOUT``: a build never counts against it, a failed build spawns nothing, an
+  occupied port builds nothing;
+* the build step's output comes out in order on a pipe too (CI, a ``tee``'d log), where Python block-buffers it: the
+  runner flushes its stdout, then its stderr, after its info line and before the build starts, and runs the build as
+  ``python -u dev.py …``, so dev.py's own messages come out among the npm, vite and mkdocs output they introduce;
+* ``mkdocs gallery`` runs the same build step after its database step and its port check, before Playwright, with
+  the environment Playwright gets (``LF_APP_VERSION`` included: the bundle bakes the version in); ``--list`` builds
+  nothing;
+* without ``--workers``, ``mkdocs gallery`` runs ``default_gallery_workers()`` browser workers, 60 % of the
+  ``os.cpu_count()`` read at each call (two CPUs when it cannot tell), rounded, at least one, and sizes its server from
+  them; an explicit ``--workers`` wins.
+
+PURE — no server, no database, no network. Every seam (the build steps, ``subprocess``, ``os.execvpe``, signals,
+lsof, health, the clock, the CPU count, the build step's ``sys`` streams) is faked, the ``node_modules/.bin`` layouts
+live under ``tmp_path``, and an autouse fixture forbids every real process: one that started would build the frontend.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+import dev
+from scripts.test_runner import _common as test_runner_common
+from scripts.test_runner import _server as test_runner_server
+
+# ── Shared fixtures, fakes and probes ──────────────────────────────────────
+
+#: What the frontend build calls (``vite`` through npm, ``npx svelte-check``, ``npx openapi-zod-client`` through
+#: ``generate-api``) and what the API client generator needs. Literals: dev.py's own tuples are asserted against them.
+BUILD_TOOLS = ("openapi-zod-client", "svelte-check", "vite")
+API_CLIENT_TOOLS = ("openapi-zod-client",)
+#: A failing build's exit code, distinctive enough that an error naming it cannot match by accident.
+FAILED_BUILD_CODE = 77
+#: The test lane a runner exports to ``dev.py server --test --build-only``. Never bound: every port seam is faked.
+LANE_PORT = "6139"
+#: The lane variables ``dev.py server`` writes into ``os.environ`` (``configure_*_runtime``) before it builds.
+RUNTIME_ENV_NAMES = ("LIBREFOLIO_TEST_MODE", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_TEST_LANE_ID", "PORT", "TEST_PORT", "PIPENV_DONT_LOAD_ENV", "PIPENV_DOTENV_LOCATION")
+
+
+def forbid(monkeypatch, target, name: str, reason: str, *, raising: bool = True) -> None:
+    """Make an attribute fail the test if the code under test ever reaches it.
+
+    ``raising=False`` also forbids a name the code does not define yet: a guard that holds before and after it exists.
+    """
+
+    def fail(*_args, **_kwargs):
+        pytest.fail(reason)
+
+    monkeypatch.setattr(target, name, fail, raising=raising)
+
+
+@pytest.fixture(autouse=True)
+def no_real_process(monkeypatch):
+    """No test here may start a real process or signal one: a process that started would build the frontend or bind.
+
+    A test that asserts on one of these seams replaces the forbidding stub with its own fake.
+    """
+    for name in ("run", "Popen"):
+        forbid(monkeypatch, subprocess, name, f"a real subprocess.{name} was reached")
+    for name in ("execvpe", "kill", "killpg"):
+        forbid(monkeypatch, os, name, f"a real os.{name} was reached")
+
+
+@pytest.fixture
+def runtime_env(monkeypatch, tmp_path):
+    """The lane a runner exports, under ``tmp_path``, and no lane variable of the caller's; every env change undone.
+
+    ``dev.py server`` writes its lane into ``os.environ`` before it builds: the snapshot puts the caller's
+    environment back, whatever the code under test did to it.
+    """
+    snapshot = dict(os.environ)
+    for name in RUNTIME_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("TEST_PORT", LANE_PORT)
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "test-lane-data"))
+    monkeypatch.setenv("LIBREFOLIO_DATA_DIR", str(tmp_path / "production-data"))
+    yield monkeypatch
+    os.environ.clear()
+    os.environ.update(snapshot)
+
+
+def record_errors(monkeypatch, module) -> list[str]:
+    """Capture what ``module.print_error`` reports instead of printing it."""
+    errors: list[str] = []
+    monkeypatch.setattr(module, "print_error", errors.append)
+    return errors
+
+
+# ── Contract 1 — `dev.py server --build-only`: the pre-bind builds, and nothing after them ──
+
+
+def run_dev(monkeypatch, *argv: str) -> int:
+    """``dev.py <argv>`` in this process, through the real parser; argparse refusing it fails the test, not pytest."""
+    monkeypatch.setattr(dev, "HAS_ARGCOMPLETE", False)
+    monkeypatch.setattr(sys, "argv", ["dev.py", *argv])
+    try:
+        return dev.main()
+    except SystemExit as exc:
+        pytest.fail(f"dev.py {' '.join(argv)} raised SystemExit({exc.code!r}) instead of returning: argparse refuses an unknown flag this way")
+
+
+def capture_pre_bind_steps(monkeypatch, *, forced_rebuild: bool = False, frontend_result=None) -> dict:
+    """Replace what ``dev.py server`` does before it binds with an ordered recording; binding or spawning fails the test.
+
+    ``steps`` holds each step with the ``LIBREFOLIO_TEST_MODE`` it ran under. The frontend goes through
+    ``auto_build_frontend(debug=…)``, or through ``cmd_fe_build(BuildArgs)`` under ``--rebuild``: the other is forbidden.
+    """
+    captured: dict = {"steps": [], "frontend_debug": [], "js_cache_calls": []}
+
+    def step(name: str, result):
+        captured["steps"].append((name, os.environ.get("LIBREFOLIO_TEST_MODE")))
+        return result
+
+    def auto_build_frontend(*args, **kwargs):
+        captured["frontend_debug"].append(kwargs.get("debug", args[0] if args else False))
+        return step("frontend", frontend_result)
+
+    def cmd_fe_build(build_args):
+        captured["frontend_debug"].append(build_args.debug)
+        return step("frontend", frontend_result)
+
+    def update_js_cache(*args, **kwargs):
+        captured["js_cache_calls"].append((args, kwargs))
+        return step("js-cache", 0)
+
+    used, unused = ("cmd_fe_build", "auto_build_frontend") if forced_rebuild else ("auto_build_frontend", "cmd_fe_build")
+    monkeypatch.setattr(dev, used, cmd_fe_build if forced_rebuild else auto_build_frontend)
+    forbid(monkeypatch, dev, unused, f"the frontend must be built through {used} here, never {unused}")
+    monkeypatch.setattr(dev, "auto_build_mkdocs", lambda *_args, **_kwargs: step("mkdocs", None))
+    monkeypatch.setattr(dev, "update_js_cache", update_js_cache)
+    for name in ("check_port_in_use", "run_command_live"):
+        forbid(monkeypatch, dev, name, f"--build-only reached {name}: it must stop before the port check and never start the server")
+    forbid(monkeypatch, dev.os, "execvpe", "--build-only exec'd the server: it must stop before uvicorn")
+    return captured
+
+
+class TestBuildOnlyServer:
+    """``dev.py server --build-only``: exactly what the server builds before binding, then the exit code, nothing more."""
+
+    @pytest.mark.parametrize(
+        ("flags", "frontend_result", "expected_debug", "expected_mode"),
+        [
+            pytest.param(("--test",), None, True, "1", id="test-lane-frontend-up-to-date"),
+            pytest.param(("--test",), 0, True, "1", id="test-lane-frontend-rebuilt"),
+            pytest.param(("--test", "--rebuild"), 0, True, "1", id="test-lane-forced-rebuild"),
+            pytest.param((), None, False, "0", id="production-server"),
+        ],
+    )
+    def test_build_only_runs_the_pre_bind_builds_in_order_and_never_binds(self, runtime_env, flags, frontend_result, expected_debug, expected_mode):
+        # The same steps as before a real bind, in the same order and mode: a test server started after this finds
+        # its bundle up to date (debug, which --test forces) and binds at once, inside STARTUP_TIMEOUT.
+        captured = capture_pre_bind_steps(runtime_env, forced_rebuild="--rebuild" in flags, frontend_result=frontend_result)
+
+        assert run_dev(runtime_env, "server", *flags, "--build-only") == 0
+
+        assert captured["steps"] == [("frontend", expected_mode), ("mkdocs", expected_mode), ("js-cache", expected_mode)]
+        assert captured["frontend_debug"] == [expected_debug]
+        # As before a bind: not strict, so a resource missing from the cache falls back to the CDN, never fails.
+        assert captured["js_cache_calls"] == [((), {})]
+
+    @pytest.mark.parametrize("flags", [pytest.param(("--test",), id="stale-frontend-build-fails"), pytest.param(("--test", "--rebuild"), id="forced-rebuild-fails")])
+    def test_a_failed_frontend_build_ends_build_only_with_its_exit_code(self, runtime_env, flags):
+        # As before a bind today: no docs and no JS cache are built for a server that will not start.
+        captured = capture_pre_bind_steps(runtime_env, forced_rebuild="--rebuild" in flags, frontend_result=FAILED_BUILD_CODE)
+        for name in ("auto_build_mkdocs", "update_js_cache"):
+            forbid(runtime_env, dev, name, f"{name} ran after a failed frontend build")
+
+        assert run_dev(runtime_env, "server", *flags, "--build-only") == FAILED_BUILD_CODE
+
+        assert captured["steps"] == [("frontend", "1")]
+
+    @pytest.mark.parametrize(
+        ("argv", "expected"),
+        [
+            pytest.param(("server", "--test", "--build-only"), True, id="test-mode"),
+            pytest.param(("server", "--build-only"), True, id="production-mode"),
+            pytest.param(("server", "--test"), False, id="test-mode-default"),
+            pytest.param(("server",), False, id="production-mode-default"),
+        ],
+    )
+    def test_the_server_parser_has_build_only_off_by_default(self, monkeypatch, argv, expected):
+        parsed: list = []
+        monkeypatch.setattr(dev, "cmd_server", lambda args: parsed.append(args) or 0)
+
+        assert run_dev(monkeypatch, *argv) == 0
+
+        (args,) = parsed
+        assert vars(args).get("build_only", "<no build_only>") is expected
+
+    def test_the_runner_prerequisites_command_is_a_build_only_test_server_run(self, runtime_env):
+        # The two halves of C-94 must agree: the argv the runner launches is one dev.py takes as a test-mode build.
+        command = test_runner_server.prerequisites_command()
+        captured = capture_pre_bind_steps(runtime_env)
+
+        assert run_dev(runtime_env, *command[command.index("dev.py") + 1 :]) == 0
+
+        assert captured["steps"] == [("frontend", "1"), ("mkdocs", "1"), ("js-cache", "1")]
+        assert captured["frontend_debug"] == [True]
+
+
+# ── Contract 2 — `frontend/node_modules/.bin` is checked before any npm or npx call ──
+#
+# Without it, a tree with no node_modules reached `npx svelte-check` (cmd_fe_build) and `npm run generate-api`
+# (cmd_api_client), whose `npx openapi-zod-client` then fetched from the registry instead of the locked version.
+
+#: What ``cmd_fe_build`` does after its check, in its order: none of it may run while a tool is missing.
+FE_BUILD_STEPS = ((dev, "update_js_cache"), (dev, "cmd_api_sync"), (dev, "run_command_live"), (dev.i18n_catalog, "build"), (dev, "generate_favicon"))
+
+
+def frontend_node_bin(monkeypatch, root: Path, *tools: str, installed: bool = True, layout: str = "npm-symlinks") -> Path:
+    """Point ``dev.FRONTEND_NODE_BIN`` at a ``node_modules/.bin`` under ``root`` holding exactly ``tools``.
+
+    ``installed=False`` leaves ``node_modules`` absent, as in a fresh worktree. ``layout`` is npm's on POSIX (a symlink
+    into each tool's package) or, as ``"shim-files"``, npm's on Windows (a plain file per tool).
+    """
+    node_bin = root / "node_modules" / ".bin"
+    if installed:
+        node_bin.mkdir(parents=True)
+    for tool in tools:
+        if layout == "npm-symlinks":
+            target = root / "node_modules" / tool / "bin" / "cli.js"
+            target.parent.mkdir(parents=True)
+            target.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+            (node_bin / tool).symlink_to(target)
+        else:
+            (node_bin / tool).write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(dev, "FRONTEND_NODE_BIN", node_bin)
+    return node_bin
+
+
+def forbid_steps(monkeypatch, steps, reason: str) -> None:
+    """``forbid`` each ``(target, name)`` of ``steps``, the step's name appended to ``reason``."""
+    for target, name in steps:
+        forbid(monkeypatch, target, name, f"{reason}: {name} ran")
+
+
+def assert_reports_missing_tools(errors: list[str], output: str, missing) -> None:
+    """The error names every missing tool; the error or the hints after it say ``npm ci``."""
+    reported = "\n".join(errors)
+    assert all(tool in reported for tool in missing), f"the error does not name every missing tool {missing}: {errors}"
+    assert "npm ci" in f"{reported}\n{output}", f"no `npm ci` in the error or the hints: {errors} / {output!r}"
+
+
+class TestFrontendToolsCheck:
+    """The tools a command calls are checked in ``frontend/node_modules/.bin`` first: missing, it stops with exit 1."""
+
+    def test_the_checked_tools_are_the_ones_the_build_and_the_api_client_call(self):
+        assert dev.FRONTEND_NODE_BIN == dev.PROJECT_ROOT / "frontend" / "node_modules" / ".bin"
+        assert dev.FRONTEND_BUILD_BINARIES == BUILD_TOOLS
+        assert dev.API_CLIENT_BINARIES == API_CLIENT_TOOLS
+
+    @pytest.mark.parametrize(
+        ("installed_tools", "installed", "layout", "asked", "expected"),
+        [
+            pytest.param((), False, "npm-symlinks", BUILD_TOOLS, list(BUILD_TOOLS), id="fresh-worktree"),
+            pytest.param((), True, "npm-symlinks", BUILD_TOOLS, list(BUILD_TOOLS), id="empty-bin"),
+            pytest.param(("vite",), True, "npm-symlinks", BUILD_TOOLS, ["openapi-zod-client", "svelte-check"], id="partial-npm-symlinks"),
+            pytest.param(("vite",), True, "shim-files", BUILD_TOOLS, ["openapi-zod-client", "svelte-check"], id="partial-shim-files"),
+            pytest.param(("vite",), True, "npm-symlinks", BUILD_TOOLS[::-1], ["svelte-check", "openapi-zod-client"], id="asked-order-kept"),
+            pytest.param(BUILD_TOOLS, True, "npm-symlinks", BUILD_TOOLS, [], id="complete"),
+        ],
+    )
+    def test_missing_frontend_binaries_lists_the_absent_tools_in_the_order_asked(self, monkeypatch, tmp_path, installed_tools, installed, layout, asked, expected):
+        frontend_node_bin(monkeypatch, tmp_path, *installed_tools, installed=installed, layout=layout)
+
+        assert list(dev.missing_frontend_binaries(asked)) == expected
+
+    def test_require_frontend_dependencies_is_silent_when_every_tool_is_there(self, monkeypatch, tmp_path, capsys):
+        frontend_node_bin(monkeypatch, tmp_path, *BUILD_TOOLS)
+        errors = record_errors(monkeypatch, dev)
+
+        assert dev.require_frontend_dependencies(BUILD_TOOLS, purpose="the frontend build") == 0
+
+        assert (errors, tuple(capsys.readouterr())) == ([], ("", ""))
+
+    def test_require_frontend_dependencies_names_what_is_missing_and_npm_ci(self, monkeypatch, tmp_path, capsys):
+        frontend_node_bin(monkeypatch, tmp_path, "vite")
+        errors = record_errors(monkeypatch, dev)
+
+        assert dev.require_frontend_dependencies(BUILD_TOOLS, purpose="the frontend build") == 1
+
+        assert_reports_missing_tools(errors, capsys.readouterr().out, ("openapi-zod-client", "svelte-check"))
+
+    @pytest.mark.parametrize(
+        ("installed_tools", "installed", "missing"),
+        [
+            pytest.param((), False, BUILD_TOOLS, id="fresh-worktree"),
+            pytest.param((), True, BUILD_TOOLS, id="empty-bin"),
+            pytest.param(("vite",), True, ("openapi-zod-client", "svelte-check"), id="partial"),
+        ],
+    )
+    def test_fe_build_stops_before_any_step_when_a_tool_is_missing(self, monkeypatch, tmp_path, capsys, installed_tools, installed, missing):
+        frontend_node_bin(monkeypatch, tmp_path, *installed_tools, installed=installed)
+        forbid_steps(monkeypatch, FE_BUILD_STEPS, "cmd_fe_build went past a failed node_modules check")
+        errors = record_errors(monkeypatch, dev)
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=True)) == 1
+
+        assert_reports_missing_tools(errors, capsys.readouterr().out, missing)
+
+    def test_fe_build_goes_on_to_its_first_step_when_every_tool_is_there(self, monkeypatch, tmp_path):
+        # The positive control: an installed tree passes the check and the JS cache step comes next. Its failure
+        # (exit 9) ends the build there, so nothing is built for real.
+        frontend_node_bin(monkeypatch, tmp_path, *BUILD_TOOLS)
+        monkeypatch.setattr(dev, "update_js_cache", lambda *_args, **_kwargs: 9)
+        forbid_steps(monkeypatch, FE_BUILD_STEPS[1:], "cmd_fe_build went past a failed JS cache step")
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=True)) == 9
+
+    @pytest.mark.parametrize("tools_only", [False, True], ids=["generate-api", "generate-tools"])
+    @pytest.mark.parametrize(
+        ("installed_tools", "installed"),
+        [
+            pytest.param((), False, id="fresh-worktree"),
+            pytest.param((), True, id="empty-bin"),
+            pytest.param(("svelte-check", "vite"), True, id="build-tools-without-the-generator"),
+        ],
+    )
+    def test_api_client_stops_before_npm_when_its_generator_is_missing(self, monkeypatch, tmp_path, capsys, tools_only, installed_tools, installed):
+        # generate-api runs `npx openapi-zod-client`; generate-tools imports it as a library.
+        frontend_node_bin(monkeypatch, tmp_path, *installed_tools, installed=installed)
+        forbid(monkeypatch, dev, "run_command_live", "cmd_api_client ran npm without openapi-zod-client installed")
+        errors = record_errors(monkeypatch, dev)
+
+        assert dev.cmd_api_client(SimpleNamespace(tools_only=tools_only)) == 1
+
+        assert_reports_missing_tools(errors, capsys.readouterr().out, API_CLIENT_TOOLS)
+
+    @pytest.mark.parametrize(("tools_only", "script"), [(False, "generate-api"), (True, "generate-tools")], ids=["generate-api", "generate-tools"])
+    def test_api_client_runs_its_npm_script_once_its_generator_is_installed(self, monkeypatch, tmp_path, tools_only, script):
+        # Only openapi-zod-client is installed: the API client needs nothing else, and runs exactly as before.
+        frontend_node_bin(monkeypatch, tmp_path, *API_CLIENT_TOOLS)
+        calls: list = []
+        monkeypatch.setattr(dev, "run_command_live", lambda *args, **kwargs: calls.append((args, kwargs)) or 0)
+
+        assert dev.cmd_api_client(SimpleNamespace(tools_only=tools_only)) == 0
+
+        assert calls == [((["npm", "run", script],), {"cwd": dev.PROJECT_ROOT / "frontend"})]
+
+
+# ── Contract 3 — SharedTestServer.start(): port check, build step, then the spawn and its deadline ──
+
+SERVER_PID, SERVER_GROUP = 48001, 48000
+
+
+class FakeClock:
+    """``_server``'s ``time``: still unless a fake moves ``now``; any sleep fails the test."""
+
+    def __init__(self):
+        self.now = 0.0
+
+    def time(self) -> float:
+        return self.now
+
+    monotonic = perf_counter = time
+
+    def sleep(self, _seconds):
+        pytest.fail("this path must not wait on the clock")
+
+
+class FakeServerProcess:
+    """The ``Popen`` of a backend that stays up: ``poll()`` always answers None."""
+
+    pid, returncode = SERVER_PID, None
+
+    def poll(self):
+        return None
+
+
+def patch_start(monkeypatch, *, holders=(), build=None, spawn=None, clock=None) -> None:
+    """Wire ``SharedTestServer.start()`` to fakes: lsof, the build step, ``Popen``, the PGID, health, the clock.
+
+    ``build=None`` keeps the real build step, whose ``subprocess.run`` stays forbidden unless the test fakes it;
+    ``spawn=None`` forbids the spawn. Health answers yes at the first poll.
+    """
+    monkeypatch.setattr(test_runner_server, "port_holders", holders if callable(holders) else (lambda port=None: list(holders)))
+    if build is not None:
+        monkeypatch.setattr(test_runner_server, "build_server_prerequisites", build)
+    if spawn is None:
+        forbid(monkeypatch, test_runner_server.subprocess, "Popen", "the backend was spawned on a path that must spawn nothing")
+    else:
+        monkeypatch.setattr(test_runner_server.subprocess, "Popen", spawn)
+    monkeypatch.setattr(test_runner_server.os, "getpgid", lambda _pid: SERVER_GROUP)
+    monkeypatch.setattr(test_runner_server, "is_healthy", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(test_runner_server, "time", clock or FakeClock())
+
+
+class TestSharedServerBuildsBeforeItsDeadline:
+    """``SharedTestServer.start()``: the port check, then the build step, then the spawn and ``STARTUP_TIMEOUT``."""
+
+    def test_start_checks_the_port_then_builds_then_spawns(self, monkeypatch):
+        # Port first: refusing a held lane after minutes of building would waste them. Spawn last: no backend may
+        # serve a bundle the build step did not finish.
+        server, events = test_runner_server.SharedTestServer(), []
+        patch_start(
+            monkeypatch,
+            holders=lambda port=None: events.append("port-check") or [],
+            build=lambda *_args, **_kwargs: events.append("build") or True,
+            spawn=lambda *_args, **_kwargs: events.append("spawn") or FakeServerProcess(),
+        )
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        assert events[:3] == ["port-check", "build", "spawn"]
+        assert events.count("build") == 1
+        assert (server.process_group_id, server.started_here) == (SERVER_GROUP, True)
+
+    def test_the_build_step_does_not_count_against_the_startup_timeout(self, monkeypatch):
+        # A build longer than STARTUP_TIMEOUT itself, then a backend that answers at once: only a deadline started
+        # after the build lets this start succeed.
+        server, clock, build_started_at = test_runner_server.SharedTestServer(), FakeClock(), []
+
+        def slow_build(*_args, **_kwargs):
+            build_started_at.append(clock.now)
+            clock.now += test_runner_server.STARTUP_TIMEOUT + 100
+            return True
+
+        patch_start(monkeypatch, build=slow_build, spawn=lambda *_args, **_kwargs: FakeServerProcess(), clock=clock)
+        forbid(monkeypatch, server, "stop", "the start timed out: its deadline counted the build step")
+
+        assert server.start() is True
+
+        assert build_started_at == [0.0]
+
+    def test_a_build_step_that_fails_spawns_nothing(self, monkeypatch):
+        server = test_runner_server.SharedTestServer()
+        patch_start(monkeypatch, build=lambda *_args, **_kwargs: False)
+
+        assert server.start() is False
+
+        assert (server.proc, server.process_group_id, server.started_here) == (None, None, False)
+
+    def test_a_build_command_that_exits_non_zero_spawns_nothing_and_names_its_code(self, monkeypatch):
+        # The real build step, down to its subprocess.run of `dev.py server --test --build-only`.
+        server, runs = test_runner_server.SharedTestServer(), []
+        patch_start(monkeypatch)
+        monkeypatch.setattr(test_runner_server.subprocess, "run", lambda command, *_args, **_kwargs: runs.append(command) or subprocess.CompletedProcess(command, FAILED_BUILD_CODE))
+        errors = record_errors(monkeypatch, test_runner_server)
+
+        assert server.start() is False
+
+        assert runs == [test_runner_server.prerequisites_command()]
+        assert (server.proc, server.process_group_id, server.started_here) == (None, None, False)
+        assert any(re.search(rf"\b{FAILED_BUILD_CODE}\b", message) for message in errors), errors
+
+    def test_an_occupied_port_is_refused_before_anything_is_built(self, monkeypatch):
+        server = test_runner_server.SharedTestServer()
+        patch_start(monkeypatch, holders=["918273"])
+        forbid(monkeypatch, test_runner_server, "build_server_prerequisites", "the build step ran while the port was held by another lane")
+        errors = record_errors(monkeypatch, test_runner_server)
+
+        assert server.start() is False
+
+        assert (server.proc, server.started_here) == (None, False)
+        assert any("918273" in message for message in errors), errors
+
+    def test_the_build_step_gets_the_runner_env_and_only_the_server_the_coverage_wiring(self, monkeypatch):
+        # Under --coverage the backend measures itself, the build must not: it comes out the same either way, and
+        # configure_test_runtime imports backend.app.config, which .coveragerc measures.
+        for name in ("COVERAGE_PROCESS_START", "PYTHONPATH"):
+            monkeypatch.delenv(name, raising=False)
+        server, build_envs, spawn_envs = test_runner_server.SharedTestServer(coverage=True), [], []
+
+        def build(*args, **kwargs):
+            given = kwargs.get("env", args[0] if args else None)
+            build_envs.append(dict(os.environ if given is None else given))
+            return True
+
+        patch_start(monkeypatch, build=build, spawn=lambda *_args, **kwargs: spawn_envs.append(kwargs["env"]) or FakeServerProcess())
+
+        assert server.start() is True
+
+        (build_env,) = build_envs
+        assert "COVERAGE_PROCESS_START" not in build_env
+        assert str(test_runner_common.COVERAGE_SITECUSTOMIZE_DIR) not in build_env.get("PYTHONPATH", "")
+        (spawn_env,) = spawn_envs
+        assert spawn_env["COVERAGE_PROCESS_START"] == str(test_runner_common.PROJECT_ROOT / ".coveragerc")
+
+
+# ── Contract 4 — build_server_prerequisites(): the build-only server, in the foreground, its output in order ──
+#
+# On a pipe (CI, a tee'd gallery log, the runner's own logs) Python block-buffers stdout. In one log the runner's info
+# line came out 262 s late, after the whole build; inside the build, dev.py's own messages ("Frontend sources changed,
+# rebuilding…", "Frontend build complete!") came out at its exit, after the npm, vite and mkdocs output they introduce.
+# A terminal, line-buffered, showed the right order: only the logs were scrambled.
+
+
+class FlushRecordingStream:
+    """``_server``'s ``sys.stdout`` or ``sys.stderr``: each ``flush()`` recorded as ``<name>.flush``, then done for real.
+
+    Everything else goes to the real stream, looked up at each call: whatever pytest's capture put there gets it.
+    """
+
+    def __init__(self, name: str, events: list[str]):
+        self._name, self._events = name, events
+
+    def flush(self):
+        self._events.append(f"{self._name}.flush")
+        getattr(sys, self._name).flush()
+
+    def __getattr__(self, attribute: str):
+        return getattr(getattr(sys, self._name), attribute)
+
+
+class SysRecordingFlushes:
+    """``_server``'s ``sys``: the real module, ``executable`` included, but for its two streams, which record their flushes."""
+
+    def __init__(self, events: list[str]):
+        self.stdout = FlushRecordingStream("stdout", events)
+        self.stderr = FlushRecordingStream("stderr", events)
+
+    def __getattr__(self, name: str):
+        return getattr(sys, name)
+
+
+def record_build_runs(monkeypatch, *, returncode: int) -> tuple[list[str], list[tuple]]:
+    """Fake ``_server``'s ``subprocess.run`` (answering ``returncode``), ``print_info``, ``sys`` and clock; order the calls.
+
+    ``events`` gets ``info``, ``stdout.flush``, ``stderr.flush`` and ``run``, as they happen.
+    """
+    events: list[str] = []
+    runs: list[tuple] = []
+
+    def fake_run(*args, **kwargs):
+        events.append("run")
+        runs.append((args, kwargs))
+        return subprocess.CompletedProcess(args[0] if args else kwargs.get("args"), returncode)
+
+    monkeypatch.setattr(test_runner_server.subprocess, "run", fake_run)
+    monkeypatch.setattr(test_runner_server, "print_info", lambda _message: events.append("info"))
+    monkeypatch.setattr(test_runner_server, "sys", SysRecordingFlushes(events))
+    monkeypatch.setattr(test_runner_server, "time", FakeClock())
+    return events, runs
+
+
+class TestBuildServerPrerequisites:
+    """``build_server_prerequisites()``: ``python -u dev.py server --test --build-only``, its output on the terminal in order, its verdict."""
+
+    def test_the_command_is_a_test_mode_build_only_server(self):
+        command = test_runner_server.prerequisites_command()
+
+        # -u: dev.py unbuffered, so on a pipe its own messages come out among its subprocesses' output, not at its exit.
+        assert command == [sys.executable, "-u", "dev.py", "server", "--test", "--build-only"]
+        # An interpreter option goes before the script: after it, -u would be one of dev.py's own arguments.
+        assert "-u" in command[: command.index("dev.py")], command
+        # From the cwd the step runs in, the dev.py this module imports.
+        assert (Path(test_runner_server.PROJECT_ROOT) / command[command.index("dev.py")]).resolve() == Path(dev.__file__).resolve()
+
+    @pytest.mark.parametrize("call_kwargs", [{}, {"env": {"LF_APP_VERSION": "explicit-env"}}], ids=["inherited-env", "explicit-env"])
+    def test_it_runs_the_command_in_the_foreground_with_its_output_visible(self, monkeypatch, call_kwargs):
+        # Inherited stdout/stderr, never DEVNULL: a build lasts minutes and must be seen. check=False: a failed build
+        # is a verdict, not an exception.
+        events, runs = record_build_runs(monkeypatch, returncode=0)
+        errors = record_errors(monkeypatch, test_runner_server)
+
+        assert test_runner_server.build_server_prerequisites(**call_kwargs) is True
+
+        ((args, kwargs),) = runs
+        assert args == (test_runner_server.prerequisites_command(),)
+        assert Path(kwargs.get("cwd", "<no cwd>")).resolve() == Path(test_runner_server.PROJECT_ROOT).resolve()
+        assert kwargs.get("env") == call_kwargs.get("env")
+        assert kwargs.get("check", False) is False
+        assert not kwargs.get("shell", False)
+        assert not {"capture_output", "stdout", "stderr"} & kwargs.keys(), f"the build's output must reach the terminal: {kwargs}"
+        assert "info" in events[: events.index("run")], events
+        assert errors == []
+
+    @pytest.mark.parametrize("call_kwargs", [{}, {"env": {"LF_APP_VERSION": "explicit-env"}}], ids=["inherited-env", "explicit-env"])
+    def test_it_flushes_its_output_after_its_info_line_and_before_the_build_starts(self, monkeypatch, call_kwargs):
+        # The build writes to this process's stdout and stderr. On a pipe, a line still in this process's buffer comes
+        # out after the whole build: both streams are flushed once the info line is written and before the build
+        # starts. Flushed before the line, the line stays in the buffer; flushed after the run, it comes out too late.
+        events, _runs = record_build_runs(monkeypatch, returncode=0)
+
+        assert test_runner_server.build_server_prerequisites(**call_kwargs) is True
+
+        assert "run" in events, f"the build never started: {events}"
+        # What the step did last before the build started: the info line, then a flush of each stream, nothing between.
+        assert events[: events.index("run") + 1][-4:] == ["info", "stdout.flush", "stderr.flush", "run"], events
+
+    def test_a_build_that_exits_non_zero_is_false_and_its_exit_code_is_named(self, monkeypatch):
+        _events, runs = record_build_runs(monkeypatch, returncode=FAILED_BUILD_CODE)
+        errors = record_errors(monkeypatch, test_runner_server)
+
+        assert test_runner_server.build_server_prerequisites() is False
+
+        assert len(runs) == 1
+        assert any(re.search(rf"\b{FAILED_BUILD_CODE}\b", message) for message in errors), errors
+
+
+# ── Contract 5 — `mkdocs gallery`: the same build step, before Playwright, with Playwright's environment ──
+#
+# Playwright's webServer starts `dev.py server --test` itself, so its builds fell inside STARTUP_TIMEOUT_S. The
+# gallery now builds first, after its database step and its port check. The colour coordinator's condition: the
+# step gets the environment Playwright gets, LF_APP_VERSION included, because the bundle bakes the version in.
+
+
+def gallery_args(**overrides) -> SimpleNamespace:
+    """``mkdocs gallery`` arguments: desktop only, one browser worker, the lane DB reused, a test port of its own."""
+    values = {"list_tests": False, "filter": None, "desktop_only": True, "mobile_only": False, "no_populate": True, "test_port": 6199, "force": False, "workers": 1, "headed": False, "ui": False}
+    return SimpleNamespace(**{**values, **overrides})
+
+
+class FakePlaywright:
+    """The gallery's ``npm run test:e2e`` process: no output, exit 0."""
+
+    def __init__(self):
+        self.stdout, self.returncode = iter([]), 0
+
+    def wait(self):
+        return self.returncode
+
+
+class TestGalleryBuildsBeforePlaywright:
+    """``mkdocs gallery``: the build step runs between its port check and Playwright, with Playwright's environment."""
+
+    def test_the_build_step_runs_before_playwright_with_the_environment_playwright_gets(self, runtime_env):
+        runtime_env.setenv("LF_APP_VERSION", "x-c94")
+        events, seen = [], {}
+
+        def build(*args, **kwargs):
+            events.append("build")
+            seen["build_env"] = dict(kwargs.get("env", args[0] if args else None) or {})
+            return True
+
+        def playwright(command, *_args, **kwargs):
+            events.append("playwright")
+            seen.update(command=command, cwd=kwargs.get("cwd"), playwright_env=dict(kwargs.get("env") or {}))
+            return FakePlaywright()
+
+        runtime_env.setattr(dev, "_reuse_gallery_test_db", lambda: events.append("lane-db") or True)
+        runtime_env.setattr(dev, "check_port_in_use", lambda _port: events.append("port-check") or [])
+        runtime_env.setattr(test_runner_server, "build_server_prerequisites", build)
+        runtime_env.setattr(dev.subprocess, "Popen", playwright)
+
+        assert dev.cmd_mkdocs_gallery(gallery_args()) == 0
+
+        assert events == ["lane-db", "port-check", "build", "playwright"]
+        assert (seen["build_env"].get("LF_APP_VERSION"), seen["build_env"].get("TEST_PORT")) == ("x-c94", "6199")
+        assert seen["build_env"] == seen["playwright_env"]
+        assert seen["command"][:5] == ["npm", "run", "test:e2e", "--", "gallery.spec.ts"]
+        assert seen["cwd"] == dev.PROJECT_ROOT / "frontend"
+
+    def test_a_failed_build_step_ends_the_gallery_before_playwright(self, runtime_env):
+        events: list[str] = []
+        runtime_env.setattr(dev, "_reuse_gallery_test_db", lambda: True)
+        runtime_env.setattr(dev, "check_port_in_use", lambda _port: [])
+        runtime_env.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: events.append("build") or False)
+        forbid(runtime_env, dev.subprocess, "Popen", "Playwright started after a failed build step")
+        errors = record_errors(runtime_env, dev)
+
+        assert dev.cmd_mkdocs_gallery(gallery_args()) == 1
+
+        assert events == ["build"]
+        assert errors, "the gallery stopped without saying why"
+
+    def test_list_only_lists_and_builds_nothing(self, runtime_env):
+        # A guard, green before C-94 as after: --list returns before the database step, the port check and the
+        # build step. raising=False: the build step does not exist before C-94.
+        forbid(runtime_env, test_runner_server, "build_server_prerequisites", "--list ran the build step", raising=False)
+        for name in ("_reuse_gallery_test_db", "check_port_in_use"):
+            forbid(runtime_env, dev, name, f"--list reached {name}")
+
+        assert dev.cmd_mkdocs_gallery(gallery_args(list_tests=True)) == 0
+
+
+# ── Contract 6 — `mkdocs gallery` without --workers: 60 % of the CPUs as browsers, the server sized from them ──
+#
+# The default was max(2, os.cpu_count()) browsers, and one server worker per four of them: 10 browsers and 3 server
+# workers on a 10-CPU Mac, where one run reached load 65 and 8 reds in 10 minutes came from saturation alone. With 6
+# browsers, two 30-minute runs were green at load 11–16: the colour coordinator asked for 60 % of the CPUs.
+
+#: CPUs → the gallery's default browser workers, round(0.6 × CPUs) and at least one. Literals: dev.py's function is
+#: asserted against them. 0.6 × a whole number never ends in .5, so no row depends on how round() breaks a tie.
+DEFAULT_GALLERY_WORKERS_BY_CPUS = ((1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (8, 5), (10, 6), (16, 10))
+
+
+def report_cpus(monkeypatch, cpus: int | None) -> None:
+    """Make ``os.cpu_count()`` answer ``cpus``, whatever this machine has; None is a platform that cannot tell."""
+    monkeypatch.setattr(dev.os, "cpu_count", lambda: cpus)
+
+
+def launch_gallery(monkeypatch, args) -> tuple[list[str], dict]:
+    """``cmd_mkdocs_gallery(args)`` through contract 5's fakes; the argv and the env of the one Playwright it launched."""
+    launched: list[tuple[list[str], dict]] = []
+
+    def playwright(command, *_args, **kwargs):
+        launched.append((list(command), dict(kwargs.get("env") or {})))
+        return FakePlaywright()
+
+    monkeypatch.setattr(dev, "_reuse_gallery_test_db", lambda: True)
+    monkeypatch.setattr(dev, "check_port_in_use", lambda _port: [])
+    monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dev.subprocess, "Popen", playwright)
+
+    assert dev.cmd_mkdocs_gallery(args) == 0
+
+    (launch,) = launched
+    return launch
+
+
+def playwright_workers(command: list[str]) -> str | None:
+    """The value after ``--workers`` in a Playwright argv, which carries the flag at most once; None without it."""
+    assert command.count("--workers") <= 1, f"--workers given more than once: {command}"
+    return command[command.index("--workers") + 1] if "--workers" in command else None
+
+
+class TestGalleryDefaultBrowserWorkers:
+    """``mkdocs gallery`` without ``--workers``: 60 % of the CPUs as browser workers, at least one; its server follows."""
+
+    @pytest.mark.parametrize(("cpus", "expected"), DEFAULT_GALLERY_WORKERS_BY_CPUS, ids=[f"{cpus}-cpus" for cpus, _ in DEFAULT_GALLERY_WORKERS_BY_CPUS])
+    def test_the_default_is_sixty_percent_of_the_cpus_rounded_and_at_least_one(self, cpus, expected):
+        assert dev.default_gallery_workers(cpus) == expected
+
+    def test_the_share_is_sixty_percent_of_the_cpus(self):
+        # The share by name, the knob a later tuning turns: moving it is a decision a test sees, not a side effect.
+        assert dev.GALLERY_BROWSER_WORKERS_PER_CPU == 0.6
+
+    def test_without_a_count_it_reads_the_cpu_count_at_each_call(self, monkeypatch):
+        # Two answers in one process: a count read once (a default argument, a module constant) gives the same twice,
+        # and on a 10-CPU machine the first answer alone could not tell. None is a platform that cannot tell: the
+        # fallback of two CPUs gives one browser.
+        report_cpus(monkeypatch, 10)
+        on_ten_cpus = dev.default_gallery_workers()
+        report_cpus(monkeypatch, None)
+        on_unknown_cpus = dev.default_gallery_workers()
+
+        assert (on_ten_cpus, on_unknown_cpus) == (6, 1)
+
+    @pytest.mark.parametrize(("cpus", "browsers", "servers"), [pytest.param(10, "6", "2", id="10-cpus"), pytest.param(16, "10", "3", id="16-cpus")])
+    def test_the_gallery_without_workers_runs_the_default_and_sizes_its_server_from_it(self, runtime_env, cpus, browsers, servers):
+        # Before C-94, 10 CPUs gave 10 browsers and 3 server workers. Two machines, so a fixed count cannot pass: the
+        # default follows the CPUs of the machine the gallery runs on.
+        report_cpus(runtime_env, cpus)
+
+        command, env = launch_gallery(runtime_env, gallery_args(workers=None))
+
+        assert (playwright_workers(command), env.get("GALLERY_SERVER_WORKERS")) == (browsers, servers)
+
+    @pytest.mark.parametrize(("workers", "servers"), [pytest.param(3, "1", id="below-the-default"), pytest.param(12, "3", id="above-the-default")])
+    def test_an_explicit_workers_wins_over_the_default(self, runtime_env, workers, servers):
+        # A guard, green before C-94 as after: the default (6 on these 10 CPUs) is neither a floor nor a cap on an
+        # explicit count, and the server is sized from the count given.
+        report_cpus(runtime_env, 10)
+
+        command, env = launch_gallery(runtime_env, gallery_args(workers=workers))
+
+        assert (playwright_workers(command), env.get("GALLERY_SERVER_WORKERS")) == (str(workers), servers)
+
+    @pytest.mark.parametrize(("argv", "expected"), [pytest.param((), None, id="no-flag"), pytest.param(("--workers", "3"), 3, id="explicit")])
+    def test_the_gallery_parser_leaves_workers_unset_without_the_flag(self, monkeypatch, argv, expected):
+        # A guard, green before C-94 as after, and the precondition of the gallery tests above: gallery_args(workers=None)
+        # is the command line without the flag only while the parser's default is None. Any other default would leave
+        # default_gallery_workers unreachable from the command line, however right it is.
+        parsed: list = []
+        monkeypatch.setattr(dev, "cmd_mkdocs_gallery", lambda args: parsed.append(args) or 0)
+
+        assert run_dev(monkeypatch, "mkdocs", "gallery", *argv) == 0
+
+        (args,) = parsed
+        assert vars(args).get("workers", "<no workers>") == expected
