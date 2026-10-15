@@ -36,7 +36,7 @@ catalogue, `SETTINGS_REGISTRY`.
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. A guard test checks it (runner selector `services config-package`, file
       `backend/test_scripts/test_services/test_config_package.py`). One temporary exception:
-      the `LIBREFOLIO_WEB_LINK_FINDER_*` keys, still read by `services/web_link_finder.py`
+      the `LIBREFOLIO_WEB_LINK_FINDER_*` keys, still read by `services/assets/web_link_finder.py`
       until they move into the package.
 
 ## 🗃️ Two storage models, kept separate on purpose

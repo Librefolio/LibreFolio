@@ -61,23 +61,15 @@ from backend.app.schemas.signals import (
     SignalExecutionContext,
     SignalPricePoint,
 )
-from backend.app.services.fx import (
-    FXServiceError,
-    convert_bulk,
-    delete_rates_bulk,
-    sync_pairs_bulk,
-    upsert_rates_bulk,
-)
+from backend.app.services.fx.fx import FXServiceError, convert_bulk, delete_rates_bulk, sync_pairs_bulk, upsert_rates_bulk
+from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.provider_registry import (
-    FXProviderRegistry,
-    SignalPluginRegistry,
-)
 from backend.app.services.signal_service import (
     SignalExecutionPlan,
     SignalRequestValidationError,
     SignalService,
 )
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 logger = get_logger(__name__)
 fx_router = APIRouter(prefix="/fx", tags=["FX (Forex)"])

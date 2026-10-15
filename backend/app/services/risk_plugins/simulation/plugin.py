@@ -18,10 +18,7 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
-from backend.app.services.provider_registry import (
-    RiskAnalyticRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
@@ -46,6 +43,7 @@ from backend.app.services.risk.quant.spawn_worker import (
     SpawnWorkerRemoteError,
     SpawnWorkerTimeoutError,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 _DEFAULT_SEED = 123456
 

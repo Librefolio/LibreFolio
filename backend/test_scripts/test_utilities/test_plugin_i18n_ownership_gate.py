@@ -50,7 +50,11 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, RiskAnalyticRegistry, SignalPluginRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.registry import ToolPluginRegistry
 from scripts import i18n_catalog as catalog
 

@@ -191,7 +191,7 @@ Returns the **current price** of each asset in a list: the assigned provider's l
 
 `value` is a decimal string, and `as_of_date` is a date (`YYYY-MM-DD`), not a timestamp.
 
-**Resolution strategy** (per asset, all assets in parallel — `get_current_prices_bulk` in `backend/app/services/asset_sources/price_query.py`):
+**Resolution strategy** (per asset, all assets in parallel — `get_current_prices_bulk` in `backend/app/services/assets/price_query.py`):
 
 1. If a provider is assigned, ask its `get_current_value()` — at most five calls at a time, ten seconds each — and answer with `source: "provider:<code>"`. A provider answer is cached for two minutes. What "current" means is up to the provider: JustETF answers EUR with a real-time gettex quote, kept up to date by a WebSocket feed per ISIN, and otherwise (other currencies, or no quote) with the latest daily quote of its chart API; Yahoo Finance reads `regularMarketPrice` from `ticker.info` (then `currentPrice` or `previousClose`).
 2. **Fallback**: with no usable provider, or when its call fails or times out, return the latest close stored in `PriceHistory`, with `source: "db:last_known"`.

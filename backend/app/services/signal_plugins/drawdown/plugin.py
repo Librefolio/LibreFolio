@@ -24,10 +24,11 @@ from backend.app.schemas.signals import (
     SignalUnit,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.metrics import underwater_drawdown
 from backend.app.services.risk.signal_helpers import build_line_computation
 from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class DrawdownParams(BaseModel):
@@ -116,7 +117,7 @@ class DrawdownPlugin(SignalPlugin):
             total_points=2,
             normalized_tolerance=1e-6,
             # E1: with full_history the fetch path ignores total_points and loads
-            # from the start of the available history (see asset_source).
+            # from the start of the available history (see assets/price_query.py).
             full_history=params.full_history,
         )
 
