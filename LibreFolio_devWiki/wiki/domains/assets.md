@@ -102,7 +102,7 @@ graph TD
 | Database pricing mkdocs | `mkdocs_src/docs/developer/architecture/database/assets_pricing.md` |
 | User assets docs | `mkdocs_src/docs/user/assets/` |
 | Scheduled investment docs | `mkdocs_src/docs/developer/backend/assets/provider_scheduled_investment.md` |
-| Asset API | `backend/app/api/v1/assets.py` |
+| Asset API | `backend/app/api/v1/assets/` |
 | Asset service + abstract base | `backend/app/services/assets/` |
 | Asset providers | `backend/app/services/asset_source_providers/` |
 | DB models (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |

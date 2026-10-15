@@ -6,7 +6,7 @@ and standardize data exchange between components.
 
 **Organization by Domain**:
 - common.py: Shared schemas (BackwardFillInfo, DateRangeModel, OldNew, BaseBulkResponse, BaseDeleteResult)
-- assets.py: Asset-related schemas (FAPricePoint, ScheduledInvestment*, etc.)
+- assets/: Asset schemas — assets.py (CRUD, patch, merge, classification, ScheduledInvestment*), events.py (event point, event CRUD)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
@@ -30,7 +30,7 @@ from importlib import import_module as _import_module
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from backend.app.schemas.assets import (
+    from backend.app.schemas.assets.assets import (
         # Distribution models
         BaseDistribution,
         FAAinfoFiltersRequest,
@@ -38,7 +38,6 @@ if TYPE_CHECKING:
         FAAssetCreateItem,
         FAAssetCreateResult,
         FAAssetDeleteResult,
-        FAAssetEventPoint,
         FAAssetMetadataResponse,
         FAAssetPatchItem,
         FAAssetPatchResult,
@@ -48,14 +47,13 @@ if TYPE_CHECKING:
         FABulkAssetPatchResponse,
         FABulkMetadataRefreshResponse,
         FAClassificationParams,
-        FACurrentValue,
         # Metadata & classification
         FAGeographicArea,
-        FAHistoricalData,
         FAinfoResponse,
         FAMetadataRefreshResult,
         FASectorArea,
     )
+    from backend.app.schemas.assets.events import FAAssetEventPoint
     from backend.app.schemas.brim import (
         # Constants and helpers
         FAKE_ASSET_ID_BASE,
@@ -134,6 +132,8 @@ if TYPE_CHECKING:
         FAAssetDelete,
         FABulkDeleteResponse,
         FABulkUpsertResponse,
+        FACurrentValue,
+        FAHistoricalData,
         FAPriceDeleteResult,
         FAPricePoint,
         FAUpsert,
@@ -467,13 +467,12 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
 ]
 
 _EXPORT_GROUPS = {
-    "assets": (
+    "assets.assets": (
         "BaseDistribution",
         "FAAinfoFiltersRequest",
         "FAAssetCreateItem",
         "FAAssetCreateResult",
         "FAAssetDeleteResult",
-        "FAAssetEventPoint",
         "FAAssetMetadataResponse",
         "FAAssetPatchItem",
         "FAAssetPatchResult",
@@ -483,13 +482,12 @@ _EXPORT_GROUPS = {
         "FABulkAssetPatchResponse",
         "FABulkMetadataRefreshResponse",
         "FAClassificationParams",
-        "FACurrentValue",
         "FAGeographicArea",
-        "FAHistoricalData",
         "FAinfoResponse",
         "FAMetadataRefreshResult",
         "FASectorArea",
     ),
+    "assets.events": ("FAAssetEventPoint",),
     "brim": (
         "FAKE_ASSET_ID_BASE",
         "BRIMAssetCandidate",
@@ -560,6 +558,8 @@ _EXPORT_GROUPS = {
         "FAAssetDelete",
         "FABulkDeleteResponse",
         "FABulkUpsertResponse",
+        "FACurrentValue",
+        "FAHistoricalData",
         "FAPriceDeleteResult",
         "FAPricePoint",
         "FAUpsert",

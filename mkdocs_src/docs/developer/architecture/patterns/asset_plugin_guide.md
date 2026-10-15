@@ -3,15 +3,16 @@
 How to create a new **Asset Source Provider** to fetch prices from a new data source.
 
 **Base class**: `AssetSourceProvider` (defined in
-`backend/app/services/assets/core.py`)
+`backend/app/services/assets/base.py`)
 **Plugin folder**: `backend/app/services/asset_source_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder and Translations](#plugin-folder))
 **Registry**: `AssetProviderRegistry`
 
 !!! info "Import from the defining module"
 
-    Import `AssetSourceProvider` and `AssetSourceError` from `backend.app.services.assets.core`,
-    where the thread runner and shared caches live too. No facade re-exports them: the
-    `backend/app/services/assets/` package `__init__.py` holds only a docstring.
+    Import `AssetSourceProvider` and `AssetSourceError` from `backend.app.services.assets.base`;
+    the thread runner and shared caches live in `backend.app.services.assets.core`. No facade
+    re-exports them: the `backend/app/services/assets/` package `__init__.py` holds only a
+    docstring.
 
 ---
 
@@ -287,10 +288,10 @@ from datetime import date
 from decimal import Decimal
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.services.assets.core import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 
 @register_provider(AssetProviderRegistry)
 class MyProvider(AssetSourceProvider):
