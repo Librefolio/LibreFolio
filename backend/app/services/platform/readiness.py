@@ -1,10 +1,12 @@
 """Readiness of the instance (``GET /system/ready``): the database answers, and its schema is at the head revision.
 
-The head revision is read from the migration scripts once per process; a failure to read it is not cached, so the next
-check tries again. The result carries one code per check and never an error message, a path or a revision id: those go
-to the log, once per change of state, because a monitor may ask every few seconds.
+The head revision is read from the migration scripts once per process, in a worker thread: the read parses
+``alembic.ini`` and imports the migration scripts, synchronous I/O that must not block the event loop. A failure to
+read it is not cached, so the next check tries again. The result carries one code per check and never an error message,
+a path or a revision id: those go to the log, once per change of state, because a monitor may ask every few seconds.
 """
 
+import asyncio
 from functools import cache
 
 from sqlalchemy import column, literal, select, table
@@ -48,7 +50,7 @@ async def _run_checks(session: AsyncSession) -> tuple[ReadinessDatabaseState, Re
         await session.execute(select(literal(1)))
     except Exception as exc:
         return "unreachable", "unknown", f"the database does not answer: {exc}"
-    head = alembic_head_revision()
+    head = await asyncio.to_thread(alembic_head_revision)
     if head is None:
         return "ok", "unknown", "the head revision of the migration scripts cannot be read"
     try:
