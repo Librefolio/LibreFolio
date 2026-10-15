@@ -1544,3 +1544,91 @@ Note del coordinatore: X-R10 riceve una quinta voce (la docstring di `create_rou
 rimando. Il CHANGELOG di X-R8 lo scrive lui all'ingresso. Prossimo: il disegno di FE5b (taglio di `AssetModal.svelte`) in
 sola lettura, mentre chiede il via al coordinatore colori; non FE5a (dopo il lotto A) né FE5c (dopo il lotto di Z sul
 polling); taglio dichiarato con `theme-roles.mjs --split` nello stesso commit, poi `--check`; prove dopo la finestra.
+
+### X-R8 in `dev_release2` ✅ (2026-10-15)
+
+Journal `849c98dda`; merge `173ba19e2` alle 08:18, record `380a3e768` (la riga nel CHANGELOG, «🔄 Changed», e lo SHA
+accanto a X-R8 nel backlog). Il mio ramo è avanzato a `380a3e768`. La docstring di X-R1 si corregge col CP6, insieme a
+X-R2, dichiarando il cambio delle descrizioni in `openapi.json`.
+
+### FE5b — il taglio di `AssetModal.svelte` ⏳ (2026-10-15)
+
+Via del coordinatore e del coordinatore colori alle ~08:30. Record da ripartire con `--split`: `AssetModal` m1 **214**, m2
+vuoto; i pezzi non portano letterali e le classi nuove vanno sui ruoli `lf-*` (T converte i pezzi nella sua ondata W4: chi
+parte prima sono io). Durante la finestra della galleria (fino alle ~12:30) solo codice; le prove dopo l'avviso di fine.
+Non FE5a (lo spostamento in `lib/features/assets/`, dopo il lotto A) né FE5c (la pagina dell'asset, dopo il lotto di Z).
+Base: HEAD `380a3e768`. Inventario delle dipendenze (agente explore, sola lettura): `files/fe5b-inventory.md` della
+cartella di sessione.
+
+**Il punto critico.** Le quattro cuciture della logica (identificativi, confronto dei metadati, salvataggio,
+applicazione del risultato di ricerca) condividono stato mutabile: `identifierRows`, `manualFieldRevisions`, il confronto
+trattenuto (`heldComparison`, `selectionQuestions`, variabili non reattive), `providerProbe`; e lanciano compiti
+asincroni in un ordine preciso (sonda, confronto, riuso). Il markup invece si divide con pochi props. Le prove arrivano
+solo dopo la finestra: conviene tagliare prima ciò che è quasi solo markup.
+
+**Due passi** (due checkpoint):
+- **FE5b-1, ora: i pezzi del markup e la cucitura degli identificativi** (taglio dichiarato con `--split`):
+  - `AssetModalImportNotices.svelte` (avvisi d'importazione, 1707–1726): `groups`;
+  - `AssetModalDetails.svelte` (icona, nome, tipo, quantità di base, valuta, URL, descrizione, 1760–1954): bindable
+    `displayName`, `assetType`, `quoteBaseQuantity`, `providerUserUrl`, `shortDescription`; in sola lettura `currency`,
+    `iconUrl`, `hasProvider`, `askingProvider`, `duplicateAssetName`, gli errori della quantità di base; callback per la
+    valuta scelta, il campo toccato a mano, «Chiedi al fornitore», l'icona, la descrizione;
+  - `AssetModalIdentifiers.svelte` (tabella degli identificativi, etichette «altri», cancellazione multipla con la sua
+    conferma, 1988–2066 e 2487–2499, con colonne, azioni e operazioni sulle righe, 533–596): bindable `rows`; in sola
+    lettura `hasProvider`, `askingProvider`, `zIndex`; callback `onmanualedit`, `onaskprovider`. `storageKey` invariato;
+  - `AssetModalProvider.svelte` (intestazione richiudibile, stato, «nessun fornitore», `ProviderAssignmentSection`,
+    2085–2157): bindable `expanded`, `noProvider` e i quattro campi del fornitore; in sola lettura `providerUrl`,
+    `probeState`, `testStatus`, `saving`; callback `onreconcile`;
+  - `AssetModalFooter.svelte` (interruttori attivo/benchmark, Annulla, Salva, 2177–2254): bindable `active`,
+    `isBenchmark`; callback `oncancel`, `onsave`;
+  - `AssetModalSelectionPrompts.svelte` (scelta dell'identificativo primario, la sua conferma d'abbandono, riuso
+    dell'asset esistente, 2277–2372): i flag restano nel padre (il `$derived` `selectionPromptOpen` e l'effetto che
+    rilascia il confronto trattenuto devono vederli), il figlio riceve stato e callback;
+  - resta nel padre: stato, derivati, effetti, popolamento, nome doppio, ricerca, confronto, salvataggio, chiusura; la
+    cornice, l'intestazione, la ricerca online (col suo `{#key}`), il contenitore «Altre informazioni» con le due
+    distribuzioni, i due avvisi, le conferme rimaste (salvataggio senza prova, cambio d'identificativo, abbandono,
+    rigenerazione, cambio di fornitore parametrico, confronto, valuta, icona).
+  `data-testid`, chiavi i18n, ancore della guida e attributi `data-*` (`data-busy`, `data-snapshot-ready`, `data-dirty`,
+  `data-expanded`) invariati; markup spostato tale e quale (nessuna classe nuova, quindi nessun ruolo da scegliere).
+  X-R3 (i due commenti di `AssetModal` su `asset_source.py`) si corregge qui.
+- **FE5b-2, dopo: le cuciture della logica in moduli `.ts` puri**, con i loro test (test-author): il nucleo del confronto
+  dei metadati (`compareMetadata`, conservando l'ordine degli auto-riempimenti), i payload di creazione e di modifica, la
+  patch dal risultato di ricerca; l'orchestrazione (rete, biglietti della sonda, modali di conferma) resta nel padre. Nessun
+  `--split` (nessuna classe si sposta).
+
+Passi di FE5b-1:
+1. ✅ I sei pezzi, uno alla volta, leggendo ogni sezione; X-R3.
+   > **Note implementazione**: `/tmp/libreFolio_x_fe5b_cut.py` sposta un blocco di markup tale e quale (trovato per
+   > contenuto, non per numero di riga), toglie il rientro e mette l'uso del pezzo al suo posto; poi le sole rinomine dei
+   > nomi del padre nel pezzo, con un controllo che non ne resti nessuno. `AssetModal.svelte` da 2 510 a **1 932** righe;
+   > i pezzi: `AssetModalDetails` 257, `AssetModalIdentifiers` 197, `AssetModalSelectionPrompts` 156,
+   > `AssetModalFooter` 101, `AssetModalProvider` 96, `AssetModalImportNotices` 35. Scelte:
+   > - **La conferma della cancellazione multipla resta nel padre.** `ModalBase` si monta sul posto (nessun portale: lo
+   >   sfondo è `position: fixed` dentro chi lo monta), e dentro il pezzo finirebbe nel fieldset e nella scatola che
+   >   scorre. Quindi la selezione è `bind:selectedIds` e il pezzo chiede la cancellazione con `onbulkdelete`.
+   > - **I flag delle domande dopo la scelta di un risultato restano nel padre**, perché il derivato
+   >   `selectionPromptOpen` e l'effetto che rilascia il confronto trattenuto devono vederli; nel pezzo vanno insieme le
+   >   quattro modali contigue (scelta del primario, la sua conferma d'abbandono, cambio d'identificativo, riuso), così
+   >   l'ordine nel DOM non cambia.
+   > - Nel pezzo dei dettagli va `truncateQuoteBaseQuantity` (usata solo lì); le operazioni sulle righe degli
+   >   identificativi, le colonne e le azioni vanno in `AssetModalIdentifiers`; `getIdentifierByType` e la cancellazione
+   >   confermata restano nel padre (le usano il confronto e la modale). I campi toccati a mano arrivano al padre con il
+   >   loro nome (`identifier_<tipo>`, `display_name`, …), come prima.
+   > - Le scritture su un `$bindable` arrivano al padre in modo sincrono: quando il pezzo del fornitore chiama
+   >   `onreconcile()` dopo aver cambiato «nessun fornitore», il padre vede già il valore nuovo, come prima.
+   > - 19 import tolti dal padre (icone e componenti passati ai pezzi), controllati uno a uno.
+   > X-R3: i due commenti di `AssetModal` puntano a `services/assets/provider_management.py`, quello di
+   > `assetPayload.test.ts:58` a `services/assets/crud.py`. `.github/agents/test-author.agent.md:289` citava
+   > `AssetModal.svelte:595` (già sbagliata a HEAD: la riga era la 667): ora cita la funzione, `populateFromEditData`.
+2. ✅ `theme-roles.mjs --split` e `--check`; Prettier sui file toccati.
+   > **Note implementazione**: Prettier ha solo raccolto su una riga l'uso di `AssetModalIdentifiers` (il padre era pulito a
+   > HEAD). `node frontend/scripts/theme/theme-roles.mjs --split lib/components/assets/AssetModal.svelte:<le sette parti>`:
+   > 26 + 79 + 29 + 12 + 10 + 20 + 38 = **214**, come il record, m2 vuoto, più la riga `~split`; `--check`: «Colour gates:
+   > clean».
+3. ⏳ Dopo la finestra: `front build --debug` (svelte-check), vitest di `AssetModal` (`AssetModal.test.ts`,
+   `AssetModal.providerLifecycle.test.ts`), E2E degli asset e dei flussi che aprono la modale; journal e handoff.
+   > **Note implementazione** (prima della finestra, 08:33–08:35): `npm run check` (svelte-check) **0 errori, 0 avvisi**;
+   > vitest `AssetModal.test.ts`, `AssetModal.providerLifecycle.test.ts`, `assetPayload.test.ts`,
+   > `assetIdentifiers.test.ts`: 4 file, **116/116**. Restano gli E2E dopo la finestra: `front-asset` (asset-modal,
+   > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
+   > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.
