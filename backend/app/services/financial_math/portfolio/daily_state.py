@@ -412,6 +412,7 @@ class DailyStateBuilder:
                         missing_fx_pairs=set(prev.missing_fx_pairs),
                         stale_price_asset_ids=set(prev.stale_price_asset_ids),
                         transaction_implied_asset_ids=set(prev.transaction_implied_asset_ids),
+                        transaction_implied_last_quote_dates=dict(prev.transaction_implied_last_quote_dates),
                         nav_complete=prev.nav_complete,
                         broker_contributions=dict(prev.broker_contributions),
                         pnl_candle=prev.pnl_candle,
@@ -577,6 +578,7 @@ class DailyStateBuilder:
             stale: set[int] = set()
             missing_fx: set[str] = set()
             implied: set[int] = set()
+            implied_last_quotes: dict[int, date_type | None] = {}
             # G1b — synthetic P&L candles (plan §4.3): sum every held asset's resolved daily OHLC
             # contribution (flat open=high=low=close=market_value when no intraday range is known,
             # never a guess). A MISSING valuation makes the whole day's candle unavailable, mirroring
@@ -611,6 +613,8 @@ class DailyStateBuilder:
                     missing_fx.add(valuation.missing_fx_pair)
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
                     implied.add(asset_id)
+                    series = self.mark_series.get(asset_id)
+                    implied_last_quotes[asset_id] = series.last_market_date(current) if series is not None else None
                 position_cost = cost_pool.get((asset_id, position_broker_id))
                 position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
                 open_cost_basis += position_cost_report
@@ -744,6 +748,7 @@ class DailyStateBuilder:
                     missing_fx_pairs=missing_fx,
                     stale_price_asset_ids=stale,
                     transaction_implied_asset_ids=implied,
+                    transaction_implied_last_quote_dates=implied_last_quotes,
                     nav_complete=len(missing) == 0,
                     broker_contributions=broker_contributions,
                     pnl_candle=pnl_candle,

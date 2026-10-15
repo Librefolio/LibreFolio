@@ -13,7 +13,7 @@ backend/
 │   ├── db/models.py           # SQLModel ORM models
 │   ├── schemas/               # Pydantic schemas (I/O validation)
 │   ├── services/              # Business logic
-│   │   ├── platform/                 # app startup/shutdown steps, middleware stack, static site, DB bootstrap; scheduler, container registry, date sentinels, data-quality thresholds, backup export, instance key, config checks, readiness, provider pauses
+│   │   ├── platform/                 # app startup/shutdown steps, middleware stack, static site, DB bootstrap; scheduler, container registry, date sentinels, data-quality thresholds, per-series exports, instance backup, instance key, config checks, readiness, provider pauses
 │   │   ├── files/                    # uploaded static files and their previews
 │   │   ├── email/                    # optional SMTP email: config checks, transport, budget, templates
 │   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
@@ -72,7 +72,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR, annualization | `services/financial_math/returns.py` |
+| Simple ROI, TWRR, MWRR, annualization, a period's start (rebasing), net holding return, G/L ratio | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
@@ -100,7 +100,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
 | App startup and shutdown: one line per step (`STARTUP_STEPS`, `SHUTDOWN_STEPS`), run by `lifecycle.py`; middleware, outermost first (`MIDDLEWARE_STACK`); MkDocs and SPA serving; DB create/migrate at startup. `main.py` only wires them | `backend/app/services/platform/app_lifespan.py`, `lifecycle.py`, `middleware.py`, `static_site.py`, `database_bootstrap.py` |
-| Platform services (scheduler, data-quality thresholds, backup export, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`) | `backend/app/services/platform/` |
+| Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`) | `backend/app/services/platform/` |
 | Uploads and file previews | `backend/app/services/files/` |
 | Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |

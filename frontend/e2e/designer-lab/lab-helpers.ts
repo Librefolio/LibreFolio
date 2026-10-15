@@ -14,7 +14,9 @@
  * and hold the export to the verifier the Lab ships (`verify-export.mjs`), never to a file name written down here. A
  * colour class is followed the same way (`colourSourceOf`): a Tailwind palette class reads its palette variable, a
  * colour-role utility of workstream T reads the role its rule names in the page's CSSOM, and the values of both are
- * read from the page, never written down — T changes them.
+ * read from the page, never written down — T changes them. Where a notation would get in the way — a colour at an
+ * opacity is `#rrggbbaa`, `oklch(… / a)` or a `color-mix()` in the editor, `rgba(…)` or `oklab(…)` in a computed
+ * style — colours are compared as the page paints them (`paintedColours`).
  */
 
 import {execFileSync} from 'node:child_process';
@@ -211,12 +213,14 @@ export async function expectChanges(lab: Page, count: number): Promise<void> {
     await expect(lab.getByTestId('designer-lab')).toHaveAttribute('data-changes', String(count));
 }
 
+/** The tabs of the Lab that list catalogue items the editor opens on. */
+export type ItemTab = 'palette' | 'vars' | 'sheets' | 'charts';
+
 /**
- * Change one catalogue item to `to` through the editor: open the tab, narrow the list with the search, open the item,
- * type the new colour and apply. Returns once the Lab holds one more change.
+ * Open the editor on one catalogue item: open the tab, narrow the list with the search, click the item. Returns the
+ * editor once it shows that item — its layer and its target.
  */
-export async function applyChange(lab: Page, opts: {tab: 'palette' | 'vars' | 'sheets' | 'charts'; search: string; item: string; layer: string; target: string; to: string}): Promise<void> {
-    const before = Number(await lab.getByTestId('designer-lab').getAttribute('data-changes'));
+export async function openEditor(lab: Page, opts: {tab: ItemTab; search: string; item: string; layer: string; target: string}): Promise<Locator> {
     await lab.getByTestId(`lab-tab-${opts.tab}`).click();
     await lab.getByTestId('lab-search').fill(opts.search);
     await expect(lab.getByTestId('lab-search')).toHaveValue(opts.search);
@@ -226,10 +230,37 @@ export async function applyChange(lab: Page, opts: {tab: 'palette' | 'vars' | 's
     const editor = lab.getByTestId('lab-editor');
     await expect(editor).toHaveAttribute('data-layer', opts.layer);
     await expect(editor).toHaveAttribute('data-target', opts.target);
+    return editor;
+}
+
+/**
+ * Change one catalogue item to `to` through the editor: open the tab, narrow the list with the search, open the item,
+ * type the new colour and apply. Returns once the Lab holds one more change.
+ */
+export async function applyChange(lab: Page, opts: {tab: ItemTab; search: string; item: string; layer: string; target: string; to: string}): Promise<void> {
+    const before = Number(await lab.getByTestId('designer-lab').getAttribute('data-changes'));
+    await openEditor(lab, opts);
     await lab.getByTestId('lab-editor-to').fill(opts.to);
     await expect(lab.getByTestId('lab-editor-to')).toHaveValue(opts.to);
     await lab.getByTestId('lab-editor-apply').click();
     await expectChanges(lab, before + 1);
+}
+
+/**
+ * Move a slider of the editor to `value`, as a drag that ends there. Playwright's `fill()` refuses a range input, and a
+ * real drag lands wherever the thumb's pixels put it; so the value is set in the page and the events a drag fires are
+ * dispatched, `input` then `change`, bubbling — Svelte 5 listens for `input` at the root, by delegation. Returns once
+ * the slider shows the value: a value off its step or its range would be snapped by the browser, and fails here.
+ */
+export async function setSlider(slider: Locator, value: number): Promise<void> {
+    await expect(slider).toHaveAttribute('type', 'range');
+    await slider.evaluate((el, next) => {
+        if (!(el instanceof HTMLInputElement)) throw new Error(`a slider is an <input type="range">, not a <${el.tagName.toLowerCase()}>`);
+        el.value = String(next);
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+    }, value);
+    await expect(slider).toHaveValue(String(value));
 }
 
 /**
@@ -376,6 +407,124 @@ export async function opaqueKeysOf(page: Page, colours: string[]): Promise<(stri
         });
     }, colours);
     return serialised.map((value) => (value === null ? null : (hexKeyOf(value) ?? rgbKeyOf(value))));
+}
+
+/** A colour as the page paints it: sRGB channels 0–255, alpha 0–1. */
+export interface Painted {
+    r: number;
+    g: number;
+    b: number;
+    alpha: number;
+}
+
+/**
+ * Each CSS colour value as the app page paints it, whatever its notation: set on a probe element — so a `var()` resolves
+ * against the page's variables and a `color-mix()` is computed — then its computed colour painted on one pixel of a
+ * canvas and read back as sRGB bytes. `#fbf8f180`, `rgba(251, 248, 241, 0.5)` and the `oklab(… / 0.5)` a browser
+ * computes for a mix then compare as the colours they are, which their texts do not: the editor writes `#rrggbbaa` or
+ * `oklch(… / a)` for a colour at an opacity, and a computed style serialises each form its own way. `css` is the
+ * probe's computed colour, for messages. Null for a value CSS refuses, or a computed colour the canvas refuses. Each
+ * probe is a fresh element without transitions, appended and removed within one task: the page never paints it.
+ */
+export async function paintedColours(page: Page, values: string[]): Promise<((Painted & {css: string}) | null)[]> {
+    return page.evaluate((list) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d', {willReadFrequently: true});
+        return list.map((value) => {
+            if (!ctx) return null;
+            const probe = document.createElement('div');
+            probe.style.setProperty('transition', 'none');
+            probe.style.setProperty('background-color', value);
+            // A text CSS refuses leaves the declaration empty.
+            if (!probe.style.getPropertyValue('background-color')) return null;
+            document.body.appendChild(probe);
+            const css = getComputedStyle(probe).backgroundColor;
+            probe.remove();
+            // Two different starting values: a colour the canvas refuses leaves each in place, a valid one replaces both.
+            ctx.fillStyle = '#000000';
+            ctx.fillStyle = css;
+            const first = String(ctx.fillStyle);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = css;
+            if (first !== String(ctx.fillStyle)) return null;
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillRect(0, 0, 1, 1);
+            const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+            return {r, g, b, alpha: a / 255, css};
+        });
+    }, values);
+}
+
+/**
+ * Whether two painted colours are one colour. The alpha within 0.01: an 8-bit alpha moves in steps of 0.004. The
+ * channels within what painting costs: a canvas stores a pixel premultiplied in 8 bits, so the channels of a translucent
+ * pixel come back up to 255 / (2 × its alpha byte) off — 1 at alpha 0.5, 2 at 0.25, 5 at 0.12 — plus 2 for a colour the
+ * browser computed in another space (a mix, in `oklab`) and the rounding of its serialisation. Two fully transparent
+ * pixels are one colour.
+ */
+export function sameColour(a: Painted, b: Painted): boolean {
+    if (Math.abs(a.alpha - b.alpha) > 0.01) return false;
+    const alphaByte = Math.round(Math.min(a.alpha, b.alpha) * 255);
+    if (alphaByte === 0) return true;
+    const slack = Math.ceil(255 / (2 * alphaByte)) + 2;
+    return [a.r - b.r, a.g - b.g, a.b - b.b].every((d) => Math.abs(d) <= slack);
+}
+
+/** A painted colour in a message: `rgba(r, g, b, a)`, the alpha to three decimals. */
+export function describeColour(colour: Painted): string {
+    return `rgba(${colour.r}, ${colour.g}, ${colour.b}, ${Math.round(colour.alpha * 1000) / 1000})`;
+}
+
+/**
+ * Wait until the CSS colour `read` returns paints as `expected` (`sameColour`), polled to the deadline — across tabs by
+ * default, since the Lab's write reaches an app tab as a `storage` event. Fails with the last value read, as computed
+ * and as painted.
+ */
+export async function expectPainted(page: Page, read: () => Promise<string>, expected: Painted, message: string, options: {timeout: number} = CROSS_TAB): Promise<void> {
+    const wanted = describeColour(expected);
+    await expect
+        .poll(
+            async () => {
+                const value = await read();
+                const [painted] = await paintedColours(page, [value]);
+                if (!painted) return `${value}, a value the page does not paint`;
+                return sameColour(painted, expected) ? wanted : `${value}, computed ${painted.css}, painted ${describeColour(painted)}`;
+            },
+            {...options, message},
+        )
+        .toBe(wanted);
+}
+
+/** A colour at an opacity in the form the role tokens write it, `color-mix(in <space>, <base> <p>%, transparent)`. */
+export interface TransparentMix {
+    /** The interpolation space as the Lab writes it back: lower case, single spaces (`oklab`, `oklch longer hue`). */
+    space: string;
+    /** The base as written: a colour, or `var(--x)`. */
+    base: string;
+    /** The share of the base, 0–100: the opacity the mix gives it. */
+    percent: number;
+}
+
+/**
+ * The parts of a value written in the role tokens' form for a colour at an opacity — `color-mix(in <space>, <base>
+ * <p>%, transparent)`, the base first and its share after it — read here independently of the Lab's own parser
+ * (`colorValue.ts`), so that a spec checks the Lab instead of repeating it. Null for any other text: the other orders and
+ * notations of a mix with `transparent` included, since a spec that needs a mix states which form it reads.
+ */
+export function transparentMixOf(text: string): TransparentMix | null {
+    const m = /^color-mix\(\s*in\s+([a-z][a-z0-9-]*(?:\s+(?:shorter|longer|increasing|decreasing)\s+hue)?)\s*,\s*(\S[\s\S]*?)\s+(\d+(?:\.\d+)?)%\s*,\s*transparent\s*\)$/i.exec(text.trim());
+    if (!m || /^transparent$/i.test(m[2].trim())) return null;
+    return {space: m[1].toLowerCase().replace(/\s+/g, ' '), base: m[2].trim(), percent: Number(m[3])};
+}
+
+/**
+ * The computed value of a custom property on `<html>` of `page`, trimmed. A browser substitutes the `var()`s a custom
+ * property reads when it computes it: a mix over `var(--x)` comes back with the value of `--x` in its place.
+ */
+export async function rootValueOf(page: Page, variable: string): Promise<string> {
+    return page.evaluate((name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim(), variable);
 }
 
 /** The colour property a utility prefix sets: the one its rule declares. */
