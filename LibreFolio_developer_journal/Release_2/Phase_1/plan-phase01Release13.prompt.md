@@ -999,3 +999,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
 > in comune con J C-93, H CP4 e J G-8, controlli statici del coordinatore puliti. `schemas/fx.py` e gli altri restano
 > interi, sotto soglia. Poi J-5 e X-R8.
+
+### W K2a, rifiuti a codice e L6, integrato ✅ (2026-10-15, 06:50)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `62c964242` (K2a `0eac8e1b6`, base aggiornata con J C-93,
+> H CP4, J G-8 e X CP4 in `388a20f65`). C-70 parte a: DEGIRO e il Generic CSV rifiutano con codici tradotti nel
+> wizard (7 chiavi `importWizard.parseRefusal.*`); L6: il 400 del parse nomina plugin e file con i nomi visibili.
+> Validazione di W: `all-backend` 14 027 passed, 28 skipped, 0 failed sulla base `58be885a9`; sopra il fuso, controllo
+> leggero con le E2E `tx-import-broker-mismatch` e `tx-import-degiro` sul layout nuovo di H. CHANGELOG con due righe.
+> C-95 nuova (l'albero degli schemi nelle istruzioni). W prepara E1 in sola lettura; K2b, CP7, W3 e W5–W6 aspettano
+> un commit del coordinatore su `brokers.py` e `uploads.py`.

@@ -219,6 +219,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   arrivano in inglese in ogni lingua, e il rifiuto del Generic CSV nomina il codice `broker_generic_csv` invece del
   nome del plugin. Da fare: codici d'errore con parametri, tradotti nel frammento i18n del plugin. Dettagli:
   `/tmp/libreFolio_changelog_audit_T.md` §3 D13 (copia nella sessione del coordinatore).
+  - ✅ **Parte a chiusa il 15/10** da W (lotto K2a della 1.3, `0eac8e1b6`; in `dev_release2` con `62c964242`):
+    DEGIRO e il Generic CSV rifiutano un file con un `BRIMRefusal` a codice, tradotto in `importWizard.parseRefusal.*`
+    (le chiavi stanno nella sorgente `importWizard`, non nel frammento del plugin, per la regola R1 di
+    `gate-plugin-i18n-ownership`), e il rifiuto nomina il plugin col suo nome. Resta la parte b, il 400 del parse
+    tradotto nel wizard e il codice dell'anteprima illeggibile (K2b, dopo un commit del coordinatore su `brokers.py`
+    e `uploads.py`).
 - **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
   della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
@@ -413,6 +419,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   che dica cosa sta costruendo. Nota: senza `node_modules` il runner arriva a `npx` attraverso `generate-api`, e
   dovrebbe fermarsi subito. Il runner è condiviso: va assegnato a una sessione. Dettagli: piano J, §10
   «`all-backend` — la base».
+- **C-95 · L'albero dei moduli in `backend-schemas.instructions.md` è indietro** — minimo, doc per gli agenti; W, 15/10
+  (K2a). L'albero di `.github/instructions/backend-schemas.instructions.md` non elenca `ai_export_runtime`,
+  `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
+  `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
+  riordino. Dettagli: piano 04, §12, K2a.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
