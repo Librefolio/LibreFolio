@@ -10,9 +10,11 @@
 
     interface Props {
         onOpenChange?: (open: boolean) => void;
+        /** On a green bar (the app header, D-T19): the bar's text, hover and focus ring; the menu stays on the card */
+        onBar?: boolean;
     }
 
-    let {onOpenChange = () => {}}: Props = $props();
+    let {onOpenChange = () => {}, onBar = false}: Props = $props();
 
     let isOpen = $state(false);
     let containerRef: HTMLDivElement | null = $state(null);
@@ -58,13 +60,22 @@
 </script>
 
 <div bind:this={containerRef} class="relative" data-language={$currentLanguage} data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
-    <button class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-all" data-testid="language-selector-button" aria-label={$currentLanguageName} aria-haspopup="menu" aria-expanded={isOpen} aria-controls="language-selector-panel" onclick={() => setOpen(!isOpen)} type="button">
+    <button
+        class={onBar ? 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-bar-hover transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus' : 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-all'}
+        data-testid="language-selector-button"
+        aria-label={$currentLanguageName}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls="language-selector-panel"
+        onclick={() => setOpen(!isOpen)}
+        type="button"
+    >
         <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
-        <ChevronDown class="text-lf-secondary transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
+        <ChevronDown class="{onBar ? 'text-lf-bar-text' : 'text-lf-secondary'} transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </button>
 
     {#if isOpen}
-        <div id="language-selector-panel" class="absolute right-0 mt-2 w-40 bg-lf-card rounded-lg shadow-xl border border-lf-subtle overflow-hidden z-50" role="menu" data-menu-open="true" data-testid="language-selector-panel">
+        <div id="language-selector-panel" class="absolute right-0 mt-2 w-40 bg-lf-card rounded-lg shadow-xl shadow-lf-shadow border border-lf-raised overflow-hidden z-50" role="menu" data-menu-open="true" data-testid="language-selector-panel">
             {#each availableLanguages as lang}
                 <button
                     onclick={() => handleLanguageChange(lang.code)}

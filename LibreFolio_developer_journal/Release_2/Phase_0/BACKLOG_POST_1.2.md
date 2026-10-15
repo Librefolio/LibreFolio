@@ -2203,7 +2203,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     registrazione dopo il giro di T.
 
   Dettagli: piano di T, passo T-2.
-- **TC-2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
+- ✅ **TC-2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10. **Chiusa il 15/10 con T-8**
+  (checkpoint 7): il giro 2 (D-T17) risponde a N1–N6 e Q2–Q13, e i ruoli sono in `tokens.css`; gli stati sulla barra
+  verde sono di nuovo nella barra (D-T17 supera D-T15). Ciò che resta da confermare passa a TC-8.
   - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
     dei tooltip, tinte di avviso, errore e informazione.
   - ✅ **Stati sulla barra verde** (T-3, 15/10): chiusa da D-T15 (15/10). La barra laterale è neutra, e le icone di
@@ -2281,8 +2283,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       stretto;
     - la riga di un file con `~accept` su un lato vince per quel file;
     - test sintetici in `themeRoles.gate.test.ts`, scritti da `test-author`.
+  - 🔄 **Implementata in T-8** (15/10, checkpoint 7): una riga lasciata com'era da un lato prende quella dell'altro;
+    cambiata dai due lati vince il lato con un `~accept` nuovo (due: errore), altrimenti il più stretto. Si chiude con
+    la validazione della revisione fusa, quando i test passano.
 
-  Dettagli: piano di T, passo T-6, «Validazione del fuso».
+  Dettagli: piano di T, passo T-6, «Validazione del fuso», e T-8, punto 10.
+- **TC-8 · Giro 3 della designer: quello che resta da confermare** — medio; T, 15/10. Per D-T21 la designer rivede
+  tutto insieme nel giro 3.
+  - Le otto correzioni minime di contrasto di T-8 (D-T6): sette sui valori del giro 2 e una sul colore del caffè
+    della barra scelto in D-T19. Ciascuna ha il valore chiesto accanto, in `tokens.css`.
+  - I derivati provvisori: hover dell'azione in chiaro, testo su un pieno AI (`--lf-on-ai`), commenti del terminale,
+    ombra delle card in scuro (40 %).
+  - Le scelte di T: indicatore della voce attiva a sinistra; pallino di sicurezza `#F87171` (lo stato «errore» della
+    barra) al posto di `#F84361`; la fascia del logo fusa nella barra.
+  - Interruttore spento: in chiaro si riconosce solo dal bordo del pallino, e il gate dei contrasti non lo misura.
+  - Da TC-2: guadagno e perdita distinti da successo ed errore.
+
+  Dettagli: piano di T, passo T-8 nell'avanzamento.
 
 ---
 

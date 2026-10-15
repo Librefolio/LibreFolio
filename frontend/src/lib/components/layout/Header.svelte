@@ -224,7 +224,7 @@
 
 <header
     bind:this={headerRef}
-    class={`sticky top-0 z-30 bg-lf-app border-b border-lf-subtle px-4 py-3 safe-top transition-transform duration-200 motion-reduce:transition-none ${scrollState === 'hidden' ? '-translate-y-full' : 'translate-y-0'}`}
+    class={`sticky top-0 z-30 bg-lf-bar text-lf-bar-text border-b border-lf-bar-edge px-4 py-3 safe-top transition-transform duration-200 motion-reduce:transition-none ${scrollState === 'hidden' ? '-translate-y-full' : 'translate-y-0'}`}
     data-testid="app-header"
     data-scroll-state={scrollState}
     data-menu-open={helpMenuOpen || languageMenuOpen ? 'true' : 'false'}
@@ -238,28 +238,35 @@
         <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level marks it (plan 36). -->
         <button
             aria-label={$connectionSecurity.level === 'insecure' ? `Toggle menu — ${$_('connectionSecurity.level.insecure')}` : 'Toggle menu'}
-            class="relative lg:hidden p-2 rounded-lg transition-colors"
+            class="relative lg:hidden p-2 rounded-lg transition-colors hover:bg-lf-bar-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus"
             data-testid="mobile-menu-toggle"
             use:guideAnchor={'nav.toggle.mobile'}
             onclick={onToggleSidebar}
         >
-            <Menu class="text-lf-primary" size={24} />
+            <Menu class="text-lf-bar-text" size={24} />
             {#if $connectionSecurity.level === 'insecure'}
-                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-lf-danger ring-2 ring-lf-app" data-testid="mobile-menu-security-dot" aria-hidden="true"></span>
+                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-lf-bar-danger ring-2 ring-lf-bar" data-testid="mobile-menu-security-dot" aria-hidden="true"></span>
             {/if}
         </button>
 
         <div class="hidden lg:block"></div>
 
         <div class="flex items-center space-x-2">
-            <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-lf-hover transition-colors text-lf-donate" title={$_('help.buyMeACoffee')}>
+            <a
+                href="https://www.buymeacoffee.com/librefolio"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-lf-bar-hover transition-colors text-lf-bar-donate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus"
+                data-testid="header-donate-link"
+                title={$_('help.buyMeACoffee')}
+            >
                 <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
                 <Coffee size={20} class="flex-shrink-0" />
             </a>
-            <PrivacyToggle />
-            <ThemeToggle />
-            <LanguageSelector onOpenChange={handleLanguageOpenChange} />
-            <HelpMenu onOpenChange={handleHelpMenuOpenChange} />
+            <PrivacyToggle onBar />
+            <ThemeToggle onBar />
+            <LanguageSelector onBar onOpenChange={handleLanguageOpenChange} />
+            <HelpMenu onBar onOpenChange={handleHelpMenuOpenChange} />
         </div>
     </div>
 </header>
