@@ -793,11 +793,11 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 
 
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the financial_math layer: average cost, native cash, and the boundaries of the whole layer."""
-    print_section("Services: Financial Math (average cost, native cash, layer boundaries)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py; imports and packages of every module)")
-    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency, compute_native_cash, cash_movement_from_transaction, effective_share, exchange_results, layer boundaries")
-    print_info("Pure — convert_bulk is stubbed: no server, no DB")
+    """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
+    print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
     return run_command(cmd, "Financial math tests", verbose=verbose)
@@ -1675,10 +1675,11 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost and native cash: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
-        # module with a double; the session handed to it is None or a sentinel. The layer
-        # guard only parses source files.
+        # module with a double; the session handed to it is None or a sentinel, or, for the
+        # ledger control totals, one on a private SQLite file under tmp_path that no other
+        # test reads. The layer guard only parses source files.
         isolation="pure",
     )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")

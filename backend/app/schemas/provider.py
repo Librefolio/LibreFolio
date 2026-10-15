@@ -437,3 +437,7 @@ class FAProviderSearchResponse(StrictModel):
     results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
     providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")
+    providers_not_configured: List[str] = Field(
+        default_factory=list,
+        description="Providers not called because a required setting has no value (NOT_CONFIGURED): also in providers_with_errors. Their settings: GET /api/v1/settings/plugins",
+    )
