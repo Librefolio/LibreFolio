@@ -26,7 +26,7 @@ from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     EVENT_TYPE_METADATA,
     TX_TYPE_METADATA,
     TXBatchResponse,
