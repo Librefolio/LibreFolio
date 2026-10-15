@@ -349,7 +349,7 @@
 
 Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione 7).
 
-### S10 — Verifiche e gallery ⏳
+### S10 — Verifiche e gallery ✅ (15/10/2026; in attesa dell'approvazione dell'aspetto dal developer, D-T21)
 
 - **Test:** due `test-author` in parallelo, su file distinti. Entrambi hanno finito il 15/10; i conteggi sono i loro,
   ciascun file lanciato da solo. La mia riprova sull'insieme fuso è più sotto.
@@ -428,6 +428,67 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
   pulito, `git diff --check` pulito, porta 6156 libera.
 - Osservazione di TA-1 per J, nessun cambio: `exposureCategoryLabel` ignora maiuscole e minuscole per tipi e paesi,
   ma non per i settori. Le chiavi arrivano dagli enum del backend.
+
+**Slot pesante, prove 1–7, sulla revisione `d0065fb8e`** (genitori `fb59c7bec` e `e70be943b`; via del coordinatore il
+15/10 alle 19:48). Una prova alla volta, nella corsia 6156:
+- `api sync` per primo, perché B porta le API del backup: rc 0, nessun file tracciato cambiato.
+- **1 · `front check`:** prima 1 errore, poi **0 errori e 0 avvisi**.
+  > **⚠️ Fuori pista:** l'errore era di tipo, in un test, `CorrelationHeatmap.test.ts:163`: un `new Map([...])` dedotto
+  > troppo stretto per `ReadonlyMap<number, Readonly<Record<string, number>> | null>`. TA-2 ha aggiunto l'argomento di
+  > tipo al costruttore, nient'altro. Vitest non controlla i tipi, quindi il file passava già: ora 6/6.
+- **2 · `front-utility core-unit`:** 163 file, 5243 test verdi.
+- **3 · `front-utility component-unit`:** 134 file, 3524 test verdi.
+- **4 · `front-portfolio allocation-unit`:** 6 file, 173 test; `front-portfolio risk-levels-component`: 9 file, 273.
+- **5 · `api utilities`:** 9 passati, dopo DV-2 sulla revisione fusa.
+- **6 · E2E:** `front-portfolio dashboard` 27 passati, compreso il nuovo «Allocation by type: each family in a colour
+  of its own, the same in the pie and in the history (GR1)»; `front-portfolio risk` 38; `front-user broker-sharing`
+  17; `front-utility utilities` 16, aggiunto perché prova l'endpoint dei settori dal frontend. Nessun test saltato
+  né instabile.
+- **7 · Galleria filtrata** per il contact sheet del developer (D-T21), nei due temi, desktop e telefono, quattro
+  lingue. Sono 9 test:
+  - `main dashboard`, `dashboard allocation charts`, `dashboard growth P&L submodes`;
+  - `broker sharing modal` (semi-ciambella);
+  - `Asset detail classification` (torta dei settori e mappa);
+  - `risk lab correlation`, `dashboard risk diversification`, `risk what-if simulation`;
+  - `PAC allocator result` (mappe di esposizione ed etichette di settore).
+
+  Comando: `/tmp/libreFolio_dv_heavy_7.sh`, cioè `gallery_snapshot.sh dv-charts-d0065fb8e`, poi `live_price_check`
+  e `gallery_tool browse --langs it,en`. Oggi non c'è un riferimento del target con lo stesso filtro: il diff si fa
+  solo se il coordinatore ne cattura uno.
+  - **Primo giro, 20:29–20:38, a 6 worker:** 6 passati e 12 rossi.
+    > **⚠️ Fuori pista: era saturazione della macchina, non un difetto. Triage con `test-triage`.**
+    > - **Carico:** `uptime` alle 20:39 dava 57 / 89 / 87 su 10 core. Nella finestra giravano anche le corsie della
+    >   1.3, porte 6181–6189: E `api system`, Y frontend a 2 worker, H, J, X, Z.
+    > - **Sintomi:** sono quelli che il README di `visual_review` registra per la saturazione.
+    >   - I 6 desktop della prima ondata: login fermo su `auth-loading at /` per 30 s.
+    >   - Rischio, desktop: «header still sliding».
+    >   - Mobile: timeout di `waitForLoadState`, dei click (20 s, sul main thread) e dello screenshot (60 s). Uno scatto
+    >     che non è di DV ha impiegato 24.9 s.
+    >   - Nessuna asserzione sui colori.
+    > - **Rilancio dei soli 12 rossi**, a `--workers 2 --no-populate`, in due snapshot, `-retry-desktop` e
+    >   `-retry-mobile`, dentro la finestra tranquilla chiesta dal coordinatore alla 1.3.
+    >   - Risultato: 8/8 e 4/4.
+    >   - `uptime`: 51.70 / 78.54 / 83.33 prima, 39.81 / 62.62 / 74.84 dopo il desktop, 35.06 / 47.99 / 65.81 dopo il
+    >     mobile.
+    >   - **Verdetto: ambiente.** Il dashboard mobile non si blocca più.
+  - `live_price_check` è pulito su tutti e tre gli snapshot.
+  - **Contact sheet unico:** `<visual_review>/snapshots/dv-charts-d0065fb8e-sheet/index.html`, con le pagine desktop e
+    telefono in italiano e in inglese, chiaro e scuro affiancati.
+    - È unito dal primo giro e dai due rilanci: lo scatto di un rilancio sostituisce quello del primo giro con lo
+      stesso percorso, e `origin.json` dice da dove viene ogni immagine.
+    - 352 PNG, cioè 22 scatti × 2 viewport × 4 lingue × 2 temi, nessuno senza uno dei due temi.
+  - **Controllo a occhio:**
+    - GR1: torta e storico per tipo con gli stessi colori di famiglia;
+    - le sfumature GR4 al buio;
+    - la correlazione rosso → pannello → blu, con il testo delle celle leggibile;
+    - la semi-ciambella;
+    - le emoji dei settori dal backend.
+  - **Per il giro 3, valori non toccati:** nello storico geografico il primo paese prende il primo colore senza
+    chiave, Industriali, un ardesia. Le aree traslucide stanno a ΔE00 12.8 (chiaro) e 15.2 (scuro) da «Non
+    classificato»; le basi a 31.9 e 29.4.
+- **Il target si è mosso** a `a744e5f89`, con J CP-4c e A6b. Merge simulato con `git merge-tree`: pulito, nessun
+  conflitto. In comune ci sono solo il backlog e `_frontend_utility.py`, in blocchi separati.
+- **Delta da committare:** `CorrelationHeatmap.test.ts`, una riga (l'argomento di tipo), e il piano.
 
 **Riprova sull'insieme, prima del checkpoint (15/10):** un file per volta, senza corsia né server.
 - Comando: `/tmp/libreFolio_dv_vitest_batch.sh`, cioè `node_modules/.bin/vitest run <file>` con
