@@ -533,9 +533,10 @@ fermati all'handoff, porta verificata libera.
   base.
 - **Avvisi di merge: file del programma colori** (richiesta del coordinatore colori, 15/10). Ogni avviso di merge in
   `dev_release2` elenca i file toccati sotto `scripts/visual_review/`, `frontend/scripts/theme/`,
-  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts` e `Phase_1/10_colorSystem/`, anche quando cambia solo un
-  commento: G e T li modificano nei loro checkpoint. Prima dell'avviso, il coordinatore 1.3 li cerca con
-  `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts`, `scripts/test_runner/_frontend_utility.py` e
+  `Phase_1/10_colorSystem/`, anche quando cambia solo un commento: G, R e T li modificano nei loro checkpoint. Prima
+  dell'avviso, il coordinatore 1.3 li cerca con `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `_frontend_utility.py` si è aggiunto il 15/10, dopo A3, su richiesta del coordinatore colori.
 - **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
   della 1.3 blocchi il tag.
   - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
