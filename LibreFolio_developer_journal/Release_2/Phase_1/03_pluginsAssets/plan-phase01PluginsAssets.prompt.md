@@ -327,6 +327,20 @@ impostazioni. Il merge a runtime (`GET` dei frammenti + `addMessages`) resta fac
 in più (D-X2) gli zip di backup scaricabili dalla UI contengono la chiave d'istanza solo se protetti da password (decisione
 6), altrimenti la escludono e i segreti si reinseriscono dopo il ripristino. Revisione `security-review` a fine lavoro.
 
+**Note dalla revisione di sicurezza del CP3 di H** (riportate dal coordinatore il 15/10, ~03:00), da applicare nel CP10:
+- **HKDF non ha un fattore di lavoro**: la chiave d'istanza dev'essere casuale, mai una passphrase (la doc di H lo dice già).
+  La sottochiave delle impostazioni si deriva dalla chiave d'istanza, non da un segreto scelto da una persona.
+- **`derive_key(purpose, n)`**: la lunghezza ora entra in `info`, quindi chiavi di lunghezze diverse non sono più una il
+  prefisso dell'altra. Da parte mia: un solo `purpose` fisso e distinto per le impostazioni dei plugin (per esempio
+  `plugin-settings/v1`), sempre lo stesso.
+- **Valore di controllo della chiave (H-3)**: se `instance.key` si perde dopo il primo uso, oggi l'istanza ne genera una
+  nuova senza avvisare, e i segreti cifrati diventano illeggibili. La cura è un valore di controllo salvato nel DB, da
+  **progettare con H al mio primo uso di `derive_key`, nel CP10**: è il caso «chiave persa o cambiata» della misura 4,
+  che così diventa rilevabile all'avvio invece che alla prima decifratura fallita.
+- Una chiave uguale su più istanze dà le stesse chiavi derivate: è un requisito del pannello del cloud, e lo porta il
+  coordinatore al developer. Effetto per me: nessuna isolazione crittografica fra istanze che condividono la chiave; l'AAD
+  con il contesto della riga resta l'unica separazione.
+
 ### 4.6 Ordine dei fornitori nella ricerca (F21) e C-90
 
 - Ogni fornitore asset dichiara `tier` (`premium` | `community`, default `community`) e `search_priority` (intero, più basso =
@@ -820,7 +834,7 @@ lui; io risolvo, metto in stage i soli file risolti o corretti, e valido.
 > **Fuori pista**: nessuno. Segnalato al coordinatore, fuori dal mio perimetro: `scripts/coverage_analysis.py` cita
 > `backend/app/uploads.py`, che non esiste (preesistente, già alla base `c9bb8f257`).
 
-### Secondo aggiornamento di base: H CP2a (pacchetto `config/`) nel ramo X ✅ (2026-10-15)
+### Secondo aggiornamento di base: H CP2a (pacchetto `config/`) nel ramo X ✅ (2026-10-15) — merge `bff1bd97b`, nota `64a5a3fe7`; CP1 e CP2a in `dev_release2`
 
 Mentre risolvevo il primo merge è entrato in `dev_release2` H CP2a (`60f8a35ce`): `config.py` → `config/__init__.py` (stesso
 percorso d'import), letture d'ambiente in `config/platform.py` e `config/accounts.py`, guardia nuova `services
@@ -858,3 +872,117 @@ coordinatore ha aperto `git merge --no-ff --no-commit 0ac49739d` sul mio `5052c8
 
 > **Fuori pista**: lo stage di `settings.md` va oltre la lettera «stage solo di quel file»: la riga è il solo riferimento al
 > mio vecchio percorso entrato con H, e il grep a zero lo chiedeva. Dichiarato al coordinatore, che può toglierlo dallo stage.
+
+### CP2b — tagli degli asset, router per risorsa, eventi in moduli propri ✅ (2026-10-15)
+
+Via del coordinatore il 15/10 (~02:17), sul mio ramo a `64a5a3fe7` (uguale a `dev_release2`: CP1 e CP2a integrati). Sua
+decisione (A) del 15/10 (~02:35): `schemas/assets.py` → `schemas/assets/assets.py` come rinomina pura, nello stesso commit dei
+tagli (opzione 1: rinomine e tagli in due elenchi, nessun file insieme rinominato e tagliato, rinomine ≥ 95 %).
+
+- ✅ **Rinomina pura (C1)**: `schemas/assets.py` → `schemas/assets/assets.py` (99 %: cambia solo la riga che importa
+  `FAAssetEventPoint`), con `schemas/assets/__init__.py` di sola docstring. Serve a far esistere `schemas/assets/events.py`. La
+  via di H per `config` (il contenuto nell'`__init__.py`) qui chiudeva un ciclo d'import: `prices` → `assets.events` →
+  `assets/__init__` → `prices`.
+- ✅ **Taglio di `services/assets/core.py`** (899 → 156 righe) → `base.py` (759): il contratto dei plugin
+  (`AssetSourceProvider` con la guardia OHLC, `AssetSourceError`, `AssetHistoryStartDate`, `ASSET_HISTORY_MIN_FALLBACK`).
+  In `core.py` restano cache, `_run_provider_in_thread`, parametri e `_json_safe_details`. Le 17 definizioni sono identiche a
+  HEAD; la parte che resta non usa nessuno dei nomi spostati, e nessun modulo li leggeva come attributo di `core`.
+- ✅ **Taglio di `services/assets/price_store.py`** (1 020) per tema, mixin composti in `AssetSourceManager` (C4):
+  `price_store.py` (338: upsert e delete dei prezzi), `currency_change.py` (183: wipe al cambio di valuta), `event_store.py`
+  (539: eventi; importa `PRICE_UPSERT_CHUNK_SIZE` dai prezzi). I 12 metodi sono identici, salvo le 6 chiamate qualificate
+  `PriceStoreOperations.` → `EventStoreOperations.` dentro gli eventi; nessuna collisione di nomi fra i mixin, e ogni
+  metodo pubblico del manager risolve come prima. `refresh.py` chiama `EventStoreOperations._upsert_asset_events`. La
+  docstring di `manager.py` non dice più «Compatibility» (segnalata da docs-writer nel CP2a).
+- ✅ **Router per risorsa (C2)**: `api/v1/assets.py` (1 225) → pacchetto `api/v1/assets/` con `crud.py` (7 rotte),
+  `market_data.py` (2), `prices.py` (6), `providers.py` (8) ed `events.py` (4). `__init__.py` compone `asset_router`
+  includendo ogni sotto-router con prefisso `/assets` e tag `FA (Financial Assets)`, nell'ordine di registrazione di prima;
+  `router.py` è intatto. Le 27 funzioni sono identiche (cambia il nome del router in 9 decoratori). FastAPI rifiuta un
+  `include_router` senza prefisso con rotte dal percorso vuoto, da qui il prefisso messo all'inclusione.
+- ✅ **Schemi degli eventi (C3)**: le 11 classi da `schemas/prices.py` (551 → 369) a `schemas/assets/events.py`, identiche;
+  `prices.py` importa il punto evento per `FAHistoricalData` e `FAPriceQueryResult`.
+- ✅ **Import**: 90 istruzioni in 60 file (`/tmp/libreFolio_x_cp2b_rewrite.py`), ogni nome al modulo che lo definisce,
+  compresi quelli che `schemas/assets.py` ri-esportava (`FACurrentValue`, `FAHistoricalData`, `FAPricePoint` → `prices`;
+  `AssetType`, `IdentifierType` → `db.models`). Uno a mano (`db_schema_validate.py`, `# noqa` sulla prima riga). Hub
+  `schemas/__init__.py`: gruppi `assets.assets` e `assets.events`, e i nomi ri-esportati puntano al modulo che li definisce
+  (191 nomi di `__all__` risolti). Poi `ruff --select I --fix` su 18 file.
+- ✅ **Test** (adattamenti meccanici, nessuna asserzione cambiata): `test_asset_source_upsert_guards.py` chiama i metodi degli
+  eventi da `EventStoreOperations`; in `test_provider_core_cache.py` il caso «price-store» della sonda diventa
+  «currency-change» (l'unico dei tre moduli che usa le cache di `core`) e la sonda a freddo importa `AssetSourceProvider` da
+  `base`.
+- ✅ **Doc e wiki**: docs-writer, 7 pagine e 20 sostituzioni (più un esempio di codice che col pacchetto di sola docstring
+  sarebbe stato rotto); `.github`, 4 righe in 3 file (istruzioni di asset e segnali, skill `asset-plugin`); 6 commenti nel
+  codice, nei test e nel runner; devWiki (C6), 40 pagine: 61 sostituzioni nelle tabelle «Source files» e nella prosa al
+  presente, più l'entità `asset-sources-package` riscritta per lo stato nuovo.
+- ✅ **Prova C2** (`/tmp/libreFolio_x_cp2b_routes_probe.py`, prima e dopo): la tabella delle 139 rotte effettive dell'app è
+  identica nell'ordine e in percorso, metodi, nome, endpoint, tag, `unique_id`, `operation_id`, stato, modello di risposta e
+  dipendenze; 46 richieste d'esempio arrivano allo stesso endpoint, compresi i casi ambigui
+  (`/assets/prices/market-data/summary` → `market_data_summary`), i 405 e il catch-all del frontend.
+- ✅ **Verifiche statiche** (confronti con HEAD estratto da `git archive` in `/tmp/libreFolio_x_cp2b_base_tree`):
+  - `dev.py api schema`: `openapi.json` identico tranne `info.version`; `tool-contracts.openapi.json` identico;
+  - `pytest --collect-only`: 13 453 (HEAD 13 443). I +10 sono la guardia `config-package` di H, parametrizzata per file, che
+    perde i 2 file spariti e conta i 12 nuovi; il caso della sonda cambia solo nome;
+  - ruff pulito; `black --check backend/` con i soliti 4 file; codice morto identico; `mkdocs build` stretto verde,
+    `check-links` 95 validi; `check_source_paths.py` con i 5 artefatti ignorati; `git diff --check` pulito;
+  - grep dei vecchi percorsi di CP1, CP2a e CP2b: zero, tranne X-R1 e X-R2 (ora anche `db/models.py:117`, che resta per
+    indicazione del coordinatore); i riscrittori dei tre lotti e la scansione delle stringhe, a secco: zero.
+- ✅ **Suite del dominio** sulla corsia 6183, una alla volta (`/tmp/libreFolio_x_cp2b_targeted.sh`), tutte verdi:
+  `services` asset-source 61, asset-source-refresh 12, asset-source-guards 29, asset-signals 30, current-price-bootstrap 8,
+  scheduled-investment-param-change 3, asset-sync-counts 1, provider-errors 134, config-package 482, provider-registry 7,
+  signal-registry 65; `utils` provider-core-cache 28; `db` asset-merge 12; `schemas` all 1 705.
+- ✅ **Backend intera**: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183
+  --data-dir /tmp/librefolio-r13-x --fresh-run all-backend` (15/10 02:48–03:11, 22 min 17 s): **7/7 categorie verdi**,
+  **13 442 passati, 28 saltati, 0 falliti**. Rispetto alla base (il secondo aggiornamento, 13 432) i +10 sono la guardia
+  `config-package` sui file nuovi, nell'unità consolidata dei `services` (6 908 → 6 918); gli altri 22 riepiloghi sono
+  identici. Log in `/tmp/libreFolio_x_cp2b_allbackend.log`. Porta 6183 libera.
+- ✅ **Similarità**, misurata con git in un repo usa e getta (`/tmp/libreFolio_x_cp2b_sim`): una sola rinomina,
+  `schemas/{ => assets}/assets.py` (99 %); `api/v1/assets.py` risulta cancellato, accanto a sei moduli nuovi, senza
+  appaiamento.
+
+> **Fuori pista**:
+> - La prima `utils provider-core-cache` è caduta su un test: la sonda a freddo, codice dentro una stringa eseguito in un
+>   sottoprocesso, importava ancora `AssetSourceProvider` da `core`, e l'AST non la vede (come nel CP1). Corretta; poi una
+>   scansione delle costanti stringa di `backend/` e `scripts/` non ha trovato altro. Rilancio: 28 verdi.
+> - FastAPI 0.141 non appiattisce più i router inclusi (`_IncludedRouter`): la sonda delle rotte segue le rotte effettive e
+>   scende con `_IncludedRouter._match` come fa il router. La prova di corrispondenza C2 resta valida, ed è più stretta di
+>   un confronto per percorso.
+> - Il riscrittore ha trovato nomi che `schemas/assets.py` ri-esportava senza definirli (11 importatori fra plugin e test):
+>   ognuno ora punta al modulo che lo definisce. Il grep iniziale non li vedeva.
+
+### Checkpoint CP2b ✅ (2026-10-15) — committato dal coordinatore: `870c9956f` (codice) e `84a72c0b2` (journal)
+
+- Base `64a5a3fe7`. Un commit con due elenchi (opzione 1): 1 rinomina pura (`schemas/assets.py` → `schemas/assets/assets.py`,
+  99 %) e i tagli (`core`, `price_store`, `api/v1/assets.py`, `schemas/prices.py`); 12 file nuovi, 2 tolti, 113 modificati
+  (compresi questo piano e il backlog); elenco esplicito in `/tmp/libreFolio_x_cp2b_paths.txt`.
+- File di altre sessioni, una riga d'import ciascuno: `brim_provider.py` (W); `risk/service.py`,
+  `ai_export/components/asset_resources.py` e il suo test (J); `db/models.py:700` (condiviso). L'hub `schemas/__init__.py`:
+  9 righe (gruppi e import di tipo).
+- Consegna degli eventi a W dopo l'ingresso: `api/v1/assets/events.py`, `services/assets/event_store.py`,
+  `schemas/assets/events.py` e i loro test; le righe che toccano gli eventi nei miei file restano mie (elenco nell'handoff).
+- Messaggi proposti: `refactor(assets): cut asset services, router and event schemas` (due parti nel corpo) e
+  `docs(journal): X CP2b log, CP10 key notes, backlog X-R2 and X-R3`.
+
+### Terzo aggiornamento di base: W I1 e A3, validazione della revisione combinata ✅ (2026-10-15)
+
+Il coordinatore ha portato nel mio ramo `dev_release2` a `0ddd296a0` (W I1 `dc7e4e48e`, A3 `90491071d`): merge `eb245b624`,
+senza conflitti (unione automatica su `brim_provider.py` e sul backlog), worktree pulito. Ordine d'ingresso: X prima di J.
+Validazione sulla corsia 6183, confronti con `0ddd296a0` estratto da `git archive` in `/tmp/libreFolio_x_base3_tree`:
+
+- ✅ Riscrittori di CP1, CP2a e CP2b a secco: 0; scansione delle stringhe (bersagli di `patch`, codice in sottoprocesso): 0;
+  grep dei vecchi percorsi nel perimetro della regola: solo X-R1 e X-R2. Nel frontend, fuori perimetro, `asset_source.py`
+  compare in tre commenti (X-R3, ora allargata) e nel `generated.ts` ignorato, che riprende la docstring di X-R2.
+- ✅ `pytest --collect-only`: 13 487 contro 13 477. Le differenze sono le stesse del CP2b: la guardia `config-package` perde 2
+  file e ne conta 12 nuovi, il caso della sonda cambia nome. I test nuovi di W I1 e A3 ci sono da tutte e due le parti.
+- ✅ `api schema`: identico a `0ddd296a0` tranne `info.version`; 113 percorsi e 133 `operationId` nello stesso ordine;
+  `tool-contracts` identico.
+- ✅ Sonda delle rotte: tabella identica (139 rotte effettive) e 46 risoluzioni identiche. La prima volta l'albero estratto
+  aveva 138 rotte: senza la build del frontend `main.py` non monta `/_app` (`frontend_available()`, righe 467-477). Con un
+  `index.html` e una cartella `_app` vuoti nell'albero estratto le tabelle coincidono. È una differenza d'ambiente, non di
+  codice.
+- ✅ `dev.py front build --debug` (svelte-check 0 errori e 0 avvisi) e `dev.py mkdocs build` prima della run, perché A3 ha
+  toccato il frontend; nessun manifesto di dipendenze cambiato.
+- ✅ `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183 --data-dir
+  /tmp/librefolio-r13-x --fresh-run all-backend` (15/10 03:23–03:44, 20 min 59 s): **7/7 verdi**, **13 476 passati, 28
+  saltati, 0 falliti**. I +34 rispetto al CP2b sono i 34 test nuovi di W I1 e A3, gli stessi della raccolta (unità
+  consolidate: `services` +3, `utils` +22, `api` +9); gli altri 20 riepiloghi sono identici. Porta 6183 libera.
+
+> **Fuori pista**: nessuno.

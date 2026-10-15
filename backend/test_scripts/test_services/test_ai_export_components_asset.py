@@ -39,7 +39,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.assets import FAClassificationParams
+from backend.app.schemas.assets.assets import FAClassificationParams
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
