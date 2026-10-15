@@ -108,8 +108,9 @@ Access management is exposed via the following endpoints:
 Besides the broker roles, every account carries one system-wide flag, `users.is_superuser`: the
 *administrator* of the admin manual. It belongs to the account, not to a broker.
 
-- **Granted** to the first account registered (`POST /api/v1/auth/register` when `count_users()`
-  is 0: accepted whatever the [registration mode](#registration-modes), and an administrator even
+- **Granted** to the first account registered (`POST /api/v1/auth/register` while
+  `first_account_open()` holds, that is while `count_users()` is 0, inactive accounts counted:
+  accepted whatever the [registration mode](#registration-modes), and an administrator even
   when the invitation it spends grants a regular account), to an account registered
   with an invitation that grants it (`grants_admin`, see [Invitations](#invitations)), to an account
   created with `./dev.py user create` without `--role user` (`--role admin` is the default:
@@ -155,8 +156,17 @@ account changes in `user_service.py`, and the four variables in `backend/app/con
 
 `effective_registration_mode(session)` returns a `RegistrationModeState(mode, locked)`:
 `LIBREFOLIO_REGISTRATION` when it is set (blank counts as unset; case and surrounding spaces are
-ignored), with `locked=True`; otherwise the global setting `registration_mode`, `open` by default
+ignored), with `locked=True`; otherwise the global setting `registration_mode`
 ([Settings System](settings.md)), with `locked=False`.
+
+The default of that setting is `invite` (decision 36), and it has one source:
+`GLOBAL_SETTINGS_DEFAULTS` in `backend/app/schemas/settings.py`. The startup seeding writes it on a
+new install, and `get_setting_value()` answers it while the row is missing: the service passes no
+fallback of its own. The seeding creates only missing rows, so an existing install keeps its row,
+whatever its value. An install that holds accounts but no row has run with the earlier default,
+`open`: migration `008_registration_invite_default` writes that `open` row before the seeding runs
+([`GLOBAL_SETTING`](database/users_access.md#global-setting)), so an upgrade never closes
+registration in silence.
 
 | Mode | `POST /api/v1/auth/register` accepts |
 |------|--------------------------------------|
@@ -177,7 +187,7 @@ an optional `invite_token`) and owns its transaction:
 
 | Situation | Outcome |
 |-----------|---------|
-| No account at all (`count_users()` is 0) | Created as an administrator, whatever the mode, the limit and the role of an invitation. Without an `invite_token`, nothing else is checked. With one, the invitation must be valid — otherwise `400` `INVITE_INVALID`, and the instance stays empty — and the registration spends it as any other does (row *A valid invitation*): its link then reads `consumed` |
+| No account at all (`first_account_open()`: `count_users()` is 0, an inactive account counts) | Created as an administrator, whatever the mode, the limit and the role of an invitation. Without an `invite_token`, nothing else is checked. With one, the invitation must be valid — otherwise `400` `INVITE_INVALID`, and the instance stays empty — and the registration spends it as any other does (row *A valid invitation*): its link then reads `consumed` |
 | Mode `disabled` | `403` `REGISTRATION_DISABLED` |
 | Mode `invite`, no `invite_token` | `403` `INVITE_REQUIRED` |
 | A token that is not a valid invitation: unknown, of another purpose, expired, used or revoked | `400` `INVITE_INVALID` |
@@ -190,8 +200,11 @@ for one invitation cannot both spend it: `consume_token()` is one conditional `U
 rolls back with `INVITE_INVALID`.
 
 `GET /api/v1/system/instance` publishes the effective state as `accounts: {registration_mode,
-registration_locked}` (`AccountsInstanceConfig`), and nothing about the users: no count, no limit
-([Public instance configuration](settings.md#public-instance-configuration)).
+registration_locked, first_account_open}` (`AccountsInstanceConfig`). About the users it says one
+thing only, whether there is one: `first_account_open`, from `first_account_open(session)`, is true
+while the `users` table is empty, and the login page then offers **Register here** whatever the
+mode. No count, no limit ([Public instance configuration](settings.md#public-instance-configuration);
+why the flag may be public: [The First-Account Flag](security.md#first-account-open)).
 
 ### ✉️ Invitations {: #invitations }
 

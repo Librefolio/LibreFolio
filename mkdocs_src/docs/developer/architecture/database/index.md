@@ -74,6 +74,7 @@ The chain is linear:
 | `005_accounts_invites.py` | `005_accounts_invites` | `004_release_1_2_0_schema` | `users.session_version`, `users.email_verified_at` and `users.last_seen_version`, and the [`account_tokens`](users_access.md#account-token) table of single-use account links |
 | `006_registration_mode.py` | `006_registration_mode` | `005_accounts_invites` | Data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting) — `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; the downgrade writes `true` for `open`, `false` for `invite` and `disabled` |
 | `007_plugin_settings.py` | `007_plugin_settings` | `006_registration_mode` | The [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables of the plugin settings, created empty; the downgrade drops them, with their values and secrets |
+| `008_registration_invite_default.py` | `008_registration_invite_default` | `007_plugin_settings` | Data only: where [`registration_mode`](users_access.md#global-setting) is missing and `users` holds at least one account, the row is written `open`, the earlier default, so an upgraded install keeps its registration while a new one seeds the new default, `invite`; an existing row is never touched, a database without accounts gets nothing, and the downgrade does nothing |
 
 !!! warning "The revision id is the contract, not the filename"
 

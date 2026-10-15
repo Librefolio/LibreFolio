@@ -250,7 +250,9 @@ tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passin
 `embedded` prop (see below) so they sit inside the tab's own cards without double separators.
 
 **Registration mode.** `registration_mode`, in the *Security* category, is a `SettingSelect`
-(default `open`, `SETTING_DEFAULTS`). The server variable `LIBREFOLIO_REGISTRATION` can pin it
+(default `invite`, `SETTING_DEFAULTS`, as in `GLOBAL_SETTINGS_DEFAULTS`: **Reset to Default** and
+**Reset All to Defaults** propose `invite`, also on an upgraded instance that kept `open`). The
+server variable `LIBREFOLIO_REGISTRATION` can pin it
 ([Registration Modes](../../../architecture/access_control.md#registration-modes)); the tab learns
 it from the [instance configuration](../../state/app-state.md#instance-config),
 `instanceConfig.config.accounts.registration_locked`:

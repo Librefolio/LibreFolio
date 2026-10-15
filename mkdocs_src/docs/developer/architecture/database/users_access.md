@@ -107,7 +107,7 @@ erDiagram
 
 ### 👤 `USER`
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode; a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)).
+The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)).
 
 Migration `005_accounts_invites` added three columns:
 
@@ -136,17 +136,30 @@ One-to-one with `USER`. Stores user-specific preferences: display language, base
 
 ### 🌍 `GLOBAL_SETTING` {: #global-setting }
 
-System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences.
+System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36.
 
 Migration `006_registration_mode` changes data only: the row `enable_registration` (`bool`) becomes
 `registration_mode` (`value_type` `str`). The new value is `open` when the old one, lower-cased, was `true`, `1`,
 `yes` or `on` — what the settings service read as true — and `disabled` otherwise, so an odd value stays closed; the
-`updated_at` and `updated_by_user_id` of the row are kept. A database without the old row has nothing to convert: the
-startup seeding creates `registration_mode` with its default, `open`. The downgrade writes `true` for `open`, and
+`updated_at` and `updated_by_user_id` of the row are kept. A database without the old row has nothing to convert: if
+it already holds accounts, `008_registration_invite_default` writes `open`; otherwise the startup seeding creates
+`registration_mode` with its default, `invite`. The downgrade writes `true` for `open`, and
 `false` for `invite` and `disabled`, since the old setting had no middle ground. Each direction checks before it acts,
 so an interrupted run can be repeated. `./dev.py test db migration-006`
 (`backend/test_scripts/test_db/test_migration_006_registration.py`) covers both directions, the metadata and the
 idempotence, on temporary databases.
+
+Migration `008_registration_invite_default` changes data only too: an install upgraded with accounts keeps the
+registration it had. Releases before the `invite` default read a missing row as open, so where `registration_mode`
+is missing and `users` holds at least one row, active or not, it inserts `registration_mode` = `open`, the earlier
+default made explicit: `value_type` `str`, the registry's description (a copy frozen in the migration), `updated_at`
+the time of the upgrade, `updated_by_user_id` `NULL`. The migration runs at the `database` step of the startup, before
+the seeding of the `global-settings` step could write the new default. A row that is there is never touched, whatever
+its value, and a database without accounts gets nothing: it is a new install, and the seeding gives it `invite`. The
+upgrade checks before it acts, so it can run again; the downgrade does nothing, since an `open` row is what the
+earlier default meant (006's downgrade turns it into `enable_registration` = `true`). `./dev.py test db migration-008`
+(`backend/test_scripts/test_db/test_migration_008_registration_default.py`) covers it on temporary databases, a
+1.1 install taken to the head included.
 
 ### 🏢 `PLUGIN_SYSTEM_SETTING` {: #plugin-system-setting }
 
