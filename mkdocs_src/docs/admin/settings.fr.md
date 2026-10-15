@@ -71,6 +71,9 @@ Le planificateur maintient les prix et les taux de change à jour tout seul, mê
   taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de récupération**, pour combler tout manque. Les paires
   avec uniquement des taux manuels sont ignorées.
 
+Si le serveur est éteint ou en veille à une heure de synchronisation, la synchronisation historique
+manquée s'exécute dès que le serveur revient, sans attendre l'heure de synchronisation suivante.
+
 ### ⚙️ Configurer la planification
 
 Déverrouillez l'onglet, ouvrez **Tâche de mise à jour** et cliquez sur **Configurer…** dans la ligne **Configuration du Planning**.

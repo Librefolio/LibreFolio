@@ -66,7 +66,7 @@ The **WAC / Market Price** chart plots each lot as a bubble against the market p
 
 ## 💰 Total Return per Lot
 
-**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot, and any allocated income received while the lot was held.
+**Total Return** is broader than Open Return. It includes the lot's remaining market value, any sale proceeds already realized from that lot — or the value an outgoing adjustment with a cost basis handed over at that cost — and any allocated income received while the lot was held.
 
 LibreFolio's lot math uses these exact building blocks:
 

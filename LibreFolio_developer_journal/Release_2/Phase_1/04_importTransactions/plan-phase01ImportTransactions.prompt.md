@@ -2358,3 +2358,200 @@ dice chi vede i report) e handoff.
 > `all-backend` nello slot (chiesto), poi l'handoff.
 > **`all-backend --workers 2`** (slot pesante 2, 21:50–22:15, `nice -n 10`): **7/7 gruppi**, 14 803 passati, 4 saltati, 0
 > rossi. Porta libera, slot restituito. Backlog: **W-B3** e **W-B4** chiuse (✅ F36). Handoff FROZEN (22:17).
+> **Ingresso di F36** (coordinatore 22:17: committato `3907eed36`, `258407d4d`, `4213b175a`, `c65421690`; base aggiornata con
+> `dev_release2` `2415faf33` senza conflitti → HEAD `d3afcf779`). Prove sulla revisione combinata (22:17–22:30, `nice`):
+> `api sync` (602 righe, tutte d'altri: impostazioni dei plugin, lavori del backup), `front check` **0/0**, `api brim`
+> **116/116**, Vitest `ImportWizardModal` **26/26**, `check-orphans` pulito; l'E2E `files-uploader` dopo la pausa di T
+> (22:28, 10 minuti senza E2E): **8/8** (22:32–22:34). Pronto all'ingresso.
+
+### W-B20 — la cancellazione dei broker atomica per broker ✅ FROZEN (2026-10-15)
+
+**Cura decisa** (coordinatore, 15/10 11:19, con i reperti di X): un aiuto in `db/session.py` che apre la transazione
+prima del primo savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto di `assets/crud.py:349-351`, o `BEGIN
+IMMEDIATE`), usato da `delete_bulk` per broker; il rosso prima. Il listener `begin` generale resta scartato
+(`SQLITE_BUSY_SNAPSHOT`). Ordine (coordinatore, 22:17): W-B20, poi la 47 quando J ha CP-16, poi A-14 con W-B10 e le
+chiavi di W-B27.
+
+**Analisi** (22:30, codice di `d3afcf779`): `BrokerService.delete_bulk`
+(`backend/app/services/brokers/broker_service.py:424-520`) **non ha nessun savepoint**: per ogni broker un `try` che, su
+un'eccezione, aggiunge un risultato fallito e passa al successivo. Quello che `delete_by_broker` (N1b-1: costi Auto,
+conversioni delle metà rimaste, cancellazioni) aveva già scritto resta nella sessione, e `DELETE /brokers` fa commit
+perché `response.errors` resta vuoto (`api/v1/brokers.py`). Cioè: un errore a metà della cancellazione di un broker lascia
+scritto metà del lavoro. La cura vuole **un savepoint per broker** (`session.begin_nested()`), e prima del primo savepoint
+l'aiuto che fa emettere `BEGIN` a pysqlite (che lo rimanda fino alla prima scrittura: un savepoint aperto dopo sole
+letture sarebbe il più esterno, e il suo RELEASE farebbe commit).
+
+**Disegno**:
+1. `db/session.py`: `begin_writes(session, table)`, un `UPDATE` di `table` che non tocca righe (`WHERE false`, sulla
+   chiave primaria), con la docstring del perché; nessun effetto se una transazione è già aperta.
+2. `delete_bulk`: `begin_writes(self.session, Broker)` prima del ciclo; il corpo di ogni broker dentro
+   `async with self.session.begin_nested()`; su un'eccezione il savepoint torna indietro e il risultato dice l'errore.
+   La cancellazione dell'account (che chiama la stessa strada) resta atomica per intero: i savepoint stanno dentro la sua
+   transazione.
+3. X potrà sostituire il trucco locale di `crud.py` con l'aiuto (non in questo lotto).
+
+**Rossi previsti** (servizi, `services broker`): due broker in una richiesta, il secondo fallisce a metà di
+`delete_by_broker` (un errore provocato dopo una prima scrittura) → oggi la scrittura parziale del secondo resta dopo il
+commit; dopo la cura il primo è cancellato e il secondo è com'era. Guardie: la cancellazione normale; l'atomicità della
+cancellazione dell'account; nessun commit prima della fine della richiesta.
+
+**Passi**: 1. ✅ rossi (test-author); 2. ✅ cura; 3. ✅ prove; 4. ✅ doc e handoff (sotto, con il dettaglio).
+> **F36 entrato** (coordinatore 22:35: treno 63, merge `434af2925`, registri `e05eaf17d`; CHANGELOG sotto una nuova «🔒
+> Security» di `[Unreleased]`). **Via a W-B20** come disegnato (savepoint per broker con `_delete_one` e il `flush` dentro);
+> `begin_writes` in `db/session.py` è un file condiviso: funzione piccola, documentata, solo in aggiunta, dichiarata
+> nell'handoff. Cura pronta: `/tmp/libreFolio_w_wb20_fix.py` (dry run ok; l'import di `begin_writes` dopo `db.models`).
+> Verifiche di lettura (22:40): nessun servizio delle transazioni o dei broker fa `commit`/`rollback` dentro;
+> `leave_broker` (F4) e la cancellazione dell'account passano da `delete_bulk` e restano atomiche per intero (il loro
+> `rollback` esterno disfa anche i savepoint rilasciati). Doc: aggiornare la pagina devWiki
+> `problems/sqlite-savepoint-without-write-begins-as-transaction.md` («Seen again», oggi «not built»).
+> **Finestra tranquilla** (coordinatore 22:53, corretta alle 22:55): **00:00–01:15** (G-13 dei colori, schermate con la
+> data del 16/10); fino a mezzanotte lavoro normale, poi niente E2E né run pesanti finché non scrive «galleria finita».
+
+1. ✅ **Rossi** (2026-10-15 22:58). test-author ha aggiunto la sezione 4.10 `TestDeleteBulkOneSavepointPerBroker` a
+   `backend/test_scripts/test_services/test_broker_service.py` (azione `services broker`, nessuna registrazione nuova):
+   BR-U-081 e BR-U-082 rossi, BR-U-083/084/085 guardie. Il fallimento è provocato sostituendo `make_standalone` nello
+   spazio di nomi di `transaction_service` (dopo le due scritture di `delete_by_broker`: il costo Auto sulla metà
+   ricevente, lo scollegamento dell'FX_CONVERSION del mittente); ogni caso fa commit come il router, legge da una
+   sessione propria e pulisce con la fixture `committed`. Nessun caso nuovo per la cancellazione dell'account: il test
+   esistente `test_delete_user_is_all_or_nothing_when_a_broker_deletion_reports_failure` (`services user-profile`) fallisce
+   con una cura senza `begin_writes`; lo giro dopo la cura.
+   > **Note implementazione**: `nice -n 10 … dev.py test --fresh-run --test-port 6184 --data-dir /tmp/librefolio-r13-w
+   > services broker TestDeleteBulkOneSavepointPerBroker` → **2 failed, 3 passed** (2,5 s), per il motivo atteso: in
+   > BR-U-081 il commit tiene `sender's FX_CONVERSION -100/110` senza `related_transaction_id` e la metà ricevente con il
+   > costo Auto, mentre il mittente esiste ancora; in BR-U-082 le stesse scritture dentro la transazione della richiesta
+   > (dopo il rollback del chiamante tutto torna com'era). Log `/tmp/libreFolio_w_wb20_red1.log`.
+2. ✅ **Cura** (2026-10-15 23:05). `/tmp/libreFolio_w_wb20_fix.py --apply`:
+   - `backend/app/db/session.py` (**file condiviso, solo in aggiunta**): `false, update` nell'import di `sqlalchemy` e la
+     funzione `begin_writes(session, table)` in fondo al file (un `UPDATE` di `table` con `WHERE false`, chiave primaria
+     su sé stessa, `synchronize_session=False`; la docstring dice perché, e perché non un listener `begin`);
+   - `backend/app/services/brokers/broker_service.py`: `delete_bulk` chiama `begin_writes(self.session, Broker)` prima del
+     ciclo e cancella ogni broker in `async with self.session.begin_nested()`; il corpo è passato tale e quale in
+     `_delete_one(item, user_id, as_user_id) -> BRDeleteResult`, con un `flush` dopo `session.delete(broker)` dentro il
+     savepoint (un errore di scrittura emerge prima del RELEASE e il broker risulta fallito); su un'eccezione il savepoint
+     torna indietro e il risultato porta il messaggio. Messaggi e conteggi invariati.
+   > **Note implementazione**: `black` invariato, `ruff check` pulito (anche sul file di test). Verdi: `services broker
+   > TestDeleteBulkOneSavepointPerBroker` **5/5**; `services user-profile test_delete_user_is_all_or_nothing` **2/2**.
+   > **Prova di mutazione** (`/tmp/libreFolio_w_wb20_mutation.sh`: tolta solo la chiamata a `begin_writes`, file
+   > ripristinato all'uscita e verificato): BR-U-082 **rosso** (1 failed, 4 passed) e i due test dell'account **rossi**
+   > («A technical failure half-way must commit nothing (D6)»: il primo broker resta cancellato dopo il rollback, perché
+   > il RELEASE del suo savepoint, il più esterno, ha fatto commit). Cioè l'aiuto serve, e i test lo custodiscono.
+   > **⚠️ Fuori pista** (23:08–23:15): ho lanciato `dev.py test --workers 2 … services broker` con il carico a 79 (sopra
+   > 70: ho concatenato il controllo invece di aspettare). Con `--workers N` il runner **ignora l'azione**: la passata
+   > parallela (`_run_parallel_prepass` → `_parallel_for_scope(args, category, …)`, `scripts/test_runner/_cli.py:906-949`)
+   > copre tutta la categoria, e sono partiti i pytest di `test_ai_export_*`, cioè un run pesante senza slot. Fermato dopo
+   > ~7 minuti (`stop_bash`), nessun processo rimasto, porta 6184 libera; la base della corsia era solo il DB vuoto dei
+   > servizi. Segnalato al coordinatore. Da ora: mai `--workers` con un'azione singola, e il carico si controlla prima, in
+   > un comando a parte.
+3. ✅ **Prove** (2026-10-15 23:10–23:21, `nice -n 10`, una alla volta, carico controllato prima in un comando a parte):
+   `services broker` **70/70**; `services user-profile` **36/36**; `services orphan-transfer-numbers` **19/19**;
+   `services account-deletion-preview` **15/15**; `db populate --force --clean`; `api brokers` **34/34**; `api
+   broker-access` **25 passed, 1 skipped** (ACCESS-050, salto previsto dal test: il primo utente non è superuser in un DB
+   popolato); `api account-deletion` **9/9**; `api users-admin` **64/64** (`DELETE /users/{id}` passa da `delete_user`);
+   `check-orphans` pulito (326 backend, 429 frontend). `services transaction` non serve: il suo `delete_bulk` è l'aiuto
+   delle transazioni (`_tx_test_helpers.py`), non quello dei broker. Porta 6184 libera dopo ogni prova API.
+4. ✅ **Doc e handoff** (2026-10-15 23:25–23:40).
+   - **docs-writer**: `mkdocs_src/docs/developer/backend/transactions/service.md`, «🗑️ Broker Deletion», un blocco nuovo
+     «One savepoint per broker» (33 righe aggiunte, nessuna tolta): il savepoint per broker, chi fa commit (`DELETE
+     /brokers`, `leave_broker`, `delete_user` tutto o niente), perché `begin_writes()` e quando chiamarla, i test. Il
+     Developer Manual è solo in inglese: nessun debito di traduzione. `mkdocs build` stretto (`nice -n 15`): 0 avvisi,
+     0 errori; nessun link nuovo, quindi niente `check-links`.
+   - **devWiki** (skill `wiki-file`, pagina esistente aggiornata, nessun duplicato):
+     `problems/sqlite-savepoint-without-write-begins-as-transaction.md` («Fixed (2026-10-15, W-B20)», la lezione sui
+     test, Prevention con `begin_writes`, fonti), la riga in `index.md`, una voce in fondo a `log.md`.
+     `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti. Grafo non aggiornato
+     (graphify assente nel worktree).
+   - **Backlog**: W-B20 ✅; **W-B33** nuova (tre imprecisioni di testo nella stessa sezione, trovate da docs-writer: le
+     metto nel lotto di doc A-14 / W-B10).
+   > **Note implementazione**: nessun file nuovo; delta di 9 file tracciati. Non girati: `all-backend` (lo chiedo nello
+   > slot se il coordinatore lo vuole), E2E (nessun cambiamento del frontend né dell'API), `api sync` (nessuno schema
+   > toccato).
+> **Ingresso di W-B20** (coordinatore 23:33: committato `d6b457849` fix, `357f2cd72` docs, `81bf8204f` wiki, `d4c034936`
+> giornale; base aggiornata con `dev_release2` `4ef2fc199`, merge pulito, solo il backlog fuso da sé → HEAD `70f7ab9bc`;
+> `all-backend` **non richiesto**: `begin_writes` è nuovo e lo chiama solo `delete_bulk`, bastano mirate e mutazione).
+> Prove sulla revisione combinata (23:34–23:41, `nice -n 10`, carico sotto 70 controllato prima): `services broker`
+> **70/70**; `db populate --force --clean`; `api brokers` **34/34**; `api users-admin` **64/64** (atteso il calo del
+> carico da 71). Porta 6184 libera. Pronto all'ingresso.
+
+**Regola della notte** (coordinatore 23:33; il developer dorme fino a domattina): una decisione del developer (prodotto,
+sicurezza, comportamento visibile fuori dal piano approvato) non si aspetta: al coordinatore in 3-4 righe con la proposta
+per prima, quel punto in pausa e si passa al successivo; una scelta tecnica nel perimetro la decido io e la annoto come
+«Decisione notturna, da rivedere»; slot pesanti, una prova alla volta con `nice` e checkpoint FROZEN invariati; senza
+lavoro, lo dico subito.
+
+### Lotto di doc A-14 · W-B10 · W-B27 (chiavi) · W-B33 ✅ FROZEN (2026-10-15/16; build da girare dopo la finestra)
+
+Ordine del coordinatore (23:33): finché J non ha CP-16, il lotto di doc A-14 con W-B10, più le chiavi di W-B27 e W-B33;
+le chiavi i18n vogliono `core-unit` prima dell'handoff; dalle 00:00 alle 01:15 niente E2E.
+
+**Analisi** (23:45, codice di `70f7ab9bc`):
+- **A-14** — `mkdocs_src/docs/developer/architecture/access_control.md`, «🔒 The "Last Owner" Rule»: dice che l'ultimo OWNER
+  «cannot remove themselves» e che per andarsene deve promuovere un altro OWNER o cancellare il broker. Il codice (F4):
+  `leave_broker()` (`services/brokers/access.py`) lascia andare l'ultimo OWNER e **cancella il broker** (`delete_bulk` con
+  `force`); `update_own_role()` gli rifiuta la retrocessione («The last OWNER cannot demote themselves — promote another
+  user first»); `bulk_update_access()` (`PUT …/access`) rifiuta ogni configurazione senza OWNER («At least one OWNER is
+  required»). La sezione «🔧 Self-Management» della stessa pagina è già giusta. Cura: riscrivere la regola come «un
+  broker ha sempre almeno un OWNER: nessuno lo toglie o lo retrocede; se se ne va, il broker se ne va con lui».
+- **W-B10** — stessa pagina, «🌐 API Endpoints»: elenca `POST …/access` e `PATCH`/`DELETE …/access/{user_id}`, che non
+  esistono. Le rotte vere (`backend/app/api/v1/brokers.py:446`, `:478`, `:531`, `:557`): `GET` e `PUT
+  /brokers/{broker_id}/access` (la configurazione intera: aggiunte, ruoli, quote e rimozioni in un colpo; OWNER o admin;
+  403, 400, 422 con la lista vuota), `PATCH /brokers/{broker_id}/access/me` (retrocessione di sé), `DELETE
+  /brokers/{broker_id}/access/me` (andarsene; `broker_deleted` nella risposta).
+- **W-B27, le chiavi** — `events.deleteBlocked` ed `events.deleteNotFound` (sorgente `assets`, prefisso `events`):
+  nessun lettore nei sorgenti del prodotto, nei test, nelle E2E, nel backend, negli script né nella doc; nessuna
+  chiave `events.${…}` costruita a runtime (le sole occorrenze di `deleteBlocked` sono `brokers.deleteBlocked*` e una
+  variabile locale di `routes/(app)/brokers/+page.svelte`). Si tolgono con `dev.py i18n remove`. Il resto di W-B27 (il
+  prefisso «Save failed:» e le date ISO in `AssetDataEditorSection.svelte`) è di X e resta fuori.
+- **W-B33** — `mkdocs_src/docs/developer/backend/transactions/service.md`, «🗑️ Broker Deletion»: (1) «One is required
+  since (`costBasisRequired`)» — `costBasisRequired` è il codice d'errore del batch (`schemas/transactions/batch.py:122`)
+  che la regola `cost_basis_required()` (`schemas/transactions/type_metadata.py:378`) solleva; (2) «both helpers» → i tre
+  aiuti, che `_compute_wac_for_auto_items()` (`services/transactions/auto_cost.py:31`) usa tutti; (3) la riga di
+  `delete_bulk()` nella tabella dei chiamanti tace l'admin: `as_user_id="all"` salta il controllo, `as_user_id=<id>`
+  controlla quell'utente (solo per l'admin, 403 per gli altri: `api/v1/brokers.py`).
+- La riga di `developer/api/overview.md:82` segnalata dal coordinatore (`/brim/files/…/download`) è **già giusta**
+  (`/brokers/import/files/…/download`): niente da fare.
+
+**Superfici**: `access_control.md` è condivisa con A (le sezioni d'account): tocco solo «Last Owner» e «API Endpoints»;
+`service.md` è di W; i sorgenti i18n `frontend/src/lib/i18n/assets/{en,it,fr,es}.json` (due chiavi in meno, il catalogo
+generato è ignorato).
+
+**Passi**: 1. ✅ doc (docs-writer: A-14, W-B10, W-B33, più tre sviste della stessa pagina); 2. ✅ chiavi (`i18n
+remove`); 3. ✅ prove (`i18n check`, `utils gate-i18n-catalog`, `utils gate-i18n-usage`, `front-utility core-unit`;
+`mkdocs build` stretto e `check-links` del secondo giro **dopo la finestra**); 4. ✅ handoff (sotto).
+
+2. ✅ **Chiavi di W-B27** (2026-10-15 23:46). `dev.py i18n remove "events.deleteBlocked" -f` e `… "events.deleteNotFound"
+   -f`: tolte in EN, IT, FR ed ES dalla sorgente `frontend/src/lib/i18n/assets/` (4 file, 8 righe tolte, nient'altro; il
+   catalogo generato si rifà da sé ed è ignorato).
+   > **Note implementazione**: prove, `nice -n 10`, una alla volta col carico controllato prima: `i18n check` stretto
+   > (**4 633 chiavi**, sorgenti base 1, plugin 71, sottosistemi 21); `utils gate-i18n-catalog` **176/176**; `utils
+   > gate-i18n-usage` **195/195**; `front-utility core-unit` **166 file, 5 491 test** verdi (23:48–23:5x, prima della
+   > finestra delle 00:00).
+1. ✅ **Doc** (docs-writer, 23:50–00:05).
+   - **Primo giro** (A-14, W-B10, W-B33): `access_control.md` +28 / −11, `service.md` +12 / −10; `mkdocs build` stretto
+     0 avvisi, `check-links` 96 validi (link nuovi: `#self-management`, `wac.md#persisted-cost-basis`). Due scarti dal
+     mio brief, scritti come fa il codice:
+     - l'elenco degli accessi (`GET …/access`) lo legge **qualsiasi utente con il login, di qualsiasi broker, e-mail
+       comprese** (`get_by_id(…, as_user_id="all")`, nessun controllo in `list_accesses()`): decisione del developer per
+       l'istanza di famiglia (C-8 della 38), fissata da ACCESS-002/003;
+     - W-B33 (1): «refused with `costBasisRequired`» vale per un batch che **crea** quella metà senza costo; un'edit di
+       sole note, tag o data su una riga vecchia passa (`batch_costs.py:152-176`, N2).
+     Riformulata anche la frase «orphaned … inaccessible by anyone with admin rights» (l'admin raggiunge comunque un
+     broker senza OWNER).
+   - **Secondo giro** (stessa pagina, sezioni dei broker, trovate dal primo): L56 «OWNER defaults to 1.00» (vale per chi
+     crea il broker; un OWNER aggiunto col `PUT` senza quota ha 0), L92 «cascade over transactions» (non è una cascata
+     del DB: `delete_by_broker()`, link a `service.md#broker-deletion`), L106 `bulk_update_access()` «OWNER only» (anche
+     l'admin). Senza build: dalle 00:00 è finestra tranquilla; build e `check-links` li giro io dopo «galleria finita».
+     Applicata da me la sua quarta segnalazione, L101 «Promotions stay on the OWNER-only path» → «Promotions go through
+     the `PUT`, OWNER or administrator only». Totale: `access_control.md` +40 / −17, `service.md` +12 / −10.
+   > **⚠️ Fuori pista** — **W-B34**, decisione per il developer (inviata al coordinatore alle 23:57 secondo la regola della
+   > notte, con la proposta per prima): `GET /brokers/{broker_id}/access` solo a chi ha un ruolo sul broker e all'admin,
+   > 404 agli altri. In pausa; il lotto va avanti e la doc descrive la regola di oggi. **W-B35** nel backlog: docstring
+   > e commenti superati (`access.py:98`, `:141`, `brokers.py:455`, `:496`, `transaction_service.py:84`; le docstring
+   > delle rotte vanno nell'OpenAPI, quindi `api sync` dopo). A-14 sta nella sezione di A del backlog: la chiusura la
+   > segna il coordinatore.
+4. ✅ **Handoff FROZEN** (2026-10-16 00:1x). Delta: `mkdocs_src/docs/developer/architecture/access_control.md` (solo
+   le sezioni dei broker: «Ownership share», «Last Owner», «Self-Management», «Implementation Details», «API
+   Endpoints»; le sezioni d'account di A intatte), `mkdocs_src/docs/developer/backend/transactions/service.md`,
+   `frontend/src/lib/i18n/assets/{en,it,fr,es}.json`, backlog e piano. Nessun file nuovo, nessun codice.
+   > **Note implementazione**: non girati, per la finestra G-13 (00:00–01:15): `mkdocs build` stretto e `check-links`
+   > del secondo giro (il primo giro: 0 avvisi, 96 link validi); li giro dopo «galleria finita», o li gira il
+   > coordinatore al treno. W-B34 attende il developer.

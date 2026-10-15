@@ -3583,4 +3583,12 @@ Y's lot Y7 closed the two DataTable problems the wiki still held as open or as h
   pre-existing.
 
 Filed: [[problems/datatable-actions-column-on-mobile]], [[problems/datatable-column-resize-noop]].
+
+## [2026-10-15] update | SQLite savepoint without an outer write transaction commits on release
+W-B20 built (workstream W): `begin_writes()` in `backend/app/db/session.py` opens the transaction before the per-broker
+savepoints of `BrokerService.delete_bulk`, so a broker that fails half-way leaves nothing behind and account deletion
+stays all or nothing. Red first (BR-U-081…085); a mutation without the helper turns BR-U-082 and the account's
+all-or-nothing tests red. The page gains the fix, a testing lesson (only a *released* outermost savepoint commits
+early) and its source files.
+Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
 Graph: not updated; graphify is not available in this worktree.

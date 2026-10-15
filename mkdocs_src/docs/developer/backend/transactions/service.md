@@ -214,7 +214,7 @@ many it deleted. Its callers are in `BrokerService`:
 
 | Caller | When |
 |--------|------|
-| `delete_bulk()` | `DELETE /brokers?ids=…&force=true` on a broker that still has transactions; it requires `OWNER` on the broker |
+| `delete_bulk()` | `DELETE /brokers?ids=…&force=true` on a broker that still has transactions; it requires `OWNER` on the broker. An administrator may pass `as_user_id` (403 for anyone else): `all` skips the role check, `<id>` checks that user's role instead |
 | `leave_broker()` | The last `OWNER` leaves (`DELETE /brokers/{broker_id}/access/me`): it calls `delete_bulk()` with `force`. Account deletion (`delete_user()`, `accounts/user_service.py`) calls `leave_broker()` on every broker of the account |
 
 The method checks neither access nor balances. The broker's own pairs, both halves
@@ -245,15 +245,17 @@ and the receiving half (by quantity for a `TRANSFER`, by amount otherwise), and
 `make_standalone()` re-types one half in place, clears its link — and its asset,
 unless it becomes an `ADJUSTMENT` — and sets `updated_at`.
 
-**A received `TRANSFER` without a cost basis.** One is required since
-(`costBasisRequired`), but older data can lack it. Such a leg first gets its
-sender's **Auto cost**, computed while the sender's rows still exist:
-`_auto_cost_source()` names the pool — the sender's broker up to the date the units
-left, without the outgoing leg — `_auto_cost()` runs `compute_wac_iterative()` on it,
-and `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`
-together; both helpers come from `_compute_wac_for_auto_items()`, which uses them
-too. Every cost is computed before any row changes, so a computation that fails
-leaves every row as it was (`delete_bulk()` reports that broker as failed). An
+**A received `TRANSFER` without a cost basis.** One is required today — a batch
+that creates such a leg without it is refused with `costBasisRequired` (see
+[Persisted Cost Basis](wac.md#persisted-cost-basis)) — but older data can lack it.
+Such a leg first gets its sender's **Auto cost**, computed while the sender's rows
+still exist: `_auto_cost_source()` names the pool — the sender's broker up to the
+date the units left, without the outgoing leg — `_auto_cost()` runs
+`compute_wac_iterative()` on it, and `_write_auto_cost()` writes
+`cost_basis_override` and `cost_basis_currency` together; all three helpers come
+from `_compute_wac_for_auto_items()` (`auto_cost.py`), which uses them too. Every
+cost is computed before any row changes, so a computation that fails leaves every
+row as it was (`delete_bulk()` reports that broker as failed). An
 empty pool gives what Auto gives, a zero cost (backlog P-1); a missing conversion
 writes nothing, and the `ADJUSTMENT` stays without a cost basis (see
 [WAC & Cost Basis — Diagnostics](wac.md#diagnostics)).
@@ -283,6 +285,39 @@ What the conversion changes in the figures:
   which ignored the unlinked leg; the portfolio summary's `total_deposited`,
   `total_withdrawn` and `net_deposited_capital`; and the deposits series of
   `get_deposit_history()` (`DEPOSIT` only).
+
+**One savepoint per broker.** `delete_bulk()` deletes each broker of a request in a
+savepoint of its own (`self.session.begin_nested()`) through `_delete_one()`, which
+flushes its writes, the broker's own delete included, while the savepoint is open: a
+write error surfaces before the savepoint is released. A broker whose deletion fails
+at any point — even after `delete_by_broker()` wrote the Auto cost on a receiving
+half or unlinked the broker's own pairs — leaves every row as it was, its own and the
+other halves on other brokers. Its result has `success=False` and the error as
+`message`; the brokers before and after it in the request are still deleted.
+`delete_bulk()` never commits; its caller does:
+
+- `DELETE /brokers` commits when `response.errors` is empty, which `delete_bulk()`
+  never fills: a broker that fails is reported in `results`;
+- `DELETE /brokers/{broker_id}/access/me` commits when `leave_broker()` succeeds;
+- account deletion (`delete_user()`) is all or nothing: it rolls everything back when
+  a broker cannot be released, and the savepoints nest inside its transaction.
+
+Nesting needs an open transaction, and pysqlite defers `BEGIN` until the first write:
+a savepoint opened after reads alone is SQLite's outermost transaction, and its
+`RELEASE` commits — the caller's later rollback can no longer bring that broker back.
+So `delete_bulk()` first calls `begin_writes(self.session, Broker)`
+(`backend/app/db/session.py`), which runs an `UPDATE` of that table matching no row
+(`where(false())`): pysqlite emits `BEGIN` before it, and inside an open transaction
+it changes nothing. A write path that opens per-item savepoints after reads must call
+`begin_writes()` first; `AssetCRUDService.delete_assets_bulk()` (`assets/crud.py`)
+runs its own no-op `UPDATE` for the same reason. A global SQLAlchemy `begin` listener
+emitting `BEGIN` up front is ruled out: a session that reads, sees another writer
+commit, then writes, fails at once with `SQLITE_BUSY_SNAPSHOT`.
+
+Tests: `./dev.py test services broker` (`TestDeleteBulkOneSavepointPerBroker`,
+BR-U-081…085) and `./dev.py test services user-profile` (`TestDeleteUser`, the two
+`test_delete_user_is_all_or_nothing_*` cases); BR-U-082 and those two fail without
+`begin_writes()`.
 
 ---
 
