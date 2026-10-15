@@ -29,8 +29,8 @@ from pathlib import Path
 import pytest
 
 from backend.app.schemas.brim import BRIMFileStatus, BRIMParseOutput
-from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim import brim_provider
+from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim_providers import _brim_io
 
 
