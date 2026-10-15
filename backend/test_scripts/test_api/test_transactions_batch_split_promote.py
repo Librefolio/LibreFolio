@@ -5,10 +5,14 @@ Covers:
 - B1: Split via batch pipeline (commit with splits[])
 - B2: Promote via batch pipeline (commit with promotes[])
 - B3: Promote-suggest endpoint (POST /transactions/promote-suggest)
+- B4: Edits of rows an older version stored without a cost basis (N2)
 
 Reference: plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md
 """
 
+import contextlib
+import io
+import json
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -1885,3 +1889,115 @@ class TestPromoteSuggest:
             ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
             assert ids == [same_day_id], f"tolerance_days=0 must offer the ADJUSTMENT(-5) id={same_day_id} of {day} alone, never id={day_before_id} of {day_before}; candidates {ids}"
             print_success("Suggest: tolerance_days=0 offers the same day only ✓")
+
+
+# ============================================================================
+# B4 — EDITS OF ROWS STORED WITHOUT A COST BASIS (N2)
+# ============================================================================
+
+
+def write_legacy_cost_rows(*, user_id: int, source_broker: int, dest_broker: int, asset_id: int, day: str, marker: str) -> dict[str, int]:
+    """Write a TRANSFER pair and an ADJUSTMENT +5 without cost basis, as a version before the mandatory cost stored them.
+
+    Through the lane-database helper ``test_db/legacy_cost_rows.py`` — the one the E2E data-quality spec runs as a
+    script — called in-process: same lane (TEST_PORT / LIBREFOLIO_TEST_DATA_DIR, exported by the runner), same guards
+    (this lane's test database only, both brokers owned by ``user_id``), one database transaction. TRANSFER 4 units of
+    ``asset_id`` from ``source_broker`` to ``dest_broker`` and ADJUSTMENT +5 of it at ``dest_broker``, all on ``day``:
+    amount 0, no currency, no cost basis; every description carries ``marker`` (the helper gives each leg its own).
+    Returns the helper's three ids: ``transfer_out``, ``transfer_in``, ``adjustment_in``.
+    """
+    from backend.test_scripts.test_db import legacy_cost_rows  # noqa: PLC0415 — imported where used: the module runs setup_test_database() on import, which this one test needs and the collection of the whole file does not
+
+    argv = ["--user-id", str(user_id), "--source-broker", str(source_broker), "--dest-broker", str(dest_broker), "--transfer-asset", str(asset_id), "--adjustment-asset", str(asset_id), "--date", day, "--marker", marker]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        exit_code = legacy_cost_rows.main(argv)
+    assert exit_code == 0, f"legacy_cost_rows refused, exit {exit_code}: {stderr.getvalue()}"
+    lines = stdout.getvalue().strip().splitlines()
+    assert len(lines) == 1, f"legacy_cost_rows prints one line of JSON; it printed {stdout.getvalue()!r}"
+    return json.loads(lines[0])
+
+
+async def delete_owned(client: httpx.AsyncClient, *, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
+    """Delete what a test created, by id: each broker with force, one request each as the E2E data-quality teardown
+    does (their transactions go with them, rows written by ``legacy_cost_rows`` included), then the assets, which a
+    remaining transaction would block.
+
+    Returns the problems instead of raising, so that a failed cleanup never hides the test's own failure.
+    """
+    problems: list[str] = []
+    try:
+        for broker_id in broker_ids:
+            resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": "true"}, timeout=TIMEOUT)
+            if resp.status_code != 200 or not any(item["id"] == broker_id and item["success"] for item in resp.json()["results"]):
+                problems.append(f"broker {broker_id} not deleted: HTTP {resp.status_code} {resp.text}")
+        if asset_ids:
+            resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+            deleted = {item["asset_id"] for item in resp.json()["results"] if item["success"]} if resp.status_code == 200 else set()
+            problems.extend(f"asset {asset_id} not deleted: HTTP {resp.status_code} {resp.text}" for asset_id in asset_ids if asset_id not in deleted)
+    except httpx.HTTPError as exc:
+        problems.append(f"cleanup request failed: {exc!r}")
+    return problems
+
+
+@pytest.mark.asyncio
+class TestRowsStoredWithoutCostBasis:
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def test_legacy_rows_description_only_update_commits(self):
+        """B4.1 — RED until N2: a notes-only edit of rows an older version stored without a cost basis commits.
+
+        The rows are ``legacy_cost_rows``': a TRANSFER pair (−4 / +4) and an ADJUSTMENT +5, amount 0, no currency, no
+        cost basis. The edit sends a new description, and nothing else, for all three — both legs of the pair alike,
+        as a pair keeps one description. It changes no type, quantity or cost: N2 lets it commit and repairs nothing.
+        Today ``_check_update_cost_basis`` checks every update, and refuses the receiving leg (update 1) and the
+        ADJUSTMENT (update 2) with ``costBasisRequired``: ``committed: false``. Service-level twin, with tags and
+        both shapes apart: ``test_services/test_transaction_cost_basis_rule.py``.
+        """
+        print_section("B4.1 — Notes-only edit of rows stored without a cost basis → committed (N2)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me.status_code == 200, me.text
+            user_id = me.json()["user"]["id"]
+            broker_ids: list[int] = []
+            asset_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_src = await create_broker(client, "LegacyCbSrc")
+                broker_ids.append(broker_src)
+                broker_dst = await create_broker(client, "LegacyCbDst")
+                broker_ids.append(broker_dst)
+                asset_id = await get_or_create_asset(client, "LegacyCbAsset")
+                asset_ids.append(asset_id)
+                # The source holds 10 units before the legacy transfer takes 4: the edit's balance replay re-reads that day.
+                await create_standalone_tx(client, broker_src, "BUY", asset_id=asset_id, quantity="10", cash={"code": "USD", "amount": "-1000"}, tx_date="2026-03-01")
+                marker = f"B4.1 legacy-cost {uuid.uuid4().hex}"
+                legacy = write_legacy_cost_rows(user_id=user_id, source_broker=broker_src, dest_broker=broker_dst, asset_id=asset_id, day="2026-03-10", marker=marker)
+                notes = f"{marker} notes edited"
+
+                resp = await client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={"updates": [{"id": legacy[key], "description": notes} for key in ("transfer_out", "transfer_in", "adjustment_in")]},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, resp.text
+                data = resp.json()
+                if not data["committed"]:
+                    pytest.fail(f"N2: a notes-only edit of rows stored without a cost basis (TRANSFER out id={legacy['transfer_out']}, in id={legacy['transfer_in']}, ADJUSTMENT +5 id={legacy['adjustment_in']}) changes no type, quantity or cost and must commit; it was refused: {data['issues']}")
+
+                rows_resp = await client.get(f"{API_BASE}/transactions", params={"ids": list(legacy.values())}, timeout=TIMEOUT)
+                assert rows_resp.status_code == 200, rows_resp.text
+                by_id = {tx["id"]: tx for tx in rows_resp.json()}
+                for key, tx_id in legacy.items():
+                    tx = by_id.get(tx_id)
+                    assert tx is not None, f"{key} id={tx_id} not found after the commit: {rows_resp.json()}"
+                    assert tx["description"] == notes, f"{key} id={tx_id}: description {tx['description']!r} after a committed notes edit"
+                for key in ("transfer_in", "adjustment_in"):
+                    assert by_id[legacy[key]]["cost_basis_override"] is None, f"N2 repairs nothing: {key} id={legacy[key]} now has cost_basis_override={by_id[legacy[key]]['cost_basis_override']}"
+                print_success("Notes-only edit of rows stored without a cost basis → committed, still no cost basis ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=asset_ids)
+            assert cleanup_problems == [], f"Cleanup of the test's brokers and asset: {cleanup_problems}"

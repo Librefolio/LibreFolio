@@ -195,7 +195,8 @@ export default defineConfig({
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
         // In coverage mode the flush itself takes time (writing the coverage data file), and a
         // SIGKILL there silently discards the whole run's backend coverage — so the grace
-        // window is widened. Outside coverage there is nothing to flush: 5s stays.
-        gracefulShutdown: {signal: 'SIGTERM', timeout: process.env.COVERAGE_BACKEND ? 30000 : 5000},
+        // window is widened. Outside coverage the server has its own shutdown budget
+        // (LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, 8 s by default): 10s gives it that and a margin.
+        gracefulShutdown: {signal: 'SIGTERM', timeout: process.env.COVERAGE_BACKEND ? 30000 : 10000},
     },
 });

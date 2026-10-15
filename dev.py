@@ -315,6 +315,11 @@ def cmd_server(args):
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
     _ensure_shared_jwt_secret(env)
+    # Shutdown budget (decision 35): uvicorn drains the requests in flight for 3/8 of
+    # LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, unless UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN is set by hand.
+    from backend.app.config.sleep_wake import uvicorn_drain_env  # noqa: PLC0415 — CLI-only import
+
+    env.update(uvicorn_drain_env(env))
 
     # uvicorn closes idle keep-alive connections after 5 s by default. A test
     # client that reuses a socket the server has just closed gets ECONNRESET on

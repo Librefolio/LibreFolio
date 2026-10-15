@@ -976,3 +976,198 @@ tool.
    > - revisione combinata, una prova alla volta con `nice -n 15`: `check-orphans` verde (410 frontend, 304
    >   backend); `utils cooldown` 112/112; `services provider-cooldown` 66/66; `services config-env-example` 36/36;
    >   `utils runtime-isolation` 195/195; ruff e black puliti sui due `__init__`; porta 6186 libera.
+
+## Z6b — spegnimento con un tempo massimo (codice, autorizzato il 15/10)
+
+> **Autorizzazione del developer, alla lettera** (15/10 17:3x, inoltrata dal coordinatore; risposta alla domanda
+> «Posso far partire Z con il codice di Z6b?»): «Sì, Z parta con Z6b».
+>
+> - **Base**: avanzamento veloce a `9c8ee20c3`, uguale a `dev_release2`. Dentro ci sono Z7a (`2ab8a3a43`) e H.
+>   `main.py` è ancora senza gli agganci di CP2b.
+> - **Perimetro**, dal disegno:
+>   - `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=8`, con 0 per nessun limite;
+>   - il drenaggio a 3/8 del budget, passato come `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` da `entrypoint.sh` e da
+>     `dev.py server`;
+>   - i passi del lifespan con una scadenza comune;
+>   - il watchdog;
+>   - la grazia del runner da 5 a 10 s;
+>   - l'interfaccia comune per le attese dei pool.
+> - **Superfici d'altri, dichiarate**:
+>   - in `dev.py`, solo il punto in cui `cmd_server` prepara l'ambiente di uvicorn, senza toccare `--build-only` (J,
+>     C-94) né il banner del Lab;
+>   - `entrypoint.sh`;
+>   - `scripts/test_runner/_server.py`;
+>   - `backend/app/main.py`, prima di CP2b di H: le righe della sequenza di spegnimento, da comunicare al
+>     coordinatore;
+>   - `frontend/playwright.config.ts:199`, la grazia del webServer da 5000 a 10000 ms: lo stesso caso del runner, da
+>     dichiarare.
+> - **Restano ad altri**: `stop_grace_period` nei compose (H, CP7b) e la nota per Fly nella doc del profilo gestito
+>   (X, CP6).
+
+### Contratto del codice
+
+- `config/sleep_wake.py`, nella sezione di Z:
+  - `shutdown_timeout_seconds()`: `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, default 8; 0 vuol dire nessun limite;
+    altrimenti un intero da 2 a 600. Un valore fuori da queste regole dà `SHUTDOWN_TIMEOUT_INVALID`;
+  - `shutdown_drain_seconds(budget)`: 3/8 del budget, almeno 1 s; `None` con il budget a 0;
+  - `uvicorn_drain_env(environ)`: la variabile che un lanciatore aggiunge per uvicorn,
+    `{"UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN": "<n>"}`. È vuota se la variabile è già impostata o se il budget è 0; un
+    budget inutilizzabile vale il default.
+- `services/platform/shutdown_budget.py`:
+  - `ShutdownStep(name, run, blocking=False)`: `run` restituisce `None` oppure qualcosa da attendere. Un passo
+    `blocking` gira in un thread;
+  - `StepOutcome(name, finished, seconds, error)`;
+  - `ShutdownWatchdog(budget, *, clock, exit, terminate_children)`:
+    - `arm()` è idempotente, e il primo armo fissa la scadenza;
+    - alla scadenza scrive nel log la fase e i superstiti (thread e figli), termina i figli, salva la coverage se è
+      attiva, svuota i log, poi `exit(1)`;
+  - `install_shutdown_watchdog()`: avvolge i gestori di SIGTERM e SIGINT installati da uvicorn, e li chiama ancora.
+    Funziona solo nel thread principale, con un gestore chiamabile e un budget maggiore di 0. **Mai nel processo di
+    pytest**, dove i test API avviano uvicorn in un thread;
+  - `ShutdownSequence.begin()` fissa la scadenza:
+    - con il watchdog armato, la sua scadenza meno 0,75 s per la pulizia;
+    - senza watchdog, adesso più il budget meno il drenaggio;
+    - con il budget a 0, nessuna scadenza;
+  - `ShutdownSequence.run(*steps, final=False)`:
+    - ogni passo riceve il tempo che resta, almeno 0,2 s; quello che lo supera viene cancellato e segnato nel log, e
+      la sequenza continua;
+    - un errore finisce nel log e non ferma la sequenza;
+    - con `final=True`, alla fine termina i processi figli rimasti, tranne il resource tracker di
+      `multiprocessing`;
+  - `terminate_child_processes(timeout, keep=None)`: `terminate`, poi `kill`, sui figli ricorsivi (psutil).
+- **L'interfaccia comune dei pool**: nessuna riga nei file di W e di J. Ogni pool resta un passo della sequenza con il
+  suo tempo; i figli rimasti si terminano alla fine. Il motivo del `wait=True` di BRIM (niente orfani) resta coperto
+  anche quando l'attesa viene tagliata.
+- In `main.py`:
+  - prima dello `yield`, `install_shutdown_watchdog()`;
+  - nel `finally`, il passo del `tool executor`;
+  - dopo, nello stesso ordine di oggi: lo scheduler (il task, cancellato alla scadenza), i tre registri dei fornitori,
+    il pool BRIM (`blocking`), i pool quant, le festività, le cache, con `final=True`.
+
+### Passi di Z6b
+
+> **Accordo con H** (15/10, ~18:00, messaggio di H; firma fissata da lì, codice nel suo CP2b, SHA al checkpoint):
+> `main.py` lo divide H in CP2b, e nessun altro lo tocca. Il meccanismo sta in `services/platform/lifecycle.py` (di H):
+> - `Step(name, run, blocking=False)`; un awaitable lo attende `asyncio.wait_for`, e un `Task` tagliato viene
+>   cancellato; `blocking=True` va in un thread solo quando c'è una scadenza;
+> - `StepOutcome(name, finished, seconds, error)` e `MIN_STEP_SECONDS = 0.2`;
+> - `current_step()`, che vale `"startup:<nome>"` o `"shutdown:<nome>"`;
+> - `run_startup_steps(steps)` e `run_shutdown_steps(steps, deadline=None) -> list[StepOutcome]`, con la scadenza
+>   assoluta su `time.monotonic()`; un passo tagliato va nel log in WARNING, uno che solleva in ERROR, e si prosegue.
+>
+> Il cablaggio sta in `services/platform/app_lifespan.py` (di H): `STARTUP_STEPS`, `FINALLY_STEPS = (tool-executor,)`,
+> `SHUTDOWN_STEPS` nell'ordine di oggi, e `shutdown_deadline()`, chiamata una volta all'inizio del `finally`. Z6b ci
+> aggiunge una riga per ciascuno di questi:
+> - `Step("shutdown-watchdog", lambda: install_shutdown_watchdog())`, primo passo d'avvio;
+> - `shutdown_deadline` collegata alla mia;
+> - `child_processes_step()`, ultimo di `SHUTDOWN_STEPS`.
+>
+> Di conseguenza:
+> - il mio `ShutdownStep`/`ShutdownSequence` del contratto sopra non si fa, perché il runner è quello di H;
+> - `child_processes_step()` non fa niente senza un watchdog installato nel processo: nel processo di pytest, dove i
+>   test API avviano uvicorn in un thread, non deve terminare i figli di pytest;
+> - finché CP2b non entra, `shutdown_budget.py` importa `lifecycle` solo dentro le funzioni. All'ingresso di CP2b gli
+>   import passano in cima al modulo.
+>
+> **Firma definitiva** (H, 15/10 ~18:05; `lifecycle.py` entra nel commit di taglio di CP2b):
+> - con la scadenza ogni passo è limitato da `asyncio.timeout(max(deadline − now, MIN_STEP_SECONDS))`, e i passi
+>   `blocking` girano in `asyncio.to_thread`;
+> - un passo tagliato dà `finished=False` e un WARNING «Shutdown step cut by the deadline»;
+> - un passo che solleva, anche con un suo `TimeoutError`, dà `error=repr(exc)` e `logger.exception`;
+> - `current_step()` torna `None` dopo ogni passo;
+> - per collegare la mia `shutdown_deadline` basta sostituire la `def` di `app_lifespan.py` con l'import;
+> - il test `services app-lifecycle` di H fissa l'ordine come sottosequenza; i due vincoli di Z6b (il watchdog primo
+>   passo d'avvio, `child-processes` ultimo passo di spegnimento) li fissa un test mio.
+>
+> **Avviso di H**: un passo `blocking` tagliato lascia vivo il suo thread. Lo coprono tre cose:
+> - con SIGTERM uvicorn rilancia il segnale con il gestore di default, e il processo esce senza aspettare i thread;
+> - con SIGINT, dove `asyncio.run` aspetterebbe l'executor fino a 300 s, l'uscita forzata del watchdog;
+> - per il pool BRIM, il passo dei processi figli, che termina i worker e fa tornare `shutdown(wait=True)`.
+
+1. Test di `test-author`, rossi: le unità, i processi veri con l'app minima su un socket Unix, `entrypoint.sh` e la
+   grazia del runner. ⏳ (parte 1 ✅ 2026-10-15: unità, `entrypoint.sh` e grazie; i test di processo dopo CP2b)
+
+   > **Note implementazione** (parte 1): `backend/test_scripts/test_services/test_shutdown_budget.py`, SDB-001…041,
+   > 178 casi, azione `services shutdown-budget` (PURE):
+   > - la configurazione: 62 casi;
+   > - `entrypoint.sh` sotto `sh` e sotto `dash`: 50 casi, saltati da root;
+   > - la grazia del runner e del webServer di Playwright: 2 casi;
+   > - il modulo: 64 casi, con il watchdog e i suoi falsi `exit` e `terminate_children`, i gestori dei segnali salvati e
+   >   rimessi a posto, e i figli veri.
+   >
+   > Tre rilievi di test-author sono adottati:
+   > - `arm()` può essere rientrato da un gestore di segnale sullo stesso thread: con un `Lock` si bloccherebbe, e
+   >   con un controllo seguito da un'assegnazione partirebbero due thread. Ora c'è un `dict.setdefault` con una tupla
+   >   nuova a ogni chiamata;
+   > - `exit(1)` gira anche quando falliscono il rapporto, i figli o la coverage;
+   > - gli spazi in shell valgono come in Python (`sed`, e una `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` vuota conta come non
+   >   impostata).
+2. Rossi. ✅ 2026-10-15 (parte 1)
+
+   > `services shutdown-budget` → exit 1, `ImportError: cannot import name 'DEFAULT_SHUTDOWN_TIMEOUT_SECONDS'`, alla
+   > raccolta. Log: `/tmp/libreFolio_z6b_red_unit.log`.
+3. Codice. ✅ 2026-10-15 (senza il cablaggio, che aspetta CP2b)
+
+   > **Note implementazione**:
+   > - `config/sleep_wake.py`: la variabile, `shutdown_drain_seconds`, `uvicorn_drain_env`. `_value` legge
+   >   l'ambiente del processo ancora come `os.environ.get(name)`, la forma che la guardia di `.env.example` segue:
+   >   un'espressione condizionale l'avrebbe resa cieca anche alle variabili di Z7a;
+   > - `services/platform/shutdown_budget.py`: il watchdog, l'installazione, la scadenza, i figli, e
+   >   `child_processes_step()`. Senza watchdog non fa niente. Importa `lifecycle` dentro le funzioni finché CP2b non
+   >   entra;
+   > - `entrypoint.sh`: il blocco del drenaggio, in shell POSIX. Gli zeri iniziali si tolgono con l'espansione dei
+   >   parametri, perché `expr` esce con 1 su un risultato 0 e con `set -e` fermerebbe l'avvio;
+   > - righe dichiarate in altri file:
+   >   - `dev.py`: due righe dopo `_ensure_shared_jwt_secret(env)`, lontano da `--build-only` e dal banner del Lab;
+   >   - `scripts/test_runner/_server.py`: `SHUTDOWN_GRACE_PLAIN` da 5 a 10, con il perché;
+   >   - `frontend/playwright.config.ts:199`: da 5000 a 10000 ms;
+   > - `.env.example`: la variabile, nella sezione «Sleep and Wake», con la decisione 35 citata.
+   >
+   > ruff e black puliti sui file del lotto. In `dev.py` ruff conta gli stessi 42 reperti di prima, e nessuno è sulle
+   > mie righe. Black segnala riformattazioni già presenti in `dev.py` e in `_server.py`, e nessuna tocca le mie
+   > righe.
+4. Verdi e guardie; poi, su uno slot del coordinatore, un ciclo di vita vero del backend della corsia. ⏳ (parte 1 ✅
+   2026-10-15)
+
+   > **Note implementazione** (parte 1; corsia 6186, `nice -n 15`, una prova alla volta):
+   > - `services shutdown-budget` **178/178** in 11,3 s;
+   > - `check-orphans` verde, 305 file backend;
+   > - `services config-env-example` 36/36; `services provider-cooldown` 66/66 (la sezione `sleep_wake` è cambiata);
+   > - `utils runtime-isolation` **195/195** dopo la riparazione qui sotto;
+   > - porta 6186 libera.
+   >
+   > **Fuori pista**: con la grazia a 10 s, `utils runtime-isolation` ha dato due rossi e poi è rimasto appeso.
+   > Tre orologi finti dei test del runner erano tarati sui 5 s: valori 6.0 e 12.0, cioè grazia + 1. In
+   > `[group-ignores-sigterm]` l'orologio fermo a 12, sotto la scadenza di 16, con la `sleep` finta che torna subito,
+   > girava in tondo. Ho fermato la run, senza processi rimasti.
+   >
+   > Riparazione di test-author in `test_runtime_isolation.py`:
+   > - gli orologi derivano da `SHUTDOWN_GRACE_PLAIN` (`PLAIN_GRACE_S + 1.0`, `2 * PLAIN_GRACE_S + 2.0`), come il
+   >   file già faceva per `STARTUP_TIMEOUT`;
+   > - un'asserzione era giusta solo per coincidenza: in quel caso l'unica attesa è la raccolta dopo il SIGKILL, scritta
+   >   5 in `_server.py`, che per caso valeva quanto la vecchia grazia. Ora ha il suo valore atteso,
+   >   `SIGKILL_REAP_TIMEOUT_S = 5`.
+   >
+   > Nel file non ci sono altri valori tarati sulla grazia.
+   >
+   > Restano per la parte 2, dopo CP2b: i test di processo, le tre righe in `app_lifespan.py`, gli import di
+   > `lifecycle` in cima al modulo e il ciclo di vita vero.
+   >
+   > **Ingresso della parte 1** (15/10, 18:41–18:56). Il coordinatore ha committato `f0b9bcad2` e `a014ec482`, poi ha
+   > fuso `dev_release2` a `bcd680868` (Y2, W E1b, J CP-4, E2): HEAD `c92fe1a93`. Le prove sulla revisione combinata,
+   > una alla volta con `nice -n 10`:
+   > - `utils test-server-preparation` 63/63, `utils runtime-isolation` 195/195, `services shutdown-budget` 178/178;
+   > - `api system` 117/117, con un ciclo di vita vero del backend condiviso:
+   >   - nell'ambiente del processo uvicorn c'è `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=3`, letto con `ps eww` sul listener;
+   >   - il gruppo di processi si svuota 760 ms dopo la chiusura del listener;
+   >   - nel log dell'app «Shutting down LibreFolio» e «All caches closed on shutdown»;
+   >   - nessun avviso «Shared backend ignored SIGTERM»;
+   > - `front-utility settings` 46/46 con `--workers 2`: stessa variabile nel processo, gruppo vuoto dopo 109 ms, nessun
+   >   avviso;
+   > - `check-orphans` verde: 126 spec, 415 file Vitest, 308 file backend;
+   > - porta 6186 libera.
+   >
+   > Il carico era alto (fino a 95 al minuto): prima delle due run col backend ho aspettato che scendesse sotto 60.
+   > Strumenti fuori dal repo: `/tmp/libreFolio_z6b_run.sh` e l'osservatore di Z6a. Log in `/tmp/libreFolio_z6b_*`.
+5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳
+6. Checkpoint FROZEN. ⏳
