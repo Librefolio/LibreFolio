@@ -9,3 +9,7 @@ class AssetProviderRegistry(AbstractProviderRegistry):
     @classmethod
     def _get_provider_folder(cls) -> str:
         return "asset_source_providers"
+
+    @classmethod
+    def settings_family(cls) -> str:
+        return "asset"

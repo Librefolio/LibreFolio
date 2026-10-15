@@ -16,7 +16,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResultItem,
 )
 from backend.app.services.assets import core, web_link_finder
-from backend.app.services.assets.base import AssetSourceProvider
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
@@ -101,7 +101,7 @@ class AssetSearchService:
 
                 async def _resolve_one(u: str):
                     try:
-                        return await core._run_provider_in_thread(lambda: provider.resolve_url(u), timeout=20.0)
+                        return await core.call_provider(provider, lambda: provider.resolve_url(u), timeout=20.0)
                     except Exception as e:
                         logger.debug(f"link-finder: resolve_url failed for '{u}' on provider '{code}': {e}")
                         return None
@@ -179,7 +179,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:  # noqa: C901 — per-provider fan-out, error mapping + item packing
+    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> FAProviderSearchResponse:  # noqa: C901 — per-provider fan-out, error mapping + item packing
         """
         Search for assets across one or more providers in parallel.
 
@@ -190,6 +190,7 @@ class AssetSearchService:
             hints: Optional extra search terms (report-extracted identifiers + names).
                    Used only by the link-finder fallback to build a specific query when
                    a provider's on-site search returns nothing.
+            user_id: The user searching: the providers receive that user's settings too.
 
         Returns:
             FAProviderSearchResponse with aggregated results from all providers.
@@ -207,7 +208,7 @@ class AssetSearchService:
         # Filter to valid providers that support search
         valid_providers: list[tuple[str, AssetSourceProvider]] = []
         for code in provider_codes:
-            provider_instance = AssetProviderRegistry.get_provider_instance(code)
+            provider_instance = await core.configured_provider(code, user_id=user_id)
             if provider_instance:
                 if provider_instance.supports_search:
                     valid_providers.append((code, provider_instance))
@@ -233,7 +234,8 @@ class AssetSearchService:
             Uses Layer 2 (query cache) and Layer 1 (item cache) for acceleration.
             """
             query_lower = query.lower().strip()
-            query_cache_key = (code, query_lower)
+            # The settings the provider received change its answer: a cached answer serves the same settings only.
+            query_cache_key = (code, query_lower, core.settings_cache_part(provider))
 
             # Layer 2: exact query cache (15min)
             cached_query, q_ok = core._search_query_cache.get(query_cache_key)
@@ -247,10 +249,7 @@ class AssetSearchService:
             #  and rely on Layer 2 for repeated queries)
 
             try:
-                search_results = await core._run_provider_in_thread(
-                    lambda: provider.search(query),
-                    timeout=30.0,
-                )
+                search_results = await core.call_provider(provider, lambda: provider.search(query), timeout=30.0)
                 # Last-resort: no on-site hits → try the external link-finder + resolve_url.
                 if not search_results:
                     search_results = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
@@ -262,6 +261,9 @@ class AssetSearchService:
                 if "not_supported" in error_str or "not supported" in error_str:
                     logger.debug(f"Provider '{code}' does not support search")
                     return (code, [], None)
+                elif isinstance(e, AssetSourceError) and e.error_code == "NOT_CONFIGURED":
+                    logger.info("Search skipped: provider not configured", provider=code, missing=e.details.get("missing"))
+                    return (code, [], str(e))
                 else:
                     logger.exception(f"Search error from provider '{code}': {e}")
                     return (code, [], str(e))
@@ -323,7 +325,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover  # noqa: C901 — SSE fan-out, per-provider error mapping
+    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> AsyncGenerator[str]:  # pragma: no cover  # noqa: C901 — SSE fan-out, per-provider error mapping
         """
         Stream search results as SSE events, one event per provider completion.
 
@@ -337,6 +339,7 @@ class AssetSearchService:
         Args:
             query: Search query string
             provider_codes: Optional list of provider codes to query.
+            user_id: The user searching: the providers receive that user's settings too.
 
         Yields:
             SSE-formatted strings: "data: {...}\\n\\n"
@@ -348,7 +351,7 @@ class AssetSearchService:
 
         valid_providers: list[tuple[str, AssetSourceProvider]] = []
         for code in provider_codes:
-            instance = AssetProviderRegistry.get_provider_instance(code)
+            instance = await core.configured_provider(code, user_id=user_id)
             if instance and instance.supports_search:
                 valid_providers.append((code, instance))
 
@@ -361,10 +364,11 @@ class AssetSearchService:
         providers_queried: list[str] = []
         providers_with_errors: list[str] = []
 
-        async def _search_one(code: str, provider: object):
+        async def _search_one(code: str, provider: AssetSourceProvider):
             """Run one provider search and put results on the queue."""
             query_lower = query.lower().strip()
-            query_cache_key = (code, query_lower)
+            # The settings the provider received change its answer: a cached answer serves the same settings only.
+            query_cache_key = (code, query_lower, core.settings_cache_part(provider))
 
             # Layer 2: exact query cache (15min)
             cached_query, q_ok = core._search_query_cache.get(query_cache_key)
@@ -374,10 +378,7 @@ class AssetSearchService:
                 return
 
             try:
-                items = await core._run_provider_in_thread(
-                    lambda: provider.search(query),
-                    timeout=20.0,
-                )
+                items = await core.call_provider(provider, lambda: provider.search(query), timeout=20.0)
                 # Last-resort: no on-site hits → try the external link-finder + resolve_url.
                 if not items:
                     items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)

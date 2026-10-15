@@ -108,6 +108,38 @@ export function formatQuantity(value: number, locale: string = uiLocale()): stri
     return value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
 }
 
+/**
+ * The ICU plural count of `formatQuantity`: the integer part shown, plus 0.5 when a fraction is shown. The plural
+ * follows the digits the user reads, never `Number(value)`: «1.0004» is plural in English, although
+ * `Intl.PluralRules`, which rounds to three decimals, reads the raw number as singular. `NaN` (`other` in every
+ * language) for a value that is not finite.
+ */
+export function quantityPluralCount(value: number, locale: string = uiLocale()): number {
+    if (!Number.isFinite(value)) return NaN;
+    const parts = new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).formatToParts(Math.abs(value));
+    const whole = Number(
+        parts
+            .filter((part) => part.type === 'integer')
+            .map((part) => part.value)
+            .join(''),
+    );
+    return whole + (parts.some((part) => part.type === 'fraction') ? 0.5 : 0);
+}
+
+/** The translator `lotQuantityLine` needs: the app's `$t`. */
+type QuantityTranslate = (key: string, options?: {values?: Record<string, string | number>}) => string;
+
+/**
+ * The quantity line of a lot's tooltip, its noun in the language's plural: «10 → 0 shares» for a closed lot, «3
+ * shares open out of 10» for an open one. `openText` and `originalText` are the figures as shown — formatted, and
+ * masked when privacy is on. The open line's plural comes from the digits shown (`quantityPluralCount`) and is
+ * always `other` while the figures are masked, so the noun cannot reveal a quantity of 1.
+ */
+export function lotQuantityLine(t: QuantityTranslate, {closed, open, openText, originalText, masked}: {closed: boolean; open: number; openText: string; originalText: string; masked: boolean}): string {
+    if (closed) return t('brokers.lots.tooltip.quantityClosed', {values: {original: originalText, count: 0}});
+    return t('brokers.lots.tooltip.quantityOpen', {values: {open: openText, original: originalText, count: masked ? NaN : quantityPluralCount(open)}});
+}
+
 /** Rough Latin-glyph width estimate (no canvas `measureText` inside renderItem). */
 export function estimateTextWidthPx(text: string, fontSize = 11): number {
     return text.length * fontSize * 0.58;

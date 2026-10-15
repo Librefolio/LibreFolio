@@ -4,7 +4,7 @@ Contract of the FX rate providers.
 - FXRateProvider: the abstract base class every plugin in ``services/fx_providers/`` extends.
 - FXProviderStartDate / FX_HISTORY_MIN_FALLBACK: the start date of a history fetch ("min" = from the earliest
   available rate).
-- FXServiceError / RateNotFoundError: the errors of the FX service.
+- FXServiceError / RateNotFoundError / FXNotConfiguredError: the errors of the FX service.
 
 ``registry.py`` discovers the providers; ``sync.py``, ``conversion.py`` and ``storage.py`` are the service.
 """
@@ -13,6 +13,8 @@ from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
 from typing import Literal
+
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 
 FXProviderStartDate = date | Literal["min"]
 FX_HISTORY_MIN_FALLBACK = date(1900, 1, 1)
@@ -23,7 +25,7 @@ FX_HISTORY_MIN_FALLBACK = date(1900, 1, 1)
 # ============================================================================
 
 
-class FXRateProvider(ABC):
+class FXRateProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for FX rate providers.
 
@@ -321,3 +323,12 @@ class FXServiceError(Exception):
 
 class RateNotFoundError(FXServiceError):
     """Raised when no FX rate is found for a conversion."""
+
+
+class FXNotConfiguredError(FXServiceError):
+    """A provider's required settings have no value: the call is refused before any I/O (``fx/runtime.py``)."""
+
+    def __init__(self, provider_code: str, missing: list[str]):
+        super().__init__(f"Provider {provider_code} is not configured: {', '.join(missing)} missing")
+        self.provider_code = provider_code
+        self.missing = missing
