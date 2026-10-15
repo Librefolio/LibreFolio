@@ -504,6 +504,8 @@ graph TD
 5. **CP3 — PL4**: il taglio di `services/fx/fx.py` per tema (`base`, `sync`, `conversion`, `storage`), poi
    `api/v1/fx.py` → `api/v1/fx/` per risorsa (C2). CP2b e CP3 possono viaggiare nello stesso treno. Dopo il PL4, J scrive
    nei miei file le parti X6, X7, X8 e `fx.py:717` di U1 (regola 10), con me informato.
+   Poi **CP3b — test senza rete e residui di testo** (approvato dal coordinatore il 15/10, dopo l'ingresso del CP3 e prima
+   del CP4): W-B9, W-B13, X-R5 (tranne `AssetModal`) e X-R7, con test-author e docs-writer.
 6. **CP4 — schemi** (C3: pacchetti per dominio, al posto di D-X9), quando W e J sono fermi su quei file.
 7. **CP5 — PL7**, dopo PL1 di J.
 8. **CP6 — F05**: elenchi, `is_scraper`, punto unico, esiti `PROVIDER_NOT_ALLOWED`, `provider_allowed`, sezione `.env.example`;
@@ -1064,7 +1066,7 @@ Via del coordinatore il 15/10 (~03:51), sul mio ramo a `05c21b2b6`. Lotto di sol
   (`lsof -nP -iTCP:6183 -sTCP:LISTEN` vuoto). Log in `/tmp/libreFolio_x_cp3_allbackend.log`, righe in
   `/tmp/libreFolio_x_cp3_allbackend_counts.txt`.
 
-### Checkpoint CP3 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint CP3 ✅ (2026-10-15) — committato dal coordinatore: `b991d5e26` (codice) e `7639d71d9` (journal)
 
 - **Base**: HEAD `05c21b2b6` (record dell'ingresso del CP2b); `dev_release2` è nel frattempo a `d9b853395` (W K1, lotto
   `web_link_finder` di H).
@@ -1092,3 +1094,55 @@ Via del coordinatore il 15/10 (~03:51), sul mio ramo a `05c21b2b6`. Lotto di sol
 >   come sottomoduli del pacchetto solo `fx` e `registry`. Falso positivo; aggiornata la sua lista (`/tmp`, fuori dal repo).
 > - La prima versione della guardia delle patch mute dava 13 falsi positivi sugli asset (letture `core.X` da altri moduli,
 >   `DDGS` legato in un `try` di modulo): corretta prima di usarla come prova.
+
+### Quinto aggiornamento di base: W K1, H `web_link_finder`, J CP-1, W4 CP6 — validazione di `d1ef3ddeb` (2026-10-15)
+
+Il coordinatore ha committato il CP3 (`b991d5e26`, 100 file, con il suo controllo sull'AST: 32/32 definizioni dei servizi e
+20/20 del router identiche) e il journal (`7639d71d9`), poi ha fuso `dev_release2` a `0902524e5` nel mio ramo: HEAD
+`d1ef3ddeb` (genitori `7639d71d9` e `0902524e5`). Il merge porta W K1, il lotto `web_link_finder` di H (`config/plugins.py`),
+J CP-1 (il PAC per tema, che usa le funzioni dei cambi) e W4 CP6 (il BRIM in `services/brim/`). Unione automatica di 7 file
+in comune; worktree pulito. Richiesta: validazione completa sulla 6183, handoff entro le 08:45.
+
+- ✅ **Riscrittori e percorsi vecchi** (`/tmp/libreFolio_x_base5_static.sh`, log `/tmp/libreFolio_x_base5_static.log`):
+  riscrittori di CP1, CP2a, CP2b e CP3 a secco a zero (resta il solito `router.py:8`, che usa `fx_router` del pacchetto);
+  risoluzione statica degli import su `backend/` e `scripts/` 0 irrisolti su 9 557 nomi (9 541 su `0902524e5`); guardia
+  contro le patch mute (C4) 42 patch, nessuna muta (+3 dai test arrivati col merge); nessuna coppia (file, testo) nuova con
+  un vecchio percorso di X rispetto a `7639d71d9`.
+- ✅ **Stringhe** (nuovo `/tmp/libreFolio_x_base5_strings.py`): ogni `from backend.app… import …` scritto in una stringa,
+  ogni `backend.app.x.y` puntato e ogni percorso `.py` del backend citato in una stringa deve risolversi sull'albero. 50
+  righe su tutti e due gli alberi, identiche tranne X-R1, che ha cambiato file: sono le forme sintetiche delle guardie
+  (`gate_probe_plugins`, i confini dei livelli, il PAC di J), X-R2 e due righe da correggere (sotto, X-R5 e X-R2).
+- ✅ **Raccolta** contro `0902524e5` estratto: 13 886 contro 13 881. Le sole differenze sono i 2 → 7 casi della guardia
+  `config-package` per file del CP3.
+- ✅ **`api schema`** identico a quello di `0902524e5` salvo `info.version` (113 percorsi); `tool-contracts` identico.
+  **Sonda delle rotte**: 139 rotte e 63 risoluzioni d'esempio identiche. **Scoperta dei registri** identica: 6 asset, 7 cambi,
+  33 BRIM, 23 segnali, 15 rischio, ciascuno dal suo `registry.py`.
+- ✅ **Build e `all-backend`** (`/tmp/libreFolio_x_base5_heavy.sh`): `front build --debug` verde (158 s), `mkdocs build` verde
+  (45 s, 3 012 URL risolti); `all-backend` sulla 6183 (04:54:41–05:17:16, 22 min 35 s): 7/7 verdi, **13 875 passati, 28 saltati**,
+  0 falliti, 0 errori. Dei 23 blocchi cambia solo `services`: 7 186 → 7 307 (+121, e un'unità in più, 122 → 123), pari alla
+  differenza di raccolta (13 765 del CP3 → 13 886): 34 da `test_pac_planner_engine_boundaries.py` (nuovo, J CP-1), 82 dalla
+  guardia `config-package` per file (572 contro 490 al CP3: i moduli nuovi di J e W4), 5 da altri test modificati dal merge.
+  Porta 6183 libera alla fine. Log in `/tmp/libreFolio_x_base5_allbackend.log`, righe in
+  `/tmp/libreFolio_x_base5_allbackend_counts.txt`.
+
+> **Fuori pista**:
+> - **Residui di testo dei miei lotti (X-R5).** Il grep di questa validazione, più largo di quelli dei lotti (nomi di file
+>   nudi come «fx.py», nomi puntati nelle docstring, il frontend, `TODO_FUTURI.md`), trova 16 righe che citano un percorso
+>   tolto da CP2a, CP2b o CP3: 5 nel backend (docstring), 9 nel frontend (commenti), 2 in `TODO_FUTURI.md`. Tutte erano già
+>   nel mio ramo prima del merge; nessuna è in `openapi.json` né cambia comportamento. I miei grep cercavano le forme
+>   d'import e i percorsi completi in `backend/`, `scripts/`, doc, `.github` e devWiki. Elenco e proposta in X-R5:
+>   correzione nel CP3b, tranne i due commenti di `AssetModal` (X-R3, FE5).
+> - **Una riga di W nella docstring di X-R2.** `db/models.py:127` cita `services/brim_provider.py`, spostato da W nel W4
+>   CP6. È nella stessa docstring di X-R2, che finisce in `openapi.json`: l'ho aggiunta a X-R2.
+
+Note del coordinatore per i prossimi lotti, registrate:
+- **W-B9** approvata come lotto di soli test (CP3b), dopo l'ingresso del CP3 e prima del CP4; **W-B13** (la ✕ di
+  `fx-csv-import.spec.ts:247` e `:276`, col `data-testid` `data-import-modal-close`) passata nella mia sezione, nello stesso
+  lotto.
+- Da H, sul `web_link_finder`: valori di `_TIMEOUT` e `_MAX` non validati (X-R6, con il CP6 o il CP10, d'accordo con H).
+- Doc: `provider_borsa_italiana.md:123` senza `_FILE` (X-R7, nel CP3b). Le mie variabili d'ambiente nuove vanno in
+  `config/plugins.py`.
+- Preparando il CP3b: `GET /fx/providers` va alla BCE a ogni richiesta, senza cache (X-R8, prodotto). Il W-B9 è più largo
+  del solo test 1: anche `test_get_providers` (`test_fx_api.py:175`) vuole valute per ogni fornitore, e i suoi controlli del
+  filtro usano la BCE (`:186`, `:199`); la verifica dal vivo della BCE c'è già in
+  `test_external/test_fx_providers.py::test_supported_currencies`.
