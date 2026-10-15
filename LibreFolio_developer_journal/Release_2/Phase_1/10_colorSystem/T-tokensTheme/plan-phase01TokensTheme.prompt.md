@@ -49,6 +49,7 @@ e le tue integrazioni».
 | D-T24 | (15/10, sera) La barra del titolo della PWA (`theme-color`) resta verde `#1B4334` nei due temi, come la barra laterale, anche con l'header neutro di D-T23: opzione A di T, nessun cambio alle tre copie né al gate |
 | D-T25 | (15/10, sera) Il rosso del tema scuro è `#FF7A86` al posto di `#F84361`, per `--lf-danger` (testi, bordi, icone di errore): 7,0:1 sulla card. Invariati `--lf-danger-solid` e `--lf-danger-hover` (il riempimento dei pulsanti pieni sotto testo bianco, che `#FF7A86` non regge), le tinte `-soft`, `-line`, `-on-soft`, `--lf-bar-danger` e tutto il tema chiaro. |
 | D-T26 | (15/10, sera) Il verde del tema scuro è `#5ED69A` al posto di `#36D399`, per `--lf-success` (testi, icone ✓, barra di robustezza, «Forte»): 9,6:1 sulla card, 8,8:1 sulla superficie secondaria. Con D-T25 chiude il punto 5 di T-8b. Per coerenza con la regola della designer sulla barra verde («gli stati luminosi del tema scuro», indicazione del coordinatore): `--lf-bar-success` `#5ED69A` e `--lf-bar-danger` `#FF7A86` |
+| D-T27 | (15/10, notte; il developer è andato a dormire) «il tuo obiettivo è finire la migrazione e fattorizzazione dei colori, cercando comunque di seguire le direttive della designer, e poi a giochi fatti, possiamo sempre tornare e modificare solo i colori». Dal coordinatore: ogni lotto validato entra senza aspettare l'OK del developer, che rivede tutto insieme la mattina; niente contact sheet per lotto; gate verdi a ogni lotto; valori sempre dai ruoli e dalla tabella della skill `theme-roles`, e un caso non coperto prende il ruolo più vicino, annotato qui nel piano («da rivedere»); in ogni handoff due o tre righe «dove guardarlo». Ordine: W3-a, TD-3, W3-b, W3-c con W3-d, poi W1, W2 e oltre |
 
 **Vincoli:**
 - **Fino alle 22:45 del 14/10:** solo scrittura. Niente `npm ci`, build, test né server: G misura la gallery. Dopo,
@@ -575,7 +576,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
 | 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
 | 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
-| 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ⏳ validato il 15/10 su `ec1ddba96` più il delta; due commit da fare, poi l'ingresso unico |
+| 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
+| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ⏳ validato il 15/10 su `a0915bef9` più il delta; checkpoint da committare |
 
 ## Avanzamento
 
@@ -1433,3 +1435,79 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Galleria filtrata** `dashboard privacy mode`, 1 worker, nella corsia (`LIBREFOLIO_TEST_DATA_DIR`): mobile ✓ in
 >   47 s; desktop in timeout all'ottavo scatto col carico a 82, dopo 7 scatti buoni con l'header visibile, poi ✓ 8/8 in
 >   49 s nella finestra tranquilla. Scatti guardati: header neutro visibile, occhio in vista, nessun anello di focus.
+
+> ✅ **4 · Controllo leggero e ingresso** (22:3x–22:49). Il primo merge di base, `2ce572779`, è superato dal secondo,
+> `dd4be16ad` (J CP-4d: schema di `portfolio.py`, i18n `dataQuality`). Rifatto da capo su `dd4be16ad`, nella 6155:
+> `api sync` rc 0, `front check` 0 e 0; i gate (11 file `*.gate.test.ts` più `roleColors.test.ts`) 237/237; `i18n check`
+> stretto, 4.632 chiavi; golden `native_cash_guard` rigenerato con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1` (il test
+> salta di proposito, «golden regenerated»), diff contro HEAD vuoto, poi 1 passato senza la variabile; E2E a 1 worker
+> `theme-roles` 24 e 2 saltati, `header-scroll` 11 e 3 saltati. **Ingresso:** `dev_release2` = `a0915bef9`, merge di
+> `dd4be16ad`; il ramo di T in avanti veloce. Da dichiarare: la riga di T-8b/T-8c in `features/auth/AuthPageFrame.svelte`
+> (file di A; A lo sa dalla 1.3).
+
+### W3-a — ✅ 15/10/2026 (TD-2: il segno della dashboard sui ruoli; D-T27)
+
+> **Avvio** (coordinatore, 22:5x, dopo l'ingresso): via a W3-a nella 6155; OK della 1.3 a tutto il lotto, compresi i due
+> test di `ui/display/`. Prove pesanti fino a mezzanotte; dalle 00:00 alle 01:15 la finestra di G-13.
+
+> ✅ **1 · Analisi** (sola lettura). Il lotto è più stretto del piano: tutti i consumatori ricevono la classe della
+> tabella su uno `span` o un `div` senza altri colori legacy (celle HTML di `ContributionTable`, `ExposureTable`,
+> `OtherPeriodEffectsTable`, `UnifiedLotsTable`; valore e barra di `KpiMetricBar`; barre di `KpiDivergingFlowBar`;
+> striscia e valore di `KpiCard` e `RiskMetricCard`; figure di `KpiSection`; barre di `TornadoChart`), quindi niente G3 a
+> runtime e nessun componente da modificare. `timingEffectColor` lo legge solo lo `style` inline di `KpiSection`: un
+> `color-mix()` sulla variabile del ruolo basta, senza allargare il ponte di DV (`ChartRole`, `STAND_INS`, parità).
+> **⚠️ Fuori pista:** anche `UnifiedLotsTable` (brokers) usa `SIGN_TEXT.portfolio` e cambia con W3-a, non con W3-b.
+
+> ✅ **2 · Le tabelle sui ruoli** (`lib/theme/toneClasses.ts`):
+> - `SIGN_TEXT.portfolio`, `.kpi`, `.headline` → `text-lf-gain` / `text-lf-loss`; lo zero → `text-lf-muted`, il neutro
+>   del titolo → `text-lf-primary`. Le tre voci restano separate, con lo stesso valore: una superficie potrà prendere un
+>   ruolo suo senza toccare i consumatori;
+> - `SIGN_BAR.kpi`, `.accent` → `bg-lf-gain` / `bg-lf-loss`; `SIGN_BAR.tornado` (la terza voce delle barre, fuori dal
+>   piano ma dello stesso significato) → `bg-lf-gain/80` / `bg-lf-loss/80`;
+> - `lib/theme/chartColorScales.ts`: `timingEffectColor` → `color-mix(in oklab, var(--lf-gain) N%, transparent)`, alfa
+>   limitata a 0–1; prima `rgba(22,163,74,α)` / `rgba(220,38,38,α)` fissi, il verde e il rosso chiari anche in scuro.
+> - **Da rivedere domattina (D-T27):** le barre della dashboard prendono lo stesso ruolo del testo, quindi in chiaro
+>   sono più scure di prima (`#18794E` al posto di `green-500` `#22C55E`; `#C82838` al posto di `red-400`); in scuro
+>   passano dal fluo `green-400` / `red-400-500` a `#5ED69A` / `#FF7A86`. Le barre di perdita delle KPI erano più chiare
+>   in chiaro e più scure in scuro, per deriva: ora sono uguali al testo nei due temi. Nessun ruolo di riempimento più
+>   tenue esiste per i segni: se la designer lo vuole, è un ruolo nuovo (`--lf-gain-fill`?) e una riga di tabella.
+
+> ✅ **3 · Test** (`test-author`): `RiskMetricCard.test.ts` asserisce i ruoli `bg-lf-gain`/`text-lf-gain` e
+> `bg-lf-loss`/`text-lf-loss`, ciascuno con l'assenza dell'opposto, e `text-lf-primary` per il neutro;
+> `KpiDivergingFlowBar.test.ts` i ruoli di default e, nell'override, l'assenza di `bg-lf-gain` (il `not.toContain`
+> vecchio era diventato vuoto). 29/29; provato che le asserzioni nuove falliscono scambiando i ruoli con un mock
+> temporaneo, poi rimosso.
+
+> ✅ **4 · Gate** (23:03–23:19, nella 6155, uno alla volta):
+> - `theme-roles --update`: m1 11.026 → 11.000, solo `lib/theme/toneClasses.ts` 202 → 176; `--check` pulito;
+> - `front-utility core-unit` 5.462/5.462 (166 file); `component-unit` 3.704/3.704 (139 file);
+>   `front-portfolio risk-levels-component` 273/273; `front check` 0 e 0; Prettier verde;
+> - E2E `front-portfolio dashboard` a 1 worker 27/27 (carico 40–60);
+> - CSS compilato: `.text-lf-gain`, `.text-lf-loss`, `.bg-lf-gain`, `.bg-lf-loss` e le `/80` col `color-mix` nel blocco
+>   `@supports`, tutte presenti.
+
+> ✅ **5 · Gli scatti e le cinque righe di `KpiSection`** (23:2x; OK del coordinatore e della 1.3). Gli scatti di
+> verifica (`files/W3a-shots/` della sessione T, server della corsia in modalità test, desktop, chiaro e scuro) mostrano
+> le tabelle giuste, colori calcolati `#18794E` / `#5ED69A` per il guadagno e l'effetto tempi sul ruolo con la sua alfa.
+> **⚠️ Fuori pista:** TD-2 non era chiuso. `KpiSection` aveva cinque copie scritte a mano delle stringhe delle tabelle,
+> che il lotto A di R non aveva spostato, ancora fluo in scuro: la barra del valore di mercato (`marketBarColor`), le
+> righe «Dividendi e interessi» e «Commissioni e tasse», la striscia di «Rendimenti», il valore del «Capitale
+> depositato». Ora leggono `SIGN_BAR.kpi`, `SIGN_BAR.accent` e `SIGN_TEXT.kpi`: stesse soglie, solo classi, markup
+> invariato. Restano com'erano le barre categoriali «Costo d'acquisto» (blu) e «Liquidità» (smeraldo): **da rivedere**,
+> se accanto ai verdi nuovi lo smeraldo della liquidità sembra fluo serve un ruolo categoriale. Restano anche i badge di
+> stato di `ContributionTable` (aperta/venduta) e di `OtherPeriodEffectsTable` (entrata/costo): sono stati, vanno con
+> la dashboard (W5) o con W3-c.
+> - `--update`: m1 11.000 → 10.980 (`KpiSection` 70 → 50); `--check` pulito; `front check` 0 e 0; Vitest di
+>   `KpiSection`, `RiskMetricCard`, `KpiDivergingFlowBar`, `KpiMetricBar` 80/80; `core-unit` 5.462/5.462.
+> - **⚠️ Fuori pista:** dopo la modifica `<KpiDivergingFlowBar …/>` sta su una riga e Prettier lo vuole raccolto;
+>   `front check` non lancia Prettier (solo svelte-check), quindi il controllo è a parte: `prettier --write` sul file,
+>   solo spazi.
+> - E2E `front-portfolio dashboard` 27/27 (23:30–23:39); Prettier verde sui cinque file del lotto; `diff --check`
+>   pulito; scatti dopo la correzione (`files/W3a-shots/after-kpisection/`): in scuro tutti i segni della fila dei KPI
+>   sono `#5ED69A` / `#FF7A86`, in chiaro `#18794E` / `#C82838`; restano blu e smeraldo le due barre categoriali.
+>   Porta 6155 libera.
+> - Riga di backlog: **TC-10**, la revisione del mattino dei casi «da rivedere» delle ondate notturne.
+
+> **Dove guardarlo** (per il developer): Dashboard, la fila dei tre KPI in alto (P&L del periodo, Rendimenti con
+> l'effetto tempi, Patrimonio netto), in chiaro e in scuro; le tabelle Contributo ed Esposizione sotto; nei pannelli
+> rischio le card delle metriche (striscia e valore) e il tornado dello stress test.
