@@ -2089,6 +2089,31 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
 
   Dettagli: piano H, §14 «CP5b».
+- **H-7 · Senza `tzdata` di PyPI, su un sistema senza database dei fusi lo scheduler va in UTC** — basso; H (CP7a,
+  docs-writer), 15/10.
+  - `zoneinfo` legge il database del sistema, poi il pacchetto `tzdata` di PyPI, che non è nel lock.
+  - Nell'immagine Docker lo copre `tzdata-legacy` (CP7a). Su un host senza database (Windows), ogni fuso salvato
+    ricadrebbe in UTC (`scheduler.py:20-24`).
+  - Cura: `tzdata` nel Pipfile, nella finestra delle dipendenze.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-8 · La scheda «password dimenticata» mostra un `docker exec` che gira come root** — minimo; H (CP7a,
+  docs-writer), 15/10; il file è di A.
+  - `ForgotPasswordCard.svelte:43` mostra `docker compose exec … user reset`.
+  - Da CP7a, `./dev.py docker exec` passa per gosu con gli id numerici; il comando nudo gira come root, e i file che
+    crea restano di root fino al riavvio.
+  - Cura: mostrare il comando con gosu, come `admin/docker_advanced` (sezione «docker exec»), oppure
+    `./dev.py docker exec`.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
+  lotto del log di accesso), 15/10.
+  - `logging_config.py` toglie i gestori della radice con `removeHandler` senza `close()`; poi `basicConfig(force=True)`
+    non trova più niente da chiudere.
+  - Conta solo per il file di log, e in produzione la chiamata è una per processo.
+  - Cura: `close()` su ogni gestore tolto, oppure lasciare la pulizia a `basicConfig(force=True)`.
+
+  Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
 
 ## A · Account e accessi (fase 01)
 
