@@ -2307,6 +2307,25 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - `UTC`: neutro e uguale alle immagini pubblicate oggi, ma cambia ogni scatto locale con un'ora o un asse del tempo.
       Dovrebbe entrare prima di G-13, e ogni candidata dovrebbe averlo nella base prima del suo cancello.
   - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
+- **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
+  15/10, doppio lancio degli scatti nuovi (`g-new3-a/b`). **Difetto del prodotto, proprietario da instradare.**
+  - Con le 3 schede nuove (Utenti, Backup, Email) l'admin ha 7 schede. In uno scatto desktop di 1280 px:
+    - in inglese ci stanno, e resta lo spazio prima di «Admin»;
+    - in italiano e francese ci stanno di misura;
+    - in spagnolo «Copia de seguridad» le spinge oltre il bordo, e di «Correo» resta visibile solo la «C».
+  - Anche nello scatto `settings/email`, dove «Correo» è la scheda attiva, si vede solo la sua «C».
+  - Causa: in `routes/(app)/settings/+page.svelte` la card della barra ha `overflow-hidden`, e `TabBar` non scorre in
+    orizzontale. Con la barra laterale e in spagnolo, la scheda si raggiunge solo con `?tab=email` o con la tastiera.
+  - *Inferenza, non misurata:* nelle finestre fra 640 px (`sm:`, dove compaiono le etichette) e circa 1200 px, la barra
+    può uscire anche nelle altre lingue.
+  - Correzioni possibili, a scelta del prodotto:
+    - `shrinkLabelsToFit`, che `TabBar` ha già e che Settings non usa;
+    - uno scorrimento orizzontale che tenga in vista la scheda attiva;
+    - un'etichetta spagnola più corta.
+  - Per la gallery è deterministico: a e b sono identici. La correzione però cambierà gli scatti desktop di Settings in
+    spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
+
+  Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
