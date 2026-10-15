@@ -6,7 +6,9 @@ and standardize data exchange between components.
 
 **Organization by Domain**:
 - common.py: Shared schemas (BackwardFillInfo, DateRangeModel, OldNew, BaseBulkResponse, BaseDeleteResult)
-- assets/: Asset schemas — assets.py (CRUD, patch, merge, classification, ScheduledInvestment*), events.py (event point, event CRUD)
+- assets/: Asset schemas — assets.py (CRUD, patch, merge, provider assignment), metadata.py (distributions,
+  classification, metadata refresh), scheduled_investment.py (financial enums, ScheduledInvestment*), events.py (event
+  point, event CRUD)
 - provider.py: Provider assignment schemas (FA + FX)
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
@@ -32,29 +34,31 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from backend.app.schemas.assets.assets import (
-        # Distribution models
-        BaseDistribution,
-        FAAinfoFiltersRequest,
         # Asset CRUD
+        FAAinfoFiltersRequest,
         FAAssetCreateItem,
         FAAssetCreateResult,
         FAAssetDeleteResult,
-        FAAssetMetadataResponse,
         FAAssetPatchItem,
         FAAssetPatchResult,
         FAAssetProviderAssignment,
         FABulkAssetCreateResponse,
         FABulkAssetDeleteResponse,
         FABulkAssetPatchResponse,
+        FAinfoResponse,
+    )
+    from backend.app.schemas.assets.events import FAAssetEventPoint
+    from backend.app.schemas.assets.metadata import (
+        # Distribution models
+        BaseDistribution,
+        # Metadata & classification
+        FAAssetMetadataResponse,
         FABulkMetadataRefreshResponse,
         FAClassificationParams,
-        # Metadata & classification
         FAGeographicArea,
-        FAinfoResponse,
         FAMetadataRefreshResult,
         FASectorArea,
     )
-    from backend.app.schemas.assets.events import FAAssetEventPoint
     from backend.app.schemas.brim import (
         # Constants and helpers
         FAKE_ASSET_ID_BASE,
@@ -473,26 +477,28 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
 
 _EXPORT_GROUPS = {
     "assets.assets": (
-        "BaseDistribution",
         "FAAinfoFiltersRequest",
         "FAAssetCreateItem",
         "FAAssetCreateResult",
         "FAAssetDeleteResult",
-        "FAAssetMetadataResponse",
         "FAAssetPatchItem",
         "FAAssetPatchResult",
         "FAAssetProviderAssignment",
         "FABulkAssetCreateResponse",
         "FABulkAssetDeleteResponse",
         "FABulkAssetPatchResponse",
+        "FAinfoResponse",
+    ),
+    "assets.events": ("FAAssetEventPoint",),
+    "assets.metadata": (
+        "BaseDistribution",
+        "FAAssetMetadataResponse",
         "FABulkMetadataRefreshResponse",
         "FAClassificationParams",
         "FAGeographicArea",
-        "FAinfoResponse",
         "FAMetadataRefreshResult",
         "FASectorArea",
     ),
-    "assets.events": ("FAAssetEventPoint",),
     "brim": (
         "FAKE_ASSET_ID_BASE",
         "BRIMAssetCandidate",

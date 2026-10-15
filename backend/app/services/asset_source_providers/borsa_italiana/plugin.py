@@ -16,8 +16,8 @@ from urllib.parse import parse_qs, urlparse
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
