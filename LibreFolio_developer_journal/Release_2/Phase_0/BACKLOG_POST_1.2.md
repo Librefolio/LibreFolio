@@ -2286,6 +2286,46 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+- **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
+  (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
+  - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
+    - Qui il fuso è Europe/Rome. La gallery pubblicata nasce invece in CI (`release.yml`, `mkdocs gallery --workers 4`),
+      su un runner GitHub in UTC.
+    - Quindi la documentazione mostra ore diverse da quelle delle run locali: pagina File, scheduler, `updated_at` delle
+      impostazioni globali, Users, Backup.
+    - I 5 grafici con un asse `time` di ECharts (Growth, AllocationHistory e i tre dei lotti) mettono le tacche alla
+      mezzanotte locale.
+    - Il backend non aggiunge differenze: `server_tz` e il default di `scheduler_timezone` sono sempre UTC.
+  - Non riguarda il cancello di R né la coppia di G-13: sulla stessa macchina il fuso è lo stesso. Un istante fisso si
+    disegna con l'offset di quell'istante, quindi nemmeno il cambio d'ora del 25/10 lo sposta.
+  - Correzione proposta (perimetro G, test-author): una riga a livello di file in `gallery.spec.ts`,
+    `test.use({timezoneId: …})`, accanto a quella di `launchOptions`. `playwright.config.ts` resta com'è.
+  - Il valore:
+    - `Europe/Rome`, consigliato: è il fuso di questa macchina, quindi non cambia nessuno scatto locale. Riferimenti e
+      candidate restano validi in qualunque ordine d'ingresso; cambiano una volta sola le ore delle immagini generate
+      in CI.
+    - `UTC`: neutro e uguale alle immagini pubblicate oggi, ma cambia ogni scatto locale con un'ora o un asse del tempo.
+      Dovrebbe entrare prima di G-13, e ogni candidata dovrebbe averlo nella base prima del suo cancello.
+  - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
+- **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
+  15/10, doppio lancio degli scatti nuovi (`g-new3-a/b`). **Difetto del prodotto, proprietario da instradare.**
+  - Con le 3 schede nuove (Utenti, Backup, Email) l'admin ha 7 schede. In uno scatto desktop di 1280 px:
+    - in inglese ci stanno, e resta lo spazio prima di «Admin»;
+    - in italiano e francese ci stanno di misura;
+    - in spagnolo «Copia de seguridad» le spinge oltre il bordo, e di «Correo» resta visibile solo la «C».
+  - Anche nello scatto `settings/email`, dove «Correo» è la scheda attiva, si vede solo la sua «C».
+  - Causa: in `routes/(app)/settings/+page.svelte` la card della barra ha `overflow-hidden`, e `TabBar` non scorre in
+    orizzontale. Con la barra laterale e in spagnolo, la scheda si raggiunge solo con `?tab=email` o con la tastiera.
+  - *Inferenza, non misurata:* nelle finestre fra 640 px (`sm:`, dove compaiono le etichette) e circa 1200 px, la barra
+    può uscire anche nelle altre lingue.
+  - Correzioni possibili, a scelta del prodotto:
+    - `shrinkLabelsToFit`, che `TabBar` ha già e che Settings non usa;
+    - uno scorrimento orizzontale che tenga in vista la scheda attiva;
+    - un'etichetta spagnola più corta.
+  - Per la gallery è deterministico: a e b sono identici. La correzione però cambierà gli scatti desktop di Settings in
+    spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
+
+  Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2731,15 +2771,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
   commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
-- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+- ✅ **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
   `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
   accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
   (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
   timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
   `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
   `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
-  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», quinto aggiornamento di base.
+  toccano la configurazione dei plugin. **Chiusa nel CP10 il 15/10** (commit al checkpoint del CP10): i due accessori di
+  `config/plugins.py` danno il default per un valore non finito o sotto 1, `DDGS(timeout=math.ceil(timeout))` rispetta un
+  timeout non intero, `.env.example` e la docstring dicono «at least 1»; i sei casi di `test_config_package.py` che
+  fissavano il vecchio comportamento aggiornati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base, e sezione «CP10», passo 8.
 - ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
   da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
@@ -2829,6 +2872,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
   rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
+
+- **X-R12 · Un evento del fornitore datato oggi arriva solo il giorno dopo** — piccolo, prodotto; trovata da W in E1b,
+  girata a X dal coordinatore il 15/10, valutata da X lo stesso giorno, fuori dal CP10. Il refresh chiede la storia fino
+  a ieri (`services/assets/refresh.py:227`, `history_end = today - 1` quando `end >= today`), e gli eventi arrivano
+  solo con la storia: un dividendo o uno split con la data di oggi entra il giorno dopo.
+  - **Perché c'è il taglio**: protegge i prezzi. La chiusura di oggi non c'è ancora, e il valore di oggi arriva da
+    `get_current_value`.
+  - **Gli eventi non hanno questa ragione**: una data di stacco annunciata è un fatto. Restano legati al taglio solo
+    perché viaggiano nella stessa chiamata.
+  - **Effetto**: nessun errore di valore. Uno split sposta le posizioni solo con la transazione ADJUSTMENT legata
+    all'evento (`portfolio/engine.py:213-223`). Ritarda di un giorno la comparsa dell'evento, il suo collegamento da una
+    transazione e i dati di AI Export.
+  - **Cura proposta**: chiedere la storia fino a oggi e scartare il prezzo di oggi prima della cache e della scrittura,
+    tenendo gli eventi fino a oggi. Va rivisto il calcolo della copertura della cache (`dates`), che non deve contare
+    oggi. Va verificato per ogni plugin che `end_date` sia inclusivo, e con `scheduled_investment`, che i punti futuri
+    li genera da sé.
+  - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+- **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
+  colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
+  ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
+  settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
 
 ## W · Import e transazioni (fase 01)
 
@@ -3151,6 +3217,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - **La scelta definitiva va al developer come punto 47**, con la raccomandazione di J (la 1) e la stessa domanda sullo
     split di una coppia: che cosa vuol dire per le unità in uscita. Se sceglie la 1: lotto di J con il rosso prima, poi
     la correzione degli orfani in uscita.
+  - **Decisione 47 del developer (15/10, 19:09)**, alla lettera: «sono daccordo, si va mantenuto lo stesso principio nel
+    senso opposto». La gamba in uscita rimasta senza coppia diventa una rettifica in uscita **con il costo** medio con
+    cui le unità partono, dalla funzione del costo «Auto»; nell'esempio guadagno 60 sia in Dashboard sia nei lotti.
+    - **Dove vale**: la cancellazione del broker che riceve, le gambe in uscita già spaiate nei database, «dividi la
+      coppia».
+    - **Lotti**: J, **CP-16**, la regola in FIFO con il rosso prima, dopo CP-4c e CP-4d e prima di CP-15 (ordine
+      confermato dal coordinatore il 15/10: CP-4d resta prima perché corregge un numero visibile; W non aspetta ancora
+      la regola, prima fa N2 e i file dei broker). Conversione delle cancellazioni e dei dati: W, sopra la regola di J,
+      con la firma da accordare.
+    - **Punto aperto per CP-16**: con più lotti a prezzi diversi le unità possono uscire al loro costo FIFO (realizzato
+      0, come in un trasferimento) oppure al costo medio della riga (realizzato = medio − costo FIFO). Nell'esempio le
+      due letture coincidono. Da proporre all'avvio di CP-16, con un rosso per ciascuna lettura.
 
   Dettagli: piano J, §10 «Domande di W N1».
 - **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
@@ -3248,6 +3326,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
+  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
+  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
+  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
+  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
+  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
+  budget più un margine. Superficie del coordinatore. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
+  massimo».
 
 ## B · Backup e Docker (fase 01)
 
@@ -3312,6 +3399,14 @@ sulla base `23f6578f3`.
     chiavi `backup.checks.*` nelle 4 lingue.
 
   Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+- **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
+  40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
+  «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
+  - Cura: una rotta col token del pannello, come B8 (`require_panel_token`, permessa sull'istanza bloccata se il
+    developer lo vuole), che chiama la funzione dei link di reset di A e restituisce il link al pannello.
+  - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
+
+  Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
 
 ## E · Email (fase 01)
 
@@ -3364,10 +3459,13 @@ da Y il 15/10.
 - **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
   T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
   le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
-- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
-  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
-  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
-  Y8. Dettagli: piano di Y, §2.
+- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (commit al checkpoint di Y8): un `$effect`, a ogni
+  caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in percentuale, e torna al `%` quando li
+  ritrova, salvo una scelta esplicita nel frattempo. Rosso prima in `GrowthChart.test.ts` («% view without % data,
+  after every load»); provata in Vitest, non ancora nel browser. Era: basso; Y, 15/10 (analisi). Il ripiego da % ad Abs
+  scattava solo per la vista % ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo
+  o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
+  Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
 - **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
   verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
@@ -3392,3 +3490,23 @@ da Y il 15/10.
   15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
+- **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
+  Y4), approvata come residuo dal coordinatore, 15/10 (D-Y15).
+  - Con `lib/charts` in `features/signals`, restano fuori i generici: `LineChart`, `CandlestickChart`,
+    `PriceChartCompact`, `PriceChartFull`, `chartCoreHelpers`, `lineChartHelpers`, `priceChartHelpers`,
+    `timeSeriesAggregation` di `components/charts`, e `stores/chartSettingsStore`.
+  - Questi importano da `$lib/features/signals`: quasi solo `type RenderedSignal`, più `signalLabelToHtml` e, in
+    `priceChartHelpers`, `backendSignalSchemas` e `getBackendSignalProblem`.
+  - È un'inversione di livello: la UI generica dipende da una feature.
+  - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
+  - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
+- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
+  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+  `PriceChartFull.svelte:612`.
+  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
+    proprio contro gli scatti sui grafici con anni di dati giornalieri.
+  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
+  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
+    o rinviata come le etichette.
+  - Dettagli: piano di Y, §7 «Y8 — passo 3».

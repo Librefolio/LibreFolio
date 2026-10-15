@@ -128,6 +128,7 @@ import {
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
+import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -2061,6 +2062,29 @@ test.describe('Gallery Screenshots', () => {
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the profile shot frames it.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/email`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'email');
+                await restoreTallScreen(page);
+            });
+        });
+
+        test('backup ready (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Backup tab with a finished backup on offer: the lane never runs a real backup, so the job the
+            // card follows is stored and answered, before any navigation, by galleryBackup.ts — done, 46.0 MB, no warning.
+            // Neither the download nor the delete is ever pressed.
+            const viewport = getViewport(testInfo);
+            await serveGalleryBackupJob(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                await navigateTo(page, '/settings?tab=backup');
+                await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // The job is read after the card is drawn: the card says when it is in (data-busy).
+                await waitForSettled(page.getByTestId('backup-download-card'), 15_000);
+                await expectGalleryBackupReady(page);
+                await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the email shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-ready`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'backup-ready');
                 await restoreTallScreen(page);
             });
         });
