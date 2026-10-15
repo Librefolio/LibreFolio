@@ -58,7 +58,7 @@ from pyscipopt import Model as ScipModel
 from backend.app.services.pac_allocator import compiler as compiler_module
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import (

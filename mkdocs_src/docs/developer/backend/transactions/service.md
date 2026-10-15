@@ -1,12 +1,22 @@
 # 🧾 Transaction Service Architecture
 
-Transaction batch execution is split across three source modules:
+Transaction batch execution is split across these source modules, in `backend/app/services/transactions/`:
 
 | File | Responsibility |
 |------|----------------|
-| `backend/app/services/transaction_service.py` | Public service methods, shared validation helpers, WAC dispatch, and the `execute_batch()` orchestrator |
-| `backend/app/services/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transaction_batch_stages.py` | Ordered parse, preload/access, mutation, linking, WAC, cost-basis, balance, and response stages |
+| `backend/app/services/transactions/transaction_service.py` | `TransactionService`: the `execute_batch()` orchestrator and `delete_by_broker()`, composed of the mixins below |
+| `backend/app/services/transactions/access.py` | `TransactionAccessMixin`: broker access checks, once per broker a batch touches |
+| `backend/app/services/transactions/validation.py` | `TransactionValidationMixin`: asset event links, the rows that require a cost basis, linked-pair rules |
+| `backend/app/services/transactions/queries.py` | `TransactionQueryMixin`: the transaction query, partner brokers, rows by id |
+| `backend/app/services/transactions/balances.py` | `TransactionBalancesMixin`: the balance replay and the balances at a date |
+| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to |
+| `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
+| `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
+| `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, preload/access, balance replay, response |
+| `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
+| `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
+| `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
 
 The former 637-line `execute_batch()` C901 hotspot has been decomposed. The public
 orchestrator is now approximately 50 source lines and makes the execution order
@@ -20,7 +30,7 @@ explicit.
 |------|---------------|
 | **CRUD and pair helpers** | `TransactionService` |
 | **Batch inputs and cross-stage state** | `TransactionBatchContext` |
-| **Access scope and ordered mutations** | `transaction_batch_stages.py` |
+| **Access scope and ordered mutations** | `transaction_batch_stages.py` (access), `batch_edits.py` and `batch_creates.py` (mutations) |
 | **Linked-pair persistence** | Stage code writes reciprocal `related_transaction_id` values |
 | **WAC** | `_compute_wac_for_auto_items()` delegates to `compute_wac_iterative()` |
 | **Balance validation** | The final mutation stage flushes, then replays each affected broker from its earliest affected date |
@@ -129,9 +139,29 @@ the commit route persists none of it when `committed=False`.
 
 `preload_and_authorize()` derives the access scope from parsed creates and from
 database rows referenced by updates, deletes, splits, and saved promote references.
-It calls `_check_broker_access(..., min_role=UserRole.EDITOR)` once per distinct
-touched broker. A denied broker adds an `accessDenied` issue and returns before any
-delete, split, update, create, or promote is applied.
+`_denied_brokers()` calls `_check_broker_access(..., min_role=UserRole.EDITOR)` once
+per distinct touched broker. `_append_access_issues()` then refuses each row that
+touches a denied broker, on that row's own coordinates: one `accessDenied` issue, with
+params `{"brokerId": id}`, per row and denied broker.
+
+| Row | Issue `operation`, `index` | `ref_id` |
+|-----|----------------------------|----------|
+| Create on a denied broker | `create`, the row's index | `None` |
+| Update or delete | `update` / `delete`, the row's index | The saved transaction it names |
+| Split or promote | `split` / `promote`, the row's index | The saved leg on the denied broker: two issues when the two legs sit on two denied brokers |
+| Promote leg named by `link_uuid` | — | None added: the create it names already carries the refusal |
+| No row (fallback) | `create`, `-1` | `None` |
+
+A row that touches the same denied broker twice, such as a split of an intra-broker
+`FX_CONVERSION`, gets one issue. The fallback covers a denied broker that no row
+explains, so a denial is never silent. The bulk editor maps `operation:index` back to
+its rows, so the refusal lands on the row that caused it — for example the receiving
+leg (`1b`) of a new `TRANSFER` whose destination is a broker the user can only view —
+and labels an issue with a negative index by the broker in `params.brokerId`.
+
+When a broker is denied, `preload_and_authorize()` returns `True` and
+`execute_batch()` responds before any delete, split, update, create, or promote is
+applied.
 
 Role hierarchy is `OWNER > EDITOR > VIEWER`; mutation requires at least `EDITOR`.
 

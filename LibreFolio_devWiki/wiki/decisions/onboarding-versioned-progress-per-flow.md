@@ -68,7 +68,7 @@ That is the released-phase rule applied as written: an existing file is edited o
 
 | Role | Path |
 |------|------|
-| Registry, transitions, lazy insert | `backend/app/services/onboarding_service.py` |
+| Registry, transitions, lazy insert | `backend/app/services/accounts/onboarding_service.py` |
 | Endpoints and 409/422 | `backend/app/api/v1/settings.py` |
 | Tables | `backend/alembic/versions/004_release_1_2_0_schema.py` |
 | Due predicates | `frontend/src/lib/types/onboarding.ts` |

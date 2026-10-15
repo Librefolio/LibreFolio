@@ -50,5 +50,5 @@ Found together with the connection-security indicator: [[decisions/connection-se
 | Role | Path |
 |------|------|
 | Login handler (password first, 401/403) | `backend/app/api/v1/auth.py` |
-| `verify_password_or_dummy`, dummy hash | `backend/app/services/auth_service.py` |
+| `verify_password_or_dummy`, dummy hash | `backend/app/services/accounts/auth_service.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` |

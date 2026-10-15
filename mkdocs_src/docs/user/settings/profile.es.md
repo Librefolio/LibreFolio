@@ -44,7 +44,7 @@ El botón **Cambiar contraseña** (siempre disponible, sin necesidad de desbloqu
 2. Una **nueva contraseña** que cumpla todas las reglas: mínimo 8 caracteres, al menos una letra mayúscula, una letra minúscula, un número y un carácter especial — y debe ser diferente de la actual
 3. La **confirmación** de la nueva contraseña
 
-Después de la confirmación, tu sesión permanece activa — no necesitas volver a iniciar sesión.
+Después de la confirmación, tu sesión permanece activa — no necesitas volver a iniciar sesión. Cualquier otro dispositivo conectado a tu cuenta se desconecta.
 
 ### 🗑️ Eliminar cuenta
 

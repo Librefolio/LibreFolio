@@ -350,6 +350,15 @@ class OnboardingStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class AccountTokenPurpose(StrEnum):
+    """What an account token is for: a token of one purpose is never accepted for another."""
+
+    INVITE = "invite"
+    PASSWORD_RESET = "password_reset"
+    EMAIL_VERIFICATION = "email_verification"
+    ADMIN_SETUP = "admin_setup"
+
+
 # ============================================================================
 # USER MODELS
 # ============================================================================
@@ -375,9 +384,17 @@ class User(SQLModel, table=True):
     # Lifetime login counter — incremented on every successful login, unconditionally.
     # Kept independent from the donation-popup logic below for future/generic use.
     login_count: int = Field(default=0, nullable=False)
-    # Donation-popup trigger bookkeeping (see services/donation_popup_service.py).
+    # Donation-popup trigger bookkeeping (see services/accounts/donation_popup_service.py).
     donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True)
     donation_popup_logins_since_shown: int = Field(default=0, nullable=False)
+
+    # Session version of the account, carried by the session JWT as `sv`: raising it (user_service.end_sessions)
+    # ends every session issued before.
+    session_version: int = Field(default=0, nullable=False)
+    # When the email address was verified; NULL for the accounts that existed before migration 005.
+    email_verified_at: Optional[datetime] = Field(default=None, nullable=True)
+    # The release whose changelog this user last saw.
+    last_seen_version: Optional[str] = Field(default=None, max_length=40, nullable=True)
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -489,6 +506,48 @@ class UserOnboardingStepProgress(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
     completed_at: Optional[datetime] = Field(default=None, nullable=True)
     skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
+class AccountToken(SQLModel, table=True):
+    """A single-use account link: an invitation, a password reset, an email verification or the admin setup.
+
+    Only the SHA-256 of the token is stored; the token itself is shown once to whoever asked for it
+    (``services/accounts/token_service.py``). ``user_id`` is the account the token acts on, and its
+    tokens go with it; an invitation has none, its account does not exist yet.
+    """
+
+    __tablename__ = "account_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_account_tokens_token_hash"),
+        CheckConstraint(
+            "purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup')",
+            name="ck_account_tokens_purpose",
+        ),
+        Index("ix_account_tokens_purpose_expires_at", "purpose", "expires_at"),
+        Index("ix_account_tokens_user_id", "user_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    purpose: AccountTokenPurpose = Field(sa_column=Column(String(32), nullable=False))
+    token_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True),
+    )
+    email: Optional[str] = Field(default=None, nullable=True)
+    grants_admin: bool = Field(default=False, nullable=False)
+    created_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(nullable=False)
+    consumed_at: Optional[datetime] = Field(default=None, nullable=True)
+    revoked_at: Optional[datetime] = Field(default=None, nullable=True)
+    consumed_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
 
 
 class GlobalSetting(SQLModel, table=True):
@@ -697,7 +756,7 @@ class Asset(SQLModel, table=True):
     @field_validator("classification_params")
     def validate_classification_params(cls, v):
         # Lazy import to avoid circular dependency
-        from backend.app.schemas.assets import FAClassificationParams  # noqa: PLC0415 — avoid circular import
+        from backend.app.schemas.assets.metadata import FAClassificationParams  # noqa: PLC0415 — avoid circular import
 
         if v is None:
             return v

@@ -72,6 +72,7 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
+    import {isBulkBalanceIssue} from '$lib/utils/transactions/bulkDisplay';
     import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
@@ -968,8 +969,8 @@
     let issuesDismissed = $state(false);
     let isFreshlyValid = $derived(!isReadonly && !hasLocalErrors && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
-    let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
-    let balanceIssues = $derived(issues.filter((i) => i.index < 0));
+    let fieldIssues = $derived(issues.filter((i) => i.index >= 0 && !isBulkBalanceIssue(i)));
+    let balanceIssues = $derived(issues.filter((i) => i.index < 0 || isBulkBalanceIssue(i)));
     let hasWacFxIssues = $derived(issues.some((i) => i.code === 'wacFxUnavailable'));
     let showFxSyncModal = $state(false);
     let fxSyncPairs = $state<string[]>([]);
@@ -1480,9 +1481,9 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                                <li data-testid="tx-form-balance-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1524,9 +1525,9 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
+                                <li data-testid="tx-form-balance-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1764,6 +1765,10 @@
                             {/if}
                         </div>
                     </div>
+
+                    {#if pairLayout === 'fx'}
+                        <p class="mt-2 text-xs text-lf-muted" data-testid="tx-form-fx-dates-hint">{$t('transactions.form.fxDatesHint')}</p>
+                    {/if}
 
                     <!-- FX Implied Rate info marker -->
                     {#if pairLayout === 'fx' && draft.cash?.amount && dualTo.cash?.amount && draft.cash.code !== dualTo.cash?.code}

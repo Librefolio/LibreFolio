@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+- `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
+- `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
+- Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
+- **Instance key**: one secret per installation, generated on first use in the `secrets/` folder of the data directory, or given through the environment. LibreFolio derives its encryption keys from it: back up `secrets/` together with the data.
+- At startup the log warns about settings that leave the instance weaker: a short session key, a secret set twice, loose permissions on the instance key, `SESSION_COOKIE_SECURE=never`, a verbose log level.
+- `.env.example` lists every option LibreFolio reads, grouped by function.
+- `GET /api/v1/system/instance`: the public configuration of the instance, read by the app at startup.
+- A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
+- `GET /api/v1/system/ready`: 200 when the database answers and its schema is at the latest migration, 503 otherwise, one code per check — for Docker health checks, Uptime Kuma and hosting panels.
+
+### 🔄 Changed
+
+- An empty or blank secret counts as not set, as if the variable were absent.
+- Changing your password signs out every other device; the one you changed it from stays signed in.
+- A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
+- Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
+- `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
+- The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
+
 ### 🧹 Repository cleanup
 
 - The promotional video experiment leaves the repository (`mkdocs_src/videoClipPrject/` and `./dev.py mkdocs video`): it never reached the app or the documentation, and it now lives outside this repository.
@@ -19,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
+- **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
+- **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
+- Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
+- The show/hide button of password fields can be reached with the keyboard and has a translated name.
+- The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
+- The data editor's counters (modified, deleted, new), its stale-rows switch and the import window's Help and Close buttons follow your language instead of English.
+- The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
+- The Tools catalogue and the plugin diagnostics in Settings › About no longer fail with "Tool request deadline exceeded" when the server is busy: their request budget now covers sign-in too.
+- A parse that a plugin refuses names the plugin and the file as you know them, not the plugin code and the stored file id.
+- Asset data editor: an events CSV with events of different types on the same day (a dividend and a split) imports them all, instead of leaving them out as duplicates; a new event can move to a day that holds only an event of another type.
+- In a source checkout the app version follows `git describe` again: a `VERSION` file left by an earlier Docker build no longer hides newer commits.
 
 ---
 

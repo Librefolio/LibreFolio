@@ -243,7 +243,7 @@ def configure_test_runtime(
         raw_data_dir = _configured_env_value("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR
     resolved_data_dir = resolve_data_dir(raw_data_dir)
 
-    from backend.app.config import validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
+    from backend.app.config import INSTANCE_TRUST_SECRETS, validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
 
     resolved_data_dir = validate_test_data_dir(
         resolved_data_dir,
@@ -251,6 +251,9 @@ def configure_test_runtime(
     )
 
     _load_project_dotenv()
+    # A test lane uses secrets of its own, never the instance's
+    for name in INSTANCE_TRUST_SECRETS:
+        os.environ.pop(name, None)
     os.environ["TEST_PORT"] = str(resolved_port)
     os.environ["LIBREFOLIO_TEST_DATA_DIR"] = str(resolved_data_dir)
     ensure_test_lane_id()

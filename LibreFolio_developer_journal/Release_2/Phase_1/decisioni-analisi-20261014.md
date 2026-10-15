@@ -8,6 +8,8 @@
 > («la 7 no, la 12 così…»). Il primo via libera al codice è tuo: lo inoltro alla lettera a ogni sessione.
 >
 > Le sigle fra parentesi servono solo a ritrovare la voce nelle analisi.
+>
+> **Aggiunta del 15/10**: l'analisi di Backup e Docker, punti 38–43 in fondo al §2, con il modo di rispondere.
 
 ## Come leggere i punti
 
@@ -455,12 +457,26 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: il salvataggio non modifica più un evento in silenzio, e chi lo faceva apposta
   riceve un messaggio.
 
+- **Aggiornamento dall'analisi di W (15/10, lotto E1)**:
+    - la premessa va corretta: un salvataggio senza id modifica solo un evento **manuale** con la stessa data e lo stesso
+      tipo; uno del fornitore non viene mai sovrascritto. Il caso del fornitore nasce dalla finestra, che dopo il
+      salvataggio rilegge il giorno e può collegare la transazione all'evento del fornitore (I-10 S4);
+    - l'export degli eventi non porta gli id: il giro «esporta, modifica, reimporta» si regge su data e tipo, quindi la
+      mia raccomandazione regge;
+    - proposta di W, precisata: «+ Nuovo evento» crea sempre; se esiste già un evento, manuale o del fornitore, con
+      quella data e quel tipo, la finestra lo mostra e offre «Usa questo», «Crea comunque» o «Annulla». Due eventi nello
+      stesso giorno sono ammessi già oggi, per esempio un dividendo ordinario e uno straordinario;
+    - **domanda per te**: «Crea comunque» resta?
+
 #### 21. Per cancellare degli eventi serve indicare l'asset — 🟢 (D-W2, I-12)
 - **Oggi**: la richiesta che cancella gli eventi accetta una lista di id, di qualunque asset. Una richiesta sbagliata,
   o costruita apposta, può cancellare eventi di altri asset.
 - **Proposta**: la richiesta indica l'asset, e si cancellano solo i suoi eventi.
 - **Perché**: sicurezza e integrità dei dati.
 - **Per chi usa già LibreFolio**: nulla. L'unico chiamante è l'editor degli eventi, aggiornato insieme.
+
+- **Aggiornamento dall'analisi di W (15/10)**: confermata. Gli id di un altro asset tornano «non trovati». L'unico
+  chiamante è l'editor degli eventi (una riga di X, aggiornata insieme).
 
 #### 22. Salvataggio degli eventi tutto o niente — 🟡 (D-W3, I-12)
 - **Oggi**: un salvataggio di più eventi li scrive uno alla volta. Se una riga è sbagliata, le precedenti restano
@@ -471,6 +487,10 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: un CSV di eventi con una riga sbagliata non salva più nulla, finché la riga non è
   corretta.
 
+- **Aggiornamento dall'analisi di W (15/10)**: ogni elemento si controlla prima di scrivere, con un solo commit per gli
+  eventi manuali. Il refresh dei fornitori continua a salvare a blocchi. Un asset inesistente fa fallire la richiesta,
+  invece di dire «0 salvati».
+
 #### 23. Tipi di evento in minuscolo: controllo e correzione dei dati — 🟢 (D-W7, I-09)
 - **Oggi**: un tipo scritto in minuscolo o sconosciuto, per esempio da un CSV scritto a mano, viene salvato, e da quel
   momento ogni lettura di quell'evento va in errore 500.
@@ -480,6 +500,15 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Da decidere**: cosa fare degli eventi con un tipo sconosciuto già salvati. Lasciarli e segnalarli (continuano a
   dare errore), oppure eliminarli.
 - **Alternative**: solo il controllo all'ingresso, senza toccare i dati salvati.
+
+- **Aggiornamento dall'analisi di W (15/10)**: tutti i fornitori scrivono già i tipi in maiuscolo, quindi il controllo
+  all'ingresso non li rompe e l'API non cambia. Per gli eventi con un tipo sconosciuto già salvati, che rendono in errore
+  ogni lettura degli eventi di quell'asset, due strade:
+    - **A**, prudente: lasciarli e scrivere nel log id, asset, data e importo;
+    - **B**: cancellare quelli non collegati a transazioni, scrivendoli nel log; quelli collegati non si possono
+      cancellare.
+
+  Come per K-1, un conteggio sulla copia del tuo database aiuterebbe a scegliere.
 
 #### 24. K-1 chiusa senza codice — 🟢 (D-W15)
 - **Contesto**: nella 1.2 il Bulk mostrava come «coppia» due cloni dello stesso tipo. La correzione è nell'interfaccia,
@@ -637,6 +666,96 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: correggere solo i file e lasciare il resto com'è.
 - **Per chi usa già LibreFolio**: chi condivide l'istanza smette di vedere i file e i broker degli altri.
 
+#### 37. Le regole della password, uguali dappertutto — 🟢 (A-6)
+- **Oggi**: le regole della password (lunghezza, maiuscole, cifre…) sono scritte in quattro posti: l'indicatore di
+  robustezza, la finestra del cambio password, la registrazione e la riga di comando. Il server, invece, chiede solo
+  8 caratteri: chi usa l'API direttamente può scegliere una password che l'app rifiuterebbe.
+- **Proposta**: le regole si scrivono una volta sola nel backend, che le applica anche all'API; il frontend le mostra
+  prendendole da lì. Le password già salvate restano valide: le regole contano solo quando se ne sceglie una nuova.
+- **Perché**: quattro copie prima o poi divergono, e un controllo solo nel browser si aggira.
+- **Alternative**: lasciare le copie e allinearle a mano.
+- **Per chi usa già LibreFolio**: niente di visibile nell'app, che le applica già.
+
+### Backup e Docker (analisi di B, 15/10)
+
+> B ha verificato tutto sul codice: oggi il backup completo risponde «non ancora implementato», e la devWiki lo dava per
+> fatto. Il disegno: uno zip con la forma della cartella dei dati, il ripristino provato sempre prima su una copia, poi
+> un riavvio ordinato; Litestream spento finché non lo configuri. Il testo intero è nella cartella della sessione B, e
+> andrà nel piano 07 al primo via.
+
+#### 38. Il backup con password usa un formato di LibreFolio — 🟢 (D-B1)
+- **Oggi**: dalla UI non si fa nessun backup. La specifica dice «opzione: zip protetto da password».
+- **Proposta**: con la password, tutto lo zip va dentro una busta cifrata `.lfbackup`.
+  - La password diventa una chiave con scrypt, un metodo lento apposta, così indovinarla costa molto; poi si cifra con
+    AES-256-GCM.
+  - Serve solo `cryptography`, che entra comunque per le impostazioni dei plugin: **nessuna dipendenza nuova**.
+  - La busta si apre con LibreFolio: dalla UI, o con `dev.py backup decrypt`, anche dentro l'immagine Docker.
+- **Perché**: lo zip con password «classico» si apre solo con 7-Zip o Keka, non con il Finder né con Esplora risorse.
+  In più ricava la chiave in modo debole e porta una dipendenza nuova.
+- **Il rischio**: la busta la costruiamo noi, con pezzi standard e un metodo noto. Passa dalla revisione di sicurezza,
+  con dei casi di prova fissi.
+- **Alternative**: lo zip con password classico (`pyzipper`); nessuna cifratura, solo un avviso forte.
+- **Per chi usa già LibreFolio**: niente, è una funzione nuova.
+
+#### 39. La chiave d'istanza dentro un backup — 🟢 (D-B2, precisa il punto 18)
+- **Oggi**: in `secrets/` c'è solo la chiave d'istanza. Ancora nessuna funzione la usa: la useranno le impostazioni dei
+  plugin, per cifrare le chiavi d'accesso ai fornitori.
+- **Proposta**:
+  - la chiave entra nel backup solo se c'è la password, e solo se l'ha generata LibreFolio. Una chiave data con una
+    variabile, per esempio dal pannello del cloud, non esce mai: la custodisce chi l'ha data;
+  - al ripristino l'istanza tiene la sua chiave. I segreti dei plugin del backup si ricifrano con quella; se manca la
+    chiave vecchia, restano «impostato ma illeggibile: reinseriscilo».
+- **Perché**: una chiave per istanza, mai due istanze con la stessa. E uno zip con i dati e la chiave insieme, senza
+  password, vale come avere i segreti in chiaro (punto 18).
+- **Alternative**: adottare la chiave del backup. È più semplice, ma due istanze finiscono con la stessa chiave, ed è
+  impossibile quando la chiave arriva da una variabile.
+- **Per chi usa già LibreFolio**: niente.
+
+#### 40. Dopo un ripristino tutte le sessioni si chiudono — 🟢 (D-B3)
+- **Proposta**: dopo un ripristino si rientra con un account dei dati ripristinati. La UI lo dice prima della conferma.
+- **Perché**: con `JWT_SECRET` impostato, un cookie di prima potrebbe aprire, nei dati ripristinati, l'account di
+  un'altra persona.
+- **Alternative**: nessuna sicura.
+- **Per chi usa già LibreFolio**: tocca solo chi ripristina.
+
+#### 41. Prima di un ripristino, un backup automatico — 🟢 (D-B4)
+- **Proposta**: prima di sostituire i dati, LibreFolio fa uno zip dei dati attuali e lo tiene (solo l'ultimo),
+  scaricabile dalla scheda Backup. Se il primo avvio dopo il ripristino fallisce, per esempio per una migrazione,
+  rimette da solo i dati di prima.
+- **Alternative**: tenere la cartella vecchia invece di uno zip: niente spazio in più, ma niente file da scaricare.
+- **Per chi usa già LibreFolio**: niente.
+
+#### 42. Si ripristinano anche le copie fatte a mano — 🟢 (D-B5)
+- **Oggi**: la 1.2 non ha un backup; la guida dice di copiare a mano la cartella dei dati.
+- **Proposta**: il ripristino accetta anche lo zip di una cartella dei dati fatto a mano, senza `manifest.json`: legge
+  la versione dal database e lo segnala nel report.
+- **Perché**: così «ripristinare un backup della 1.2», chiesto dalla specifica e dai cancelli di rilascio, diventa una
+  cosa vera.
+- **Per chi usa già LibreFolio**: chi ha una copia della cartella la porta nella 1.3 dalla UI.
+
+#### 43. Il limite al caricamento di un backup lo decide chi ospita — 🟢 (D-B6)
+- **Proposta**: la variabile `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`; 0 vuol dire senza limite, ed è il default del
+  self-hosted; 500 MB nel profilo gestito.
+- **Perché**: nel cloud il cliente è admin, quindi il limite lo deve decidere l'hoster, non chi usa l'istanza.
+- **Alternative**: un'impostazione nella UI, che però l'admin potrebbe alzare.
+- **Per chi usa già LibreFolio**: niente.
+
+**Decise dal coordinatore, salvo tue obiezioni**:
+- le proposte 6–9 del §10 del piano reggono sul codice: password facoltativa (formato al 38); scaricamento per il
+  pannello con un token separato, spento se non impostato, mai con la chiave; senza un supervisore (Docker, systemd)
+  l'app esce comunque e la UI chiede di riavviarla; Litestream copre solo il database, i file viaggiano negli zip;
+- percorsi nuovi dell'API per backup e ripristino; via i 4 segnaposto di oggi, che nessuno usa;
+- `backup_service.py`, che fa gli export di prezzi, eventi e cambi di un asset, prende il nome `series_export.py`
+  (solo il nome);
+- la prova «stessi totali» gira in un processo a parte, senza un secondo server;
+- immagini anche arm64 (M-1) alla fine, solo se la build regge;
+- la divisione di `backup.py` entra per prima; il lotto di W sugli eventi, che aspetta le decisioni 20–23, la troverà
+  già fatta.
+
+**Come rispondere su B**: «approvo 38–43 e autorizzo il codice di B», più le eccezioni. Se vuoi pensarci ancora sulla
+38 e sulla 39, B può partire lo stesso: i primi tre lotti (divisione di `backup.py`, backup senza password, prova su
+copia) non ne dipendono.
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non
@@ -654,8 +773,9 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
     - I messaggi d'import tradotti (C-70) sono tutti di Import e transazioni.
     - La matematica dei cambi dentro i file dei plugin la scrive Numeri e analisi (regola 10: una sola casa per la
     matematica finanziaria).
-- **Migrazioni del database**: la 005 è degli account, la 006 delle impostazioni dei plugin, poi le correzioni dei dati
-  degli eventi. Chi integra per secondo ricollega la catena.
+- **Migrazioni del database**: la 005 e la 006 sono degli account (token monouso; modalità di registrazione), la 007
+  delle impostazioni dei plugin, poi le correzioni dei dati degli eventi (riallineato il 15/10). Chi integra per secondo
+  ricollega la catena.
 - **`npm ci` dal lock**: permesso a ogni sessione quando serve a un controllo. Mai `npm install`, che potrebbe cambiare
   le versioni.
 - **Colori**: il coordinatore colori ha dato gli elenchi esatti dei suoi lotti. Le cartelle di asset, cambi e
@@ -681,8 +801,12 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 
 ## 4. Cose che servono da te più avanti
 
-- Una sola finestra per installare `cryptography` (impostazioni dei plugin), a corsie ferme. Facoltativa `tzdata`.
-- Docker acceso quando Piattaforma arriva al lotto dell'immagine.
+- Una sola finestra per installare `cryptography` (impostazioni dei plugin e, se approvi la 38, password dei backup), a
+  corsie ferme. Facoltativa `tzdata`.
+- Docker acceso quando Piattaforma arriva al lotto dell'immagine, e poi per Litestream (Backup e Docker).
 - Togliere il tag `test` da GHCR (C-26): è un'azione sul remoto.
+- Lato pannello di controllo (repo privato): **una chiave d'istanza diversa per ogni istanza**, generata a caso e mai
+  ricavata da una parola d'ordine. Con la stessa chiave, i segreti cifrati di un'istanza sarebbero leggibili da
+  un'altra. Serve anche un'azione «reinvia il link di attivazione» (punto 3).
 - Lato pannello di controllo (repo privato): le macchine con `auto_stop_machines="off"` e `auto_start_machines=true`,
   perché è l'istanza a decidere quando sospendersi.

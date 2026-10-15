@@ -39,6 +39,6 @@ The "problem" users observed was not an algorithm bug but **context starvation**
 
 | Role | Path |
 |------|------|
-| Balance validation | `backend/app/services/transaction_service.py` |
+| Balance validation | `backend/app/services/transactions/balances.py` |
 | Balance walk tests | `backend/test_scripts/test_api/test_tx_balance_walk.py` |
 

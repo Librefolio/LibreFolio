@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
-    import DonationPopupModal from '$lib/components/auth/DonationPopupModal.svelte';
-    import UpdateAvailableModal from '$lib/components/auth/UpdateAvailableModal.svelte';
+    import DonationPopupModal from '$lib/features/support/DonationPopupModal.svelte';
+    import UpdateAvailableModal from '$lib/features/update-check/UpdateAvailableModal.svelte';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 
