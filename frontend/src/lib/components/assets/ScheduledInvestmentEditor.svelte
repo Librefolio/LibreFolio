@@ -72,13 +72,13 @@
     // Constants
     // =========================================================================
 
-    // Source of truth: backend/app/schemas/assets.py → InterestType enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → InterestType enum
     let INTEREST_TYPE_OPTIONS = $derived([
         {value: 'SIMPLE', label: `📊 ${$t('assets.schedule.interestTypeSimple')}`},
         {value: 'COMPOUND', label: `📈 ${$t('assets.schedule.interestTypeCompound')}`},
     ]);
 
-    // Source of truth: backend/app/schemas/assets.py → DayCountConvention enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → DayCountConvention enum
     const DAY_COUNT_OPTIONS = [
         {value: 'ACT/365', label: 'ACT/365'},
         {value: 'ACT/360', label: 'ACT/360'},
@@ -86,7 +86,7 @@
         {value: '30/360', label: '30/360'},
     ];
 
-    // Source of truth: backend/app/schemas/assets.py → MaturationFrequency enum
+    // Source of truth: backend/app/schemas/assets/scheduled_investment.py → MaturationFrequency enum
     let MATURATION_FREQ_OPTIONS = $derived([
         {value: 'DAILY', label: `🕐 ${$t('assets.schedule.matFreqDaily')}`},
         {value: 'WEEKLY', label: `📅 ${$t('assets.schedule.matFreqWeekly')}`},

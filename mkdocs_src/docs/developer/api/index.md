@@ -24,7 +24,7 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/auth`: Authentication (login, token refresh).
 - `/users`: User management.
 - `/settings`: User settings, admin-managed global settings, scheduler state/logs, and the cache admin routes (`/settings/cache/status`, `/settings/cache/clear/{name}`, `/settings/cache/clear-all` — see [Cache Registry & Admin](../architecture/settings_cache.md)).
-- `/system`: Server info and plugin diagnostics (`/system/plugin-diagnostics`).
+- `/system`: Server info (`/system/info`: the app version only without a session, everything with one), health check (`/system/health`), readiness (`/system/ready`, no session: `200` when the database answers and its schema is at the head revision, `503` otherwise), plugin diagnostics (`/system/plugin-diagnostics`), the connection and container-image checks, and the public instance configuration (`/system/instance`, no session: see [Public instance configuration](../architecture/settings.md#public-instance-configuration)). [System Information and Readiness](../architecture/security.md#system-info-and-readiness) details `/system/info` and `/system/ready`. One module per resource in the `backend/app/api/v1/system/` package, whose `__init__.py` only composes the `/system` router.
 - `/uploads`: File uploads and media serving.
 - `/assets`: Asset management (CRUD, price history) — includes `/prices`, `/provider` (search, live quotes), `/events`.
 - `/transactions`: Transaction management.

@@ -4,7 +4,7 @@ Test Suite: Sync Delta Payload (I-bis #24)
 Covers Phase 7 Part 3 Blocco G.12 — ``FARefreshResult.changed_points``
 contract on ``POST /api/v1/assets/prices/sync``.
 
-Contract (``backend/app/services/asset_source.py`` L2727):
+Contract (``backend/app/services/assets/refresh.py``):
 
     changed_points = (
         changed_items_delta
@@ -43,14 +43,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.models import ProviderInputType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
 )
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import CHANGED_POINTS_PAYLOAD_CAP
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 

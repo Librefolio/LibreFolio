@@ -60,7 +60,7 @@ from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
     BucketDetailLevel,
     BucketingPolicy,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry  # noqa: E402
+from backend.app.services.signals.registry import SignalPluginRegistry  # noqa: E402
 from backend.test_scripts.diagnostics import (  # noqa: E402
     ai_export_technical_density_probe as baseline_helpers,
 )

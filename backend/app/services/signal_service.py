@@ -53,7 +53,6 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.series_preparation import date_is_within_range
 from backend.app.services.signal_annotations import SignalAnnotationService
 from backend.app.services.signal_plugins.base import (
@@ -71,6 +70,7 @@ from backend.app.services.signal_series_preparation import (
     slice_signal_series,
     visible_signal_output_state,
 )
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 logger = get_logger(__name__)
 _ANNOTATION_REQUEST_ADAPTER = TypeAdapter(SignalAnnotationRequest)

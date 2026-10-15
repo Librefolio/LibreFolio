@@ -93,7 +93,8 @@
       "eventPickerCreateNew": "Nouvel événement",
       "eventCreateTitle": "Créer événement pour {asset}",
       "eventCreateAmountRequired": "Le montant est obligatoire",
-      "eventCreateDateRequired": "La date est obligatoire"
+      "eventCreateDateRequired": "La date est obligatoire",
+      "fxDatesHint": "Les dates 'De' et 'À' coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour."
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

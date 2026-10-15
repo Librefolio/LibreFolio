@@ -42,7 +42,7 @@
     "reparseSingle": "Re-parse",
     "previewFile": "Preview file",
     "txCount": "{n} transactions across {k} files",
-    "assetsCount": "{n} unique assets, {m} need resolution",
+    "assetsCount": "{n, plural, one {# unique asset} other {# unique assets}}, {m, plural, one {# needs resolution} other {# need resolution}}",
     "likelyDuplicates": "{n} likely duplicates",
     "viewDetail": "View Detail",
     "detailTitle": "Parse Detail — {file}",
@@ -504,7 +504,14 @@
       "scalable_deposit_file": "This is the export of the Scalable overnight account: read it with the {plugin_name} plugin.",
       "scalable_broker_file": "This is the export of the Scalable broker account: read it with the {plugin_name} plugin.",
       "scalable_prime_file": "This is Scalable's own export of the broker account: read it with the {plugin_name} plugin.",
-      "scalable_mixed_file": "The file mixes the broker account and the overnight account: export the two accounts separately."
+      "scalable_mixed_file": "The file mixes the broker account and the overnight account: export the two accounts separately.",
+      "csv_only": "The {plugin_name} plugin reads only .csv files.",
+      "file_unreadable": "The file could not be read.",
+      "no_header_row": "The file has no header row.",
+      "missing_columns": "{count, plural, one {Required column {columns} not found in the CSV header.} other {Required columns {columns} not found in the CSV header.}}",
+      "no_movement_rows": "The file has no movement rows.",
+      "degiro_csv_only": "Only the CSV export is read: download the Account Statement as CSV.",
+      "degiro_not_account_statement": "This is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",

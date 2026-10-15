@@ -111,6 +111,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/htmlInterpolation.gate.test.ts",
             "src/htmlSink.gate.test.ts",
             "src/clipboardSink.gate.test.ts",
+            "src/themeRoles.gate.test.ts",
+            "src/themeTokens.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
@@ -138,7 +140,11 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
-            "src/lib/components/support/supportLinks.test.ts",
+            "src/lib/i18n/importWizardAssetsCount.test.ts",
+            "src/lib/features/support/supportLinks.test.ts",
+            "src/lib/features/settings/settingsTabs.test.ts",
+            "src/lib/features/instance/instanceConfig.test.ts",
+            "src/lib/features/instance/instanceNotices.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
@@ -191,6 +197,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/ExactQuantityInput.test.ts",
             "src/lib/components/ui/input/TagInput.test.ts",
             "src/lib/components/ui/input/PasswordInput.test.ts",
+            "src/lib/components/ui/input/PasswordStrength.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.reopen.test.ts",
@@ -256,12 +263,12 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
             "src/lib/components/risk/AssetChip.test.ts",
-            "src/lib/components/auth/RegisterCard.test.ts",
-            "src/lib/components/auth/LoginCard.test.ts",
-            "src/lib/components/auth/DonationPopupModal.test.ts",
-            "src/lib/components/support/SupportActions.test.ts",
-            "src/lib/components/support/SocialShareModal.test.ts",
-            "src/lib/components/support/shareNavigation.test.ts",
+            "src/lib/features/auth/RegisterCard.test.ts",
+            "src/lib/features/auth/LoginCard.test.ts",
+            "src/lib/features/support/DonationPopupModal.test.ts",
+            "src/lib/features/support/SupportActions.test.ts",
+            "src/lib/features/support/SocialShareModal.test.ts",
+            "src/lib/features/support/shareNavigation.test.ts",
             "src/lib/utils/clipboard.test.ts",
             "src/lib/utils/core/sanitizeHtml.test.ts",
             "src/lib/components/brokers/BrokerModal.test.ts",
@@ -283,16 +290,17 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/layout/ChangelogModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
-            "src/lib/components/auth/UpdateAvailableModal.test.ts",
-            "src/lib/components/settings/SettingControls.test.ts",
-            "src/lib/components/settings/SettingsLayout.test.ts",
-            "src/lib/components/settings/PasswordChangeModal.test.ts",
-            "src/lib/components/settings/SchedulerConfigModal.test.ts",
-            "src/lib/components/settings/SchedulerLogModal.test.ts",
-            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
-            "src/lib/components/settings/tabs/ProfileTab.test.ts",
-            "src/lib/components/settings/tabs/AboutTab.test.ts",
-            "src/lib/components/settings/tabs/GlobalSettingsTab.test.ts",
+            "src/lib/features/update-check/UpdateAvailableModal.test.ts",
+            "src/lib/features/settings/SettingControls.test.ts",
+            "src/lib/features/settings/SettingsLayout.test.ts",
+            "src/lib/features/settings/PasswordChangeModal.test.ts",
+            "src/lib/features/settings/SchedulerConfigModal.test.ts",
+            "src/lib/features/settings/SchedulerLogModal.test.ts",
+            "src/lib/features/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/features/settings/tabs/ProfileTab.test.ts",
+            "src/lib/features/settings/tabs/AboutTab.test.ts",
+            "src/lib/features/settings/tabs/GlobalSettingsTab.test.ts",
+            "src/routes/(app)/settings/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
@@ -301,6 +309,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/result/text.test.ts",
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
             "src/lib/components/ui/display/BrokerBadge.test.ts",
+            "src/lib/features/instance/components/InstanceNotices.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -347,7 +356,7 @@ def front_onboarding_component_unit(
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
-            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
@@ -443,6 +452,16 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_theme_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the colour roles of the sign-in page, in light and in dark, on desktop and mobile (workstream T, step T-2)."""
+    print_section("Frontend Theme Roles Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/theme-roles.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
 def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -626,7 +645,7 @@ def populate_registry(registry: dict) -> None:
         front_utility_unit,
         test_names=True,
         name="Core Store Unit Tests",
-        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument",
+        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument, and the colour gates of workstream T: the ratchet on the legacy colour classes and literals (no total and no file rises above src/themeRoles.baseline.tsv, a swapped colour is a rise, a move keeps its record and a split is declared), the grammar of the role utilities (no dark: on a role, no unknown role, no element mixing roles with legacy classes, no arbitrary colour value), and the contract of tokens.css (the same base roles in both themes, every utility a declared role, the WCAG contrast pairs in both themes) with the legacy dark remap of app.css exempting migrated elements and losing each rule with its class's last use, and the Settings tab registry (plan A3): today's four tabs with unique URL-safe ids and unique orders, their labels in all four catalogues, their icons and tab modules, admin visible to everyone with canEdit for an administrator only and alignEnd, and visibleSettingsTabs keeping what visible(ctx) allows, sorted by order, without touching its input",
         tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"),
     )
     add_test(
@@ -635,7 +654,7 @@ def populate_registry(registry: dict) -> None:
         front_component_unit,
         test_names=True,
         name="Svelte Component Unit Tests",
-        desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14), plus the promoted primitives and the risk metric card: KpiMetricBar and KpiDivergingFlowBar proving their defaults still render the dashboard bars unchanged after the move out of dashboard/, and that a non-finite percentage renders 0% instead of having `width: NaN%` rejected by the CSS parser and leaving the fill at its previous width, and RiskMetricCard proving by node identity across a loading flip — the same DOM object before and after — that the value never leaves the DOM and the card cannot shift layout, and RiskCardGrid proving the risk cards are laid out by auto-fit rather than by enumerated breakpoints, and that the column floor stays capped at the container width so a narrow screen stacks the cards instead of cropping them, and the laboratory's historical replay section mounted over a real, observed panel controller: a replay answer discarded three times running is disclosed as risk.errors.answer_discarded while a discard the re-ask recovered from is not, and a keyed replay warning is worded through its catalogue key and values in all four locales instead of the backend's English sentence",
+        desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, PasswordInput's decorative icon (aria-hidden, inside the field, no test id when the field has none) and its eye button (K-17: named $_(auth.showPassword) or $_(auth.hidePassword) in aria-label and title, in the tab order, no aria-pressed) and PasswordStrength's checklist (each rule's data-passed, a check or a cross by glyph and by shape, nothing for an empty password, the zxcvbn score in data-strength), SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14), plus the promoted primitives and the risk metric card: KpiMetricBar and KpiDivergingFlowBar proving their defaults still render the dashboard bars unchanged after the move out of dashboard/, and that a non-finite percentage renders 0% instead of having `width: NaN%` rejected by the CSS parser and leaving the fill at its previous width, and RiskMetricCard proving by node identity across a loading flip — the same DOM object before and after — that the value never leaves the DOM and the card cannot shift layout, and RiskCardGrid proving the risk cards are laid out by auto-fit rather than by enumerated breakpoints, and that the column floor stays capped at the container width so a narrow screen stacks the cards instead of cropping them, and the laboratory's historical replay section mounted over a real, observed panel controller: a replay answer discarded three times running is disclosed as risk.errors.answer_discarded while a discard the re-ask recovered from is not, and a keyed replay warning is worded through its catalogue key and values in all four locales instead of the backend's English sentence, and the Settings page as the runtime of the tab registry (plan A3): the bar and the body from SETTINGS_TABS through visibleSettingsTabs, by order, sm:ml-auto from alignEnd alone, props(ctx) spread and kept in step with the auth store, ?tab= applied at the first render without mounting the default body, again on every change and once per value, unknown or hidden ids ignored, and an administrators' tab appearing with the store and taking a pending ?tab=",
         tests="src/lib/components/ui/date/CalendarMonth.test.ts",
     )
     add_test(
@@ -657,7 +676,7 @@ def populate_registry(registry: dict) -> None:
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
-            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
         ),
     )
@@ -683,6 +702,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "theme-roles",
+        front_theme_roles,
+        name="Theme Roles Tests",
+        desc="The sign-in page draws the colour roles of tokens.css, in light and in dark, as the browser resolves them (a probe element per role, never a hex): the login card's surface and border (in dark, proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action, and the register card's password requirements on success-soft once every rule passes; a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set) — workstream T, step T-2",
+        prereq="Test users created",
+        tests="layout/theme-roles.spec.ts",
+    )
     add_test(
         cat,
         "pac-allocator-real",

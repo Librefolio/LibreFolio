@@ -36,7 +36,7 @@ The technical indicators (`services/signal_plugins/`, `services/signal_runtime.p
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
-in the FX service: `convert_bulk()` in `services/fx.py` is the primitive the calculations call.
+in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
 
 ---
 
@@ -117,7 +117,7 @@ flowchart LR
         Math["the calculations"]
     end
     subgraph Infra["Infrastructure"]
-        FX["fx.convert_bulk()"]
+        FX["fx.conversion.convert_bulk()"]
         Settings["settings_service<br/>base currency"]
         Thresholds["data_quality_thresholds"]
         Cache["utils/runtime/cache<br/>TTL cache"]
@@ -134,7 +134,7 @@ flowchart LR
 
 1. **A calculation owns its whole problem.** It takes the plain data of the problem —
    movements, currencies, dates — and calls the infrastructure it needs to complete it:
-   `fx.convert_bulk()` for conversions, the base currency from `settings_service`, the
+   `fx.conversion.convert_bulk()` for conversions, the base currency from `settings_service`, the
    thresholds of `data_quality_thresholds`, the cache. Its caller does not prepare values for
    it: `compute_average_costs()` receives the amounts actually paid and converts each
    acquisition itself, at its own date, in one batched call. A calculation reads its own data
@@ -208,7 +208,7 @@ flowchart LR
         async def fake_convert_bulk(_session, conversions, raise_on_error=False):
             return [None] * len(conversions), []
 
-        # Replaced where conversions.py reads it, not in backend.app.services.fx
+        # Replaced where conversions.py reads it, not in backend.app.services.fx.conversion
         monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
@@ -239,7 +239,7 @@ source of every module of the layer with `ast` — it imports none of them: no d
 server — and fails when:
 
 - a module imports an orchestration service, the API, AI Export, risk (`risk_plugins`
-  included), PAC (`pac_allocator`, `portfolio_allocation_source`) or signals (every `signal*`
+  included), PAC (`pac_allocator`, its planner source in `pac_allocator/source/` included) or signals (every `signal*`
   module), [rule 2](#layer-rules). Every import counts, a lazy one inside a function or one
   under `if TYPE_CHECKING:` included; the infrastructure (`fx`, `settings_service`,
   `data_quality_thresholds`, `utils`, `db`, `schemas`) and the layer's own modules stay

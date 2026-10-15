@@ -1,0 +1,32 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avvisi dell'istanza"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Le sessioni sono firmate con una chiave impostata dall'amministratore.",
+        "ephemeral": "Nessuna chiave di firma delle sessioni è impostata: ogni riavvio disconnette tutti gli utenti.",
+        "short": "La chiave di firma delle sessioni da {source} è lunga {length} caratteri: usane almeno {minimum}, casuali.",
+        "unreadable": "La chiave di firma delle sessioni non si può leggere: {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Ogni segreto è impostato in un solo posto.",
+        "found": "Impostati sia direttamente sia da file: {variables}. Vince il valore diretto e il file viene ignorato."
+      },
+      "instanceKey": {
+        "ok": "La chiave d'istanza è utilizzabile.",
+        "unusable": "La chiave d'istanza non è utilizzabile: {reason}",
+        "permissions": "{path} è accessibile ad altri utenti: la cartella dovrebbe essere 0700 e il file 0600."
+      },
+      "sessionCookie": {
+        "ok": "Il cookie di sessione è Secure ogni volta che il browser usa HTTPS.",
+        "never": "Il cookie di sessione viaggia anche su HTTP in chiaro (SESSION_COOKIE_SECURE=never)."
+      },
+      "logLevel": {
+        "ok": "Il livello di log è adatto alla produzione.",
+        "verbose": "Il livello di log è {log_level}: il log registra dettagli operativi; in produzione basta INFO."
+      }
+    }
+  }
+}

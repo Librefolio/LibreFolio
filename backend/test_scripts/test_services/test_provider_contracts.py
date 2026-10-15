@@ -23,11 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.services.provider_registry import (
-    AssetProviderRegistry,
-    BRIMProviderRegistry,
-    FXProviderRegistry,
-)
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

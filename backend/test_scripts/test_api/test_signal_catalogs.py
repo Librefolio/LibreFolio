@@ -9,8 +9,8 @@ import uuid
 import httpx
 import pytest
 
-from backend.app.api.v1.assets import list_asset_signal_catalog
-from backend.app.api.v1.fx import list_fx_signal_catalog
+from backend.app.api.v1.assets.prices import list_asset_signal_catalog
+from backend.app.api.v1.fx.currencies import list_fx_signal_catalog
 from backend.app.config import get_settings
 from backend.app.schemas.signals import SignalCatalogResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager

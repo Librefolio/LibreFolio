@@ -24,7 +24,7 @@ do not hold without a gate that fails the build when the level regresses.*
 | `PLC0415` | import-outside-toplevel | Imports belong at module top; the few legitimate function-local imports carry a justified `# noqa: PLC0415` |
 | `S110` | try-except-pass | No silent `except: pass` swallows — audit 08/P0-3 fixed the instances, the gate keeps them from coming back |
 | `C901` | cyclomatic complexity | Gated at **10** (`[tool.ruff.lint.mccabe] max-complexity = 10`) — see the policy below |
-| `RUF022` | sorted `__all__` | Barrel modules keep `__all__` sorted — with 4 deliberate exceptions, see below |
+| `RUF022` | sorted `__all__` | Barrel modules keep `__all__` sorted — with 3 deliberate exceptions, see below |
 
 `ruff check backend/` is green under these gates; a regression is a lint failure, not a discussion.
 
@@ -54,8 +54,8 @@ over-threshold function:
 The transaction batch refactor demonstrates the preferred outcome:
 `TransactionService.execute_batch()` no longer has a C901 exemption or
 `TODO(P2-refactor)`. Its former 637-line body is now an approximately 50-line
-orchestrator over `TransactionBatchContext` and ordered functions in
-`transaction_batch_stages.py`.
+orchestrator over `TransactionBatchContext` and ordered functions in the batch stage modules
+(`transaction_batch_stages.py`, `batch_edits.py`, `batch_creates.py`, `batch_costs.py`).
 
 As of 2026-09-11, the current tree carries **201** `# noqa: C901` sites and **24**
 `TODO(P2-refactor)` markers. Relative to the tracked pre-refactor tree,
@@ -73,15 +73,14 @@ grep -rn "TODO(P2-refactor)" backend/ scripts/ --include="*.py" | wc -l
     with the flat-shape justification. If you found real nesting, mark it `TODO(P2-refactor)` —
     or better, extract a helper and drop the noqa entirely.
 
-## 🛢️ The 4 RUF022 exceptions
+## 🛢️ The 3 RUF022 exceptions
 
-`__all__` is kept sorted everywhere **except** four barrel modules that group their exports by
+`__all__` is kept sorted everywhere **except** three barrel modules that group their exports by
 domain with section comments — sorting would scatter related names away from their group:
 
 - `backend/app/db/__init__.py`
 - `backend/app/db/base.py`
 - `backend/app/schemas/__init__.py`
-- `backend/app/schemas/assets.py`
 
 Each carries `# noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names`.
 
@@ -102,7 +101,7 @@ Two JSON-safety helpers coexist with **opposite** error policies, and they must 
   checks a value is natively JSON-serializable and raises `ValueError` otherwise. Used by Pydantic
   `field_validator`s on contract boundaries (signals, AI Export payloads), where a non-JSON value
   means the *producer* is broken and must be rejected.
-- **`_json_safe_details`** (local to `backend/app/services/asset_source.py`) — the **sanitizer**:
+- **`_json_safe_details`** (defined in `backend/app/services/assets/core.py`) — the **sanitizer**:
   stringifies anything non-primitive and never raises. It exists for one field
   (`AssetSourceError.details` in provider diagnostics), preserves `None`/empty as "omit the field",
   and sanitizes one list level deep — exactly what provider-error localization needs.
