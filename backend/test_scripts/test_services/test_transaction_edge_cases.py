@@ -6,7 +6,7 @@ See checklist: 01_test_broker_transaction_subsystem.md - Category 6
 
 Reference:
 - backend/app/services/transactions/transaction_service.py
-- backend/app/schemas/transactions.py
+- backend/app/schemas/transactions/transactions.py
 """
 
 import sys
@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem, TXQueryParams
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk

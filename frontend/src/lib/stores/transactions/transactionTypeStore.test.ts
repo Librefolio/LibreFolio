@@ -18,7 +18,7 @@
  * findPromoteMatch answers on an empty cache too.
  *
  * Node env. `$lib/api` is mocked: GET /transactions/types answers six types copied from the
- * backend's TX_TYPE_METADATA (backend/app/schemas/transactions.py), in its order and through
+ * backend's TX_TYPE_METADATA (backend/app/schemas/transactions/transactions.py), in its order and through
  * the generated schema the real client applies. The store caches the response at module
  * level and never drops it, so it is loaded once, in beforeAll.
  */

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction, TransactionType, UserRole
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     TX_TYPE_METADATA,
     PairFieldConstraint,
     TXPromoteSuggestCandidate,

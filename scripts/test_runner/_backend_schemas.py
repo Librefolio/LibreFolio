@@ -45,7 +45,7 @@ def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
-    print_info("Testing: backend/app/schemas/transactions.py")
+    print_info("Testing: backend/app/schemas/transactions/transactions.py")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_transaction_schemas.py", test_names)
 

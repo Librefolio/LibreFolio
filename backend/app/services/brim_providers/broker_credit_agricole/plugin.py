@@ -92,7 +92,7 @@ from backend.app.schemas.brim import (
     BRIMValidationIssue,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io

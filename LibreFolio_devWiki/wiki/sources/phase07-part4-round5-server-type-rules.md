@@ -49,6 +49,6 @@ Replaced 3 hardcoded frontend files (`transactionTypeRules.ts`, `transactionType
 | Unified bulk modal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Transaction picker | `frontend/src/lib/components/transactions/modals/TransactionPickerModal.svelte` |
 | Types endpoint | `backend/app/api/v1/transactions.py` — `GET /transactions/types` |
-| Type metadata schemas | `backend/app/schemas/transactions.py` — `TXTypeMetadata`, `EventTypeMetadata`, `TXTypesResponse` |
+| Type metadata schemas | `backend/app/schemas/transactions/transactions.py` — `TXTypeMetadata`, `EventTypeMetadata`, `TXTypesResponse` |
 | Original plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
 

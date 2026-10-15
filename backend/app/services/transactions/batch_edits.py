@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     TXBatchResultItem,
     TXUpdateItem,
     TXValidationCode,

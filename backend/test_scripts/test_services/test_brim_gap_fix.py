@@ -70,7 +70,7 @@ from backend.app.db.models import Asset, Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAbsorbed, BRIMCheckpoint, BRIMFieldTodo, BRIMNotice, BRIMParseOutput, BRIMTruthCash, BRIMTruthPosition, BRIMVerification
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_sets
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry

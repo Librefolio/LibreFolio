@@ -391,7 +391,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 
 @register_provider(BRIMProviderRegistry)
 class MyBrokerProvider(BRIMProvider):
@@ -503,7 +503,7 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import register_provider
@@ -926,7 +926,7 @@ BRIMFieldTodo(
 
 !!! warning "Accrued interest is a `FEE`, never an `INTEREST`"
 
-    `schemas/transactions.py` rule 11 requires `cash > 0` for `INTEREST`, and accrued
+    `schemas/transactions/transactions.py` rule 11 requires `cash > 0` for `INTEREST`, and accrued
     interest paid on a purchase is money **leaving**. `FEE` is also the semantically right
     answer, not a workaround: accrued interest is not part of the security's cost — it comes
     back with the first gross coupon — and `FEE` is exactly the type the FIFO engine keeps

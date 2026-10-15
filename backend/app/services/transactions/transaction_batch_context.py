@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 
 from backend.app.db.models import Transaction
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     TXBatchResultItem,
     TXCreateItem,
     TXPromoteBatchItem,

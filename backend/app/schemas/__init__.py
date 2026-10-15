@@ -11,7 +11,7 @@ and standardize data exchange between components.
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
 - fx.py: FX-specific schemas (conversion, upsert, delete, pair sources)
-- transactions.py: Transaction CRUD schemas (TX prefix)
+- transactions/: Transaction schemas (TX prefix) — transactions.py (CRUD, batch, validation, promotion, type metadata)
 - brokers.py: Broker CRUD schemas
 
 **Naming Conventions**:
@@ -230,7 +230,7 @@ if TYPE_CHECKING:
         PluginDiscoveryFailureInfo,
         SystemInfoResponse,
     )
-    from backend.app.schemas.transactions import (
+    from backend.app.schemas.transactions.transactions import (
         TX_TYPE_METADATA,
         FieldMode,
         PairFieldConstraint,
@@ -656,7 +656,7 @@ _EXPORT_GROUPS = {
         "PluginDiscoveryFailureInfo",
         "SystemInfoResponse",
     ),
-    "transactions": (
+    "transactions.transactions": (
         "TX_TYPE_METADATA",
         "FieldMode",
         "PairFieldConstraint",

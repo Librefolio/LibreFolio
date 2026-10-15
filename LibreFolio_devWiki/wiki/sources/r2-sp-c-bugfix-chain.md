@@ -167,7 +167,7 @@ Components that display computed data should be **controlled** (props-in, callba
 | PromoteMergeModal | `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` |
 | FX store registry (lookupFxRate) | `frontend/src/lib/stores/fxStoreRegistry.ts` |
 | TX types (PendingOp, DraftFields) | `frontend/src/lib/components/transactions/types.ts` |
-| TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions.py` |
+| TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions/transactions.py` |
 | TX service (compute_wac_iterative) | `backend/app/services/transactions/transaction_service.py` |
 | Financial utils (WAC math; financial_utils.py → wac_utils.py → the average-cost function, 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Asset source (get_prices_bulk) | `backend/app/services/assets/price_query.py` |
