@@ -9,10 +9,15 @@
  * the client validates it against the generated schema (Zodios), and a body that drifted from the backend would be
  * refused — the page would keep its defaults, and the test would read them as the mode it asked for.
  *
+ * The one hand-built body, `plainInstanceConfig()`, is for specs whose data is entirely synthetic: they let no request
+ * reach the shared backend, so there is no real response to change, and nothing they assert depends on this read.
+ *
  * Users: auth.spec.ts («Register link and the registration setting») and auth-links.spec.ts (valid invitations on an
- * instance by invitation only, and on one whose registration is disabled).
+ * instance by invitation only, and on one whose registration is disabled); `plainInstanceConfig()`:
+ * files-uploader.spec.ts and layout/header-scroll.spec.ts.
  */
 import type {APIResponse} from '@playwright/test';
+import {schemas} from '../../src/lib/api/generated';
 import type {Page} from './playwright';
 
 export type RegistrationMode = 'open' | 'invite' | 'disabled';
@@ -134,4 +139,23 @@ export async function serveRegistrationMode(page: Page, mode: RegistrationMode |
             await page.unroute(isInstanceConfig, handler);
         },
     };
+}
+
+/**
+ * The body of `GET /api/v1/system/instance` for a plain instance, as the backend answers it today: self-hosted,
+ * anyone may register, the mode not pinned by the environment. For a spec whose data is entirely synthetic and which
+ * must still declare this read: the app makes it on every page load (instanceConfig.svelte.ts), and such a spec
+ * refuses any request it did not declare.
+ *
+ * The client validates the answer with Zod (the generated schema, through Zodios): a body that drifted from the backend
+ * would be refused, and the page would keep its defaults — the same plain instance, so the drift would go unseen. Hence
+ * the check against that schema here: a contract that moves fails by name, in the spec that asked for the body.
+ *
+ * It answers the read; it cannot test what the configuration changes. A spec that needs real behaviour (the
+ * registration mode) uses `serveRegistrationMode()` above: the real response, with one field changed.
+ */
+export function plainInstanceConfig() {
+    const body = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}} as const;
+    schemas.InstanceConfigResponse.parse(body);
+    return body;
 }
