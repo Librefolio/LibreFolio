@@ -29,6 +29,7 @@ from backend.app.db.models import FxConversionRoute
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.fx import FXConversionRouteItem, FXConversionRouteReadItem, FXDeleteItem, FXUpsertItem
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, FXSyncPairResult, SyncDateRangeModel, SyncStatus
+from backend.app.services.fx import catalog as fx_catalog
 from backend.test_scripts.test_utils import print_section, print_success
 
 
@@ -36,6 +37,23 @@ def _mock_scalar_result(items):
     result = Mock()
     result.scalars.return_value.all.return_value = items
     return result
+
+
+def _forget_catalog_currencies(code: str) -> None:
+    fx_catalog._currencies_cache.delete(code)
+    fx_catalog._last_known.pop(code, None)
+
+
+@pytest.fixture
+def fed_currencies_not_cached():
+    """X-R8: list_providers reads target currencies through the process-wide catalog cache (services/fx/catalog.py).
+
+    The FED entry and its last known list are dropped before the test, so an earlier call in this process cannot answer
+    instead of the dummy provider, and after it, so the dummy list does not stay cached for 24 h in this pytest process.
+    """
+    _forget_catalog_currencies("FED")
+    yield
+    _forget_catalog_currencies("FED")
 
 
 def test_build_providers_description_lists_codes(monkeypatch):
@@ -59,6 +77,7 @@ def test_build_providers_description_lists_codes(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("fed_currencies_not_cached")
 async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
     """list_providers should hide internal providers and sort target currencies."""
     print_section("list_providers")
