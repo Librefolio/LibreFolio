@@ -2632,6 +2632,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - **Cura**: un `detail` con `error_code` (per esempio `LAST_ADMIN`) e un messaggio tradotto nel dialogo. Cambia la
     forma della risposta, quindi servono un rosso e l'aggiornamento dei casi ACCDEL sull'unico amministratore.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6b.2».
+- **A-17 · KeePassXC mette la sua icona sul campo Email della registrazione** — basso; segnalata dal coordinatore
+  colori (15/10).
+  - KeePassXC prende come nome utente il campo subito prima della password, e in `RegisterCard` quel campo è Email.
+  - Possibile cura: Email prima di Username, nella registrazione e nella pagina d'invito che usa la stessa scheda.
+    Attenzione a T-8b dei colori, che tocca le stesse schede di accesso: si fa dopo il suo ingresso.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
