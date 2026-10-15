@@ -59,6 +59,6 @@ Found by workstream D on 2026-09-24/25, while making SCIP's status the proof (D-
 | Role | Path |
 |------|------|
 | Fee rows, bounds and the cap binary | `backend/app/services/pac_allocator/constraints.py` |
-| Exact fee rules in the replay | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact fee rules in the replay | `backend/app/services/pac_allocator/evaluation/economics.py` |
 | Policy and fee tests | `backend/test_scripts/test_services/test_pac_planner_policies.py` |
 | Round 5 plan (Passo F, X2 and QX1-a) | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md` |
