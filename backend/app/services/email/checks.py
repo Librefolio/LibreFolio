@@ -77,7 +77,8 @@ def check_smtp_encryption() -> ConfigCheck:
 
 def check_email_links() -> ConfigCheck:
     """Emails can carry links only with ``LIBREFOLIO_PUBLIC_URL``: said when email works and the variable is missing
-    (``info``) or not an http(s) address (``warning``). Email off: nothing to say."""
+    (``info``) or cannot start a link (``warning``: not http(s), no host, a user name, a password, a ``?`` or ``#``,
+    a space, a bad port). Email off: nothing to say."""
     from backend.app.services.email.links import links_state  # noqa: PLC0415 — keeps config_audit's imports light
     from backend.app.services.platform.config_audit import ConfigCheck  # noqa: PLC0415 — config_audit imports this module
 
@@ -90,7 +91,7 @@ def check_email_links() -> ConfigCheck:
             check_id,
             "warning",
             "email.checks.links.invalid",
-            summary="LIBREFOLIO_PUBLIC_URL is not an http(s) address: no email with a link (forgotten password, invitation, reset) can go out",
+            summary="LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out",
         )
     return ConfigCheck(
         check_id,

@@ -1,19 +1,21 @@
 <!--
-  Settings › Email, for administrators (workstream E, lot E2): the state of the instance's email, the configuration
-  checks worth a word, the hourly budget, and a test email to one's own address.
+  Settings › Email, for administrators (workstream E, lots E2 and E3): the state of the instance's email, the
+  configuration checks worth a word, the hourly budget, a test email to one's own address, and the base of the emailed
+  links checked from this browser (developer decision 45).
 
   The SMTP configuration itself never reaches the browser (F04): `GET /email/status` gives the state, the problem and
-  the variable at fault, the checks (an i18n key and its parameters) and the budget. Colours are roles only
-  (theme-roles skill): every class is a whole literal in `emailText.ts` or here.
+  the variable at fault, the checks (an i18n key and its parameters), the budget and the links' base. Colours are roles
+  only (theme-roles skill): every class is a whole literal in `emailText.ts` or here.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {Mail, Send} from 'lucide-svelte';
+    import {Mail, RefreshCw, Send} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {fetchEmailStatus, readTestFailure, sendTestEmail, type EmailCheck, type EmailStatus, type EmailTestFailure} from './emailApi';
-    import {minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
+    import {fetchEmailStatus, issueProbeNonce, readTestFailure, sendTestEmail, type EmailCheck, type EmailStatus, type EmailTestFailure} from './emailApi';
+    import {probeEmailLinks, type LinksProbeState} from './emailLinks';
+    import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
 
     let status = $state<EmailStatus | null>(null);
     let loading = $state(true);
@@ -29,6 +31,42 @@
 
     /** Only the latest read writes: an older answer never replaces a newer one, nor ends its `loading`. */
     let loadGeneration = 0;
+
+    /** The base of the emailed links, when emails with a link can go out: the address the browser checks. */
+    const linksBase = $derived(status?.state === 'ready' && status.links.ready ? status.links.base : null);
+    /** The check of `linksBase` from this browser: null until there is a base to check. */
+    let linksProbe = $state<LinksProbeState | null>(null);
+    /** The base checked last: a new read of the state (after a test email) does not check the same base again. */
+    let probedBase: string | null = null;
+    /** Only the latest check writes: «Check again», a new base or leaving the tab drops an older one. */
+    let probeGeneration = 0;
+
+    async function checkLinks(base: string): Promise<void> {
+        const generation = ++probeGeneration;
+        probedBase = base;
+        linksProbe = 'checking';
+        const outcome = await probeEmailLinks(base, {pageProtocol: window.location.protocol, issueNonce: issueProbeNonce});
+        if (generation !== probeGeneration) return;
+        linksProbe = outcome;
+        notify({name: 'email.links.checked', detail: {outcome}});
+    }
+
+    function checkLinksAgain(): void {
+        if (linksBase !== null) void checkLinks(linksBase);
+    }
+
+    $effect(() => {
+        const base = linksBase;
+        if (base === null) {
+            probedBase = null;
+            linksProbe = null;
+            return;
+        }
+        if (base !== probedBase) void checkLinks(base);
+        return () => {
+            probeGeneration++;
+        };
+    });
 
     async function load(): Promise<void> {
         const generation = ++loadGeneration;
@@ -114,6 +152,23 @@
                     </li>
                 {/each}
             </ul>
+        {/if}
+
+        {#if linksBase !== null}
+            <div class="space-y-2" data-testid="email-links" data-base={linksBase} data-busy={linksProbe === 'checking' ? 'true' : 'false'} aria-busy={linksProbe === 'checking'}>
+                <p class="text-sm text-lf-secondary" data-testid="email-links-base">{$_('email.links.base', {values: {base: linksBase}})}</p>
+                {#if linksProbe !== null}
+                    <p class={LINKS_PROBE_CLASSES[linksProbe]} aria-live="polite" data-testid="email-links-probe" data-outcome={linksProbe}>
+                        {$_(LINKS_PROBE_KEYS[linksProbe])}
+                    </p>
+                {/if}
+                {#if linksProbeWarns(linksProbe)}
+                    <button type="button" class="inline-flex items-center gap-1.5 rounded-md border border-lf-input bg-lf-card px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={checkLinksAgain} data-testid="email-links-recheck">
+                        <RefreshCw class="h-4 w-4" aria-hidden="true" />
+                        {$_('email.links.recheck')}
+                    </button>
+                {/if}
+            </div>
         {/if}
 
         {#if status.state === 'ready'}
