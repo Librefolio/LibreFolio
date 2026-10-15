@@ -2358,12 +2358,16 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
 - ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
   coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4. ✅ Chiusa da X il 15/10
   (`743fca514`).
-- **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
+- ✅ **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
   (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
   d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
   lascia aperta una `aiosqlite.Connection` creata durante il test (registrando le connessioni create e controllando
   al teardown, come la sonda usata per C-93). Il conftest è condiviso: decide il coordinatore. Dettagli: piano J, §10
   «C-93».
+  - 15/10, J: chiusa al checkpoint J-6. Fixture autouse `_aiosqlite_leak_guard` nel `conftest.py` condiviso: un
+    test che lascia aperta una connessione aiosqlite creata nel thread principale ha un ERROR al proprio teardown, con
+    lo stack di creazione; elenco esplicito `AIOSQLITE_LEAK_EXCEPTIONS`, vuoto. Self-test in `utils
+    gate-aiosqlite-leak` (9). `all-backend --workers 2` verde senza rapporti. Dettagli: piano J, §10 «J-6».
 
 ## Z · Sospensione e risveglio (fase 01)
 
