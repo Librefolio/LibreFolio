@@ -1453,3 +1453,29 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   2. `docs(journal): A4 progress, A backlog`.
 > - **Dopo il commit**: l'aggiornamento di base porta il CP3 di H. Poi viene la parte `sv` di A4, con un suo
 >   checkpoint.
+>
+> **Esito**: il coordinatore ha committato `75a8af5a7` (`feat(accounts): migration 005 and account tokens`, 12 file) e
+> `a170c68c0` (journal). Prima del commit ha corretto un'attribuzione nella docstring della 005 e in
+> `database/users_access.md`: `email_verified_at` a `NULL` è una «coordinator decision», non del developer, perché
+> l'ha decisa lui sulla mia proposta.
+>
+> Poi ha aggiornato la base con il merge `3ebf4c043` di `dev_release2` a `0902524e5`. Il merge porta H CP3 (segreti da
+> `*_FILE`, chiave d'istanza, guardie `config-package` e `config-env-example`), X CP2b, W K1, il lotto
+> `web_link_finder` di H, J CP-1 e W4 CP6 (BRIM in `services/brim/`).
+> - Unione automatica di 6 file: `models.py`, `db_schema_validate.py`, `_backend_services.py`, `security.md`,
+>   `database/index.md` e il backlog.
+> - Catena delle migrazioni lineare 004 → 005.
+> - Su `patterns/alembic.md` (A-7): la corregge chi tocca per primo una migrazione su una tabella referenziata.
+
+#### A4.7 — Validazione completa della revisione combinata `3ebf4c043` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a4c_validate.sh`, corsia 6182, dalle 04:46 alle 05:14, tutto exit 0):
+> - `dev.py front build --debug`: svelte-check 0/0. `dev.py mkdocs build`: exit 0. Entrambi prima di `all-backend`, per
+>   l'avvio del server.
+> - `services account-tokens`: **64**. `db migration-005`: **25**. `db create`, poi `db validate` **17** e
+>   `db post-migration` **37**.
+> - `services config-package`: **568** passati; la scansione ora comprende `token_service.py`, che non legge
+>   l'ambiente. `services config-env-example`: **36**.
+> - `check-orphans`: 367 unitari, 118 E2E e 272 file backend, tutti registrati e raggiungibili.
+> - **`all-backend`**: uscita 0, **7/7 categorie**, 24 min. 24 righe di riepilogo pytest: **13 960 passati,
+>   28 saltati, 0 falliti**.
+> - `git diff --check` pulito, porta 6182 libera, worktree pulito prima di questa nota.
