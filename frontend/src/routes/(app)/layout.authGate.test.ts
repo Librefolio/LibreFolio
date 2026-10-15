@@ -128,6 +128,9 @@ vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte', 
 vi.mock('$lib/features/onboarding/components/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/instance/components/InstanceNotices.svelte', () => ({default: mocks.noopComponent}));
+// The instance block (H, CP6) stays off here: the auth gate is the subject, and the block page is a no-op like every child.
+vi.mock('$lib/features/instance/instanceBlock.svelte', () => ({instanceBlock: {blocked: false, markBlocked: vi.fn(), clear: vi.fn()}}));
+vi.mock('$lib/features/instance/components/InstanceBlockedPage.svelte', () => ({default: mocks.noopComponent}));
 
 import {cleanup, fireEvent, render, screen, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';

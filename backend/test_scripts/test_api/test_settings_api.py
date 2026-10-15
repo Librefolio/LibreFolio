@@ -1032,7 +1032,7 @@ class TestGlobalSettingsList:
             resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
 
             # Global settings have PUBLIC read access by design
-            # (needed for frontend to check enable_registration, etc.)
+            # (needed for frontend to check registration_mode, etc.)
             assert resp.status_code == 200, f"Expected 200 (public access), got {resp.status_code}"
             data = resp.json()
             assert "items" in data, "Response should contain 'items' key"
@@ -1585,11 +1585,12 @@ _INVALID_GLOBAL_VALUES = [
     # int 1..365
     pytest.param("scheduler_history_sync_horizon_days", "0", id="sync_horizon_days-below_min"),
     pytest.param("scheduler_history_sync_horizon_days", "366", id="sync_horizon_days-above_max"),
+    # One of open, invite, disabled. Every user registration of the lane depends on
+    # registration_mode, so it gets a single refused value, never an accepted one.
+    pytest.param("registration_mode", "closed", id="registration_mode-unknown_choice"),
     # bool: true/false/1/0/yes/no/on/off in any case, nothing else. Every invalid
-    # spelling reads back as False, so enable_registration (which every user
-    # registration depends on) gets a single typo; the variants go on
-    # require_email_verification, which nothing reads yet.
-    pytest.param("enable_registration", "ture", id="enable_registration-typo"),
+    # spelling reads back as False; the variants go on require_email_verification,
+    # which nothing reads yet.
     pytest.param("require_email_verification", "", id="require_email_verification-empty"),
     pytest.param("require_email_verification", "2", id="require_email_verification-not_0_or_1"),
     pytest.param("require_email_verification", "y", id="require_email_verification-y_is_not_yes"),

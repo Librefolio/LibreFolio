@@ -49,7 +49,11 @@ else `~/LibreFolio_visual_review`.
   `git describe` by default and so differs between any two commits. `gallery_snapshot.sh` exports
   `LF_APP_VERSION` (default `v0.0.0-review`) and rebuilds the frontend in debug mode first when the checkout's
   build does not carry it (`build.log` in the snapshot). `meta.json` records it as `app_version`.
-- A full gallery takes about **31–34 min** at 10 workers and about **500 MB** (four languages).
+- A full gallery takes about **30 min** at **6 workers** (`-- --workers 6`) and about **500 MB** (four languages).
+  Until C-94 (J) makes the default about 60 % of the cores, do not leave the worker count at its default:
+  `dev.py mkdocs gallery` starts one browser worker per CPU plus three server workers, which saturates a 10-core
+  machine. On 15/10/2026 a run at 10 workers reached load 65 and had 8 red tests in its first 10 minutes, with requests
+  stuck for 10–20 s; the same tests passed alone, and two full runs at 6 workers had none.
   A `diff` of two full snapshots takes about 3.5 min. The designer package weighs about 120 MB per language.
 
 ## Workflow
@@ -57,8 +61,8 @@ else `~/LibreFolio_visual_review`.
 ### 1. Noise baseline (once per comparison day)
 Two captures of the same commit show what changes on its own:
 ```bash
-scripts/visual_review/gallery_snapshot.sh base-r1
-scripts/visual_review/gallery_snapshot.sh base-r2
+scripts/visual_review/gallery_snapshot.sh base-r1 -- --workers 6
+scripts/visual_review/gallery_snapshot.sh base-r2 -- --workers 6
 W=/Users/ea_enel/Documents/00_My/LibreFolio_subRepo/LibreFolio_visual_review   # the default work dir on the developer's machine
 pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/base-r1 $W/snapshots/base-r2   # must exit 0
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/base-r1 $W/snapshots/base-r2 \
@@ -86,8 +90,8 @@ A diff on an `unstable` shot is weak evidence: compare it by eye.
 ### 2. Check a change
 Capture the reference and the candidate on the **same day**. They may run in parallel on two lanes:
 ```bash
-scripts/visual_review/gallery_snapshot.sh ref                                   # target checkout, lane 6150
-scripts/visual_review/gallery_snapshot.sh cand --checkout <worktree> --port 6151 --data-dir /tmp/librefolio-r2-x
+scripts/visual_review/gallery_snapshot.sh ref -- --workers 6                    # target checkout, lane 6150
+scripts/visual_review/gallery_snapshot.sh cand --checkout <worktree> --port 6151 --data-dir /tmp/librefolio-r2-x -- --workers 6
 pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/ref $W/snapshots/cand   # must exit 0
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/ref $W/snapshots/cand --out $W/diffs/ref__vs__cand \
     --ignore-masks $W/diffs/noise/masks --stability $W/diffs/noise/stability.json
@@ -123,21 +127,33 @@ pipenv run python -m scripts.visual_review.color_inventory            # → $W/i
 pipenv run python -m scripts.visual_review.build_review_notes $W/snapshots/ref   # → $W/notes/NOTE_DESIGNER.md
 ```
 
-## Known gallery behaviour (14/10/2026, commit `27228466c`)
+## Known gallery behaviour (15/10/2026, commit `2338aaf79`)
 
-- **Failures under a full run.** Two full runs at 10 workers each had 4–5 failed tests, all on desktop, and a different set each time:
-  - login stuck on «auth-loading» in the first burst of tests;
-  - three transaction modals;
-  - `Dashboard Risk › what-if crisis replay`.
+Two full runs of the same commit (`g-final3-r1`/`r2`, 6 workers, both clean for `live_price_check`). The analysis of
+every unstable and medium shot is in G's evidence:
+[analysis-final-2026-10-15.md](../../LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 
-  The failed tests passed again in isolation (`-- --no-populate --desktop-only -w 5 -f "<names>"`).
-- **The what-if replay preset** failed on desktop in 2 of 3 runs. The crisis menu opens with the option, but
-  `chooseReplayPreset` (`frontend/e2e/fixtures/galleryRiskDashboard.ts`) never stops on it.
-- **27 shots of 177 are `unstable`.** Two causes seen so far:
-  - the animated login background, not fully frozen (`auth/*`);
-  - a scroll offset of a few pixels that shifts a whole panel (`*/fifo-lots-panel`, `*/fifo-lots-wac-chart`).
+- **No red test at 6 workers.** The failures of the 14/10 full runs did not recur: login stuck on «auth-loading», three
+  transaction modals, `Dashboard Risk › what-if crisis replay`. At 10 workers the machine saturates (see above).
+- **The what-if replay preset** is now chosen in every run: `chooseReplayPreset` parks the pointer and walks the menu
+  in both directions (G-3).
+- **6 shots of 177 are `unstable`**, down from 27 on 14/10.
+  - By content, accepted:
+    - `media/asset-picker-modal`: the seed's image order;
+    - `brokers/import-nway-compare`: the order of the set's two files.
+  - By framing, fixed by G after the measure (checkpoint 2). A `scrollIntoViewIfNeeded()` depended on where the page
+    was:
+    - `assets/detail-measures` and `detail-measures-active` on the phone;
+    - `settings/about-plugin-diagnostics` on the phone;
+    - the page behind the modal of `settings/scheduler-config`.
 
-  Making the gallery deterministic (frozen background, no smooth scrolling, stable scroll position) would turn
-  most of them into `stable`.
+    Verified alone twice: all stable or `low`, except one variant. On the phone in `es/light`, the header of
+    `assets/detail-measures` can stay visible where the page ends before the chart (G-11).
+- **The seeded scheduler log has fixed times on the day before**, and its modal lists the last 24 hours. A reference
+  and a candidate taken on two sides of about 06:00, 12:10, 18:00 or 23:00 differ in `settings/scheduler-log`.
+  This is content.
+- **19 shots are `medium`.**
+  - Content: times, the names of disposable accounts, random codes, durations measured in ms, the order of uploaded files.
+  - Two render residues: the sticky cells of the FIFO lots table, and the antialiasing of the RSI and MACD canvases.
 - **Screenshots are sRGB.** Tailwind v4 colours are OKLCH and often outside sRGB, so the live app on a wide-gamut
   display (recent Macs) looks more saturated than the PNGs.

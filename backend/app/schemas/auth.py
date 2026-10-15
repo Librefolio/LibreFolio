@@ -4,10 +4,11 @@ Authentication Schemas
 Pydantic models for auth API requests/responses.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+from backend.app.schemas.common import StrictModel
 from backend.app.schemas.settings import UserSettingsRead
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -29,6 +30,21 @@ class AuthRegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="Username")
     email: EmailStr = Field(..., description="Email address")
     password: str = Field(..., min_length=8, description="Password (min 8 chars)")
+    invite_token: Optional[str] = Field(None, min_length=1, max_length=200, description="Token of an invitation link: required when registration is by invitation, optional otherwise; it sets the role of the account")
+
+
+class TokenInspectRequest(StrictModel):
+    """``POST /auth/tokens/inspect``: what a link's token is worth, asked by whoever holds it."""
+
+    token: str = Field(..., min_length=1, max_length=200, description="The token of the link")
+    purpose: Literal["invite", "password_reset"] = Field(..., description="What the link is for: a token of another purpose is unknown")
+
+
+class PasswordResetRequest(StrictModel):
+    """``POST /auth/password-reset``: spend a password-reset link."""
+
+    token: str = Field(..., min_length=1, max_length=200, description="The token of the password-reset link")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
 
 
 class ChangePasswordRequest(BaseModel):
@@ -91,6 +107,30 @@ class AuthRegisterResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Registration successful"
+
+
+class TokenInspectResponse(StrictModel):
+    """The status of a link's token; the details only when it is valid, and only to whoever holds it."""
+
+    status: Literal["valid", "expired", "consumed", "revoked", "unknown"] = Field(..., description="unknown also for a token of another purpose")
+    purpose: Literal["invite", "password_reset"]
+    expires_at: Optional[UTCDateTime] = Field(None, description="When the link stops working (valid links only)")
+    grants_admin: Optional[bool] = Field(None, description="Invitation only: the account it creates is an administrator")
+    email: Optional[str] = Field(None, description="Invitation only: the address the administrator wrote, if any (a suggestion, not a constraint)")
+    username: Optional[str] = Field(None, description="Password reset only: the account whose password the link resets")
+
+
+class PasswordResetResponse(StrictModel):
+    """Response after a password reset through a link."""
+
+    message: str = "Password reset successfully"
+
+
+class AccountsInstanceConfig(StrictModel):
+    """The accounts part of ``GET /system/instance``: public, the same for whoever asks."""
+
+    registration_mode: Literal["open", "invite", "disabled"] = Field(..., description="Who may create an account: open (anyone), invite (an invitation link), disabled (nobody)")
+    registration_locked: bool = Field(..., description="LIBREFOLIO_REGISTRATION pins the mode: the global setting cannot change it")
 
 
 class ChangePasswordResponse(BaseModel):
