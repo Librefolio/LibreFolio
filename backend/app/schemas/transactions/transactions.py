@@ -31,6 +31,7 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
+from backend.app.schemas.transactions.type_metadata import cost_basis_allowed
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -187,23 +188,15 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
         if tx_type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
             errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
 
-    # Rule 12: cost_basis_mode is only valid for:
-    #   - TRANSFER with quantity > 0 (receiver side)
-    #   - ADJUSTMENT with quantity > 0
-    if cost_basis_mode is not None:
-        cbm_valid = False
-        if tx_type == TransactionType.TRANSFER and quantity > zero:
-            cbm_valid = True
-        elif tx_type == TransactionType.ADJUSTMENT and quantity > zero:
-            cbm_valid = True
-        if not cbm_valid:
-            errors.append(
-                PydanticCustomError(
-                    "costBasisModeIncompatible",
-                    "cost_basis_mode is only valid for TRANSFER receiver (qty>0) or ADJUSTMENT (qty>0), got {type} qty={qty}",
-                    {"type": t, "qty": str(quantity)},
-                )
+    # Rule 12: cost_basis_mode only where TX_TYPE_METADATA lets a cost basis in (cost_basis_allowed, W-B31).
+    if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity):
+        errors.append(
+            PydanticCustomError(
+                "costBasisModeIncompatible",
+                "cost_basis_mode is not valid for {type} with qty={qty}: that type and side take no cost basis",
+                {"type": t, "qty": str(quantity)},
             )
+        )
 
     return errors
 
@@ -499,31 +492,6 @@ class TXReadItem(StrictModel):
 # =============================================================================
 # TRANSACTION UPDATE
 # =============================================================================
-
-# Sign-flip swap groups: types with identical field structure that can be
-# swapped.  Types not listed here are singletons (swap group = [self]).
-# Paired types are currently singletons but this may evolve.
-SWAP_GROUPS: list[frozenset[TransactionType]] = [
-    frozenset({TransactionType.BUY, TransactionType.SELL}),
-    frozenset({TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}),
-    frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST}),
-    frozenset({TransactionType.TAX, TransactionType.FEE}),
-]
-
-
-def get_swap_group(tx_type: TransactionType) -> frozenset[TransactionType]:
-    """Return the swap group containing *tx_type*, or a singleton frozenset."""
-    for group in SWAP_GROUPS:
-        if tx_type in group:
-            return group
-    return frozenset({tx_type})
-
-
-def _swap_group_codes(tx_type: TransactionType) -> list[str]:
-    """Return swap partners as a sorted list of code strings (EXCLUDING self).
-    Empty list = no swap possible (singleton or paired type)."""
-    group = get_swap_group(tx_type)
-    return sorted(t.value for t in group if t != tx_type)
 
 
 class TXUpdateItem(StrictModel):
