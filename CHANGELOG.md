@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plugin settings, the foundation**: an asset or exchange-rate provider plugin can declare the settings it needs (an API key, a region, a limit). Administrators set the instance-wide ones and each user their own, through `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk` (all or nothing). Secrets are write-only and stored encrypted with a key derived from the instance key. An instance-wide field can also come from `LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>` or its `_FILE` form, which locks it. The shipped plugins declare none yet; the settings screen comes later.
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
+- `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
 
 ### 🔄 Changed
 
@@ -109,6 +110,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The growth chart's % view comes back by itself.** With a period or a broker that has no rate-of-return data, the chart shows **Abs**, and returns to **%** as soon as the data has percentages again, unless you pick another view meanwhile. Before, only the view restored at opening fell back; otherwise **%** stayed pressed and greyed out.
 - **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
 - The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
+
+#### 🔒 Security
+
+- **Broker reports uploaded by older versions are no longer open to every user.** A report stored without a broker could be listed, read, parsed and deleted by any signed-in user. Now only the user who uploaded it and an administrator can reach it, and only an administrator when no uploader was recorded.
+- **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
+- **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
 
 ### ⚠️ Breaking changes
 
