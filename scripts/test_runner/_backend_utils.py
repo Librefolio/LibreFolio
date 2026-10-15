@@ -523,8 +523,8 @@ Tests for utility modules and helper functions:
         name="Served Content Types",
         desc="Uploaded content reaches the browser only as types that cannot run: the text preview of an upload is text/plain; charset=utf-8 with X-Content-Type-Options: nosniff whatever type was stored (a CSV still readable, whole or windowed); a broker report opens inline only with download=false and a type that cannot carry active content (PDF, PNG, CSV, JSON, plain text), while HTML, SVG, XML, XHTML and unknown types are attachments, download=true (the default) is always an attachment, and every answer carries nosniff",
         # Fresh apps holding the uploads and broker import routers, called through httpx's in-process
-        # ASGI transport; sign-in and session dependencies overridden, storage lookups monkeypatched to
-        # files under tmp_path. No DB, no server, no network.
+        # ASGI transport; sign-in and session dependencies overridden, broker report lookups monkeypatched,
+        # each upload a real file and sidecar, all under tmp_path. No DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")

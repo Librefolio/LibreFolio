@@ -814,9 +814,9 @@ async def test_a_check_runs_on_a_copy_and_reports_what_a_restore_would_do(instan
 
 @pytest.mark.asyncio
 async def test_an_older_backup_reports_its_upgrade_its_migrations_and_its_warnings(instance, older_archive, monkeypatch):
-    """(b) A backup at the revision before the head, upgraded (``staging._upgrade`` simulated, as the tests of staging
-    do: the real alembic run is theirs) with a broken reference added: the report says the upgrade, its migration with
-    the first line of its description, and both warnings; restorable all the same."""
+    """(b) A backup at an older revision (``cases.OLDER``), upgraded (``staging._upgrade`` simulated, as the tests of
+    staging do: the real alembic run is theirs) with a broken reference added: the report says the upgrade, its
+    migrations each with the first line of its description, and both warnings; restorable all the same."""
 
     def upgrade_adding_a_broken_reference(database: Path) -> None:
         cases.stamp_head(database)
@@ -827,7 +827,7 @@ async def test_an_older_backup_reports_its_upgrade_its_migrations_and_its_warnin
     report = state["report"]
     assert state["status"] == "done" and report is not None, f"done, with its report: {state}"
     assert (report["action"], report["backup_revision"], report["head_revision"]) == ("upgrade", cases.OLDER, cases.HEAD), f"an upgrade, from {cases.OLDER}: {report['action']}"
-    assert report["migrations"] == [{"revision": cases.HEAD, "message": cases.CHAIN[-1].message}], f"the migration after the backup's revision: {report['migrations']}"
+    assert report["migrations"] == [{"revision": migration.revision, "message": migration.message} for migration in cases.AFTER_OLDER], f"the migrations after the backup's revision, oldest first: {report['migrations']}"
     assert (report["warnings"], report["blockers"], report["restorable"]) == (["rows_changed", "foreign_key_violations_added"], [], True), f"warned, not blocked: {report['warnings']}"
     counts = (report["foreign_key_violations_before"], report["foreign_key_violations_after"], report["tables"]["user_settings"])
     assert counts == (0, 1, {"before": 0, "after": 1}), f"the broken reference the upgrade added: {counts}"

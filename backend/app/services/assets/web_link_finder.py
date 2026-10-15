@@ -27,14 +27,15 @@ Configuration (environment variables, all optional, read in ``backend/app/config
   ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``, the path of a file holding it
 - ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION``   ddgs region, e.g. ``"wt-wt"``/``"it-it"`` (default ``"wt-wt"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND``  ddgs backend(s), e.g. ``"auto"``/``"google,bing"`` (default ``"auto"``)
-- ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``  per-request timeout, seconds (default ``"6"``)
-- ``LIBREFOLIO_WEB_LINK_FINDER_MAX``      max candidate URLs returned (default ``"5"``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``  per-request timeout, seconds, at least 1 (default ``"6"``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_MAX``      max candidate URLs returned, at least 1 (default ``"5"``)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 import urllib.parse
 from typing import Protocol, runtime_checkable
@@ -105,7 +106,7 @@ class DdgsEngine:
     def search(self, query: str, *, timeout: float, max_results: int) -> list[str]:
         if DDGS is None:  # pragma: no cover - guarded by _build_engine / find_candidate_urls
             return []
-        results = DDGS(timeout=int(timeout) or None).text(
+        results = DDGS(timeout=math.ceil(timeout)).text(
             query,
             region=self._region,
             max_results=max_results * _OVER_FETCH_FACTOR,

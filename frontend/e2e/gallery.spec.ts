@@ -137,6 +137,7 @@ import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-a
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage} from './assets/assets-helpers';
+import {schemas} from '../src/lib/api/generated';
 import * as path from 'path';
 import * as fs from 'fs';
 import {fileURLToPath} from 'url';
@@ -1066,14 +1067,16 @@ test.describe('Gallery Screenshots', () => {
 
     /**
      * Hide or show amounts from the header's eye button, the state asserted on both sides: privacy-masking.spec.ts's
-     * flipPrivacy. Focused, the button pins the header (Header.svelte, handleFocusIn), so the header stays on screen
-     * however the page scrolls next — which is what keeps the button in the privacy shot.
+     * flipPrivacy, with the mouse alone, as a user does. The header is on screen first, and the button with it. No focus
+     * is given: keyboard focus would pin the header, but it lights the button's focus-visible ring, which the click does
+     * not clear — a ring in every privacy shot. A mouse click leaves none, and does not pin the header (T-7): the scene
+     * brings the header back by scrolling instead.
      */
     async function setPrivacyFromHeader(page: Page, on: boolean): Promise<void> {
         const toggle = page.getByTestId('privacy-toggle');
         await expect(toggle, `privacy must start ${on ? 'off' : 'on'}`).toHaveAttribute('aria-pressed', String(!on));
-        await toggle.focus();
-        await expect(page.getByTestId('app-header'), 'focused, the eye button pins the header').toHaveAttribute('data-scroll-state', 'pinned');
+        await expect(page.getByTestId('app-header'), 'the header is on screen, not slid away').toHaveAttribute('data-scroll-state', 'visible');
+        await expect(toggle, 'and so is the eye button').toBeInViewport({ratio: 1});
         await toggle.click();
         await expect(toggle).toHaveAttribute('aria-pressed', String(on));
     }
@@ -1449,15 +1452,33 @@ test.describe('Gallery Screenshots', () => {
                 }
                 await expect(page.getByTestId('kpi-return-roi-value'), 'ROI stays readable').toHaveText(/\d/);
 
-                // The frame: the KPI row right under the header, which the focused eye button keeps on screen. The date-range
-                // toolbar above the cards scrolls away, and the room it leaves goes to the growth chart below them: on the
-                // desktop its header and the top of its masked axis, on a phone none of it, the cards being stacked there.
+                // The frame: the KPI row right under the header. The date-range toolbar above the cards scrolls away, and the
+                // room it leaves goes to the growth chart below them: on the desktop its header and the top of its masked
+                // axis, on a phone none of it, the cards being stacked there.
                 await page.getByTestId('kpi-row').evaluate((row) => {
                     const header = document.querySelector('[data-testid="app-header"]')?.getBoundingClientRect().height ?? 0;
                     // 16 px: the dashboard's gap between its blocks (space-y-4).
                     window.scrollTo({top: Math.max(0, row.getBoundingClientRect().top + window.scrollY - header - 16), behavior: 'instant'});
                 });
-                await expect(page.getByTestId('app-header'), 'the header stays: the focused eye button pins it').toHaveAttribute('data-scroll-state', 'pinned');
+                // No focus holds the header (its keyboard ring would show in the shot): the header's own scroll rule brings it
+                // back (Header.svelte, the distance accumulated per direction). 8 px further down, HIDE_SCROLL_THRESHOLD, slide
+                // it away; 8 px back up, past SHOW_SCROLL_THRESHOLD (4), to the very frame above, bring it back. The header
+                // reads a scroll in the animation frame its listener schedules: each step waits for its `scroll` event and two
+                // frames, so the state read next is the header's verdict on that step, not on the two at once.
+                const framedTop = await page.evaluate(() => window.scrollY);
+                const scrollSeen = (top: number) =>
+                    page.evaluate(async (y) => {
+                        const from = window.scrollY;
+                        const scrolled = new Promise<void>((resolve) => window.addEventListener('scroll', () => resolve(), {once: true}));
+                        window.scrollTo({top: y, behavior: 'instant'});
+                        if (window.scrollY !== from) await scrolled;
+                        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+                        return window.scrollY;
+                    }, top);
+                expect(await scrollSeen(framedTop + 8), 'the page has room to scroll 8 px further down').toBeGreaterThan(framedTop);
+                await expect(page.getByTestId('app-header'), '8 px further down, HIDE_SCROLL_THRESHOLD, the header slides away').toHaveAttribute('data-scroll-state', 'hidden');
+                expect(await scrollSeen(framedTop), 'back up, the frame is exactly the framing one again').toBeCloseTo(framedTop, 0);
+                await expect(page.getByTestId('app-header'), 'the header is back after an upward scroll past SHOW_SCROLL_THRESHOLD, not pinned by focus').toHaveAttribute('data-scroll-state', 'visible');
                 await expect(page.getByTestId('privacy-toggle'), 'the eye button is in the shot').toBeInViewport({ratio: 1});
                 await expect(page.getByTestId('kpi-period-pnl').getByTestId('kpi-value'), 'and so is the first masked amount').toBeInViewport({ratio: 1});
                 await parkPointer(page);
@@ -2160,6 +2181,72 @@ test.describe('Gallery Screenshots', () => {
                 // profile down to its rounded bottom edge — `profile-tab` alone stops inside the card's padding.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/profile`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'profile');
+                await restoreTallScreen(page);
+            });
+        });
+
+        // The Users tab (lot A6b, administrators only), one account's actions open. Both lists are fixed bodies, answered on
+        // this page only: the lane's accounts and invitations change with every test that registers its own (the gallery's
+        // too, registerGalleryAccount in galleryReportSets.ts), so the real lists would draw another picture on every run.
+        // The admin's row keeps the admin's real account, read from
+        // /auth/me: the tab tells the signed-in account's row («You», no actions) by its id. Another account is open, so the
+        // picture shows what an administrator can do to it. Every date is drawn absolute (formatDateTime): no clock is set.
+        test('users - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            // A read, nothing written: the signed-in admin, through the page's own session (its cookies, the config's baseURL).
+            const admin = schemas.AuthMeResponse.parse(await (await page.request.get('/api/v1/auth/me')).json()).user;
+            // 5 places taken: the 3 active accounts and the 2 open invitations. `/billing` is a path of the app, never opened:
+            // it draws the «Manage subscription» link.
+            const usage = {used: 5, max_users: 10, billing_url: '/billing'};
+            const accountRows = [
+                {id: admin.id, username: admin.username, email: admin.email, is_active: true, is_superuser: true, created_at: '2026-01-12T09:30:00Z', protected: false},
+                {id: 9101, username: 'anna.rossi', email: 'anna.rossi@example.com', is_active: true, is_superuser: true, created_at: '2026-02-03T18:05:00Z', protected: false},
+                {id: 9102, username: 'marco', email: 'marco@example.com', is_active: true, is_superuser: false, created_at: '2026-03-21T07:45:00Z', protected: false},
+                {id: 9103, username: 'giulia.b', email: 'giulia.b@example.com', is_active: false, is_superuser: false, created_at: '2026-04-09T12:00:00Z', protected: false},
+            ];
+            const inviteRows = [
+                {id: 7201, grants_admin: false, email: 'luca@example.com', created_at: '2026-10-10T08:15:00Z', expires_at: '2026-10-17T08:15:00Z', created_by_user_id: admin.id},
+                {id: 7202, grants_admin: true, email: null, created_at: '2026-10-12T16:40:00Z', expires_at: '2026-10-19T16:40:00Z', created_by_user_id: admin.id},
+            ];
+            // Checked here against the generated schemas the client validates with: a body Zodios refuses leaves the tab empty,
+            // without an error — this fails now, with Zod's message.
+            const accounts = schemas.AdminUserListResponse.parse({items: accountRows, usage});
+            const invites = schemas.InviteListResponse.parse({items: inviteRows, usage});
+            // Before the tab's first load (the sign-in lands on the dashboard, which asks neither path). Each answers its own
+            // path for GET only; anything else falls back — to the gallery's guard and filters, then the backend.
+            await page.route(
+                (url) => url.pathname === '/api/v1/users',
+                (route) => (route.request().method() === 'GET' ? route.fulfill({json: accounts}) : route.fallback()),
+            );
+            await page.route(
+                (url) => url.pathname === '/api/v1/users/invites',
+                (route) => (route.request().method() === 'GET' ? route.fulfill({json: invites}) : route.fallback()),
+            );
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as for Preferences: the page applies ?tab=users once the admin's tab is drawn.
+                await navigateTo(page, '/settings?tab=users');
+                await expect(page.getByTestId('settings-tab-users')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // Both lists are in: the tab says so with data-busy (UsersTab, `load`).
+                const usersTab = page.getByTestId('users-tab');
+                await waitForSettled(usersTab, 15_000);
+                // The fixed lists, not the lane's: a route that missed would leave the real ones on screen, and the shot green.
+                await expect(usersTab.getByTestId('users-row'), 'the Users tab does not show the fixed accounts').toHaveCount(accountRows.length, {timeout: 5_000});
+                await expect(usersTab.getByTestId('users-invite-row'), 'the Users tab does not show the fixed invitations').toHaveCount(inviteRows.length, {timeout: 5_000});
+                await freezeAnimations(page);
+                // One account open, so the picture shows its actions. Every load draws the rows closed (UserRow, `expanded`).
+                const marcoRow = usersTab.locator('[data-testid="users-row"][data-username="marco"]');
+                const toggle = marcoRow.getByTestId('users-row-toggle');
+                await expect(toggle, "marco's row starts closed").toHaveAttribute('aria-expanded', 'false', {timeout: 5_000});
+                await toggle.click();
+                await expect(toggle, "marco's actions are open").toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as for the Profile tab.
+                // PHONE — marco's row framed from its top (frameTarget), so the actions it opened are whole on the screen (G-15).
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/users`);
+                else await frameTarget(page, marcoRow, `${viewport}/${lang}/${theme}/settings/users`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'users');
                 await restoreTallScreen(page);
             });
         });

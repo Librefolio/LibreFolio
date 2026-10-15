@@ -11,7 +11,7 @@
  */
 
 /** Channels of an sRGB colour, 0–255. */
-interface Rgb {
+export interface Rgb {
     r: number;
     g: number;
     b: number;
@@ -45,7 +45,7 @@ function finite(rgb: Rgb): Rgb | null {
 }
 
 /** The sRGB channels of a hex, `rgb()` or `hsl()` colour, or `null` for any other notation. */
-function parseRgb(color: string): Rgb | null {
+export function parseRgb(color: string): Rgb | null {
     const text = color.trim();
     const long = HEX_LONG.exec(text);
     if (long) {
@@ -68,6 +68,32 @@ function parseRgb(color: string): Rgb | null {
     }
     if (name.startsWith('hsl')) return finite(hslToRgb(parseFloat(first), parseFloat(second), parseFloat(third)));
     return null;
+}
+
+/** An sRGB colour with its opacity, 0–1. */
+export interface Rgba extends Rgb {
+    alpha: number;
+}
+
+/**
+ * The sRGB channels of a colour and its opacity (0–1): the notations of {@link parseRgb}, with the alpha of an
+ * eight- or four-digit hex and of the fourth number of `rgba()`/`hsla()` (or after `/`); `null` for any other notation.
+ */
+export function parseRgba(color: string): Rgba | null {
+    const rgb = parseRgb(color);
+    if (!rgb) return null;
+    const text = color.trim();
+    let alpha = 1;
+    const long = /^#[0-9a-f]{6}([0-9a-f]{2})$/i.exec(text);
+    const short = /^#[0-9a-f]{3}([0-9a-f])$/i.exec(text);
+    const fn = FUNCTIONAL.exec(text);
+    if (long) alpha = parseInt(long[1], 16) / 255;
+    else if (short) alpha = parseInt(short[1] + short[1], 16) / 255;
+    else if (fn) {
+        const fourth = channelsOf(fn[2])[3];
+        if (fourth !== undefined) alpha = fourth.endsWith('%') ? parseFloat(fourth) / 100 : parseFloat(fourth);
+    }
+    return Number.isFinite(alpha) ? {...rgb, alpha: Math.min(1, Math.max(0, alpha))} : null;
 }
 
 /**

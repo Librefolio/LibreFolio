@@ -1629,6 +1629,130 @@ describe('GrowthChart mode persistence (S5)', () => {
 });
 
 // =============================================================================
+// I-03 — the % view over a history without % data, after every load
+// =============================================================================
+
+/**
+ * The % button is disabled while the history carries no return (`mwrr_cumulative`, `twrr` and `roi`
+ * all null), so a % view left on over such a history sits on a disabled button, above a chart with
+ * nothing to draw. Until now this was checked once, for a % view restored from storage at mount (S5
+ * above): a % view the USER chose stayed on when a period or broker change brought a history without
+ * returns. The rule after the fix holds after every completed load (`loading` false):
+ *
+ * - a % view over a history without % data falls back to Abs, for display only: the stored mode stays
+ *   `pct`, and nothing but the user's own click writes it;
+ * - the component remembers the fallback, so the % view comes back with the next history that has
+ *   returns, unless the user chose another mode meanwhile: then the user's choice wins, Abs included.
+ *
+ * A period or broker change is driven as the Dashboard drives it: the next history replaces the previous
+ * one with `loading` false throughout (`historyLoading` is true only while there is no history at all).
+ * Observed through the toggles' `aria-pressed` and the % button's `disabled`, never a colour class.
+ */
+describe('GrowthChart % view without % data, after every load (I-03)', {timeout: 30_000}, () => {
+    /** Mounts over HISTORY, which has returns, and turns the % view on by a click: the user's own choice, persisted. */
+    async function mountWithChosenPct() {
+        const view = render(GrowthChart, {props: {history: HISTORY}});
+        await waitForFrame(FRAME.abs);
+        // Precondition: HISTORY carries returns, so the % view can be chosen.
+        expect(view.getByTestId('growth-toggle-pct')).toBeEnabled();
+        await fireEvent.click(view.getByTestId('growth-toggle-pct'));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        expect(storage.get(MODE_KEY), 'the click persisted the choice').toBe('pct');
+        return view;
+    }
+
+    /**
+     * Hands the chart the next history with `loading` false: a period or broker change, one completed load.
+     * Barrier: the % button already reflects that history, so a pressed state read after this is the state
+     * that follows the load, not the one before it.
+     */
+    async function loadHistory(rerender: (props: {history: PortfolioHistoryPoint[]; loading: boolean}) => Promise<void>, history: PortfolioHistoryPoint[]): Promise<void> {
+        await rerender({history, loading: false});
+        await tick();
+        const pctData = history.some((point) => point.mwrr_cumulative != null || point.twrr != null || point.roi != null);
+        expect(screen.getByTestId('growth-toggle-pct').hasAttribute('disabled'), `barrier: the % button is ${pctData ? 'enabled' : 'disabled'} for the history just loaded`).toBe(!pctData);
+    }
+
+    it('falls back to Abs when a history without % data replaces the one the user chose % on, keeping the stored choice', async () => {
+        // WHY: today only a % view RESTORED at mount falls back; one the user clicked stays pressed on a
+        // disabled button after a period or broker change. Catches the fallback still being a one-shot
+        // for the restored view, or being done through selectMode, which persists.
+        const {rerender} = await mountWithChosenPct();
+
+        await loadHistory(rerender, NO_PCT_HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'a % view over a history without % data falls back to Abs').toEqual(['growth-toggle-eur']);
+        // The drawn frame agrees with the pressed button.
+        await waitForFrame(FRAME.abs);
+        // Display only: the stored mode is still the user's %, and the only write is the user's own click.
+        expect(storage.get(MODE_KEY)).toBe('pct');
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+
+    it('returns to % when a later history has % data again and the user chose nothing meanwhile', async () => {
+        // WHY: the fallback is a display state, not a decision; the user's % comes back with the returns.
+        // Catches a fallback that forgets the % view, or that writes Abs where the % view is read from.
+        const {rerender} = await mountWithChosenPct();
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        // Barrier: the fallback happened, so what follows is a return from it.
+        expect(pressedAmong(MODE_TOGGLES), 'precondition: the % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the history has % data again: the % view returns').toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+
+    it.each(['growth-toggle-eur', 'growth-toggle-pnl'])('keeps %s, clicked during the fallback, when % data comes back: the user’s choice wins', async (toggle) => {
+        // WHY: a click during the fallback is a decision, Abs included although it is already pressed;
+        // an automatic return would overrule it. Catches a return that ignores what happened meanwhile.
+        const {rerender} = await mountWithChosenPct();
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        expect(pressedAmong(MODE_TOGGLES), 'precondition: the % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await fireEvent.click(screen.getByTestId(toggle));
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([toggle]);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the user chose during the fallback: no automatic return to %').toEqual([toggle]);
+        expect(storage.get(MODE_KEY)).toBe(toggle === 'growth-toggle-eur' ? 'eur' : 'pnl');
+    });
+
+    it('brings a % view restored from storage back to % too, once a history with % data follows the one without', async () => {
+        // WHY: S5 pins the restored view's fallback; the return is the same rule, whoever chose %.
+        // Catches the one-shot check that is disarmed for good after the first completed load.
+        storage.set(MODE_KEY, 'pct');
+        const {rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        // Barrier: the stored % really was restored.
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        await loadHistory(rerender, NO_PCT_HISTORY);
+        expect(pressedAmong(MODE_TOGGLES), 'precondition (S5): the restored % view fell back to Abs').toEqual(['growth-toggle-eur']);
+
+        await loadHistory(rerender, HISTORY);
+
+        expect(pressedAmong(MODE_TOGGLES), 'the history has % data again: the restored % view returns').toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([]);
+    });
+
+    it('leaves the % view alone while a load is in progress over an empty history (guard)', async () => {
+        // WHY: an empty history while `loading` is no answer yet: the button is disabled because nothing has
+        // arrived, not because the returns are missing. Green today; catches a check that runs before the
+        // load completes and flips the view in the middle of every reload.
+        const {rerender} = await mountWithChosenPct();
+
+        await rerender({history: [], loading: true});
+        // Barrier: the chart holds the empty history, which leaves the % button nothing to enable it.
+        expect(screen.getByTestId('growth-toggle-pct')).toBeDisabled();
+        expect(pressedAmong(MODE_TOGGLES), 'no load has completed: the mode does not flip').toEqual(['growth-toggle-pct']);
+
+        await loadHistory(rerender, HISTORY);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+        expect(persistedWrites()).toEqual([[MODE_KEY, 'pct']]);
+    });
+});
+
+// =============================================================================
 // S9 — the synthetic-candle caption
 // =============================================================================
 
