@@ -8,7 +8,10 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
    field as declared, with its state for the caller: the value of a plain field, for a secret only ``is_set``,
    ``source`` and ``problem`` (``unreadable`` once the instance key changed; ``invalid_stored`` for a row the field
    refuses now). A system field is editable by an administrator only, a user field by its owner; ``env_variable`` is
-   shown to an administrator only. A user's values reach nobody else's catalogue, an administrator's included.
+   shown to an administrator only. A user's values reach nobody else's catalogue, an administrator's included. Each
+   plugin says whether it is ``configured``: every required field has a usable value — a secret set and readable by
+   the current key — and no environment variable of its fields is invalid, optional fields included; a row the field
+   refuses now while a default stands in does not unconfigure it.
 2. **Writes are all or nothing**: every item is checked first; one refused item refuses the write, the refusal lists
    every item with its outcome and nothing is written. A system field needs an administrator (``FORBIDDEN_SCOPE``); a
    field an environment variable sets is ``LOCKED_BY_ENV`` (the derived name, its ``_FILE``, the alias; never a user
@@ -17,7 +20,8 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
    it are ``INVALID_VALUE``. No message contains a value.
 3. **The managed profile** (``LIBREFOLIO_PROFILE=managed``): a field the environment locks is absent from the
    catalogue (a plugin with no field left is absent too) and a write to it is ``UNKNOWN_FIELD``, for an administrator
-   too; the other fields behave as usual.
+   too; the other fields behave as usual. ``configured`` is judged on every field, the hidden ones too, and the entry
+   never names which one is missing (decision N2).
 4. **Storage**: a secret is encrypted with the instance's subkey, bound to its row (family, plugin, field, scope, user)
    and recorded with the key id; no plaintext of a secret anywhere in the database; a system row records who wrote it;
    writing again updates the row, clearing deletes it. A write that needs the key when the key cannot be used raises
@@ -29,7 +33,8 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
 
 Pure: the database is a private SQLite file under ``tmp_path`` built by ``create_all``, with its own users; the instance
 key is a test key set with ``monkeypatch`` and the data directory points into ``tmp_path``; every variable is set with
-``monkeypatch``, the ambient ones of the two plugins removed first.
+``monkeypatch``, the ambient ones of the plugins removed first. The plugin with required fields is a lab plugin of this
+module, put in the service's place of the asset registry with ``monkeypatch`` for the tests that need it.
 """
 
 from __future__ import annotations
@@ -51,15 +56,17 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
-from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingsCatalogResponse, PluginSettingWriteItem, PluginSettingWriteResult
+from backend.app.schemas.plugin_settings import PluginSettingErrorCode, PluginSettingsCatalogResponse, PluginSettingsPluginRead, PluginSettingWriteItem, PluginSettingWriteResult
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.plugin_settings import resolver, runtime, service
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.crypto import decrypt_secret, key_id_of, secret_aad, settings_subkey
-from backend.app.services.plugin_settings.fields import env_name, env_variables
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
 from backend.app.services.plugin_settings.service import PluginSettingsKeyUnavailable, PluginSettingsRefused, read_catalogue, write_settings
+from backend.app.services.provider_registry import AbstractProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 
 KEY_A = "LibreFolio-plugin-settings-test-key-A-0123456789"
@@ -70,6 +77,34 @@ SYSTEM_KEYS = ["api_key", "region", "price_tolerance", "verbose"]
 USER_KEYS = ["preferred_language", "results_limit", "personal_token"]
 REGION_VARIABLE = "LIBREFOLIO_PLUGIN_ASSET_MOCKPROV_REGION"
 API_KEY_ALIAS = "LIBREFOLIO_MOCKPROV_API_KEY"
+
+LAB_CODE = "lab_required"
+#: The lab plugin's fields: two required system fields, a plain one and a secret, and an optional user field.
+LAB_FIELDS = (
+    PluginSettingField(key="endpoint", type=SettingType.STRING, scope=SettingScope.SYSTEM, label="Endpoint (testing)", required=True),
+    PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, label="API key (testing)", secret=True, required=True),
+    PluginSettingField(key="limit", type=SettingType.INTEGER, scope=SettingScope.USER, label="Limit (testing)", default=5, minimum=1, maximum=9),
+)
+
+
+class _LabPlugin(PluginSettingsMixin):
+    """An asset plugin of these tests that cannot work without its two required fields: listed only when named."""
+
+    provider_code = LAB_CODE
+    test_only = True
+    settings_fields = LAB_FIELDS
+
+
+class _LabRegistry(AbstractProviderRegistry):
+    """The asset registry these tests put in the service's place: the lab plugin only, no folder to discover."""
+
+    @classmethod
+    def _get_provider_folder(cls) -> str:
+        return "plugin_settings_service_lab"
+
+    @classmethod
+    def settings_family(cls) -> str:
+        return "asset"
 
 
 def _secret() -> str:
@@ -83,13 +118,13 @@ def _secret() -> str:
 
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """The test key A, a data directory of this test, the self-hosted profile, no ambient variable of mockprov or MOCKFX."""
+    """The test key A, a data directory of this test, the self-hosted profile, no ambient variable of mockprov, MOCKFX or the lab plugin."""
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.delenv("LIBREFOLIO_INSTANCE_KEY_FILE", raising=False)
     monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", KEY_A)
     monkeypatch.setenv("LIBREFOLIO_PROFILE", "selfhosted")
-    for family, plugin in (("asset", MockProvider), ("fx", MockFXProvider)):
+    for family, plugin in (("asset", MockProvider), ("fx", MockFXProvider), ("asset", _LabPlugin)):
         code = plugin().provider_code
         for declared in plugin.settings_fields:
             for name in {*env_variables(family, code, declared), env_name(family, code, declared.key)}:
@@ -163,6 +198,25 @@ async def _fields(engine: AsyncEngine, user: User, code: str = "mockprov", famil
     plugins = [plugin for plugin in catalogue.plugins if plugin.plugin_code == code]
     assert len(plugins) <= 1
     return {field.key: field for field in plugins[0].fields} if plugins else {}
+
+
+async def _entry(engine: AsyncEngine, user: User, code: str) -> PluginSettingsPluginRead:
+    """The catalogue entry of one plugin as ``user`` sees it; the test fails when it is not listed exactly once."""
+    catalogue = await _catalogue(engine, user, plugin_code=code)
+    (entry,) = [plugin for plugin in catalogue.plugins if plugin.plugin_code == code]
+    return entry
+
+
+def _by_key(entry: PluginSettingsPluginRead) -> dict[str, Any]:
+    return {field.key: field for field in entry.fields}
+
+
+@pytest.fixture
+def lab_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The service reads the asset family from a registry holding the lab plugin alone (mockprov out of sight)."""
+    monkeypatch.setattr(_LabRegistry, "_providers", {LAB_CODE: _LabPlugin})
+    monkeypatch.setattr(_LabRegistry, "_discovery_done", True)
+    monkeypatch.setitem(service.FAMILY_REGISTRIES, "asset", _LabRegistry)
 
 
 async def _rows(engine: AsyncEngine) -> tuple[list[PluginSystemSetting], list[PluginUserSetting]]:
@@ -246,6 +300,98 @@ async def test_a_member_reads_the_system_fields_without_editing_them(engine: Asy
     assert {key: field.editable for key, field in asset.items()} == {key: key in USER_KEYS for key in MOCKPROV_KEYS}
     assert {key: field.editable for key, field in fx.items()} == {"api_key": False, "decimals": False}
     assert {key: field.editable for key, field in admins_fx.items()} == {"api_key": True, "decimals": True}
+
+
+# -----------------------------------------------------------------------------
+# configured: one rule for the catalogue and for a call (resolver.missing_field_keys)
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_plugin_with_nothing_required_and_nothing_invalid_is_configured(engine: AsyncEngine, people: dict[str, User]):
+    """1: mockprov and MOCKFX declare no required field: configured for everyone, before and after writes, and with a
+    row the field refuses now (``invalid_stored``), for which the default stands in."""
+    print_section("1: configured, nothing required")
+    admin, alice = people["admin"], people["alice"]
+    untouched = {(code, name): (await _entry(engine, user, code)).configured for code in ("mockprov", "MOCKFX") for name, user in (("admin", admin), ("alice", alice))}
+    await _write(engine, admin, [_item("api_key", "system", secret_value=_secret()), _fx("decimals", value=2)])
+    await _write(engine, alice, [_item("results_limit", "user", value=7)])
+    async with AsyncSession(engine) as session:
+        session.add(PluginSystemSetting(family="asset", plugin_code="mockprov", field_key="price_tolerance", value_json="99"))
+        await session.commit()
+
+    written = {(code, name): (await _entry(engine, user, code)) for code in ("mockprov", "MOCKFX") for name, user in (("admin", admin), ("alice", alice))}
+
+    assert untouched == dict.fromkeys(untouched, True)
+    assert _by_key(written[("mockprov", "alice")])["price_tolerance"].problem == "invalid_stored", "barrier: the refused row is there"
+    assert {key: entry.configured for key, entry in written.items()} == dict.fromkeys(written, True)
+    print_success("configured, whatever was written; invalid_stored with a default does not unconfigure")
+
+
+@pytest.mark.asyncio
+async def test_a_required_field_without_a_value_leaves_the_plugin_not_configured_until_a_valid_save(engine: AsyncEngine, people: dict[str, User], lab_registry: None):
+    """1: both required fields unset: not configured; a refused write changes nothing, one of the two is not enough;
+    with both saved, configured for every caller."""
+    print_section("1: configured after a valid save")
+    admin, alice = people["admin"], people["alice"]
+
+    before = await _entry(engine, alice, LAB_CODE)
+    (refused,) = await _refused(engine, admin, [_item("endpoint", "system", code=LAB_CODE, value="")])
+    after_refusal = await _entry(engine, alice, LAB_CODE)
+    await _write(engine, admin, [_item("endpoint", "system", code=LAB_CODE, value="https://api.example/v1")])
+    half = await _entry(engine, alice, LAB_CODE)
+    await _write(engine, admin, [_item("api_key", "system", code=LAB_CODE, secret_value=_secret())])
+    after = {name: await _entry(engine, user, LAB_CODE) for name, user in people.items()}
+
+    unset = _by_key(before)
+    assert {key: (field.required, _state(field)) for key, field in unset.items() if field.required} == {
+        "endpoint": (True, (None, False, "none", False, False, None)),
+        "api_key": (True, (None, False, "none", False, False, None)),
+    }
+    assert (refused.error_code, before.configured, after_refusal.configured, half.configured) == (INVALID, False, False, False)
+    assert {name: entry.configured for name, entry in after.items()} == {"admin": True, "alice": True, "bob": True}
+    assert _state(_by_key(after["alice"])["api_key"]) == (None, True, "db", False, False, None), "the secret is set and readable, never shown"
+    print_success("not configured until both required fields hold a valid value")
+
+
+@pytest.mark.asyncio
+async def test_a_required_secret_the_current_key_cannot_read_leaves_the_plugin_not_configured(engine: AsyncEngine, people: dict[str, User], lab_registry: None, monkeypatch: pytest.MonkeyPatch):
+    """1: the required secret written under key A, the instance key now B: «set but unreadable», not configured;
+    written again under B, configured."""
+    admin = people["admin"]
+    await _write(engine, admin, [_item("endpoint", "system", code=LAB_CODE, value="https://api.example/v1"), _item("api_key", "system", code=LAB_CODE, secret_value=_secret())])
+    readable = await _entry(engine, admin, LAB_CODE)
+    monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", KEY_B)
+
+    unreadable = await _entry(engine, admin, LAB_CODE)
+    await _write(engine, admin, [_item("api_key", "system", code=LAB_CODE, secret_value=_secret())])
+    rewritten = await _entry(engine, admin, LAB_CODE)
+
+    assert readable.configured is True
+    assert (_state(_by_key(unreadable)["api_key"]), unreadable.configured) == ((None, True, "db", False, True, "unreadable"), False)
+    assert (_state(_by_key(rewritten)["api_key"]), rewritten.configured) == ((None, True, "db", False, True, None), True)
+
+
+@pytest.mark.parametrize(
+    ("code", "key", "variable", "valid", "invalid"),
+    [
+        pytest.param("mockprov", "region", REGION_VARIABLE, "us", "atlantis", id="mockprov-region-select"),
+        pytest.param("MOCKFX", "decimals", env_name("fx", "MOCKFX", "decimals"), "4", "four", id="MOCKFX-decimals-integer"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_invalid_variable_leaves_the_plugin_not_configured_even_for_an_optional_field(engine: AsyncEngine, people: dict[str, User], monkeypatch: pytest.MonkeyPatch, code, key, variable, valid, invalid):
+    """1: an optional system field locked by a variable: configured while the value is valid, not configured once it is
+    not — its default never stands in."""
+    monkeypatch.setenv(variable, valid)
+    with_a_valid_value = await _entry(engine, people["alice"], code)
+    monkeypatch.setenv(variable, invalid)
+
+    with_an_invalid_value = await _entry(engine, people["alice"], code)
+
+    field = next(field for field in with_an_invalid_value.fields if field.key == key)
+    assert (field.required, field.locked, field.source, field.value, field.problem) == (False, True, "env", None, "invalid_env")
+    assert (with_a_valid_value.configured, with_an_invalid_value.configured) == (True, False)
 
 
 # =============================================================================
@@ -560,6 +706,27 @@ async def test_in_the_managed_profile_a_plugin_whose_fields_are_all_locked_is_no
 
     assert await _fields(engine, people["admin"], "MOCKFX") == {}
     assert set(await _fields(engine, people["admin"], "mockprov")) == set(MOCKPROV_KEYS), "managed alone hides nothing"
+
+
+@pytest.mark.parametrize(("value", "configured"), [pytest.param("us", True, id="a-valid-variable"), pytest.param("atlantis", False, id="an-invalid-variable")])
+@pytest.mark.asyncio
+async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_naming_it(engine: AsyncEngine, people: dict[str, User], monkeypatch: pytest.MonkeyPatch, value: str, configured: bool):
+    """3 (decision N2): ``region`` locked by its variable is hidden; valid, the plugin stays configured; invalid, it is
+    not — and the entry says only that: no field, key, variable or value of the hidden field anywhere in it."""
+    print_section(f"3: managed, a hidden field locked by {value!r}")
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(REGION_VARIABLE, value)
+    assert service._is_managed(), "barrier: the service reads the managed profile, or nothing below is about it"
+
+    entries = {name: await _entry(engine, user, "mockprov") for name, user in people.items()}
+
+    for name, entry in entries.items():
+        shown = entry.model_dump_json()
+        assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
+        assert entry.configured is configured, name
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "configured", "fields"}, "the entry has no place for a missing field's name"
+        assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
+    print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 
 
 # =============================================================================
