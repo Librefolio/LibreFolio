@@ -39,6 +39,12 @@ interface ResponsiveXAxisInput {
     locale?: string;
     axisType: 'category' | 'time';
     horizontalPadding?: number;
+    /**
+     * How many of `values` a zoom leaves visible (`visiblePointCountFromZoom`). The density and the label spacing of a
+     * category axis follow the visible window, not the whole series: computed on all the points, a zoomed window of 34
+     * days out of 365 keeps a step of 34 and shows only its edges (47-1). The formatter still names every value.
+     */
+    visibleCount?: number;
 }
 
 interface AxisDateFormats {
@@ -259,9 +265,9 @@ export function axisLabelMeasure(chart: unknown, fontSize: number): AxisLabelMea
     };
 }
 
-export function buildResponsiveXAxisPolicy({width, values, locale, axisType, horizontalPadding = 64}: ResponsiveXAxisInput): ResponsiveXAxisPolicy {
+export function buildResponsiveXAxisPolicy({width, values, locale, axisType, horizontalPadding = 64, visibleCount}: ResponsiveXAxisInput): ResponsiveXAxisPolicy {
     const usableWidth = Math.max(0, width - horizontalPadding);
-    const pointCount = values.length;
+    const pointCount = visibleCount === undefined || !Number.isFinite(visibleCount) ? values.length : Math.min(values.length, Math.max(1, Math.round(visibleCount)));
     const compact = usableWidth < 480 || (pointCount > 1 && usableWidth / pointCount < 24);
     const labelBudget = axisType === 'time' ? 48 : 56;
     const maxLabels = compact ? Math.max(2, Math.min(12, Math.floor(usableWidth / labelBudget))) : Math.max(2, pointCount);
@@ -292,4 +298,37 @@ export function buildResponsiveXAxisPolicy({width, values, locale, axisType, hor
             ...(axisType === 'category' ? {alignMaxLabel: 'right' as const} : {}),
         },
     };
+}
+
+/** How long a zoom gesture must pause before a chart re-spaces its category labels on the new window. */
+export const ZOOM_LABEL_SETTLE_MS = 120;
+
+/**
+ * How many categories a zoom leaves visible, read from a `dataZoom` event (its first `batch` entry, or the event
+ * itself) or from a `{start, end}` window: by value (`startValue`/`endValue`, indices on a category axis) when it
+ * carries them, else by percent (`start`/`end`). Clamped to `[1, pointCount]`; `null` when there is nothing to read.
+ * Read from the event, not from `getOption()`, which deep-clones the whole option on every zoom tick (47-1).
+ */
+export function visiblePointCountFromZoom(event: unknown, pointCount: number): number | null {
+    if (!(pointCount > 0) || event === null || typeof event !== 'object') return null;
+    const batch = (event as {batch?: unknown}).batch;
+    const source = (Array.isArray(batch) && batch[0] !== null && typeof batch[0] === 'object' ? batch[0] : event) as {startValue?: unknown; endValue?: unknown; start?: unknown; end?: unknown};
+    const clamp = (count: number) => Math.min(pointCount, Math.max(1, count));
+    const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+    if (finite(source.startValue) && finite(source.endValue)) return clamp(Math.round(source.endValue) - Math.round(source.startValue) + 1);
+    if (finite(source.start) && finite(source.end)) {
+        const last = pointCount - 1;
+        return clamp(Math.ceil((source.end / 100) * last) - Math.floor((source.start / 100) * last) + 1);
+    }
+    return null;
+}
+
+/**
+ * The `xAxis.axisLabel` patch that re-spaces a category axis on a new window (a zoom, a resize). A compact window
+ * gets its own step, or ECharts' (`'auto'`) when it needs none, so a `setOption` merge never keeps the previous
+ * window's step. A window that is no longer compact also gets back the defaults the compact policy overrides (47-1).
+ */
+export function categoryAxisLabelPatch(policy: ResponsiveXAxisPolicy): Record<string, unknown> {
+    if (policy.axisLabel) return {interval: 'auto', ...policy.axisLabel};
+    return {interval: 'auto', formatter: policy.formatter, hideOverlap: false, showMinLabel: null, showMaxLabel: null, alignMaxLabel: null};
 }

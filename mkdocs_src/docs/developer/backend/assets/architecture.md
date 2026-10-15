@@ -10,7 +10,7 @@ responsibility:
 | Module | Responsibility |
 |--------|----------------|
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard. |
-| `core.py` | Shared infrastructure: the five cache singletons, provider-parameter hashing, error sanitization, and `_run_provider_in_thread`. |
+| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, masks its secrets in the call's log lines and errors, and runs the call in a thread of its own (`_run_provider_in_thread`); `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
@@ -284,7 +284,9 @@ reports `valuation_source = LAST_TRADE_PRICE`.
   objects through `core`, preserving one identity and one monkeypatch point.
 - **`_asset_current_cache`**: caches provider current-value results. The live-query path keys by
   provider code, identifier, and identifier type; refresh keys also include the provider-parameter
-  hash so parameter changes cannot reuse stale data.
+  hash so parameter changes cannot reuse stale data. Both also include the fingerprint of the
+  provider's settings, as do the history, metadata and search-query keys, so different settings never
+  share an entry (see [Plugin Settings](../../architecture/patterns/plugin_settings.md#caching)).
 - **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in the application
   lifespan, instantiating registered providers and allowing providers with internal data caches
   to warm them.
