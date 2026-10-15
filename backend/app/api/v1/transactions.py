@@ -26,25 +26,11 @@ from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.transactions.transactions import (
-    EVENT_TYPE_METADATA,
-    TX_TYPE_METADATA,
-    TXBatchResponse,
-    TXCreateItem,
-    TXEventSuggestRequestItem,
-    TXEventSuggestResultItem,
-    TXMixedBatch,
-    TXPromoteBatchItem,
-    TXPromoteSuggestInput,
-    TXPromoteSuggestResponse,
-    TXQueryParams,
-    TXReadItem,
-    TXSplitBatchItem,
-    TXTransferPromoteRequest,
-    TXTransferPromoteResponse,
-    TXTypesResponse,
-    TXUpdateItem,
-)
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.event_suggest import TXEventSuggestRequestItem, TXEventSuggestResultItem
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
