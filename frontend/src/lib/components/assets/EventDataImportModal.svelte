@@ -35,7 +35,7 @@
     // column: the alias lets an exported file come back in.
     const eventColumns: CsvColumnDef[] = [
         {key: 'currency', label: 'currency', type: 'string', required: false},
-        {key: 'type', label: 'type', type: 'string', required: true},
+        {key: 'type', label: 'type', type: 'string', required: true, matchKey: true},
         {key: 'amount', label: 'amount', aliases: ['value'], type: 'number', required: true},
         {key: 'notes', label: 'notes', type: 'string', required: false},
     ];

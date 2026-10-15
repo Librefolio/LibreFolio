@@ -356,7 +356,9 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   conteggio va scritto relativo, mai assoluto. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
 - **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
   `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
-  `git describe`. Da allineare a ogni rilascio, o da togliere.
+  `git describe`. Da allineare a ogni rilascio, o da togliere. **Metà chiusa da H il 15/10** (decisione 14):
+  `pyproject.toml` a `0.0.0`, con un commento (`6e78b8c96`, in `dev_release2` con `9deb0ea08`); `frontend/package.json`
+  e le due righe radice del lock con il CP5b di H, dopo la finestra della galleria.
 - **C-85 · Mostrare che si sta aspettando il server, nelle richieste importanti** — medio; developer, 14/10, dalla
   verifica sul server della build `v1.1.0-1674-g797a7e432` (voce 7). Le sue parole: «quando un pacchetto è in volo non si
   ha chiaro che si sta attendendo la risposta, dobbiamo aggiungere nel backlog un task che si occupa di rendere palese
@@ -1758,8 +1760,11 @@ sulle tabelle del 21/09, «Il residuo vero» compreso. Correzione della ricogniz
   sorgente invece di eseguire le funzioni. Dettagli: idem.
 - **P4-10 · I sei siti di Risk fuori dal canale di mascheramento** — basso, da riverificare dopo il Round 2 della
   privacy. Dettagli: idem.
-- **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
-  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2.
+- ✅ **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
+  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2. **Chiusa da H il 15/10** (piano 1.3, §10
+  n. 12): con `.git` vince `git describe`; `VERSION` vale solo senza `.git` o quando git fallisce; prima di tutto
+  `LF_APP_VERSION`, che la pipeline di rilascio esporta già per la build del frontend (`6e78b8c96`, in `dev_release2`
+  con `9deb0ea08`).
 - **§2.4 · Il guardiano del catalogo finto** — basso; debito dichiarato, non verificato nel codice. Dettagli: idem, e
   [09](09_feedbackJobs/09_reperti_analisi_statica_20260922.md) §2.4.
 - **SP15 · `SensitiveValue`** — peso da stimare; sospeso dal 21/09 perché non c'era nessun consumatore misurato, e non
@@ -2068,6 +2073,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
 
   Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
+- **H-5 · Debito di traduzione delle pagine admin toccate da H** — basso; H, 15/10.
+  - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
+    `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
+  - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
+
+  Dettagli: piano H, §14 «CP5a passo 2».
 
 ## A · Account e accessi (fase 01)
 
@@ -2211,7 +2223,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
   rimando. **Chiusa nel CP3b il 15/10** (docs-writer): la riga rimanda a `search_link_finder.md#configuration-env-vars-all-optional`.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
-- **X-R8 · `GET /fx/providers` chiede alla BCE l'elenco delle valute a ogni richiesta** — piccolo, prodotto; X, 15/10
+- ✅ **X-R8 · `GET /fx/providers` chiede alla BCE l'elenco delle valute a ogni richiesta** — piccolo, prodotto; X, 15/10
   (preparazione del CP3b). `list_providers` (`api/v1/fx/providers.py:97-101`) chiama `get_supported_currencies` di ogni
   fornitore pubblico; quello della BCE (`fx_providers/ecb/plugin.py:95`) fa una richiesta HTTP senza cache, con 30 s di
   timeout: ogni apertura dell'elenco aspetta la BCE, e senza rete la BCE compare con zero valute (l'errore resta nel log).
@@ -2220,8 +2232,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Il CP3b toglie la rete dai test che controllano le valute; le chiamate senza filtro (elenco completo, `MANUAL` nascosto)
   restano, e sul server vanno comunque alla BCE. Proposta del coordinatore (15/10; il developer può cambiarla): una cache
   dell'elenco delle valute dei fornitori, valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout
-  breve. In un lotto di X dopo il CP3b. Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
+  breve. In un lotto di X dopo il CP3b. **Chiusa da X il 15/10**: `services/fx/catalog.py`,
+  `get_supported_currencies_cached`, usato da `list_providers`: cache con nome `fx_provider_currencies` (24 h, nel pannello
+  delle cache), timeout di 5 s, l'ultimo elenco noto quando il fornitore fallisce, riprovato dopo 5 minuti; una sola
+  richiesta per fornitore con chiamate simultanee. API e `openapi.json` invariati; 8 test senza rete
+  (`services fx-catalog`). In `dev_release2` con `173ba19e2` (X-R8 `1dfd4e657`). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e X-R8.
+- **X-R10 · Commenti e pagine dei cambi un po' più ottimisti del codice** — minimo, doc; X, 15/10 (X-R8, segnalate da
+  docs-writer). Preesistenti, nessuna cambia comportamento:
+  - `frontend/src/lib/stores/currencyGraphStore.ts`: il commento dice che le risposte sono «stable» e che la cache
+    «can never go stale»; con la cache di 24 h l'elenco di un fornitore può cambiare durante la sessione (e prima poteva
+    arrivare vuoto e poi pieno);
+  - `mkdocs_src/docs/developer/frontend/fx-chain-algorithm.md`: l'esempio sopra il paragrafo «Why this works» usa
+    `getOrBuildGraph()`, `fetchProviders()`, `fetchCurrencies()`; lo store vero ha `getCurrencyGraph()`, una
+    `buildPromise` condivisa ed `ensureCurrenciesLoaded()`;
+  - `fx_plugin_guide.md`: «Phase 1 happens when a user adds a new currency pair» è più stretto del vero (il frontend chiama
+    `/fx/providers` una volta per sessione, alla prima vista che usa il grafo, e a ogni apertura della scheda About);
+  - `settings_cache.md`: le cache «register lazily at import time», ma `yfinance_currency` si registra alla creazione
+    del plugin.
+  - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
+    `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
+    **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+  Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
   `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx/providers.py`
@@ -2243,15 +2276,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   pulsante `hasText: 'Cancel'`. Per questi ultimi due `DataImportModal.svelte` non ha test-id: il `ConfirmModal` di `:305`
   accetta `testId` ma non lo riceve, e il pulsante Annulla di `:287` non ne ha. Cura: due test-id nel componente (condiviso,
   toccato da W in K1) e le quattro righe della spec. Deciso dal coordinatore il 15/10: con il FE4; i due test-id li chiede
-  lui a W, proprietario di `DataImportModal.svelte`.
+  lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
+  `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
-- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
+- ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
   `asyncio.to_thread`) imposta un loop nuovo, lo chiude e non lo toglie: chi poi, nello stesso thread, chiama
   `asyncio.get_event_loop()` riceve un loop chiuso. È il contesto in cui una connessione aiosqlite raccolta dal GC
   muore con «Event loop is closed». Cura di una riga: `asyncio.set_event_loop(None)` nel `finally`, oppure
-  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage».
+  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage». **Chiusa da X il
+  15/10**: `asyncio.set_event_loop(None)` nel `finally` di `_sync_runner`, prima di `loop.close()`, come
+  `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
+  rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
 
 ## W · Import e transazioni (fase 01)
 
@@ -2308,11 +2346,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   a `services/asset_source.py` e `schemas/assets.py` di X. La docstring diventa la descrizione dell'enum nell'OpenAPI,
   quindi un lotto di riordino, che vuole lo schema identico, non la tocca. Cura: un lotto che accetta la differenza
   nella descrizione, insieme a X per le sue due righe. Dettagli: piano 04, §12, W4.
-- **W-B15 · `tx-bulk-operations.spec.ts` prende il pulsante di chiusura per testo** — minimo, test; trovato da X il 15/10
+- **W-B16 · Un evento del fornitore reimportato da un backup torna come evento manuale, e poi raddoppia** — basso,
+  dati; W, 15/10 (analisi di E1, I-11b). L'export degli eventi (`backend/app/api/v1/backup.py:277-330`) porta la colonna
+  `source` (`MANUAL`/`PROVIDER`), che l'import ignora. Se la riga del fornitore trova ancora il suo evento, l'editor la
+  salta (`frontend/src/lib/components/ui/data-editor/DataEditor.svelte:545-548`); se non lo trova più, per esempio dopo
+  un cambio di valuta che cancella gli eventi, rientra come evento manuale, e il fornitore la ricrea al sync successivo:
+  due eventi. Oggi la guida chiede di togliere a mano quelle righe (`user/assets/detail/data-editor.en.md:71`). Proposta:
+  l'import degli eventi salta le righe `PROVIDER` quando l'asset ha un fornitore assegnato e le conta nel riepilogo;
+  un'opzione le importa comunque come manuali, per un asset rimasto senza fornitore. Dettagli: piano 04, §12, E0.
+- ✅ **W-B15 · `tx-bulk-operations.spec.ts` prende il pulsante di chiusura per testo** — minimo, test; trovato da X il 15/10
   (CP3b), assegnato a W dal coordinatore. `frontend/e2e/transactions/tx-bulk-operations.spec.ts:428` usa
   `button:has-text("Cancel"), button:has-text("Close"), [aria-label="Close"]`, che regge solo in inglese. Nella
   stessa famiglia, X-R9 (sezione X) chiede due `data-testid` in `DataImportModal.svelte` di W: il `ConfirmModal` di
-  `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b.
+  `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b. **Chiusa da W il 15/10** (E0, `d226bc69e`): la
+  spec chiude il picker con `tx-picker-cancel`, che c'era già; nessun difetto del prodotto.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -2351,13 +2398,20 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
   J, §10 «A — rinomina», «Restano di proposito».
 - ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
-  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4.
-- **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
+  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4. ✅ Chiusa da X il 15/10
+  (`743fca514`).
+- ✅ **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
   (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
   d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
   lascia aperta una `aiosqlite.Connection` creata durante il test (registrando le connessioni create e controllando
   al teardown, come la sonda usata per C-93). Il conftest è condiviso: decide il coordinatore. Dettagli: piano J, §10
   «C-93».
+  - 15/10, J: chiusa al checkpoint J-6. Fixture autouse `_aiosqlite_leak_guard` nel `conftest.py` condiviso: un
+    test che lascia aperta una connessione aiosqlite creata nel thread principale ha un ERROR al proprio teardown, con
+    lo stack di creazione; elenco esplicito `AIOSQLITE_LEAK_EXCEPTIONS`, vuoto. Self-test in `utils
+    gate-aiosqlite-leak` (9). `all-backend --workers 2` verde senza rapporti. Dettagli: piano J, §10 «J-6».
+  - In `dev_release2` con `e2cb55054` (J-6 `b49a54645`); la regola è la n. 7 di
+    `.github/instructions/backend-testing.instructions.md`.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -2365,7 +2419,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
 ## B · Backup e Docker (fase 01)
 
-Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione non ancora avviata.
+Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
+07:10, solo analisi, sulla base `ee5d81a6f`.
 
 ## E · Email (fase 01)
 

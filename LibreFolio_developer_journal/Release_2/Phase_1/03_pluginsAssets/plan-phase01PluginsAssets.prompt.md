@@ -1380,7 +1380,7 @@ Passi:
 > - Un file `frontend/src/lib/api/.tools-codegen.lock` compare durante la build del frontend e sparisce alla fine
 >   (`frontend/scripts/tools-generation-io.mjs:94`): non è un artefatto da escludere.
 
-### Checkpoint CP4 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint CP4 ✅ (2026-10-15) — in `dev_release2` come `7f4618494` (merge del mio `805f2f112`), record `786f3e216`
 
 - **Base**: HEAD `c81670354`; `dev_release2` nel frattempo a `6d67fdaac` (J C-93, H CP4): nessun file in comune, nessun import
   nuovo dei nomi spostati (55 coppie su tutti e due gli alberi).
@@ -1392,3 +1392,155 @@ Passi:
   `TODO_FUTURI.md` (1 riga), `pyproject.toml` (commento), `.github` 1, MkDocs 2, devWiki 2.
 - **Messaggi di commit proposti**: `refactor(schemas): split asset schemas by theme` (36 percorsi: tutto tranne il piano) e
   `docs(journal): X CP4 log` (il piano).
+
+Il coordinatore ha integrato il CP4 con un merge (`7f4618494`): nel frattempo erano entrati J C-93, H CP4 e J G-8, senza
+file in comune; il suo controllo sull'AST: 49/49 nomi identici, tolto solo `__all__`. `schemas/fx.py` resta intero (sotto
+soglia): niente lotto di simmetria. La riga `transactions.py` dell'albero delle istruzioni la gira lui a W. Il mio ramo è
+avanzato a `786f3e216`, che porta J-5 nella mia sezione del backlog.
+
+### J-5 — `_run_provider_in_thread` non lascia un loop chiuso come corrente ✅ (2026-10-15)
+
+Via del coordinatore alle ~06:34 («una riga più il test di test-author; poi X-R8»). Base: HEAD `786f3e216`.
+
+**Il difetto** (triage di J, piano 05 §10 «C-93»): `services/assets/core.py:114-119`, `_sync_runner` (dentro
+`asyncio.to_thread`), crea un loop, lo imposta come corrente, lo chiude e non lo toglie. Nel thread dell'executor resta
+così un loop chiuso come corrente: una connessione aiosqlite raccolta dal GC in quel thread crea il suo future con
+`asyncio.get_event_loop()`, lo lega al loop chiuso e muore con «Event loop is closed» (`PytestUnhandledThreadExceptionWarning`
+attribuito a un test estraneo). Nel backend è l'unico punto che lo fa.
+
+**La cura**: `asyncio.set_event_loop(None)` nel `finally`, prima di `loop.close()`, come fa `asyncio.Runner.close()`.
+
+Passi:
+1. ✅ Test (test-author) in `test_utilities/test_provider_core_cache.py`, classe `TestRunProviderInThread`: dopo una
+   chiamata, il thread che l'ha eseguita non ha un loop chiuso come corrente. Rosso sul codice di oggi.
+   > **Note implementazione**: `test_worker_thread_does_not_keep_closed_event_loop` (righe 267–315). Il thread si fissa con
+   > un `ThreadPoolExecutor(max_workers=1)` privato: `asyncio.to_thread` è sostituito, solo per quella chiamata
+   > (`monkeypatch.context()`), con il suo stesso corpo su quell'executor; una sonda prima e una dopo nello stesso thread
+   > (verificato, non supposto: il fornitore e le due sonde registrano il thread). L'executor di default del loop del test
+   > non c'entra. Asserzione stretta: nessun loop corrente, come il thread era stato trovato. **Rosso sul codice di oggi**:
+   > 1 fallito, 28 passati, «pinned-provider_0 still has <_UnixSelectorEventLoop running=False closed=True …> as its current
+   > loop» (`/tmp/libreFolio_x_j5_ta_red_current.log`).
+2. ✅ La riga in `core.py`; il test diventa verde.
+   > **Note implementazione**: `asyncio.set_event_loop(None)` nel `finally` di `_sync_runner`, prima di `loop.close()`
+   > (`core.py:120`). `utils provider-core-cache` 29/29 (`/tmp/libreFolio_x_j5_green.log`); ruff e black puliti.
+3. ✅ Verifiche: `utils provider-core-cache`, ruff e black, i test dei chiamanti; journal e handoff.
+   > **Note implementazione**: la riga sta nel percorso di ogni chiamata ai fornitori (prezzi, storico, metadati, ricerca),
+   > quindi la run completa: `front build --debug` (97 s) e `mkdocs build` (47 s), resi vecchi dall'integrazione del CP4 (14
+   > file di `frontend/src`, 8 di MkDocs, il CHANGELOG), poi **`all-backend` sulla 6183, 06:46–07:08, 7/7, 14 003 passati,
+   > 29 saltati**, 0 falliti (`/tmp/libreFolio_x_j5_heavy.sh`, log `/tmp/libreFolio_x_j5_allbackend.log`). Rispetto al CP4
+   > (13 972 / 28) il +32 è la differenza di raccolta (13 983 → 14 015, +33 −1): il mio test più 32 arrivati con
+   > l'aggiornamento di base (H CP4: `test_system_api` 8, `test_config_misc` 8, 7 casi della guardia `config-package`,
+   > uno tolto, `api/v1/system.py`; `test_tools_api` 5; J: 4 in `test_ai_export_components_portfolio_broker_integration`).
+   > Il saltato in più è `test_external/test_asset_providers.py::test_current_value[css_scraper]`: la pagina di Borsa
+   > Italiana senza prezzo («market closed or in Call status», 07:00), dipende dall'ora, non dalla riga. Porta 6183 libera.
+
+### Checkpoint J-5 ✅ (2026-10-15) — `7794e2fb0` (codice) e `cb0bac88d` (journal), in `dev_release2` col merge `743fca514`, record `4fdc0d9c5`
+
+- **Base**: HEAD `786f3e216`.
+- **Elenchi**: nessuna rinomina, nessun taglio, nessun file nuovo. Modificati 4: `backend/app/services/assets/core.py` (1 riga),
+  `backend/test_scripts/test_utilities/test_provider_core_cache.py` (il test e 4 import), il piano e il backlog (J-5 chiusa).
+- **Messaggi di commit proposti**: `fix(assets): unset the provider thread's closed event loop` (i 2 file di codice) e
+  `docs(journal): X J-5 log, W agreements` (piano e backlog).
+
+> **Accordi con W, comunicati dal coordinatore il 15/10 (~07:00), da rispettare nel FE5:**
+> - Lotto E1b degli eventi (dopo le decisioni 20–23 del developer): W modifica in
+>   `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` il salvataggio degli eventi (righe 349–438: prima le
+>   cancellazioni, poi gli upsert; `asset_id` nella cancellazione; la valuta della riga quando c'è; la conferma per gli
+>   eventi collegati) e il toast d'errore con il `detail` (461–466). Finché il lotto non entra, quelle righe non le tocco.
+> - Lotto E0 (dopo la finestra della galleria): W scrive in `frontend/src/lib/components/assets/EventDataImportModal.svelte:38`
+>   `matchKey: true` sulla colonna `type`, così che i doppioni del CSV degli eventi siano solo le righe con stessa data e
+>   stesso tipo (I-11a). Prezzi, cambi e distribuzioni non cambiano.
+> Nessuna obiezione da parte mia: non ho modifiche previste su quelle righe.
+
+### X-R8 — l'elenco delle valute dei fornitori dei cambi in cache ✅ (2026-10-15)
+
+Via del coordinatore alle ~07:13: disegno approvato così com'è («nessun cambio all'API; la cache con nome si vede nel
+pannello delle cache»). Finestra della galleria dalle 09:00 (~2 ore): lì solo codice, la run completa prima delle 08:45 o
+dopo l'avviso di fine. Base: HEAD `4fdc0d9c5`.
+
+**Il problema** (X-R8): `list_providers` (`GET /fx/providers`, `api/v1/fx/providers.py:96-101`) chiama
+`get_supported_currencies` di ogni fornitore pubblico a ogni richiesta. La BCE fa una richiesta HTTP senza cache (30 s di
+timeout), la SNB finché non riesce una volta nel processo (15 s): ogni apertura dell'elenco li aspetta, e senza rete
+compaiono con zero valute. È l'unico chiamante dell'app.
+
+**Disegno** (nuovo modulo `services/fx/catalog.py`, una funzione che `list_providers` usa al posto della chiamata diretta):
+- cache con nome `fx_provider_currencies` (`get_ttl_cache`, chiave il codice del fornitore): un elenco riuscito vale 24 ore;
+- se il fornitore fallisce o va oltre il timeout breve (5 s, `asyncio.wait_for`), si risponde con l'ultimo elenco noto
+  nel processo (vuoto prima del primo successo) e lo si mette in cache per 5 minuti, così che senza rete l'elenco non
+  aspetti a ogni richiesta; poi si riprova. `NamedCache.set` accetta un TTL per voce: una sola cache;
+- l'ultimo elenco noto resta anche dopo uno svuotamento dal pannello delle cache;
+- un lock per fornitore contro le richieste simultanee a cache vuota, tenuto per loop (`WeakKeyDictionary`), perché un
+  `asyncio.Lock` conteso resta legato al suo loop;
+- nessun cambio all'API: stessa risposta, stesso `openapi.json`.
+
+Passi:
+1. ✅ `services/fx/catalog.py` e il collegamento in `list_providers`.
+   > **Note implementazione**: `get_supported_currencies_cached(code, provider, *, timeout=5.0)`, ~60 righe; la chiave è il
+   > codice del registro, che `list_providers` ha già (un fornitore finto di `test_fx_api_unit.py` non ha `code`, ed è il
+   > registro a dare l'identità). In `list_providers` la chiamata diretta e il suo `try/except` lasciano il posto a una riga;
+   > `services/fx/__init__.py` elenca `catalog.py`. Prova di fumo fuori dal repository (`/tmp/libreFolio_x_r8_smoke.py`):
+   > due richieste, una chiamata; fallimento senza storia `[]` e nessun nuovo tentativo per 5 minuti; fallimento dopo un
+   > successo, l'ultimo elenco; timeout 0,2 s rispettato; 10 chiamate simultanee, una sola al fornitore, anche in un secondo
+   > loop; cache registrata. `api schema` identico a HEAD (`openapi.json` 114 percorsi, `tool-contracts`); ruff e black
+   > puliti.
+2. ✅ Test senza rete (test-author).
+   > **Note implementazione**: `test_services/test_fx_catalog.py`, 8 test con fornitori finti e una fixture autouse che
+   > svuota cache e ultimi elenchi prima e dopo: copie, fallimento senza storia e attesa di 5 minuti, ultimo elenco anche
+   > dopo uno svuotamento, timeout, una sola chiamata con 8 chiamanti simultanei (con un cancello che si apre quando tutti
+   > hanno trovato la cache vuota) anche in un secondo loop, cache nel pannello, TTL chiesto per un elenco (24 h) e per un
+   > ripiego (5 min) letto da un involucro della cache vera. test-author ha provato che i test del lock possono cadere
+   > (senza lock: «8 fetches for 8 concurrent callers»; un lock unico fra due loop: «bound to a different event loop»),
+   > poi ha tolto le due mutazioni. Azione nuova `services fx-catalog` in `_backend_services.py` (pura). In
+   > `test_fx_api_unit.py` la fixture `fed_currencies_not_cached` toglie la voce `FED` prima e dopo
+   > `test_list_providers_filters_hidden_and_sorts_targets`, che ora passa dalla cache del processo. `services fx-catalog`
+   > 8/8, `api fx-unit` 29/29.
+3. ✅ Doc (docs-writer): la tabella delle cache in `settings_cache.md`, le pagine dei cambi.
+   > **Note implementazione**: cinque pagine per sviluppatori, nessuna con traduzioni. `settings_cache.md`: riga
+   > `fx_provider_currencies` (32, 24 h, `fx/catalog.py`, il ripiego 5 min) e data del registro (le altre 17 righe
+   > ricontrollate); una frase sugli ultimi elenchi, che nessuno svuotamento toglie. `fx_plugin_guide.md`: contratto di
+   > `get_supported_currencies()` (Mermaid, paragrafo della fase 1, tabella, esempio): passa da `catalog.py`, quindi un
+   > fornitore può scaricare l'elenco ma non contare di essere chiamato a ogni richiesta (X-R4 non toccata). `ecb.md` e
+   > `snb.md`: l'elenco resta in cache 24 h. `developer/frontend/fx-chain-algorithm.md:295`: diceva che `GET /fx/providers`
+   > non cambia fino al riavvio del server; ora dice la cache di 24 h e che `currencyGraphStore.ts` tiene il grafo fino al
+   > ricaricamento della pagina (verificato nel codice). `mkdocs build` stretto verde, `check-links` 95 validi, 0 rotti.
+
+> **Fuori pista**:
+> - Quattro imprecisioni preesistenti viste da docs-writer, lasciate e registrate come X-R10 (per il FE4).
+4. ✅ Verifiche: `api schema` identico, ruff e black, test mirati, `api fx` anche senza rete, `all-backend`; journal e handoff.
+   > **Note implementazione** (`/tmp/libreFolio_x_r8_verify.sh`, log `/tmp/libreFolio_x_r8_verify.log`): ruff e black puliti
+   > sui 6 file Python; `openapi.json` (114 percorsi) e `tool-contracts` identici a HEAD; raccolta 14 131 contro 14 122 (+9:
+   > gli 8 test nuovi e il caso `config-package` di `catalog.py`); 0 import irrisolti su 9 658; nessuna patch muta;
+   > `services fx-catalog` 8, `api fx-unit` 29, `api fx` 21 e, senza rete, 21. **`all-backend` sulla 6183, 07:42–08:06, 7/7,
+   > 14 119 passati, 29 saltati**, 0 falliti (`/tmp/libreFolio_x_r8_allbackend.log`). Il +116 sui 14 003 di J-5 è la
+   > differenza di raccolta (+117 −1): i miei 9 e 107 arrivati con l'aggiornamento di base (A4b: `test_session_version` 47,
+   > `test_session_revocation_api` 3; K2a: test BRIM 28 + 27 + 2 + 1). Porta 6183 libera.
+
+### Checkpoint X-R8 ✅ (2026-10-15) — committato dal coordinatore: `1dfd4e657` (codice, 11 file) e `edbb067b5` (journal)
+
+- **Base**: HEAD `4fdc0d9c5`.
+- **Elenchi**: nessuna rinomina, nessun taglio. Nuovi 2: `backend/app/services/fx/catalog.py`,
+  `backend/test_scripts/test_services/test_fx_catalog.py`. Modificati 11: `backend/app/api/v1/fx/providers.py`,
+  `backend/app/services/fx/__init__.py`, `backend/test_scripts/test_api/test_fx_api_unit.py`,
+  `scripts/test_runner/_backend_services.py` (superficie condivisa: un'azione in più, `fx-catalog`), 5 pagine MkDocs
+  (`settings_cache.md`, `fx_plugin_guide.md`, `fx/providers/ecb.md`, `fx/providers/snb.md`,
+  `frontend/fx-chain-algorithm.md`), il piano e il backlog (X-R8 chiusa, X-R10 nuova).
+- **Messaggi di commit proposti**: `feat(fx): cache the providers' supported currencies for a day` (11 percorsi: tutto
+  tranne il journal) e `docs(journal): X X-R8 log, backlog X-R8 closed, X-R10` (piano e backlog).
+
+### Ottavo aggiornamento di base: H CP5a, J-6, W E0 — controllo leggero di `38b913df3` ✅ (2026-10-15)
+
+Il coordinatore ha fuso `dev_release2` a `979d9ac2e` (H CP5a, la guardia di J-6, W E0, i record) nel mio ramo: merge
+`38b913df3`, pulito (`_backend_services.py` mette `fx-catalog` accanto a `platform-readiness` di H). La guardia di J-6 manda
+in ERROR, al suo teardown, ogni test che lascia aperta una connessione aiosqlite creata da lui: la run completa di X-R8 non
+l'aveva. Controllo leggero sulla 6183 (`/tmp/libreFolio_x_base8.sh`, 08:13–08:17, log `/tmp/libreFolio_x_base8.log`):
+- ✅ `front build --debug` (86 s): E0 ha cambiato il frontend e CP5a l'API.
+- ✅ Con la guardia: `services fx-catalog` 8, `api fx-unit` 29, `api fx` 21; nessun ERROR al teardown.
+- ✅ `services config-package` 593; `check-orphans`: nessun file orfano, ogni test registrato raggiungibile da un `all`.
+- ✅ `api schema` contro `979d9ac2e` estratto: `openapi.json` identico (115 percorsi), `tool-contracts` identico.
+- ✅ `mkdocs build` stretto (41 s, 3 012 URL), `check-links` 95 validi.
+- Worktree pulito dopo, porta 6183 libera.
+
+Note del coordinatore: X-R10 riceve una quinta voce (la docstring di `create_routes_bulk`), che è X-R1: registrata come
+rimando. Il CHANGELOG di X-R8 lo scrive lui all'ingresso. Prossimo: il disegno di FE5b (taglio di `AssetModal.svelte`) in
+sola lettura, mentre chiede il via al coordinatore colori; non FE5a (dopo il lotto A) né FE5c (dopo il lotto di Z sul
+polling); taglio dichiarato con `theme-roles.mjs --split` nello stesso commit, poi `--check`; prove dopo la finestra.
