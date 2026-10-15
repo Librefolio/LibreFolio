@@ -2465,3 +2465,93 @@ cancellazione dell'account; nessun commit prima della fine della richiesta.
    > **Note implementazione**: nessun file nuovo; delta di 9 file tracciati. Non girati: `all-backend` (lo chiedo nello
    > slot se il coordinatore lo vuole), E2E (nessun cambiamento del frontend né dell'API), `api sync` (nessuno schema
    > toccato).
+> **Ingresso di W-B20** (coordinatore 23:33: committato `d6b457849` fix, `357f2cd72` docs, `81bf8204f` wiki, `d4c034936`
+> giornale; base aggiornata con `dev_release2` `4ef2fc199`, merge pulito, solo il backlog fuso da sé → HEAD `70f7ab9bc`;
+> `all-backend` **non richiesto**: `begin_writes` è nuovo e lo chiama solo `delete_bulk`, bastano mirate e mutazione).
+> Prove sulla revisione combinata (23:34–23:41, `nice -n 10`, carico sotto 70 controllato prima): `services broker`
+> **70/70**; `db populate --force --clean`; `api brokers` **34/34**; `api users-admin` **64/64** (atteso il calo del
+> carico da 71). Porta 6184 libera. Pronto all'ingresso.
+
+**Regola della notte** (coordinatore 23:33; il developer dorme fino a domattina): una decisione del developer (prodotto,
+sicurezza, comportamento visibile fuori dal piano approvato) non si aspetta: al coordinatore in 3-4 righe con la proposta
+per prima, quel punto in pausa e si passa al successivo; una scelta tecnica nel perimetro la decido io e la annoto come
+«Decisione notturna, da rivedere»; slot pesanti, una prova alla volta con `nice` e checkpoint FROZEN invariati; senza
+lavoro, lo dico subito.
+
+### Lotto di doc A-14 · W-B10 · W-B27 (chiavi) · W-B33 ✅ FROZEN (2026-10-15/16; build da girare dopo la finestra)
+
+Ordine del coordinatore (23:33): finché J non ha CP-16, il lotto di doc A-14 con W-B10, più le chiavi di W-B27 e W-B33;
+le chiavi i18n vogliono `core-unit` prima dell'handoff; dalle 00:00 alle 01:15 niente E2E.
+
+**Analisi** (23:45, codice di `70f7ab9bc`):
+- **A-14** — `mkdocs_src/docs/developer/architecture/access_control.md`, «🔒 The "Last Owner" Rule»: dice che l'ultimo OWNER
+  «cannot remove themselves» e che per andarsene deve promuovere un altro OWNER o cancellare il broker. Il codice (F4):
+  `leave_broker()` (`services/brokers/access.py`) lascia andare l'ultimo OWNER e **cancella il broker** (`delete_bulk` con
+  `force`); `update_own_role()` gli rifiuta la retrocessione («The last OWNER cannot demote themselves — promote another
+  user first»); `bulk_update_access()` (`PUT …/access`) rifiuta ogni configurazione senza OWNER («At least one OWNER is
+  required»). La sezione «🔧 Self-Management» della stessa pagina è già giusta. Cura: riscrivere la regola come «un
+  broker ha sempre almeno un OWNER: nessuno lo toglie o lo retrocede; se se ne va, il broker se ne va con lui».
+- **W-B10** — stessa pagina, «🌐 API Endpoints»: elenca `POST …/access` e `PATCH`/`DELETE …/access/{user_id}`, che non
+  esistono. Le rotte vere (`backend/app/api/v1/brokers.py:446`, `:478`, `:531`, `:557`): `GET` e `PUT
+  /brokers/{broker_id}/access` (la configurazione intera: aggiunte, ruoli, quote e rimozioni in un colpo; OWNER o admin;
+  403, 400, 422 con la lista vuota), `PATCH /brokers/{broker_id}/access/me` (retrocessione di sé), `DELETE
+  /brokers/{broker_id}/access/me` (andarsene; `broker_deleted` nella risposta).
+- **W-B27, le chiavi** — `events.deleteBlocked` ed `events.deleteNotFound` (sorgente `assets`, prefisso `events`):
+  nessun lettore nei sorgenti del prodotto, nei test, nelle E2E, nel backend, negli script né nella doc; nessuna
+  chiave `events.${…}` costruita a runtime (le sole occorrenze di `deleteBlocked` sono `brokers.deleteBlocked*` e una
+  variabile locale di `routes/(app)/brokers/+page.svelte`). Si tolgono con `dev.py i18n remove`. Il resto di W-B27 (il
+  prefisso «Save failed:» e le date ISO in `AssetDataEditorSection.svelte`) è di X e resta fuori.
+- **W-B33** — `mkdocs_src/docs/developer/backend/transactions/service.md`, «🗑️ Broker Deletion»: (1) «One is required
+  since (`costBasisRequired`)» — `costBasisRequired` è il codice d'errore del batch (`schemas/transactions/batch.py:122`)
+  che la regola `cost_basis_required()` (`schemas/transactions/type_metadata.py:378`) solleva; (2) «both helpers» → i tre
+  aiuti, che `_compute_wac_for_auto_items()` (`services/transactions/auto_cost.py:31`) usa tutti; (3) la riga di
+  `delete_bulk()` nella tabella dei chiamanti tace l'admin: `as_user_id="all"` salta il controllo, `as_user_id=<id>`
+  controlla quell'utente (solo per l'admin, 403 per gli altri: `api/v1/brokers.py`).
+- La riga di `developer/api/overview.md:82` segnalata dal coordinatore (`/brim/files/…/download`) è **già giusta**
+  (`/brokers/import/files/…/download`): niente da fare.
+
+**Superfici**: `access_control.md` è condivisa con A (le sezioni d'account): tocco solo «Last Owner» e «API Endpoints»;
+`service.md` è di W; i sorgenti i18n `frontend/src/lib/i18n/assets/{en,it,fr,es}.json` (due chiavi in meno, il catalogo
+generato è ignorato).
+
+**Passi**: 1. ✅ doc (docs-writer: A-14, W-B10, W-B33, più tre sviste della stessa pagina); 2. ✅ chiavi (`i18n
+remove`); 3. ✅ prove (`i18n check`, `utils gate-i18n-catalog`, `utils gate-i18n-usage`, `front-utility core-unit`;
+`mkdocs build` stretto e `check-links` del secondo giro **dopo la finestra**); 4. ✅ handoff (sotto).
+
+2. ✅ **Chiavi di W-B27** (2026-10-15 23:46). `dev.py i18n remove "events.deleteBlocked" -f` e `… "events.deleteNotFound"
+   -f`: tolte in EN, IT, FR ed ES dalla sorgente `frontend/src/lib/i18n/assets/` (4 file, 8 righe tolte, nient'altro; il
+   catalogo generato si rifà da sé ed è ignorato).
+   > **Note implementazione**: prove, `nice -n 10`, una alla volta col carico controllato prima: `i18n check` stretto
+   > (**4 633 chiavi**, sorgenti base 1, plugin 71, sottosistemi 21); `utils gate-i18n-catalog` **176/176**; `utils
+   > gate-i18n-usage` **195/195**; `front-utility core-unit` **166 file, 5 491 test** verdi (23:48–23:5x, prima della
+   > finestra delle 00:00).
+1. ✅ **Doc** (docs-writer, 23:50–00:05).
+   - **Primo giro** (A-14, W-B10, W-B33): `access_control.md` +28 / −11, `service.md` +12 / −10; `mkdocs build` stretto
+     0 avvisi, `check-links` 96 validi (link nuovi: `#self-management`, `wac.md#persisted-cost-basis`). Due scarti dal
+     mio brief, scritti come fa il codice:
+     - l'elenco degli accessi (`GET …/access`) lo legge **qualsiasi utente con il login, di qualsiasi broker, e-mail
+       comprese** (`get_by_id(…, as_user_id="all")`, nessun controllo in `list_accesses()`): decisione del developer per
+       l'istanza di famiglia (C-8 della 38), fissata da ACCESS-002/003;
+     - W-B33 (1): «refused with `costBasisRequired`» vale per un batch che **crea** quella metà senza costo; un'edit di
+       sole note, tag o data su una riga vecchia passa (`batch_costs.py:152-176`, N2).
+     Riformulata anche la frase «orphaned … inaccessible by anyone with admin rights» (l'admin raggiunge comunque un
+     broker senza OWNER).
+   - **Secondo giro** (stessa pagina, sezioni dei broker, trovate dal primo): L56 «OWNER defaults to 1.00» (vale per chi
+     crea il broker; un OWNER aggiunto col `PUT` senza quota ha 0), L92 «cascade over transactions» (non è una cascata
+     del DB: `delete_by_broker()`, link a `service.md#broker-deletion`), L106 `bulk_update_access()` «OWNER only» (anche
+     l'admin). Senza build: dalle 00:00 è finestra tranquilla; build e `check-links` li giro io dopo «galleria finita».
+     Applicata da me la sua quarta segnalazione, L101 «Promotions stay on the OWNER-only path» → «Promotions go through
+     the `PUT`, OWNER or administrator only». Totale: `access_control.md` +40 / −17, `service.md` +12 / −10.
+   > **⚠️ Fuori pista** — **W-B34**, decisione per il developer (inviata al coordinatore alle 23:57 secondo la regola della
+   > notte, con la proposta per prima): `GET /brokers/{broker_id}/access` solo a chi ha un ruolo sul broker e all'admin,
+   > 404 agli altri. In pausa; il lotto va avanti e la doc descrive la regola di oggi. **W-B35** nel backlog: docstring
+   > e commenti superati (`access.py:98`, `:141`, `brokers.py:455`, `:496`, `transaction_service.py:84`; le docstring
+   > delle rotte vanno nell'OpenAPI, quindi `api sync` dopo). A-14 sta nella sezione di A del backlog: la chiusura la
+   > segna il coordinatore.
+4. ✅ **Handoff FROZEN** (2026-10-16 00:1x). Delta: `mkdocs_src/docs/developer/architecture/access_control.md` (solo
+   le sezioni dei broker: «Ownership share», «Last Owner», «Self-Management», «Implementation Details», «API
+   Endpoints»; le sezioni d'account di A intatte), `mkdocs_src/docs/developer/backend/transactions/service.md`,
+   `frontend/src/lib/i18n/assets/{en,it,fr,es}.json`, backlog e piano. Nessun file nuovo, nessun codice.
+   > **Note implementazione**: non girati, per la finestra G-13 (00:00–01:15): `mkdocs build` stretto e `check-links`
+   > del secondo giro (il primo giro: 0 avvisi, 96 link validi); li giro dopo «galleria finita», o li gira il
+   > coordinatore al treno. W-B34 attende il developer.

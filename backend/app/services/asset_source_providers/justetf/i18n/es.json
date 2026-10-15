@@ -1,0 +1,19 @@
+{
+  "pluginSettings": {
+    "asset": {
+      "justetf": {
+        "label": {
+          "preferred_currency": "Moneda preferida"
+        },
+        "description": {
+          "preferred_currency": "La búsqueda muestra cada fondo solo en esta moneda. Con Todas las monedas, cada fondo aparece en las cuatro, y 👑 marca la moneda del fondo."
+        },
+        "option": {
+          "preferred_currency": {
+            "all": "Todas las monedas"
+          }
+        }
+      }
+    }
+  }
+}

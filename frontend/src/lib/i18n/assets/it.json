@@ -377,8 +377,6 @@
   },
   "events": {
     "deleteSuccess": "{n} evento/i eliminato/i",
-    "deleteNotFound": "Evento/i non trovato/i: {ids}",
-    "deleteBlocked": "Impossibile eliminare: {n} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
     "fxBannerContext": "per eventi dividendi/cassa",
     "exists": {
       "title": "Questo evento esiste già",
@@ -414,6 +412,8 @@
     "UNSUPPORTED_PAGE": "Il provider ha trovato questo strumento ma la sua pagina di mercato non è ancora leggibile. Apri una issue su GitHub (Librefolio/LibreFolio) segnalando questo ISIN così possiamo aggiungere il supporto.",
     "RATE_LIMITED": "In pausa per troppe richieste fino alle {time}",
     "RATE_LIMITED_NO_TIME": "Troppe richieste: riprova più tardi",
-    "RATE_LIMITED_DAY": "In pausa per troppe richieste fino al {time}"
+    "RATE_LIMITED_DAY": "In pausa per troppe richieste fino al {time}",
+    "NOT_CONFIGURED": "Questo provider va configurato prima dell'uso",
+    "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}"
   }
 }
