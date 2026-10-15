@@ -66,8 +66,10 @@ flowchart TD
 4. The call goes through the family's boundary, `call_provider(provider, fn, timeout=…)` or
    `call_fx_provider(provider, fn)`, where `fn` returns the plugin's coroutine, for example
    `lambda: provider.search(query)`. A required field without a value refuses the call
-   ([`NOT_CONFIGURED`](#not-configured)); otherwise the operation runs with the plugin's secrets
-   in flight, masked in the log lines and in the exception it raises ([Secrets](#secrets)).
+   ([`NOT_CONFIGURED`](#not-configured)), and so does a pause after «too many requests»
+   (`RATE_LIMITED`, [Provider Pauses](../../backend/assets/architecture.md#provider-pauses));
+   otherwise the operation runs with the plugin's secrets in flight, masked in the log lines and in
+   the exception it raises ([Secrets](#secrets)).
 
 Every use gets a new instance and values resolved again: nothing is kept between uses, so one user's
 values never reach another user's call. A use is one search, one probe, the refresh of one asset,
@@ -77,7 +79,8 @@ the operations of a probe).
 A new call site follows the same path: an instance from `configured_provider()` or
 `configured_fx_provider()`, called through `call_provider()` or `call_fx_provider()`. An instance
 taken straight from the registry has no settings bound. `call_provider()` also accepts a `scope`
-argument, unused today.
+argument, the part of the provider a pause after «too many requests» covers
+(`core.cooldown_scope_for()`).
 
 ---
 
@@ -415,7 +418,9 @@ An error that still shows a secret after masking, because its own `__str__` buil
 state that masking cannot reach, is replaced at the boundary: by an `AssetSourceError` with
 `error_code="PROVIDER_ERROR"` for an asset provider, by an `FXServiceError` for an FX provider. Its
 message is `Provider <code> failed: <type>: <masked text>`, and it is raised with no link to the
-original error.
+original error. A refusal for too many requests is replaced the same way by an
+`AssetRateLimitedError` or an `FXRateLimitedError`, `Provider <code> refused for too many requests: …`,
+which keeps its `retry_after`.
 
 Masking does not reach threads a library starts by itself (they do not inherit the `ContextVar`),
 nor return values, nor a secret transformed in another way: in base64 in a Basic `Authorization`

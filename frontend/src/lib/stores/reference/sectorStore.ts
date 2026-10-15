@@ -1,14 +1,18 @@
 /**
- * Sector Store — Session-level cache for financial sector names from GET /utilities/sectors.
+ * Sector Store — session cache of GET /utilities/sectors: the sector keys, and the emoji of every sector and of the two
+ * allocation buckets (the cash, the unclassified), from the backend's one map (`backend/app/utils/asset/sector.py`).
  *
- * Loads once per session, then provides getSectorKeys() and getSectorEmoji() for any component.
- * Eliminates hardcoded sector arrays — single source of truth from the backend.
+ * No emoji is written here (developer, 15/10/2026: «se la andasse a prendere dal backend per essere centralizzati»).
+ * Until the list arrives a key has none, and every reader inside a reactive context — a `$derived`, an `$effect`, a
+ * template — runs again when it does (`createSubscriber`). A key the backend lists nowhere gets the backend's own
+ * fallback (`fallback_emoji`).
  *
- * Used by: DistributionEditor (sector options), assetTypes.ts (SECTOR_KEYS),
- *          AllocationHistoryChart (emoji icons).
+ * Used by: DistributionEditor and SectorSearchSelect (sector options), assetTypes.ts (`getSectorKeysList`), the
+ * allocation pie and history, the correlation heatmap, the risk panels, the PAC categories.
  *
  * @module stores/sectorStore
  */
+import {createSubscriber} from 'svelte/reactivity';
 import {zodiosApi} from '$lib/api';
 
 // ============================================================================
@@ -16,10 +20,20 @@ import {zodiosApi} from '$lib/api';
 // ============================================================================
 
 let sectorKeys: string[] = [];
-let sectorEmojiMap: Record<string, string> = {};
+let emojiByKey = new Map<string, string>();
+let fallbackEmoji = '';
 let loaded = false;
-let loading = false;
+let version = 0;
 let loadPromise: Promise<void> | null = null;
+let announce: (() => void) | null = null;
+
+/** Registers the reader in a reactive context; `announce()` then runs it again. */
+const track = createSubscriber((update) => {
+    announce = update;
+    return () => {
+        announce = null;
+    };
+});
 
 // ============================================================================
 // PUBLIC API
@@ -35,25 +49,22 @@ export async function ensureSectorsLoaded(): Promise<void> {
     if (loadPromise) return loadPromise;
 
     loadPromise = (async () => {
-        loading = true;
         try {
-            const response = await (zodiosApi as any).list_sectors_api_v1_utilities_sectors_get({
+            const response = await zodiosApi.list_sectors_api_v1_utilities_sectors_get({
                 queries: {include_other: true},
             });
             const items = response.items ?? [];
-            // Handle both old format (string[]) and new format ({key, emoji}[])
-            if (items.length > 0 && typeof items[0] === 'object') {
-                sectorKeys = items.map((i: any) => i.key);
-                sectorEmojiMap = Object.fromEntries(items.map((i: any) => [i.key, i.emoji ?? '📊']));
-            } else {
-                sectorKeys = items;
-                sectorEmojiMap = {};
-            }
+            const buckets = response.buckets ?? [];
+            sectorKeys = items.map((item) => item.key);
+            // A Map, not an object: `constructor` or `__proto__` must not answer with what Object.prototype holds.
+            emojiByKey = new Map([...items, ...buckets].map((entry): [string, string] => [entry.key, entry.emoji]));
+            fallbackEmoji = response.fallback_emoji ?? '';
             loaded = true;
+            version += 1;
+            announce?.();
         } catch (e) {
             console.error('Failed to load sectors:', e);
         } finally {
-            loading = false;
             loadPromise = null;
         }
     })();
@@ -66,33 +77,24 @@ export async function ensureSectorsLoaded(): Promise<void> {
  * Call ensureSectorsLoaded() first if you need guaranteed data.
  */
 export function getSectorKeys(): string[] {
+    track();
     return sectorKeys;
 }
 
 /**
- * Get the emoji for a sector key. Returns from backend data if available,
- * otherwise uses built-in fallback map.
+ * The emoji of a sector or an allocation bucket (`Liquidity`, `Unknown`), as the backend lists it: `''` until the
+ * list arrives, the backend's fallback for a key it does not list.
  */
 export function getSectorEmoji(key: string): string {
-    if (sectorEmojiMap[key]) return sectorEmojiMap[key];
-    // Fallback: hardcoded map (used until API sync regenerates client)
-    const FALLBACK: Record<string, string> = {
-        Industrials: '🏭',
-        Technology: '💻',
-        Financials: '🏦',
-        'Consumer Discretionary': '🛍️',
-        'Health Care': '🏥',
-        'Real Estate': '🏠',
-        'Basic Materials': '⛏️',
-        Energy: '⚡',
-        'Consumer Staples': '🛒',
-        Telecommunication: '📡',
-        Utilities: '💡',
-        'Corporate Bonds': '🏢',
-        'Government Bonds': '🏛️',
-        Other: '📦',
-        Liquidity: '💰',
-        Unknown: '❓',
-    };
-    return FALLBACK[key] ?? '📊';
+    track();
+    return emojiByKey.get(key) ?? (loaded ? fallbackEmoji : '');
+}
+
+/**
+ * A number that changes when the list arrives. Read it in the reactive context of a view that writes the emoji
+ * somewhere a reactive read cannot follow — a chart option built later, in a callback — to rebuild that view then.
+ */
+export function sectorEmojiVersion(): number {
+    track();
+    return version;
 }

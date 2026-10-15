@@ -2330,3 +2330,204 @@ parte 1, Y2. Merge aperto dal coordinatore e committato da lui (`f2a766f45`, gen
   **⚠️ Fuori pista**: l'avviso della seconda pausa (dalle 21:00) mi è arrivato dopo. `api assets-provider` era già in
   corso e ha finito alle 21:01:11. Dopo, lo script ha lanciato da solo due passi leggeri, `check-orphans` (7 s, una
   scansione dei file) e `api sync` (24 s), finiti alle 21:01:42. Da allora niente in esecuzione.
+
+## X-RL (X1–X8) — il contratto dei limiti dei fornitori, sopra Z7a ✅ (15/10, 21:03–23:16; FROZEN, in attesa del checkpoint)
+
+> **Via del coordinatore** (15/10, 21:03): «Via a X1–X8, il contratto dei limiti dei fornitori sopra Z7a, che è già
+> dentro.» Base: `86da642c3` (= `dev_release2`, avanzamento veloce del coordinatore). Disegno: piano 06 di Z, sezione
+> «Z7 — disegno», contratto X1–X8; decisioni D-Z7-1…4 del coordinatore (attuazione della decisione 34 del developer).
+
+### Analisi sul codice (15/10)
+
+- **Z7a** (`utils/runtime/cooldown.py`, `services/platform/provider_cooldown.py`):
+  - `RateLimitedError(retry_after, scope)`, `retry_after_seconds()`;
+  - `wait_before_call(domain, provider, scope)` (0 o i secondi che mancano; alla scadenza un solo tentativo);
+  - `record_refusal(…, retry_after) -> attesa`, `record_success`, `record_no_verdict` (altro errore, timeout,
+    cancellazione: libera il tentativo).
+  Sincroni, in memoria, impostazioni lette a ogni chiamata (0 spegne).
+- **I segnali dei fornitori**:
+  - yahoo: `yfinance` 1.7.0 ha `YFRateLimitError`; `_yf_with_retry` riprova anche i 429 con `sleep` 1,5–3–6 s;
+  - css_scraper: `httpx.HTTPStatusError` (oggi `HTTP_ERROR`), l'URL è l'identificativo, quindi lo scope è il suo host;
+  - justETF: `justetf_scraping` non ha eccezioni sue: `RuntimeError("…status 429…")` (`helpers.py:64`,
+    `etf_profile.py:232`), riconoscibile solo dal testo;
+  - Borsa Italiana: `borsa_italiana_scraping` 0.3.2 ha `RateLimitRaggiunto`, per un 429 dopo i suoi ritentativi con
+    `sleep` 2–4 s, e per un 403 del WAF;
+  - FX ECB, FED, BOE, SNB: `httpx` con `raise_for_status()`, poi `FXServiceError`.
+- **I confini** sono già unici dal CP10: `call_provider(provider, fn, *, timeout, scope=None)` per gli asset (ogni
+  chiamata: dal vivo, refresh, metadati, ricerca anche in streaming, `resolve_url`, prova) e `call_fx_provider` per i
+  cambi (sync, `ensure_rates_multi_source`, catalogo delle valute). Le cache stanno già prima del confine.
+- **Gli schemi**: `FACurrentPriceItem` (`prices.py:352`), `FARefreshResult` (`refresh.py:111`), `FXSyncPairResult`
+  (`refresh.py:206`) e `BaseProbeOperationResult` (`provider.py:346`, ha già `error_code` ed `error_details`). La
+  ricerca: `providers_with_errors` è una lista di codici; l'evento SSE `provider_error` è un JSON libero.
+
+### Scelte
+
+1. Ai consumatori arriva come `retry_after` **l'attesa decisa dal confine** (`record_refusal`, ≥ il `Retry-After` del
+   fornitore), non il solo `Retry-After`: è il tempo dopo cui una chiamata passa davvero.
+2. Lo scope lo dà il plugin con l'hook `cooldown_scope(identifier, identifier_type, provider_params)` (default `None`;
+   css_scraper: l'host). Lo calcolano i chiamanti, che hanno l'identificativo, con `core.cooldown_scope_for(...)`, e lo
+   passano a `call_provider`; la ricerca non ha identificativo, quindi scope `None`.
+3. I doppi dei test che non sono plugin restano fuori dalle pause, come restano fuori dalle impostazioni.
+4. yahoo: un rifiuto per troppe richieste non si riprova più nel thread (via i `sleep` sul 429); gli altri errori
+   transitori sì. justETF dal testo `status 429`; Borsa Italiana da `RateLimitRaggiunto`. I `sleep` interni della
+   libreria di Borsa restano: è un pacchetto a parte; lacuna scritta nella guida.
+5. Ricerca: `providers_with_errors` resta com'è; l'evento `provider_error` aggiunge `error_code` e `retry_after`.
+6. Prova (X8): `retry_after` in `BaseProbeOperationResult` e in `error_details`; la UI mostra «in pausa fino alle
+   HH:MM» con l'ora locale, chiave nuova `providerErrors.RATE_LIMITED` nelle 4 lingue; un'operazione in pausa è
+   un avviso, non un fallimento.
+7. Modalità «troppe richieste» dei doppi:
+   - `mockprov`: il parametro `mock_rate_limited` (secondi, o `true`) e la ricerca `lf-rate-limited`;
+   - `mockfx`: due attributi di classe per le prove in processo.
+   Mai una pausa vera sul backend condiviso.
+
+### Passi
+
+1. ✅ (2026-10-15) X1/X2: `AssetRateLimitedError`, `FXRateLimitedError`, gli aiuti per riconoscere un 429, l'hook `cooldown_scope`.
+   > **Note implementazione**: `assets/base.py`:
+   > - `AssetRateLimitedError(AssetSourceError, RateLimitedError)`: codice `RATE_LIMITED`, `retry_after`, `scope`;
+   > - gli aiuti `rate_limited_from_response` (un 429 di `httpx` o `requests` col suo `Retry-After`),
+   >   `rate_limited_from_exception` (anche dal testo «status 429» / «HTTP 429») e `raise_if_rate_limited`;
+   > - l'hook `cooldown_scope(identifier, identifier_type, provider_params)` del plugin, default `None`.
+   >
+   > `fx/base.py`: `FXRateLimitedError(FXServiceError, RateLimitedError)`, `fx_rate_limited_from_response`,
+   > `raise_if_fx_rate_limited`, `longest_refusal` e `raise_longest_refusal`.
+2. ✅ (2026-10-15) X4: le pause nei due confini; lo scope dai chiamanti.
+   > **Note implementazione**: `core.call_provider` e `fx/runtime.call_fx_provider` chiamano Z7a:
+   > - prima `wait_before_call`: in pausa → `AssetRateLimitedError` / `FXRateLimitedError` subito, senza thread né I/O;
+   > - dopo, un `RateLimitedError` → `record_refusal`, e l'errore riparte con `retry_after` = la pausa decisa;
+   > - una risposta → `record_success`; ogni altra fine, cancellazione compresa → `record_no_verdict`.
+   >
+   > Un `RateLimitedError` che non è dell'errore del dominio, o che mostra ancora un segreto, è sostituito da un
+   > `AssetRateLimitedError` / `FXRateLimitedError` senza legami. `core.cooldown_scope_for` chiama l'hook in modo sicuro
+   > (un hook che fallisce → `None`, nel log). Lo scope arriva da:
+   > - il dal vivo di `price_query`;
+   > - le due chiamate di `refresh`;
+   > - `metadata`;
+   > - le tre operazioni della prova.
+   >
+   > La ricerca e `resolve_url` restano senza scope.
+3. ✅ (2026-10-15) X3: i fornitori (yahoo, css_scraper, justETF, Borsa Italiana, 4 FX) e le modalità dei doppi.
+   > **Note implementazione**:
+   > - **yahoo**: `_is_rate_limited` (`YFRateLimitError`, o `429` come parola intera, «too many requests», «rate
+   >   limit») → `AssetRateLimitedError` in `_yf_with_retry`, senza ritentativi; tolti dalle parole transitorie. Ricerca
+   >   e metadati ora lo lasciano passare: prima ogni errore diventava `[]` o `None`.
+   > - **css_scraper**: un 429 → `AssetRateLimitedError` con `Retry-After` e scope = host; l'hook `cooldown_scope` dà
+   >   l'host dell'URL (identificativo). `_url_host` regge un URL malformato.
+   > - **justETF**: il testo «status 429» nei quattro gestori.
+   > - **Borsa Italiana**: `RateLimitRaggiunto` (429 dopo i ritentativi della libreria, 403 del WAF) nei cinque gestori.
+   > - **I 4 FX**: un 429 nei gestori `httpx`. Una valuta rifiutata rifiuta tutta la chiamata: BOE e FED dopo il
+   >   `gather`, ECB si ferma nel suo ciclo seriale.
+   > - **Doppi**: `mockprov` col parametro `mock_rate_limited` (secondi, o `true`) in corrente, storico e metadati, e
+   >   la ricerca `lf-rate-limited` (`Retry-After` 30 s); `MockFXProvider.rate_limited` /
+   >   `.rate_limited_retry_after`, che valgono per il catalogo e le quotazioni.
+   >
+   > Prova: l'app si importa; scoperta: 6 asset e 7 cambi senza errori; ruff e black puliti.
+   > **⚠️ Fuori pista**:
+   > - Al primo giro i rami aggiunti portavano 5 funzioni sopra il limite di complessità (C901). Invece di `noqa`, aiuti
+   >   che sollevano da sé: una riga per gestore, nessun ramo.
+   > - Una sostituzione automatica degli import, troppo larga, aveva fuso le righe di import seguenti in 6 file.
+   >   Riparata ricostruendo il blocco dalla versione di HEAD; controllo con `ast` e diff di sole righe d'import volute.
+4. ✅ (2026-10-15) X5: gli schemi e i servizi che li riempiono (dal vivo, refresh, sync FX, prova, evento della ricerca); `api sync`.
+   > **Note implementazione**: `error_code` e `retry_after` (secondi, `ge=0`) in `FACurrentPriceItem`,
+   > `FARefreshResult` e `FXSyncPairResult`; `retry_after` in `BaseProbeOperationResult`. Chi li riempie:
+   > - **dal vivo** (`price_query`): una pausa ripiega sull'ultimo prezzo come prima (`db:last_known`, HTTP 200), con
+   >   codice e attesa; anche senza prezzo salvato;
+   > - **refresh**: `_fetch_refresh_item` restituisce anche il rifiuto incontrato, storico o corrente (vince l'attesa più
+   >   lunga); `_persist_refresh_items` lo aggiunge al risultato finito con `model_copy`, che sia fallito o parziale, e
+   >   `_persist_refresh_item` resta com'è;
+   > - **sync FX**: i fornitori in pausa registrati da `_fetch_provider` (INFO, non più un'eccezione nel log); dopo il
+   >   `gather`, una coppia FAILED o PARTIAL con uno di loro nelle sue rotte prende `RATE_LIMITED` e l'attesa più
+   >   breve; una coppia servita per intero da un'altra rotta resta com'è;
+   > - **prova**: `_probe_failure_fields` mette `retry_after` sul risultato e in `error_details`;
+   > - **ricerca**: un fornitore in pausa scrive un INFO al posto di un traceback, e l'evento SSE `provider_error` porta
+   >   `error_code` e `retry_after`; la risposta non in streaming non cambia.
+   >
+   > `api sync` fatto; il client generato è ignorato.
+5. ✅ (2026-10-15) X8: la UI della prova e la chiave i18n.
+   > **Note implementazione**: `resolveProviderError.ts`: `RATE_LIMITED` → `providerErrors.RATE_LIMITED`, «…fino
+   > alle {time}». L'attesa viene da `retry_after` o da `error_details.retry_after`, e `formatResumeTime` arrotonda per
+   > eccesso al minuto in `uiLocale()`: solo l'ora oggi, data e ora un altro giorno. Senza attesa,
+   > `providerErrors.RATE_LIMITED_NO_TIME`. `providerProbe.ts`: `RATE_LIMITED` in `SOFT_FAIL_CODES`, un avviso: la
+   > configurazione può essere giusta, e il messaggio dice fino a quando. `ProviderAssignmentSection.svelte` non
+   > cambia: passava già `error_details`. Le due chiavi nelle 4 lingue con `dev.py i18n add` (sorgente
+   > `i18n/assets/`). Prove: Vitest `resolveProviderError` + `providerProbe` 36/36; Prettier invariato;
+   > `front check` 0 errori e 0 avvisi.
+   > Il primo smoke dei confini (`/tmp/libreFolio_x_rl_smoke.py`) dà 17/17:
+   > - il rifiuto mette in pausa per max(base, `Retry-After`);
+   > - durante la pausa nessuna chiamata;
+   > - dopo la scadenza passa un tentativo solo, e il successo toglie la pausa;
+   > - lo scope per host, i riconoscitori e il confine FX;
+   > - a pause spente ogni chiamata arriva al fornitore, con il suo `Retry-After`.
+   > **⚠️ Fuori pista (dalla rilettura di docs-writer, 15/10)**: cinque correzioni.
+   > - **Il riassunto della prova** (`summarizeProbeError`) taglia a 60 caratteri, e in spagnolo l'ora andava persa.
+   >   Testi accorciati, sotto i 60 nelle 4 lingue anche con la data (misurati). Una chiave in più,
+   >   `providerErrors.RATE_LIMITED_DAY`, perché in italiano «fino alle» non regge una data, e in FR/ES nemmeno; il
+   >   nuovo `resumesToday` sceglie la chiave.
+   > - **SNB**: anche la richiesta della mappa delle valute riconosce un 429 (`_ensure_currency_map`).
+   > - **Borsa Italiana `resolve_url`**: i due gestori best-effort non ingoiano più un rifiuto: il fornitore va in
+   >   pausa, e la ricerca salta comunque quell'URL. Resta best-effort solo la scheda del fondo dentro la ricerca.
+   > - **Le docstring**: la libreria di Borsa dorme 2, 4 e 8 s, non 2 e 4; `_yf_with_retry` fa al massimo tre
+   >   tentativi, con attese di 1,5 e 3 s.
+   > - **Il commento di `refresh.py`** prometteva il comportamento di Z7b, che non c'è ancora.
+   >
+   > Vitest 36/36, Prettier e ruff puliti.
+6. ✅ (2026-10-15) X6: prove (test-author), alla ripresa.
+   > **Note implementazione** (test-author). Quattro unità nuove, tutte `pure`:
+   >
+   > | unità | test |
+   > |---|---|
+   > | services `rate-limit-errors` | 43 |
+   > | services `rate-limit-boundaries` | 33 |
+   > | services `rate-limit-http-providers` | 18 (`httpx.MockTransport`) |
+   > | services `rate-limit-results` | 22 (DB privato sotto `tmp_path`) |
+   >
+   > Estesi `provider-errors` (Yahoo, justETF, Borsa Italiana: 177) e i due Vitest (`resolveProviderError` 35,
+   > `providerProbe` 30). Ogni prova installa il suo `Cooldowns` (orologio finto, jitter 0) con monkeypatch: nessuna
+   > pausa tocca il backend condiviso. Regressioni verdi:
+   > - services: asset-source 61, asset-source-refresh 12, asset-source-guards 29, provider-contracts 435,
+   >   provider-registry 7, web-link-finder 29, borsa-italiana-search 5 e -funds 17, fx-sync-service 5, fx-catalog 8,
+   >   provider-cooldown 66, plugin-settings-runtime 80;
+   > - utils: cooldown 112, provider-core-cache 29;
+   > - schemas: assets 70, fx-routes 34;
+   > - api (dopo `db --force populate`): fx-unit 29, fx 21, assets-provider 24;
+   > - `check-orphans` pulito; `providerProbeState` 237 e `svelte-check` 0/0.
+   >
+   > **Tre osservazioni**:
+   > 1. Una coppia FX PARTIAL con una rotta di riserva in pausa prende `RATE_LIMITED`: tenuta, perché finita la pausa
+   >    quella rotta può riempire le date che mancano.
+   > 2. Il riconoscitore di testo era stretto: allargato a «HTTP Error 429» (urllib), «status code 429» e «Too Many
+   >    Requests», con i casi aggiunti alle prove.
+   > 3. Un refresh può essere OK con `RATE_LIMITED`: Z7b deve rimandare in base a `error_code`, non allo stato
+   >    (nota per Z).
+7. ✅ (2026-10-15) X7: guide dei plugin e architettura (docs-writer).
+   > **Note implementazione** (docs-writer, solo inglese, tre giri):
+   > - **Guide dei plugin**: in `asset_plugin_guide.md` e `fx_plugin_guide.md` una sezione «Too many requests» con le
+   >   regole, gli aiuti, l'hook (asset), la regola della chiamata intera (FX), un esempio e le modalità dei doppi.
+   > - **Architettura e cambi**: `backend/assets/architecture.md` («Provider Pauses»: il confine, le pause, la tabella
+   >   dei chiamanti, i testi della prova); `backend/fx/configuration.md` («Paused Providers»).
+   > - **Pagine dei fornitori**: Yahoo, CSS, justETF, Borsa Italiana (le lacune volute) e i quattro FX. Sistemati anche
+   >   FED e BOE, che dicevano «sequenziale» per un codice parallelo.
+   > - **Altre pagine**: `plugin_settings.md`, `search_link_finder.md`, `api/overview.md` e
+   >   `test-walkthrough/external.md`, che dava ancora il 429 di yfinance fra gli errori riprovati.
+   > - **Utente**: `create-edit.en.md` (il messaggio della prova), `yahoo-finance.en.md`, `css-scraper.en.md`.
+   >
+   > Nessuna pagina nuova, nessuna riga in nav. Debito di traduzione: i tre `.it/.fr/.es` delle pagine utente. Le sue
+   > riletture hanno portato le correzioni del «Fuori pista» qui sopra, più due in Borsa Italiana: `_fund_metadata`
+   > rilancia un rifiuto prima di `except AssetSourceError`, e la scheda di `resolve_url` lo rilancia. Restano
+   > best-effort, scritti, solo la valuta (`_price_api_currency`) e la scheda del fondo dentro la ricerca.
+   > Le pagine di Z (scheduler, live ticker, variabili `LIBREFOLIO_PROVIDER_COOLDOWN_*`) non sono toccate: i link
+   > puntano a `.env.example` finché Z non le scrive (Z-9).
+8. ✅ (2026-10-15) Revisione, prove della corsia, checkpoint.
+   > **Note implementazione**:
+   > - `all-backend --workers 2` sullo slot pesante 1 (22:43–23:16, corsia 6183,
+   >   `--log-dir /tmp/libreFolio_x_rl_allbackend`): **7 categorie su 7 verdi**. Le fasi parallele 4796, 4819, 2750, 1119,
+   >   586 e 75 test. Le 6 righe ❌ della suite esterna FX sono stampe dentro prove che passano (28 passate, 21 saltate),
+   >   identiche nel giro del CP10.
+   > - `mkdocs build` (strict, 52 s) e `check-links` (96 link) verdi sulla documentazione finale.
+   > - `front check` 0/0; ruff pulito su 31 file. Black segnala solo `_backend_services.py`, che fallisce già a HEAD
+   >   per una riga di un altro lotto (l'anteprima della cancellazione dell'account): non toccata.
+   > - OpenAPI contro `86da642c3`: solo campi facoltativi aggiunti (`error_code`/`retry_after` in `FACurrentPriceItem`,
+   >   `FARefreshResult` e `FXSyncPairResult`; `retry_after` nei tre risultati della prova), nessun `required` cambiato,
+   >   nessun percorso.
+   > - Previsione dei conflitti contro `45499dec4`: due file in comune (`api/overview.md`, `_backend_services.py`),
+   >   entrambi puliti.

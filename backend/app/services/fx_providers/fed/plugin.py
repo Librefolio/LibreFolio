@@ -16,7 +16,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.provider_registry import register_provider
 
@@ -199,6 +199,7 @@ class FEDProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency} from FED/FRED: {e}")
                 raise FXServiceError(f"FED/FRED API error for {currency}: {e}") from e
             except Exception as e:
@@ -208,6 +209,7 @@ class FEDProvider(FXRateProvider):
         # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
         tasks = [_fetch_one(c) for c in valid_currencies]
         fetched = await asyncio.gather(*tasks, return_exceptions=True)
+        raise_longest_refusal(fetched)  # a currency refused for too many requests: the whole call is refused, the core pauses
 
         for i, result in enumerate(fetched):
             if isinstance(result, BaseException):
