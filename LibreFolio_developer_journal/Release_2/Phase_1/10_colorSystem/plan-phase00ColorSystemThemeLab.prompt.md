@@ -100,7 +100,7 @@
 | G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | codice `e23bf842c` + `0076f4269` **integrato in `dev_release2`** (`60b3f27aa`); misura finale il 15/10 alle 09:00 sul target, poi checkpoint delle evidenze |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotti A `d80b9e0cd`, B `75c45d923`, C `0b660632f`, D `98731240d`: codice completo; base allineata con T-1 (`418ea8042`); cancello unico A+B+C+D dopo l'ingresso di G, poi W10 |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` e T-2 (accesso) `a73eb7eda` **integrati in `dev_release2`** (`d80b986bf`); prossimo T-3 (shell) |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` e T-2 (accesso) `a73eb7eda` **integrati in `dev_release2`** (`d80b986bf`); T-3 (shell) `bd51acbc2` e T-5 (sfondo del login) `f43aa7200` committati sul ramo, in attesa della gallery candidata del 15/10 e della revisione del developer; poi T-4 dopo l'ingresso di R, poi le ondate W1–W6 |
 
 Superfici condivise e relativi proprietari:
 

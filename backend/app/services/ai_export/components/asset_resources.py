@@ -38,7 +38,7 @@ from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse,
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 

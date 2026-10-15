@@ -637,3 +637,118 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 
 > Handoff inviato al coordinatore: 13 rinomine, 80 file modificati, 3 nuovi. Commit proposto:
 > `refactor(services): move platform and file modules`. Nella sezione H del backlog: H-1 e H-2.
+
+### Aggiornamento di base con A1 ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - Il coordinatore ha aperto `git merge --no-ff --no-commit 769cc31cb` (A1) sul mio `7366c0355`: 6 conflitti, tutti
+>   d'import fra i percorsi miei (`platform/`, `files/`) e quelli di A (`accounts/`).
+> - I file risolti tengono i percorsi nuovi di tutti e due: `main.py`, `api/v1/settings.py`, `api/v1/uploads.py`,
+>   `portfolio_service.py`, `test_layer_boundaries.py`, `coverage_analysis.py`.
+>   - In `settings.py` e `uploads.py` c'erano due righe vecchie fuori dai marcatori: le ho corrette.
+>   - `platform/scheduler/settings.py:11` si era fuso da solo, sul percorso giusto.
+> - **Revisione combinata**:
+>   - `front build --debug` ok;
+>   - `all-backend` 7/7, **11 351 passed, 3 skipped, 0 failed**, uguale alla base;
+>   - `api schema` uguale a quello di `769cc31cb`, escluso `info.version`;
+>   - ruff pulito; grep dei vecchi percorsi, miei e di A, a zero.
+> - **Integrazione**: merge `79b866f9a` (coordinatore), poi CP1 in `dev_release2` con `6a605904c`. Il mio ramo è
+>   avanzato in fast-forward a `6a605904c`.
+
+### CP2 diviso — via per CP2a (coordinatore, 2026-10-15 alle 00:49)
+
+> **Ordine approvato**: CP2a → CP3 → CP4 → CP2b (dopo il commit del coordinatore su `main.py`) → CP5 → CP6 → CP7a e
+> CP7b, ciascuno con il suo checkpoint FROZEN.
+>
+> **Precauzioni per CP2a**:
+>
+> - `web_link_finder.py` non si tocca: X lo sta spostando in `services/assets/`. Le sue 7 letture le sposto sul
+>   percorso nuovo dopo l'ingresso di X, in CP3 o in un lotto a parte.
+> - Nei file di A, `accounts/auth_service.py:104` e `accounts/donation_popup_service.py:39`, va bene una riga
+>   ciascuno; `platform/scheduler/scheduler.py:97` va bene anche lui, perché Z non è partito.
+>
+> **Mia decisione**: il pacchetto `api/v1/system/` (C2) esce da CP2a e va all'inizio di CP4. Il CP1 di X, committato
+> sul suo ramo ma non ancora in `dev_release2`, cambia probabilmente l'import di `system.py:26`. Dividere ora il file
+> metterebbe X in conflitto su una riga spostata in un altro modulo.
+
+### CP2a — il pacchetto `config/` e le letture d'ambiente (2026-10-15) — in corso
+
+> **Disegno**, in due commit:
+>
+> - **Rinomina**: `git mv backend/app/config.py backend/app/config/__init__.py`. L'unica riga cambiata è
+>   `PROJECT_ROOT` (`parents[3]`), più i riferimenti al percorso nei commenti, nella doc e nelle tabelle della wiki.
+> - **Sezioni e letture**:
+>   - `config/platform.py` (H): `scheduler_disabled()`, `configured_jwt_secret()`, `owning_test_lane_id()`;
+>   - `config/accounts.py` (A, creato da H): `donation_popup_disabled()`;
+>   - le cinque letture sparse passano da quelle funzioni: `main.py:70` usa `is_test_mode()`;
+>   - ogni variabile tiene la sorgente di oggi, solo ambiente e mai `.env`, con la stessa semantica.
+>   - La guardia: nessuna lettura d'ambiente in `backend/app` fuori da `config/`, salvo `web_link_finder.py`. Le
+>     scritture di `spawn_worker` sono ammesse.
+
+#### CP2a passo 1 — rinomina del pacchetto ✅ (2026-10-15)
+
+> **Note implementazione**:
+>
+> - `git mv backend/app/config.py backend/app/config/__init__.py`. Cambiano due righe: `PROJECT_ROOT =
+>   Path(__file__).parents[3]` e il suo commento, che diceva «two levels up» ed era sbagliato già prima.
+> - Verifiche: `PROJECT_ROOT` è la radice del repo; `.env`, `DEFAULT_PROD_DATA_DIR` e `import backend.app.main` sono
+>   invariati.
+> - **Riferimenti al percorso**:
+>   - commenti in `alembic/env.py` e `alembic/check_constraints_hook.py`;
+>   - docstring in `test_server_helper.py` e `test_dev_cli_db_path.py`;
+>   - doc `developer/architecture/database/index.md` e `developer/backend/risk/architecture.md` (×2);
+>   - 15 righe di tabelle «Source files» della devWiki (C6). Il controllo dei percorsi resta a 5/8. La prosa va in
+>     H-1.
+
+#### CP2a passo 2 — sezioni e letture spostate ✅ (2026-10-15)
+
+> **Note implementazione**:
+>
+> - **Sezioni nuove**:
+>   - `config/platform.py` (H): `scheduler_disabled()`, `configured_jwt_secret()`, `owning_test_lane_id()`;
+>   - `config/accounts.py` (A): `donation_popup_disabled()`.
+>   - Solo ambiente, con la semantica di prima: `LIBREFOLIO_NO_SCHEDULER` disattiva con qualunque valore non vuoto,
+>     anche `0`; un `JWT_SECRET` vuoto conta come assente.
+> - **Letture spostate**:
+>   - `main.py`: via `import os` (r. 8); la r. 70 usa `is_test_mode()`, che era già importata;
+>   - `api/v1/system.py`: via `import os`, un import nuovo, `owning_test_lane_id()`;
+>   - `platform/scheduler/scheduler.py` (Z): via `import os`, un import, `scheduler_disabled()`;
+>   - `accounts/auth_service.py` (A): via `import os`, un import, `configured_jwt_secret()`;
+>   - `accounts/donation_popup_service.py` (A): via `import os`, un import, `donation_popup_disabled()` e la docstring
+>     di due righe.
+> - **Fuori da `config/`**: restano le letture di `web_link_finder.py` (eccezione dichiarata) e le scritture di
+>   `spawn_worker`.
+> - **Doc e istruzioni**:
+>   - `.github/instructions/backend.instructions.md`: la mappa e la riga «Config & Data Paths»;
+>   - `developer/architecture/settings.md` (docs-writer): l'admonition del terzo livello, con il pacchetto, le
+>     sezioni e la regola con la sua guardia. `mkdocs build` passa.
+> - **Mirati**, tutti PASSED: `services config-misc` (4), `donation-popup` (19), `scheduler-loop` (5);
+>   `utils runtime-isolation` (167), `dev-cli-db-path` (15); `db post-migration` (37).
+> - **Fuori pista**: nessuno.
+
+#### CP2a passo 3 — la guardia e i verdi ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Guardia** (test-author): `backend/test_scripts/test_services/test_config_package.py`, 451 test puri.
+>   - Il rilevatore AST si prova da solo: 34 forme di lettura, 11 ammesse.
+>   - Un caso per ognuno dei 421 file di `backend/app` fuori da `config/`.
+>   - L'eccezione `web_link_finder.py` è legata al nome del file, a cricchetto: quando il file non legge più, o non
+>     esiste più, la voce va tolta.
+>   - Le quattro funzioni conservano anche le stranezze di prima.
+>   - Il test controlla che `PROJECT_ROOT` sia la radice.
+>   - Sui file di `HEAD`, il rilevatore trova le 5 letture di prima alla riga giusta.
+> - **Runner**: `services config-package`, `isolation="pure"`, dopo `config-misc`. Aggiornato il `print_info` di
+>   `config-misc`.
+> - **`all-backend`**, con i flag della base: 7/7 in 11 min 55 s; **11 802 passed, 3 skipped, 0 failed**. Sono 451 in
+>   più rispetto a CP1 + A1: esattamente i test nuovi.
+> - **Statici**:
+>   - ruff pulito; black invariato sui 14 `.py` toccati;
+>   - dead code identico, salvo il percorso di `user_service` che ha spostato A1;
+>   - `api schema` identico alla base.
+> - **Doc e wiki**: `mkdocs build` passa (docs-writer); `check_source_paths.py` dà 5/8, invariato.
+> - **Altro**: rinomina al 99 %; grep di `app/config.py` a zero fuori dal journal e dalla prosa della wiki;
+>   `git diff --check` pulito; porta 6181 libera.
+
+### Checkpoint CP2a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore

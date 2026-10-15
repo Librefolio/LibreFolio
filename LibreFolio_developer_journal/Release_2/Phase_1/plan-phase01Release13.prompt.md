@@ -531,6 +531,11 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
+- **Avvisi di merge: file del programma colori** (richiesta del coordinatore colori, 15/10). Ogni avviso di merge in
+  `dev_release2` elenca i file toccati sotto `scripts/visual_review/`, `frontend/scripts/theme/`,
+  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts` e `Phase_1/10_colorSystem/`, anche quando cambia solo un
+  commento: G e T li modificano nei loro checkpoint. Prima dell'avviso, il coordinatore 1.3 li cerca con
+  `git diff --name-only <target> <ramo> -- <quei percorsi>`.
 - **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
   della 1.3 blocchi il tag.
   - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
@@ -781,3 +786,23 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
 >
 > Così CP3 (segreti) e CP4 (configurazione pubblica) non aspettano più la release.
+
+### Riordino del backend: sette lotti integrati ✅ (2026-10-15, 02:20)
+
+> **Note implementazione**: in `dev_release2`, nell'ordine:
+> - A1 (`769cc31cb`);
+> - H CP1 (`6a605904c`);
+> - A2, il frontend in `lib/features/` (`76e61889b`);
+> - W1 e W2, transazioni e broker per tema (`998fd2701`);
+> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`60f8a35ce`);
+> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`64a5a3fe7`).
+>
+> Ogni ingresso dopo un aggiornamento di base e la validazione della revisione combinata nel worktree del figlio:
+> - `all-backend` uguale alla base, più i test nuovi;
+> - `api schema` invariato;
+> - ricerca dei vecchi percorsi a zero;
+> - per X, anche la ricerca degli import vecchi che si fondono senza conflitto.
+>
+> **Fuori pista**:
+> - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
+> - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.

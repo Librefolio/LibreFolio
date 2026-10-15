@@ -80,7 +80,7 @@ complete history on every batch.
 ## 🚨 Issue Shape and Stop Condition
 
 `BalanceValidationError` is defined in
-`backend/app/services/transaction_batch_context.py` and carries:
+`backend/app/services/transactions/transaction_batch_context.py` and carries:
 
 ```python
 broker_id: int

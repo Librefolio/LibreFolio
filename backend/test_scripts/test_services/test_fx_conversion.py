@@ -29,7 +29,7 @@ from sqlmodel import select
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import RateNotFoundError, compute_chain_rate, convert_bulk
+from backend.app.services.fx.fx import RateNotFoundError, compute_chain_rate, convert_bulk
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,

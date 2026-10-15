@@ -26,7 +26,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
 )
-from backend.app.services.market_calendar import is_market_closed_repeat
+from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 

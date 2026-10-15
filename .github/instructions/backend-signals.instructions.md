@@ -8,7 +8,8 @@ applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.p
 
 - **Plugins**: one folder per indicator, `services/signal_plugins/<code>/` (`__init__.py` with the docstring only,
   `plugin.py` with the code, `i18n/` with its `signals.<ns>.*` texts), extending `SignalPlugin` (`signal_plugins/base.py`,
-  which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/provider_registry.py`).
+  which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/signals/registry.py`; the decorator is in
+  `services/provider_registry.py`).
   Import and patch from `….signal_plugins.<code>.plugin`. Keys several indicators share (`signals.reference.*`,
   `signals.riskRollingReturn.*`) stay in the `charts` subsystem of the catalogue.
 - **Runtime**: `signal_service.py` (planning, execution, annotations, validation), `signal_runtime.py`,
