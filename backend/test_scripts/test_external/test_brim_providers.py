@@ -51,7 +51,7 @@ from backend.app.schemas.brim import (
     BRIMRefusal,
     is_fake_asset_id,
 )
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows

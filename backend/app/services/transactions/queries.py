@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     TXQueryParams,
     TXReadItem,
 )
