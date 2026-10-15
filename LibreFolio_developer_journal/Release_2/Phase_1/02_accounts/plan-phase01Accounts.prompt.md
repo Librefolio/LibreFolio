@@ -2566,3 +2566,342 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 ### Checkpoint A5, base aggiornata (`7fa6a14b9`) 🧊 (2026-10-15, 15:20) — FROZEN, pronto per l'ingresso
 > - **Delta**, non in stage: il piano (A5b.10 e questo checkpoint) e il backlog (A-13).
 > - **Commit proposto**: `docs(journal): A5 second base update, CP6 notes`.
+
+### A6 — scheda Utenti: eliminazione da parte dell'admin, verifica dell'indirizzo, UI (CP A6a + A6b) — in corso
+
+#### A6.0 — Via e decisioni ✅ (2026-10-15)
+> - **Ordine dei lotti** approvato dal coordinatore: A6, poi A8, poi A7.
+> - **Base**: `46c159ebc`, già dentro `dev_release2` (`8bcb23502`), quindi nessun aggiornamento.
+> - **Due handoff**: A6a, il backend, FROZEN; poi A6b, il frontend.
+> - **Le cinque domande**, risposte del coordinatore:
+>   1. **Verifica dell'indirizzo (D-A3, punto 2 del developer)**: «se lo modifica, un controllo dal browser verifica
+>      che a quell'indirizzo risponda davvero l'istanza».
+>      - Il coordinatore proponeva un `instance_id` stabile in `/system/instance`, con CORS `*`. Ho segnalato il
+>        rischio: una pagina qualsiasi, visitata da chi è sulla rete dell'istanza, leggerebbe configurazione e id della
+>        LibreFolio in LAN, e riconoscerebbe la stessa istanza a due indirizzi.
+>      - **Scelto il nonce firmato**: due rotte in A6a, ciascuna con il suo rosso, compresi un nonce falsificato e uno di
+>        un'altra istanza, entrambi `{match: false}`.
+>      - H conferma che il `CORSMiddleware` globale lascia passare l'header della mia rotta, e che `derive_key` va bene
+>        per questo uso.
+>   2. **Eliminare un altro admin**: prima va declassato (punto 8 del developer). Nel cloud l'admin creato dalle
+>      variabili, cioè chi paga, non si elimina, non si disattiva e non si declassa: è di A7, e A6 ne prepara il punto
+>      d'aggancio.
+>   3. **`ProfileTab`**: via del coordinatore colori. T arriva a quel file fra giorni (W2-f1), quindi il taglio lo
+>      faccio io.
+>      - `AccountDeletionDialog` nasce solo con ruoli `lf-*`, senza letterali, quindi senza `--split`.
+>      - Il pulsante rosso usa `bg-lf-danger text-lf-on-status`.
+>   4. **«Spedisci per email» di E**: le finestre dell'invito e del reset hanno uno spazio per un'azione in più.
+>   5. **Frase V-3**: provvisoria, concordata con W, poi la sua definitiva.
+
+#### A6.1 — Contratto di A6a (backend) ✅ (2026-10-15)
+> **Anteprima dell'eliminazione** — `user_service.preview_user_deletion(session, user_id)`:
+> - Restituisce `AccountDeletionPreview(user_id, username, brokers_deleted, brokers_left, transfers_unpaired)`, oppure
+>   `None` se l'utente non esiste. Non scrive niente.
+> - **La regola è quella di `BrokerService.leave_broker`** (`services/brokers/access.py`), applicata da `delete_user`:
+>   per ogni broker a cui l'utente accede, se è OWNER e non c'è un altro OWNER il broker sparisce, con le sue
+>   transazioni; altrimenti se ne va solo il suo accesso.
+>   - Il file di W non si tocca. L'equivalenza la fissa un test: per ogni scenario, gli id previsti sono quelli che
+>     `delete_user` cancella davvero.
+> - `brokers_deleted`: `{broker_id, name, transactions}`, in ordine di id.
+> - `brokers_left`: `{broker_id, name, role}`, in ordine di id.
+> - `transfers_unpaired` (V-3): le transazioni che restano e sono collegate, in un verso o nell'altro
+>   (`related_transaction_id`), a una transazione che sparisce. Sono le metà che restano da sole.
+>
+> **Un aiuto unico per eliminare** — `user_service.delete_account(session, user) -> AccountDeletionResult`:
+> - `delete_user`, poi i file BRIM dei broker cancellati rimossi dopo il commit (`brim_provider.delete_files_for_brokers`,
+>   in un thread);
+> - restituisce `deleted_broker_ids` e `files_removed`;
+> - lo usano sia la cancellazione del proprio account (`DELETE /auth/users/me`, che non cambia comportamento) sia quella
+>   da parte dell'admin.
+>
+> **Punto d'aggancio per A7** — `user_service.account_protection(user) -> Optional[str]`:
+> - oggi restituisce sempre `None`; A7 restituirà un motivo per l'admin creato dalle variabili;
+> - `PATCH /users/{id}` (disattivare, declassare) e `DELETE /users/{id}` lo consultano, e con un motivo rispondono 409
+>   `ACCOUNT_PROTECTED`;
+> - `AdminUserRead.protected: bool`, così la UI di A6b spegne le azioni.
+>
+> **API**:
+> - `GET /users/{user_id}/deletion-preview`, admin: 200 `AccountDeletionPreviewRead`; 404, 401 e 403.
+> - `GET /auth/users/me/deletion-preview`, con sessione: la stessa forma per sé. Serve al dialogo estratto e alla
+>   pagina di blocco di H, a cui va chiesta la riga in `ALLOWED_WHEN_BLOCKED`.
+> - `DELETE /users/{user_id}`, admin, 204:
+>   - 404 per un utente che non c'è;
+>   - 409 `SELF_DELETION` per se stessi: il proprio account si cancella dal profilo;
+>   - 409 `DEMOTE_FIRST` se il bersaglio è un amministratore, attivo o no. Così l'ultimo admin non si cancella mai da
+>     qui;
+>   - 409 `ACCOUNT_PROTECTED` dall'aggancio di A7;
+>   - un errore tecnico dà 500 «nothing was deleted», come nel caso del proprio account;
+>   - log strutturato «Account deleted by an administrator», con `user_id`, `username`, `admin_id`, `brokers_deleted` e
+>     `files_removed`.
+>
+> **Verifica dell'indirizzo** — nuovo `services/accounts/address_probe.py`:
+> - **Il nonce**: `base64url` senza padding di `rand16 ‖ expiry_be8 ‖ HMAC-SHA256(derive_key("accounts.address-probe.v1"),
+>   rand16 ‖ expiry_be8)`, valido 120 s.
+> - `issue_probe_nonce(now=None) -> (nonce, expires_at)`.
+> - `verify_probe_nonce(nonce, now=None) -> bool`:
+>   - `False` per tutto il resto: malformato, troppo lungo (oltre 256 caratteri), firma sbagliata, scaduto, firmato da
+>     un'altra istanza;
+>   - confronto in tempo costante; non solleva mai.
+> - `POST /users/address-probe`, admin: 200 `{nonce, expires_at}`.
+> - `GET /auth/address-probe?nonce=…`, pubblica: 200 `{match: bool}` e nient'altro.
+>   - Header `Access-Control-Allow-Origin: *`, impostato dalla rotta, e `Cache-Control: no-store`.
+>   - Con un'istanza bloccata non serve: resta fuori da `ALLOWED_WHEN_BLOCKED`.
+>
+> **Prove di A6a**: i test le fissano, compreso un `Origin` estraneo sul server della corsia, perché l'header deve
+> sopravvivere al `CORSMiddleware`.
+>
+> **Fuori da A6a**: la UI (A6b), le traduzioni (A-10), la frase definitiva di V-3 (W).
+
+#### Decisione 37 (A-6): regole della password uniche — lotto **A6c**, dopo A6b e prima di A8 (2026-10-15)
+> **Testo del developer**, alla lettera: «si sono daccordi in questa centralizzazione, fai in modo che il backend esponga
+> le regole così che il frontend possa correttamente mostrarle e se si aggiornano si aggiorna anche nella ui, però
+> teniamo l'indicatore di sicurezza.»
+>
+> **In sintesi, dal coordinatore**:
+> - le regole si scrivono una volta sola nel backend, che le applica anche all'API;
+> - un endpoint le espone, e il frontend le mostra da lì: registrazione, cambio password, reset, invito;
+> - la riga di comando usa la stessa funzione;
+> - l'indicatore di robustezza resta;
+> - le password già salvate restano valide.
+>
+> **Perché un lotto a sé, A6c**: quando l'API applica le regole, ogni test o fixture che registra o cambia una password
+> debole via API diventa rosso. Serve una ricognizione di tutta la suite e un `all-backend` suo. Dentro A6, già
+> medio-alto, mescolerebbe due rischi in un checkpoint.
+>
+> **Disegno, da verificare nell'analisi di A6c**:
+> - un modulo unico nel backend (`services/accounts/password_rules.py`) con le regole come dati: `id`, tipo e
+>   parametro (`min_length` 8, `uppercase`, `lowercase`, `digit`, `symbol` con l'insieme dei simboli);
+>   `failed_rules(password)` le valuta;
+> - `GET /api/v1/auth/password-rules`, pubblica e innocua (le regole non sono un segreto), le restituisce;
+> - **il frontend**: `PasswordStrength` mostra l'elenco ricevuto, valuta dal vivo i tipi che conosce, e un tipo nuovo
+>   lo mostra solo come testo (lo controllerà il server all'invio). L'indicatore zxcvbn resta;
+> - le quattro copie di oggi spariscono: `PasswordStrength`, `RegisterCard`, `PasswordChangeModal` e
+>   `user_cli.validate_password`. Restano le chiavi i18n `auth.passwordStrength.rules.*`;
+> - **l'API** (registrazione, cambio password, reset) rifiuta con un codice e l'elenco delle regole mancate;
+>   `create_user` del servizio resta permissivo per i dati di prova e per la CLI, che chiama la funzione da sé;
+> - il login non controlla le regole: le password già salvate restano valide.
+>
+> **Dal programma colori (coordinatore, 15/10 16:07, solo informazione)**: T-8 aggiunge a `ui/input/PasswordInput.svelte`
+> la direttiva `class:hover:border-lf-input-hover={!hasError}`, l'hover del bordo, accanto a quelle di T-2. Non tocca
+> markup né logica; K-17 sta su altre righe. Se A6c passa da quel file, lavora sopra la versione convertita (controllo
+> all'aggiornamento di base prima di A6c).
+
+#### Note di H su A5 (15/10, ~15:50), dalla verifica di C-96
+> - **LIVE-002** (`test_registration_api.py`) non ha la precondizione che ha `users-admin`. Lanciata da sola su un DB di
+>   corsia vuoto fallisce con `assert True is False`, senza messaggio.
+>   - Il motivo: dalla correzione di A5b il primo account di un'istanza vuota è sempre admin, anche con un invito.
+>   - **Cura, in A6a**: la precondizione va *prima* della registrazione, perché su una corsia vuota il test creerebbe
+>     l'admin della corsia. Deve dire che la preparazione `api` (`db populate`) non è girata, come fa `users-admin`.
+>     L'asserzione dopo prende un messaggio.
+> - **`test_instance_block.py`** fissava il corpo di `/system/instance` a `{"profile": …}` e si era rotto con
+>   `accounts`. H l'ha riparato confrontando ogni risposta con quella a blocco spento: i campi che si aggiungono lì non
+>   lo rompono più.
+> - H è entrato: `dev_release2` = `744f5a0ee`.
+
+#### Conferma di H sul nonce firmato (15/10, ~16:00)
+> 1. **CORS: sì.** H l'ha provato in processo con i parametri di `main.py`. Su una GET semplice resta
+>    l'`Access-Control-Allow-Origin: *` della rotta; il middleware aggiunge solo `Access-Control-Allow-Credentials: true`,
+>    che con `credentials: 'omit'` il browser ignora.
+>    - **Vincolo per A6b**: un header custom, `Content-Type: application/json` o un metodo non semplice fanno partire un
+>      OPTIONS, che il middleware rifiuta (`400 Disallowed CORS origin`).
+>    - Quindi la finestra dell'invito usa `fetch` nudo: `GET <indirizzo>/api/v1/auth/address-probe?nonce=…`, senza
+>      header, `credentials: 'omit'`. Non il client Zodios, che aggiunge i suoi header.
+> 2. **`derive_key("accounts.address-probe.v1")`: va bene.** Legge la chiave a ogni chiamata e la crea al primo uso.
+>    Le due rotte sono già `def` sincrone, quindi FastAPI le esegue in un thread; in una rotta `async` servirebbe
+>    `asyncio.to_thread`.
+> 3. **Se la chiave d'istanza cambia** i nonce già emessi non valgono più. Per due minuti va bene.
+> - `GET /auth/users/me/deletion-preview` (funzione `auth.preview_own_account_deletion`) va in `ALLOWED_WHEN_BLOCKED`
+>   nel lotto di H. Chi entra per secondo aggiunge la riga.
+
+#### A6.2 — Test rossi (`test-author`: P per la verifica dell'indirizzo, D per l'eliminazione, L per LIVE-002) ✅ (2026-10-15)
+- **P, verifica dell'indirizzo** ✅. Due file nuovi, scritti senza eseguire nulla; i rossi li ho lanciati io.
+  - `test_services/test_address_probe.py`: 53 casi, `pure`.
+    - Il nonce, la scadenza `expiry >= now` (float) e ogni bit alterato.
+    - Le scritture non canoniche: il decoder base64 di Python è permissivo, quindi la verifica deve ricodificare e
+      confrontare.
+    - Un'altra istanza, `hmac.compare_digest` come solo giudice, nessuna eccezione.
+    - `derive_key` chiamato a ogni uso: le spie sostituiscono ogni nome del modulo legato alla funzione.
+  - `test_api/test_address_probe_api.py`: 26 casi, write-scoped (il login scrive i contatori di `e2e_test_admin` e
+    `e2e_test_user`).
+    - 401, 403 e 200 per il nonce; `{match}` pubblico con `Access-Control-Allow-Origin: *` presente una volta sola e
+      `no-store`.
+    - Un `Origin` di fuori attraverso il `CORSMiddleware`; i cookie non contano; un'altra istanza in processo.
+  - Registrati: `services address-probe` (dopo `session-version`) e `api address-probe` (dopo `session-revocation`).
+  - **Rossi, per il motivo giusto**:
+    - `services address-probe`: errore di raccolta, `cannot import name 'address_probe'`.
+    - `db populate --force`, poi `api address-probe`: 26 falliti su 26.
+      - `POST /users/address-probe` → 405: cade su `PATCH /users/{user_id}`.
+      - `GET /auth/address-probe` → 404 HTML dal catch-all della SPA.
+      - I due casi che coniano in processo: `ModuleNotFoundError`.
+    - Log: `/tmp/libreFolio_a6a/logs/red_*.log`.
+- **D, eliminazione** ⏳: anteprima, `DELETE /users/{id}`, `protected`, uguaglianza fra anteprima ed eliminazione reale.
+- **L, LIVE-002** ✅. Solo `test_api/test_registration_api.py` (+19 / −3).
+  - Nuovo `_assert_lane_has_an_account()`, letto nel DB della corsia *prima* della registrazione. Controlla
+    l'esistenza (`select(User.id).limit(1)`), non il numero.
+  - Lo usano LIVE-002 e anche LIVE-003, che su una corsia vuota creerebbe l'admin allo stesso modo. LIVE-001 no: un
+    invito non valido viene rifiutato anche lì.
+  - L'asserzione di LIVE-002 prende un messaggio, che nomina prima il ruolo dell'invito, poi la corsia vuota.
+  - **Prova**, con la corsia svuotata dalla preparazione di `services`, poi `api registration` sui due casi:
+    - 2 falliti col messaggio «Precondition: the lane has no account yet…»;
+    - nel DB 0 utenti e 0 token: nessun admin creato.
+  - Dopo `db populate --force`, gli stessi due: 2 passati.
+  - Log: `/tmp/libreFolio_a6a/logs/live_*_lane.log`.
+- **D, eliminazione** ✅. Tre file: il nuovo `test_services/test_account_deletion_preview.py` (15 casi, `pure`) e
+  l'estensione di `test_api/test_users_admin_api.py` e `test_api/test_account_deletion_api.py`.
+  - **Fuori pista (scelta del test-author, accettata)**: niente `create_all`, perché i modelli non dichiarano
+    l'`ON DELETE CASCADE` di `broker_user_access` che `delete_user` usa. Al suo posto, un DB portato a head con le
+    migrazioni vere, in un processo figlio, una volta per modulo (`_alembic_upgrade_head` di
+    `test_db/test_autoincrement_schema.py`), poi copiato per ogni test. Lo stesso fa la fixture `private_head` dei casi
+    in processo di `users-admin`.
+  - La pulizia dei report BRIM è sempre spiata e la loro cartella è sotto `tmp_path`: gli id dei broker privati
+    partono da 1, come quelli della corsia.
+  - Registrato `services account-deletion-preview` (dopo `address-probe`).
+  - **Rossi, per il motivo giusto**:
+    - `services account-deletion-preview`: 15 falliti su 15 (funzioni, dataclass e aggancio mancanti).
+    - `api users-admin`: 15 falliti, 49 passati. UADM-001 ×2 (404/405), i quattro casi col campo `protected`,
+      UADM-040…043 sulla corsia, UADM-050…054 in processo.
+    - `api account-deletion`: 2 falliti, 6 passati (ACCDEL-006/007: 404).
+- **Rinumerazione IMG** (richiesta del coordinatore, 15/10 16:2x): in `test_utilities/test_dev_cli_image.py` i miei
+  IMG-013…016 diventano IMG-027…030, suffissi compresi, perché la serie IMG è unica con `test_dev_cli_docker.py` di H
+  (IMG-013…024) e B ha IMG-025/026. Solo docstring, intestazioni ed etichette: nessun nome di test conteneva l'id.
+  - Prova: il file, con gli id normalizzati, è identico a HEAD; `utils dev-cli-image` 71 passati.
+  - Il rimando storico in A5.2 qui sopra («IMG-013…016b») resta com'era: ora si chiamano IMG-027…030.
+
+#### A6.3 — Implementazione di A6a ✅ (2026-10-15)
+> - Applicata la bozza provata a secco (`/tmp/libreFolio_a6a/apply_a6a.py`), poi black e ruff sui 6 file: puliti.
+>   - Nuovo `services/accounts/address_probe.py`.
+>   - `user_service`: le quattro dataclass, `_count_unpaired_halves`, `preview_user_deletion`, `delete_account`,
+>     `account_protection`.
+>   - `schemas/users.py` e `schemas/auth.py`: `AdminUserRead.protected` e le forme di anteprima e sonda.
+>   - `api/v1/users.py`: `POST /users/address-probe`, `GET /{id}/deletion-preview`, `DELETE /{id}`, il 409 sul PATCH.
+>   - `api/v1/auth.py`: `GET /auth/users/me/deletion-preview`, `GET /auth/address-probe`; `delete_own_account` passa
+>     da `user_service.delete_account`.
+> - **Fuori pista — ordine dei rifiuti del DELETE**: rispetto ad A6.1, `ACCOUNT_PROTECTED` viene prima di
+>   `DEMOTE_FIRST`. Per l'admin pagante di A7 «declassalo prima» sarebbe una strada chiusa, perché anche il
+>   declassamento è rifiutato. Nessun test lo fissa oggi: lo fisseranno i test di A7. Nel PATCH `ACCOUNT_PROTECTED`
+>   viene prima della regola dell'ultimo admin; promuovere o riattivare un account protetto non è rifiutato.
+> - **Fuori pista — pulizia dei file dopo il commit**: in `delete_account` un errore della rimozione dei report viene
+>   registrato nel log e non rovescia l'esito. Prima, nell'eliminazione del proprio account, diventava un 500 a
+>   eliminazione già fatta.
+> - **Fuori pista — difetto trovato da UADM-054** (verdetto: *defect*):
+>   - Con un guasto tecnico `delete_user` fa rollback, e il rollback fa scadere ogni oggetto della sessione della
+>     richiesta, compreso l'`admin` di `require_admin`, che condivide `get_session_generator`.
+>   - L'`except` della rotta leggeva `admin.id` → `MissingGreenlet` al posto del 500 «nothing was deleted».
+>   - **Cura**: `username` e `admin_id` letti prima dell'eliminazione. UADM-054 passa.
+>   - La rotta del proprio account ha lo stesso difetto latente (`current_user.id` nell'`except`), e nessun test copre
+>     quel ramo. Chiesto al test-author D un rosso, ACCDEL-008; la cura arriva dopo il rosso.
+
+#### A6.4 — Test verdi ✅ (2026-10-15)
+> Sequenza in serie con `nice -n 10` (`/tmp/libreFolio_a6a/greens.sh`; log `/tmp/libreFolio_a6a/logs/green_*.log`):
+>
+> | Azione | Esito |
+> |---|---|
+> | `services address-probe` | 53 passati |
+> | `services account-deletion-preview` | 15 passati |
+> | `services user-profile` | 36 passati |
+> | `services config-package` | 641 passati |
+> | `api address-probe` | 26 passati |
+> | `api users-admin` | 63 passati, 1 fallito (UADM-054, il difetto qui sopra); dopo la cura, UADM-054 passa |
+> | `api account-deletion` | 8 passati |
+> | `api registration` | 65 passati (LIVE-002 compreso) |
+> | `api auth` | 60 passati |
+> | `api instance-block` | 42 passati, 2 falliti: **non di A6a** (vedi sotto) |
+> | `api system` | 117 passati |
+> | `utils dev-cli-image` | 71 passati (rinumerazione IMG) |
+>
+> - **I 2 rossi di `instance-block`** (`test_each_allowed_route_answers_a_signed_in_user`,
+>   `test_the_allowed_routes_answer_anonymous_callers_as_usual`): confrontano `GET /system/instance` con
+>   `{"profile": …}` e trovano anche `accounts`, il campo di A5. È il rosso già trovato da H nella verifica di C-96 e
+>   riparato in `dev_release2` (`744f5a0ee`), che la mia base `46c159ebc` non ha ancora. A6a non tocca
+>   `/system/instance`. Verdetto: *environment* (base); spariscono all'aggiornamento di base.
+> - `lint --dead-code --scope backend`: nessun nuovo risultato da A6a; `derive_key` non compare più.
+>   `count_superusers`, usato solo dai test, è di prima (`bfa85b0a8`).
+> - `test check-orphans`: tutti i file registrati e raggiungibili da `all`.
+> - `api sync`: pulito; le quattro rotte nuove sono in `openapi.json` (il client generato è ignorato da git).
+>   `front check`: 0 errori, 0 avvisi. Nessun file tracciato cambiato oltre a quelli del lotto.
+> - **ACCDEL-008** (test-author D, gemello di UADM-054 per `DELETE /auth/users/me`):
+>   `TestTechnicalFailure::test_a_failure_part_way_answers_500_logs_it_and_deletes_nothing`.
+>   - Il guasto colpisce a metà, dopo aver lasciato il broker condiviso di id più basso, nella stessa transazione.
+>   - **Rosso, per il motivo previsto**: `MissingGreenlet` esce dall'handler al posto del 500, e manca l'evento
+>     «Account deletion failed: nothing was deleted» (l'eccezione nasce mentre si costruiscono gli argomenti del log).
+>   - **Cura**: `user_id` e `username` letti prima dell'eliminazione, come nella rotta dell'admin.
+> - **Ripetizione sul codice finale**: `api account-deletion` 9 passati (ACCDEL-008 compreso), `api users-admin` 64
+>   passati, `api auth` 60 passati. ruff e black puliti.
+
+#### A6.5 — Doc per sviluppatori (`docs-writer`) ✅ (2026-10-15)
+> - Tre pagine, senza traduzioni: `access_control.md`, `security.md`, `users_and_brokers.md`.
+>   - `access_control.md`: le rotte nuove nella tabella dell'API admin e il campo `protected`. Due sezioni nuove:
+>     `#admin-account-deletion` (ordine dei rifiuti, tutto o niente, log, istanza bloccata) e `#account-protection`
+>     (l'aggancio di A7).
+>   - `security.md`: la sezione `#address-probe`, con il modello di minaccia, il formato del nonce, la verifica, il
+>     CORS su una sola rotta e la regola del preflight. Una riga per la sonda nella tabella delle rotte pubbliche e
+>     in quella del blocco.
+>   - `users_and_brokers.md`: `#account-deletion`, con la regola, l'aiuto unico, l'anteprima e `transfers_unpaired`.
+> - **Correzioni del docs-writer al mio brief, verificate**:
+>   - con l'istanza bloccata la sonda risponde 401 al chiamante senza sessione, cioè sempre (non 423), e senza
+>     `Access-Control-Allow-Origin`: la UI la legge come «non verificabile»;
+>   - Chrome ha sostituito il preflight di Private Network Access con un permesso per la rete locale: la pagina
+>     cita entrambi.
+> - **Per A6b**: con una chiave d'istanza inutilizzabile `POST /users/address-probe` risponde 500, documentato. La
+>   finestra dell'invito deve leggere ogni errore della POST, come quelli della GET, come «non verificabile».
+> - **Fuori pista — merge con W**: `6be11ecf3` di W, in `dev_release2`, trasforma la metà che resta di una coppia
+>   con un broker eliminato (ADJUSTMENT, DEPOSIT o WITHDRAWAL; il ramo che dà di un TRANSFER perde solo il legame).
+>   - Il paragrafo su `transfers_unpaired` l'ho scritto in modo che valga da entrambi i lati: rimanda a
+>     `delete_by_broker()`.
+>   - Il conteggio dell'anteprima resta giusto: sono proprio le metà che perdono il partner.
+> - **Fuori dal mio perimetro, segnalato al coordinatore**:
+>   - in `access_control.md`, «The last OWNER cannot remove themselves» contraddice «Self-Management», dove
+>     l'ultimo OWNER che se ne va elimina il broker;
+>   - la docstring di `instance_block.py` (H) elenca come esempi le rotte pubbliche fuori dall'elenco, e la sonda
+>     non c'è.
+> - **Prove**: `mkdocs build` (strict) pulito, anche dopo il ritocco del paragrafo; `mkdocs check-links`: 95 link
+>   validi.
+
+### Checkpoint A6a (backend) 🧊 (2026-10-15, ~17:50) — FROZEN, in attesa del commit del coordinatore
+> - Base `46c159ebc`; nessun server attivo, la porta 6182 è libera; `git diff --check` pulito.
+> - **Da fare al prossimo aggiornamento di base**:
+>   - se H è già entrato, aggiungere `auth.preview_own_account_deletion` a `ALLOWED_WHEN_BLOCKED` e al suo test,
+>     dichiarandolo. Insieme vanno aggiornati il punto «Blocked instance» di `access_control.md#admin-account-deletion`
+>     e la tabella del blocco in `security.md`;
+>   - `users_and_brokers.md#account-deletion`: aggiungere il dettaglio della trasformazione di W (V-3, D-J4);
+>   - `security.md#address-probe`: un rimando a `#request-logs` di H. Il suo filtro non maschera `nonce`, che non è
+>     una credenziale;
+>   - i 2 rossi di `instance-block` devono sparire con il test riparato da H: da verificare.
+> - **Committato dal coordinatore** (15/10, 16:56):
+>   - `5928176cf` feat(accounts): admin deletion, deletion preview, address probe;
+>   - `181096f6e` test(cli): renumber IMG-013..016 to IMG-027..030;
+>   - `2545791a4` docs(journal): A6a plan, backlog A-14 A-15.
+
+#### A6.6 — Aggiornamento di base (`4a74a9e7e`) e validazione della revisione combinata ✅ (2026-10-15)
+> - Il coordinatore ha unito `dev_release2` (`d22eb6f43`), senza conflitti: HEAD `4a74a9e7e`, genitori `2545791a4` e
+>   `d22eb6f43`. Dentro ci sono W (la conversione delle metà orfane), J e il resto. Mancano ancora la riga di H per
+>   il blocco (il suo lotto piccolo è in `all-backend`) e la scheda Email di E (E2b non è partito).
+> - **Validazione**, una prova alla volta con `nice -n 10` (`/tmp/libreFolio_a6a/combined.sh`; log in
+>   `/tmp/libreFolio_a6a/logs/combined/`):
+>
+> | Azione | Esito |
+> |---|---|
+> | `services account-deletion-preview` | 15 passati |
+> | `services config-package` | 643 passati |
+> | `api instance-block` | 44 passati: spariti i 2 rossi di base (test riparato da H) |
+> | `api system` | 117 passati |
+> | `api account-deletion` | 9 passati (con l'ACCDEL-001 di W) |
+> | `api users-admin` | 64 passati |
+> | `api registration` | 65 passati (1 avviso: `HTTP_422_UNPROCESSABLE_ENTITY` di `api/v1/settings.py`, di prima) |
+> | `api auth` | 60 passati |
+> | `api address-probe` | 26 passati |
+> | `check-orphans` | tutto registrato e raggiungibile |
+> | `api sync` | pulito |
+> | `front check` | 0 errori, 0 avvisi |
+>
+> - **`ALLOWED_WHEN_BLOCKED`**: sono entrato per primo, quindi la riga di `auth.preview_own_account_deletion` la
+>   scrive H al suo ingresso. `api instance-block` non segnala rotte non classificate, quindi non la scrivo io.
+> - **Doc riallineate alla base**:
+>   - `users_and_brokers.md#account-deletion`: la trasformazione di W (V-3, D-J4) e un rimando a
+>     `backend/transactions/service.md#broker-deletion`;
+>   - `security.md#address-probe`: il nonce arriva nel log delle richieste, e il filtro di `#request-logs` (H) non
+>     lo maschera, perché non è una credenziale.
+>   - `mkdocs build` (strict) pulito; `check-links`: 95 link validi.
+> - **Backlog**: in A-10, la sezione «Accounts and Sign-ups» di `admin/configuration` manca del tutto in IT, FR ed
+>   ES (debito di A, confermato dal coordinatore). A-14 è passato a W, A-15 ad H.
+> - `all-backend`: nella validazione di A6b, prima del suo ingresso (coordinatore).

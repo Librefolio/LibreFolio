@@ -1287,7 +1287,16 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### Treno 41, decisioni 38–39 (2026-10-15, 16:40–16:55)
 
 > **Note implementazione**: entrato J (`2faa88a34`: C-94 e CP-2). `copilot-instructions.md` aggiornato con il testo di J
-> sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbackup`,
-> scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
+> sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbk`,
+> scelta dal developer alle 17:00 al posto di `.lfbackup`; scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
 > l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto la differenza».
 > B4 dopo B3 e B5: è l'unico pezzo di B che può slittare. Z7a autorizzato dal developer («Sì, Z parta con Z7a»).
+
+### Treni 42–44, decisione 40, Z6b (2026-10-15, 17:15–17:40)
+
+> **Note implementazione**: entrati A6a (treno 42), H (`eacc34784`) e Z7a (`2ab8a3a43`). Decisione 40 del developer: le sessioni
+> si chiudono con l'ora del ripristino (non si rigenera `JWT_SECRET`), l'anteprima elenca gli admin del backup e blocca
+> se non ce n'è nessuno; nel cloud il recupero dell'admin passa da «password dimenticata» via email, nei casi gravi
+> dall'assistenza con `dev.py user reset-link`. Z6b autorizzato dal developer («Sì, Z parta con Z6b»).
+> Scatti nuovi di galleria (`settings/users` di A6b, `settings/backup-ready` di B): li scrivono A e B con la checklist di
+> G, che li rivede prima dell'ingresso.
