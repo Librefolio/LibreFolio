@@ -47,10 +47,11 @@
  *
  * Two things the settle cannot fix afterwards, so a test does them before it shoots. The frame: {@link frameTarget} brings
  * a block to the top of the screen the same way in every run, and waits for the frame to stand still — the page's end may
- * stop the scroll short of the top, with the header still on screen: the same frame every time, logged (↕️). An open
- * dropdown: one placed once, from its trigger's box, stays where it was put when the layout above the trigger moves
- * afterwards — so it is opened on a settled page only ({@link settledToOpen}), and asserted where its component puts it
- * before the shot ({@link expectDropdownAt}).
+ * stop the scroll short of the top, with the header still on screen: the same frame every time, logged (↕️); a dialog locks
+ * the page where its trigger's scroll left it, so that trigger is brought into view from the top of a settled page, the
+ * same way in every run ({@link bringIntoViewFromTop}). An open dropdown: one placed once, from its trigger's box, stays
+ * where it was put when the layout above the trigger moves afterwards — so it is opened on a settled page only
+ * ({@link settledToOpen}), and asserted where its component puts it before the shot ({@link expectDropdownAt}).
  *
  * ## Looping animations
  *
@@ -859,17 +860,44 @@ export async function frameTarget(page: Page, target: Locator, what: string, mar
 }
 
 /**
+ * Bring `trigger` into view for the shot `shot` the same way in every run, before the click that opens a dialog over the
+ * page. A dialog locks the page where it stands (ModalBase, `lockBodyScroll`: the body fixed at `top: -<scroll>px`), so the
+ * frame behind it is wherever the trigger's scroll left the page — and a bare scroll into view decided that from wherever the
+ * clicks before it had left the page, on a page still laying out above the trigger: the trigger in view in one run and left
+ * there, out of view in the other and centred. Behind `settings/scheduler-config` the page stood 59 px apart, unseen by the
+ * shot's line (🔎) until it read the lock (plan 56). So the page is settled for it first — no `/api/` request in flight, no
+ * loader on screen, the trigger's box still ({@link settledToOpen}) — then brought to its top, where the header sees it and
+ * is visible, and only then is the trigger scrolled into view: from the top, the same move every time — the page left there
+ * when the trigger is on the first screen, else the trigger centred. Both scheduler triggers lie below the first screen on
+ * both viewports, so they are centred: behind `scheduler-config` on the desktop that is the frame of the 14/10 baseline,
+ * the page locked at 880 px (measured 15/10). Ends on the frame standing still — the scroll, the page's height, the
+ * header's state and box, the trigger's box — for {@link BOX_QUIET_MS} of rendered frames, and on the trigger on the
+ * screen, asserted.
+ */
+export async function bringIntoViewFromTop(page: Page, trigger: Locator, shot: string): Promise<void> {
+    await expect(trigger, `${shot}: the dialog's trigger is not on the page`).toBeVisible();
+    await settledToOpen(page, trigger, shot, "the dialog's trigger");
+    await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
+    await renderedFrames(page);
+    await expect(page.getByTestId('app-header'), `${shot}: the app header is back at the top`).toHaveAttribute('data-scroll-state', 'visible');
+    await trigger.scrollIntoViewIfNeeded();
+    await standsStill(trigger, `${shot}: the frame — the scroll, the page's height, the header or the dialog's trigger —`, true);
+    await expect(trigger, `${shot}: the dialog's trigger is not on the screen`).toBeInViewport();
+}
+
+/**
  * The page is settled enough to open a dropdown anchored to `anchor`, for a shot of it open: no `/api/` request in flight, no
  * loader on screen, and the anchor's box standing still ({@link boxStill}). TreeSelect and the tables' column filters place
  * their dropdown once, from the anchor's box when it opens, and move it on a scroll or a resize only: opened while the layout
  * above the anchor still moved, the dropdown stayed where it was put — 4 px off its trigger in one run of
  * `assets/detail-signals-tree` and not in the other, with the trigger and the page identical (plan 56). `anchor` is the
  * element whose box the component reads: TreeSelect's root (`data-testid` of the select), a column filter's button.
+ * `anchorName` names it in a failure: the trigger of a dialog ({@link bringIntoViewFromTop}) is no dropdown's.
  */
-export async function settledToOpen(page: Page, anchor: Locator, shot: string): Promise<void> {
+export async function settledToOpen(page: Page, anchor: Locator, shot: string, anchorName = "the dropdown's trigger"): Promise<void> {
     await apiQuiet(page, shot);
     await noLoaderOnScreen(page, shot);
-    await boxStill(anchor, `${shot}: the dropdown's trigger`);
+    await boxStill(anchor, `${shot}: ${anchorName}`);
 }
 
 /**
@@ -951,13 +979,14 @@ export async function settleShot(page: Page, shot: string, options: ShotOptions 
 }
 
 /**
- * One line of what decides the frame, as compact JSON: `y` the scroll (1 decimal), `dh` the page's height, `vh` the
- * screen's, `hdr` the header's `data-scroll-state` (or `-`), `api` the `/api/` requests in flight, `loop` the looping
- * animations the last settle pinned, `fin` the animations it finished by hand, `charts` the render counters of the charts on
- * screen, `preset` the active date preset on screen, `hover` and `focus` the nearest test id of the element under the pointer
- * and of the one with the focus (`-` for none), and `tip` the tooltips on screen — written only when there is one (a shot of
- * a pinned tooltip, `pinnedTooltip`), so the line of every other shot reads as it did before. Two runs of a shot that differ
- * here differ in their frame.
+ * One line of what decides the frame, as compact JSON: `y` the scroll (1 decimal; while a dialog locks the page, the scroll it
+ * froze — ModalBase fixes the body at `top: -<scroll>px`, and `window.scrollY` reads 0 under it — followed by `lock` 1, a key
+ * written only then), `dh` the page's height, `vh` the screen's, `hdr` the header's `data-scroll-state` (or `-`), `api` the
+ * `/api/` requests in flight, `loop` the looping animations the last settle pinned, `fin` the animations it finished by hand,
+ * `charts` the render counters of the charts on screen, `preset` the active date preset on screen, `hover` and `focus` the
+ * nearest test id of the element under the pointer and of the one with the focus (`-` for none), and `tip` the tooltips on
+ * screen — written only when there is one (a shot of a pinned tooltip, `pinnedTooltip`), so the line of every other shot
+ * reads as it did before. Two runs of a shot that differ here differ in their frame.
  */
 export async function shotFingerprint(page: Page): Promise<string> {
     const settled = lastSettle.get(page) ?? {forced: 0, pinned: 0};
@@ -972,8 +1001,14 @@ export async function shotFingerprint(page: Page): Promise<string> {
         const deepest = hovered.length > 0 ? hovered[hovered.length - 1] : null;
         const active = document.activeElement;
         const focused = active && active !== document.body && active !== document.documentElement ? active : null;
+        // Under a dialog the page cannot scroll: the frame it froze is the body's offset. ModalBase writes `-${scrollY}px`, so a
+        // dialog opened at the top locks the page at 0 — read back as `0px` or `-0px`, a lock all the same.
+        const body = document.body;
+        const lockedAt = body.style.position === 'fixed' && body.style.top.endsWith('px') ? Number.parseFloat(body.style.top) : Number.NaN;
+        const locked = lockedAt <= 0;
         return {
-            y: Math.round(window.scrollY * 10) / 10,
+            y: Math.round((locked ? -lockedAt : window.scrollY) * 10) / 10,
+            locked,
             dh: document.documentElement.scrollHeight,
             vh: window.innerHeight,
             hdr: document.querySelector('[data-testid="app-header"]')?.getAttribute('data-scroll-state') ?? '-',
@@ -992,7 +1027,21 @@ export async function shotFingerprint(page: Page): Promise<string> {
             tips: Array.from(document.querySelectorAll('[data-testid="tooltip-content"]')).filter(onScreen).length,
         };
     });
-    return JSON.stringify({y: seen.y, dh: seen.dh, vh: seen.vh, hdr: seen.hdr, api: apiInFlight(page).length, loop: settled.pinned, fin: settled.forced, charts: seen.charts, preset: seen.preset, hover: seen.hover, focus: seen.focus, ...(seen.tips > 0 ? {tip: seen.tips} : {})});
+    return JSON.stringify({
+        y: seen.y,
+        ...(seen.locked ? {lock: 1} : {}),
+        dh: seen.dh,
+        vh: seen.vh,
+        hdr: seen.hdr,
+        api: apiInFlight(page).length,
+        loop: settled.pinned,
+        fin: settled.forced,
+        charts: seen.charts,
+        preset: seen.preset,
+        hover: seen.hover,
+        focus: seen.focus,
+        ...(seen.tips > 0 ? {tip: seen.tips} : {}),
+    });
 }
 
 // ---------------------------------------------------------------------------

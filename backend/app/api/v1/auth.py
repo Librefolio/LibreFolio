@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
-from backend.app.db.models import User
+from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
     AuthLoginRequest,
@@ -24,10 +24,14 @@ from backend.app.schemas.auth import (
     AuthUserResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
+    PasswordResetRequest,
+    PasswordResetResponse,
+    TokenInspectRequest,
+    TokenInspectResponse,
     UpdateProfileRequest,
     UpdateProfileResponse,
 )
-from backend.app.services.accounts import settings_service, user_service
+from backend.app.services.accounts import registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -36,7 +40,8 @@ from backend.app.services.accounts.auth_service import (
     verify_password_or_dummy,
 )
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
-from backend.app.services.accounts.global_settings_service import get_session_ttl_hours, is_registration_enabled
+from backend.app.services.accounts.global_settings_service import get_session_ttl_hours
+from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.brim import brim_provider
 
 logger = structlog.get_logger(__name__)
@@ -210,41 +215,74 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return AuthMeResponse(user=AuthUserResponse.model_validate(current_user))
 
 
+# The answer of POST /auth/register to each refusal of the registration rule. An account that already exists keeps the
+# plain 400 it always had; the others carry an error code the login page translates.
+_REGISTRATION_REFUSALS: dict[str, int] = {
+    "REGISTRATION_DISABLED": 403,
+    "INVITE_REQUIRED": 403,
+    "INVITE_INVALID": 400,
+    "USER_LIMIT_REACHED": 409,
+}
+
+
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
 async def register(request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)):
     """
-    Register a new user.
+    Register a new user, under the registration mode and the limit of the instance.
 
-    Note: The first user registered becomes admin (is_superuser=True).
-    In production, you may want to add email verification.
+    The first account of an empty instance becomes an administrator, whatever the mode. Otherwise ``disabled`` refuses
+    everyone, ``invite`` requires ``invite_token``, and ``open`` accepts anyone; a valid invitation sets the role.
+    A refusal for the limit tells nothing about how many accounts exist: whoever asks is not signed in.
     """
-    # Check if this is the first user - make them admin
-    user_count = await user_service.count_users(session)
-    is_first_user = user_count == 0
-
-    registration_enabled = await is_registration_enabled(session)
-    if not registration_enabled and not is_first_user:
-        raise HTTPException(status_code=403, detail="New user registration is disabled")
-
-    # Create user using service
-    user, error = await user_service.create_user(
-        session,
-        username=request.username,
-        email=request.email,
-        password=request.password,
-        is_superuser=is_first_user,  # First user becomes admin
-        is_active=True,
-    )
-
-    if not user:
-        raise HTTPException(status_code=400, detail=error)
-
-    logger.info("User registered", user_id=user.id, username=user.username, is_first_user=is_first_user)
+    try:
+        user = await registration_service.register_user(
+            session,
+            username=request.username,
+            email=request.email,
+            password=request.password,
+            invite_token=request.invite_token,
+        )
+    except RegistrationError as exc:
+        if exc.code not in _REGISTRATION_REFUSALS:
+            raise HTTPException(status_code=400, detail=exc.message) from None
+        raise HTTPException(status_code=_REGISTRATION_REFUSALS[exc.code], detail={"error_code": exc.code, "message": exc.message}) from None
 
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
-        message="Registration successful" + (" (Admin)" if is_first_user else ""),
+        message="Registration successful" + (" (Admin)" if user.is_superuser else ""),
     )
+
+
+@router.post("/tokens/inspect", response_model=TokenInspectResponse)
+async def inspect_link_token(request: TokenInspectRequest, session: AsyncSession = Depends(get_session_generator)):
+    """
+    What a link's token is worth: an invitation or a password-reset link.
+
+    Public: it answers whoever holds the token, and a token of another purpose is ``unknown``. The details — when it
+    expires, the role and address of an invitation, the account of a reset link — come only with a valid token.
+    """
+    purpose = AccountTokenPurpose(request.purpose)
+    inspection = await token_service.inspect_token(session, request.token, purpose)
+    if inspection.status != token_service.TokenStatus.VALID or inspection.record is None:
+        return TokenInspectResponse(status=inspection.status.value, purpose=request.purpose)
+    record = inspection.record
+    if purpose == AccountTokenPurpose.INVITE:
+        return TokenInspectResponse(status="valid", purpose=request.purpose, expires_at=record.expires_at, grants_admin=record.grants_admin, email=record.email)
+    owner = await user_service.get_user_by_id(session, record.user_id) if record.user_id is not None else None
+    return TokenInspectResponse(status="valid", purpose=request.purpose, expires_at=record.expires_at, username=owner.username if owner else None)
+
+
+@router.post("/password-reset", response_model=PasswordResetResponse)
+async def reset_password_with_link(request: PasswordResetRequest, session: AsyncSession = Depends(get_session_generator)):
+    """
+    Spend a password-reset link: the new password is set and every session of the account ends.
+
+    A link that is not valid — used, expired, revoked, unknown, or of another purpose — changes nothing.
+    """
+    user = await user_service.complete_password_reset(session, request.token, request.new_password)
+    if user is None:
+        raise HTTPException(status_code=400, detail={"error_code": "TOKEN_INVALID", "message": "This password-reset link is not valid"})
+    return PasswordResetResponse()
 
 
 @router.post("/change-password", response_model=ChangePasswordResponse)
