@@ -45,6 +45,10 @@ else `~/LibreFolio_visual_review`.
 - A busy port stops the scripts. Never use `--force`.
 - **Compare captures of the same day only.** The test database is generated from `date.today()`, so
   snapshots of different days differ by construction (axes, ranges, values). `diff` warns when the dates differ.
+- **The app version is pinned.** The sidebar, the changelog and the About tab show the build's version, which is
+  `git describe` by default and so differs between any two commits. `gallery_snapshot.sh` exports
+  `LF_APP_VERSION` (default `v0.0.0-review`) and rebuilds the frontend in debug mode first when the checkout's
+  build does not carry it (`build.log` in the snapshot). `meta.json` records it as `app_version`.
 - A full gallery takes about **31–34 min** at 10 workers and about **500 MB** (four languages).
   A `diff` of two full snapshots takes about 3.5 min. The designer package weighs about 120 MB per language.
 

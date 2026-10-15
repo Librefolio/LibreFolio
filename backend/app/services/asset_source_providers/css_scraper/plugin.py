@@ -29,9 +29,10 @@ except ImportError:
     BeautifulSoup = None
     SCRAPER_AVAILABLE = False
 
-from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 

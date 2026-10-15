@@ -47,6 +47,6 @@ contract held (`committed` false, `pairDeleteIncomplete` with `id`/`partnerId`).
 | Role | Path |
 |------|------|
 | Fixture and test, fixed | `backend/test_scripts/test_api/test_transactions_api.py` |
-| `POST /assets` (201), `DELETE /assets` | `backend/app/api/v1/assets.py` |
+| `POST /assets` (201), `DELETE /assets` | `backend/app/api/v1/assets/crud.py` |
 | Latent skips on 404 | `backend/test_scripts/test_api/test_settings_api.py` |
 | Plan (step 14, item 3) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md` |

@@ -60,7 +60,7 @@ Le [guide de théorie financière](../../financial-theory/instruments/transactio
 
 ### 🔗 Transactions appariées {: #composite-transactions }
 
-Une opération appariée est enregistrée comme deux transactions liées, que le formulaire affiche comme une seule, avec un côté **De** et un côté **À**. Chaque côté a sa propre date, et la flèche **Inverser les côtés** inverse le sens.
+Une opération appariée est enregistrée comme deux transactions liées, que le formulaire affiche comme une seule, avec un côté **De** et un côté **À**. Chaque côté a sa propre date, et la flèche **Inverser les côtés** inverse le sens. Dans une opération de change de devises, les deux dates coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour.
 
 | Type | Ce qu'il enregistre | Théorie |
 |------|-----------------|--------|

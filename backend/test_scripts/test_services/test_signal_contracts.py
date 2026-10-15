@@ -13,7 +13,7 @@ from backend.app.schemas.signals import (
     SignalExecutionContext,
     SignalSeriesKind,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.test_scripts.fixtures.signal_plugins.registry import (
     FixtureSignalPluginRegistry,
 )

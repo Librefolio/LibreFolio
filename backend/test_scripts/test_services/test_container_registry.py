@@ -11,9 +11,10 @@ import pytest
 from fastapi import FastAPI, HTTPException
 
 import backend.app.api.v1.system as system_api
+import backend.app.api.v1.system.container_image as container_image_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.schemas.system import ContainerImageStatusResponse
-from backend.app.services.container_registry import (
+from backend.app.services.platform.container_registry import (
     GHCR_MANIFEST_ACCEPT,
     GHCR_MANIFEST_URL,
     GHCR_SCOPE,
@@ -444,7 +445,7 @@ async def test_container_image_endpoint_requires_auth_before_probe(
         probe_called = True
         raise AssertionError("unauthenticated request reached the registry probe")
 
-    monkeypatch.setattr(system_api, "probe_container_image", unexpected_probe)
+    monkeypatch.setattr(container_image_api, "probe_container_image", unexpected_probe)
     app = _system_app(authenticated=False)
 
     async with httpx.AsyncClient(
@@ -470,7 +471,7 @@ async def test_container_image_endpoint_returns_the_probe_projection(
         received_tags.append(tag)
         return ContainerImageStatusResponse(status="pending")
 
-    monkeypatch.setattr(system_api, "probe_container_image", fake_probe)
+    monkeypatch.setattr(container_image_api, "probe_container_image", fake_probe)
     app = _system_app(authenticated=True)
 
     async with httpx.AsyncClient(
@@ -504,7 +505,7 @@ async def test_container_image_endpoint_rejects_non_stable_tags_before_probe(
         probe_called = True
         raise AssertionError("invalid tag reached the registry probe")
 
-    monkeypatch.setattr(system_api, "probe_container_image", unexpected_probe)
+    monkeypatch.setattr(container_image_api, "probe_container_image", unexpected_probe)
     app = _system_app(authenticated=True)
 
     async with httpx.AsyncClient(

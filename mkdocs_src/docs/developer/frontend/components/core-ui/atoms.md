@@ -86,7 +86,12 @@ A **drag-and-drop reorderable list** (`ui/OrderableList.svelte`).
 A **password field with visibility toggle** (eye icon).
 
 - Toggle between `type="password"` and `type="text"`
-- Eye / EyeOff icon from lucide-svelte
+- Eye / EyeOff icon from lucide-svelte, on a `type="button"` that never submits the form and is
+  disabled with the field
+- The eye button is named after what a press does: `aria-label` and `title` are
+  `$_('auth.showPassword')` while the field is masked, `$_('auth.hidePassword')` while it shows the
+  text. It is in the tab order, and has no `aria-pressed` on purpose: a toggle whose name changes
+  must not also report a pressed state (WAI-ARIA APG, Button pattern)
 - `autocomplete` (`current-password` by default, or `new-password`, `off`, `on`), `id` and `name`
   are passed to the input: password managers rely on them — see the
   [password-manager contract](../features/auth.md#password-manager-contract)

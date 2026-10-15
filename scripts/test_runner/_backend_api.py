@@ -47,7 +47,7 @@ def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
 def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     """Run direct unit tests for FX API handlers (no live server/network)."""
     print_section("FX API Unit Tests")
-    print_info("Testing happy-path/main-branch coverage in backend/app/api/v1/fx.py")
+    print_info("Testing happy-path/main-branch coverage in backend/app/api/v1/fx/")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_api_unit.py", test_names)
     return run_command(cmd, "FX API unit tests", verbose=verbose)
 
@@ -575,6 +575,17 @@ def api_account_deletion(verbose: bool = False, test_names: list[str] | None = N
     return run_command(cmd, "Account deletion API tests", verbose=verbose)
 
 
+def api_session_revocation(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run session revocation API tests: a password change ends every other session of the account."""
+    print_section("Session Revocation API Tests")
+    print_info("Testing POST /auth/change-password: session version +1, the device that changed it gets a new cookie")
+    print_info("Tests: other devices and the old cookie refused, other accounts untouched, refusals end nothing")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_session_revocation_api.py", test_names)
+    return run_command(cmd, "Session revocation API tests", verbose=verbose)
+
+
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run broker multi-user role tests."""
     print_section("Broker Multi-User Role Tests")
@@ -732,7 +743,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets, and held-now flags in the list")
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
-    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps")
+    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
     add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
@@ -769,6 +780,9 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
+    # The category's write-scoped holds: each test registers its own two users, reads only their rows and deletes them;
+    # a password change ends the sessions of that account alone.
+    add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")

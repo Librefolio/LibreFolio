@@ -16,7 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import psutil as psutil_module
 
-from backend.app.services.scheduler.leader import am_i_leader
+from backend.app.services.platform.scheduler.leader import am_i_leader
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================
@@ -46,7 +46,7 @@ def _patch_leader(me_pid: int, siblings: list, parent_cmdline: list[str] | None 
         parent.children.return_value = siblings
         me.parent.return_value = parent
 
-    return patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid)
+    return patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid)
 
 
 # ============================================================================
@@ -67,7 +67,7 @@ class TestSingleWorker:
         parent.children.return_value = [me]
         me.parent.return_value = parent
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid):
             result = am_i_leader()
 
         assert result is True
@@ -93,7 +93,7 @@ class TestLowestPidIsLeader:
         parent.children.return_value = siblings
         me.parent.return_value = parent
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid):
             result = am_i_leader()
 
         assert result is True
@@ -119,7 +119,7 @@ class TestNotLowestPid:
         parent.children.return_value = siblings
         me.parent.return_value = parent
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid):
             result = am_i_leader()
 
         assert result is False
@@ -146,7 +146,7 @@ class TestZombieSiblingsExcluded:
         parent.children.return_value = siblings
         me.parent.return_value = parent
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid), patch("backend.app.services.scheduler.leader.psutil.STATUS_ZOMBIE", "zombie"):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid), patch("backend.app.services.platform.scheduler.leader.psutil.STATUS_ZOMBIE", "zombie"):
             result = am_i_leader()
 
         assert result is True
@@ -168,7 +168,7 @@ class TestDockerPid1:
         me.pid = me_pid
         me.parent.return_value = None
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid):
             result = am_i_leader()
 
         assert result is True
@@ -192,7 +192,7 @@ class TestDevModeReload:
         parent.children.return_value = [me]
         me.parent.return_value = parent
 
-        with patch("backend.app.services.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.scheduler.leader.os.getpid", return_value=me_pid):
+        with patch("backend.app.services.platform.scheduler.leader.psutil.Process", return_value=me), patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=me_pid):
             result = am_i_leader()
 
         assert result is True
@@ -211,10 +211,10 @@ class TestPsutilException:
 
         with (
             patch(
-                "backend.app.services.scheduler.leader.psutil.Process",
+                "backend.app.services.platform.scheduler.leader.psutil.Process",
                 side_effect=psutil_module.NoSuchProcess(pid=999),
             ),
-            patch("backend.app.services.scheduler.leader.os.getpid", return_value=999),
+            patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=999),
         ):
             result = am_i_leader()
 
@@ -227,10 +227,10 @@ class TestPsutilException:
 
         with (
             patch(
-                "backend.app.services.scheduler.leader.psutil.Process",
+                "backend.app.services.platform.scheduler.leader.psutil.Process",
                 side_effect=psutil_module.AccessDenied(pid=999),
             ),
-            patch("backend.app.services.scheduler.leader.os.getpid", return_value=999),
+            patch("backend.app.services.platform.scheduler.leader.os.getpid", return_value=999),
         ):
             result = am_i_leader()
 

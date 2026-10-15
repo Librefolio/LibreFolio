@@ -4,7 +4,7 @@ Tests for TransactionService.
 Tests CRUD operations, balance validation, and link resolution.
 See checklist: 01_test_broker_transaction_subsystem.md - Category 3
 
-Reference: backend/app/services/transaction_service.py
+Reference: backend/app/services/transactions/transaction_service.py
 """
 
 import sys
@@ -30,17 +30,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import (
-    PairFieldConstraint,
-    TXCreateItem,
-    TXQueryParams,
-    TXTransferPromoteRequest,
-    TXUpdateItem,
-)
-from backend.app.services.transaction_service import (
-    TransactionService,
-    _parse_lenient,
-)
+from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
+from backend.app.schemas.transactions.type_metadata import PairFieldConstraint
+from backend.app.services.transactions.transaction_batch_stages import _parse_lenient
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 

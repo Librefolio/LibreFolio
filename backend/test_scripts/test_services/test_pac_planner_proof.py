@@ -50,7 +50,7 @@ import pytest
 
 from backend.app.services.pac_allocator import proof
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.proof import (
     NOT_PROVEN_REASON,
