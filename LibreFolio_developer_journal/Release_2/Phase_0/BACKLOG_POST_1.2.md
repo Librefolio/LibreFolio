@@ -2011,8 +2011,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
     `test_portfolio_api.py`, `test_portfolio_wac.py`.
   - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
-  - `user_cli.py` si sistema con A5, che ne tocca i comandi.
-  - Dettagli: idem, «A1.6».
+  - ✅ **`user_cli.py` chiuso il 15/10** con A3, che ne tocca i comandi (L12): black, W293 e PLC0415, più il C901
+    portato dal comando nuovo (ora una tabella). Restano gli altri tre file, fuori dal dominio di A.
+  - Dettagli: idem, «A1.6» e «A3.3».
 - **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; A
   (15/10).
   - Quattro copie delle stesse cinque regole: `ui/input/PasswordStrength.svelte`, `settings/PasswordChangeModal.svelte`,
@@ -2020,6 +2021,26 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
+- **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
+  - `architecture/access_control.md:116-123`:
+    - dice che `set_user_admin()` non controlla l'ultimo admin, ma da `2fb8b8502` l'ultimo admin attivo non si
+      declassa né si disattiva;
+    - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
+      giusta.
+    - Si allinea con A6, che riscrive le regole dell'admin.
+  - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+  - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
+    HttpOnly. Si sistema in A4 (sessioni).
+  - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
+    segnalata al coordinatore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5».
+- **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
+  lingua mostra l'inglese — basso; programma colori (15/10).
+  - Probabile causa: `lib/stores/app/language.ts`, `init()`.
+  - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
+    locale del browser `it-IT`).
+  - Dettagli: idem, «A3.0».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
