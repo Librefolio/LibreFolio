@@ -26,6 +26,9 @@ from pathlib import Path
 from scripts.visual_review._common import REPO, work_dir
 
 ROOT = REPO / "frontend" / "src"
+# The Designer Lab's own sources are tooling, not the app: frontend/scripts/designer-lab/scan-colors.mjs skips them too,
+# so the two inventories keep counting the same tree.
+LAB_DIRS = ("lib/dev/designer-lab/", "routes/designer-lab/")
 
 EXTS = {".svelte", ".ts", ".js", ".css"}
 FAMILIES = ("slate gray zinc neutral stone red orange amber yellow lime green emerald teal cyan sky blue " "indigo violet purple fuchsia pink rose").split()
@@ -68,7 +71,7 @@ class Scan:
 
 def source_files() -> list[Path]:
     files = [p for p in ROOT.rglob("*") if p.suffix in EXTS and p.is_file() and "node_modules" not in p.parts]
-    return sorted(p for p in files if not p.name.startswith("generated") and "openapi" not in p.name and "tool-contract-map" not in p.name)
+    return sorted(p for p in files if not p.name.startswith("generated") and "openapi" not in p.name and "tool-contract-map" not in p.name and not p.relative_to(ROOT).as_posix().startswith(LAB_DIRS))
 
 
 def scan_line(s: Scan, rel: str, ln: int, line: str, test: bool) -> None:

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_settings, secrets_set_twice
-from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin
+from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
@@ -24,6 +24,10 @@ logger = get_logger(__name__)
 Severity = Literal["ok", "info", "warning", "error"]
 
 JWT_SECRET_MIN_LENGTH = 32
+
+
+class WeakSecretError(ValueError):
+    """A configured secret too short for the profile: in the managed profile, a short ``JWT_SECRET`` stops the start."""
 
 
 @dataclass(frozen=True)
@@ -38,7 +42,10 @@ class ConfigCheck:
 
 
 def check_jwt_secret() -> ConfigCheck:
-    """``JWT_SECRET``: unset means a new key at every start (the default, so only info); a short one is weak."""
+    """``JWT_SECRET``: unset means a new key at every start (the default, so only info); a short one is weak.
+
+    In the managed profile a short key is an error, and ``log_configuration_audit()`` stops the start on it.
+    """
     check_id = "platform.jwt_secret"
     try:
         secret = configured_jwt_secret()
@@ -55,7 +62,7 @@ def check_jwt_secret() -> ConfigCheck:
         origin = configured_jwt_secret_origin() or "JWT_SECRET"
         return ConfigCheck(
             check_id,
-            "warning",
+            "error" if get_settings().LIBREFOLIO_PROFILE == "managed" else "warning",
             "instance.checks.jwtSecret.short",
             {"source": origin, "length": len(secret), "minimum": JWT_SECRET_MIN_LENGTH},
             f"The session signing key from {origin} is {len(secret)} characters long: use at least {JWT_SECRET_MIN_LENGTH} random characters",
@@ -140,13 +147,23 @@ def run_config_checks() -> list[ConfigCheck]:
 
 
 def log_configuration_audit() -> None:
-    """Startup: stop on a configured secret that cannot be used, then log every check that is not ``ok``.
+    """Startup: stop on a configuration the server must not start with, then log every check that is not ``ok``.
 
     A ``JWT_SECRET_FILE`` that cannot be read raises ``SecretFileError``, a configured instance key that cannot be
-    used raises ``InstanceKeyError``: the admin asked for that source, so the server must not start without it. A
-    generated key file gone bad is logged as an error instead, and the start goes on.
+    used raises ``InstanceKeyError``: the admin asked for that source, so the server must not start without it. In the
+    managed profile, a ``JWT_SECRET`` shorter than ``JWT_SECRET_MIN_LENGTH`` raises ``WeakSecretError``. A
+    ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``. A generated key
+    file gone bad is logged as an error instead, and the start goes on.
     """
-    configured_jwt_secret()
+    secret = configured_jwt_secret()
+    if secret is not None and len(secret) < JWT_SECRET_MIN_LENGTH and get_settings().LIBREFOLIO_PROFILE == "managed":
+        origin = configured_jwt_secret_origin() or "JWT_SECRET"
+        raise WeakSecretError(f"In the managed profile the session signing key from {origin} must be at least {JWT_SECRET_MIN_LENGTH} characters long; it is {len(secret)}")
+    if instance_blocked():
+        deletion_date = instance_deletion_date()
+        logger.warning("Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer", deletion_date=deletion_date.isoformat() if deletion_date else None)
+    else:
+        instance_deletion_date()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)

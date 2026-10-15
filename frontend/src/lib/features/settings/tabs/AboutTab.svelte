@@ -137,7 +137,8 @@
                 zodiosApi.list_asset_signal_catalog_api_v1_assets_prices_signals_get().catch(() => ({items: []})),
                 zodiosApi.list_fx_signal_catalog_api_v1_fx_currencies_signals_get().catch(() => ({items: []})),
             ]);
-            systemInfo = sysInfo as SystemInfo;
+            // Without a valid session the answer is the version only (GET /system/info): no report to show.
+            systemInfo = 'python_version' in sysInfo ? (sysInfo as SystemInfo) : null;
             assetProviders = assetProv as ProviderInfo[];
             fxProviders = fxProv as ProviderInfo[];
             importPlugins = brimPlugins as ProviderInfo[];

@@ -269,6 +269,42 @@ describe('AboutTab — loading and the version header', () => {
         expect(screen.getByTestId('about-tab')).toBeInTheDocument();
     });
 
+    it('leaves the diagnostics grid out for a version-only answer, and still lists the providers', async () => {
+        // Without a valid session `GET /system/info` answers `{app_version}` only
+        // (`SystemInfoPublicResponse`). Unlike the rejection above the call resolves,
+        // so the rest of the `try` runs, and the `'python_version' in sysInfo` guard is
+        // what turns the answer into "no report".
+        //
+        // Why the guard matters, reasoned rather than shown. Cast to the full shape, the
+        // same answer passes both `{#if systemInfo}` gates, and the credits block reads
+        // `systemInfo.backend_dependencies.length` on an object without the field. The
+        // TypeError comes from a render effect, after `onMount` has left its `try`/`catch`:
+        // nothing in the component absorbs it, and Vitest reports an uncaught exception
+        // that fails the run even when the test itself passes, which is why no test here
+        // provokes it. The state before the throw is what the assertions below reject: on
+        // the unguarded version the grid label renders and the copy button is enabled.
+        api.sys().mockResolvedValue({app_version: 'v1.2.3'} as never);
+        api.asset().mockResolvedValue([{code: 'yf', name: 'Yahoo Finance'}] as never);
+        api.fx().mockResolvedValue([{code: 'ecb', name: 'European Central Bank'}] as never);
+        api.brim().mockResolvedValue([{code: 'degiro', name: 'DEGIRO'}] as never);
+        await mount();
+
+        // The provider lists are assigned after the guard, in the same `try`: their
+        // presence shows the block ran to its end instead of landing in the `catch`.
+        expect(screen.getByText('Yahoo Finance')).toBeInTheDocument();
+        expect(screen.getByText('European Central Bank')).toBeInTheDocument();
+        expect(screen.getByText('DEGIRO')).toBeInTheDocument();
+
+        expect(copyButton()).toBeDisabled();
+        expect(screen.queryByText('settings.appVersion')).toBeNull();
+        expect(screen.queryByText('settings.deploymentMode')).toBeNull();
+        // Each dependency summary reads "label (count)", hence a pattern rather than the bare key.
+        expect(screen.queryByText(/settings\.backendLibraries/)).toBeNull();
+        expect(screen.queryByText(/settings\.frontendLibraries/)).toBeNull();
+        // The header is left unasserted: the answer does carry a version, and whether
+        // the tab shows it without a report is a separate choice from this guard.
+    });
+
     it('still shows the system facts when only the provider lists fail', async () => {
         // Each secondary call carries its own `.catch(() => [])`, which is what
         // makes a half-broken backend degrade instead of blanking the page.
