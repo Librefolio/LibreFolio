@@ -25,8 +25,9 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.core import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.cache import get_ttl_cache
 

@@ -56,7 +56,7 @@ from backend.app.services.ai_export.telemetry import (  # noqa: E402
     canonical_json,
     estimate_tokens_chars_div_4,
 )
-from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
+from backend.app.services.assets.manager import AssetSourceManager  # noqa: E402
 
 SCHEMA_VERSION = "1.1.0"
 TARGET_CURRENCY = "USD"

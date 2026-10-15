@@ -10,7 +10,7 @@ catalogue, `SETTINGS_REGISTRY`.
     environment; the admin-facing list is [Configuration](../../admin/configuration.md). How they
     load:
 
-    - `Settings(BaseSettings)` in `backend/app/config.py` reads the project-root `.env`;
+    - `Settings(BaseSettings)` in `backend/app/config/__init__.py` reads the project-root `.env`;
       environment variables override it, names are case-sensitive, unknown keys are ignored.
     - `get_settings()` builds a fresh, validated instance on every call. `main.py` calls it at
       import, so a mistyped or out-of-range value stops the startup. It also computes
@@ -18,11 +18,26 @@ catalogue, `SETTINGS_REGISTRY`.
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
       otherwise `backend/data/prod`.
-    - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_MODE`, `JWT_SECRET`,
-      `LIBREFOLIO_WEB_LINK_FINDER_*`, `LIBREFOLIO_NO_SCHEDULER` — are read from `os.environ`.
-      pydantic-settings does not export `.env` there, so they arrive through the launcher:
-      `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
-      `env_file:`.
+    - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_DATA_DIR`,
+      `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_NO_SCHEDULER`,
+      `LIBREFOLIO_DISABLE_DONATION_POPUP`, `LIBREFOLIO_TEST_LANE_ID`,
+      `LIBREFOLIO_WEB_LINK_FINDER_*` — are read in `backend/app/config/` (base or section
+      module), still from `os.environ` only; the web link finder keys are the one exception,
+      see below. pydantic-settings does not export `.env` there, so they arrive through the
+      launcher: `./dev.py server` copies `.env` into the environment (shell values win),
+      Compose uses `env_file:`.
+    - `backend/app/config/` is a package; the import path is still `backend.app.config`.
+      `__init__.py` is the base: constants, data directories, test mode, `Settings` and
+      `get_settings()`. New variables go into one section module per topic. Two exist today:
+      `platform.py` (`scheduler_disabled()`, `configured_jwt_secret()`,
+      `owning_test_lane_id()`) and `accounts.py` (`donation_popup_disabled()`). `plugins.py`,
+      `sleep_wake.py`, `backup.py` and `email.py` will follow when their areas add variables.
+    - The rule: every environment variable of the application is read inside
+      `backend/app/config/`. A module elsewhere calls a function there instead of reading
+      `os.environ`. A guard test checks it (runner selector `services config-package`, file
+      `backend/test_scripts/test_services/test_config_package.py`). One temporary exception:
+      the `LIBREFOLIO_WEB_LINK_FINDER_*` keys, still read by `services/assets/web_link_finder.py`
+      until they move into the package.
 
 ## 🗃️ Two storage models, kept separate on purpose
 
