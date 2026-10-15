@@ -624,10 +624,78 @@ rompono con moduli comuni dai nomi brevi (C1).
 >   possibile in meno con A. Le prove valgono: il file provato aveva lo stesso AST.
 > - `git diff --check` pulito; indice vuoto; porta 6185 libera.
 
-#### Checkpoint B 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+#### Checkpoint B ✅ (2026-10-15) — committato dal coordinatore
 
 - Delta: 26 file nuovi (25 moduli, la guardia), 1 cancellato (`schemas/pac_allocator/pac_allocator.py`), 47
   modificati (15 dell'app, 14 di test e diagnostica, il runner, lo skill `devpy-i18n`, una pagina dev, un commento TS,
   `TODO_FUTURI.md`, 11 pagine della devWiki, il backlog, questo piano).
 - Backlog, sezione J: G-8 (dal coordinatore) e J-4 (prosa della devWiki).
-- Dopo il commit: il coordinatore aggiorna la base (con A1 `769cc31cb`) e J valida la revisione combinata.
+- Commit del coordinatore: `9a58157a4` (`refactor(pac): split planner source, evaluator and schemas by theme`, con la
+  riga sulla guardia allargata a `sqlmodel` e `backend.app.db`, accettata) e `69edafebf` (`docs(journal): J CP-1B, PAC
+  split`).
+
+#### Aggiornamento di base 1 — `dev_release2` `0ac49739d` 🧊 (2026-10-15) — FROZEN, merge commit del coordinatore
+
+Il coordinatore ha aperto nel worktree `git merge --no-ff --no-commit 0ac49739d` su `69edafebf` (merge-base
+`c9bb8f257`, 59 commit): A1 (`accounts/`), H CP1 (`platform/`, `files/`), A2 (frontend `lib/features/`), W1 e W2
+(`transactions/`, `brokers/` coi mixin), H CP2a (pacchetto `config/`, guardia sulle letture d'ambiente). Il commit del
+merge è suo; J risolve, mette in stage solo i file risolti o corretti e valida.
+
+> **Note implementazione**:
+> - **3 conflitti**:
+>   - `DU backend/app/services/portfolio_allocation_source.py`: H aveva cambiato sul percorso vecchio una sola riga
+>     (`a52018fd7`), l'import di `QUANTITY_DUST_THRESHOLD` da `services.platform.data_quality_thresholds`. La riga
+>     serve a `source/distribution.py`: portata lì (ordine degli import con ruff), poi `git rm` del percorso vecchio;
+>   - `UU test_api/test_pac_planner_tool_api.py` e `UU test_api/test_portfolio_api.py`: stesso blocco di import, da
+>     tenere tutti e due: mio l'import da `schemas/pac_allocator/results.py` e da `source/portfolio_allocation_source.py`,
+>     loro `services.accounts.user_service`. Rispetto a `MERGE_HEAD` i due file differiscono solo per i miei import;
+>     `test_portfolio_api.py` ha lo stesso debito di black del loro lato (P-9).
+> - **6 file uniti da git, rivisti**: `api/v1/portfolio_api.py`, `scripts/test_runner/_backend_services.py`,
+>   `test_financial_math/test_layer_boundaries.py`, due pagine della devWiki (`financial-math-single-average-cost`,
+>   `wac-target-currency-last-acquisition`), il backlog. Rispetto a `MERGE_HEAD` ognuno contiene solo il delta di J.
+>   La guardia dello strato fusa ha i prefissi di W (`brokers`, `transactions`) e `pac_allocator` (che copre la
+>   sorgente), senza la voce `portfolio_allocation_source`. Nel backlog J-2 compare una volta, nella sezione J: lo
+>   sposta il coordinatore.
+> - **Ricerca semantica** sull'albero fuso:
+>   - risoluzione statica degli import (`/tmp/libreFolio_j/import_resolve.py`: ogni `from M import N` e ogni
+>     `import M`, pigri e sotto `TYPE_CHECKING` compresi, e ogni bersaglio di `patch(...)`): 840 file, nessun import
+>     irrisolto (l'unico reperto, `backend.test_scripts.diagnostics`, è un pacchetto senza `__init__` che Python
+>     risolve, identico sui tre lati);
+>   - testo (`merge1_oldpaths.py`): zero citazioni dei 17 moduli spostati da A, H e W né dei vecchi percorsi del PAC in
+>     `backend/`, `scripts/`, `.github/`, `mkdocs_src/docs/`, `frontend/src`, `frontend/scripts`, `dev.py`;
+>   - letture d'ambiente: nessuna nei moduli del PAC; fuori da `config/` restano `web_link_finder.py` (eccezione
+>     elencata nella guardia di H, fino al suo CP3) e le scritture di `risk/quant/spawn_worker.py` (permesse).
+> - **Da ricordare per i lotti del rischio**: la guardia di H (`test_config_package.py`) cita
+>   `services/risk/quant/spawn_worker.py` per percorso (`KNOWN_MODULES`, `ENVIRONMENT_WRITER`); se J sposta quel
+>   file, il percorso va aggiornato lì, d'accordo con H.
+> - **Cancelli**:
+>   - `services config-package` 492 verdi; `services pac-planner-core` 264 (con i 34 della guardia);
+>   - `pytest --collect-only backend/test_scripts` (con l'ambiente della corsia: `TEST_PORT=6185`,
+>     `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r13-j`, `LIBREFOLIO_TEST_MODE=1`): 13 502 test, nessun errore;
+>   - `dev.py api sync` sull'albero fuso, confrontato col bersaglio: `git archive 0ac49739d` estratto in
+>     `/tmp/libreFolio_j/target_0ac49739d/` e `dev.py api schema` lì. `openapi.json` identico byte per byte una volta
+>     rimessa la stringa della versione (il bersaglio, senza git, dice `unknown`); `tool-contracts.openapi.json`
+>     identico byte per byte. Gli altri 3 generati sono identici anche alla base di J-0;
+>   - `dev.py lint` pulito; `check_source_paths.py` 5, lo stesso insieme della base; patch 41, nessuna muta;
+>     equivalenza AST del taglio intatta; `git diff --cached --check` pulito;
+>   - **test raccolti, fuso contro bersaglio** (`--collect-only` anche nella copia estratta di `0ac49739d`, stesso
+>     ambiente): 13 441 → 13 502. La differenza è esatta: +34 della guardia D-J18; la guardia d'ambiente di H
+>     (`test_config_package.py`, un caso per modulo di `backend/app`) perde i 3 casi dei percorsi vecchi del PAC e ne
+>     guadagna 30 per i moduli nuovi (+27). Nessun test perso nel merge;
+>   - **`all-backend`** sulla 6185 (02:09–02:32, `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600`: il server ha ricostruito
+>     frontend e sito dopo le 69 + 26 modifiche di A2 e H): 7/7, «ALL BACKEND TESTS PASSED»; 23 invocazioni,
+>     **13 491 passed, 28 skipped, 0 failed**. Rispetto a CP-1B cambia solo `services` (6 470 → 6 962): i 492 test di
+>     `test_config_package.py`. Le righe «Shared backend exited during startup» del log vengono da
+>     `test_runtime_isolation.py`, che simula quei guasti (PASSED);
+>   - porta 6185 libera.
+> - **Stage**: risolti `test_pac_planner_tool_api.py`, `test_portfolio_api.py` e il percorso vecchio della sorgente
+>   (`git rm`); corretto `source/distribution.py`. Nessun altro file toccato nel merge; questo piano resta fuori
+>   dallo stage (journal).
+> - **Prossimo aggiornamento (X, `64a5a3fe7`), previsto in sola lettura**: X non tocca
+>   `tool_plugins/pac_allocator/plugin.py` (il Tool usava già `tools/registry.py`). I file in comune con CP-1 sono 5
+>   (`test_layer_boundaries.py`, `_backend_services.py`, `developer/backend/financial_math.md`, la pagina della devWiki
+>   `financial-math-single-average-cost`, il backlog): la fusione a tre vie simulata con `git merge-file -p` su copie in
+>   `/tmp` non dà conflitti, prende gli aggiornamenti di X e tiene il delta di J. I file di CP-1 non importano i
+>   percorsi vecchi di X.
+>
+> **⚠️ Fuori pista**: nessuno.
