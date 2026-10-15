@@ -41,26 +41,35 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     other purpose is ``unknown``), then the recipient. An invitation goes to ``to``, else to the address written in it —
     neither is ``EmailRecipientRequiredError`` —, in the language asked for, else the instance's; a reset link goes only
     to the address of its account, in the account's language: any ``to``, its own address included, is
-    ``EmailRecipientNotAllowedError``. The email is exactly what the builder writes for that language with the
-    ``LIBREFOLIO_PUBLIC_URL`` link of the token, the host of that address as the instance, the administrator as the
-    inviter and the administrator's role sentence when the invitation grants it; one unit spent. The token is in no
+    ``EmailRecipientNotAllowedError``, and the reset link of an inactive account is ``EmailAccountInactiveError``
+    (``EMAIL_ACCOUNT_INACTIVE``), the link left live. The email is exactly what the builder writes for that language
+    with the ``LIBREFOLIO_PUBLIC_URL`` link of the token, the host of that address as the instance, the administrator as
+    the inviter and the administrator's role sentence when the invitation grants it; one unit spent. The token is in no
     log event.
-11. ``admit_forgotten_password`` reads the configuration first — email, then links —, counting nothing when it refuses;
-    then 5 requests per 15 minutes per client address and 3 per hour per identifier (stripped, case-insensitive), each
-    refusal an ``EmailRateLimitedError`` with the seconds until the window frees; then the instance's hourly budget,
-    peeked, never spent. Without a client address (a unix socket) the limit per address does not apply — one shared
-    count would let a single client block everyone —, while the limit per identifier and the budget still do. The
-    shipped limits are 5/900 s, 3/3600 s, and per account one email every 5 minutes and 3 an hour.
+11. ``admit_forgotten_password`` ships held (``FORGOT_PASSWORD_HELD``, until lot E4): ``ForgottenPasswordHeldError``
+    (``FORGOT_PASSWORD_DISABLED``) before anything else, nothing counted. Lifted, it reads the configuration first —
+    email, then links —, counting nothing when it refuses; then 10 requests per 15 minutes per client address — keyed
+    by ``address_key``: an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4,
+    anything else as written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
+    ``EmailRateLimitedError`` with the seconds until the window frees; then the instance's hourly budget, peeked, never
+    spent. Without a client address (a unix socket) the limit per address does not apply — one shared count would let
+    a single client block everyone —, while the limit per identifier and the budget still do. The shipped limits are
+    10/900 s per address, 3/3600 s per identifier and per mailbox, and per account one email every 5 minutes and 3 an
+    hour.
 12. ``forgotten_password_work`` finds the account as the login does — by username or email, spaces around ignored —,
     active only; per account at most one reset link every 5 minutes and 3 an hour, counted on every password-reset row
-    whatever made it or became of it. It then reads the configuration again — the instance not blocked, email usable,
-    links ready, a unit of the hourly budget free —, and only then makes the new reset link: when one of them is gone,
-    nothing is made and the account's earlier live links stay live. Making it revokes the account's earlier live reset
-    links; the new one is emailed, valid, in the account's language, built from ``LIBREFOLIO_PUBLIC_URL``, and when
-    anything stops the email after the link was made — the server refusing, an error while the email is built or while
-    the account's language is read — the new link is revoked: no live link reaches nobody. Unknown, inactive, past its
-    limits, the configuration gone, the email refused, an unexpected error: nothing is sent and nothing is raised.
-    Neither the identifier nor the token is in any log event.
+    whatever made it or became of it; an administrator's reset link still live stops it, nothing made nor revoked. It
+    then reads the configuration again — the instance not blocked, email usable, links ready, a unit of the hourly
+    budget free —, counts the recipient's mailbox (3 an hour, without case, whatever the account), and only then makes
+    the new reset link: when one of them is missing, nothing is made and the account's earlier live links stay live.
+    Making it revokes the account's earlier live reset links; counted again inside the write transaction, its own link
+    included, more than one in five minutes or more than three in the hour — a link made meanwhile by another request —
+    rolls it all back, what it revoked live again. The new link is emailed, valid, in the account's language, built from
+    ``LIBREFOLIO_PUBLIC_URL``, and when anything stops the email after the link was made — the server refusing, an error
+    while the email is built or while the account's language is read — the new link is revoked: no live link reaches
+    nobody. Unknown, inactive, past its limits, the configuration gone, the email refused, an unexpected error: nothing
+    is sent and nothing is raised; an unexpected error is logged as its type alone, without a traceback (whose rendering
+    would print a database error's parameters). Neither the identifier nor the token is in any log event.
 13. A blocked instance (``LIBREFOLIO_BLOCKED`` blocking, or unreadable) sends nothing through any flow, and every flow
     asks it first: ``send_test_email``, ``send_link_email`` and ``admit_forgotten_password`` raise
     ``EmailUnavailableError`` with ``INSTANCE_BLOCKED`` before the configuration, the links, the token or a limiter is
@@ -72,8 +81,9 @@ settings (NullPool, disposed at teardown), users written as rows, tokens issued 
 the case needs; no server of the lane, no network beyond 127.0.0.1. An autouse fixture removes every inherited
 ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOCKED`` (C-96 removes them from the lanes; a
 developer's shell may still carry them) and each test sets its own with ``monkeypatch``; others replace
-``delivery.INSTANCE_BUDGET`` and the two «forgot password» limiters (``flows.FORGOT_BY_ADDRESS``,
-``flows.FORGOT_BY_IDENTIFIER``, with the shipped limits) with private limiters on a fake clock;
+``delivery.INSTANCE_BUDGET`` and the three «forgot password» limiters (``flows.FORGOT_BY_ADDRESS``,
+``flows.FORGOT_BY_IDENTIFIER``, ``flows.FORGOT_BY_MAILBOX``, with the shipped limits) with private limiters on a fake
+clock, and lift the hold of «forgot password» (``flows.FORGOT_PASSWORD_HELD``), which the tests of the hold set back;
 ``smtp.SMTP_TIMEOUT_SECONDS`` is 5 s, a bound for a defect that hangs, never a wait. Every SMTP conversation is with
 ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks. Nothing is timed.
 """
@@ -95,6 +105,7 @@ import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 from structlog.testing import capture_logs
@@ -102,7 +113,7 @@ from structlog.testing import capture_logs
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User, UserSettings
 from backend.app.schemas.settings import SETTINGS_REGISTRY
-from backend.app.services.accounts import token_service
+from backend.app.services.accounts import token_service, user_service
 from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenInspection, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
@@ -157,6 +168,9 @@ DEAD_KINDS = ("expired", "consumed", "revoked", "unknown", "other-purpose")
 #: The «forgot password» limiters as the module ships them, read before any fixture replaces them.
 SHIPPED_BY_ADDRESS = flows.FORGOT_BY_ADDRESS
 SHIPPED_BY_IDENTIFIER = flows.FORGOT_BY_IDENTIFIER
+SHIPPED_BY_MAILBOX = flows.FORGOT_BY_MAILBOX
+#: Whether «forgot password» ships held, read before the autouse fixture lifts it for the rest of the module.
+SHIPPED_HELD = flows.FORGOT_PASSWORD_HELD
 #: The fake clock's start: the first request of every limiter test.
 START = 1_000.0
 
@@ -210,10 +224,11 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 
 @dataclass(frozen=True)
 class ForgotLimits:
-    """The two «forgot password» limiters of a test: per client address, per identifier."""
+    """The three «forgot password» limiters of a test: per client address, per identifier, per recipient mailbox."""
 
     by_address: SlidingWindowLimiter
     by_identifier: SlidingWindowLimiter
+    by_mailbox: SlidingWindowLimiter
 
 
 @pytest.fixture(autouse=True)
@@ -222,10 +237,18 @@ def forgot_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> ForgotLi
     limits = ForgotLimits(
         by_address=SlidingWindowLimiter(SHIPPED_BY_ADDRESS.limit, SHIPPED_BY_ADDRESS.window_seconds, clock=clock),
         by_identifier=SlidingWindowLimiter(SHIPPED_BY_IDENTIFIER.limit, SHIPPED_BY_IDENTIFIER.window_seconds, clock=clock),
+        by_mailbox=SlidingWindowLimiter(SHIPPED_BY_MAILBOX.limit, SHIPPED_BY_MAILBOX.window_seconds, clock=clock),
     )
     monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", limits.by_address)
     monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", limits.by_identifier)
+    monkeypatch.setattr(flows, "FORGOT_BY_MAILBOX", limits.by_mailbox)
     return limits
+
+
+@pytest.fixture(autouse=True)
+def _forgot_password_lifted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """«Forgot password» ships held (``FORGOT_PASSWORD_HELD``, until lot E4): lifted here so that the admission's other steps can be tested; the tests of the hold set it back themselves."""
+    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", False)
 
 
 @pytest.fixture(autouse=True)
@@ -955,23 +978,25 @@ async def test_admission_reads_the_configuration_first_and_counts_nothing(monkey
 
 
 @pytest.mark.asyncio
-async def test_five_requests_per_address_every_fifteen_minutes(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EMF-021 — contract 11: five requests from one address pass, each for another identifier; two minutes later the sixth is ``EmailRateLimitedError`` with ``900 - 120`` seconds to wait; another address passes meanwhile; fifteen minutes after the first five, the address passes again."""
+async def test_ten_requests_per_address_every_fifteen_minutes(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMF-021 — contract 11: ten requests from one IPv4 address pass, each for another identifier, and are counted under that address as is; two minutes later the eleventh is ``EmailRateLimitedError`` with ``900 - 120`` seconds to wait; another address passes meanwhile; fifteen minutes after the first ten, the address passes again."""
     print_section("EMF-021: per address")
     _usable_without_a_server(monkeypatch)
 
     clock.now = START
-    for index in range(5):
+    for index in range(10):
         await flows.admit_forgotten_password(ADDRESS, f"zq_user_{index}")
+    counted = forgot_limits.by_address.count(ADDRESS)
     clock.now = START + 120
     with pytest.raises(EmailRateLimitedError) as refused:
-        await flows.admit_forgotten_password(ADDRESS, "zq_user_5")
-    await flows.admit_forgotten_password(OTHER_ADDRESS, "zq_user_5")
+        await flows.admit_forgotten_password(ADDRESS, "zq_user_10")
+    await flows.admit_forgotten_password(OTHER_ADDRESS, "zq_user_10")
     clock.now = START + 900
-    await flows.admit_forgotten_password(ADDRESS, "zq_user_6")
+    await flows.admit_forgotten_password(ADDRESS, "zq_user_11")
 
+    assert counted == 10, f"the ten requests from {ADDRESS} must be counted under it: {counted}"
     assert refused.value.retry_after == pytest.approx(900 - 120)
-    print_success(f"the sixth refused for {refused.value.retry_after:.0f} s; another address and the next window pass")
+    print_success(f"the eleventh refused for {refused.value.retry_after:.0f} s; another address and the next window pass")
 
 
 @pytest.mark.asyncio
@@ -1015,23 +1040,24 @@ async def test_the_instance_budget_is_peeked_never_spent(monkeypatch: pytest.Mon
 
 
 def test_the_shipped_limits() -> None:
-    """EMF-024 — contract 11: the module ships ``FORGOT_BY_ADDRESS`` 5 per 900 s, ``FORGOT_BY_IDENTIFIER`` 3 per 3600 s (both ``SlidingWindowLimiter``), and per account one email every 5 minutes and 3 an hour."""
+    """EMF-024 — contract 11: the module ships ``FORGOT_BY_ADDRESS`` 10 per 900 s, ``FORGOT_BY_IDENTIFIER`` 3 per 3600 s, ``FORGOT_BY_MAILBOX`` 3 per 3600 s (all ``SlidingWindowLimiter``), and per account one email every 5 minutes and 3 an hour."""
     print_section("EMF-024: shipped limits")
 
-    assert isinstance(SHIPPED_BY_ADDRESS, SlidingWindowLimiter) and (SHIPPED_BY_ADDRESS.limit, SHIPPED_BY_ADDRESS.window_seconds) == (5, 900)
+    assert isinstance(SHIPPED_BY_ADDRESS, SlidingWindowLimiter) and (SHIPPED_BY_ADDRESS.limit, SHIPPED_BY_ADDRESS.window_seconds) == (10, 900)
     assert isinstance(SHIPPED_BY_IDENTIFIER, SlidingWindowLimiter) and (SHIPPED_BY_IDENTIFIER.limit, SHIPPED_BY_IDENTIFIER.window_seconds) == (3, 3600)
+    assert isinstance(SHIPPED_BY_MAILBOX, SlidingWindowLimiter) and (SHIPPED_BY_MAILBOX.limit, SHIPPED_BY_MAILBOX.window_seconds) == (3, 3600)
     assert (flows.RESET_EMAIL_MIN_INTERVAL, flows.RESET_EMAILS_PER_HOUR) == (timedelta(minutes=5), 3)
-    print_success("5/15 min, 3/h; per account 1/5 min, 3/h")
+    print_success("10/15 min per address, 3/h per identifier and per mailbox; per account 1/5 min, 3/h")
 
 
 @pytest.mark.asyncio
 async def test_without_a_client_address_only_the_limit_per_address_is_skipped(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
-    """EMF-032 — contract 11: ``address=None`` — a unix socket —: seven admissions for seven identifiers pass, more than the five one address may make, and the limiter per address holds no key at all, not even a shared one. The limit per identifier still applies — ``ZQ_ALICE`` a minute after three ``zq_alice``: ``3600 - 60`` seconds —, and so does the hourly budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit spent: ``3600 - 30`` seconds)."""
+    """EMF-032 — contract 11: ``address=None`` — a unix socket —: eleven admissions for eleven identifiers pass, more than the ten one address may make, and the limiter per address holds no key at all, not even a shared one. The limit per identifier still applies — ``ZQ_ALICE`` a minute after three ``zq_alice``: ``3600 - 60`` seconds —, and so does the hourly budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit spent: ``3600 - 30`` seconds)."""
     print_section("EMF-032: no client address")
     _usable_without_a_server(monkeypatch, max_per_hour="1")
 
     clock.now = START
-    for index in range(7):
+    for index in range(11):
         await flows.admit_forgotten_password(None, f"zq_user_{index}")
     for _ in range(3):
         await flows.admit_forgotten_password(None, ALICE)
@@ -1104,12 +1130,15 @@ async def test_the_work_sends_nothing_to_an_unknown_or_inactive_account(monkeypa
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("age", "sent"), [pytest.param(timedelta(minutes=5) - timedelta(seconds=1), False, id="4m59s-ago-nothing"), pytest.param(timedelta(minutes=5), True, id="5m-ago-sent")])
 async def test_one_reset_email_every_five_minutes_per_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, age: timedelta, sent: bool) -> None:
-    """EMF-027 — contract 12: the account has a reset link an administrator made ``age`` before the request — every reset row counts, whoever made it —: 4 min 59 s ago, nothing is sent and no row added; 5 min ago, the email goes and a row is added."""
+    """EMF-027 — contract 12: an administrator made the account a reset link ``age`` before the request, and revoked it a second later — every reset row counts, whoever made it and whatever became of it; revoked, it is no live administrator's link, which would stop the work on its own —: 4 min 59 s ago, nothing is sent and no row added; 5 min ago, the email goes and a row is added."""
     print_section(f"EMF-027: a reset row {age} old")
     admin = await _add_user(engine, ADMIN)
     alice = await _add_user(engine, ALICE)
     moment = utcnow()
-    await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id, now=moment - age)
+    made = await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id, now=moment - age)
+    async with AsyncSession(engine) as session:
+        assert await token_service.revoke_tokens(session, token_id=made.record.id, now=moment - age + timedelta(seconds=1)) == 1, "setup: revoked"
+        await session.commit()
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
@@ -1142,12 +1171,11 @@ async def test_three_reset_emails_an_hour_per_account_counting_every_row(monkeyp
 
 @pytest.mark.asyncio
 async def test_the_work_revokes_the_accounts_earlier_live_reset_links(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine) -> None:
-    """EMF-029 — contract 12: a live reset link an administrator made ten minutes earlier is revoked by the work, and the emailed one is valid."""
+    """EMF-029 — contract 12: a live reset link an earlier request made ten minutes before — no administrator made it — is revoked by the work, and the emailed one is valid."""
     print_section("EMF-029: earlier links revoked")
-    admin = await _add_user(engine, ADMIN)
     alice = await _add_user(engine, ALICE)
     moment = utcnow()
-    earlier = await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id, now=moment - timedelta(minutes=10))
+    earlier = await _issue(engine, PASSWORD_RESET, user_id=alice.id, now=moment - timedelta(minutes=10))
     assert (await _inspect(engine, earlier.token, PASSWORD_RESET)).status == TokenStatus.VALID, "precondition: the earlier link is live"
 
     with FakeSmtpServer() as fake:
@@ -1163,12 +1191,11 @@ async def test_the_work_revokes_the_accounts_earlier_live_reset_links(monkeypatc
 @pytest.mark.asyncio
 @pytest.mark.parametrize("gone", ["links", "links-no-longer-usable", "email", "budget", "blocked"])
 async def test_the_work_makes_nothing_when_the_configuration_went_away(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, gone: str) -> None:
-    """EMF-030 — contract 12: the configuration admitted the request; before the work, ``LIBREFOLIO_PUBLIC_URL`` went away or became an address no link can start from, ``LIBREFOLIO_SMTP_HOST`` went away, the hourly budget was spent (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit taken), or the hosting provider blocked the instance. The work checks again before it makes the link: no new reset row, the live link an administrator made ten minutes earlier still live — nothing revoked it —, no connection, nothing more spent, nothing raised. It logs why it stopped: the barrier that it went past the account and its limits."""
+    """EMF-030 — contract 12: the configuration admitted the request; before the work, ``LIBREFOLIO_PUBLIC_URL`` went away or became an address no link can start from, ``LIBREFOLIO_SMTP_HOST`` went away, the hourly budget was spent (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit taken), or the hosting provider blocked the instance. The work checks again before it makes the link: no new reset row, the live link an earlier request made ten minutes before still live — nothing revoked it —, no connection, nothing more spent, nothing raised. It logs why it stopped: the barrier that it went past the account and its limits."""
     print_section(f"EMF-030: {gone} before the work")
-    admin = await _add_user(engine, ADMIN)
     alice = await _add_user(engine, ALICE)
     moment = utcnow()
-    earlier = await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id, now=moment - timedelta(minutes=10))
+    earlier = await _issue(engine, PASSWORD_RESET, user_id=alice.id, now=moment - timedelta(minutes=10))
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake, max_per_hour="1")
@@ -1198,7 +1225,7 @@ async def test_the_work_makes_nothing_when_the_configuration_went_away(monkeypat
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["smtp-refuses-the-recipient", "value-error-while-building", "unexpected-error-while-building", "language-fails-after-reading"])
 async def test_the_work_never_raises_and_revokes_a_link_it_could_not_send(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, failure: str) -> None:
-    """EMF-031 — contract 12: after the work made the link, the SMTP server refuses the account's address, a ``ValueError`` or an unexpected ``RuntimeError`` happens while the email is built, or reading the account's language fails once it has queried the database: the work returns, raises nothing, sends nothing, and logs the failure without the identifier (the account's address). Whatever stopped it, the link the work made — the account's only reset row — is revoked: no live link reaches nobody."""
+    """EMF-031 — contract 12: after the work made the link, the SMTP server refuses the account's address, a ``ValueError`` or an unexpected ``RuntimeError`` happens while the email is built, or reading the account's language fails once it has queried the database: the work returns, raises nothing, sends nothing, and logs the failure without the identifier (the account's address) — an unexpected one as its type alone, without a traceback. Whatever stopped it, the link the work made — the account's only reset row — is revoked: no live link reaches nobody."""
     print_section(f"EMF-031: {failure}")
     alice = await _add_user(engine, ALICE)
 
@@ -1225,6 +1252,10 @@ async def test_the_work_never_raises_and_revokes_a_link_it_could_not_send(monkey
     assert [event for event in events if alice.email in repr(event)] == [], f"a log event holds the identifier: {events}"
     rows = await _reset_rows(engine, alice.id)
     assert len(rows) == 1 and rows[0].revoked_at is not None, f"the link that reached nobody must be revoked: {[(row.id, row.revoked_at) for row in rows]}; the work logged {failures}"
+    if failure in ("unexpected-error-while-building", "language-fails-after-reading"):
+        logged = failures[-1]
+        assert (logged.get("event"), logged.get("log_level"), logged.get("error")) == ("Forgotten password: the request failed", "error", "RuntimeError"), logged
+        assert "exc_info" not in logged, f"an unexpected failure is logged as its type alone, without a traceback: {logged}"
     print_success(f"{failures[-1]['event']}, the link revoked, nothing raised")
 
 
@@ -1243,7 +1274,7 @@ async def test_a_blocked_instance_sends_nothing_through_any_flow_and_makes_no_li
     moment = utcnow()
     invitation = await _issue(engine, INVITE, email=GUEST, created_by_user_id=admin.id)
     reset = await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id)
-    earlier = await _issue(engine, PASSWORD_RESET, user_id=bob.id, created_by_user_id=admin.id, now=moment - timedelta(minutes=10))
+    earlier = await _issue(engine, PASSWORD_RESET, user_id=bob.id, now=moment - timedelta(minutes=10))
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
@@ -1305,3 +1336,222 @@ async def test_the_block_is_asked_before_anything_else_by_every_flow(monkeypatch
         assert (type(raised), raised.code) == (EmailUnavailableError, "INSTANCE_BLOCKED"), repr(raised)
     assert (fake.connections, budget.count(), len(forgot_limits.by_address), len(forgot_limits.by_identifier)) == (0, 0, 0, 0)
     print_success("INSTANCE_BLOCKED first, from both")
+
+
+# =============================================================================
+# 14. AFTER THE SECURITY REVIEW OF E3
+# =============================================================================
+
+#: One mailbox written four ways: accounts are distinct rows, the mailbox is one (compared without case).
+ONE_MAILBOX = ["zq-shared@example.com", "ZQ-SHARED@EXAMPLE.COM", "Zq-Shared@Example.com", "zq-shared@EXAMPLE.com"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("also", ["nothing-else", "email-off", "links-missing", "blocked", "budget-spent"])
+async def test_forgot_password_ships_held_and_the_hold_comes_first(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits, also: str) -> None:
+    """EMF-035 — contract 11: «forgot password» ships held (``FORGOT_PASSWORD_HELD`` is ``True`` until lot E4). Held, ``admit_forgotten_password`` raises ``ForgottenPasswordHeldError`` — an ``EmailError``, ``FORGOT_PASSWORD_DISABLED`` — before anything else: email ready, off, without links, on a blocked instance or with the hourly budget spent, the hold is what the caller hears; no limiter counts the address nor the identifier."""
+    print_section(f"EMF-035: held, and {also}")
+    assert SHIPPED_HELD is True, "«forgot password» must ship held until changing an account's email asks for its password"
+    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", True)
+    if also != "email-off":
+        _usable_without_a_server(monkeypatch, max_per_hour="1")
+    if also == "links-missing":
+        monkeypatch.delenv(PUBLIC_URL_VARIABLE)
+    elif also == "blocked":
+        monkeypatch.setenv(BLOCKED_VARIABLE, "1")
+    elif also == "budget-spent":
+        assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+
+    with pytest.raises(EmailError) as held:
+        await flows.admit_forgotten_password(ADDRESS, ALICE)
+
+    assert (type(held.value), held.value.code) == (flows.ForgottenPasswordHeldError, "FORGOT_PASSWORD_DISABLED"), repr(held.value)
+    assert (len(forgot_limits.by_address), len(forgot_limits.by_identifier)) == (0, 0)
+    print_success("FORGOT_PASSWORD_DISABLED first, nothing counted")
+
+
+@pytest.mark.parametrize(
+    ("address", "key"),
+    [
+        pytest.param("198.51.100.7", "198.51.100.7", id="ipv4-as-is"),
+        pytest.param("2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64", id="ipv6-by-its-64"),
+        pytest.param("2001:db8:1:2::abcd", "2001:db8:1:2::/64", id="ipv6-another-address-of-the-same-64"),
+        pytest.param("2001:DB8:1:2::1", "2001:db8:1:2::/64", id="ipv6-in-capitals"),
+        pytest.param("2001:db8:1:3::1", "2001:db8:1:3::/64", id="ipv6-the-next-64"),
+        pytest.param("::1", "::/64", id="ipv6-loopback"),
+        pytest.param("fe80::1%eth0", "fe80::/64", id="ipv6-with-a-zone-the-zone-ignored"),
+        pytest.param("::ffff:198.51.100.7", "198.51.100.7", id="ipv4-mapped-as-the-ipv4"),
+        pytest.param("testclient", "testclient", id="a-name-as-written"),
+        pytest.param("/run/librefolio/zq.sock", "/run/librefolio/zq.sock", id="a-socket-path-as-written"),
+        pytest.param("", None, id="an-empty-address"),
+        pytest.param(None, None, id="no-address"),
+    ],
+)
+def test_the_key_of_a_client_address(address: str | None, key: str | None) -> None:
+    """EMF-036 — contract 11: ``address_key``: an IPv4 address as is; an IPv6 one by its /64 network — which one subscriber usually holds whole —, in its canonical form, a zone (``%eth0``) ignored; an IPv4-mapped IPv6 address as the IPv4 it maps; anything that is not an IP address as written; no address, or an empty one, no key."""
+    print_section(f"EMF-036: address_key({address!r})")
+
+    answer = flows.address_key(address)
+
+    assert answer == key, f"address_key({address!r}) is {answer!r}, expected {key!r}"
+    print_success(f"{address!r} → {answer!r}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("members", "one_more", "outsider", "key"),
+    [
+        pytest.param([f"2001:db8:1:2::{index:x}" for index in range(1, 11)], "2001:db8:1:2:ffff:ffff:ffff:fffe", "2001:db8:1:3::1", "2001:db8:1:2::/64", id="ipv6-one-64"),
+        pytest.param(["198.51.100.7", "::ffff:198.51.100.7"] * 5, "::ffff:198.51.100.7", "198.51.100.8", "198.51.100.7", id="ipv4-and-its-mapped-form"),
+    ],
+)
+async def test_the_limit_per_address_counts_by_the_key(monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits, members: list[str], one_more: str, outsider: str, key: str) -> None:
+    """EMF-037 — contract 11: ten admissions from addresses with one key — ten addresses of one IPv6 /64, or an IPv4 address and its IPv4-mapped form in turn — pass; an eleventh from another address with that key is ``EmailRateLimitedError`` — one subscriber, one count —, while an address with another key passes. Each request names another identifier: only the limit per address can refuse."""
+    print_section(f"EMF-037: the count of {key}")
+    _usable_without_a_server(monkeypatch)
+
+    clock.now = START
+    for index, address in enumerate(members):
+        await flows.admit_forgotten_password(address, f"zq_user_{index}")
+    with pytest.raises(EmailRateLimitedError) as refused:
+        await flows.admit_forgotten_password(one_more, "zq_user_one_more")
+    await flows.admit_forgotten_password(outsider, "zq_user_outsider")
+
+    assert refused.value.retry_after == pytest.approx(900)
+    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(flows.address_key(outsider))) == (10, 1)
+    print_success(f"ten under {key}, the eleventh refused; another key passes")
+
+
+@pytest.mark.asyncio
+async def test_three_reset_emails_an_hour_per_mailbox_whatever_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
+    """EMF-038 — contract 12: four accounts whose addresses are one mailbox written four ways (a mailbox is compared without case); each asks once, each well within its own limits. The first three get their email; the fourth gets nothing — the mailbox had three this hour —: no new row, its live link from an earlier request (ten minutes old) still live, nothing more spent, nothing raised. An hour later, by the limiters' clock, the same request for the fourth goes: the mailbox was all that held it."""
+    print_section("EMF-038: per mailbox")
+    moment = utcnow()
+    accounts = [await _add_user(engine, f"zq_shared_{index}", email=address) for index, address in enumerate(ONE_MAILBOX)]
+    earlier = await _issue(engine, PASSWORD_RESET, user_id=accounts[3].id, now=moment - timedelta(minutes=10))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        clock.now = START
+        for account in accounts:
+            assert await flows.forgotten_password_work(account.username, engine=engine, now=moment) is None
+        held_back = (len(fake.messages), budget.count(), [row.id for row in await _reset_rows(engine, accounts[3].id)], (await _inspect(engine, earlier.token, PASSWORD_RESET)).status)
+        clock.now = START + 3600
+        await flows.forgotten_password_work(accounts[3].username, engine=engine, now=moment)
+
+    assert [message.rcpt_tos for message in fake.messages[:3]] == [[address] for address in ONE_MAILBOX[:3]]
+    assert held_back == (3, 3, [earlier.record.id], TokenStatus.VALID), f"past the mailbox's limit nothing may be made or revoked: {held_back}"
+    assert [message.rcpt_tos for message in fake.messages[3:]] == [[ONE_MAILBOX[3]]], "an hour later the fourth request goes"
+    print_success("three emails to one mailbox, the fourth held, then sent an hour later")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("state", "sent"), [pytest.param("live", False, id="live-stops-the-work"), pytest.param("consumed", True, id="consumed"), pytest.param("revoked", True, id="revoked"), pytest.param("expired", True, id="expired")])
+async def test_an_administrators_live_reset_link_stops_the_work(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, state: str, sent: bool) -> None:
+    """EMF-039 — contract 12: an administrator made the account a reset link ten minutes ago — past the account's own limits — or, for the expired one, just over its lifetime ago. While it is live, the work stops before making anything: no email, no new row, nothing spent, the administrator's link still live — a stranger's request must not cancel it. Consumed, revoked or expired, it stops nothing: the email goes, with a new link."""
+    print_section(f"EMF-039: an administrator's link, {state}")
+    admin = await _add_user(engine, ADMIN)
+    alice = await _add_user(engine, ALICE)
+    moment = utcnow()
+    age = DEFAULT_TTL[PASSWORD_RESET] + timedelta(minutes=1) if state == "expired" else timedelta(minutes=10)
+    made = await _issue(engine, PASSWORD_RESET, user_id=alice.id, created_by_user_id=admin.id, now=moment - age)
+    async with AsyncSession(engine) as session:
+        if state == "consumed":
+            assert await token_service.consume_token(session, made.token, PASSWORD_RESET, now=moment - age + timedelta(minutes=1)) is not None, "setup: consumed"
+        elif state == "revoked":
+            assert await token_service.revoke_tokens(session, token_id=made.record.id, now=moment - age + timedelta(minutes=1)) == 1, "setup: revoked"
+        await session.commit()
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        await flows.forgotten_password_work(ALICE, engine=engine, now=moment)
+
+    rows = [row.id for row in await _reset_rows(engine, alice.id)]
+    if sent:
+        assert (len(fake.messages), len(rows)) == (1, 2), f"{len(fake.messages)} message(s), rows {rows}"
+    else:
+        assert (fake.connections, budget.count(), rows) == (0, 0, [made.record.id])
+        assert (await _inspect(engine, made.token, PASSWORD_RESET)).status == TokenStatus.VALID, "the administrator's link must stay live"
+    print_success("sent, with a new link" if sent else "nothing made, the administrator's link live")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("earlier_ages", "rival_age", "rival_by_an_administrator"),
+    [
+        pytest.param((), timedelta(seconds=1), True, id="an-administrators-link-made-meanwhile"),
+        pytest.param((50, 30), timedelta(minutes=10), False, id="the-third-link-of-the-hour-made-meanwhile"),
+    ],
+)
+async def test_a_reset_link_made_meanwhile_rolls_the_work_back(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, earlier_ages: tuple[int, ...], rival_age: timedelta, rival_by_an_administrator: bool) -> None:
+    """EMF-040 — contract 12: the account passes the work's first count; between that count and the link, another request gives the account a reset link — committed by another session inside ``user_service.create_password_reset``, just before the real one —: an administrator's link a second old, or the third link of the hour. Counted again inside the write transaction, its own link included, the account has more than one in five minutes, or more than three in the hour: the work rolls back — its own row never existed, and the rival link, which making it had revoked, is live again —, sends nothing, spends nothing, raises nothing."""
+    print_section(f"EMF-040: a rival link {rival_age} old")
+    admin = await _add_user(engine, ADMIN)
+    alice = await _add_user(engine, ALICE)
+    moment = utcnow()
+    earlier = [await _issue(engine, PASSWORD_RESET, user_id=alice.id, now=moment - timedelta(minutes=minutes)) for minutes in earlier_ages]
+    rivals: list[IssuedToken] = []
+    create = user_service.create_password_reset
+
+    async def create_after_a_rival(session: AsyncSession, user: User, **arguments: object) -> IssuedToken:
+        async with AsyncSession(engine, expire_on_commit=False) as other:
+            rival = await token_service.issue_token(other, PASSWORD_RESET, user_id=user.id, created_by_user_id=admin.id if rival_by_an_administrator else None, now=moment - rival_age)
+            await other.commit()
+        rivals.append(rival)
+        return await create(session, user, **arguments)
+
+    monkeypatch.setattr(user_service, "create_password_reset", create_after_a_rival)
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        returned = await flows.forgotten_password_work(ALICE, engine=engine, now=moment)
+
+    assert returned is None
+    assert len(rivals) == 1, "barrier: the work went past its first count and made its link"
+    assert (fake.connections, budget.count()) == (0, 0)
+    rows = [row.id for row in await _reset_rows(engine, alice.id)]
+    assert rows == [*(issued.record.id for issued in earlier), rivals[0].record.id], f"the work's own row must be rolled back: {rows}"
+    assert (await _inspect(engine, rivals[0].token, PASSWORD_RESET)).status == TokenStatus.VALID, "what making the link revoked must be live again"
+    print_success("rolled back: no row of its own, the rival link live, nothing sent")
+
+
+@pytest.mark.asyncio
+async def test_a_reset_link_of_an_inactive_account_is_not_emailed(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter) -> None:
+    """EMF-041 — contract 10: an administrator emails the live reset link of an inactive account: ``EmailAccountInactiveError`` — an ``EmailError``, ``EMAIL_ACCOUNT_INACTIVE`` —: it would set a password nobody can use yet. Nothing sent, nothing spent, the link still live."""
+    print_section("EMF-041: a reset link of an inactive account")
+    admin = await _add_user(engine, ADMIN)
+    dora = await _add_user(engine, "zq_dora", active=False)
+    issued = await _issue(engine, PASSWORD_RESET, user_id=dora.id, created_by_user_id=admin.id)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        async with AsyncSession(engine) as session:
+            with pytest.raises(EmailError) as raised:
+                await flows.send_link_email(session, admin=admin, purpose="password_reset", token=issued.token)
+
+    assert (type(raised.value), raised.value.code) == (flows.EmailAccountInactiveError, "EMAIL_ACCOUNT_INACTIVE"), repr(raised.value)
+    assert (fake.connections, budget.count()) == (0, 0)
+    assert (await _inspect(engine, issued.token, PASSWORD_RESET)).status == TokenStatus.VALID
+    print_success("EMAIL_ACCOUNT_INACTIVE, nothing sent, the link live")
+
+
+@pytest.mark.asyncio
+async def test_a_database_error_is_logged_as_its_type_without_the_identifier(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine) -> None:
+    """EMF-042 — contract 12: the account lookup fails with a database error whose statement parameters hold the identifier, as SQLAlchemy's errors do (the precondition: its text names it). The work returns, raises nothing, and logs ``Forgotten password: the request failed`` at error level with the error's type alone — no traceback (``exc_info``), whose rendering would print the parameters —; no log event holds the identifier."""
+    print_section("EMF-042: a database error in the work")
+    identifier = f"{ALICE}@example.com"
+    error = OperationalError("SELECT users.id FROM users WHERE users.username = ? OR users.email = ?", (identifier, identifier), Exception("database is locked"))
+    assert identifier in str(error), "precondition: the error's text holds the identifier"
+
+    async def failing_lookup(session: AsyncSession, written: str) -> User:
+        raise error
+
+    monkeypatch.setattr(user_service, "get_user_by_username_or_email", failing_lookup)
+    with capture_logs() as events:
+        returned = await flows.forgotten_password_work(identifier, engine=engine)
+
+    assert returned is None
+    failures = [event for event in events if event.get("log_level") in ("warning", "error")]
+    assert [(event.get("event"), event.get("log_level"), event.get("error")) for event in failures] == [("Forgotten password: the request failed", "error", "OperationalError")], failures
+    assert "exc_info" not in failures[0], f"no traceback: {failures[0]}"
+    assert [event for event in events if identifier in repr(event)] == [], f"a log event holds the identifier: {events}"
+    print_success("logged as OperationalError, no traceback, no identifier")

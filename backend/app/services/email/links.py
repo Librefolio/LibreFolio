@@ -53,8 +53,8 @@ def _usable_base(base: str) -> bool:
     """
     if any(char.isspace() for char in base) or "?" in base or "#" in base:
         return False
-    parts = urlsplit(base)
     try:
+        parts = urlsplit(base)
         parts.port  # noqa: B018 — reading it is what validates the port
     except ValueError:
         return False

@@ -8,7 +8,8 @@ contract pinned here:
 1. ``links_state()`` reads ``LIBREFOLIO_PUBLIC_URL`` now and never raises: unset or blank is ``PUBLIC_URL_MISSING``
    with no base; a value that is not an http(s) address, or an http(s) address no link can start from — no host, a
    space or a tab inside, a ``?`` or a ``#`` anywhere (even with nothing after it), a port out of range or not a
-   number, credentials —, is ``PUBLIC_URL_INVALID`` with no base — the value is never echoed —; an http(s) address is
+   number, credentials, a bracket the URL parser cannot read (``https://[::1``: never an exception) —, is
+   ``PUBLIC_URL_INVALID`` with no base — the value is never echoed —; an http(s) address is
    ready, its base stripped of the spaces around it and of one trailing slash, a path prefix kept as written, the
    scheme in any case, the host a name or an IP literal (IPv6 in brackets). ``ready`` is a base without a problem.
 2. ``LinksState.instance`` is how an email names the instance: the host of the base with its port, no scheme, no path;
@@ -70,6 +71,7 @@ MALFORMED_VALUES = [
     pytest.param("https://folio.zq-port.example.com:99999/app", id="a-port-out-of-range"),
     pytest.param("https://folio.zq-port.example.com:abc/", id="a-port-that-is-not-a-number"),
     pytest.param("https://zq-user:zq-secret@folio.example.com/app", id="credentials"),
+    pytest.param("https://[::1", id="an-unclosed-ipv6-bracket"),
 ]
 
 
