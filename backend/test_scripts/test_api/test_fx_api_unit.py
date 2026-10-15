@@ -1,7 +1,7 @@
 """
 Direct unit tests for FX API handlers.
 
-Focus: happy-path/main-branch coverage in backend/app/api/v1/fx.py
+Focus: happy-path/main-branch coverage in backend/app/api/v1/fx/
 without live server/network dependency.
 """
 
@@ -23,7 +23,8 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from backend.app.api.v1 import fx as fx_api
+from backend.app.api.v1.fx import currencies as fx_currencies_api
+from backend.app.api.v1.fx import providers as fx_providers_api
 from backend.app.db.models import FxConversionRoute
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.fx import FXConversionRouteItem, FXConversionRouteReadItem, FXDeleteItem, FXUpsertItem
@@ -42,7 +43,7 @@ def test_build_providers_description_lists_codes(monkeypatch):
     print_section("_build_providers_description")
 
     monkeypatch.setattr(
-        fx_api.FXProviderRegistry,
+        fx_providers_api.FXProviderRegistry,
         "list_providers",
         lambda: [
             {"code": "ECB", "name": "European Central Bank"},
@@ -50,7 +51,7 @@ def test_build_providers_description_lists_codes(monkeypatch):
         ],
     )
 
-    description = fx_api._build_providers_description()
+    description = fx_providers_api._build_providers_description()
 
     assert "Installed providers: ECB, FED" in description
     assert "Get the list of available FX rate providers." in description
@@ -75,7 +76,7 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
             return ["JPY", "EUR", "USD"]
 
     monkeypatch.setattr(
-        fx_api.FXProviderRegistry,
+        fx_providers_api.FXProviderRegistry,
         "list_providers",
         lambda: [
             {"code": "MANUAL", "name": "Manual"},
@@ -84,12 +85,12 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
         ],
     )
     monkeypatch.setattr(
-        fx_api.FXProviderRegistry,
+        fx_providers_api.FXProviderRegistry,
         "get_provider_instance",
         lambda _code: _DummyProvider(),
     )
 
-    providers = await fx_api.list_providers(providers=["manual", "fed"])
+    providers = await fx_providers_api.list_providers(providers=["manual", "fed"])
 
     assert len(providers) == 1
     assert providers[0].code == "FED"
@@ -122,14 +123,14 @@ async def test_sync_rates_success_and_future_validation(monkeypatch):
         total_points_changed=1,
     )
     sync_mock = AsyncMock(return_value=expected)
-    monkeypatch.setattr(fx_api, "sync_pairs_bulk", sync_mock)
+    monkeypatch.setattr(fx_currencies_api, "sync_pairs_bulk", sync_mock)
 
     good_body = FXSyncPairRequest(
         pairs=["USD-EUR"],
         start=date(2025, 1, 1),
         end=date(2025, 1, 1),
     )
-    result = await fx_api.sync_rates(good_body, session=session, _current_user=Mock())
+    result = await fx_currencies_api.sync_rates(good_body, session=session, _current_user=Mock())
     assert result == expected
     sync_mock.assert_awaited_once()
     assert sync_mock.await_args.kwargs["pairs"] == ["EUR-USD"]
@@ -140,7 +141,7 @@ async def test_sync_rates_success_and_future_validation(monkeypatch):
         end=date.today() + timedelta(days=1),
     )
     with pytest.raises(HTTPException, match="future"):
-        await fx_api.sync_rates(future_body, session=session, _current_user=Mock())
+        await fx_currencies_api.sync_rates(future_body, session=session, _current_user=Mock())
 
     reversed_range_body = Mock(
         start=date(2025, 1, 3),
@@ -148,7 +149,7 @@ async def test_sync_rates_success_and_future_validation(monkeypatch):
         pairs=["EUR-USD"],
     )
     with pytest.raises(HTTPException, match="before or equal"):
-        await fx_api.sync_rates(reversed_range_body, session=session, _current_user=Mock())
+        await fx_currencies_api.sync_rates(reversed_range_body, session=session, _current_user=Mock())
 
     print_success("Success path + future-date validation covered")
 
@@ -160,13 +161,13 @@ async def test_upsert_rates_endpoint_keeps_valid_item_and_normalizes(monkeypatch
 
     session = AsyncMock()
     monkeypatch.setattr(
-        fx_api,
+        fx_currencies_api,
         "upsert_rates_bulk",
         AsyncMock(side_effect=[[(True, "inserted")], [(True, "updated")]]),
     )
 
     today = date.today()
-    response = await fx_api.upsert_rates_endpoint(
+    response = await fx_currencies_api.upsert_rates_endpoint(
         [
             FXUpsertItem(**{"date": today}, base="USD", quote="EUR", rate=Decimal("0.80"), source="MANUAL"),
             FXUpsertItem(**{"date": today}, base="EUR", quote="GBP", rate=Decimal("0.90"), source="MANUAL"),
@@ -203,13 +204,13 @@ async def test_delete_rates_endpoint_covers_delete_all_bulk_and_invalid(monkeypa
     session.commit = AsyncMock()
 
     monkeypatch.setattr(
-        fx_api,
+        fx_currencies_api,
         "delete_rates_bulk",
         AsyncMock(return_value=[(True, 1, 1, None), (True, 2, 2, None)]),
     )
 
     today = date.today()
-    response = await fx_api.delete_rates_endpoint(
+    response = await fx_currencies_api.delete_rates_endpoint(
         [
             FXDeleteItem(**{"from": "USD", "to": "CAD"}, delete_all=True),
             FXDeleteItem(**{"from": "USD", "to": "NZD"}, date_range=DateRangeModel(start=today)),
@@ -278,12 +279,12 @@ def route_case(request):
 def route_providers(monkeypatch):
     """Registry membership only: even SNB/ECB cases must never fetch anything."""
     monkeypatch.setattr(
-        fx_api.FXProviderRegistry,
+        fx_providers_api.FXProviderRegistry,
         "list_providers",
         lambda: [{"code": code} for code in ("MOCKFX", "MOCKFX_FAIL", "SNB", "ECB", "MANUAL")],
     )
     lookup = Mock(side_effect=AssertionError("Route configuration must not instantiate a provider"))
-    monkeypatch.setattr(fx_api.FXProviderRegistry, "get_provider_instance", lookup)
+    monkeypatch.setattr(fx_providers_api.FXProviderRegistry, "get_provider_instance", lookup)
     return lookup
 
 
@@ -313,7 +314,7 @@ async def test_list_routes_returns_deserialized_items(route_case, route_provider
     route = FxConversionRoute(base=base, quote=quote, priority=1, chain_steps=json.dumps(steps))
     session = _route_session(listed_routes=[route])
 
-    response = await fx_api.list_routes(session=session, _current_user=Mock())
+    response = await fx_providers_api.list_routes(session=session, _current_user=Mock())
 
     (item,) = response.items
     assert isinstance(item, FXConversionRouteReadItem)
@@ -328,7 +329,7 @@ async def test_list_routes_returns_deserialized_items(route_case, route_provider
 
 @pytest.mark.asyncio
 async def test_list_routes_empty_and_fallback_alternatives():
-    empty = await fx_api.list_routes(session=_route_session(), _current_user=Mock())
+    empty = await fx_providers_api.list_routes(session=_route_session(), _current_user=Mock())
     assert json.loads(empty.model_dump_json())["items"] == []
 
     routes = [
@@ -340,7 +341,7 @@ async def test_list_routes_empty_and_fallback_alternatives():
         )
         for priority, provider in ((1, "MOCKFX_FAIL"), (2, "MOCKFX"))
     ]
-    response = await fx_api.list_routes(session=_route_session(listed_routes=routes), _current_user=Mock())
+    response = await fx_providers_api.list_routes(session=_route_session(listed_routes=routes), _current_user=Mock())
     items = {item["priority"]: item for item in json.loads(response.model_dump_json(by_alias=True))["items"]}
     assert set(items) == {1, 2}
     for priority, provider in ((1, "MOCKFX_FAIL"), (2, "MOCKFX")):
@@ -368,7 +369,7 @@ async def test_create_routes_derives_metadata_ignoring_spoofed_input(route_case,
     assert {"is_chain", "providers_used"}.isdisjoint(request.model_dump())
     session = _route_session()
 
-    response = await fx_api.create_routes_bulk([request], session=session, _current_user=Mock())
+    response = await fx_providers_api.create_routes_bulk([request], session=session, _current_user=Mock())
 
     assert response.success_count == 1
     assert response.error_count == 0
@@ -410,7 +411,7 @@ async def test_create_routes_same_priority_direct_chain_direct_updates_same_orm_
                 "providers_used": ["BOGUS"],
             }
         )
-        response = await fx_api.create_routes_bulk([request], session=session, _current_user=Mock())
+        response = await fx_providers_api.create_routes_bulk([request], session=session, _current_user=Mock())
         (result,) = json.loads(response.model_dump_json(by_alias=True))["results"]
         snapshots.append(result)
         assert response.success_count == 1
@@ -470,7 +471,7 @@ async def test_create_routes_atomic_error_preserves_every_result_metadata(order,
     session = _route_session(existing=existing)
 
     with pytest.raises(HTTPException) as exc:
-        await fx_api.create_routes_bulk([requests[name] for name in order], session=session, _current_user=Mock())
+        await fx_providers_api.create_routes_bulk([requests[name] for name in order], session=session, _current_user=Mock())
 
     assert exc.value.status_code == 400
     detail = exc.value.detail
