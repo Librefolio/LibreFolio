@@ -12,6 +12,7 @@ import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Dict
+from urllib.parse import urlsplit
 
 from mergedeep import merge
 
@@ -30,11 +31,22 @@ except ImportError:
     SCRAPER_AVAILABLE = False
 
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
-from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
+
+
+def _url_host(url: object) -> str | None:
+    """The host of ``url``, lowercase without the port; None when it has none or cannot be read."""
+    if not isinstance(url, str):
+        return None
+    try:
+        host = urlsplit(url.strip()).hostname
+    except ValueError:  # a malformed URL (an unclosed IPv6 bracket): no host to pause
+        return None
+    return host or None
 
 
 @register_provider(AssetProviderRegistry)
@@ -71,6 +83,10 @@ class CSSScraperProvider(AssetSourceProvider):
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:  # pragma: no cover
         """The identifier IS the URL for CSS scraper."""
         return identifier if identifier.startswith("http") else None
+
+    def cooldown_scope(self, identifier: str, identifier_type=None, provider_params=None) -> str | None:
+        """The host of the scraped page: a site that refuses for too many requests pauses itself, not every site."""
+        return _url_host(identifier)
 
     @property
     def params_schema(self) -> list[dict]:
@@ -220,6 +236,7 @@ class CSSScraperProvider(AssetSourceProvider):
         except AssetSourceError:
             raise
         except httpx.HTTPStatusError as e:
+            raise_if_rate_limited(e, self.provider_name, scope=_url_host(url))
             raise AssetSourceError(
                 f"HTTP error {e.response.status_code}: {e.response.reason_phrase}",
                 "HTTP_ERROR",

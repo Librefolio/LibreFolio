@@ -98,18 +98,33 @@ function text(value: unknown): string | undefined {
 
 /** The body of a refused request: the generated client rejects with axios's own error (`AxiosError`, whose response
  * carries it); an `ApiError` carries it in `data`. */
-function refusalBody(error: unknown): unknown {
+export function refusalBody(error: unknown): unknown {
     if (isAxiosError(error)) return error.response?.data;
     return error instanceof ApiError ? error.data : undefined;
+}
+
+/** The HTTP status of a refused request; undefined for a failure without an answer (network, timeout). */
+export function refusalStatus(error: unknown): number | undefined {
+    if (isAxiosError(error)) return error.response?.status;
+    return error instanceof ApiError ? error.status : undefined;
+}
+
+/** The `detail` object of a refusal, or null when the answer has none (a network error, a plain-text `detail`). */
+export function refusalDetail(error: unknown): Record<string, unknown> | null {
+    const body = refusalBody(error);
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    return typeof detail === 'object' && detail !== null && !Array.isArray(detail) ? (detail as Record<string, unknown>) : null;
+}
+
+/** Seconds from a refusal's `retry_after`, when it is a finite number. */
+export function retryAfterOf(fields: Record<string, unknown>): number | undefined {
+    return typeof fields.retry_after === 'number' && Number.isFinite(fields.retry_after) ? fields.retry_after : undefined;
 }
 
 /** The failure of `sendTestEmail()`: the fields of the API's `detail`; `UNKNOWN` when there is no such `detail` (a
  * network error, an answer without a `detail` object). */
 export function readTestFailure(error: unknown): EmailTestFailure {
-    const body = refusalBody(error);
-    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
-    if (typeof detail !== 'object' || detail === null) return {errorCode: 'UNKNOWN'};
-    const fields = detail as Record<string, unknown>;
-    const retryAfter = typeof fields.retry_after === 'number' && Number.isFinite(fields.retry_after) ? fields.retry_after : undefined;
-    return {errorCode: text(fields.error_code) ?? 'UNKNOWN', problem: text(fields.problem), smtpCode: text(fields.smtp_code), retryAfter};
+    const fields = refusalDetail(error);
+    if (fields === null) return {errorCode: 'UNKNOWN'};
+    return {errorCode: text(fields.error_code) ?? 'UNKNOWN', problem: text(fields.problem), smtpCode: text(fields.smtp_code), retryAfter: retryAfterOf(fields)};
 }
