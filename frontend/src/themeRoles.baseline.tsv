@@ -176,7 +176,7 @@ lib/components/transactions/import/GapFixToggle.svelte	4
 lib/components/transactions/import/ImportAssetPicker.svelte	20
 lib/components/transactions/import/ReportSetCard.svelte	95
 lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1	#0f172a×2	#153428	#166534	#1a4031×3	#334155×5	#475569×2	#4ade80×2	#64748b×2	#7f1d1d×2	#86efac	#92400e	#94a3b8×3	#991b1b	#dc2626	#dcfce7	#e2e8f0×6	#f0fdf4	#f1f5f9×3	#f59e0b	#f87171	#f8fafc	#fca5a5×2	#fcd34d	#fecaca	#fee2e2	#fef2f2×2	#fffbeb	rgba(127,29,29,0.15)	rgba(15,23,42,0.4)	rgba(22,101,52,0.18)	rgba(220,38,38,0.12)	rgba(220,38,38,0.2)	rgba(245,158,11,0.12)	rgba(34,197,94,0.18)	white
-lib/components/transactions/modals/ImportWizardModal.svelte	595	#dc2626
+lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
 lib/components/transactions/modals/ParseDetailModal.svelte	141
 lib/components/transactions/modals/PromoteAllModal.svelte	32
 lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
@@ -188,6 +188,12 @@ lib/components/transactions/modals/TransactionPickerModal.svelte	20
 lib/components/transactions/shared/TransactionResultBanner.svelte	18
 lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
 lib/components/transactions/wac/WacPreviewSection.svelte	96
+lib/components/transactions/wizard/AnalyzeStep.svelte	67
+lib/components/transactions/wizard/DuplicatesStep.svelte	77
+lib/components/transactions/wizard/ReviewStep.svelte	86
+lib/components/transactions/wizard/SelectFilesStep.svelte	22
+lib/components/transactions/wizard/UploadStep.svelte	20
+lib/components/transactions/wizard/WizardFooter.svelte	101
 lib/components/ui/AnimatedBackground.svelte	0	#00ff9a	#11151c	#1a4031×3	#4ade80	#9caf9c	#f5f4ef
 lib/components/ui/ContextMenu.svelte	0	#1e293b	#334155×4	#450a0a	#dc2626	#e2e8f0×3	#f1f5f9	#f87171	#fef2f2	rgb(0 0 0/0.05)	rgb(0 0 0/0.1)	rgb(0 0 0/0.2)	rgb(0 0 0/0.4)	white
 lib/components/ui/DocsLink.svelte	4
@@ -319,5 +325,6 @@ routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
+~split	lib/components/transactions/modals/ImportWizardModal.svelte	lib/components/transactions/wizard/UploadStep.svelte,lib/components/transactions/wizard/SelectFilesStep.svelte,lib/components/transactions/wizard/AnalyzeStep.svelte,lib/components/transactions/wizard/DuplicatesStep.svelte,lib/components/transactions/wizard/ReviewStep.svelte,lib/components/transactions/wizard/WizardFooter.svelte	595	#dc2626
 ~split	lib/components/transactions/modals/TransactionBulkModal.svelte	lib/components/transactions/bulk/TxBulkBanners.svelte,lib/components/transactions/bulk/TxBulkToolbar.svelte	190
 ~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218
