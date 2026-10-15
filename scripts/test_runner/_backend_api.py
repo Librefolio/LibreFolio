@@ -47,7 +47,7 @@ def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
 def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     """Run direct unit tests for FX API handlers (no live server/network)."""
     print_section("FX API Unit Tests")
-    print_info("Testing happy-path/main-branch coverage in backend/app/api/v1/fx.py")
+    print_info("Testing happy-path/main-branch coverage in backend/app/api/v1/fx/")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_api_unit.py", test_names)
     return run_command(cmd, "FX API unit tests", verbose=verbose)
 

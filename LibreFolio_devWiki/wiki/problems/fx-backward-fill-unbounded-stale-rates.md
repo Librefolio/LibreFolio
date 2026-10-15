@@ -26,7 +26,7 @@ after it, the same days are *filled* from the island's last rate and nothing rep
 
 ## Root cause
 
-`convert_bulk()` (`backend/app/services/fx.py:1240`) is the one conversion path of the backend. Its docstring says
+`convert_bulk()` (`backend/app/services/fx/conversion.py`) is the one conversion path of the backend. Its docstring says
 it plainly (`:1247`): *"unlimited backward-fill: if rate for exact date is not found, uses the most recent rate
 available (no time limit)"*. For each conversion it does `bisect_right(pair_dates, date)` and takes the rate at
 `pos - 1` (`:1384-1385`):
@@ -110,13 +110,13 @@ repairs it.
 
 | Role | Path |
 |------|------|
-| `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx/fx.py` |
+| `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx/conversion.py` |
 | Engine FX preload — discards date and flag | `backend/app/services/financial_math/portfolio/engine.py` |
 | Carried-forward FX count for Risk and Signals | `backend/app/services/series_preparation.py` |
 | Staleness threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `DataQualityReport.carried_forward_fx_*`, `MISSING_FX_RATES` | `backend/app/schemas/portfolio.py` |
 | Risk surfacing of carried-forward pairs | `backend/app/services/risk/service.py` |
-| `POST /fx/currencies/convert` with `BackwardFillInfo` | `backend/app/api/v1/fx.py` |
+| `POST /fx/currencies/convert` with `BackwardFillInfo` | `backend/app/api/v1/fx/currencies.py` |
 | Banner sync range (±7 days, capped at today) | `frontend/src/lib/utils/sync/syncRange.ts` |
 | Full history on pair creation (D1) | `frontend/src/lib/services/fxCreationSync.ts` |
 | User doc: provider as the authority on sync | `mkdocs_src/docs/user/fx/sync.en.md` |

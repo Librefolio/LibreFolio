@@ -50,7 +50,7 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.transactions.transaction_service import TransactionService

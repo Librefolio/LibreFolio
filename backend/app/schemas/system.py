@@ -69,3 +69,17 @@ class ConnectionSecurityResponse(StrictModel):
         description="Class of the client address: the last X-Forwarded-For value when present, else the TCP peer. Advisory only; the address itself is never returned",
     )
     cookie_secure: bool = Field(..., description="Whether the session cookie set or cleared on this request carries the Secure attribute (SESSION_COOKIE_SECURE)")
+
+
+InstanceProfile = Literal["selfhosted", "managed"]
+
+
+class InstanceConfigResponse(StrictModel):
+    """``GET /system/instance``: what the app needs to know about this instance before anyone signs in.
+
+    Public by design: every field is the same for whoever asks, and nothing private goes here. A workstream that owns
+    part of the public configuration adds one field, typed with a model of its own schemas, and fills it in
+    ``api/v1/system/instance.py`` with one call to its service.
+    """
+
+    profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
