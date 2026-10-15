@@ -1,7 +1,7 @@
 # 🛡️ Admin Manual
 
 This manual is for the people who install and run LibreFolio. Most administration happens from the
-command line, through environment variables, or in the app's **Admin** settings tab.
+command line, through environment variables, or in the app's **Admin** and **Users** settings tabs.
 
 ---
 
@@ -17,6 +17,7 @@ command line, through environment variables, or in the app's **Admin** settings 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
 - ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
+- 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 
 ### 🧹 Maintenance & Operations
 - 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
