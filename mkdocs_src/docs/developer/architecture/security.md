@@ -627,8 +627,9 @@ administrator of this instance can obtain:
 - any page can still tell that *a* LibreFolio answers at an address, since the check answers
   `{"match": false}` to anyone, but not *which* one.
 
-Unlike an [account token](#account-token-links), the nonce rides in the query string, so it may reach
-access logs: there it is worth the same bit, for at most two minutes.
+Unlike an [account token](#account-token-links), the nonce rides in the query string, so it reaches the
+request log: the [request-log filter](#request-logs) masks credential-like parameters, and `nonce` is not one.
+There it is worth the same bit, for at most two minutes.
 
 ### 🧾 The Nonce {: #address-probe-nonce }
 
