@@ -6,6 +6,7 @@
  */
 
 import {changeId, STATE_SCHEMA} from './store';
+import {varImpact} from './catalogView';
 import {ELEMENT_PROPERTIES} from './cssProps';
 import type {CatalogLiteral, ColorCatalog, LabAnchor, LabAnchorCandidate, LabChange, LabState, Layer, Scope, SourceKind} from './types';
 import {isSafeCssValue, isSafeSelector} from './engine/targets';
@@ -99,13 +100,18 @@ export function literalsOf(catalog: ColorCatalog, change: LabChange): CatalogLit
 function exportChange(catalog: ColorCatalog, change: LabChange): ExportChange {
     const out: ExportChange = {id: change.id, layer: change.layer, scope: change.scope, preview: change.layer !== 'proposal', target: change.target, from: change.from, to: change.to, occurrences: []};
     if (change.layer === 'css-var') {
-        const palette = catalog.palette.find((p) => p.var === change.target);
-        const v = catalog.css_vars.find((x) => x.name === change.target);
-        out.impact = {uses: (palette?.uses ?? 0) + (v?.uses ?? 0), files: new Set([...Object.keys(palette?.files ?? {}), ...Object.keys(v?.files ?? {})]).size};
-        if (palette) {
-            out.impact.classes = palette.classes;
-            out.occurrences = palette.occ.map(([f, line]) => ({file: catalog.files[f], line}));
+        const impact = varImpact(catalog, change.target);
+        out.impact = {uses: impact.uses, files: impact.files};
+        if (impact.entries.length) {
+            out.impact.classes = impact.classes;
+            // A class that reads the variable through an inline alias (`bg-lf-card` for `--lf-surface-card`) names
+            // neither the variable nor a palette shade on its line: the class is the text to find there.
+            out.occurrences = impact.entries.flatMap((p) => {
+                const names = Object.keys(p.classes);
+                return p.occ.map(([f, line, c]) => (p.role ? {file: catalog.files[f], line, raw: names[c]} : {file: catalog.files[f], line}));
+            });
         }
+        const v = impact.variable;
         if (v?.defs.length) out.definitions = v.defs.map((d) => ({file: catalog.files[d.file], line: d.line, selector: d.selector, theme: d.theme, value: d.value}));
     } else if (change.layer === 'element') {
         out.property = change.property ?? '';

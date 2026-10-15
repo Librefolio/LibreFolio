@@ -6,12 +6,15 @@
  * The layer works only if it is declared before any other layer, so the statement `@layer lf-designer-lab;` must be the
  * first thing in `<head>`; the rules are `!important` inside that layer, scoped to a theme by their `html…` prefix. A
  * selector or value that could break out of the rule is refused, and a selector the browser cannot parse is skipped.
+ * The variable overrides of L1 (`engine/vars.ts`) live in a `<style>` of their own, outside the layer: one `!important`
+ * rule per variable, on `<html>` and on the theme subtrees of its scope (`.light`, `.dark`), as the role tokens are, the
+ * rules for both themes first so that a theme's own value wins on a theme subtree too.
  * jsdom stands in for the page; what is asserted is the text the engine writes, not the cascade (the E2E specs see it).
  */
 
 import {beforeEach, describe, expect, it} from 'vitest';
 import {applyElementRules, ELEMENT_STYLE_ID, elementRule, LAB_LAYER} from './engine/anchors';
-import {OWN_ATTR} from './engine/vars';
+import {applyVars, OWN_ATTR, VAR_SELECTOR} from './engine/vars';
 import type {LabChange} from './types';
 
 const TH = '[data-testid="tx-table"] > div > table > thead > tr > th';
@@ -113,5 +116,69 @@ describe('applyElementRules', () => {
 
         expect(applyElementRules([specialise({target: 'th['})])).toBe(0);
         expect(labStyles()).toEqual([]);
+    });
+});
+
+describe('applyVars', () => {
+    /** The `<style>` the variable engine writes (its id is the engine's own, not exported). */
+    const VARS_STYLE_ID = 'lf-designer-lab-vars';
+    const varsStyle = () => document.getElementById(VARS_STYLE_ID);
+
+    const override = (fields: Partial<LabChange> = {}): LabChange => ({id: '', layer: 'css-var', target: '--lf-surface-card', scope: 'both', from: '#f5f5f4', to: '#ffffff', ...fields});
+
+    it('writes each scope with the selectors of the token blocks: `<html>` and the theme subtrees', () => {
+        expect(VAR_SELECTOR).toEqual({both: 'html, .light, .dark', light: 'html:not(.dark), .light', dark: 'html.dark, .dark'});
+    });
+
+    it('overrides each variable with an important declaration under the selector of its scope, and returns how many', () => {
+        expect(applyVars([override({scope: 'both'}), override({scope: 'light', to: '#fafaf9'}), override({scope: 'dark', target: '--color-gray-500', to: 'oklch(70% 0.1 250)'})])).toBe(3);
+        expect(varsStyle()?.textContent).toBe(['html, .light, .dark { --lf-surface-card: #ffffff !important; }', 'html:not(.dark), .light { --lf-surface-card: #fafaf9 !important; }', 'html.dark, .dark { --color-gray-500: oklch(70% 0.1 250) !important; }'].join('\n'));
+    });
+
+    it('writes the rules for both themes before the theme rules, whatever the order of the changes', () => {
+        // On a `.dark` island the dark rule and the rule for both themes match with the same specificity: written later,
+        // the theme's own value wins there as it does on `<html>`. Only the text is checked: jsdom has no cascade.
+        const changes = [override({scope: 'dark', to: '#0c0a09'}), override({scope: 'both', to: '#ffffff'})];
+        expect(applyVars(changes)).toBe(2);
+        expect(varsStyle()?.textContent?.split('\n')).toEqual(['html, .light, .dark { --lf-surface-card: #ffffff !important; }', 'html.dark, .dark { --lf-surface-card: #0c0a09 !important; }']);
+        // The list of changes it was given keeps its own order.
+        expect(changes.map((c) => c.scope)).toEqual(['dark', 'both']);
+
+        expect(applyVars([override({scope: 'light', to: '#fafaf9'}), override({scope: 'both', to: '#ffffff'})])).toBe(2);
+        expect(varsStyle()?.textContent?.split('\n')).toEqual(['html, .light, .dark { --lf-surface-card: #ffffff !important; }', 'html:not(.dark), .light { --lf-surface-card: #fafaf9 !important; }']);
+    });
+
+    it('keeps the order of the changes among the rules for both themes, and among the rules of one theme', () => {
+        const changes = [override({scope: 'dark', target: '--a', to: '#000001'}), override({scope: 'both', target: '--b', to: '#000002'}), override({scope: 'dark', target: '--c', to: '#000003'}), override({scope: 'both', target: '--d', to: '#000004'})];
+        expect(applyVars(changes)).toBe(4);
+        expect(varsStyle()?.textContent?.split('\n')).toEqual(['html, .light, .dark { --b: #000002 !important; }', 'html, .light, .dark { --d: #000004 !important; }', 'html.dark, .dark { --a: #000001 !important; }', 'html.dark, .dark { --c: #000003 !important; }']);
+    });
+
+    it('is one <style> of <head>, marked as the Lab’s own, rewritten on every apply', () => {
+        applyVars([override(), override({scope: 'dark', to: '#0c0a09'})]);
+        expect(applyVars([override({to: 'var(--lf-surface-panel)'})])).toBe(1);
+        const style = varsStyle();
+        expect(style?.tagName).toBe('STYLE');
+        expect(style?.parentElement).toBe(document.head);
+        expect(style?.hasAttribute(OWN_ATTR)).toBe(true);
+        expect(document.querySelectorAll(`#${VARS_STYLE_ID}`)).toHaveLength(1);
+        expect(style?.textContent).toBe('html, .light, .dark { --lf-surface-card: var(--lf-surface-panel) !important; }');
+        // The app's own stylesheet is left as it was.
+        expect(document.getElementById('app-style')?.textContent).toBe('p { color: #111827; }');
+    });
+
+    it('skips a target that is not a custom property and a value that could break out of the rule, counting only what it wrote', () => {
+        const changes = [override({target: '#64748b'}), override({target: 'color'}), override({target: '--x;y'}), override(), override({target: '--color-gray-500', to: 'red; background: url(x)'}), override({target: '--color-gray-500', to: 'red }'}), override({target: '--color-gray-500', to: ''})];
+        expect(applyVars(changes)).toBe(1);
+        expect(varsStyle()?.textContent).toBe('html, .light, .dark { --lf-surface-card: #ffffff !important; }');
+    });
+
+    it('removes its <style> once no override is left, and writes none when every change is skipped', () => {
+        applyVars([override()]);
+        expect(applyVars([])).toBe(0);
+        expect(varsStyle()).toBeNull();
+        expect(applyVars([override({to: 'red; x: y'}), override({target: 'color'})])).toBe(0);
+        expect(varsStyle()).toBeNull();
+        expect(document.getElementById('app-style')).not.toBeNull();
     });
 });
