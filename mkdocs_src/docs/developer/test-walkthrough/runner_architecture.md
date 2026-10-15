@@ -107,8 +107,8 @@ make_category(
 
 add_test(
     "auth", ...,
-    exclusive_because="rewrites global_settings.enable_registration; while it is False "
-                      "every concurrent user creation fails",
+    exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: "
+                      "a concurrent unit would register against whatever value this one left behind",
 )
 ```
 
@@ -135,7 +135,11 @@ is small because an exclusive has to survive being written down.
 
 | Unit | Why it cannot be scoped |
 |---|---|
-| `api auth` | rewrites `global_settings.enable_registration` — an **instance-wide flag**, not a per-user row. While it is `False` every concurrent user creation fails, and a test that verifies closed registration necessarily owns the instance. |
+| `api auth` | rewrites `global_settings.registration_mode` — **one row shared by every user**, not a per-user row. A concurrent unit would register against whatever value this one left behind (`disabled` while it checks closed registration), and a test that verifies a registration mode on the lane's server necessarily owns the instance. |
+
+The units that came with the registration modes show the other way out: `api registration` and `api users-admin`
+run every case that needs another mode, an accounts variable or a user limit in-process, on a private database, and
+touch only their own accounts and tokens on the lane's server, so they stay WRITE-SCOPED with no exclusive.
 
 Two claims that look like reasons and are not:
 
@@ -795,7 +799,7 @@ sequenceDiagram
 | `scripts/test_runner/_inventory.py` | Derives the test units from the registry without executing them, classifies each one by isolation class, and answers the reachability questions used by `check-orphans`. |
 | `scripts/test_runner/_scheduler.py` | Turns inventory plus `--workers N` into an execution plan, balancing groups longest-processing-time first from persisted per-unit durations. |
 | `scripts/test_runner/_executor.py` | Runs the plan's groups as concurrent processes, hands each worker its exclusive resource lot, and combines the per-worker coverage databases afterwards. |
-| `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. It refuses a port that another process holds, sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, stops with SIGTERM and a grace period (30 s under coverage, 5 s otherwise), and steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
+| `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. `start()` refuses a port that another process holds, then builds before it spawns: `build_server_prerequisites()` runs `dev.py server --test --build-only` in the foreground, its output on the terminal, with the runner's environment but not the coverage wiring the server gets (the tooling is not measured). That rebuilds the frontend (debug) and the MkDocs site when they are missing or stale and refreshes the JS cache; a failed build starts no server. The backend spawned next finds those builds up to date, so `STARTUP_TIMEOUT` (300 s; `LIBREFOLIO_TEST_STARTUP_TIMEOUT` overrides it, in whole seconds) measures its start alone. Before this step the server made the builds inside that wait, about 130 s after a large merge, unseen: the shared backend's own output is discarded. It sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, stops with SIGTERM and a grace period (30 s under coverage, 5 s otherwise), and steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
 | `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one vitest invocation and one Playwright invocation per project selection (desktop only, or desktop and mobile; in batches of 8 specs under JS coverage), then reads the JSON reporters back into a per-spec verdict. |
 | `scripts/test_runner/_consolidate_backend.py` | The backend counterpart: when a whole category or suite runs, one pytest invocation per category instead of one per unit — `services`, `utils`, `schemas`, `api`, `e2e`, in that order, while `db` and `external` keep one per action — with the JUnit report read back into a per-file verdict, so the summary and `--resume` stay per unit. |
 | `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category` and `add_test`. |

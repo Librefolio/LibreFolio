@@ -45,6 +45,15 @@
  * nothing else, so their count has no handle — the label is the level's
  * non-colour channel.
  *
+ * The last describe pins the one functional addition of accounts lot A5b: a
+ * bindable `valid`, true exactly when every rule of the checklist holds. The
+ * new password-reset card reads the app's rules through it (`bind:valid`)
+ * instead of keeping a fifth copy of them (A-6). A legacy prop is bound from
+ * here the way Svelte binds it: the props object carries an accessor, and the
+ * component calls its setter when it writes the prop. Each case starts the
+ * bound value at the opposite of what it expects, so the assertion proves a
+ * write by the component, not a value that was never touched.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`,
  * action `component-unit`).
  */
@@ -164,5 +173,61 @@ describe('PasswordStrength — the strength', () => {
 
         expect(screen.getByTestId('password-strength-bar')).toHaveAttribute('data-strength', '4');
         expect(within(meter()).getByText('auth.passwordStrength.veryStrong')).toBeInTheDocument();
+    });
+});
+
+describe('PasswordStrength — valid, bindable: true exactly when every rule holds (A5b)', () => {
+    /** All five rules: length, upper case, lower case, a digit, a special character. */
+    const ALL_RULES = 'Str0ng!pass';
+
+    /**
+     * Mounts the meter with `valid` bound, as a parent's `bind:valid` binds a legacy prop: an accessor on the props
+     * object, whose setter the component calls when it writes the prop. `bound.value` is what the parent holds; it
+     * starts at `start`, the opposite of what the case expects.
+     */
+    function mountBound(password: string, start: boolean) {
+        const bound = {value: start};
+        const props = {
+            password,
+            get valid(): boolean {
+                return bound.value;
+            },
+            set valid(next: boolean) {
+                bound.value = next;
+            },
+        };
+        const utils = render(PasswordStrength, {props});
+        return {...utils, bound};
+    }
+
+    it('is true once all five rules hold', () => {
+        const {bound} = mountBound(ALL_RULES, false);
+
+        expect(rulesPassed(), 'premise: the checklist marks every rule as held').toEqual(states({minLength: true, hasUppercase: true, hasLowercase: true, hasNumber: true, hasSpecial: true}));
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it.each([
+        ['an empty password', ''],
+        ['three rules out of five', THREE_RULES],
+        ['two rules out of five', TWO_RULES],
+        ['one character', WEAKEST],
+        // zxcvbn scores it 4, yet it has no capital: valid follows the rules, not the strength.
+        ['a passphrase zxcvbn scores 4 but with no capital', STRONGEST],
+    ])('is false for %s', (_label, password) => {
+        const {bound} = mountBound(password, true);
+
+        expect(bound.value, 'valid, written by the meter').toBe(false);
+    });
+
+    it('follows the password as it changes, both ways', async () => {
+        const {bound, rerender} = mountBound(THREE_RULES, true);
+        expect(bound.value, 'three rules out of five').toBe(false);
+
+        await rerender({password: ALL_RULES});
+        expect(bound.value, 'all five').toBe(true);
+
+        await rerender({password: TWO_RULES});
+        expect(bound.value, 'two out of five').toBe(false);
     });
 });

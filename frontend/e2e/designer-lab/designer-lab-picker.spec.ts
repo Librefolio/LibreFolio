@@ -11,39 +11,50 @@
  * been opened (the neutral spec proves the converse).
  *
  * The elements are the app's own and exist whatever the data: the date header of the transactions table, which
- * DataTable styles, and the subtitle of the transactions page (a Tailwind text colour, overridden by `app.css` in the
- * dark theme). Where to click is computed at run time: a point of the element where the element itself is on top.
+ * DataTable styles, the subtitle of the transactions page (a Tailwind text colour, overridden by `app.css` in the
+ * dark theme), and the login card a visitor who is not logged in gets at `/`, whose background is a colour-role utility
+ * of workstream T (`bg-lf-*`, read from its classes and the page's CSSOM by `colourSourceOf`). Where to click is
+ * computed at run time: a point of the element where the element itself is on top.
  *
  * How DataTable writes the header colour — a literal in its `th` rule, a `:root` token that rule reads (R-3), a role
  * utility — is not this spec's subject, and it moves. The date-header test reads it from the facts the app tab reported
  * (`picker/describe.ts`), applies the documented classification rules to the proved winner, and holds the Lab's
  * «Element» tab (`pickView.ts`) and its export to them: two modules checked against each other, whatever the code says
- * today.
+ * today. The login-card test holds them to a role: the winner is the utility's rule, which reads the role; «Edit the
+ * source» edits the role, not the alias no stylesheet defines; and the anchor finds the class in the card's component.
  *
- * Nothing is written server-side: TEST_USER only reads, the theme toggle and the Lab keep their state in this
- * context's localStorage, and the context dies with the test.
+ * Nothing is written server-side: TEST_USER only reads, the visitor never signs in, the theme toggle and the Lab keep
+ * their state in this context's localStorage, and the context dies with the test.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {
     chooseTheme,
+    colourSourceOf,
     computedStyle,
     CROSS_TAB,
     dateColumnHeader,
     DESKTOP_ONLY,
     downloadExport,
     expectChanges,
+    IDLE_STATS,
+    labActive,
     labPicking,
     labStats,
+    LOGIN_CARD,
+    newColourFor,
     openLab,
+    openSignIn,
     openTransactions,
     pickedFacts,
     pickedProperty,
     pickVeil,
+    placesInComponent,
     pointOnItself,
-    textPaletteClassOf,
+    sourceLines,
     transactionsSubtitle,
+    verifyExport,
     waitForLabClient,
     type PickedDeclarationFacts,
 } from './lab-helpers';
@@ -53,6 +64,11 @@ test.setTimeout(60_000);
 /** A colour no element of the app uses, so the effect of a specialisation cannot be mistaken for the app's own. */
 const FRESH = '#ff00aa';
 const FRESH_RGB = 'rgb(255, 0, 170)';
+/** The new colours a colour-role test may apply, in order: the first the role has in neither theme. */
+const NEW_COLOURS = [
+    {hex: FRESH, rgb: FRESH_RGB},
+    {hex: '#00aaff', rgb: 'rgb(0, 170, 255)'},
+];
 const SOURCE_KINDS = ['var', 'tailwind-class', 'rule-literal', 'inline', 'attribute', 'current-color', 'chart', 'unknown'];
 /** The component that renders the transactions table and styles its header cells. */
 const DATA_TABLE = 'lib/components/table/DataTable.svelte';
@@ -231,6 +247,138 @@ test.describe('Designer Lab — the element picker', () => {
         ).toEqual([]);
     });
 
+    test('a colour-role utility: the pick reads the role, «Edit the source» edits it, the filter shows its chip, the anchor finds the class in its component', async ({page, context}, testInfo) => {
+        const card = await openSignIn(page);
+        await waitForLabClient(page);
+        await chooseTheme(page, 'light');
+        // The card's background class and the role its rule reads in the page's CSSOM: what the picker must find.
+        const source = await colourSourceOf(card, 'bg');
+        expect(source.role, `${source.className} must be a colour-role utility: the login card reads the roles of workstream T`).toBe(true);
+        expect(source.target, `${source.className} reads a role`).toMatch(/^--lf-/);
+        const original = await computedStyle(card, 'background-color');
+        // A colour the role has in neither theme, read from the page: T changes the values of the roles.
+        const fresh = await newColourFor(page, source.target, NEW_COLOURS, [original]);
+        const lab = await openLab(context);
+
+        // The Lab asks; the app tab lays its veil; the click lands on the card itself — its border, around its children.
+        const point = await pointOnItself(card);
+        await lab.getByTestId('lab-pick').click();
+        await expect(lab.getByTestId('lab-pick-cancel')).toBeVisible();
+        await expect(pickVeil(page)).toBeVisible(CROSS_TAB);
+        await page.mouse.click(point.x, point.y);
+
+        const picked = lab.getByTestId('lab-picked');
+        await expect(picked, 'the app tab answers with the element').toBeVisible({timeout: 15_000});
+        await expect(picked).toHaveAttribute('data-route', '/');
+        await expect(picked).toHaveAttribute('data-theme', 'light');
+        await expect(lab.getByTestId('lab-scope'), 'the Lab edits the theme the element was picked in').toHaveValue('light');
+        await expect(pickVeil(page), 'the pick is over in the app tab').toHaveCount(0);
+
+        // What the app tab proved: the card's own background, set by the utility's rule, which reads the role.
+        const facts = await pickedFacts(page);
+        expect(facts, 'the facts in the pick channel are those of this pick').toMatchObject({route: '/', theme: 'light'});
+        expect(facts.testids[0], "the nearest test id is the card's own").toBe(LOGIN_CARD);
+        const background = facts.properties.find((p) => p.property === 'background-color');
+        if (!background) throw new Error(`the app tab must report the card's background: no \`background-color\` among its facts (${facts.properties.map((p) => p.property).join(', ')})`);
+        expect(background.depth, 'the pick landed on the card itself: the background is its own, not one seen through').toBe(0);
+        const winner = background.declarations.find((d) => d.wins);
+        if (!winner) throw new Error(`the app tab must prove the declaration that sets the card's background: no winner among ${background.declarations.map((d) => d.selector ?? d.origin).join(', ') || 'no candidate'}`);
+        expect(winner, `the rule of ${source.className} the page's CSSOM holds sets the card's background`).toMatchObject({origin: 'rule', selector: source.selector});
+        expect(varReadBy(winner.value), `${winner.selector} { background-color: ${winner.value} } reads the role`).toBe(source.target);
+        const kind = kindOfRule(winner);
+        expect(kind, `${winner.selector} is in the layer ${winner.layer ?? 'none'}: a Tailwind utility`).toBe('tailwind-class');
+        const colour = pickedProperty(lab, 'background-color');
+        await expect(colour, `the Element tab classifies \`${winner.selector} { background-color: ${winner.value} }\` (layer ${winner.layer ?? 'none'}) as the rules do`).toHaveAttribute('data-kind', kind);
+        await expect(colour.getByTestId('lab-picked-class')).toHaveText(source.className);
+        await expect(colour.getByTestId('lab-picked-var').first(), 'the chain starts at the role the utility reads, not at its alias').toHaveText(source.target);
+
+        // The «picked» filter keeps the card's colours: fewer chips, the role's among them, under its alias.
+        await lab.getByTestId('lab-tab-palette').click();
+        const search = lab.getByTestId('lab-search');
+        await search.fill('');
+        await expect(search).toHaveValue('');
+        const chips = lab.locator('[data-testid^="lab-item-var-"]');
+        await expect(chips, 'the palette tab lists the catalogue').not.toHaveCount(0);
+        const unfiltered = await chips.count();
+        const filter = lab.getByTestId('lab-filter-picked');
+        await filter.check();
+        await expect(filter).toBeChecked();
+        await expect.poll(() => chips.count(), {message: "the filter keeps only the picked element's colours"}).toBeLessThan(unfiltered);
+        const chip = lab.getByTestId(`lab-item-var-${source.chipVar}`);
+        await expect(chip, `the filter shows the chip of ${source.className}, under its alias ${source.chipVar}`).toBeVisible();
+        await expect(chip, 'the chip edits the role').toHaveAttribute('data-target', source.target);
+
+        // «Edit the source» edits the role — the alias has no rule at runtime — with the pick as the change's anchor.
+        await lab.getByTestId('lab-tab-element').click();
+        await colour.getByTestId('lab-picked-edit').click();
+        const editor = lab.getByTestId('lab-editor');
+        await expect(editor).toHaveAttribute('data-layer', 'css-var');
+        await expect(editor).toHaveAttribute('data-target', source.target);
+        await lab.getByTestId('lab-editor-to').fill(fresh.hex);
+        await expect(lab.getByTestId('lab-editor-to')).toHaveValue(fresh.hex);
+        await lab.getByTestId('lab-editor-apply').click();
+        await expectChanges(lab, 1);
+        await expect(card, `${source.target} changes, and the card with it`).toHaveCSS('background-color', fresh.rgb, CROSS_TAB);
+        await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, elementRules: 0});
+
+        // The export: the role, anchored on the card, with the class where the code writes it.
+        const {text, doc} = await downloadExport(lab);
+        expect(doc.schema).toBe('lf-designer-lab/1');
+        expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.to])).toEqual([[`css-var:${source.target}@light`, 'css-var', 'light', source.target, fresh.hex]]);
+        const [change] = doc.changes;
+        const anchor = change.anchor;
+        if (!anchor) throw new Error('a change opened from the Element tab must carry its anchor');
+        expect(anchor).toMatchObject({route: '/', theme: 'light', property: 'background-color', computed: original});
+        expect(anchor.testids[0], 'the nearest test id first, as the code writes it').toBe(LOGIN_CARD);
+        expect(anchor.source, 'the anchor names the source the Element tab showed: the utility, its rule, the role').toMatchObject({kind, selector: winner.selector, var: source.target, class: source.className});
+        const where = anchor.candidates.map((c) => `${c.file}:${c.line} ${c.why} ${c.needle}`).join(', ');
+        const classUses = anchor.candidates.filter((c) => c.why === 'class-use' && c.needle === source.className);
+        expect(classUses.length, `the uses of ${source.className} are found through the role: a class-use candidate. Candidates: ${where}`).toBeGreaterThan(0);
+        // Each is a line of today's code that writes the class, read from disk; one is in the card's component.
+        for (const c of classUses) {
+            const lines = await sourceLines(c.file);
+            expect(lines, `${c.file} exists in the repository`).not.toBeNull();
+            expect(lines?.[c.line - 1] ?? '', `${c.file}:${c.line} writes ${source.className}`).toContain(source.className);
+        }
+        const inCard = await placesInComponent(classUses, source.className, LOGIN_CARD);
+        expect(inCard.length, `a class-use candidate in the component that writes ${LOGIN_CARD}. Candidates: ${where}`).toBeGreaterThan(0);
+        const verified = await verifyExport(text, testInfo.outputPath('designer-lab-changes.json'));
+        const report = verified.report;
+        if (!report) throw new Error(`verify-export.mjs printed no JSON report (exit ${verified.status}): ${verified.stderr}`);
+        expect(
+            report.changes.flatMap((c) => c.missing.map((m) => `${c.id} ${m.file}:${m.line} ${m.raw ?? ''}`)),
+            'every occurrence the export lists is still written in the code',
+        ).toEqual([]);
+        expect(verified.status, `verify-export.mjs exits 0 when nothing is missing: ${verified.stderr}`).toBe(0);
+        expect(report.totals.ok, 'positive control: the verifier found occurrences in place').toBeGreaterThan(0);
+        // No text of the page: the card's phrases — words of the interface, never a token of the code — appear nowhere.
+        const phrases = await card.evaluate((root) => [
+            ...new Set(
+                Array.from(root.querySelectorAll('*'))
+                    .map((el) =>
+                        Array.from(el.childNodes)
+                            .filter((node) => node.nodeType === Node.TEXT_NODE)
+                            .map((node) => node.textContent ?? '')
+                            .join(' ')
+                            .replace(/\s+/g, ' ')
+                            .trim(),
+                    )
+                    .filter((t) => /\p{L}/u.test(t) && t.includes(' ')),
+            ),
+        ]);
+        expect(phrases.length, 'the card shows phrases to look for').toBeGreaterThan(0);
+        expect(
+            phrases.filter((t) => text.includes(t)),
+            'the export carries no text of the page',
+        ).toEqual([]);
+
+        await lab.getByTestId('lab-reset-all').click();
+        await expectChanges(lab, 0);
+        await expect(card, 'reset: the card shows its own background again').toHaveCSS('background-color', original, CROSS_TAB);
+        await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
+        await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
+    });
+
     test('Esc cancels a pick; Alt+Shift+D starts one in an app tab that was open when the Lab was opened', async ({page, context}) => {
         await login(page, TEST_USER);
         await openTransactions(page);
@@ -249,7 +397,7 @@ test.describe('Designer Lab — the element picker', () => {
         // The app tab learnt that the Lab was opened from the `storage` event, which arrived before the pick request it
         // has just answered: its shortcut is installed.
         const subtitle = transactionsSubtitle(page);
-        const {className, variable} = await textPaletteClassOf(subtitle);
+        const source = await colourSourceOf(subtitle, 'text');
         const point = await pointOnItself(subtitle);
         await page.keyboard.press('Alt+Shift+KeyD');
         await expect(pickVeil(page)).toBeVisible(CROSS_TAB);
@@ -261,11 +409,11 @@ test.describe('Designer Lab — the element picker', () => {
         await expect(picked).toHaveAttribute('data-theme', 'light');
         await expect(pickVeil(page)).toHaveCount(0);
         const colour = pickedProperty(lab, 'color');
-        await expect(colour, `${className} is a Tailwind utility`).toHaveAttribute('data-kind', 'tailwind-class');
-        await expect(colour.getByTestId('lab-picked-class')).toHaveText(className);
-        await expect(colour.getByTestId('lab-picked-var').first(), 'the variable the utility reads comes first').toHaveText(variable);
+        await expect(colour, `${source.className} is a Tailwind utility`).toHaveAttribute('data-kind', 'tailwind-class');
+        await expect(colour.getByTestId('lab-picked-class')).toHaveText(source.className);
+        await expect(colour.getByTestId('lab-picked-var').first(), 'the variable the utility reads comes first').toHaveText(source.target);
         await expect(colour.getByTestId('lab-picked-dark-override')).toHaveCount(0);
-        await expect(colour.getByTestId('lab-picked-specialise-selector'), 'a specialisation keeps the class its rule names').toContainText(`p.${className}`);
+        await expect(colour.getByTestId('lab-picked-specialise-selector'), 'a specialisation keeps the class its rule names').toContainText(`p.${source.className}`);
     });
 
     test('a dark-theme pick of a text-gray-500 element shows the variable of the app.css override', async ({page, context}) => {

@@ -19,6 +19,7 @@ import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
+import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
 
 // =============================================================================
 // CONFIGURATION
@@ -132,6 +133,11 @@ axiosInstance.interceptors.response.use(
                 debug.log('API', '401 Unauthorized - redirecting to login');
                 goto(loginUrl(window.location.pathname + window.location.search));
             }
+        }
+
+        // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
+        if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
+            instanceBlock.markBlocked();
         }
 
         // Let the error propagate - Zodios will handle it
