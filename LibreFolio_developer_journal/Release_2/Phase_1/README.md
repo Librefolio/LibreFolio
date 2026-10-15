@@ -157,3 +157,4 @@ Sono tutti locali: la push la fa il developer.
 | 68 | 15/10 23:38 | E: E5a (verifica dell'email, parti solo di E: servizio `verification.py`, `POST /email/verification/confirm` e `/resend`, pagina `/verify-email`; inerte fino a E5b; decisione 44) | `e9a993e00` |
 | 69 | 15/10 23:45 | W: W-B20 (un savepoint per broker nella cancellazione multipla; `begin_writes` in `db/session.py`) | `23ff56b95` |
 | 70 | 16/10 00:42 | J: CP-16 (decisione 47 nei lotti: la rettifica in uscita con costo chiude i lotti al costo medio della riga, valore ceduto nei proventi; J-9; etichetta «Valore ceduto al costo») | `240675ad1` |
+| 71 | 16/10 00:55 | X: CP11a (impostazioni dei plugin, backend: `configured` nel catalogo, `providers_not_configured` e `error_code` nello stream di ricerca, preferenze justETF/Borsa D-X14, `PROVIDER_ERROR` mascherato; CHANGELOG con CP11b) | `a6453571d` |
