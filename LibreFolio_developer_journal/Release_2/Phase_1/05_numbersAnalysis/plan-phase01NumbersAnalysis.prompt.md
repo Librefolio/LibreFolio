@@ -300,7 +300,10 @@ Nessun cambio di comportamento. Due commit: A (rinomina) committato da solo dal 
   `price_query` e i router di asset e cambi importano `series_preparation` e `signal_service`; la pagina asset (C-71);
   il PL7 dopo CP-10. CP-1 non tocca file di X.
 - **H**: `main.py:59` (CP-10); `data_quality_thresholds` → `platform/` cambia gli import nella casa, nel PAC (anche
-  nella sorgente di CP-1) e nella guardia.
+  nella sorgente di CP-1) e nella guardia. La guardia d'ambiente di H (`test_config_package.py`, `KNOWN_MODULES` ed
+  `ENVIRONMENT_WRITER`) cita `services/risk/quant/spawn_worker.py` per percorso: se un lotto del rischio lo sposta,
+  J aggiorna il percorso nella guardia nello stesso commit e lo scrive nell'handoff; il coordinatore avvisa H
+  (coordinatore, 15/10).
 - **A**: `settings_service` → `accounts/` cambia l'import in `portfolio/engine.py` e nella guardia.
 - **W**: `transaction_service.py:50` (CP-8); `broker_service` (V3, C2, B15); `delete_by_broker` (V-3); gli eventi (P-10).
 - **Z**: nessuno. **Y**: consuma CP-13; T-D9. **Colori**: nessun file dei lotti di R nei CP-1…12.
@@ -634,7 +637,7 @@ rompono con moduli comuni dai nomi brevi (C1).
   riga sulla guardia allargata a `sqlmodel` e `backend.app.db`, accettata) e `69edafebf` (`docs(journal): J CP-1B, PAC
   split`).
 
-#### Aggiornamento di base 1 — `dev_release2` `0ac49739d` 🧊 (2026-10-15) — FROZEN, merge commit del coordinatore
+#### Aggiornamento di base 1 — `dev_release2` `0ac49739d` ✅ (2026-10-15) — merge `1ab103f64`, nota `4492c3b42`
 
 Il coordinatore ha aperto nel worktree `git merge --no-ff --no-commit 0ac49739d` su `69edafebf` (merge-base
 `c9bb8f257`, 59 commit): A1 (`accounts/`), H CP1 (`platform/`, `files/`), A2 (frontend `lib/features/`), W1 e W2
@@ -699,3 +702,49 @@ merge è suo; J risolve, mette in stage solo i file risolti o corretti e valida.
 >   percorsi vecchi di X.
 >
 > **⚠️ Fuori pista**: nessuno.
+
+#### Aggiornamento di base 2 — X, `dev_release2` `75a20ce29` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+
+Merge del coordinatore `ea3d80a83` (genitori `4492c3b42` e `75a20ce29`): X CP1 (un registro per famiglia) e CP2a
+(`services/assets/`, `services/fx/` pacchetto, senza shim); da `64a5a3fe7` a `75a20ce29` solo journal. I 5 file in
+comune con CP-1 si sono fusi da soli, come nella simulazione; nessun conflitto. J valida la revisione combinata.
+
+> **Note implementazione**:
+> - **Albero**: `test_layer_boundaries.py`, `_backend_services.py`, `developer/backend/financial_math.md` e la pagina
+>   della devWiki `financial-math-single-average-cost` sono identici byte per byte alla fusione simulata; il delta di
+>   `ea3d80a83` rispetto a `75a20ce29` ha gli stessi 84 file, con lo stesso stato, del delta di CP-1 (`c9bb8f257` →
+>   `69edafebf`); il merge non tocca i pacchetti del PAC.
+> - **Ricerca semantica** sull'albero fuso, con i percorsi vecchi di X:
+>   - risoluzione statica estesa (`/tmp/libreFolio_j/import_resolve2.py`): oltre agli import e ai bersagli di
+>     `patch("...")`, ogni lettura d'attributo attraverso un alias di modulo (`fx.convert_bulk` con `fx` il pacchetto,
+>     catene `a.b.c.x`) e ogni `setattr`/`monkeypatch.setattr`/`patch.object` su un alias. 847 file, 2 825 controlli,
+>     **0 reperti**; un alias saltato perché riassegnato (`state_mod` in `test_scheduler_state.py`, di H, coerente).
+>     Autocontrollo su un albero sintetico: le 6 forme vecchie (import di `convert_bulk` dal pacchetto `fx`, `fx` usato
+>     come modulo, alias `import … as`, stringa di `patch`, `monkeypatch.setattr` sul pacchetto, registro da
+>     `provider_registry`) sono segnalate, le forme valide (`fx.fx.convert_bulk`, pacchetto senza `__init__`) no;
+>   - testo (`merge2_oldpaths_x.py`, `backend/`, `scripts/`, `dev.py`, `.github/`, docs, frontend, devWiki,
+>     `TODO_FUTURI.md`): nessun nome puntato dei moduli vecchi di X, nessun `services.fx.<nome>` che non sia un
+>     sottomodulo, nessun registro da `provider_registry`. Restano 21 citazioni di file vecchi in testo, tutte del
+>     dominio di X (17 pagine della devWiki, `TODO_FUTURI.md:2067`, commenti in `api/v1/fx.py:767`,
+>     `db/models.py:123`, `frontend/…/assetPayload.test.ts:58`), identiche nel bersaglio: non vengono dal merge.
+> - **Cancelli**:
+>   - `pytest --collect-only` (ambiente della corsia): fuso 13 504, bersaglio `75a20ce29` estratto 13 443. Differenza
+>     esatta, come nell'aggiornamento 1: +34 della guardia D-J18, +27 della guardia d'ambiente di H (−3 percorsi vecchi
+>     del PAC, +30 moduli nuovi). Nessun test perso;
+>   - `services config-package` 499 (+7 su aggiornamento 1: i moduli nuovi di X); `services pac-planner-core` 264;
+>   - `dev.py api sync` contro `dev.py api schema` del bersaglio estratto: `openapi.json` identico byte per byte una
+>     volta rimessa la stringa della versione, `tool-contracts.openapi.json` identico; gli altri 3 generati identici a
+>     quelli dell'aggiornamento 1 e della base di J-0;
+>   - `dev.py lint` pulito; patch 41, nessuna muta; equivalenza AST del taglio intatta;
+>   - `check_source_paths.py`: 5 nel worktree; il bersaglio estratto ne dà 8, ma i 3 in più sono artefatti generati che
+>     una copia da `git archive` non ha (`frontend/build/`, `generated.ts`, `mkdocs_src/site/`): a parità, 5 e 5.
+>   - **`all-backend`** sulla 6185 (02:40–03:02, `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600`): 7/7, «ALL BACKEND TESTS
+>     PASSED»; 23 invocazioni, **13 493 passed, 28 skipped, 0 failed**. Rispetto all'aggiornamento 1 cambiano due
+>     sessioni, entrambe per X (confronto delle raccolte dei due bersagli, `0ac49739d` 13 441 → `75a20ce29` 13 443):
+>     `services` +7, i casi della guardia d'ambiente di H sui moduli nuovi di X (+21 −14); la seconda sessione −5,
+>     i test d'identità fra simboli vecchi e nuovi di `test_provider_core_cache.py`, tolti con lo shim. Netto +2,
+>     uguale nella raccolta e in `all-backend`;
+>   - porta 6185 libera; worktree pulito tranne questo piano.
+>
+> **⚠️ Fuori pista**: nessuno. (Per leggere i file con `git ls-files` nella copia estratta del bersaglio ho fatto
+> `git init` dentro `/tmp/libreFolio_j/target_75a20ce29/`, un repository usa e getta fuori dal worktree.)
