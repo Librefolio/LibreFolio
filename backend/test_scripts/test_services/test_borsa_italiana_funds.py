@@ -15,7 +15,7 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_italiana
 from backend.app.services.asset_source_providers.borsa_italiana.plugin import BorsaItalianaProvider
-from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 

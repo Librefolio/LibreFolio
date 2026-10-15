@@ -98,5 +98,5 @@ New tests added:
 | BRIM abstract base | `backend/app/services/brim_provider.py` |
 | BRIM schemas | `backend/app/schemas/brim.py` |
 | BRIM API endpoint | `backend/app/api/v1/brokers.py` |
-| Asset source (renamed method) | `backend/app/services/assets/price_store.py` |
+| Asset source (renamed method) | `backend/app/services/assets/event_store.py` |
 | Plugin test | `backend/test_scripts/test_external/test_brim_providers.py` |

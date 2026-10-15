@@ -52,7 +52,7 @@ from pydantic import ValidationError
 from sqlalchemy import String, and_, cast, or_, select
 
 from backend.app.db.models import Asset, Transaction, TransactionType
-from backend.app.schemas.assets import FAAinfoFiltersRequest
+from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetMapping,

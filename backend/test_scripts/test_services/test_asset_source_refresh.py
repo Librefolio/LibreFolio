@@ -15,12 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets import FAHistoricalData
 from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.prices import FAHistoricalData
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
-from backend.app.services.assets.core import AssetHistoryStartDate
+from backend.app.services.assets.base import AssetHistoryStartDate
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.refresh import AssetProviderRegistry
 

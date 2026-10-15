@@ -6,11 +6,11 @@ applyTo: "backend/app/services/asset_source_providers/**,backend/app/services/as
 
 ## Architecture
 
-All asset providers extend `AssetSourceProvider` (abstract base in `assets/core.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
+All asset providers extend `AssetSourceProvider` (abstract base in `assets/base.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
 
 ### Base Class
 
-The abstract base class `AssetSourceProvider` is defined in `backend/app/services/assets/core.py`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
+The abstract base class `AssetSourceProvider` is defined in `backend/app/services/assets/base.py`, with `AssetSourceError`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
 
 ### Thread Isolation
 
