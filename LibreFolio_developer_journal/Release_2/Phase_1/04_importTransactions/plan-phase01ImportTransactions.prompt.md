@@ -1674,3 +1674,55 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > **Docs committate** (coordinatore, 11:19): `3f42dda9d` sopra `5e19c6018`. W-B22 e W-B23 **assegnate a me** come
    > lotto **N1b-3**, sopra il commit delle docs (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha
    > un link pendente non arriva mai a `orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere.
+
+### N1b-3 — il quadro delle correzioni post-migrazione: violazioni di FK preesistenti (W-B22) e log dello script (W-B23) ✅ (2026-10-15)
+
+**Via del coordinatore** (15/10 ~11:25, base `eb3bb0529`): W-B22 e W-B23 assegnate a me, lotto sopra il commit delle docs
+di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha un link pendente non arriva mai a
+`orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere (`nice`, senza server).
+
+**Disegno** (verificato su `eb3bb0529`):
+
+- **W-B22**: `_apply_one` (`backend/app/db/post_migration/__init__.py`) aggiunge ai controlli della correzione
+  `_common_problems`, che vuole `PRAGMA foreign_key_check` **vuoto** sull'intero DB. Una violazione già presente fa
+  fallire qualunque correzione, a ogni avvio, con una copia `.bak` in più; e `_apply_pending` si ferma alla prima che
+  fallisce. Cura: come per i conteggi delle righe, si confronta con lo stato di prima: è un problema solo una violazione
+  **nuova** (l'insieme `(tabella, rowid, padre, fkid)` letto subito prima della correzione). Le violazioni già presenti
+  si dicono in un warning, una volta per giro, e restano. `autoincrement` ricopia le righe con gli stessi id e lo stesso
+  DDL più `AUTOINCREMENT`, quindi le tuple restano uguali; `orphan_pair_halves` poi toglie i link pendenti delle
+  transazioni.
+- **W-B23**: `python -m backend.app.db.post_migration` non configura il log: le righe INFO (una per transazione
+  cambiata, «applied and verified» con i secondi) si perdono, e il warning esce come testo su stderr (lastResort). Cura:
+  `configure_logging(LOG_LEVEL, enable_file_logging=False)` **solo nel blocco `if __name__ == "__main__"`**: la console
+  (stdout, righe JSON come il server) e nessuna scrittura nella data-dir, che i test del piano 34 proteggono con il
+  canarino; `main()` chiamato in-process (test, figlio della prova di concorrenza) non riconfigura nulla.
+
+**Passi**:
+
+1. ✅ Rossi (test-author, 11:32): W-B22 (DB 1.1 alla testa con un link pendente → oggi `autoincrement` `failed` e
+   `orphan_pair_halves` mai eseguita; una violazione in un'altra tabella → oggi `failed` a ogni avvio; guardia: una
+   correzione che **aggiunge** una violazione fallisce ancora); W-B23 (lo script stampa una riga per transazione e la
+   chiusura con i secondi; il dry run solo il warning; nessun file nella data-dir configurata).
+   > **Note implementazione**: `test_post_migration.py` (piano 34, **solo aggiunte**: 154 righe, nessuna asserzione
+   > toccata) contratto 14 — pin 1 `test_a_broken_link_already_there_no_longer_blocks_the_fixes` (rosso:
+   > `['failed', 'would_apply']`, errore `foreign_key_check: ('transactions', 12, 'transactions', 1)`, copia tenuta), pin 2
+   > `test_a_broken_link_in_another_table_is_left_as_it_is_and_reported` (rosso: una riga di `price_history` di un asset
+   > cancellato, `failed` due volte), pin 3 `test_a_fix_that_breaks_a_link_itself_still_fails` (guardia verde: un UPDATE
+   > che rompe un riferimento, non una DELETE, che fallirebbe già sui conteggi) — e contratto 15, la guardia `nessun
+   > file nella data-dir` (verde). `test_post_migration_orphan_pairs.py` contratto 9 — pin 4 (rosso: nessuna riga JSON
+   > per riga cambiata) e pin 5 (rosso: il warning del dry run solo come testo su stderr), con `LIBREFOLIO_LOG_LEVEL=INFO`
+   > forzato nel figlio. Prove: `db post-migration` 39/41, `db post-migration-orphan-pairs` 45/47, rossi solo i quattro.
+   > **⚠️ Fuori pista** (test-author): il nome della copia è al secondo, quindi due giri falliti nello stesso secondo
+   > lasciano una copia sola (la seconda sovrascrive la prima); fra secondi diversi le copie si accumulano. Solo nota.
+2. ✅ Cure (11:33), `/tmp/libreFolio_w_n1b3_fix.py --apply`.
+   > **Note implementazione**: `post_migration/__init__.py`: `_fk_violations()`; `_apply_one` legge le violazioni subito
+   > prima della correzione e `_common_problems` segnala solo quelle nuove (ordinate); `_apply_pending`, dopo la copia,
+   > logga una volta il WARNING «Foreign key violations already in the database, left as they are» (`count`, fino a 20
+   > righe). `__main__.py`: `configure_logging(get_settings().LOG_LEVEL, enable_file_logging=False)` nel solo blocco
+   > `if __name__ == "__main__"`. Prove (`nice -n 15`, senza server): `db post-migration` **41/41**,
+   > `db post-migration-orphan-pairs` **47/47**; `ruff`/`black` puliti.
+3. ✅ Doc EN (11:36), a mano (correzioni puntuali): `developer/architecture/database/index.md` (il passo 5 con la regola
+   delle violazioni nuove e il warning; lo script logga sulla console; tolta la frase delle righe INFO perse) e
+   `admin/cli_tools.en.md` (un punto per il warning delle violazioni già presenti; nel riquadro, lo script stampa il
+   log e non scrive file). Solo EN (W-B21). `mkdocs build` e `check-links` dopo la finestra.
+4. ⏳ Handoff FROZEN.
