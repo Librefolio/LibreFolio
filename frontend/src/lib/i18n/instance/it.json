@@ -27,6 +27,12 @@
         "ok": "Il livello di log è adatto alla produzione.",
         "verbose": "Il livello di log è {log_level}: il log registra dettagli operativi; in produzione basta INFO."
       }
+    },
+    "block": {
+      "title": "Questa istanza è bloccata",
+      "adminDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Regolarizza con il fornitore per sbloccarla.",
+      "userDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Chiedi all'amministratore un backup dei tuoi dati.",
+      "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}."
     }
   }
 }
