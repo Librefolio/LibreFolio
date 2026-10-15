@@ -315,11 +315,46 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
 | `/auth/register` | POST | New user registration |
-| `/system/health` | GET | Health check |
-| `/system/info` | GET | System information |
+| `/system/health` | GET | Health check: the server answers |
+| `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
+| `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
+
+### 🩺 System Information and Readiness {: #system-info-and-readiness }
+
+**`GET /system/info`** (`backend/app/api/v1/system/info.py`) runs the checks of `get_current_user` through its
+`signed_in_user` dependency, where a `401` means anonymous instead of an error. Without a valid session cookie (none,
+an expired or invalid token, an unknown or disabled account), the answer is the app version only,
+`{"app_version": "..."}` (`SystemInfoPublicResponse`). With one, it is the full `SystemInfoResponse`: app, Python and
+OS versions, platform, deployment mode, backend and frontend dependency versions. The OpenAPI `200` response is the
+`anyOf` of the two schemas, the full one first.
+
+**`GET /system/ready`** (`backend/app/api/v1/system/ready.py`) tells whether the instance can serve requests, for
+Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_readiness()`
+(`backend/app/services/platform/readiness.py`) runs two checks, and the body (`ReadinessResponse`,
+`backend/app/schemas/system.py`) carries one code for each:
+
+| Check | Codes |
+|-------|-------|
+| `database` | `ok`: the database answers a query; `unreachable`: it does not |
+| `migrations` | `ok`: the database's revision, in `alembic_version`, is the head revision of the migration scripts; `mismatch`: it is another revision; `unknown`: a revision cannot be read (no `alembic_version` table or not exactly one row in it, several heads or no scripts), and whenever `database` is `unreachable` |
+
+`status` is `ready`, with `200`, only when both checks are `ok`; otherwise it is `not_ready`, with `503` and the same
+shape:
+
+```json
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}
+```
+
+- **Codes only.** The body never carries an error message, a path or a revision id. The details go to the server
+  log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
+  (info). A monitor that asks every few seconds adds no log line while the state holds.
+- **The head revision is read once per process**, from the migration scripts of `backend/alembic.ini`. A failed read
+  is not cached: the next check tries again.
+- **`/system/health` is a different question**: it answers `{"status": "ok"}` as soon as the server answers, without
+  touching the database. The image's `HEALTHCHECK` and both Compose files call it.
 
 ### 🔒 Private Endpoints (auth required)
 
