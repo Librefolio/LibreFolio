@@ -1375,8 +1375,18 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - Le righe le aggiungo io, in B3, quando CP2b è nella mia base.
 > - Nessun passo di spegnimento: il riavvio è un SIGTERM, e Litestream avvolge uvicorn da fuori.
 > - Ho chiesto ad H che cosa cambia fra `blocking=True` e `blocking=False`.
+>
+> **Conferma di H** (17:50):
+>
+> - CP2b non cambia l'ordine dei passi. `pending-restore` va fra `Step("tool-catalog", …)` e
+>   `Step("data-directories", …)`; `restore-commit` fra `Step("global-settings", …)` e `Step("provider-prewarm", …)`.
+> - `blocking` all'avvio non cambia niente: `run_startup_steps` attende la coroutine, e un'eccezione ferma l'avvio.
+>   `blocking=True` conta solo allo spegnimento con una scadenza. Quindi il default, con lambda `asyncio.to_thread`,
+>   come il suo `post-migration-fixes`.
+> - Il test puro `services app-lifecycle` fissa solo l'ordine relativo dei passi di oggi e i nomi unici. I miei due
+>   vincoli vanno in una funzione di test mia. H manda il nome del file e lo SHA quando CP2b entra.
 
-### Slot pesante 1 — E2E della scheda e knip (2026-10-15, 17:21-18:20) ✅ — 🧊 FROZEN, in attesa del coordinatore
+### Slot pesante 1 — E2E della scheda e knip (2026-10-15, 17:21-17:51) ✅ — committato
 
 > - **knip** (`dev.py lint --dead-code --scope frontend`, 17:23, 9 s): nessun file di B fra i risultati
 >   (`features/backup`, `i18n/backup`, `settingsTabs`). I 2 file, 19 export, 28 tipi, 4 dipendenze di sviluppo e 20
@@ -1407,6 +1417,57 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   verde finale» girerebbe sulla build mutata. Proposto per la devWiki.
 > - Rumore d'ambiente, non del prodotto: a ogni corsa la cache statica non scarica MathJax da jsDelivr (certificato SSL)
 >   e tiene la copia in cache.
+
+> **Committato dal coordinatore** (17:52): `d7b57002a` (test E2E) e `c24466527` (journal). **⚠️ Fuori pista — orario
+> sbagliato**: nel journal e nell'handoff avevo scritto che lo slot si era liberato «alle 18:20». È andato dalle 17:21
+> alle 17:51: lo dicono i log (knip 17:23, `check-orphans` 17:50). Il titolo è corretto qui sopra.
+
+### Aggiornamento di base — merge di `dev_release2` `9c8ee20c3` (2026-10-15, 17:52-17:55) ✅
+
+> **Merge aperto dal coordinatore**: HEAD `c24466527`, `MERGE_HEAD` `9c8ee20c3`. La base porta H (fatturazione e rotte
+> dei link), A6a, Z7a, J e il banner del Lab.
+>
+> **6 file in conflitto**, risolti tenendo i due lati:
+>
+> - `instance_block.py`: in `ALLOWED_WHEN_BLOCKED` 17 voci, ogni gruppo col suo commento: i link di H, la cancellazione
+>   del proprio account con l'anteprima di A6a, le mie 4 rotte di backup, la pagina di blocco, le sonde. La docstring
+>   tiene il testo di H, sonda dell'indirizzo compresa, più la frase sul backup.
+> - `system/block.py` e `schemas/system.py`: `billing_url` (H, solo per l'admin, facoltativo) e `backup_available` (B,
+>   obbligatorio).
+> - `test_instance_block.py`: `ALLOWED_ROUTES` con 17 voci; i due campi in ogni JSON esatto; il perno OpenAPI con le
+>   quattro proprietà, `required` = `[blocked, backup_available]`; import e docstring uniti.
+> - `test_dev_cli_image.py`: gli IMG-027…030 di A (rinumerati) e i miei IMG-025/026, in una serie unica.
+> - `backend.instructions.md`: le righe di `platform/` unite (provider pauses di Z7a e le mie).
+>
+> **⚠️ Fuori pista — due problemi che git non vedeva**, corretti nello stesso stage:
+>
+> 1. **Fixture `administrator` doppia**, quella di H per la fatturazione e la mia per il backup: in Python la seconda
+>    sostituiva la prima in silenzio. Tolta la mia: i casi di backup usano quella di H, che controlla anche il ruolo con
+>    `/auth/me`.
+> 2. **Perni del JSON della pagina di blocco**: 4 perni uniti senza conflitto avevano uno solo dei due campi (3 di H,
+>    1 mio). Ora li hanno tutti e due, con `backup_available` vero solo per l'admin. Il mio caso di backup toglie
+>    esplicitamente `LIBREFOLIO_BILLING_URL` invece di darlo per assente.
+>
+> Verifiche: nessun marcatore; compilazione; ruff e black puliti; `diff --cached --check` pulito; stage dei soli 6 file.
+> **Merge committato dal coordinatore**: `25cd742cf`, genitori `c24466527` e `9c8ee20c3`.
+>
+> **Prove sulla revisione combinata `25cd742cf`** (17:56-18:09, corsia 6187, `nice -n 10`, una alla volta), tutte
+> verdi:
+>
+> - `api sync` 0; `front check` 0 errori e 0 avvisi;
+> - `api instance-block` 56 (i casi di fatturazione e dei link di H più i miei di backup; il backend della corsia ci ha
+>   messo circa 225 s a partire); `api backup` 23; `api backup-instance-errors` 6;
+> - `utils dev-cli-image` 75; `services backup-archive` 141 più 1 saltato; `services backup-jobs` 63;
+> - `check-orphans` verde; Vitest `settingsTabs` 18 e `InstanceBlockedPage` 22;
+> - porta libera.
+>
+> **devWiki**: la lezione di `cp -p` va in `problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild.md`, con
+> la riga in `index.md` e la voce in `log.md`. `check_source_paths` torna ai 5 percorsi mancanti di prima, tutti in
+> altre pagine. Una prima stesura citava `build/index.html`, che non esiste nel repo.
+>
+> **B8 dopo il merge**: le copie messe da parte sono su `a22400f1e`, quindi B8 si rimette come patch
+> (`files/b8-wip/b8.patch`, 9 file, 502 righe), non come copia, che cancellerebbe il merge. I 9 file di riserva sono
+> controllati col manifest.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
