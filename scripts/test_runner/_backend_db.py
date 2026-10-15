@@ -228,6 +228,16 @@ def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
 
 
+def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 005_accounts_invites on temporary databases: a new one, and a populated 1.2 install."""
+    print_section("DB Test: Migration 005 (accounts)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, users columns and account_tokens at head, models = migration, 1.2 install upgraded, downgrade without cascade, interrupted upgrade")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_005_accounts.py", test_names)
+    return run_command(cmd, "Migration 005 tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -271,7 +281,7 @@ def db_all(verbose: bool = False) -> bool:
 
     db_order = [
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
-        "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "migration-005", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -340,6 +350,11 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
              desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
              prereq="None (temporary databases)")
+    # PURE: every database is a private file under tmp_path. Alembic runs in-process with -x sqlalchemy.url= pointing at
+    # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
+    add_test(cat, "migration-005", db_migration_005, name="Migration 005 Accounts",
+             desc="005_accounts_invites: users columns and account_tokens at head, models = migration, a 1.2 install upgraded, downgrade without cascade",
+             prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
              tests="12 merge tests")
