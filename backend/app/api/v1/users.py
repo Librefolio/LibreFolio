@@ -10,12 +10,14 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.api.v1.auth import get_current_user
+from backend.app.api.v1.auth import deletion_preview_read, get_current_user
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.users import (
+    AccountDeletionPreviewRead,
+    AddressProbeIssued,
     AdminUserListResponse,
     AdminUserRead,
     AdminUserUpdateRequest,
@@ -29,7 +31,7 @@ from backend.app.schemas.users import (
     UserSearchResponse,
     UserUsageRead,
 )
-from backend.app.services.accounts import registration_service, token_service, user_service
+from backend.app.services.accounts import address_probe, registration_service, token_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
@@ -85,7 +87,23 @@ def _invite_read(invite: AccountToken) -> InviteRead:
 
 
 def _admin_user_read(user: User) -> AdminUserRead:
-    return AdminUserRead(id=user.id, username=user.username, email=user.email, is_active=user.is_active, is_superuser=user.is_superuser, created_at=user.created_at)
+    return AdminUserRead(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        protected=user_service.account_protection(user) is not None,
+    )
+
+
+def _protected(user: User) -> Optional[HTTPException]:
+    """409 ``ACCOUNT_PROTECTED`` when nobody may delete, deactivate or demote ``user``."""
+    reason = user_service.account_protection(user)
+    if reason is None:
+        return None
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "ACCOUNT_PROTECTED", "message": "This account cannot be deleted, deactivated or demoted", "reason": reason})
 
 
 async def _user_or_404(session: AsyncSession, user_id: int) -> User:
@@ -127,6 +145,15 @@ async def revoke_invite(invite_id: int, admin: Annotated[User, Depends(require_a
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/address-probe", response_model=AddressProbeIssued, summary="A nonce to check that this instance answers at another address (admin)")
+def issue_address_probe(admin: Annotated[User, Depends(require_admin)]) -> AddressProbeIssued:
+    """A short-lived signed nonce: ``GET <address>/api/v1/auth/address-probe?nonce=…`` answers ``match: true`` only
+    when this instance answers at that address. Sync: deriving the key reads the instance key file.
+    """
+    nonce, expires_at = address_probe.issue_probe_nonce()
+    return AddressProbeIssued(nonce=nonce, expires_at=expires_at)
+
+
 @router.get("", response_model=AdminUserListResponse, summary="List every account (admin)")
 async def list_accounts(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AdminUserListResponse:
     """Every account, oldest first, with the usage of the instance."""
@@ -142,6 +169,10 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     free place (409 ``USER_LIMIT_REACHED``). Deactivating or demoting ends every session of the account.
     """
     user = await _user_or_404(session, user_id)
+    deactivate = request.is_active is False and user.is_active
+    demote = request.is_superuser is False and user.is_superuser
+    if (deactivate or demote) and (refusal := _protected(user)):
+        raise refusal
     if request.is_active is True and not user.is_active:
         usage = await registration_service.user_usage(session)
         if usage.full:
@@ -150,6 +181,44 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "LAST_ADMIN", "message": "The last active administrator can be neither deactivated nor demoted"})
     logger.info("Account updated by an administrator", user_id=user.id, admin_id=admin.id, is_active=user.is_active, is_superuser=user.is_superuser)
     return _admin_user_read(user)
+
+
+@router.get("/{user_id}/deletion-preview", response_model=AccountDeletionPreviewRead, summary="What deleting an account would take with it (admin)")
+async def preview_account_deletion(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AccountDeletionPreviewRead:
+    """The brokers that would go with the account, those where only its access would go, and the transfers left
+    unpaired. Nothing is written.
+    """
+    preview = await user_service.preview_user_deletion(session, user_id)
+    if preview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return deletion_preview_read(preview)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete an account (admin)")
+async def delete_account(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
+    """Delete an account by the rule of deleting one's own: its brokers per ``deletion-preview``, then the account.
+
+    Refused for the caller's own account (409 ``SELF_DELETION``: that is deleted from the profile), for a protected
+    account (409 ``ACCOUNT_PROTECTED``, before any other answer: demoting it would be refused too) and for an
+    administrator (409 ``DEMOTE_FIRST``: demote it first, so the last one never goes from here). All or nothing;
+    cannot be undone.
+    """
+    user = await _user_or_404(session, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SELF_DELETION", "message": "Delete your own account from your profile"})
+    if refusal := _protected(user):
+        raise refusal
+    if user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"})
+    # A failed deletion rolls the session back and expires every object in it, the caller's included: read them first
+    username, admin_id = user.username, admin.id
+    try:
+        result = await user_service.delete_account(session, user)
+    except Exception as exc:
+        logger.exception("Account deletion by an administrator failed: nothing was deleted", user_id=user_id, admin_id=admin_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account deletion failed: nothing was deleted") from exc
+    logger.warning("Account deleted by an administrator", user_id=user_id, username=username, admin_id=admin_id, brokers_deleted=result.deleted_broker_ids, files_removed=result.files_removed)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{user_id}/password-reset-link", response_model=LinkTokenResponse, status_code=status.HTTP_201_CREATED, summary="Create a password-reset link (admin)")

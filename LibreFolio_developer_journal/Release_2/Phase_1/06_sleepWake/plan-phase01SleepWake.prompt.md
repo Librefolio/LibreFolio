@@ -24,14 +24,14 @@
 |---|---|---|
 | A | Analisi d'implementazione (sola lettura), inviata al coordinatore | ✅ 14/10 |
 | A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
-| Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ⏳ passo 1 ✅ (15/10); i gate dopo la finestra delle dipendenze |
+| Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ⏳ passo 1 ✅ (15/10); 9 cicli di vita puliti su spec singole; dal 15/10 l'avviso si cerca nelle run di categoria del coordinatore; lettura del codice nel disegno di Z6b |
 | Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`); merge di base `4618a2116` con i cancelli d'ingresso verdi; FROZEN di ingresso al coordinatore |
 | Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | ⏸ attende gli agganci di H (punto 32 deciso il 15/10) |
 | Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
-| Z6b | C-49: la cura | ⏸ attende Z6a e il punto 35 |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | ⏸ attende il codice d'errore `RATE_LIMITED` di X |
+| Z6b | C-49: la cura | 📝 disegnato il 15/10 (sezione «Z6b — disegno»), punto 35 deciso; il codice aspetta gli agganci di H (CP2b) e l'autorizzazione del developer |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -131,7 +131,8 @@ nessun EventSource né WebSocket, SvelteKit senza `version.pollInterval`).
 - **Z6 · C-49**: prove (Z6a), poi la cura (Z6b) con un rosso PURE (`services shutdown-budget`).
 - **Z7 · 429** (punto 34): attesa crescente per fornitore, nello scheduler e nelle richieste dal vivo; il polling del
   frontend rispetta `retry_after` e rallenta in modo esponenziale sugli errori; i ritentativi dello scheduler nel suo
-  giro (`services scheduler-backoff`).
+  giro (`services scheduler-backoff`). Disegno e contratto per X: sezione «Z7 — disegno» (15/10); la dipendenza si
+  rovescia, perché è X ad aspettare la primitiva di Z7a.
 
 ### 4. Decisioni
 
@@ -261,6 +262,14 @@ ogni run in `/tmp/libreFolio_z6a_<gate>_<n>.log`.
    > libera.
 3. Verdetto per ipotesi, con le prove; se il log non basta, propongo una diagnostica temporanea (richiede codice:
    serve un via esplicito).
+
+   > **Note implementazione** (15/10, ~16:10): oltre alla run 1 del gate 1, i cicli di vita del backend della corsia
+   > sono venuti dalle run verdi di Z1 (8) e dal merge di base (1), tutti puliti. Visto che sulle spec singole l'avviso
+   > non si riproduce, con il coordinatore si è cambiata strategia: lui cerca `Shared backend ignored SIGTERM for` nelle
+   > sue run di categoria a ogni ingresso, e le prove attive restano per uno slot libero con poco carico. Il verdetto
+   > provvisorio viene dalla lettura del codice (uvicorn 0.52.4): con SIGTERM l'ipotesi H1 è esclusa, perché uvicorn
+   > rilancia il segnale alla fine e il processo esce senza aspettare i thread; restano H2 (la più probabile), H3 e H4.
+   > Dettagli e cura: sezione «Z6b — disegno».
 4. Checkpoint FROZEN: porta 6186 libera, nessun file di prodotto toccato.
 
 ## Righe nel backlog
@@ -465,3 +474,505 @@ Pagine (solo i cicli di polling e il punto della pillola):
    > 65, il livello del via del coordinatore (soglia mia): è partita alle 15:57 a 38,8. Nel merge
    > `frontend/package.json` e il lock cambiano solo la versione della radice (1.1.0 → 0.0.0): `node_modules` resta
    > valido, nessun `npm ci`.
+
+## Z7 — disegno: attesa crescente sui 429 (15/10, prima del codice)
+
+> **Via del coordinatore** (15/10 ~16:10): «Va bene: disegno di Z7 adesso, poi quello di Z6b. Quando il contratto di
+> `RATE_LIMITED` è pronto, me lo giri e lo assegno a X.» Solo disegno, nessun codice di prodotto: il codice di Z7
+> aspetta l'autorizzazione del developer.
+>
+> **Decisione 34, alla lettera** (nota dev nel file delle decisioni): «si questo retry esponenziale non è male come
+> idea, a prescindere, da mettere sia nel frontend che nello scheduler.» Registrata il 15/10: «sì, sia nello scheduler
+> sia nel frontend: il polling rispetta la pausa del fornitore e rallenta a ogni errore».
+
+### Stato reale (sola lettura, su `4618a2116`)
+
+- **`RATE_LIMITED` non esiste**, né nel codice né nel piano di X (`03_pluginsAssets`): era un'aspettativa di questa
+  analisi (§5), non un lavoro di qualcuno. Da qui il contratto più sotto.
+- **Nessun fornitore riconosce davvero un 429, nessuno legge `Retry-After`.** `AssetSourceError(message, error_code,
+  details)` (`services/assets/base.py:47-54`) è l'unica classe d'errore degli asset, con codici stringa liberi;
+  `FXServiceError` (`services/fx/base.py:318`) è un `Exception` senza codice.
+  - yahoo_finance riconosce il 429 dal testo (`_TRANSIENT_KEYWORDS`, `plugin.py:58-86`) e lo **riprova nel thread** 3
+    volte con `sleep` bloccanti (1,5 → 3 → 6 s, `_yf_with_retry`, `:89-117`), poi `FETCH_ERROR`: tre colpi in più a un
+    fornitore che ha già rifiutato, e un thread fermo fino a ~10 s (tocca anche C-49, ipotesi H1).
+  - css_scraper: il 429 diventa `HTTP_ERROR` con `details.status_code` (`:222-231`); chiama URL arbitrari, cioè host
+    diversi.
+  - justetf e borsa_italiana: le librerie non distinguono il 429 (`FETCH_ERROR`). justetf ha un backoff suo solo per
+    la riconnessione del WebSocket (1 → 60 s, `:104-107`).
+  - FX (ECB, FED, BOE, SNB): `httpx` più `raise_for_status()`; ogni `HTTPError` diventa `FXServiceError`.
+- **Richieste dal vivo** (`POST /assets/prices/current` → `services/assets/price_query.py:701`): cache di 120 s, poi
+  il fornitore con `concurrency=5` e `timeout=10`. Ogni errore è inghiottito (`logger.debug`) e si ripiega sull'ultimo
+  prezzo salvato (`source="db:last_known"`). `FACurrentPriceItem` (`schemas/prices.py:352-360`) non ha né codice
+  d'errore né tempo d'attesa.
+- **Scheduler** (`services/platform/scheduler/`):
+  - un job che solleva un'eccezione non salva lo stato e riparte al giro dopo, ogni 60 s, senza limite
+    (`scheduler.py:123-124`);
+  - un job che torna con errori per elemento avanza `last_run_at` e aspetta il suo intervallo (prezzo corrente:
+    10 min) o il prossimo slot (storico: anche il giorno dopo);
+  - nessun contatore d'errori; `JobState.last_error` resta sempre `None` (`jobs.py:73`, `:162`).
+- **Primitive esistenti**: `utils/runtime/rate_window.py` (`SlidingWindowLimiter`, di E per l'email: finestra
+  scorrevole in memoria, orologio iniettato, `RateDecision.retry_after` in secondi float). Altri «raffreddamenti» sono
+  locali e fatti ognuno a modo suo (`services/fx/catalog.py:25`, `services/assets/market_calendar.py:40`). Non c'è un
+  helper generico di backoff o di jitter.
+- **Frontend**: `startActivePolling` inghiotte gli errori e non cambia mai cadenza. I due chiamanti (`fetchLivePrices`
+  della lista, `pollLivePriceOnce` del dettaglio) inghiottono a loro volta l'errore, quindi l'helper non ne vede
+  nessuno. Nessun punto del frontend legge `Retry-After`.
+
+### Principio
+
+Una sola sede della decisione. Il **backend** sa quale fornitore è in pausa e non lo chiama: chiunque passi dal confine
+delle chiamate ai fornitori (scheduler, richieste dal vivo, sync manuale, ricerca, metadati, prova della
+configurazione) riceve subito `RATE_LIMITED` con il tempo d'attesa, senza I/O. Il **frontend** non tiene uno stato dei
+fornitori: rallenta sui propri errori e rispetta il tempo d'attesa che il backend gli comunica.
+
+### Z7a · La primitiva e la configurazione (Z)
+
+- `backend/app/utils/runtime/cooldown.py`, una foglia accanto a `rate_window.py` e nello stesso stile (orologio
+  iniettato, thread-safe, in memoria, `max_keys` con LRU):
+  - `RateLimitedError`: classe marcatore, con `retry_after: float | None` (secondi) e `scope: str | None`;
+  - `retry_after_seconds(value, now) -> float | None`: legge `Retry-After` nelle due forme di RFC 9110 (secondi e
+    data HTTP), `None` su un valore assente o sbagliato;
+  - `Cooldowns(base_s, max_s, *, hard_max_s=86_400, jitter=0.1, clock=time.time, rng=random.random)`, con chiave
+    `(dominio, fornitore, scope)`:
+    - `check(key) -> float`: 0 se si può chiamare, altrimenti i secondi che mancano. Alla scadenza passa **un solo
+      tentativo** (mezzo aperto) e gli altri chiamanti concorrenti aspettano il suo esito: la lista chiama fino a 5
+      asset insieme, lo scheduler 3, e senza questo ogni scadenza moltiplicherebbe i rifiuti;
+    - `refused(key, retry_after) -> float`: all'n-esimo rifiuto consecutivo l'attesa è `min(base × 2^(n−1), max)`;
+      `Retry-After` vale come minimo e può superare `max` fino a 24 h; si aggiunge un jitter dello 0–10 %, mai sotto
+      `Retry-After`. Restituisce l'attesa;
+    - `succeeded(key)`: azzera la chiave;
+    - `snapshot()`: lo stato per i log e per un pannello futuro.
+  - **Orologio di parete, non monotòno.** Su Fly `suspend` congela la VM, e il tempo sospeso può non entrare in
+    `time.monotonic()` (su Linux `CLOCK_MONOTONIC` non conta la sospensione): una pausa iniziata prima di una
+    sospensione bloccherebbe il fornitore anche dopo il risveglio, proprio quando l'istanza si sveglia per aggiornare.
+    Da verificare su Fly in Z2, dove lo stesso tema tocca il timer d'inattività.
+- `backend/app/services/platform/provider_cooldown.py`: l'istanza del processo, costruita con i valori letti al
+  momento della chiamata (come `INSTANCE_BUDGET` dell'email), più `reset()` per i test. Log: un WARNING quando una
+  pausa inizia o cresce (fornitore, scope, attesa, `Retry-After`), un INFO al primo successo dopo una pausa, DEBUG per
+  le chiamate saltate.
+- `backend/app/config/sleep_wake.py`, la sezione di Z (ci andranno anche le variabili di Z2, Z4, Z5 e Z6b):
+  - `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, default 60; **0 spegne** e ridà il comportamento di oggi;
+  - `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`, default 3600;
+  - un valore non valido ferma l'avvio con un codice (`PROVIDER_COOLDOWN_INVALID`), come
+    `LIBREFOLIO_SMTP_MAX_PER_HOUR`; il controllo si registra negli agganci di H (`config_audit.py`).
+  - Acceso di default per la decisione 34 («a prescindere»), che ha scartato l'alternativa «spento di default, alla
+    lettera della regola»: è un'eccezione consapevole alla regola della specifica del cloud, da scrivere in
+    `.env.example` e nella documentazione.
+- Test PURE: crescita 1, 2, 4… e tetto; `Retry-After` in secondi e come data, come minimo e sopra il tetto;
+  azzeramento; `base=0` spento; jitter nei limiti (generatore con seme); un solo tentativo alla scadenza; chiavi
+  separate per scope; il parser con valori sbagliati.
+
+### Contratto per X: `RATE_LIMITED`
+
+- **X1** · `services/assets/base.py`: `AssetRateLimitedError(AssetSourceError, RateLimitedError)` con
+  `error_code="RATE_LIMITED"`, `retry_after` e `scope`. È una sottoclasse: chi prende `AssetSourceError` continua a
+  prenderla.
+- **X2** · `services/fx/base.py`: `FXRateLimitedError(FXServiceError, RateLimitedError)`, con gli stessi attributi.
+- **X3** · Ogni fornitore traduce il suo segnale di «troppe richieste»:
+  - yahoo_finance: `YFRateLimitError` di yfinance e le parole chiave di oggi → `AssetRateLimitedError`, **senza
+    ritentativi nel thread**; gli altri errori transitori li conservano;
+  - css_scraper: 429 → `AssetRateLimitedError(retry_after=<Retry-After>, scope=<host dell'URL>)`, una pausa per sito
+    e non per tutto il fornitore;
+  - justetf e borsa_italiana: dove la libreria espone lo stato HTTP. `borsa-italiana-scraping` è nostra, quindi lì si
+    può aggiungere un'eccezione «troppe richieste»; altrimenti la lacuna resta scritta nella guida;
+  - i 4 fornitori FX: 429 → `FXRateLimitedError(retry_after=<Retry-After>)`.
+- **X4** · Un solo confine per dominio consulta `provider_cooldown`:
+  - asset: `call_provider(provider_code, fn, *, timeout, scope=None)` in `services/assets/core.py`, attorno a
+    `_run_provider_in_thread`, usata da **ogni** chiamata ai fornitori (dal vivo, refresh, metadati, ricerca anche in
+    streaming, prova della configurazione): prima `check` (in pausa → `AssetRateLimitedError` subito, senza thread),
+    poi `refused` o `succeeded`. Un hook facoltativo del plugin, `cooldown_scope(...)`, dà lo scope prima della
+    chiamata (css_scraper: l'host; default `None`);
+  - FX: `_fetch_provider` in `services/fx/sync.py`. Un fornitore in pausa diventa un errore di gamba senza I/O, e il
+    ripiego sulla rotta seguente c'è già;
+  - le cache restano prima del confine: un valore in cache si serve anche durante una pausa.
+- **X5** · Schemi:
+  - `FACurrentPriceItem` + `error_code: str | None` e `retry_after: float | None`; durante una pausa il prezzo salvato
+    resta come oggi (`source="db:last_known"`) e la risposta resta HTTP 200;
+  - `FARefreshResult` e `FXSyncPairResult` + `error_code` e `retry_after`;
+  - poi `api sync`.
+- **X6** · Test nel dominio di X:
+  - il confine: la seconda chiamata durante la pausa non chiama il fornitore (contatore); dopo la scadenza passa una
+    chiamata sola;
+  - la risposta dal vivo e il ripiego FX;
+  - una modalità «troppe richieste» in `mockprov` e `mockfx`, che serve anche a Z7b.
+  - Gli E2E non accendono mai una pausa vera sul backend condiviso della corsia: si stubba l'endpoint.
+- **X7** · Guida dei plugin asset e FX: «a un rifiuto per troppe richieste solleva l'eccezione, non riprovare nel
+  thread».
+- **X8** · La prova della configurazione (aggiunta il 15/10 su richiesta del coordinatore): la risposta porta
+  `error_code="RATE_LIMITED"` e `retry_after`, e la UI della prova mostra un messaggio chiaro con l'ora locale di
+  ripresa, per esempio «fornitore in pausa fino alle …», con una chiave i18n nuova nelle 4 lingue. Lì l'utente ha
+  chiesto un'azione esplicita.
+- **Dipendenza**: X parte dopo l'ingresso di Z7a, perché usa `RateLimitedError` e `provider_cooldown`.
+
+### Z7b · Scheduler (Z, dopo Z7a)
+
+- Nei risultati dei job, gli elementi con `error_code == "RATE_LIMITED"` contano come **rimandati**, non come errori.
+  `JobState` aggiunge `last_items_deferred` e `retry_at`, cioè la fine più vicina delle pause. Entrambi sono salvati in
+  `scheduler_state.json`, che si legge senza errori anche nei file vecchi senza questi campi. Il registro dei job
+  aggiunge `deferred` e `retry_at`.
+- Un job con elementi rimandati torna dovuto a `retry_at`, prima del suo giro regolare e mai dopo. Esempio: uno
+  storico rimandato alle 23:00 riprova alle 23:0x, invece che alle 06:00 del giorno dopo. Il nuovo giro costa poco
+  grazie alla cache e al recupero delle sole lacune per asset.
+- Un job che solleva un'eccezione oggi riparte ogni 60 s per sempre. Con Z7b `consecutive_failures` e
+  `next_attempt_at` lo fanno ripartire dopo 1, 2, 4… minuti, con un tetto di 60 min; per il prezzo corrente il tetto
+  è la sua frequenza. I contatori si azzerano al primo successo, e `last_error` viene scritto davvero.
+- Con gli altri lotti:
+  - Z3 e Z4: il recupero immediato e `wake-sync` usano lo stesso «dovuto». Un job in attesa di `retry_at` compare
+    quindi come «rimandato fino a T» nell'esito generico di `wake-sync`.
+  - Z2: una pausa non è lavoro in corso, quindi l'istanza può sospendersi.
+  - Z-7 (backlog): `retry_at` entrerà nel calcolo di `next_wake_at`.
+- Test `services scheduler-backoff`: rimandati e `retry_at`; job dovuto a `retry_at`; eccezioni con attesa crescente e
+  azzeramento; stato vecchio letto senza errori. Fino all'ingresso di X5 i test usano risultati finti.
+
+### Z7c · Frontend (Z)
+
+- `activePolling.ts`:
+  - `run` può restituire un esito `{ok?: boolean; notBefore?: number}`; un'eccezione vale `{ok: false}`.
+  - A ogni fallimento consecutivo il giro dopo si allontana: `min(intervallo × 2^k, LIVE_UPDATES_MAX_BACKOFF_MS)`,
+    con il tetto a 10 min in `cadence.ts`. La lista passa da 60 a 120, 240, 480, 600 s; il dettaglio da 30 s a 60 s e
+    così via fino a 600 s. Il conteggio si azzera al primo successo.
+  - `notBefore` è un minimo: il giro dopo non parte prima.
+  - La ripresa dopo una pausa rispetta l'attesa in corso. `pollNow`, chiesto dall'utente, passa sempre, e il suo esito
+    aggiorna i contatori.
+- `livePriceService.ts`:
+  - legge `error_code` e `retry_after`;
+  - `livePollOutcome(results)` dà un `notBefore` solo se **tutti** gli asset richiesti sono in pausa. Con fornitori
+    misti la lista va avanti: il backend non chiama quelli in pausa, e il giro costa poco;
+  - un 429 o un 503 del nostro backend con `Retry-After` dà `{ok: false, notBefore}`.
+- Le due pagine: `fetchLivePrices` e `pollLivePriceOnce` restituiscono l'esito invece di inghiottire l'errore, con
+  poche righe ciascuna. Si toccano **dopo il taglio FE5c di X**.
+- Nessun testo nuovo nella UI: durante una pausa resta l'ultimo prezzo, come oggi (D-Z7-2).
+- Test:
+  - Vitest con timer finti in `activePolling.test.ts`: crescita, tetto, azzeramento, `notBefore`, ripresa, `pollNow`;
+  - `livePriceService.test.ts`, nuovo, nella lista di core-unit;
+  - E2E `front-asset live-pause` con due casi nuovi: (g) un endpoint che risponde 500 dà richieste a intervalli che
+    raddoppiano fino al tetto; (h) con tutti gli asset `RATE_LIMITED` e `retry_after` 300 s, nessuna richiesta prima
+    di +300 s.
+
+### Decisioni (prese dal coordinatore il 15/10, attuazione della 34)
+
+> **Coordinatore, 15/10** (sintesi del suo messaggio): le decisioni D-Z7 sono l'attuazione della 34, già approvata dal
+> developer. I valori proposti vanno bene; durante la pausa resta l'ultimo prezzo, senza testi nuovi; la prova della
+> configurazione e la ricerca rispettano la pausa, e nella prova serve un messaggio chiaro, tipo «fornitore in pausa
+> fino alle …» (X8); lo scheduler di Z7b va bene così; l'eccezione alla regola «default invariato» si scrive in
+> `.env.example`, citando la decisione 34.
+
+| # | Domanda | Decisione |
+|---|---|---|
+| D-Z7-1 | Valori | ✅ Backend: base 60 s, tetto 1 h, `Retry-After` rispettato fino a 24 h, jitter 0–10 % fisso. Frontend: raddoppio fino a 10 min |
+| D-Z7-2 | Cosa vede l'utente durante una pausa | ✅ Niente di nuovo: l'ultimo prezzo salvato, come oggi |
+| D-Z7-3 | Prova della configurazione e ricerca | ✅ Rispettano la pausa: nessuna chiamata, rispondono `RATE_LIMITED` con l'attesa; nella prova un messaggio con l'ora di ripresa (X8) |
+| D-Z7-4 | Scheduler | ✅ Elementi rimandati riprovati a `retry_at`, entro il giro regolare; eccezioni con attesa crescente, tetto 60 min |
+
+### Rischi
+
+- Lo stato è per processo: con N worker ognuno impara la pausa da sé, al più un rifiuto in più per worker. L'immagine
+  Docker avvia un worker solo.
+- Le parole chiave di yfinance possono dare falsi positivi: al peggio una pausa di 1 min, con un WARNING nel log.
+- Il singleton vive nel backend condiviso dei test: una pausa non deve passare da un test all'altro. Per questo i test
+  della pausa sono PURE, in processo, con `reset()`, e gli E2E stubbano l'endpoint (classe d'isolamento da dichiarare).
+- Togliere i ritentativi nel thread di yfinance sul 429 ha un costo: un'ondata breve che oggi passava al terzo
+  tentativo aspetterà 1 minuto. In cambio spariscono i `sleep` bloccanti nel thread (C-49, H1).
+
+### Lotti e superfici
+
+| Lotto | Chi | Superfici | Dipende da | Checkpoint |
+|---|---|---|---|---|
+| Z7a | Z | `utils/runtime/cooldown.py`, `services/platform/provider_cooldown.py`, `config/sleep_wake.py`, `.env.example` (sezione Z), test PURE, doc dev della primitiva | autorizzazione al codice; agganci di H solo per il controllo d'avvio | ingresso subito: sblocca X |
+| X-RL | X | X1–X7 | Z7a | di X |
+| Z7b | Z | `services/platform/scheduler/` | Z7a; X5 per i campi | dopo X-RL |
+| Z7c | Z | `live-updates/`, `livePriceService.ts`, le due pagine | helper subito; servizio e pagine dopo X5 + `api sync` e dopo FE5c | dopo X-RL |
+
+**Conflitti.**
+
+- X: le pagine dopo FE5c, `services/assets/*`, gli schemi, i fornitori. Sono tutti di X, e il contratto separa le parti.
+- H: `config_audit.py` per il controllo d'avvio, `.env.example`.
+- E: nessuno. `rate_window.py` resta com'è, e la primitiva nuova gli sta accanto.
+- Colori: nessuna UI nuova.
+
+**Documentazione** (docs-writer):
+
+- `developer/backend/assets/architecture.md`: il confine e le pause;
+- le guide dei plugin asset e FX (X7);
+- la pagina dello scheduler: rimandati e attesa crescente;
+- `live-ticker.md`: il rallentamento;
+- la pagina delle variabili d'ambiente.
+
+**Definizione di fatto.**
+
+- Un 429 di un fornitore lo mette in pausa per tutti i chiamanti, e durante la pausa non parte nessuna chiamata
+  (contatore nei test).
+- Lo scheduler rimanda gli elementi e li riprova a `retry_at`.
+- Il polling raddoppia l'attesa sugli errori e rispetta `notBefore`.
+- Con `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=0` il backend torna al comportamento di oggi.
+- Doc EN e `.env.example` aggiornati.
+
+## Z6b — disegno: spegnimento con un tempo massimo (15/10, prima del codice)
+
+> **Via del coordinatore** (15/10 ~16:10): «disegno di Z7 adesso, poi quello di Z6b». **Decisione 35, alla lettera**
+> (nota dev): «si mi pare un ottima idea di coerenza.» Quindi circa 8 s per tutte le installazioni. Solo disegno: il
+> codice aspetta l'autorizzazione del developer, come Z7a.
+
+### Prove di Z6a finora
+
+- 9 cicli di vita del backend della corsia, su spec singole, tutti puliti: gruppo vuoto in 0,09–2,7 s, e le più lente
+  sono le spec degli asset (2,3–2,7 s). L'avviso non è mai comparso.
+- Dal 15/10 il coordinatore cerca `Shared backend ignored SIGTERM for` nelle sue run di categoria.
+
+### Cosa dice il codice (verificato il 15/10 su `ef5e96eb5`, uvicorn 0.52.4, Python 3.13.16)
+
+1. **Runner** (`scripts/test_runner/_server.py:312-334`): manda SIGTERM a tutto il gruppo di processi, aspetta il
+   processo principale fino a 5 s, poi il gruppo per altri 5 s. L'avviso compare se un membro del gruppo è ancora vivo.
+   La grazia è di 5 s, 30 s con coverage (`:49-51`).
+2. **uvicorn, al primo SIGTERM o SIGINT** (`uvicorn/server.py:342-347`): smette di accettare connessioni e aspetta le
+   richieste in corso **senza limite**, perché `timeout_graceful_shutdown` di default è `None` (`:287-298`); poi
+   esegue lo spegnimento del lifespan. Un secondo SIGINT forza l'uscita (`force_exit`), un secondo SIGTERM no.
+3. **Alla fine** uvicorn ripristina i gestori originali e rilancia il segnale (`capture_signals`, `:323-340`):
+   - con SIGTERM e il gestore di default il processo finisce subito, senza aspettare i thread. Nel caso del runner
+     l'ipotesi H1 (thread dei fornitori) è quindi esclusa;
+   - con SIGINT (Ctrl+C, e il default di Fly) arriva un `KeyboardInterrupt`: `asyncio.Runner` aspetta i thread
+     dell'executor fino a 300 s (`THREAD_JOIN_TIMEOUT`), poi l'uscita dell'interprete li unisce senza limite. Qui H1
+     vale: un thread di `_run_provider_in_thread` (timeout di 10–60 s, e il thread prosegue dopo il suo `wait_for`)
+     tiene vivo il processo.
+4. **Lifespan** (`backend/app/main.py:310-334`), in quest'ordine:
+   - `shutdown_tool_executor()`;
+   - `shutdown_event.set()` e `await scheduler_task` **senza limite**: un job in corso finisce prima;
+   - i registri dei fornitori;
+   - `shutdown_brim_parse_pool(wait=True)`, che aspetta i parse in corso. Il commento spiega perché: un SIGKILL
+     salterebbe l'atexit e lascerebbe orfani i worker;
+   - `shutdown_quant_worker_pools()`, che aspetta `pool.shutdown()`;
+   - `shutdown_market_holidays()`, che chiude subito il suo processo;
+   - `close_all_caches()`.
+5. **Avvio**:
+   - Docker usa `CMD ["uvicorn", …]` dietro `entrypoint.sh` (`exec gosu`), senza `--timeout-graceful-shutdown` e senza
+     `STOPSIGNAL`; i file compose non hanno `stop_grace_period` (Docker manda SIGTERM, poi SIGKILL dopo 10 s);
+   - `dev.py server` usa la CLI di uvicorn (`dev.py:370-401`);
+   - la CLI legge le opzioni anche dall'ambiente (`auto_envvar_prefix="UVICORN"`, `uvicorn/main.py:61`), quindi
+     `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` vale in Docker, in `dev.py` e sotto coverage.
+6. **Fly**: `kill_signal` di default è SIGINT, `kill_timeout` 5 s (fino a 300 s sulle CPU condivise).
+
+### Ipotesi riviste per C-49
+
+- **H2 · richieste in volo**: la più probabile. Le spec degli asset chiamano i fornitori veri, e uvicorn aspetta il
+  gestore anche quando il client se n'è andato. Una `POST /prices/current` (timeout di 10 s per fornitore) o una sync
+  (fino a 55–60 s) ancora aperta a fine run supera i 5 s.
+- **H3 · passi del lifespan senza scadenza**: nei test lo scheduler è spento (`LIBREFOLIO_NO_SCHEDULER`). Restano i pool
+  BRIM, quant e tool, se c'è un lavoro in corso.
+- **H4 · altri membri del gruppo**: ricevono anch'essi SIGTERM dal runner. Contano solo se lo ignorano o se nascono
+  durante lo spegnimento, per esempio un worker `spawn` che sta ancora importando l'app.
+- **H1 · thread dei fornitori**: esclusa per il runner (SIGTERM), valida con SIGINT: Fly con il default, e Ctrl+C in
+  sviluppo.
+- **H5 · coverage**: solo con la coverage attiva, che ha una grazia di 30 s.
+
+### Disegno
+
+- **Una manopola**: `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` in `config/sleep_wake.py`, default 8 (decisione 35, per
+  tutti); 0 vuol dire nessun limite, come oggi, per il debug.
+- **Il drenaggio (H2)**: `timeout_graceful_shutdown` vale 3/8 del budget, cioè 3 s con 8. Si passa a uvicorn come
+  `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` quando non è già impostata:
+  - in `entrypoint.sh`, con l'aritmetica della shell e senza avviare Python in più;
+  - nell'ambiente di `dev.py server`, calcolata da `config/sleep_wake.py`.
+  Alla scadenza uvicorn cancella le richieste rimaste, anche lo SSE della ricerca: la cancellazione arriva al gestore,
+  e una transazione SQLite aperta si annulla.
+- **Il lifespan (H3)**: i passi condividono una scadenza, il resto del budget (5 s con 8). Ogni passo riceve il tempo
+  che resta e non lo supera:
+  - scheduler: `shutdown_event.set()`, poi `wait_for(scheduler_task, restante)`; alla scadenza, `cancel()`. Il job
+    interrotto non salva lo stato e riparte al prossimo avvio (i job sono idempotenti, `leader.py`); il registro dei
+    job scrive «interrotto»;
+  - tool, BRIM e quant: un'attesa limitata, poi `terminate`, poi `kill` dei loro processi. Così resta coperto il motivo
+    del `wait=True` di BRIM: niente processi orfani;
+  - l'ordine: prima il lavoro (scheduler e tool), poi i fornitori, i pool, le festività e le cache.
+- **La rete di sicurezza (H1, H4 e ogni caso nuovo)**: un watchdog in `services/platform/shutdown_budget.py`, armato al
+  primo SIGTERM o SIGINT. Avvolge il gestore che uvicorn ha installato prima dell'avvio del lifespan, e continua a
+  chiamarlo. Allo scadere del budget, contato dal segnale:
+  - scrive nel log i superstiti: i thread vivi, i processi figli, la fase in corso;
+  - termina i figli (psutil: `terminate`, poi `kill` dopo 0,5 s);
+  - salva la coverage se è attiva, svuota i log;
+  - poi `os._exit(1)`, perché l'uscita è forzata e il codice lo deve dire.
+  Copre anche SIGINT, dove oggi i thread dei fornitori possono tenere vivo il processo per minuti. Se avvolgere il
+  gestore si rivelasse fragile, il ripiego è armare il watchdog all'inizio dello spegnimento del lifespan, con il
+  budget meno il drenaggio.
+- **Il runner** (superficie del coordinatore): la grazia normale passa da 5 a 10 s, come Docker. Con il budget di 8 s
+  garantito dall'app, l'avviso «ignored SIGTERM» diventa un segnale vero: vuol dire che l'app ha mancato il suo budget.
+- **Deploy**:
+  - nei file compose, `stop_grace_period: 10s` esplicito;
+  - per Fly, nella documentazione del profilo managed: `kill_signal = "SIGTERM"` e `kill_timeout = 10`. Il fly.toml del
+    pannello è fuori dal repo, e con i default di Fly (SIGINT, 5 s) il budget di 8 s non basta.
+
+### Test (i rossi prima)
+
+- **`services shutdown-budget`**, azione nuova, PURE: avvia un suo processo su una porta libera, senza il backend
+  condiviso. Un'app minima parte con la CLI di uvicorn e con il modulo del budget. I casi:
+  - (a) al SIGTERM una richiesta di 30 s è in volo: il processo esce entro budget + 1 s, e il gestore riceve la
+    cancellazione;
+  - (b) un passo del lifespan non finisce: il processo esce entro budget + 1 s, e il log nomina il passo;
+  - (c) SIGINT con un thread non daemon bloccato: esce entro budget + 1 s, mentre oggi resterebbe vivo;
+  - (d) un processo figlio che ignora SIGTERM: viene terminato prima dell'uscita, senza orfani;
+  - (e) budget 0: nessun limite; si controlla solo che il watchdog non intervenga entro un tempo breve.
+  I rossi: oggi (a)–(d) falliscono.
+- Unit PURE delle scadenze, con un orologio finto: la ripartizione del budget, e un tempo restante mai negativo.
+- Evidenza nel runner: dopo l'ingresso, le run di categoria del coordinatore, con la grazia nuova.
+
+### Superfici e dipendenze
+
+| Superficie | Di chi | Cosa |
+|---|---|---|
+| `services/platform/shutdown_budget.py`, `config/sleep_wake.py` | Z | il watchdog, la ripartizione del budget, la manopola |
+| `backend/app/main.py`, la sequenza di spegnimento | H, attraverso i suoi agganci (CP2b) | i passi con la scadenza |
+| `entrypoint.sh`, `docker-compose*.yml` | H e B | la variabile di uvicorn, `stop_grace_period` |
+| `dev.py server`, `scripts/test_runner/_server.py` | coordinatore | la variabile di uvicorn, la grazia a 10 s |
+| `services/brim/brim_parse_pool.py` | W | l'attesa limitata |
+| `services/risk/quant/workers.py` | J | l'attesa limitata |
+| `services/tools/executor.py` | il proprietario di `services/tools/` | l'attesa limitata |
+| doc di deploy (Docker, Fly) e delle variabili | docs-writer | `stop_grace_period`, `kill_signal`, `kill_timeout`, la manopola |
+
+Z6b dipende dagli agganci di H in `main.py` (CP2b). Per ridurre i passaggi di mano propongo che i limiti dei tre pool
+li scriva Z, con un'interfaccia comune `shutdown(deadline)` concordata dal coordinatore con W, J e il proprietario dei
+tool.
+
+### Rischi
+
+- Cancellare le richieste dopo 3 s può interrompere una scrittura lunga, come un import BRIM o una sync: la transazione
+  si annulla e l'utente rifà l'operazione. Oggi, con Docker, la stessa scrittura muore dopo 10 s per un SIGKILL, che è
+  peggio.
+- `os._exit` salta gli atexit. Per questo il watchdog chiude i figli, salva la coverage e svuota i log prima di uscire.
+- Avvolgere il gestore dei segnali dipende dal comportamento di `capture_signals` in uvicorn 0.52.4: un test lo blocca
+  alla versione fissata, e c'è il ripiego descritto sopra.
+- Il budget di 8 s supera il `kill_timeout` di default di Fly (5 s): senza la configurazione consigliata, Fly uccide
+  prima, come oggi.
+
+### Definizione di fatto
+
+- Con il budget di default il processo esce entro 8 s da SIGTERM o da SIGINT in tutti i casi di prova, senza figli
+  orfani.
+- Con la grazia di 10 s il runner non mostra l'avviso nelle run di categoria.
+- `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=0` ridà il comportamento di oggi.
+- Doc EN aggiornata: variabili d'ambiente, deploy con Docker e con Fly; `.env.example` aggiornato.
+
+## Z7a — la primitiva delle pause (codice, autorizzato il 15/10)
+
+> **Autorizzazione del developer, alla lettera** (15/10 16:3x, inoltrata dal coordinatore; risposta alla domanda
+> «Posso far partire Z con il codice di Z7a?»): «Sì, Z parta con Z7a».
+>
+> - **Base**: piano committato in `4992b864b`, poi il merge di `dev_release2` a `dae4de4fa` (W, i colori di L-10, i
+>   journal del coordinatore): HEAD `42713788e`, senza conflitti.
+> - **Superfici**: `backend/app/utils/runtime/cooldown.py`, `backend/app/services/platform/provider_cooldown.py`,
+>   `backend/app/config/sleep_wake.py`, la sezione di Z in `.env.example` con l'eccezione della decisione 34, i test e
+>   le loro voci nel catalogo del runner.
+> - X fa nascere `call_provider` nel suo CP10 con la firma di questo disegno, e aggancia il registro in X1–X8: Z non
+>   tocca `services/assets/` né `services/fx/`.
+
+### Contratto del codice
+
+- `utils/runtime/cooldown.py` (foglia, nessun import dai servizi o dalla configurazione):
+  - `RateLimitedError(Exception)`, il marcatore: `__init__(*args, retry_after=None, scope=None)`, con gli attributi
+    omonimi; si combina con le eccezioni di dominio (`AssetSourceError` chiama `super().__init__(message)`);
+  - `retry_after_seconds(value, *, now=None) -> float | None`: secondi (anche decimali) o data HTTP; una data passata
+    vale 0; `None` su un valore assente, vuoto, negativo, non finito o illeggibile;
+  - `CooldownState(key, refusals, remaining, trial_in_flight)`, immutabile, per `snapshot()`;
+  - `Cooldowns(base_seconds, max_seconds, *, hard_max_seconds=86_400, jitter=0.1, trial_seconds=60, max_keys=10_000,
+    clock=time.time, rng=random.random)`; argomenti fuori dominio → `ValueError`. I metodi:
+    - `check(key) -> float`: 0 se si può chiamare. Durante una pausa restituisce il tempo che manca; alla scadenza dà
+      il posto di prova a un chiamante solo, e agli altri il tempo che resta alla prova;
+    - `refused(key, retry_after=None, *, base_seconds=None, max_seconds=None) -> float`: l'attesa
+      `max(min(base × 2^(n−1), max), min(retry_after, hard_max))`, più un jitter in `[0, jitter]` della stessa,
+      dentro `hard_max`. Un rifiuto che arriva più di `max` dopo la fine della pausa precedente riparte da n = 1. Un
+      rifiuto che arriva **mentre la pausa è in corso** viene da una chiamata già partita: non conta e non accorcia la
+      pausa, e solo un `Retry-After` che finisce dopo la allunga. Così una raffica di chiamate concorrenti rifiutate
+      insieme mette in pausa una volta sola (regola aggiunta il 15/10, su una domanda di test-author: senza, 5 chiamate
+      in parallelo partivano da n = 5, cioè 960 s invece di 60);
+    - `succeeded(key) -> int`: dimentica la chiave e restituisce i rifiuti che aveva. Durante una pausa in corso non fa
+      niente e restituisce 0, perché la risposta viene da una chiamata già partita;
+    - `released(key)`: libera il posto di prova di un esito senza verdetto (un altro errore, un timeout);
+    - `snapshot()`, `reset(key)`, `clear()`, `len()`.
+  - Se l'orologio va indietro, il tempo che manca non supera mai l'attesa registrata. Il limite `max_keys` è LRU.
+    Thread-safe.
+- `config/sleep_wake.py`, la sezione di Z:
+  - `SleepWakeConfigError(variable, code, message)`;
+  - `provider_cooldown_base_seconds()`: `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, un intero ≥ 0, default 60, con 0
+    spento; altrimenti `PROVIDER_COOLDOWN_BASE_INVALID`;
+  - `provider_cooldown_max_seconds()`: `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`, un intero da 1 a 86 400, default
+    3600; altrimenti `PROVIDER_COOLDOWN_MAX_INVALID`;
+  - `provider_cooldown_settings()`: le due insieme, `ProviderCooldownSettings(base_seconds, max_seconds)` con
+    `enabled`; un tetto sotto la base, con le pause accese, dà `PROVIDER_COOLDOWN_MAX_INVALID`.
+- `services/platform/provider_cooldown.py`:
+  - l'istanza `PROVIDER_COOLDOWNS`, letta al momento della chiamata, così un test la sostituisce;
+  - la chiave `(dominio, fornitore, scope)`;
+  - `wait_before_call`, `record_refusal(…, retry_after=None)`, `record_success`, `record_no_verdict`,
+    `cooldown_snapshot`, `reset_provider_cooldowns`;
+  - la configurazione si legge a ogni chiamata; con le pause spente non si registra nulla e non si salta nulla;
+  - log: WARNING a ogni pausa che inizia o cresce, INFO al primo successo dopo una pausa, DEBUG per le chiamate
+    saltate.
+
+> **Fuori pista (decisione)**: un valore non valido delle due variabili non ferma l'avvio, come diceva il disegno:
+> scrive un errore nel log, una volta per valore, e si usano i default, come fa l'email. Due motivi: il controllo
+> d'avvio sta in `config_audit.py` di H, fuori dalle superfici assegnate; e un valore sbagliato qui non mette a
+> rischio niente. Se servirà, un `ConfigCheck` si aggiunge dopo, con H.
+
+### Passi di Z7a
+
+1. Test di `test-author`:
+   - `backend/test_scripts/test_utilities/test_cooldown.py`, azione `utils cooldown`;
+   - `backend/test_scripts/test_services/test_provider_cooldown.py`, azione `services provider-cooldown`;
+   - entrambi registrati nel catalogo, PURE. ✅ 2026-10-15
+
+   > **Note implementazione**: 41 test (CDW-001…041, 112 casi) e 23 test (PCD-001…023, 66 casi). Le voci sono in
+   > `scripts/test_runner/_backend_utils.py` e `_backend_services.py`, solo aggiunte, con `isolation="pure"` e il
+   > perché in un commento. Il log «una volta per variabile e codice» si prova in un interprete nuovo (PCD-022,
+   > `structlog.testing.capture_logs`), come `test_jwt_secret_blank.py`. `check-orphans` verde: 299 test raggiungibili.
+   > black pulito; ruff segnala un I001 per file finché i moduli non esistono.
+   >
+   > **Fuori pista**: test-author ha trovato un difetto del contratto. Un rifiuto durante una pausa in corso contava
+   > come consecutivo, quindi 5 chiamate in parallelo partivano da n = 5 (960 s). Il contratto è corretto sopra, con la
+   > regola della pausa in corso; i test sono stati rivisti (CDW-036…041, PCD-023). Le letture fissate da test-author:
+   > - il jitter sopra il tetto, fino a 3960 s, è voluto;
+   > - il decadimento si misura dalla fine estesa;
+   > - un rifiuto che non conta segna comunque la chiave come usata (LRU);
+   > - con una configurazione non valida si usa la coppia di default intera.
+2. Rossi: i moduli non esistono, i test non importano. ✅ 2026-10-15
+
+   > **Note implementazione**: `dev.py test --test-port 6186 --data-dir /tmp/librefolio-r13-z utils cooldown` →
+   > exit 1, `ModuleNotFoundError: No module named 'backend.app.utils.runtime.cooldown'`;
+   > `… services provider-cooldown` → exit 1, `No module named 'backend.app.config.sleep_wake'`. Entrambi alla raccolta,
+   > nessun test eseguito. Log: `/tmp/libreFolio_z7a_red_*.log`.
+3. Codice dei tre moduli. ✅ 2026-10-15
+
+   > **Note implementazione**: scritti prima in bozza fuori dal repo (cartella di sessione `files/z7a-draft/`), così i
+   > rossi restavano veri. Una prova mia in `/tmp` copriva crescita, raffica, estensione, prova unica, LRU, thread e
+   > `Retry-After`. Poi copiati in `backend/app/utils/runtime/cooldown.py`, `backend/app/config/sleep_wake.py` e
+   > `backend/app/services/platform/provider_cooldown.py`. Sono gli unici file di prodotto toccati: niente in
+   > `services/assets/` né in `services/fx/`. Le docstring di modulo dicono il perché dell'orologio di parete, della
+   > prova unica e della regola della pausa in corso.
+4. Verdi, più ruff e black sui file nuovi. ✅ 2026-10-15
+
+   > **Note implementazione** (corsia 6186, `nice -n 15`, un file alla volta):
+   > - `utils cooldown` **112 passati** in 1,6 s; `services provider-cooldown` **66 passati** in 3,2 s;
+   > - le guardie toccate dal lotto: `services config-env-example` 36/36, `utils runtime-isolation` 195/195;
+   > - ruff e black puliti sui 7 file del lotto (3 moduli, 2 test, 2 file del runner);
+   > - `dev.py lint --dead-code --scope backend` esce 1 come prima, per i reperti già presenti. Di nuovi ce ne sono 8,
+   >   tutti nei due moduli: le sei funzioni del servizio, `RateLimitedError` e `retry_after_seconds`. Li usano solo i
+   >   test finché X non aggancia il confine (X1–X4); vale lo stesso per le funzioni dell'email di E;
+   > - porta 6186 libera.
+5. `.env.example`, poi la doc dev della primitiva (`docs-writer`). ✅ 2026-10-15 (`.env.example`); doc rimandata
+
+   > **Note implementazione**: nella sezione «Sleep and Wake» di `.env.example` le due variabili, commentate,
+   > sostituiscono «No options yet.»: default, 0 per spegnere, `Retry-After` fino a un giorno, e l'eccezione alla
+   > regola del default invariato, con la decisione 34 citata.
+   >
+   > **Fuori pista**: la doc (la pagina admin `configuration.en.md`, che ha le traduzioni, e quella d'architettura) non
+   > l'ho scritta ora. Descriverebbe un comportamento che non esiste finché X non aggancia il confine: senza X1–X4 le
+   > variabili non hanno effetto. È nel backlog come Z-9, da fare con l'aggancio.
+6. Checkpoint FROZEN. ✅ 2026-10-15
+7. Ingresso: base aggiornata, file condivisi, revisione combinata. ✅ 2026-10-15
+
+   > **Note implementazione**:
+   > - il coordinatore ha committato Z7a (`9dbd1cc34` codice, `ce2763c4c` journal) e approvato le scelte 1–3: un
+   >   valore non valido finisce nel log senza fermare l'avvio, la doc va con l'aggancio (Z-9), il CHANGELOG con X o
+   >   con Z7b. Poi ha fuso `dev_release2` a `a4d1884b4` (J, A6a, il banner del Lab): HEAD `ef013ba18`, senza
+   >   conflitti, con le mie voci del catalogo intatte accanto alle loro;
+   > - file condivisi, scritti su suo via: le docstring di `utils/runtime/__init__.py` (con `rate_window`, che mancava)
+   >   e di `services/platform/__init__.py` (con la sonda di prontezza, che mancava), e
+   >   `.github/instructions/backend.instructions.md`, nei tre punti che elencano quei pacchetti;
+   > - revisione combinata, una prova alla volta con `nice -n 15`: `check-orphans` verde (410 frontend, 304
+   >   backend); `utils cooldown` 112/112; `services provider-cooldown` 66/66; `services config-env-example` 36/36;
+   >   `utils runtime-isolation` 195/195; ruff e black puliti sui due `__init__`; porta 6186 libera.

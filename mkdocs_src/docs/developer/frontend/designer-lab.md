@@ -114,6 +114,10 @@ scripts/visual_review/designer_live.sh
 
 `--test` already serves the debug build: the Lab is there without the script's `--debug` option.
 
+`./dev.py server` lists `http://localhost:<port>/designer-lab` in its «Available endpoints» whenever the
+build it serves holds the Lab's [marker](#release-builds): a `--test` or `--debug` build, not a release or
+`LF_DESIGNER_LAB=0` build. `./dev.py front dev` (port 5173) prints it too, unless `LF_DESIGNER_LAB=0`.
+
 !!! tip "One address for every tab"
 
     The state and the picker's messages live in `localStorage` and travel through the `storage` event, both

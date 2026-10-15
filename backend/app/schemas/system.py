@@ -125,3 +125,7 @@ class InstanceBlockResponse(StrictModel):
 
     blocked: bool = Field(description="Whether the hosting provider blocked this instance: then every API call but a few answers 423")
     deletion_date: date | None = Field(default=None, description="The day the hosting provider will delete this instance and its data, when it gave one")
+    billing_url: str | None = Field(
+        default=None,
+        description="Where the hosting provider's customer manages the subscription (LIBREFOLIO_BILLING_URL), for administrators only: null for other users, and when it is not set or not a valid http(s) address",
+    )
