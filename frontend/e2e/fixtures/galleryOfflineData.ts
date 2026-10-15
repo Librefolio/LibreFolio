@@ -59,9 +59,9 @@ export interface OfflineFxProvider {
 }
 
 /**
- * The catalogue as the backend builds it (api/v1/fx.py, `list_providers`): every installed provider but the hidden
- * MANUAL, MOCKFX and MOCKFX_FAIL, in registration order (the registry imports fx_providers/*.py sorted by file name),
- * each field read from the provider's class in backend/app/services/fx_providers/.
+ * The catalogue as the backend builds it (api/v1/fx/providers.py, `list_providers`): every installed provider but the
+ * hidden MANUAL, MOCKFX and MOCKFX_FAIL, in registration order (the registry imports the entries of fx_providers/ — one
+ * folder per provider — sorted by name), each field read from the provider's class in backend/app/services/fx_providers/.
  *
  * Only `target_currencies` comes from a network call in the backend (`get_supported_currencies`). FED and BOE answer it
  * from a static map in their own code (`CURRENCY_SERIES`), reproduced here whole. ECB and SNB load it live:

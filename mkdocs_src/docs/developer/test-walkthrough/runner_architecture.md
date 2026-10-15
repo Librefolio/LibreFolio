@@ -107,8 +107,8 @@ make_category(
 
 add_test(
     "auth", ...,
-    exclusive_because="rewrites global_settings.enable_registration; while it is False "
-                      "every concurrent user creation fails",
+    exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: "
+                      "a concurrent unit would register against whatever value this one left behind",
 )
 ```
 
@@ -135,7 +135,11 @@ is small because an exclusive has to survive being written down.
 
 | Unit | Why it cannot be scoped |
 |---|---|
-| `api auth` | rewrites `global_settings.enable_registration` — an **instance-wide flag**, not a per-user row. While it is `False` every concurrent user creation fails, and a test that verifies closed registration necessarily owns the instance. |
+| `api auth` | rewrites `global_settings.registration_mode` — **one row shared by every user**, not a per-user row. A concurrent unit would register against whatever value this one left behind (`disabled` while it checks closed registration), and a test that verifies a registration mode on the lane's server necessarily owns the instance. |
+
+The units that came with the registration modes show the other way out: `api registration` and `api users-admin`
+run every case that needs another mode, an accounts variable or a user limit in-process, on a private database, and
+touch only their own accounts and tokens on the lane's server, so they stay WRITE-SCOPED with no exclusive.
 
 Two claims that look like reasons and are not:
 
