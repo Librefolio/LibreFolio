@@ -34,6 +34,13 @@ what it may not convert (point 47 of release 1.3). The contract pinned here:
    conversion the foreign key check of the whole database failed the run — the backup kept, at every start — and on
    their own they stayed broken under a ``clean`` outcome. A row of another type whose link names an existing row is
    left untouched (guard).
+9. The offline script, ``python -m backend.app.db.post_migration`` (W-B23): its log reaches stdout as the server
+   writes it, one JSON object per line, among its summary lines (``Fix orphan_pair_halves: applied``). A real run
+   prints one line per changed row, ``converted`` or ``unlinked`` with its ``transaction_id``, and the closing
+   ``Post-migration fixes applied and verified`` with ``seconds``; a dry run prints the detection warning with its
+   ``conversions``, no line per row, and writes nothing. RED until ``__main__`` configures logging: today the INFO
+   lines are dropped and the warning reaches stderr only, as plain text, through Python's last-resort handler.
+   The script runs at the INFO level whatever the shell exports (``LIBREFOLIO_LOG_LEVEL``).
 
 The databases. One is built at head by the real migrations — ``alembic upgrade head`` in a child process, always
 with ``-x sqlalchemy.url=``, as test_post_migration.py does — and copied for each test. The rows are written with
@@ -47,6 +54,7 @@ test_post_migration.py: nothing here can reach the lane's database.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -199,6 +207,37 @@ def _alembic_upgrade_head(db: Path) -> None:
         check=False,
     )
     assert completed.returncode == 0, f"setup: alembic upgrade head failed on {db}\n{completed.stdout[-2000:]}\n{completed.stderr[-4000:]}"
+
+
+def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
+    """``python -m backend.app.db.post_migration`` with ``args`` in a child process, as test_post_migration.py runs it — at the INFO level, whatever the shell exports."""
+    return subprocess.run(
+        [sys.executable, "-m", "backend.app.db.post_migration", *args],
+        cwd=PROJECT_ROOT,
+        env={**_child_env(), "LIBREFOLIO_LOG_LEVEL": "INFO"},
+        capture_output=True,
+        text=True,
+        timeout=CHILD_TIMEOUT,
+        check=False,
+    )
+
+
+def _output(completed: subprocess.CompletedProcess[str]) -> str:
+    """What a child process said, for an assertion message."""
+    return f"exit {completed.returncode}\n--- stdout\n{completed.stdout[-3000:]}\n--- stderr\n{completed.stderr[-3000:]}"
+
+
+def _json_lines(text: str) -> list[dict[str, Any]]:
+    """The lines of ``text`` that are JSON objects — log lines as the server writes them — in order; the others are skipped."""
+    found = []
+    for line in text.splitlines():
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            found.append(value)
+    return found
 
 
 # =============================================================================
@@ -782,3 +821,61 @@ def test_a_row_of_another_type_whose_link_names_an_existing_row_is_untouched(hea
     assert run.report.outcomes.get(FIX) == "applied", NOT_APPLIED
     assert {label: run.rows_after[ids[label]] for label in labels} == {label: run.rows_before[ids[label]] for label in labels}
     assert [warning.get("unlinked_only") for warning in run.warnings()] == [[]]
+
+
+# =============================================================================
+# 9. THE OFFLINE SCRIPT'S LOG (W-B23: RED until __main__ configures logging)
+# =============================================================================
+
+
+def _summary_says(completed: subprocess.CompletedProcess[str], outcome: str) -> bool:
+    """Whether the script printed its summary line ``Fix orphan_pair_halves: <outcome>``, on a line of its own."""
+    return re.search(rf"^Fix {FIX}: {outcome}\s*$", completed.stdout, re.MULTILINE) is not None
+
+
+def _expected_conversions(ids: dict[str, int]) -> dict[str, list[int]]:
+    """The detection warning's ``conversions`` for the lone halves of ``_plant_orphans``: ids by ``<type>-><type>``."""
+    conversions: dict[str, list[int]] = {}
+    for kind, (from_type, to_type) in CONVERSIONS.items():
+        conversions.setdefault(f"{from_type}->{to_type}", []).extend(ids[f"{kind}, {how}"] for how in HOW)
+    return {key: sorted(found) for key, found in conversions.items()}
+
+
+def test_the_offline_script_prints_a_json_line_per_changed_row_and_the_closing_line(head: Path, tmp_path: Path) -> None:
+    """Contract 9 (RED): a real run exits 0 and prints, among its summary lines, one JSON line per row it changed — ``converted`` or ``unlinked``, with its ``transaction_id`` — and the closing ``Post-migration fixes applied and verified`` with ``seconds``.
+
+    Today ``__main__`` configures no logging: the INFO lines go nowhere, and a manual run says what it did
+    only through its summary.
+    """
+    db = _copy(head, tmp_path)
+    ids = _plant_orphans(db)
+
+    completed = _run_script("--db", str(db), "--data-dir", str(tmp_path / "data"))
+    lines = _json_lines(completed.stdout)
+
+    assert completed.returncode == 0, _output(completed)
+    assert _summary_says(completed, "applied"), _output(completed)
+    expected_rows = [(CONVERTED, ids[label]) for label in CONVERTED_LABELS] + [(UNLINKED, ids[label]) for label in UNLINKED_ONLY]
+    assert sorted((line.get("event"), line.get("transaction_id")) for line in lines if line.get("event") in (CONVERTED, UNLINKED)) == sorted(expected_rows), _output(completed)
+    closing = [line.get("seconds") for line in lines if line.get("event") == APPLIED_EVENT]
+    assert len(closing) == 1 and isinstance(closing[0], (int, float)) and closing[0] >= 0, f"one closing line, with seconds >= 0: {closing}\n{_output(completed)}"
+
+
+def test_the_offline_dry_run_prints_the_detection_warning_as_a_json_line(head: Path, tmp_path: Path) -> None:
+    """Contract 9 (RED): ``--dry-run`` exits 0, writes nothing and prints the detection warning as a JSON line — its ``conversions`` by id — and no line per row.
+
+    Today that warning reaches stderr only, as plain text, through Python's last-resort handler.
+    """
+    db = _copy(head, tmp_path)
+    ids = _plant_orphans(db)
+    _settle(db)
+    digest = _digest(db)
+
+    completed = _run_script("--db", str(db), "--data-dir", str(tmp_path / "data"), "--dry-run")
+    lines = _json_lines(completed.stdout)
+
+    assert completed.returncode == 0, _output(completed)
+    assert (_digest(db), _backups(db)) == (digest, []), f"a dry run writes nothing\n{_output(completed)}"
+    assert _summary_says(completed, "would_apply"), _output(completed)
+    assert [line.get("conversions") for line in lines if str(line.get("event", "")).startswith(FOUND)] == [_expected_conversions(ids)], _output(completed)
+    assert [line for line in lines if line.get("event") in (CONVERTED, UNLINKED)] == [], _output(completed)
