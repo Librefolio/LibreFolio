@@ -578,7 +578,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
 | 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
 | 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
-| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | 🔄 checkpoint di scrittura (prove leggere) da committare; prove pesanti nello slot insieme a W3-c/d, poi un ingresso unico |
+| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | 🔄 checkpoint di scrittura `7df164689` (prove leggere); prove pesanti nello slot insieme a W3-c/d, poi un ingresso unico |
+| 13 | W3-c e W3-d (stati e polarità sui ruoli) | 🔄 scritti, prove leggere verdi; prove pesanti nello slot insieme a TD-3 e W3-b |
 
 ## Avanzamento
 
@@ -1559,4 +1560,58 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > ✅ **4 · Checkpoint di scrittura** (coordinatore, 00:00, scelta (a)): `toneClasses.ts` sta sia in W3-b sia in W3-c/d,
 > quindi i lotti non si separano per path. TD-3 e W3-b si committano adesso con le sole prove leggere; W3-c/d si scrive
-> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso.
+> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso. Commit `7df164689`.
+
+> **Dove guardarlo** (per il developer): Dashboard, la card «Allocazione Patrimoniale» in scuro (sfondo come le altre
+> card; Ora/Storico e Tipo/Settore/Geografica attivi sul verde azione), e la stessa nel dettaglio di un broker; liste di
+> asset e cambi (card e tabella), dettaglio dell'asset, card dei broker e misura del grafico: i delta ▲▼ e il flash del
+> prezzo live sui ruoli.
+
+### W3-c e W3-d — 🔄 16/10/2026 (gli stati e la polarità sui ruoli; D-T27)
+
+> **Avvio** (coordinatore, 00:0x): scelta (a), commit di scrittura di TD-3 + W3-b `7df164689`; OK a
+> `ToastContainer.svelte` e a `ReportSetCard.svelte:351`, la 1.3 informata. Le scelte «da rivedere» vanno nella lista
+> del developer; il toast d'errore pieno è una delle domande aperte alla designer (la pagina dei toast). `DistributionEditor`
+> va con W1-d: l'asserzione `text-green-600` di `gallery.spec.ts:6067` la cambia G dopo G-13, in fila dal coordinatore.
+
+> ✅ **1 · Analisi** (sotto-agente `explore`, sola lettura): mappa voce per voce, consumatori, G3, copie scritte a mano,
+> test. Nessun G3: ogni valore arriva su un elemento senza altri colori (`BADGE_BASE` e `NOTICE_BASE` del pianificatore
+> sono solo layout; `AssetChip` aggiunge solo `border` e `border-dashed`). Nessun test legge questi colori. Le 16
+> utility di stato esistono tutte, con `danger-solid`, `on-status` e `on-danger-solid`.
+
+> ✅ **2 · Le tabelle sui ruoli** (`lib/theme/toneClasses.ts`):
+> - `STATUS_TONES`: icone della sincronizzazione `text-lf-success` / `-warning` / `-danger`, saltato e sconosciuto
+>   `text-lf-muted`; badge e avvisi del pianificatore PAC, stati dei report set, badge dei set di file, chip del rischio
+>   e banner della qualità dei dati sulla tinta (`bg-lf-X-soft text-lf-X-on-soft`, più `border-lf-X-line` dove c'è un
+>   bordo); i toast pieni `bg-lf-X text-lf-on-status`; i chip neutri `bg-lf-neutral text-lf-secondary`, come la pillola
+>   «Aggiornamenti in pausa»; il chip escluso, tratteggiato, `border-lf-subtle text-lf-muted`;
+> - `POLARITY_TONES`: le barre del contributo al rischio `bg-lf-danger` / `bg-lf-info`, i poli della correlazione; la
+>   divergenza, dove più alto è peggio, `danger` / `success` per il testo e la barra;
+> - restano classi di palette solo i categoriali: `KIND_TONES.identifier` (ISIN azzurro, simbolo viola, nome ardesia) e
+>   `fileSet.combined` (indaco). Il commento del modulo lo dice.
+
+> ✅ **3 · Le copie scritte a mano nello stesso widget:** `ToastContainer`, il pulsante di chiusura
+> `hover:bg-lf-on-status/20` e il conto alla rovescia `bg-lf-on-status/15` e `/40`: seguono il testo sul pieno, quindi in
+> scuro sono scuri su un pieno chiaro; `ReportSetCard:351`, il badge «analizzato» → `bg-lf-info-soft text-lf-info-on-soft`,
+> come lo stato accanto.
+
+> **Da rivedere (D-T27):**
+> - i toast in scuro passano a pieni chiari col testo scuro, lo stile «pieno» dei ruoli; anche l'errore, su `danger` +
+>   `on-status` come gli altri tre e non su `danger-solid`, che è dei pulsanti col testo bianco (Q3);
+> - `DataQualityBanner` tiene gli errori nel tono d'avviso, come prima; il suo pulsante sta un passo sopra la tinta,
+>   `bg-lf-X-line/50 hover:bg-lf-X-line`, perché manca un ruolo per l'hover su una tinta;
+> - la barra PAC «bilanciata» passa da `libre-green` a `bg-lf-success`; la «sconosciuta» va su `bg-lf-neutral`, e la sua
+>   traccia in `TargetsStep` resta di palette, come quella di `RiskAnalysisPanel`: un neutro più forte per un riempimento
+>   non esiste;
+> - i chip neutri (`gray-100`) vanno su `bg-lf-neutral`, un passo più scuri in chiaro.
+> - **Rimandato a W1-d:** `ui/input/DistributionEditor.svelte`, righe 138 e 527, copie di `pacTargetBar` e
+>   `pacTargetTotal`, dopo che G avrà portato l'asserzione di `gallery.spec.ts:6067` su un attributo `data-`.
+
+> ✅ **4 · Prove leggere** (00:0x): Prettier verde sui 3 file; `--update` m1 10.916 → 10.765, cioè `toneClasses` 166 → 22
+> (restano i categoriali), `ToastContainer` 3 → 0 (la riga esce), `ReportSetCard` 79 → 75; `--check` pulito, 0 file sotto
+> il record; `diff --check` pulito. Le prove pesanti nello slot, dopo Y7 e DV, su TD-3, W3-b, W3-c e W3-d insieme.
+
+> **Dove guardarlo** (per il developer): i toast, in chiaro e in scuro (salvare un'impostazione, una sincronizzazione);
+> il pianificatore PAC (badge, avvisi, barra e totale della distribuzione); il banner della qualità dei dati sulla
+> dashboard; l'import delle transazioni (lo stato dei report set); i badge dei set di file; nel rischio i chip degli
+> asset, le barre del contributo e la divergenza della diversificazione; l'esito di una sincronizzazione.
