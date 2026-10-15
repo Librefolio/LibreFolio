@@ -807,7 +807,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
 > - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.
 
-### W I1, integrità, integrato ✅ (2026-10-15, 03:10)
+### W I1, integrità, integrato ✅ (2026-10-15, 03:01)
 
 > **Note implementazione**: `dc7e4e48e`, merge di `625e3dacc` su `ae998da78`. Il commit è creato con `git commit-tree`
 > sull'albero della simulazione (`1153296e3`), così l'avviso al coordinatore colori porta già lo SHA; poi
@@ -818,3 +818,24 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > CHANGELOG `[Unreleased]` aggiornato; chiuse V-23, C-79, la ricerca inversa di C-65, L5 e C-3; W-B9 nella sezione X.
 >
 > **Fuori pista**: due avvisi di aiosqlite sotto carico in un test dell'AI Export, non rossi: C-93, a J.
+
+### A3, schede di Settings e accesso, integrato ✅ (2026-10-15, 03:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `90491071d` (A3 `755eaa27d` e journal, base aggiornata con
+> W I1 in `d851c39bc`). Registro delle schede di Settings, O-15 (errori di login come chiavi di catalogo), K-17
+> (`PasswordInput` da tastiera, nome tradotto), L12 (`user_cli.py create-user`, `dev.py user create … --role`).
+> Validazione di A:
+> - revisione `35f1e0a16` completa: `all-backend` 13 440 passed, 28 skipped, 0 failed; E2E auth 29, settings 45,
+>   app-start-auth 3, onboarding-guides 24;
+> - revisione `d851c39bc` mirata dopo W I1: build e `front check` 0/0; core-unit 4 261, component-unit 3 192;
+>   `theme-roles` pulito; `check-orphans` 265 file backend; `dev-cli-image` 39, `gate-event-loop-io` 14; E2E auth
+>   29, settings 45, `tx-broker-access` 5.
+>
+> Chiusure di O-15, K-17 e L12 nel README del 38, scritte da A; CHANGELOG con tre righe. Il controllo di L12 sul DB
+> di test popolato: `populate_mock_data.py` crea già come utenti normali tutti tranne `e2e_test_admin`, e nessuna
+> spec entra come alice…eve.
+>
+> **Ordine dei prossimi ingressi** (deciso dal coordinatore, 15/10 03:25): X CP2b prima di J CP-1. X ha la coda
+> più lunga (CP3 e CP4, e gli eventi che passano a W), mentre il CP-2 di J aspetta comunque le decisioni del
+> developer. La risoluzione statica degli import sull'albero combinato X + W I1 + A3 + J dà 0 irrisolti su 9 459
+> nomi; J valida poi una sola volta, sopra X.
