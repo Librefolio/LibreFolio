@@ -1632,3 +1632,75 @@ Passi di FE5b-1:
    > `assetIdentifiers.test.ts`: 4 file, **116/116**. Restano gli E2E dopo la finestra: `front-asset` (asset-modal,
    > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
    > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.
+
+**FE5b-1 committato sul mio ramo, non integrato** (15/10, 08:38): `37532d558` (codice, 10 file; il coordinatore ha rifatto
+`--check`) e `448d8dd33` (journal). Gli E2E dopo la finestra, poi l'ingresso con l'avviso (prima R, poi L).
+
+### FE5b-2 — le cuciture della logica di `AssetModal` in moduli `.ts` puri ✅ (2026-10-15; E2E dopo la finestra)
+
+Sopra `448d8dd33`, durante la finestra della galleria: codice, e solo prove leggere (svelte-check, singoli file vitest).
+
+**La condizione che rende sicuro estrarre il confronto dei metadati** (verificata leggendo il codice): ogni confronto legge
+solo il proprio campo, e lo scrive solo il proprio passo (`setFieldValue` scrive il campo, più `quoteBaseQuantity` per il tipo
+e `descriptionFromPrefill` per la descrizione, che non sono confrontati); le righe OTHER le legge solo il loro passo.
+Quindi una funzione pura su una fotografia presa prima del confronto decide esattamente le stesse cose, e il padre applica
+le azioni nell'ordine. `autoFilledFields` è solo scritto, mai letto (12 assegnazioni, 0 letture): resta com'è, per non
+cambiare nulla. La nota «COVERAGE NOTE» sopra il confronto, che sconsigliava l'estrazione perché avrebbe lasciato nel
+componente il ramo di rete, decade: la rete resta nel padre e la decisione diventa provabile senza rete.
+
+Passi:
+1. ✅ (2026-10-15) `assetIdentifiers.ts`: `identifierValue`, `withIdentifier`, `mergeOtherIdentifierValues`, `withElectedPrimary`
+   (le operazioni sulle righe di `getIdentifierByType`, `setIdentifierByType`, `mergeOtherIdentifiers`,
+   `confirmIdentifierPrimary`).
+   > **Note implementazione**: le quattro funzioni sono pure e rendono righe nuove; il padre delega e assegna
+   > (`mergeOtherIdentifiers` assegna solo se `added > 0`, come prima).
+2. ✅ (2026-10-15) `assetSearchSelection.ts` (nuovo): il tipo, la decisione sull'identificativo (conflitto → scelta, aggiorna,
+   aggiungi) e i parametri del fornitore di un risultato di ricerca; `applySearchResult` tiene gli effetti.
+   > **Note implementazione**: `searchResultAssetType`, `searchResultIdentifier` (esito `none | conflict | rows`),
+   > `searchResultProviderParams`. Gli effetti di `applySearchResult` restano nello stesso ordine (scelta del primario e
+   > domanda, campi del fornitore, azzeramenti, compiti asincroni). `generateUUID` e `ASSET_TYPES` escono dal padre.
+3. ✅ (2026-10-15) `assetMetadataComparison.ts` (nuovo): `compareMetadata(patchData, fotografia, scope, manuallyChanged, etichette)`
+   → azioni ordinate, differenze, campi mancanti; `fetchAndCompareMetadata` tiene rete, biglietti, avvisi, apertura.
+   > **Note implementazione**: confrontato riga per riga con l'originale (`git show HEAD:…`, righe 953–1077). Il padre
+   > costruisce la fotografia (`comparisonSnapshot()`) e applica le azioni (`applyComparisonAction()`); ogni azione
+   > porta il suo `field`, che finisce in `autoFilledFields` come prima (`mergeOther` solo se aggiunge righe). La
+   > «COVERAGE NOTE» è tolta. Tolti anche un commento orfano precedente a FE5b («Helper: field name like
+   > 'identifier_ticker'…», sopra `setIdentifierByType`), e la JSDoc di `setFieldValue` è tornata sopra la sua funzione.
+   > **⚠️ Fuori pista**: nella prima stesura l'azione `mergeDescription` non portava `field`, e `autoFilledFields` avrebbe
+   > ricevuto `undefined` al posto di `short_description`. Visto rileggendo, prima di ogni prova: ora ogni azione ha il
+   > suo `field`.
+4. ✅ (2026-10-15) `assetPayload.ts`: gli elementi di creazione, di modifica e di assegnazione del fornitore; `saveCreate` e `saveEdit`
+   tengono conferme, 409, cache, sync.
+   > **Note implementazione**: `AssetFormFields`, `buildCreateItem`, `buildPatchItem`, `ProviderAssignment`,
+   > `buildProviderAssignItem`; nel padre `formFields()` e `providerAssignment()`. Il `naLog` della creazione legge
+   > `createItem.quote_base_quantity`. Unico spostamento di tempo: in `saveEdit` la base di quotazione si normalizza dopo
+   > `await ensureAssetProvidersCached()` invece che prima. È equivalente: `handleSave` esce se `!isValid`, che vuole un
+   > intero finito ≥ 1, quindi l'unico scrittore raggiungibile (`truncateQuoteBaseQuantity`, sul blur) non scrive; e
+   > `doSave` mette `saving = true` prima di `saveEdit`, che disabilita il fieldset. Dal padre escono 8 import
+   > (`ASSET_TYPES`, `isFamilyOnlyProposal`, `generateUUID`, `identifierRowsToColumns`, `normalizeQuoteBaseQuantity`,
+   > `normalizeDistribution`, `sameDistribution`, `buildClassificationPatch`). `AssetModal.svelte`: 1 932 → 1 779 righe.
+   > Prove leggere: `npm run check` 0 errori / 0 avvisi; vitest su `AssetModal`, `AssetModal.providerLifecycle`,
+   > `assetPayload`, `assetIdentifiers`: 116/116, come prima (i due file del componente percorrono confronto, ricerca e
+   > salvataggi). Prettier: nessun cambio.
+5. ✅ (2026-10-15) Prove leggere (svelte-check, vitest dei moduli e di `AssetModal`); test nuovi (test-author); journal e handoff.
+   > **Note implementazione**: test-author ha scritto 130 test unitari: `assetIdentifiers.test.ts` +24 (45),
+   > `assetPayload.test.ts` +17 (39), `assetSearchSelection.test.ts` nuovo (28), `assetMetadataComparison.test.ts` nuovo
+   > (61, ogni ramo: ambito, tre esiti per campo, famiglia del tipo, maiuscole, valuta non scelta, OTHER, descrizione da
+   > prefill, distribuzioni nelle due forme, ordine delle azioni e delle righe, ingressi congelati). I due file nuovi
+   > sono registrati in `scripts/test_runner/_frontend_utility.py` (`front_utility_unit`, cioè `front-utility core-unit`),
+   > due righe aggiunte accanto ad `assetPayload.test.ts`. Prove finali: `npm run check` 0/0; vitest sui sei file degli
+   > asset 246/246 (116 + 130); `theme-roles.mjs --check` pulito (nessuna classe spostata, niente `--split`);
+   > `dev.py test --test-port 6183 --data-dir /tmp/librefolio-r13-x check-orphans`: 372 file unitari, tutti raggiungibili;
+   > ruff e black puliti su `_frontend_utility.py`; Prettier pulito. Porta 6183 libera.
+   > **⚠️ Fuori pista**: (a) svelte-check ha trovato 7 errori di tipo in `assetPayload.test.ts:238`: il tipo dedotto di
+   > `buildCreateItem` perde la firma d'indice delle colonne degli identificativi (come il letterale di prima). Corretto
+   > dal secondo test-author solo nel test, con una vista `Record<string, unknown>`; sorgente invariata. (b) Una
+   > differenza vera, vista da test-author: con una risposta malformata (un peso di distribuzione non numerico)
+   > l'originale aveva già scritto i campi confrontati prima del settore e poi mostrava l'errore; ora `compareMetadata`
+   > lancia prima di ogni scrittura, quindi il modulo resta intatto e l'avviso d'errore è lo stesso. Tenuta (un errore
+   > atomico invece che a metà), dichiarata nella JSDoc del modulo e nell'handoff. Il backend valida i pesi, quindi
+   > serve una risposta malformata. (c) Stranezze preesistenti copiate fedelmente: nuova voce **X-R11** del backlog (la
+   > più visibile: l'etichetta `'Description'` del dialogo di confronto non è tradotta).
+   > E2E di FE5b (1 e 2 insieme) dopo l'avviso di fine finestra: `front build --debug`, poi `front-asset` (asset-modal,
+   > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
+   > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.

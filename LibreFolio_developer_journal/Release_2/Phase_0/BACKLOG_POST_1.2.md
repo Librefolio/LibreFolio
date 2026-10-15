@@ -2270,6 +2270,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
   `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R11 · `AssetModal`: stranezze preesistenti viste dai test di FE5b-2** — minimo; X, 15/10 (FE5b-2, segnalate da
+  test-author). Copiate fedelmente nei moduli puri, nessuna cambiata:
+  - la riga della descrizione nel dialogo di confronto ha l'etichetta fissa `'Description'`
+    (`assetMetadataComparison.ts`), e `ProviderComparisonModal` la mostra com'è: in IT ed ES resta in inglese. Cura di
+    poche righe: `common.description` c'è già nei quattro cataloghi, basta un'etichetta in più in `ComparisonLabels`;
+  - `searchResultIdentifier` controlla che l'identificativo non sia vuoto prima di togliere gli spazi: uno di soli spazi
+    diventa una riga vuota, o un conflitto con un codice vuoto;
+  - `withElectedPrimary` chiama `.trim()` sui valori OTHER senza convertirli in stringa (`mergeOtherIdentifierValues` li
+    converte);
+  - `mergeOtherIdentifierValues` scarta solo `null` e `undefined`: `false` o un oggetto diventano righe `'false'` o
+    `'[object Object]'`;
+  - un `{currency: null}` nei parametri del fornitore blocca la valuta del risultato di ricerca (conta solo la chiave).
+  Proposta: la prima con un lotto piccolo dopo l'ingresso di FE5b, le altre con il FE5a. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», FE5b-2.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
