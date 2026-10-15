@@ -411,6 +411,16 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Transaction service tests", verbose=verbose)
 
 
+def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test which transaction rows need a cost basis (read from TX_TYPE_METADATA) and when a batch holds them to it."""
+    print_section("Services: Transaction Cost Basis Rule")
+    print_info("Testing: backend/app/services/transactions/validation.py (_requires_cost_basis) + batch_costs.py (validate_cost_basis)")
+    print_info("Tests: the rule follows TX_TYPE_METADATA; creates without a cost refused on their row; updates held to it when they change type, quantity or cost; notes/tags edits of rows stored without a cost")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
+    return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
@@ -1220,6 +1230,13 @@ Note: No backend server required.
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
+    add_test(
+        cat,
+        "transaction-cost-basis-rule",
+        services_transaction_cost_basis_rule,
+        name="Transaction Cost Basis Rule",
+        desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(
