@@ -2203,6 +2203,110 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Da fare**: i test in `test_backup_jobs.py` con test-author, dopo B2b; lo SHA a Z quando il coordinatore committa.
 >   `restore_jobs._a_check_runs` può usare `_lock_held`: lo unisco quando test-author ha finito con `restore_jobs.py`.
 
+### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:47) ✅ — in attesa del commit
+
+> - **B2 committato dal coordinatore**: `80b8f8c39` (B2a), `22c116679` (B2b), `6a7fae5bf` (doc), `e3a9d2251` (journal).
+>   `backup_in_progress()` è in `22c116679`: lo SHA è mandato a Z.
+> - **Merge aperto da lui**, `MERGE_HEAD` `84a18fb4c`, con X CP10 (le impostazioni dei plugin, `007_plugin_settings`)
+>   e altro. **Un conflitto**, in `hosting_providers.en.md`: tutti e due avevano aggiunto una riga alla tabella del
+>   profilo. Tenute tutte e due, prima quella di X; «three things» corretto in **four**, perché ognuno era passato da due a
+>   tre. In stage solo quel file.
+> - **File fusi da soli, riletti**: `.env.example`, `cli_tools`, `configuration`, `admin/index`, `security.md`, i 3
+>   cataloghi. Coerenti: «Five options are secrets» resta vero; le 8 righe di backup in `security.md` sono intere;
+>   nessun nome doppio nei cataloghi (il doppio `"all"` di `_backend_api.py` sono `api` ed `e2e`, già nei due lati).
+> - **Prove sulla revisione combinata** (23:21-23:28, `/tmp/libreFolio_b_merge84.sh`, una alla volta, carico sotto 70):
+>   `api backup-restore` 114, `utils runtime-isolation` 197, `services config-env-example` 36, `mkdocs build` pulita,
+>   `check-links` 96. `services backup-staging`: **111 e 1 rosso**.
+> - **⚠️ Fuori pista — un test fragile, non il prodotto**: `OLDER = CHAIN[-2]` seguiva la head, ma il test si aspettava
+>   la conversione dei dati della `006`; con la `007`, «più vecchia» era diventata la `006`. Curato da test-author:
+>   `OLDER = "005_accounts_invites"` fissata per nome, con controllo all'import, e le migrazioni da lì alla head
+>   (`AFTER_OLDER`). Corretta anche la stessa ipotesi in `test_backup_restore.py`, una riga. Dopo: `services backup-staging`
+>   112, `api backup-restore` 114, `utils backup-cli` 84; porta libera. I due test sono fuori dallo stage: il
+>   coordinatore decide se metterli nel merge.
+> - **Rifinitura proposta, dopo il commit del merge** (segnalata da test-author): una tabella creata vuota da un
+>   aggiornamento (prima nessuna, dopo 0) conta come `rows_changed`. Con la `007` ogni ripristino di un backup più
+>   vecchio avviserebbe senza motivo. La regola diventa `(before or 0) != (after or 0)`, anche per l'elenco della CLI.
+> - **`all-backend`** dopo le 01:15 (slot 1 di A fino alle 23:50, poi la finestra di G-13 dalle 00:00 alle 01:15).
+
+### B3 — il ripristino: analisi (2026-10-15, 23:20-23:45) — 🧊 FROZEN, in attesa del via
+
+> **Stato reale** (letto sul codice, base con CP2b):
+>
+> - I passi d'avvio sono in `services/platform/app_lifespan.py`, `STARTUP_STEPS`: `… tool-catalog`, `data-directories`,
+>   `risk-scenarios`, `default-avatars`, `database`, `post-migration-fixes`, `global-settings`, `provider-prewarm …`.
+>   Il primo è `shutdown-watchdog` (Z). Girano in ogni processo, quindi in ogni worker con `--workers N`. Il passo
+>   `database` (`database_bootstrap.ensure_database_exists`) esce con `sys.exit(1)` se una migrazione fallisce.
+> - Il token di sessione porta già `iat` (`auth_service.py:135`), ma `decode_jwt_token` restituisce solo `user_id` e
+>   `session_version`. Il controllo `sv` sta in `auth.py:131` (A).
+> - `GET /settings/global` è **pubblica** e restituisce *tutte* le righe di `global_settings` (`settings.py:296`,
+>   `get_all_global_settings`). Una riga «ora del ripristino» si vedrebbe da fuori, se non si filtra.
+> - Per un riavvio non c'è un aiuto: il budget di spegnimento di Z si attacca ai segnali di uvicorn
+>   (`shutdown_budget.py`).
+>
+> **Disegno** (aggiorna §3.4 e §3.6):
+>
+> 1. **Conferma** `POST /backup/restore/stage/{id}/confirm`, solo admin. Vuole una prova finita, ripristinabile (nessun
+>    blocco), non scaduta e nessun altro ripristino in attesa. Scrive in modo atomico `.restore/restore.json`: lo stato
+>    `pending`, la prova, il percorso reale della cartella dati, chi conferma e quando. Risponde 202. Codici:
+>    `restore_already_pending` 409, `restore_not_restorable` 409, `restore_stage_expired` 410, 404.
+>    - La copia di una prova in attesa non si pota e non si cancella (409).
+> 2. **Riavvio** `POST /backup/restore/restart`, solo con un ripristino in attesa (altrimenti 409). Risponde 202, poi
+>    manda SIGTERM al processo padrone, cioè al master di uvicorn se c'è, altrimenti a se stesso, con un
+>    `BackgroundTask` dopo la risposta. Lo spegnimento ordinato di Z fa il resto; Docker riavvia (`unless-stopped`).
+>    `restart.py` prende segnale e bersaglio iniettati, per i test: nessun test spegne la corsia.
+> 3. **All'avvio**, passo `pending-restore` (fra `tool-catalog` e `data-directories`, come concordato con H), sotto un
+>    flock esclusivo su `.restore/apply.lock`:
+>    - `pending` → lo scambio. Per `sqlite/`, `custom-uploads/`, `broker_reports/` e `scenario_catalog/`: la cartella
+>      viva va in `.restore/previous/` e quella della prova al suo posto, solo rinomine sullo stesso volume. Ogni mossa
+>      è scritta nel giornale prima e dopo. Poi lo stato `applied`, con l'«avvio» che l'ha fatto: PID del processo
+>      padrone e ora della sua creazione (psutil).
+>    - `applied` da *questo* avvio (un altro worker): niente.
+>    - `applied` da un avvio che non c'è più (processo morto o PID riusato): **ritorno indietro** (decisione 41). I
+>      dati ripristinati vanno in `.restore/failed/`, `previous/` torna al suo posto, e lo stato diventa `rolled_back`,
+>      con il motivo «il primo avvio dopo il ripristino non è finito».
+>    - Uno scambio interrotto a metà, con mosse fatte e mosse no: si disfano quelle fatte → `rolled_back`, «interrotto
+>      durante lo scambio». Più sicuro che finirlo.
+>    - `secrets/`, `logs/`, `scheduler_state.json`, `backups/` e `.restore/` non si toccano mai.
+> 4. **Passo `restore-commit`** (fra `global-settings` e `provider-prewarm`): se lo stato è `applied` da questo avvio,
+>    si chiudono le sessioni (punto 6), si cancella `previous/` (decisione 41: la copia serve solo a tornare indietro),
+>    lo stato diventa `committed`, si scrive l'ultimo esito e si toglie la prova. Gli altri worker trovano `committed`.
+> 5. **Stato** `GET /backup/restore/status`: il ripristino in attesa e l'ultimo esito (`committed` o `rolled_back`, con
+>    il motivo). `DELETE /backup/restore/pending` annulla prima del riavvio. Tutto bloccato sull'istanza bloccata.
+> 6. **Sessioni (decisione 40)**, due forme possibili; la scelta è del developer:
+>    - **(a) consigliata**: al commit, `users.session_version = ora del ripristino in millisecondi` per tutti, nel DB
+>      ripristinato. È «usare la data» dentro il controllo `sv` che c'è già. Un cookie di prima ha un `sv` piccolo, o
+>      quello di un ripristino precedente, e non coincide mai; i cambi di password dopo fanno +1 come oggi. Niente
+>      modifiche ad `auth.py` (A), nessuna riga nuova, nessuna migrazione, niente da nascondere a
+>      `GET /settings/global`.
+>    - **(b)**: una riga `global_settings` con l'ora, più `iat` in `SessionClaims` e un controllo accanto a `sv` in
+>      `auth.py` (A, da concordare). In più serve un filtro che tenga la riga fuori dalla lista pubblica (file di A).
+> 7. **CLI** `dev.py backup restore ARCHIVE` (senza `--dry-run`): prova, poi conferma a terminale, poi `pending`. Il
+>    ripristino si applica al prossimo avvio, a server spento o dopo un riavvio. Un solo percorso di scambio, quello
+>    dell'avvio.
+> 8. **Fuori da B3**: la chiave d'istanza e la ricifratura (B4, `.lfbk`); la card nella scheda e l'avviso dopo il
+>    riavvio (B5b); i totali di J (CP-15); Litestream (B7: l'avviatore chiama lo stesso `pending-restore` prima di
+>    Litestream).
+>
+> **Superfici**: `instance_backup/apply.py` (nuovo: giornale, scambio, ritorno indietro, commit), `restart.py` (nuovo),
+> `restore_jobs.py` (conferma, stato, annullamento, protezione della copia in attesa), `api/v1/backup/restore.py`,
+> `schemas/backup.py`, `scripts/backup_cli.py`. **Dichiarati**: due righe in `app_lifespan.py` (H, già concordate);
+> con (b), anche `auth.py`, `auth_service.py` e `settings_service.py` (A). Doc: guida e `cli_tools`.
+>
+> **Prove**:
+>
+> - `services backup-apply`, puro su cartelle temporanee: ogni mossa dello scambio interrotta e ripresa; il ritorno
+>   indietro; più worker (due processi sul lock); il PID riusato;
+> - `api backup-restore`, ampliata: conferma, stato, annullamento, riavvio con il segnale intercettato;
+> - con (a), un test che fissa che il cookie di prima viene rifiutato dal `sv` vero;
+> - l'accettazione del fondatore, «stessi totali» (backup di una cartella popolata, ripristino su una vuota, avvio in un
+>   sottoprocesso), in un `e2e` di B, senza un secondo server.
+>
+> **Rischi**:
+>
+> - lo scambio con più worker, curato con lock, giornale e PID del padrone;
+> - un supervisore assente (la UI lo dice: B5b);
+> - il riavvio della corsia nei test: mai un vero SIGTERM.
+
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
 > **Metodo**: per non mescolare B1 con il checkpoint di B0, la bozza sta in una copia dell'albero di B0 in `/tmp`
