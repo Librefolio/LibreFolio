@@ -20,7 +20,7 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 Generate automatic screenshots for documentation (light/dark × desktop/mobile × 4 languages):
 
 ```bash
-./dev.py mkdocs gallery                          # Full gallery generation
+./dev.py mkdocs gallery                          # Full gallery generation (browser workers: 60% of the CPUs)
 ./dev.py mkdocs gallery -l                       # List available test names
 ./dev.py mkdocs gallery -f "assets"              # Filter by name
 ./dev.py mkdocs gallery --desktop-only           # Only desktop viewport
@@ -50,9 +50,13 @@ quantities / ids / dates untouched, and **fails loudly** if its invariant checks
 ### Gallery Pipeline
 1. Populates test DB with deterministic data (`--with-static --with-reports`)
 2. Ensures E2E test users exist
-3. Starts test server on port 6041
-4. Runs `gallery.spec.ts` via Playwright (desktop + mobile projects)
-5. Screenshots saved to `mkdocs_src/docs/gallery/`
+3. Builds what the test server serves (`dev.py server --test --build-only`: debug frontend and site when
+   missing or stale, JS cache) in the foreground, with the environment Playwright gets (`LF_APP_VERSION`
+   included, baked into the sidebar); a failed build stops the gallery before Playwright
+4. Playwright's webServer starts the test server on the lane port (6041 by default); with the builds up to
+   date it answers in seconds, inside `STARTUP_TIMEOUT_S`
+5. Runs `gallery.spec.ts` via Playwright (desktop + mobile projects)
+6. Screenshots saved to `mkdocs_src/docs/gallery/`
 
 ### On Failure
 When tests fail, the output shows which tests failed and provides retry commands:

@@ -927,3 +927,320 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 > - Porta 6152 libera alle 12:19:51. `frontend/build` resta la build di debug delle 11:53.
 > - **Dipendenze dalle prossime ondate di T** (W4 transazioni, B6 pulizia di P1, W6 DataTable, W5 ponte sRGB): elencate nella voce **L-13** del backlog. Ogni rottura sarà esplicita.
 > - **L-10** dopo l'ingresso di L, con il suo checkpoint. Il progetto è pronto negli artefatti di sessione (`files/L-validate-2026-10-15/L-10-design.md`). Va aggiunto l'helper E2E per le utility di ruolo (L-13, W4). Attenzione: T sta cambiando i valori dei ruoli con la nuova palette del developer, e i test li leggono a runtime.
+
+## ✅ L-10 — Ruoli di T nel Lab (15/10/2026)
+
+**Base:** `9d57aa4c0`; L è già in `dev_release2`, perché il coordinatore ha committato `9d57aa4c0` col mio messaggio e il target è avanzato fin lì.
+
+**Via del coordinatore** (12:22, testuale): «L-10 approvata, con un suo checkpoint, sulla base di `9d57aa4c0`:
+- il conteggio delle classi `*-lf-*`;
+- `tw_custom_re` in Python, con la parità prima e dopo;
+- le `--color-lf-*`».
+
+Il punto (3), gli override L1 anche sui selettori del token, era approvato dal 14/10 alle 21:59.
+
+**Finestra:** codice e test leggeri subito; E2E e run pesanti dopo le 13:00, quando chiude la finestra della candidata di T.
+
+**Nota:** T-6 ha cambiato i valori dei ruoli e aggiunto `--lf-surface-sidebar`, `--lf-checked` e `--lf-on-checked`, ma non è ancora nel target. I test leggono i valori a runtime.
+
+**Parità prima** (base, 12:24): **identica**: hex 1291/1291, funzioni 238/238, `custom` **764**, `tw` 10490, 1080 file.
+
+**Progetto** (fatti verificati in sola lettura alle 10:3x, artefatto `files/L-validate-2026-10-15/L-10-design.md`):
+
+| # | Parte | Cosa |
+|---|---|---|
+| 1 | `scan-colors.mjs` `TW_CUSTOM_RE` + `color_inventory.py` `tw_custom_re` | `\|lf-[a-z-]+` nel gruppo dei valori, una riga per parte; le classi `bg-lf-card` → `--color-lf-card` |
+| 2a | scanner, `@theme inline` | `cssContext()` dice `inline`; la definizione riceve `inline: true` e `alias_of` (il nome quando il valore è esattamente `var(--x)`). Selettore e ambito non cambiano |
+| 2b | scanner, palette | una voce di palette prende `role` quando tutte le definizioni della sua variabile sono alias inline di una sola variabile. È generico, non legato al prefisso `lf` |
+| 2c | `catalogView.ts` | famiglia `lf` nella palette; `appVars()` salta le variabili fatte solo di alias inline (le 45 senza effetto) |
+| 2d | `DesignerLab.svelte` | il chip di un alias apre, mostra e marca il ruolo (`--color-lf-card → --lf-surface-card`); id di test invariato `lab-item-var-<alias>` |
+| 2e | `ColorEditor.svelte` | impatto e classi aggregano le voci con `var` o `role` = target; «Aggancia a una variabile» usa il ruolo al posto dell'alias |
+| 2f | `export.ts` | `css-var`: stessa aggregazione; le occorrenze di un alias portano `raw` = la classe, che `verify-export` cerca nella riga |
+| 2g | `pickView.ts` | candidati `class-use` via ruolo; il filtro aggiunge i nomi degli alias dei ruoli della catena |
+| 3 | `engine/vars.ts` | override L1 su `html, .light, .dark` / `html:not(.dark), .light` / `html.dark, .dark`, come i blocchi di T |
+
+Fuori ambito: le coppie di contrasto sui ruoli `--lf-*`, perché il pannello legge ancora `--theme-*` e T ha già il suo gate di contrasto. Proposta di backlog.
+
+**Test:**
+- **unit (`test-author`, leggeri):** `scanColors`, `catalogView`, `pickView`, `exportFormat`, `elementRules` (nuovo blocco per `applyVars`, jsdom). Gli stessi 15 file registrati.
+- **E2E (dopo le 13:00, corsia 6152):**
+  - live: il chip `lab-item-var---color-lf-card` modifica `--lf-surface-card` e `login-modal` cambia colore (`/` da sloggati);
+  - picker su `login-modal`: `background-color` `tailwind-class`, classe `bg-lf-card`, primo var `--lf-surface-card`, candidato `class-use` in `LoginCard.svelte`;
+  - helper del sottotitolo pronto anche per le utility di ruolo (L-13, W4).
+- **Docs:** `docs-writer` aggiorna la pagina developer (testo subito, build dopo le 13:00); la skill riceve una riga.
+
+**Definition of done:**
+- parità dopo identica, con i due numeri prima e dopo nel checkpoint;
+- unit, `npm run check`, gate, `theme-roles` verdi;
+- release senza Lab;
+- `front-designer-lab all` verde a 1 worker ed `e2e` a 4;
+- `mkdocs build` strict e `check-links` verdi;
+- porta libera;
+- piano ✅ e backlog L-10 ✅.
+
+### Avanzamento L-10
+
+**✅ Passo 1 — regex JS e Python (15/10, 12:2x).**
+> **Note implementazione**: `TW_CUSTOM_RE` (`scan-colors.mjs:48`) e `tw_custom_re` (`color_inventory.py:39`) ricevono `|lf-[a-z-]+`, una riga per parte, nello stesso cambio. **Parità dopo**, stesso albero: **identica**. Hex 1291/1291, funzioni 238/238, `tw` 10490, `var_defs` 945, 1080 file; `custom` **764 → 912** (+148). Le classi `lf` sono 36 voci di palette, 148 usi in 11 file, tutte con un ruolo. Comando: scanner + `pipenv run python -m scripts.visual_review.color_inventory` + `/tmp/libreFolio_L7_parity.mjs`; file in `/tmp/libreFolio_L10/{before,after}/`.
+> **⚠️ Fuori pista**: i 143 usi in 9 file misurati prima diventano 148 in 11. I 5 in più sono **commenti** che nominano le classi: `app.css:2` (2) e `tokens.css:8–9` (3). Scanner e inventario Python contano allo stesso modo le classi nei commenti, per tutte le famiglie: comportamento preesistente e vincolato dalla parità. Non lo tocco, perché la parte Python non è mia oltre la riga 39. Proposta di backlog **L-14**. Segnalo anche che l'etichetta del riepilogo Python «(libre-*/theme-*/primary/accent)» non cita `lf-`: è fuori dalla riga assegnata.
+> **⚠️ Fuori pista (13:00):** `test-author` ha notato che `lf-[a-z-]+` non accetta cifre. Il gate di T (`ROLE_CLASS_RE` in `scripts/theme/theme-roles.mjs`) invece le accetta: `-lf-([a-z0-9]+(?:-[a-z0-9]+)*)`. Ho allineato le due regex a `lf-[a-z0-9-]+`, sempre una riga per parte; il diff Python resta una riga. Oggi nessun alias ha cifre, quindi i conteggi non cambiano. Parità rimisurata sullo stesso albero (`/tmp/libreFolio_L10/after2/`): **identica**, `custom` 912, 36 voci `lf` tutte con ruolo, 45 alias.
+
+**✅ Passi 2a–2g — catalogo, palette, editor, export, picker (15/10, 12:2x).**
+> **Note implementazione**:
+> - **Scanner:** `ALIAS_VALUE_RE`. `cssContext()` dice `inline`; una definizione sotto `@theme … inline` riceve `inline: true` e `alias_of`, che vale `null` quando il valore non è esattamente `var(--x)`. Una voce di palette riceve `role` quando tutte le definizioni della sua variabile sono alias inline di un solo nome.
+> - **`types.ts`:** `CatalogVarDef.inline?`, `alias_of?`; `CatalogPaletteEntry.role?`.
+> - **`catalogView.ts`:** famiglia `lf`, con lo shade uguale al resto del nome; `appVars()` salta gli alias. Nuovi `isInlineAlias()`, `editTarget()` (`role ?? var`) e `varImpact()`, che aggrega le voci con `var` o `role` uguali al nome, più gli usi della variabile.
+> - **`DesignerLab.svelte`:** il chip apre e marca il ruolo (`data-target`, titolo `alias → ruolo`); la ricerca trova anche il ruolo; l'id di test `lab-item-var-<alias>` non cambia.
+> - **`ColorEditor.svelte`:** elenco dei nomi via `editTarget`, senza alias; impatto e classi da `varImpact`.
+> - **`export.ts`:** `css-var` via `varImpact`. Le occorrenze di una classe-alias portano `raw` uguale alla classe: la riga non nomina né variabile né shade.
+> - **`pickView.ts`:** i candidati `class-use` passano dal ruolo; il filtro aggiunge gli alias dei ruoli della catena.
+>
+> **Prove (leggere):**
+> - Scanner su un CSS sintetico:
+>   - l'alias diventa `inline`, con `alias_of = --lf-surface-card`, e la sua voce ha il ruolo;
+>   - un alias `color-mix()` resta `inline` con `alias_of: null` e senza ruolo;
+>   - `@theme` semplice resta root, non `inline`;
+>   - `hover:border-lf-card/50` è contata.
+> - Catalogo reale:
+>   - `--color-lf-card` → ruolo `--lf-surface-card`;
+>   - `varImpact`: 21 usi in 6 file, 3 classi, 2 definizioni in `tokens.css` (36 e 110);
+>   - export: 8 occorrenze con `raw`;
+>   - picker con `.bg-lf-card` vincente: `tailwind-class`, catena `[--lf-surface-card]`, `edit` sul ruolo, candidato `class-use` `LoginCard.svelte:41`, filtro con alias e ruolo;
+>   - `appVars` senza alias (0).
+> - Unit del Lab invariati: 15 file, 394 verdi. Prettier pulito.
+>
+> **⚠️ Fuori pista**:
+> - Le definizioni di `@theme inline` hanno selettore `null` e ambito `scoped`, perché il preludio `@theme inline` finisce fra le at-rule. È innocuo: sono marcate `inline`, l'editor e `appVars` le saltano, e `sourceVarValue` e il contrasto leggono solo le definizioni root.
+> - **Limite noto:** un alias `@theme inline` che non è `var(--x)` (per esempio un `color-mix()`) non ha ruolo, e il suo chip modifica una variabile che a runtime non esiste. Oggi in `tokens.css` non ce n'è nessuno. Lo documenta il test dello scanner.
+
+**✅ Passo 3 — L1 sui sotto-alberi di tema (15/10, 12:2x).**
+> **Note implementazione**: `engine/vars.ts` esporta `VAR_SELECTOR`, che sostituisce il `SELECTOR` privato, così i test lo leggono: `both: 'html, .light, .dark'`, `light: 'html:not(.dark), .light'`, `dark: 'html.dark, .dark'`. Sono i selettori dei blocchi di `tokens.css`, quindi l'override entra anche in un sotto-albero che ridefinisce i ruoli. Ho aggiornato il commento di testa.
+> **Verifica (12:54):** oggi nessun elemento diverso da `<html>` porta le classi `light` o `dark`. Solo `themeStore.ts` le tocca, su `document.documentElement`; le occorrenze `class:dark:…` di `ImportWizardModal.svelte` sono varianti Tailwind. Nelle librerie controllate (`svelte-sonner`, `flatpickr`, `echarts`, `@floating-ui`, `bits-ui`) nessuna aggiunge quelle classi. Il cambio quindi non modifica nulla di visibile oggi.
+> **Limite residuo**, documentato: una variabile che l'app definisce solo su `html` (per esempio le `--theme-*` di `app.css`) riceverebbe l'override di un tema anche in un'isola di quel tema dentro l'altro tema, dove il codice non la ridefinisce. Il motore gira nella scheda dell'app senza catalogo, perché il gate degli import lo vieta, e non può sapere dove sia definita ogni variabile. Senza isole il limite non ha effetto.
+> **⚠️ Fuori pista (13:00), regressione mia, segnalata da `test-author` e corretta:** su un'isola `.dark` la regola `both` (`html, .light, .dark`) e quella `dark` (`html.dark, .dark`) hanno la stessa specificità, `.dark`, e vinceva l'ultima scritta. Bastavano un cambio `dark` seguito da un `both` sulla stessa variabile per mostrare il valore `both` nell'isola, mentre su `<html>` vinceva comunque `html.dark`. Con i vecchi selettori il tema vinceva sempre. Correzione: `applyVars` scrive prima tutte le regole `both`, poi quelle di tema (`SCOPE_ORDER`, ordinamento stabile), così il tema vince ovunque, come riporta anche `changedVarValue`. Oggi non ha effetto, perché le isole non esistono; c'è un test sull'ordine del testo.
+
+**✅ Passo 4 — skill e pagina developer (15/10, 12:3x–12:5x).**
+> **Note implementazione**:
+> - **Skill `designer-lab-apply`:** nella riga `css-var` della tabella dei livelli, «future role tokens» diventa «the role tokens `--lf-<group>-<name>`». Aggiunta una frase: un ruolo è definito in `tokens.css` (T); le sue utility, che sono il `raw` delle occorrenze, lo leggono tramite `@theme inline` e seguono la definizione, senza modifiche alle loro righe.
+> - **`docs-writer`** ha aggiornato `mkdocs_src/docs/developer/frontend/designer-lab.md`: +120 righe, −39.
+>   - Nuova sezione «🎭 Colour Roles» (`#colour-roles`), a cui puntano gli altri riferimenti. La accetto.
+>   - Toccati: L1 (selettori, esempio, sotto-alberi), schema del catalogo (`inline`, `alias_of`, `role`), parità del 15/10, pagina del Lab (famiglia `lf`, chip, `appVars`, impatto), scheda Elemento (sorgente, `class-use`, filtro), livelli, Known Limits (sotto-albero riscritto e due voci nuove: alias non `var(--x)` e classi nei commenti), schema dell'export, `verify-export`, «Never Repaints Itself», seams di test.
+>   - Nessuna traduzione: la sezione developer è solo in inglese, quindi niente stamp.
+>   - Build e `check-links` vanno fatti dopo le 13:00.
+> **⚠️ Fuori pista**:
+> - Nel brief avevo scritto lo shade `text-muted`, che non esiste: l'alias di `--lf-text-muted` è `--color-lf-muted` (`tokens.css:165`). La pagina usa `card` e `action-hover`.
+> - Segnalato da `docs-writer`, fuori dal mio perimetro: anche la docstring di `color_inventory.py` (righe 5–6), oltre all'etichetta del riepilogo (riga 174), elenca `libre-*/theme-*/primary/accent` senza `lf-*`. Va nell'handoff.
+> **Secondo giro (12:55–13:00):**
+> - Known Limits, «Variables redefined in a subtree» (924–935): aggiunto il caso inverso, una variabile definita solo su `<html>` dentro un'isola del suo tema.
+> - Colour Roles: `lf-[a-z0-9-]+`.
+> - L1: una frase sull'ordine `both` → tema.
+> - `docs-writer` ha corretto anche una sua frase del primo giro: una definizione di componente sotto un altro selettore **non** tiene il suo valore. `applySheetsForTheme()` passa a L2 ogni `css-var` del tema a schermo, e L2 riscrive la definizione nelle regole non root. Tiene il valore solo una definizione in un attributo `style`; oggi esistono solo variabili locali (`--prov-*`, `--priority-w`).
+> - Precisato chi mette la classe del tema: anche lo script inline di `src/app.html:23`, sempre su `<html>`.
+> **Verifica (13:08):** `dev.py mkdocs build` strict → exit 0, 0 WARNING, 0 ERROR; `dev.py mkdocs check-links` → exit 0, 95 link validi. Log in `/tmp/libreFolio_L10/docs/`.
+
+**⏸️ Pausa Python (15/10, 13:12).** Il coordinatore ha fermato tutti i comandi Python (`dev.py`, `pipenv run …`, `mkdocs`) per circa 10 minuti: il developer installa `cryptography` nell'ambiente condiviso. Nel mio lane non c'era niente in corso e la porta 6152 era libera, come ho confermato al coordinatore. Gli E2E, la build di release e le prove della corsia ripartono alla «ripresa».
+
+**Previsione dei conflitti con la nuova base `9f3b141a8`** (G e 1.2.1; il coordinatore la aggiorna al checkpoint). Letta con `git diff --name-only 9d57aa4c0 9f3b141a8`, sola lettura, 30 file:
+- **unico file in comune: `BACKLOG_POST_1.2.md`**, con hunk lontani. La base cambia dalla riga 2039 in poi; i miei sono alle righe 1898–1943, nella sezione L;
+- per il resto la base porta file di G (`frontend/e2e/gallery.spec.ts`, `frontend/e2e/fixtures/gallery*`), `scripts/test_runner/_backend_utils.py`, `scripts/visual_review/{README.md, live_price_check.py}`, autenticazione e file della 1.2.1, e il journal;
+- nessun file in `frontend/src`, `frontend/scripts`, `frontend/e2e/designer-lab` o MkDocs developer;
+- `color_inventory.py` non è toccato.
+
+**✅ Validazione statica (15/10, 13:02, finestra chiusa):** `/tmp/libreFolio_L10_validate.sh static` → log in `/tmp/libreFolio_L10/val-static/`.
+> - unit del Lab: 15 file, **422** verdi (prima di L-10 erano 394; `test-author` ne ha aggiunti 28);
+> - `npm run check`: 0 errori, 0 warning;
+> - gate: 10 file, 162 verdi;
+> - `theme-roles --check`: pulito;
+> - Prettier: pulito;
+> - scanner + inventario + parità: **identica**, `custom` 912.
+>
+> **Test unitari aggiunti** (`test-author`, nessun file nuovo, runner invariato):
+> - `scanColors.test.ts`: albero sintetico dei ruoli, con varianti, opacità e cifre (`bg-lf-chart-1/40`), `inline`/`alias_of`, `role` solo per l'alias puro di un solo nome (misti, `color-mix`, due bersagli, `@theme` semplice: niente ruolo); invariante sull'albero reale (ogni alias **definito** ha un ruolo con definizione root; gli usi senza definizione, per esempio nei commenti, restano al gate di T);
+> - `catalogView.test.ts`: famiglia `lf`, `appVars` senza alias, `isInlineAlias`, `editTarget`, `varImpact`;
+> - `pickView.test.ts`: sorgente di un ruolo, `class-use` dall'alias che elenca la classe, filtro con ruolo e alias (non quelli di altri ruoli), catena di un ruolo derivato;
+> - `exportFormat.test.ts`: aggregazione del ruolo, `raw` secondo l'indice di classe, nessun `raw` per una variabile di palette;
+> - `verifyExport.test.ts`: un'occorrenza di ruolo cercata col suo `raw` (ok, moved, missing);
+> - `elementRules.test.ts`: `applyVars` (mappa `VAR_SELECTOR`, testo delle tre regole, `OWN_ATTR`, scarti e conteggio, rimozione, ordine `both` → tema stabile).
+
+**✅ Passo 5 — E2E dei ruoli (`test-author`), 15/10, scritti alle 13:2x, verdi a macchina quieta alle 15:33.** Fase 1, sola scrittura, finita alle 13:2x; l'esecuzione aspettava la «ripresa» del coordinatore.
+> **Note implementazione** (file in `frontend/e2e/designer-lab/`; nessuno spec nuovo, runner invariato):
+> - **`lab-helpers.ts`:**
+>   - `colourSourceOf(locator, 'text' | 'bg' | 'border')` restituisce `{className, chipVar, target, role, selector}`. Per una classe di palette dà la sua variabile; per un'utility di ruolo il chip è l'alias e il bersaglio è il ruolo, letto a runtime dal CSSOM della pagina dell'app (layer, `@media` e `@supports` compresi). Fallisce in modo esplicito se l'elemento non ha classe colore, ne ha due, mescola palette e ruolo, o se manca la regola.
+>   - Helper nuovi:
+>     - `openSignIn`/`LOGIN_CARD`: la pagina `/` da sloggati;
+>     - `themeValuesOf`/`newColourFor`: legge il valore del ruolo in una sonda `.light` e in una `.dark`, e sceglie un colore diverso da entrambi, perché T cambia i valori;
+>     - `sourceLines`, `writesTestid`, `placesInComponent`: leggono le righe dei file dell'export dal disco.
+> - **live:** nuovo test «L1: a colour role recolours an element of another tab, through the chip of its utility», sullo sfondo di `login-modal`. Chip dell'alias con `data-target` = ruolo; la ricerca trova il chip anche per nome del ruolo; l'app nell'altra scheda cambia colore. L'export ha impatto con la classe, occorrenze con `raw` e definizioni in `tokens.css`; `verify-export` dà 0. Reset finale e client fermo. Spostati su `colourSourceOf`, con le stesse attese: L1 palette, sospensione, export/import.
+> - **picker:** nuovo test sul `login-modal`. `background-color` è `tailwind-class`; «Edit the source» apre il ruolo; il filtro «picked» mostra il chip dell'alias e meno chip della lista intera; l'ancora dell'export ha un candidato `class-use` con la classe nel file del componente, verificato sul disco; `verify-export` dà 0; nessun testo di pagina nell'export. Anche la scorciatoia è passata a `colourSourceOf`.
+> - Prettier pulito. `textPaletteClassOf` non ha più chiamanti: lo tolgo prima dell'esecuzione, per non lasciare codice morto a knip.
+> - Backlog L-13: i punti W4 (helper pronto) e W6 (candidati via ruolo) risultano coperti da L-10.
+> **Fase 2 (13:37–13:51), corsia 6152:** prima di eseguire, `textPaletteClassOf` è stato tolto; Prettier pulito.
+>
+> | # | Comando (`--test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run`) | Esito |
+> |---|---|---|
+> | 1 | `front-designer-lab live`, 1 worker | **8/8** in 1,1 min; il test nuovo del ruolo dura 8,4 s |
+> | 2 | `front-designer-lab picker`, 1 worker | **4/4** in 31,8 s; il test nuovo dura 9,4 s |
+> | 3 | `--workers 4 front-designer-lab e2e` | 11 verdi e 2 rossi in 2,2 min, con carico macchina 84 → 200. I due test nuovi sono verdi |
+>
+> Log: `/tmp/libreFolio_L10_{live,picker,e2e_w4}.log`.
+>
+> **⚠️ Fuori pista:** i due rossi del giro 3 non vengono da test nuovi.
+> - **live, export/import:** timeout di 60 s sul colore del sottotitolo.
+> - **neutral:** dashboard ancora `data-busy` dopo 30 s; è uno spec non toccato.
+>
+> Triage di `test-author` col metodo `test-triage`:
+> - posizioni e conteggi: non c'entrano;
+> - ogni test era da 3,5 a 4,5 volte più lento che a 1 worker: L1 7,1 → 31,0 s, L3 6,8 → 34,1 s. Il test dell'export dura 17,1 s a 1 worker, quindi a quel rallentamento supera il budget di 60 s;
+> - nessun errore del backend;
+> - lo stato condiviso non è toccato: i test nuovi girano da sloggati.
+>
+> Causa probabile: la macchina sovraccarica. **Non è dimostrato:** serve un giro a 4 worker a macchina quieta, nel mio posto. Il budget di 60 s non si alza su questa prova.
+>
+> **Interruzione (13:48):** budget comune con la 1.3, al massimo 3 suite pesanti. Il coordinatore ha chiesto di chiudere la run in corso e di spegnere il server della 6152. `test-author` aveva già finito; alle 13:51 la porta era libera e non c'era nessun processo nella corsia. Nessun segnale inviato da me. L-10 è in coda per un posto di circa 25 minuti, dopo la validazione di T.
+>
+> **Type-check degli E2E del Lab (13:5x).** Il `tsconfig` del progetto esclude `e2e/**` e Playwright transpila senza controllare i tipi, quindi nessun gate li controlla. Prova una tantum: `tsc -p` con una config temporanea in `/tmp` che estende `frontend/tsconfig.json`, include `e2e/designer-lab/*.ts` e usa `typeRoots` assoluto. Risultato: exit 0, **0 errori**, compresi gli import (fixture, `global-setup`, tipi del Lab).
+> **⚠️ Fuori pista:** il primo tentativo ha dato 25 errori «Cannot find module 'node:…'» perché `types: ["node"]` si risolve dalla cartella della config (`/tmp`). Con `typeRoots` assoluto sono spariti. Config temporanea cancellata.
+
+**✅ Passo 6 — Validazione finale nello slot (15/10, 15:22–15:33).** Via del coordinatore alle 15:21 («lo slot pesante è tuo per chiudere L-10»). Prima del via: HEAD `9d57aa4c0`, 22 righe di stato, porta 6152 libera, carico 26, nessun sorgente cambiato dopo le run di `test-author`.
+Comando: `/tmp/libreFolio_L10_validate.sh slot`, tutto in sequenza nella corsia 6152. Log in `/tmp/libreFolio_L10/val-slot/` e copia negli artefatti di sessione (`files/L-validate-2026-10-15/L10/`).
+
+| Passo | Esito |
+|---|---|
+| unit del Lab | 15 file, **422/422** |
+| `npm run check` | 0 errori, 0 warning |
+| gate (`src/*.gate.test.ts` + `layout.gate`) | 10 file, 162/162 |
+| `theme-roles --check` | pulito |
+| Prettier (`scripts/designer-lab`, Lab, route, `e2e/designer-lab`) | pulito |
+| scanner + inventario Python + parità | **identica**: `custom` 912, hex 1291, fn 238, tw 10490, `var_defs` 945, 1080 file |
+| build di release | exit 0; marker `lf-designer-lab` 0, catalogo 0, indice 0; stub della rotta 488 B |
+| `front-designer-lab all`, 1 worker | exit 0: **13/13 E2E** (live 8, picker 4, neutral 1) + 422 unit; 5 azioni ✓ |
+| `front-designer-lab e2e`, 4 worker | exit 0: **13/13** in 39,9 s |
+| `check-orphans` | tutti raggiungibili (121 e2e, 391 unit, 277 backend) |
+| `mkdocs` | non rifatto: la pagina non è cambiata dopo la build strict delle 13:08 (0 WARNING, `check-links` 95) |
+| porta a fine giro | 6152 libera (`lsof` exit 1) |
+| stato della build | debug (`.build-debug=1`, 10 file col marker), come la vuole il server di test |
+
+> **Note implementazione**: i due rossi del giro a 4 worker delle 13:4x, con carico 84 → 200, **non si ripetono** a macchina quieta. È coerente con il triage (sovraccarico); il budget di 60 s resta com'è. `git diff --check` pulito. Delta: 22 file tracciati, 0 nuovi, +1437/−120.
+>
+> **Numeri del checkpoint** (catalogo `val-slot`):
+> - classi `*-lf-*`: **148 usi**, cioè 143 nel markup di 9 file Svelte (il conteggio di T) più 5 nei commenti di 2 CSS (`app.css`, `tokens.css`), in 36 voci di palette, tutte con ruolo;
+> - `tw_custom_re`: parità identica prima (`custom` 764) e dopo (912);
+> - `--color-lf-*`: **45** definizioni, tutte `inline` con `alias_of`; nessuna in «Variabili dell'app».
+>
+> **Base `badec1465` (Y1), sola lettura:** 132 file. **In comune solo `BACKLOG_POST_1.2.md`**, con hunk lontani (base dalla riga 2039 in poi, miei 1898–1943). Superfici del Lab non toccate. Dipendenze semantiche controllate:
+> - Y1 divide `GrowthChart.svelte` in `growthChart{Data,Series,Tooltip}.ts`, ma `data-testid="growth-chart"` e `attachChartReady` restano, e i colori vengono da `lib/theme/chart*` come prima. Gli E2E L3 e neutral ricavano tutto a runtime.
+> - `package.json` e lock cambiano solo la versione: niente `npm ci`.
+>
+> Dopo l'aggiornamento della base conviene comunque un giro `front-designer-lab all` sul fuso.
+
+**✅ Validazione del fuso `fb2526cc4` (15/10, 15:59–16:08).** Il coordinatore ha committato L-10 in `a6f29298e`: padre `9d57aa4c0`, gli stessi 22 file. Poi ha fuso `dev_release2` (`7adda8a3c`: H, A5, Y1 e i suoi registri) in `fb2526cc4`, senza conflitti.
+- Il fuso non tocca superfici del Lab: cambia solo la versione in `package.json` e nel lock.
+- Porta la migrazione 006 e 11 file di API.
+
+Prima del giro: HEAD verificato, albero pulito, porta libera. Comando: `/tmp/libreFolio_L10m_validate.sh`, in sequenza nella corsia 6152. Log in `/tmp/libreFolio_L10/val-merged/` e negli artefatti di sessione.
+
+| Passo | Esito |
+|---|---|
+| `dev.py api sync` | exit 0, albero ancora pulito |
+| unit del Lab | 15 file, **422/422** |
+| `npm run check` | 0 errori, 0 warning |
+| gate (gli stessi 10 file) | **168/168** |
+| `theme-roles --check` | pulito |
+| Prettier | pulito |
+| scanner + inventario + parità | **identica**: `custom` 942, hex 1291, fn 238, tw 10490, `var_defs` 945, 1120 file |
+| ruoli | 37 voci `lf`, **tutte con ruolo**, 178 usi in 15 file; 45 alias `--color-lf-*`, tutti `inline` con `alias_of` |
+| build di release | exit 0; marker 0, catalogo 0, indice 0 |
+| `dev.py front build --debug` | exit 0; `.build-debug=1`, 10 file col marker |
+| `front-designer-lab all`, 1 worker | exit 0: **13/13 E2E** in 44,5 s + 422 unit; 5 azioni ✓; una sola build, nessuna ricostruzione a metà giro (L-12) |
+| `check-orphans` | raggiungibili 122 e2e, 407 unit, 293 backend |
+| porta a fine giro | 6152 libera; resta la build di debug |
+
+> **Note implementazione**:
+> - Il passaggio di `custom` da 912 a 942 viene dal codice fuso, non dal Lab. C'è una voce nuova, `--color-lf-page` → `--lf-surface-page` (`bg-lf-page`), e 5 file nuovi con utility di ruolo: `AuthCard`, `AuthPageFrame`, `LinkStatusCard`, `ResetPasswordCard`, `InstanceBlockedPage`. Il Lab li riconosce tutti col loro ruolo senza cambi di codice: è il meccanismo generico di L-10 al lavoro.
+> - Il test `layout.authGate.test.ts` arrivato con H è un test funzionale del layout, non un gate di sorgente, e non entra nel mio insieme.
+> - Il giro a 4 worker non l'ho ripetuto sul fuso: era verde alle 15:33 sulla revisione di prima, e il coordinatore ha chiesto `all`.
+
+## ✅ Indirizzo del Lab nel banner di `dev.py` (15/10/2026)
+
+**Base:** `dae4de4fa`; durante il lavoro `d22eb6f43`, con un fast-forward del coordinatore che porta C-94 di J: `--build-only` e un ritorno anticipato in `cmd_server`, prima della lista. Ho riletto `cmd_server` sulla versione nuova prima di modificarlo. La 1.3 dà via libera sul blocco «Available endpoints».
+
+**Richiesta del developer** (testuale, 16:48): «puoi fare che in dev.py quando si avvia il server, viene mostrato anche il path per il design lab? similmente a quanto facciamo per le pagine delle api? ovviamente solo se è stato compilato, quindi in debug mode».
+
+**✅ Passo 1 — codice (15/10, 16:5x).**
+> **Note implementazione** (`dev.py`, solo inserimenti, +29 righe in 3 punti):
+> - **Helper** vicino ai marcatori della build: `DESIGNER_LAB_MARKER = b"lf-designer-lab"`, lo stesso `LAB_MARKER` di `vite-plugin.mjs`, e `_frontend_build_has_designer_lab(build_dir)`.
+>   - Legge gli script di `frontend/build/_app/immutable/` e si ferma al primo che contiene il marcatore.
+>   - È esatto: quando il Lab è spento, il plugin fa fallire la build se un file emesso contiene il marcatore.
+>   - Il file del modo di build non basta: una build di debug fatta con `LF_DESIGNER_LAB=0` non ha il Lab.
+>   - Gli errori di lettura (`OSError`) danno False, oppure saltano il file: la riga non compare e il server parte lo stesso.
+> - **Banner:** `├── 🎨 Designer Lab: http://localhost:{port}/designer-lab`, subito dopo `Frontend`, solo se l'helper dice True. Le altre righe non cambiano. Con `--build-only` la lista non si stampa, come prima.
+> - **`front dev`:** la stessa riga per la porta 5173, tranne con `LF_DESIGNER_LAB=0`. È la regola di `designerLabEnabled()` per `vite dev`: solo `'0'` lo spegne.
+> - **Costo** sulla build di debug vera: 5–14 ms con l'uscita anticipata, fino a 112 ms a freddo con la macchina carica. Nel caso peggiore, una build senza Lab con 22 MB di JS da leggere, 17–71 ms.
+>
+> **Prove leggere** (`/tmp/libreFolio_lab_banner_check.py`):
+> - build vera → True;
+> - cartella mancante → False;
+> - marcatore solo in `index.html` e in un `.map` → False;
+> - marcatore in uno script di `nodes/` → True;
+> - `front dev` con `npm` sostituito: la riga c'è senza variabile e con `1`, non c'è con `0`.
+>
+> `ruff check dev.py`: 44 segnalazioni, tutte preesistenti, nessuna sulle mie righe (`lint` del progetto copre solo `backend/`). `git diff --check` pulito.
+> **⚠️ Fuori pista:** il mio script in `/tmp` importava un `dev/` che sta nel site-packages del venv condiviso: è un pacchetto namespace, non un altro checkout. Ho risolto mettendo il worktree in testa a `sys.path`. I test del progetto non ne risentono, perché hanno la radice del progetto in `sys.path`.
+
+**✅ Passo 2 — documentazione (15/10, 17:0x).** `docs-writer` ha aggiunto tre righe in «🎨 Opening It for a Designer» di `designer-lab.md` (117–119), con link a `#release-builds`. Nessuna traduzione. La skill `devpy-server` non elenca il banner, quindi resta com'è; nessun'altra pagina riproduce la lista.
+> **Decisione del coordinatore (17:0x):** niente server di prova. La build di debug della corsia è vecchia: dopo i fast-forward sono cambiati 42 file in `frontend/src` e 22 in `mkdocs_src`, quindi servirebbe una ricostruzione pesante, e lo slot è del percorso critico di T. La prova è il test pytest con sei casi obbligati: nessuna build, release, debug col Lab, debug con `LF_DESIGNER_LAB=0`, `--build-only`, errore di lettura che non blocca l'avvio. Il banner vero lo vedrà il developer al primo `./dev.py server` dopo l'ingresso.
+
+**✅ Passo 3 — test (`test-author`, 15/10, 17:0x–17:2x).**
+> **Note implementazione:**
+> - **File nuovo:** `backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py`, 21 funzioni, 37 casi, isolamento `pure`.
+> - **Registrazione:** `scripts/test_runner/_backend_utils.py`, solo aggiunte (+21 righe): la funzione `utils_dev_designer_lab_banner` dopo `utils_dev_port_check`, e la voce `utils dev-designer-lab-banner` dopo `dev-port-check`.
+> - **I sei casi del coordinatore,** eseguendo davvero `cmd_server` su una build finta in `tmp_path`, con l'helper vero legato via `functools.partial`:
+>   - nessuna build;
+>   - release;
+>   - debug col Lab: la riga c'è, subito dopo Frontend e prima di API Redoc, con la porta giusta;
+>   - debug con `LF_DESIGNER_LAB=0`: `.build-debug=1` ma niente riga;
+>   - `--build-only`: niente lista e l'helper non viene chiamato;
+>   - errori di lettura (`rglob` e `read_bytes`): False o file saltato, e l'avvio arriva comunque al lancio di uvicorn.
+> - **In più:**
+>   - marcatore fuori dagli script (`.map`, CSS, `index.html`, `sw.js`, `offline.html`, `_app/env.js`) → False;
+>   - build di produzione con `LF_DESIGNER_LAB=1` → la riga c'è;
+>   - parità di `DESIGNER_LAB_MARKER` con `LAB_MARKER` di `vite-plugin.mjs`;
+>   - `front dev` con `LF_DESIGNER_LAB` assente, `1`, `false`, `""` e `0`.
+> - **Protezioni:**
+>   - nessun processo, `exec` o segnale vero;
+>   - `os.environ` confrontato prima e dopo;
+>   - `dev.PROJECT_ROOT` puntato su `tmp_path`;
+>   - la build vera non viene né letta né scritta.
+
+**✅ Passo 4 — verifica (15/10, 17:2x), solo comandi leggeri.**
+> - `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l utils dev-designer-lab-banner`: **37/37**, due volte da `test-author` e una da me (1,02 s). `check-orphans` verde, eseguito da `test-author`.
+> - `ruff check` e `black --check` sul file di test: puliti. `ruff` su `_backend_utils.py`: 0 segnalazioni.
+> - Diff: solo aggiunte. `dev.py` +29, `_backend_utils.py` +21, `designer-lab.md` +4, più il file di test nuovo. `git diff --check` pulito. Porta 6152 libera.
+> - **Non eseguito:**
+>   - il server di prova (decisione del coordinatore);
+>   - `mkdocs build`, perché lo slot non è mio. È a basso rischio: tre righe con un link a un'ancora della stessa pagina, che esiste (`#release-builds`).
+> - **Residuo minimo, solo segnalato:** la regola «solo `'0'` spegne il Lab sotto `vite dev`» di `front dev` è allineata a `designerLabEnabled()` solo da un commento; il test di parità copre il marcatore, non la regola.
+
+## ⏳ Giro 3 della designer nel Lab — analisi in sola lettura (15/10/2026)
+
+Richiesta del coordinatore (16:50), compito 2: cosa serve perché la designer modifichi dal vivo i ruoli nuovi di T-8 e i colori fissi di categoria di DV (`lib/theme/chartCategories.ts`, opzione A, non ancora scritto). Fonti: `designer-feedback/2026-10-15-round2-palette/README.md` e `analisi.md` §6. Testo completo inviato al coordinatore; bozza negli artefatti di sessione (`files/L-validate-2026-10-15/round3-analysis-draft.md`).
+
+**Sintesi:**
+- **Ruoli di T-8:** il Lab li gestisce già, perché L-10 è generico (prova: `bg-lf-page` è entrato col suo ruolo senza modifiche). Restano tre punti condizionati a come T-8 li scrive:
+  - **isole `.dark`/`.light`:** per terminale, stato sulla barra verde e tooltip, il selettore deve leggere il tema dall'isola più vicina, non da `<html>` (`picker/describe.ts:384`);
+  - **ombre:** servono come ruoli colore separati; l'editor non applica una `box-shadow` intera. Più un cursore per l'alfa;
+  - **coppie di contrasto dei ruoli** nel pannello (L-15): `CONTRAST_PAIRS` va spostato da `themeTokens.gate.test.ts` a un modulo condiviso.
+- **Tinte esplicite (B):** dopo T-8 la modifica di `--lf-warning` non trascina più le tinte. È giusto, va detto alla designer.
+- **Categorie:** «per valore» non funziona. Tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro, e in scuro le coppie sono diverse da quelle in chiaro. I sottotipi sono calcolati, e ci sono coincidenze con i ruoli (`#B45309` = Immobiliare e `--lf-warning` chiaro; `#6D28D9`/`#A78BFA` = Azione e viola AI).
+  - **Contratto proposto con DV:**
+    - C1: un solo punto di lettura, `categoryColor(kind, key, dark)`;
+    - C2: valori letterali, uno per chiave e per tema;
+    - C3: aggancio solo in debug, in un ramo `__LF_DESIGNER_LAB__`, verso `__lfDesignerLab`;
+    - C4: segnale di ridisegno completo (contratto L-5).
+  - **Nel Lab:** sezione `categories` del catalogo, livello nuovo `category`, scheda «Categorie», motore che risponde a C3 ed emette C4, avviso nella scheda Grafici, export e `verify-export`, una riga nella skill, ΔE00 dal vivo facoltativo, test unit ed E2E (ETF cambia, Tecnologia no).
+  - **Costo:** medio-grande, simile al 5b.
+- **Decisioni da portare:**
+  - D1: contratto con DV e sede del segnale;
+  - D2: con T-8, ombre come ruoli e uso delle isole;
+  - D3: con T, `CONTRAST_PAIRS` condiviso;
+  - D4: priorità fra ruoli e categorie.
