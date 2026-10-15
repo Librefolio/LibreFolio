@@ -927,3 +927,46 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > 25, `account-tokens` 64, `config-package` 568. Prima del commit il coordinatore ha corretto un'attribuzione: la
 > scelta su `email_verified_at` è sua, non del developer. Nessuna riga nel CHANGELOG: non c'è ancora niente di
 > visibile. Poi A4b, la versione di sessione `sv` (D-A17).
+
+### X CP3, i cambi per tema, integrato ✅ (2026-10-15, 05:30)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `8000aba5a`. CP3 `b991d5e26` (PL4): `services/fx/fx.py` →
+> `base`, `storage`, `conversion`, `sync`; `api/v1/fx.py` → `api/v1/fx/` (`providers`, `currencies`). Nessuna rinomina
+> a −M95 %. Controllo del coordinatore sull'AST: 32/32 e 20/20 definizioni identiche. Validazione di X: run completa
+> sulla revisione con J CP-1 e W4 (`d1ef3ddeb`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
+> `api schema` identici. Sopra A4 (`9a3ba752a`) controllo leggero: guardia 573, raccolta e schema identici.
+>
+> **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
+> solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
+> X-R8, proposta: cache di 24 ore dell'elenco delle valute dei fornitori, con l'ultimo elenco noto in caso d'errore.
+
+### W7, gli schemi delle transazioni come pacchetto, integrato ✅ (2026-10-15, 05:40)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1cd7300f3`. Due commit, perché il nucleo resta sotto la
+> soglia di somiglianza di git: W7a `00a19bf72`, la rinomina pura (`R100`) di `schemas/transactions.py` in
+> `schemas/transactions/transactions.py`; W7b `e28aad42f`, il taglio in `batch`, `event_suggest`, `promotion` e
+> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`304e6d176`)
+> `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
+> e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
+> coordinatore su `brokers.py` e `uploads.py`.
+
+### X CP3b, test dei cambi senza rete, integrato ✅ (2026-10-15, 06:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `63a1f675c` (CP3b `cea5ce859`). W-B9: il contratto e i
+> filtri dei fornitori di cambi provati su FED e BOE, che hanno elenchi statici; la SNB va anch'essa in rete, quindi
+> resta con la BCE in `test_external` (scostamento motivato dalla decisione delle 05:20, che citava anche la SNB).
+> W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
+> Validazione di X: `api fx` 21/21 anche senza rete; raccolta identica sopra W7. W-B15 (un selettore per testo in una
+> spec di W) nella sezione di W; X-R9 con il FE4.
+
+### J C-93, connessioni aiosqlite lasciate aperte, integrato ✅ (2026-10-15, 06:05)
+
+> **Note implementazione**: `c412f8dad`, merge di `3a03a1b2c` su `c81670354`. Causa trovata con la skill
+> `test-triage`: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite, e un GC in un thread con un loop corrente
+> chiuso ne uccideva il thread di lavoro; pytest attribuiva l'avviso al test in corso, estraneo. Curato nei test.
+> Validazione di J sulla revisione con A4, X CP3 e W7: `services ai-export` 1 025, raccolta +4; prima `all-backend
+> --workers 2` con la sonda: 0 connessioni aperte. **Senza nuovo controllo di J** dopo X CP3b: nessun file in comune
+> salvo il backlog, test da entrambe le parti, controlli statici del coordinatore puliti.
+>
+> J-5 (un loop chiuso lasciato come corrente in `services/assets/core.py`) passa a X, dopo il CP4; J-6 (una guardia
+> di suite per le connessioni aperte) a J, dopo G-8.

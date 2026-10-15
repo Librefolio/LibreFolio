@@ -53,13 +53,13 @@ New column `cost_basis_currency VARCHAR(3)` alongside existing `cost_basis_overr
 
 ## Implementation
 - Commit: `a79e68156` (SP-A)
-- Files: `backend/app/db/models.py`, `backend/app/schemas/transactions.py`, `backend/alembic/versions/001_initial.py`
+- Files: `backend/app/db/models.py`, `backend/app/schemas/transactions/transactions.py`, `backend/alembic/versions/001_initial.py`
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | DB model (cost_basis fields) | `backend/app/db/models.py` |
-| TX schemas (Currency field) | `backend/app/schemas/transactions.py` |
+| TX schemas (Currency field) | `backend/app/schemas/transactions/transactions.py` |
 | Currency class definition | `backend/app/schemas/common.py` |
 | Alembic migration | `backend/alembic/versions/001_initial.py` |

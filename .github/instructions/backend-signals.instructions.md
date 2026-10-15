@@ -15,7 +15,7 @@ applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.p
 - **Runtime**: `signal_service.py` (planning, execution, annotations, validation), `signal_runtime.py`,
   `signal_annotations.py`, `signal_series_preparation.py` (quote days, prepared series). `series_preparation.py` is
   shared with the risk engine.
-- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets/prices.py` and `api/v1/fx.py`. The frontend
+- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets/prices.py` and `api/v1/fx/currencies.py`. The frontend
   renders the declaration with no indicator-specific code (`frontend-signals.instructions.md`).
 
 ## Rules

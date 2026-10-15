@@ -22,10 +22,12 @@ monkeypatched (no live DB), matching
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import date
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -77,12 +79,25 @@ def _make_async_session() -> AsyncSession:
     return AsyncSession(engine)
 
 
-async def _make_real_db_session() -> AsyncSession:
-    """A real in-memory SQLite session with the ORM schema created (for DB-level loader tests)."""
+@pytest_asyncio.fixture
+async def real_db_session() -> AsyncIterator[AsyncSession]:
+    """A private in-memory SQLite database with the ORM schema (for DB-level loader tests).
+
+    Torn down whatever the test's outcome: the session is closed and the engine
+    disposed, so no aiosqlite connection outlives the test. Left to the garbage
+    collector, the pooled connection would be closed against an event loop that
+    no longer runs, and its worker thread's failure would surface as a warning
+    blamed on whichever unrelated test happened to be running.
+    """
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    return AsyncSession(engine)
+    session = AsyncSession(engine)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
 
 
 def _tx(broker_id: int, type_: TransactionType, tx_date: date, *, amount: object | None = None, currency: str | None = CURRENCY, quantity: object = 0) -> Transaction:
@@ -615,9 +630,9 @@ class TestCostEfficiencyPeriodActivityLoader:
     """DB-level tests of the real ``_load_broker_period_activity`` loader (boundary + share + access)."""
 
     @pytest.mark.asyncio
-    async def test_boundary_is_start_exclusive_end_inclusive(self, monkeypatch):
+    async def test_boundary_is_start_exclusive_end_inclusive(self, monkeypatch, real_db_session):
         scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id, 999))
         session.add(BrokerUserAccess(user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share_percentage=Decimal("1")))
         session.add_all(
@@ -638,12 +653,11 @@ class TestCostEfficiencyPeriodActivityLoader:
         assert payload["trade_count"] == 2
         # |−200| (BUY) + 300 (SELL) = 500; boundary-start and after-end trades excluded.
         assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("500")
-        await session.close()
 
     @pytest.mark.asyncio
-    async def test_share_loaded_from_broker_user_access(self, monkeypatch):
+    async def test_share_loaded_from_broker_user_access(self, monkeypatch, real_db_session):
         scope = _scope()
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
         session.add(BrokerUserAccess(user_id=scope.user_id, broker_id=scope.broker_id, role=UserRole.OWNER, share_percentage=Decimal("0.25")))
         session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000))
@@ -654,12 +668,11 @@ class TestCostEfficiencyPeriodActivityLoader:
         payload = (await context.resolve("broker.cost_efficiency", required=True)).payload
         assert Decimal(payload["ownership_share_ratio"]) == Decimal("0.25")
         assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("250")  # 1000 × 0.25
-        await session.close()
 
     @pytest.mark.asyncio
-    async def test_no_access_row_fails_explicitly(self, monkeypatch):
+    async def test_no_access_row_fails_explicitly(self, monkeypatch, real_db_session):
         scope = _scope()
-        session = await _make_real_db_session()
+        session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
         # No BrokerUserAccess row for this user/broker.
         session.add(_tx(scope.broker_id, TransactionType.BUY, date(2026, 1, 10), amount=-1000))
@@ -669,4 +682,3 @@ class TestCostEfficiencyPeriodActivityLoader:
 
         with pytest.raises(RequiredComponentBuildError):
             await context.resolve("broker.cost_efficiency", required=True)
-        await session.close()

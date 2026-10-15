@@ -523,7 +523,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
     //
     // A parametric series is invented from provider_params; under a market provider it
     // is not history, so the backend discards it ("provider changed" in
-    // asset_source.py). That is correct — but silent destruction is not, and the
+    // services/assets/provider_management.py). That is correct — but silent destruction is not, and the
     // warning has to be able to say *how much* it is about to destroy, otherwise it
     // is decoration. Both branches are driven: cancelling must leave the series
     // untouched, confirming must remove it.
