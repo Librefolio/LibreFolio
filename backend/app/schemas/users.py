@@ -93,7 +93,7 @@ class LinkTokenResponse(StrictModel):
     """A single-use link, shown once: the token, its path and, with LIBREFOLIO_PUBLIC_URL, the full address."""
 
     token: str
-    path: str = Field(..., description="The path of the page that takes the token, query included")
+    path: str = Field(..., description="The path of the page that takes the token, the token in the fragment")
     url: Optional[str] = Field(None, description="LIBREFOLIO_PUBLIC_URL followed by the path; null when the variable is not set")
     expires_at: UTCDateTime
 
@@ -103,7 +103,7 @@ class InviteCreateResponse(StrictModel):
 
     invite: InviteRead
     token: str
-    path: str = Field(..., description="The path of the page that takes the token, query included")
+    path: str = Field(..., description="The path of the page that takes the token, the token in the fragment")
     url: Optional[str] = Field(None, description="LIBREFOLIO_PUBLIC_URL followed by the path; null when the variable is not set")
 
 

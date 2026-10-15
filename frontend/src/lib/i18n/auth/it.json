@@ -57,6 +57,28 @@
     "loginServerError": "Il server ha riscontrato un errore: riprova tra un momento e, se succede di nuovo, avvisa un amministratore.",
     "tooManyAttempts": "Troppi tentativi di accesso: aspetta qualche minuto e riprova.",
     "showPassword": "Mostra password",
-    "hidePassword": "Nascondi password"
+    "hidePassword": "Nascondi password",
+    "registrationInviteOnly": "Questo server accetta nuovi account solo tramite un link d'invito. Chiedine uno a un amministratore.",
+    "userLimitReached": "Questo server ha raggiunto il numero massimo di account. Contatta l'amministratore.",
+    "invite": {
+      "notice": "Hai ricevuto un invito per questo server LibreFolio: crea il tuo account.",
+      "adminNotice": "Questo invito crea un account amministratore."
+    },
+    "link": {
+      "expired": "Questo link è scaduto.",
+      "consumed": "Questo link è già stato usato.",
+      "revoked": "Questo link è stato revocato.",
+      "unknown": "Questo link non è valido.",
+      "missing": "Questo link è incompleto: aprilo di nuovo dal messaggio che hai ricevuto.",
+      "checkFailed": "Non è stato possibile verificare il link. Riprova tra poco.",
+      "askAdmin": "Chiedi un nuovo link a un amministratore."
+    },
+    "resetPassword": {
+      "title": "Scegli una nuova password",
+      "account": "Account:",
+      "submit": "Imposta la nuova password",
+      "done": "La password è stata cambiata: accedi con quella nuova.",
+      "failed": "Non è stato possibile cambiare la password. Riprova."
+    }
   }
 }

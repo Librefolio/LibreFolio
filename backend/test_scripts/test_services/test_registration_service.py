@@ -1,13 +1,14 @@
-"""``registration_service`` and the accounts configuration: who may create an account, and how many (plan phase01Accounts §17 A5.1, lot A5a, contract points 2, 3 and 4).
+"""``registration_service`` and the accounts configuration: who may create an account, and how many (plan phase01Accounts §17 A5.1, lot A5a, contract points 2, 3 and 4, and the review of 15/10).
 
 Release 1.3 replaces the registration switch with three modes and adds a user limit. Who may create an account depends
 on a row (``registration_mode``), on a variable that overrides it (``LIBREFOLIO_REGISTRATION``), on invitations
 (single-use ``account_tokens`` of purpose ``invite``) and on the limit (``LIBREFOLIO_MAX_USERS``). ``registration_service``
 holds the whole rule, so that the API and the command line apply the same one. The contract pinned here:
 
-2. The settings registry: ``registration_mode`` replaces ``enable_registration`` — type ``string``, as migration 006
-   writes the row, so a new install and an upgraded one hold the same row —, default ``open``, choices open, invite and
-   disabled and nothing else; ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE``; ``ENABLE_REGISTRATION`` gone.
+2. The settings registry: ``registration_mode`` replaces ``enable_registration`` — ``value_type`` ``str``, the type of
+   every text setting in ``schemas/settings.py`` and the one migration 006 writes, so a new install and an upgraded one
+   hold the same row —, default ``open``, choices open, invite and disabled and nothing else;
+   ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE``; ``ENABLE_REGISTRATION`` gone.
 3. The variables, one accessor each in ``backend/app/config/accounts.py``, read at every call, each in ``.env.example``'s
    Accounts section as a commented line:
    - ``registration_mode_override()`` — ``LIBREFOLIO_REGISTRATION``, stripped and lower-cased; unset, empty or blank →
@@ -19,21 +20,34 @@ holds the whole rule, so that the API and the command line apply the same one. T
      or ``https://`` → ``ValueError``.
 4. ``registration_service``:
    - ``effective_registration_mode`` → ``RegistrationModeState(mode, locked)``: the variable when it is set, locked;
-     otherwise the row, ``open`` without one. An invalid variable closes — ``disabled``, locked — and logs one error per
-     process;
+     otherwise the row, ``open`` without one. An invalid variable closes — ``disabled``, locked —, and so does an invalid
+     stored value — ``disabled``, not locked: the administrator fixes the row in Settings;
    - ``user_usage`` → ``UserUsage(used, max_users)``: active users plus live invitations (not consumed, not revoked, not
-     expired). An invalid limit closes: ``max_users`` 0, and an error in the log;
+     expired). An invalid limit closes: ``max_users`` 0;
+   - ``public_link(path)`` is ``LIBREFOLIO_PUBLIC_URL`` followed by the path, whose token travels in the fragment
+     (``token_path`` writes ``#token=…``), and ``None`` without the variable or with an invalid one: the caller then
+     shows the bare path. ``billing_link()`` is ``LIBREFOLIO_BILLING_URL``, ``None`` without it or with an invalid one;
+   - an invalid setting is reported by ``_report_invalid(problem, consequence)``: one structlog error event,
+     ``Invalid account configuration``, whose ``problem`` names the variable or the setting and whose ``consequence``
+     says what the fallback does, once per process for each distinct pair (``functools.cache``). «registration stays
+     closed until it is fixed» for the variable, the stored mode and the limit; «links show the bare path until it is
+     fixed» for the public URL; «the billing link stays hidden until it is fixed» for the billing URL. An invalid URL
+     closes nothing — the mode, the limit and the registrations are those of a valid one — and its log never says it does;
    - ``create_invite`` issues an invitation (the token service's ``IssuedToken``) unless registration is disabled
      (``REGISTRATION_DISABLED``) or the limit is reached, ``used >= max_users`` (``USER_LIMIT_REACHED``); a refusal
      writes nothing;
    - ``list_pending_invites`` lists the live invitations; ``revoke_invite`` revokes one, ``True``, and answers ``False``
      for anything that is not a live invitation;
-   - ``register_user`` holds the whole rule. The first account is the administrator in every mode; ``disabled`` refuses
-     even an invitation; ``invite`` wants a valid one (``INVITE_REQUIRED``, ``INVITE_INVALID``); ``open`` takes one or
-     none, but a given one must be valid. An invitation gives its role and is consumed by the new account in the same
-     transaction; its place was counted already, so a full limit does not stop it. Without one, the limit is checked
-     after the insert, in the same transaction, so two racing registrations never exceed it, and a refusal rolls back.
-     bcrypt runs off the event loop. A taken name or email is today's error, and leaves the invitation live.
+   - ``register_user`` holds the whole rule. The first account is the administrator in every mode, whatever role an
+     invitation grants; the mode does not apply to it, but a token given with it is checked and spent all the same: a
+     valid invitation is consumed by it, one that is not valid refuses it (``INVITE_INVALID``, the instance still
+     empty) — an invitation can exist before anyone registered, and its link must not open a second account. After the
+     first account, ``disabled`` refuses even an invitation; ``invite`` wants a valid one (``INVITE_REQUIRED``,
+     ``INVITE_INVALID``); ``open`` takes one or none, but a given one must be valid. An invitation gives its role and is
+     consumed by the new account in the same transaction; its place was counted already, so a full limit does not stop
+     it. Without one, the limit is checked after the insert, in the same transaction, so two racing registrations never
+     exceed it, and a refusal rolls back. bcrypt runs off the event loop. A taken name or email is today's error, and
+     leaves the invitation live.
 
 Refusals are ``RegistrationError`` carrying its code (``.code``, or else its first argument). The helpers that call the
 service commit after a refusal on purpose: whatever its caller does next, a refused call must have written nothing.
@@ -43,25 +57,30 @@ keeps that schema equal to the migrated one), opened as production opens its own
 connection —, and the PRAGMA listener of ``backend.app.db.session`` (foreign keys, WAL, busy_timeout). The accounts
 variables are removed from this process's environment before each test and set through ``monkeypatch`` where a test is
 about them. bcrypt runs at its lowest cost (``auth_service.BCRYPT_ROUNDS = 4``): real hashes that verify, a hundred
-times cheaper. "Once per process" is observed in a process of its own, a child Python started for that test. No server,
+times cheaper. The cache of ``_report_invalid`` is emptied before and after every test, so "once per process" starts
+over in each, in this process; the log is read with ``structlog.testing.capture_logs``, behind a barrier: a canary
+logged through the service's own logger must reach the capture, or "nothing was logged" would prove nothing. No server,
 no lane database, no clock wait: the race is held in step by a barrier, not by sleeps.
 
-Red until ``registration_service`` and the four accessors exist: the module does not import.
+Red until the review of 15/10 lands, for the cases it changes: the registry says ``string``, ``public_link`` carries
+the token in the query string, the one log line of every invalid setting reads «Invalid account configuration:
+registration stays closed until it is fixed», whatever the setting, with no ``consequence`` field; and the first
+registration of an empty instance is admitted before its token is looked at, so a valid invitation stays live and an
+invalid one is ignored.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import os
+import contextlib
 import re
-import subprocess
-import sys
 import threading
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional, Union
+from urllib.parse import parse_qs, urlsplit
 
 import bcrypt
 import pytest
@@ -69,6 +88,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.config.accounts import billing_url, max_users, public_url, registration_mode_override
@@ -76,7 +96,7 @@ from backend.app.db.base import SQLModel  # imports every model, and backend.app
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User
 from backend.app.schemas.settings import GLOBAL_SETTINGS_CONSTRAINTS, GLOBAL_SETTINGS_DEFAULTS, SETTINGS_REGISTRY, validate_global_setting_value
 from backend.app.services.accounts import auth_service, registration_service
-from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, inspect_token, issue_token, revoke_tokens
+from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, inspect_token, issue_token, revoke_tokens, token_path
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -91,6 +111,8 @@ list_pending_invites = registration_service.list_pending_invites
 register_user = registration_service.register_user
 revoke_invite = registration_service.revoke_invite
 user_usage = registration_service.user_usage
+public_link = registration_service.public_link
+billing_link = registration_service.billing_link
 
 INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
@@ -112,7 +134,16 @@ INVALID_INVITES = ("unknown", "expired", "consumed", "revoked", "password_reset"
 #: How long two racing registrations wait for each other at the hashing barrier: a deadline for a failure, never a pause.
 BARRIER_SECONDS = 15.0
 RACE_ROUNDS = 3
-CHILD_TIMEOUT = 180
+
+#: The one event an invalid account setting logs, and the consequences it may name (review of 15/10), word for word.
+INVALID_CONFIGURATION = "Invalid account configuration"
+REGISTRATION_STAYS_CLOSED = "registration stays closed until it is fixed"
+LINKS_SHOW_THE_BARE_PATH = "links show the bare path until it is fixed"
+BILLING_LINK_STAYS_HIDDEN = "the billing link stays hidden until it is fixed"
+LOG_CANARY = "canary: the capture reaches the registration service's own logger"
+#: A token in the alphabet issue_token uses (URL-safe base64), and the page each purpose of a link opens.
+SAMPLE_TOKEN = "Zm9v_YmFy-0123456789abcdefghijklmnopqrstuv"
+PAGES = {INVITE: "/invite", PASSWORD_RESET: "/reset-password"}
 
 Outcome = Union[User, RegistrationError]
 
@@ -133,6 +164,14 @@ def accounts_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 def cheap_bcrypt(monkeypatch: pytest.MonkeyPatch) -> None:
     """bcrypt at its lowest cost in this process: real hashes that verify, at a hundredth of the time."""
     monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+
+
+@pytest.fixture(autouse=True)
+def fresh_reports() -> Iterator[None]:
+    """The cache of ``_report_invalid`` empty before and after each test: "once per process" starts over, and no test inherits what another reported."""
+    registration_service._report_invalid.cache_clear()
+    yield
+    registration_service._report_invalid.cache_clear()
 
 
 @pytest_asyncio.fixture
@@ -164,7 +203,7 @@ async def _set_mode_row(engine: AsyncEngine, mode: str) -> None:
     async with AsyncSession(engine) as session:
         row = await session.get(GlobalSetting, MODE_KEY)
         if row is None:
-            row = GlobalSetting(key=MODE_KEY, value=mode, value_type="string", description="Who may create an account: open, invite or disabled", updated_at=utcnow())
+            row = GlobalSetting(key=MODE_KEY, value=mode, value_type="str", description="Who may create an account: open, invite or disabled", updated_at=utcnow())
         row.value = mode
         session.add(row)
         await session.commit()
@@ -310,24 +349,55 @@ def _assert_registered(outcome: object, what: str) -> User:
 
 
 # =============================================================================
+# HELPERS — reading the log
+# =============================================================================
+
+
+@contextlib.contextmanager
+def _captured() -> Iterator[list[dict[str, Any]]]:
+    """The structlog events of the block, behind a barrier: a canary logged through the service's own logger must be among them.
+
+    Without it, a capture that misses the service's events would pass every "nothing was logged" for a service that
+    logs nothing — or worse, for one that logs the wrong thing.
+    """
+    with capture_logs() as events:
+        registration_service.logger.debug(LOG_CANARY)
+        yield events
+    assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: the events of the registration service's logger do not reach capture_logs, so what this test reads of the log proves nothing: {events}"
+
+
+def _errors(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The error-level events among those captured: what an operator's log shows as a problem."""
+    return [event for event in events if event.get("log_level") in ("error", "critical")]
+
+
+def _reported(events: list[dict[str, Any]]) -> list[tuple[Any, Any]]:
+    """``(event, consequence)`` of each error-level event, in order."""
+    return [(event.get("event"), event.get("consequence")) for event in _errors(events)]
+
+
+# =============================================================================
 # 2. THE SETTINGS REGISTRY
 # =============================================================================
 
 
 def test_registration_mode_replaces_enable_registration_in_the_registry() -> None:
-    """Contract 2: ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE`` is the global key ``registration_mode``, a ``string`` defaulting to ``open``; ``enable_registration`` and ``ENABLE_REGISTRATION`` are gone.
+    """Contract 2: ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE`` is the global key ``registration_mode``, a ``str`` defaulting to ``open``; ``enable_registration`` and ``ENABLE_REGISTRATION`` are gone.
 
-    ``string`` as migration 006 writes the row: a new install, seeded from the registry, and an upgraded one hold the same row.
+    ``str`` (review of 15/10): the documented type of every text setting in ``schemas/settings.py`` — "str", "int",
+    "bool", "json" —, and the one migration 006 writes: a new install, seeded from the registry, and an upgraded one hold
+    the same row.
     """
     print_section("Contract 2: registration_mode in the registry")
     spec = SETTINGS_REGISTRY.global_.REGISTRATION_MODE
 
-    assert (spec.key, spec.location, spec.value_type) == (MODE_KEY, "global", "string"), f"REGISTRATION_MODE must be the global string key {MODE_KEY!r}: {spec}"
+    assert (spec.key, spec.location, spec.value_type) == (MODE_KEY, "global", "str"), f"REGISTRATION_MODE must be the global str key {MODE_KEY!r}: {spec}"
+    assert GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]["type"] == "str", f"a new install seeds the row from the defaults, as value_type 'str': {GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]}"
     assert spec in SETTINGS_REGISTRY.global_.all()
     assert GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]["value"] == "open", f"registration is open by default, as enable_registration was true: {GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]}"
     assert "enable_registration" not in GLOBAL_SETTINGS_DEFAULTS, "enable_registration must leave the defaults: a new install would seed both rows"
     assert not hasattr(SETTINGS_REGISTRY.global_, "ENABLE_REGISTRATION"), "ENABLE_REGISTRATION must leave the registry"
-    print_success("registration_mode: global, string, open; enable_registration gone")
+    print_success("registration_mode: global, str, open; enable_registration gone")
 
 
 def test_registration_mode_accepts_its_three_choices_and_nothing_else() -> None:
@@ -336,10 +406,10 @@ def test_registration_mode_accepts_its_three_choices_and_nothing_else() -> None:
 
     assert GLOBAL_SETTINGS_CONSTRAINTS[MODE_KEY].choices == MODES
     for mode in MODES:
-        assert validate_global_setting_value(MODE_KEY, mode, "string") == mode
+        assert validate_global_setting_value(MODE_KEY, mode, "str") == mode
     for refused in ("closed", "true", "invite-only", ""):
         with pytest.raises(ValueError):
-            validate_global_setting_value(MODE_KEY, refused, "string")
+            validate_global_setting_value(MODE_KEY, refused, "str")
     print_success("open, invite, disabled accepted; closed, true, invite-only and empty refused")
 
 
@@ -556,89 +626,204 @@ async def test_an_invalid_limit_closes_the_usage_at_zero(engine: AsyncEngine, mo
     assert (usage.used, usage.max_users) == (1, 0), f"{MAX_USERS_VARIABLE}='plenty' must close: used 1, max_users 0; got {usage!r}"
 
 
-# A process of its own: whatever another test of this run already logged cannot hide the first error, or fake the second.
-LOG_PROBE = """
-import asyncio
-import json
-import logging
-import os
-import traceback
-
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.pool import NullPool
-from structlog.testing import capture_logs
-
-from backend.app.db.base import SQLModel
-from backend.app.services.accounts import registration_service
+# =============================================================================
+# 4c. THE LINKS: THE PUBLIC URL AND THE BILLING URL
+# =============================================================================
 
 
-class ErrorRecords(logging.Handler):
-    def __init__(self):
-        super().__init__(logging.ERROR)
-        self.messages = []
+@pytest.mark.parametrize("purpose", [INVITE, PASSWORD_RESET], ids=["invite", "password_reset"])
+@pytest.mark.parametrize(
+    ("configured", "base", "prefix"),
+    [
+        pytest.param("https://folio.example.com/", "https://folio.example.com", "", id="host-with-trailing-slash"),
+        pytest.param("  https://example.com/folio \n", "https://example.com/folio", "/folio", id="sub-path-with-spaces"),
+    ],
+)
+def test_public_link_is_the_public_url_then_the_page_with_the_token_in_its_fragment(monkeypatch: pytest.MonkeyPatch, purpose: AccountTokenPurpose, configured: str, base: str, prefix: str) -> None:
+    """Contract 4 (review of 15/10): ``public_link(token_path(purpose, token))`` is ``LIBREFOLIO_PUBLIC_URL`` followed by the page of the purpose, the token in the fragment (``#token=…``) and the query string empty; a valid URL reports nothing.
 
-    def emit(self, record):
-        self.messages.append(f"stdlib {record.name}: {record.getMessage()} {record.args!r}")
-
-
-async def probe():
-    engine = create_async_engine("sqlite+aiosqlite:///" + os.environ["REGISTRATION_PROBE_DB"], poolclass=NullPool)
-    records = ErrorRecords()
-    logging.getLogger().addHandler(records)
-    try:
-        async with engine.begin() as connection:
-            await connection.run_sync(SQLModel.metadata.create_all)
-        with capture_logs() as events:
-            async with AsyncSession(engine) as session:
-                states = [await registration_service.effective_registration_mode(session) for _ in range(3)]
-                usage = await registration_service.user_usage(session)
-    finally:
-        await engine.dispose()
-    errors = [f"structlog {event!r}" for event in events if event.get("log_level") in ("error", "critical")] + records.messages
-    return {"states": [[str(state.mode), state.locked] for state in states], "usage": [usage.used, usage.max_users], "errors": errors}
-
-
-try:
-    print("PROBE-RESULT " + json.dumps(asyncio.run(probe())))
-except Exception:
-    print("PROBE-FAILED " + json.dumps(traceback.format_exc()))
-"""
-
-
-def test_an_invalid_variable_logs_one_error_per_process_and_closes(tmp_path: Path) -> None:
-    """Contract 4: with ``LIBREFOLIO_REGISTRATION=sometimes`` three readings of the mode answer ``disabled``, locked, and log one error naming the variable — one, not three; with ``LIBREFOLIO_MAX_USERS=plenty`` the usage closes at 0 and logs an error naming that variable.
-
-    In a child Python of its own (fresh "once"), on a private database, its test data dir a sandbox under ``tmp_path``.
-    Errors are counted from structlog (``capture_logs``) and from the stdlib root logger alike.
+    A browser never sends the fragment: whoever opens the link an administrator hands out, the token reaches neither the
+    instance's access log nor a proxy's on the way.
     """
-    print_section("Contract 4: one error per process")
-    environment = {name: value for name, value in os.environ.items() if name not in ACCOUNTS_VARIABLES}
-    environment.update(
-        {
-            REGISTRATION_VARIABLE: "sometimes",
-            MAX_USERS_VARIABLE: "plenty",
-            "REGISTRATION_PROBE_DB": str(tmp_path / "probe.db"),
-            "LIBREFOLIO_TEST_MODE": "1",
-            "LIBREFOLIO_TEST_DATA_DIR": str(tmp_path / "data"),
-        }
-    )
+    print_section(f"Contract 4: public_link, {purpose.value}, {configured.strip()}")
+    monkeypatch.setenv(PUBLIC_URL_VARIABLE, configured)
 
-    completed = subprocess.run([sys.executable, "-c", LOG_PROBE], cwd=PROJECT_ROOT, env=environment, capture_output=True, text=True, timeout=CHILD_TIMEOUT, check=False)
-    output = f"exit {completed.returncode}\n--- stdout\n{completed.stdout[-3000:]}\n--- stderr\n{completed.stderr[-3000:]}"
-    line = next((line for line in completed.stdout.splitlines() if line.startswith("PROBE-")), "")
-    assert line.startswith("PROBE-RESULT "), f"the probe did not complete:\n{json.loads(line.removeprefix('PROBE-FAILED ')) if line.startswith('PROBE-FAILED ') else output}"
-    result = json.loads(line.removeprefix("PROBE-RESULT "))
+    with _captured() as events:
+        link = public_link(token_path(purpose, SAMPLE_TOKEN))
 
-    assert result["states"] == [["disabled", True]] * 3, f"an invalid {REGISTRATION_VARIABLE} must close: disabled, locked, at every reading; got {result['states']}"
-    registration_errors = [error for error in result["errors"] if REGISTRATION_VARIABLE in error]
-    assert len(registration_errors) == 1, f"three readings of an invalid {REGISTRATION_VARIABLE} must log exactly one error naming it, once per process; got {len(registration_errors)}: {result['errors']}"
-    assert result["usage"][1] == 0, f"an invalid {MAX_USERS_VARIABLE} must close the limit at 0: {result['usage']}"
-    assert any(MAX_USERS_VARIABLE in error for error in result["errors"]), f"an invalid {MAX_USERS_VARIABLE} must log an error naming it: {result['errors']}"
-    print_success("disabled and locked three times, one error; limit 0, its error logged")
+    parts = urlsplit(link or "")
+    assert link is not None and link.startswith(base + PAGES[purpose]), f"{PUBLIC_URL_VARIABLE}={configured!r}: the link must be the public URL followed by the page {PAGES[purpose]}, got {link!r}"
+    assert (parts.scheme, parts.path, parts.query) == ("https", prefix + PAGES[purpose], ""), f"the token must not travel in the query string, which the server and every proxy log: {link!r}"
+    assert parse_qs(parts.fragment) == {"token": [SAMPLE_TOKEN]}, f"the token must travel in the fragment, as its 'token' field: {link!r}"
+    assert _errors(events) == [], f"a valid {PUBLIC_URL_VARIABLE} is no problem to report: {_errors(events)}"
+    print_success(f"{base}{PAGES[purpose]}#token=…")
+
+
+def test_a_missing_url_or_a_valid_billing_url_is_no_problem_to_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 4: without ``LIBREFOLIO_PUBLIC_URL`` there is no link — the caller shows the bare path —, without ``LIBREFOLIO_BILLING_URL`` no billing link, and a valid billing URL is the link, stripped of its spaces and of its trailing ``/``. None of this is a problem: nothing is logged."""
+    print_section("Contract 4: no URL, or a valid one, reports nothing")
+
+    with _captured() as events:
+        missing = (public_link(token_path(INVITE, SAMPLE_TOKEN)), billing_link())
+        monkeypatch.setenv(BILLING_URL_VARIABLE, " https://billing.example.com/acme/ ")
+        billing = billing_link()
+
+    assert missing == (None, None), f"without the variables there is no link: {missing}"
+    assert billing == "https://billing.example.com/acme", f"a valid {BILLING_URL_VARIABLE} is the billing link: {billing!r}"
+    assert _errors(events) == [], f"a missing or a valid URL is no problem to report: {_errors(events)}"
+    print_success("no link without the variables, the billing link with it, nothing reported")
 
 
 # =============================================================================
-# 4c. INVITATIONS: CREATE, LIST, REVOKE
+# 4d. AN INVALID SETTING: ITS FALLBACK, AND ONE ERROR THAT SAYS WHAT IT COSTS
+# =============================================================================
+
+
+async def _read_mode(engine: AsyncEngine) -> tuple[str, bool]:
+    """The effective mode as ``(mode, locked)``, read in a session of its own."""
+    async with AsyncSession(engine) as session:
+        state = await effective_registration_mode(session)
+    return state.mode, state.locked
+
+
+async def _read_limit(engine: AsyncEngine) -> Optional[int]:
+    """``max_users`` of the usage, read in a session of its own."""
+    async with AsyncSession(engine) as session:
+        return (await user_usage(session)).max_users
+
+
+async def _read_public_link(_engine: AsyncEngine) -> Optional[str]:
+    """The link an administrator's page shows for an invitation."""
+    return public_link(token_path(INVITE, SAMPLE_TOKEN))
+
+
+async def _read_billing_link(_engine: AsyncEngine) -> Optional[str]:
+    """The billing link an administrator's page shows."""
+    return billing_link()
+
+
+@dataclass(frozen=True)
+class _InvalidSetting:
+    """An account setting made invalid: what the problem must name, the value, how the service reads it, what it falls back to, and what the log must say it costs."""
+
+    name: str
+    value: str
+    stored: bool
+    read: Callable[[AsyncEngine], Awaitable[object]]
+    fallback: object
+    consequence: str
+
+    async def put(self, engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Make it invalid: the row written as a damaged database holds it (no validation on the way), or the variable set."""
+        if self.stored:
+            await _set_mode_row(engine, self.value)
+        else:
+            monkeypatch.setenv(self.name, self.value)
+
+
+INVALID_REGISTRATION = _InvalidSetting(REGISTRATION_VARIABLE, "sometimes", False, _read_mode, ("disabled", True), REGISTRATION_STAYS_CLOSED)
+INVALID_STORED_MODE = _InvalidSetting(MODE_KEY, "sometimes", True, _read_mode, ("disabled", False), REGISTRATION_STAYS_CLOSED)
+INVALID_LIMIT = _InvalidSetting(MAX_USERS_VARIABLE, "plenty", False, _read_limit, 0, REGISTRATION_STAYS_CLOSED)
+INVALID_PUBLIC_URL = _InvalidSetting(PUBLIC_URL_VARIABLE, "folio.example.com", False, _read_public_link, None, LINKS_SHOW_THE_BARE_PATH)
+INVALID_BILLING_URL = _InvalidSetting(BILLING_URL_VARIABLE, "ftp://billing.example.com/acme", False, _read_billing_link, None, BILLING_LINK_STAYS_HIDDEN)
+INVALID_SETTINGS = [
+    pytest.param(INVALID_REGISTRATION, id="LIBREFOLIO_REGISTRATION"),
+    pytest.param(INVALID_STORED_MODE, id="stored-registration_mode"),
+    pytest.param(INVALID_LIMIT, id="LIBREFOLIO_MAX_USERS"),
+    pytest.param(INVALID_PUBLIC_URL, id="LIBREFOLIO_PUBLIC_URL"),
+    pytest.param(INVALID_BILLING_URL, id="LIBREFOLIO_BILLING_URL"),
+]
+INVALID_URLS = [pytest.param(INVALID_PUBLIC_URL, id="LIBREFOLIO_PUBLIC_URL"), pytest.param(INVALID_BILLING_URL, id="LIBREFOLIO_BILLING_URL")]
+
+
+def test_report_invalid_logs_one_error_per_distinct_problem_and_consequence() -> None:
+    """Contract 4 (review of 15/10): ``_report_invalid(problem, consequence)`` logs one error event, ``Invalid account configuration``, with both as fields — once per process for each distinct pair (``functools.cache``).
+
+    The same pair again logs nothing; another problem, or the same problem with another consequence, logs once more.
+    """
+    print_section("Contract 4: _report_invalid, once per distinct pair")
+
+    with _captured() as events:
+        registration_service._report_invalid("problem one", REGISTRATION_STAYS_CLOSED)
+        registration_service._report_invalid("problem one", REGISTRATION_STAYS_CLOSED)
+        registration_service._report_invalid("problem two", REGISTRATION_STAYS_CLOSED)
+        registration_service._report_invalid("problem one", LINKS_SHOW_THE_BARE_PATH)
+        registration_service._report_invalid("problem two", REGISTRATION_STAYS_CLOSED)
+
+    logged = [(event.get("event"), event.get("problem"), event.get("consequence")) for event in _errors(events)]
+    assert logged == [
+        (INVALID_CONFIGURATION, "problem one", REGISTRATION_STAYS_CLOSED),
+        (INVALID_CONFIGURATION, "problem two", REGISTRATION_STAYS_CLOSED),
+        (INVALID_CONFIGURATION, "problem one", LINKS_SHOW_THE_BARE_PATH),
+    ], f"one error per distinct (problem, consequence), in order, each {INVALID_CONFIGURATION!r} with both fields: {_errors(events)}"
+    print_success("three distinct pairs, three errors; the repeated pairs logged nothing")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", INVALID_SETTINGS)
+async def test_an_invalid_setting_falls_back_and_logs_what_it_costs(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, invalid: _InvalidSetting) -> None:
+    """Contract 4 (review of 15/10): an invalid setting falls back — the mode closed (locked when the variable is the culprit, not when the row is), a limit of 0, no public link, no billing link — and logs exactly one error, ``Invalid account configuration``, whose ``problem`` names the setting and whose ``consequence`` is what the fallback costs.
+
+    Registration stays closed for the variable, the stored mode and the limit; an invalid URL only loses its link. An
+    operator reading «registration stays closed» for a mistyped billing URL would look for the fault in the wrong place.
+    """
+    print_section(f"Contract 4: invalid {invalid.name}")
+    await invalid.put(engine, monkeypatch)
+
+    with _captured() as events:
+        answer = await invalid.read(engine)
+
+    errors = _errors(events)
+    assert answer == invalid.fallback, f"{invalid.name}={invalid.value!r}: the service must fall back to {invalid.fallback!r}, got {answer!r}"
+    assert _reported(events) == [(INVALID_CONFIGURATION, invalid.consequence)], f"an invalid {invalid.name} must log exactly one error, {INVALID_CONFIGURATION!r}, whose consequence is {invalid.consequence!r}; got {errors}"
+    assert invalid.name in str(errors[0].get("problem")), f"the problem must name {invalid.name}: {errors[0]}"
+    print_success(f"{invalid.name}: {invalid.fallback!r}, «{invalid.consequence}»")
+
+
+@pytest.mark.asyncio
+async def test_an_invalid_setting_read_again_is_not_reported_again(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 4 (review of 15/10): every reading of an invalid setting falls back, but each problem is logged once per process: three readings of an invalid mode and three of an invalid limit close six times and log two errors, one naming each variable, both «registration stays closed until it is fixed»."""
+    print_section("Contract 4: once per process")
+    await INVALID_REGISTRATION.put(engine, monkeypatch)
+    await INVALID_LIMIT.put(engine, monkeypatch)
+
+    with _captured() as events:
+        modes = [await _read_mode(engine) for _ in range(3)]
+        limits = [await _read_limit(engine) for _ in range(3)]
+
+    errors = _errors(events)
+    assert (modes, limits) == ([("disabled", True)] * 3, [0] * 3), f"every reading must fall back, closed: modes {modes}, limits {limits}"
+    assert _reported(events) == [(INVALID_CONFIGURATION, REGISTRATION_STAYS_CLOSED)] * 2, f"three readings of each of two invalid settings must log two errors, one each: {errors}"
+    named = [name in str(error.get("problem")) for name, error in zip((REGISTRATION_VARIABLE, MAX_USERS_VARIABLE), errors, strict=True)]
+    assert named == [True, True], f"one error names each variable, in the order they were read: {errors}"
+    print_success("six readings, closed each time; two errors")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", INVALID_URLS)
+async def test_an_invalid_url_closes_nothing_and_its_log_never_says_it_does(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, invalid: _InvalidSetting) -> None:
+    """Contract 4 (review of 15/10): with an invalid URL variable, read as an administrator's page reads it, registration works as with a valid one — the mode open and not locked, no limit, an open registration a regular account — and nothing logged says registration is closed: the one error says what the URL costs, its link."""
+    print_section(f"Contract 4: an invalid {invalid.name} closes nothing")
+    await _add_users(engine, "alice")
+    await _set_mode_row(engine, "open")
+    await invalid.put(engine, monkeypatch)
+
+    with _captured() as events:
+        link = await invalid.read(engine)
+        mode = await _read_mode(engine)
+        limit = await _read_limit(engine)
+        outcome = await _register(engine, "walkin")
+
+    user = _assert_registered(outcome, f"open mode with an invalid {invalid.name}")
+    assert (link, mode, limit, user.is_superuser) == (None, ("open", False), None, False), f"an invalid {invalid.name} costs its link and nothing else: link {link!r}, mode {mode!r}, limit {limit!r}, administrator {user.is_superuser}"
+    claims = [event for event in events if REGISTRATION_STAYS_CLOSED in repr(event)]
+    assert claims == [], f"an invalid {invalid.name} closes nothing, and the log must not say it does — an operator would look for the fault in the wrong place: {claims}"
+    assert _reported(events) == [(INVALID_CONFIGURATION, invalid.consequence)], f"the one error must say what an invalid {invalid.name} costs, «{invalid.consequence}»: {_errors(events)}"
+    print_success(f"open, no limit, a regular account registered; «{invalid.consequence}»")
+
+
+# =============================================================================
+# 4e. INVITATIONS: CREATE, LIST, REVOKE
 # =============================================================================
 
 
@@ -779,7 +964,7 @@ async def test_revoke_invite_answers_false_for_anything_but_a_live_invitation(en
 
 
 # =============================================================================
-# 4d. REGISTER_USER: WHO MAY REGISTER
+# 4f. REGISTER_USER: WHO MAY REGISTER
 # =============================================================================
 
 
@@ -803,6 +988,101 @@ async def test_an_inactive_account_is_still_an_account_so_the_next_one_is_no_adm
     user = _assert_registered(await _register(engine, "newcomer"), "a registration beside an inactive account, open mode")
 
     assert user.is_superuser is False, "an instance with an account, even inactive, has had its first user: the newcomer must not become an administrator"
+
+
+# The first account and the invitation it comes with (review of 15/10, from the docs review). An invitation can exist on
+# an instance that has no account yet — ``dev.py user invite`` before anyone registered —, and its link must not open
+# two accounts: given with the first registration, a token is checked and spent like any other.
+
+#: The invitations that are not valid on an instance without accounts, and the status the token service gives each.
+INVALID_ON_AN_EMPTY_INSTANCE = {"unknown": TokenStatus.UNKNOWN, "expired": TokenStatus.EXPIRED, "consumed": TokenStatus.CONSUMED, "revoked": TokenStatus.REVOKED}
+
+
+async def _invalid_invite_on_an_empty_instance(engine: AsyncEngine, kind: str) -> str:
+    """An invitation that is not valid, written without any account: never issued, expired, used by an account deleted since, or revoked."""
+    if kind == "unknown":
+        return NEVER_ISSUED
+    if kind == "expired":
+        return (await _issue(engine, now=utcnow() - DEFAULT_TTL[INVITE] - timedelta(days=1))).token
+    issued = await _issue(engine)
+    async with AsyncSession(engine) as session:
+        if kind == "consumed":
+            # The account it opened was deleted since: ON DELETE SET NULL left consumed_by_user_id empty, the invitation used.
+            assert await consume_token(session, issued.token, INVITE, consumed_by_user_id=None) is not None, "setup: the invitation must be consumed"
+        else:
+            assert await revoke_tokens(session, token_id=issued.record.id) == 1, "setup: the invitation must be revoked"
+        await session.commit()
+    return issued.token
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("grants_admin", [pytest.param(False, id="user-invitation"), pytest.param(True, id="admin-invitation")])
+async def test_the_first_account_spends_the_invitation_it_registers_with(engine: AsyncEngine, grants_admin: bool) -> None:
+    """Contract 4 (review of 15/10): on an empty instance a valid invitation given with the registration is spent like any other — consumed by the new account, which is the administrator whatever role the invitation grants —, so its link opens no second account: offered again, ``INVITE_INVALID``.
+
+    The invitation's state is read right after the first registration, before the second one tries the link.
+    """
+    print_section(f"Contract 4: the first account spends its invitation ({'admin' if grants_admin else 'user'} role)")
+    issued = await _issue(engine, grants_admin=grants_admin)
+    assert await _accounts(engine) == {}, "setup: the instance has no account"
+
+    user = _assert_registered(await _register(engine, "founder", invite_token=issued.token), "the first account, with a valid invitation")
+    stored = await _token(engine, issued.record.id)
+    again = await _register(engine, "second", invite_token=issued.token)
+
+    assert user.is_superuser is True, "the first account of an empty instance is its administrator, whatever the invitation grants"
+    assert (stored.consumed_by_user_id, stored.consumed_at is not None, stored.revoked_at) == (user.id, True, None), f"the invitation must be consumed by the first account, {user.id}: consumed_by_user_id {stored.consumed_by_user_id}, consumed_at {stored.consumed_at}, revoked_at {stored.revoked_at}"
+    _assert_refused(again, "INVITE_INVALID", "the first account's invitation, offered again")
+    assert set(await _accounts(engine)) == {"founder"}, "the spent invitation must open no second account"
+    print_success("administrator; the invitation consumed by it; refused the second time")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(INVALID_ON_AN_EMPTY_INSTANCE))
+async def test_the_first_account_with_an_invitation_that_is_not_valid_is_refused(engine: AsyncEngine, kind: str) -> None:
+    """Contract 4 (review of 15/10): on an empty instance an invitation that is not valid — never issued, expired, used, revoked — refuses the registration, ``INVITE_INVALID``, and the instance stays empty: a token given is always checked, the first account included."""
+    print_section(f"Contract 4: the first account with an invitation that is {kind}")
+    token = await _invalid_invite_on_an_empty_instance(engine, kind)
+    precondition = (await _accounts(engine), await _status(engine, token))
+    assert precondition == ({}, INVALID_ON_AN_EMPTY_INSTANCE[kind]), f"setup: an empty instance and an invitation that is {kind}, got {precondition}"
+
+    outcome = await _register(engine, "founder", invite_token=token)
+
+    _assert_refused(outcome, "INVITE_INVALID", f"the first account, with an invitation that is {kind}")
+    assert await _accounts(engine) == {}, "a refused first registration must leave the instance empty"
+    print_success(f"an invitation that is {kind}: INVITE_INVALID, the instance still empty")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["row", "env"])
+async def test_the_first_account_spends_its_invitation_even_while_registration_is_disabled(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, source: str) -> None:
+    """Contract 4 (review of 15/10): the mode does not apply to the first account — ``disabled``, by the row or by the variable, still lets it in, as the administrator —, but the invitation it comes with is spent all the same: consumed by it."""
+    print_section(f"Contract 4: the first account, registration disabled by the {source}, spends its invitation")
+    await _put_mode(engine, monkeypatch, "disabled", source)
+    issued = await _issue(engine)
+
+    user = _assert_registered(await _register(engine, "founder", invite_token=issued.token), f"the first account, registration disabled by the {source}, with a valid invitation")
+    stored = await _token(engine, issued.record.id)
+
+    assert await _accounts(engine) == {"founder": (user.id, True, True)}, "the first account must be an active administrator, whatever the mode"
+    assert (stored.consumed_by_user_id, stored.consumed_at is not None) == (user.id, True), f"the invitation must be consumed by the first account, {user.id}: consumed_by_user_id {stored.consumed_by_user_id}, consumed_at {stored.consumed_at}"
+    assert await _status(engine, issued.token) == TokenStatus.CONSUMED
+    print_success("administrator; the invitation consumed by it")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", MODES)
+async def test_the_first_account_without_a_token_leaves_a_pending_invitation_alone(engine: AsyncEngine, mode: str) -> None:
+    """Contract 4 (review of 15/10) — GUARD: without a token the first account registers as today, the administrator in every mode, and an invitation already issued for somebody else stays live: only the token a registration comes with is spent."""
+    print_section(f"Contract 4: the first account without a token, {mode} mode, beside a pending invitation")
+    await _set_mode_row(engine, mode)
+    pending = await _issue(engine)
+
+    user = _assert_registered(await _register(engine, "founder"), f"the first account, {mode} mode, without a token")
+
+    assert await _accounts(engine) == {"founder": (user.id, True, True)}, "the first account must be an active administrator"
+    assert await _status(engine, pending.token) == TokenStatus.VALID, "an invitation the registration did not come with must stay live"
+    print_success("administrator; the pending invitation still valid")
 
 
 @pytest.mark.asyncio
@@ -937,7 +1217,7 @@ async def test_an_invitation_with_an_email_does_not_bind_the_registration_to_it(
 
 
 # =============================================================================
-# 4e. REGISTER_USER: THE LIMIT
+# 4g. REGISTER_USER: THE LIMIT
 # =============================================================================
 
 
@@ -1026,7 +1306,7 @@ async def test_two_registrations_racing_for_the_last_places_never_exceed_the_lim
 
 
 # =============================================================================
-# 4f. REGISTER_USER: BCRYPT OFF THE EVENT LOOP
+# 4h. REGISTER_USER: BCRYPT OFF THE EVENT LOOP
 # =============================================================================
 
 

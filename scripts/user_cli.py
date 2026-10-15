@@ -39,6 +39,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import set_test_mode
+from backend.app.config.accounts import public_url
 from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.db.session import get_async_engine
 from backend.app.services.accounts import registration_service, token_service, user_service
@@ -116,7 +117,7 @@ async def cmd_create_user(username: str, email: str, password: str, is_superuser
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        _warn_if_full(await registration_service.user_usage(session), "the account")
+        _warn_if_full(await registration_service.user_usage(session), "creates the account")
         user, error = await user_service.create_user(session, username, email, password, is_superuser=is_superuser)
 
         if user:
@@ -127,10 +128,19 @@ async def cmd_create_user(username: str, email: str, password: str, is_superuser
             return False
 
 
-def _warn_if_full(usage: registration_service.UserUsage, what: str) -> None:
-    """Tell the operator the instance is at its limit: the command line goes past it."""
+def _warn_if_full(usage: registration_service.UserUsage, action: str) -> None:
+    """Tell the operator the instance is at its limit: the command line goes past it (``action``: what it does anyway)."""
     if usage.full:
-        print(f"⚠️  The instance is at its limit (LIBREFOLIO_MAX_USERS: {usage.used} of {usage.max_users} places taken): the command line creates {what} anyway")
+        print(f"⚠️  The instance is at its limit (LIBREFOLIO_MAX_USERS: {usage.used} of {usage.max_users} places taken): the command line {action} anyway")
+
+
+def _public_url_note() -> str:
+    """Why a printed link has no server address: the variable is unset, or set to something that is not an address."""
+    try:
+        public_url()
+    except ValueError as exc:
+        return f"LIBREFOLIO_PUBLIC_URL is not valid ({exc}): put the address of your server in front of the path"
+    return "LIBREFOLIO_PUBLIC_URL is not set: put the address of your server in front of the path"
 
 
 def _print_link(label: str, path: str, expires_at) -> None:
@@ -139,7 +149,7 @@ def _print_link(label: str, path: str, expires_at) -> None:
     print(f"✅ {label} link, single use, valid until {expires_at:%Y-%m-%d %H:%M} UTC:")
     print(f"   {url or path}")
     if url is None:
-        print("   LIBREFOLIO_PUBLIC_URL is not set: put the address of your server in front of the path")
+        print(f"   {_public_url_note()}")
 
 
 async def cmd_invite(grants_admin: bool, email: str | None):
@@ -156,7 +166,7 @@ async def cmd_invite(grants_admin: bool, email: str | None):
         # This session expires its objects on commit: read the deadline before it
         expires_at = issued.record.expires_at
         await session.commit()
-        _warn_if_full(usage, "the invitation")
+        _warn_if_full(usage, "creates the invitation")
         _print_link("Administrator invitation" if grants_admin else "Invitation", token_service.token_path(AccountTokenPurpose.INVITE, issued.token), expires_at)
         return True
 
@@ -219,6 +229,10 @@ async def cmd_set_user_active(username: str, active: bool):
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
+        if active:
+            user = await user_service.get_user_by_username(session, username)
+            if user is not None and not user.is_active:
+                _warn_if_full(await registration_service.user_usage(session), "reactivates the account")
         success, error = await user_service.set_user_active(session, username, active)
 
         if success:
