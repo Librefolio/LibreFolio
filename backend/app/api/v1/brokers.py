@@ -269,6 +269,7 @@ async def get_broker_summary(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
+    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash, holdings and their average cost count the transactions dated up to that day; prices are the latest known."),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRSummary:
     """
@@ -295,7 +296,7 @@ async def get_broker_summary(
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
     service = BrokerService(session)
-    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id)
+    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id, as_of=as_of)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
