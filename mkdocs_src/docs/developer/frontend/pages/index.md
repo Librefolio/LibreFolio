@@ -231,7 +231,11 @@ frontend/src/routes/
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">
 </div>
 
-- **4 tabs**: Profile, Preferences, About, Admin (global settings); `?tab=` selects one
+- **4 tabs** from the tab registry (`SETTINGS_TABS`, see
+  [Settings Components](../components/features/settings.md#tab-registry)): Profile, Preferences,
+  About, Admin (global settings). `?tab=<id>` opens a tab the user can see, from the first render;
+  an unknown or hidden id is ignored, and a value is applied once, so a page update that keeps it
+  does not take back a tab the user clicked
 - **ProfileTab**: Avatar editing via AssetPickerModal, username display
 - **PreferencesTab**: Language, currency, theme, and the Onboarding category (guide replays —
   see [Settings Components](../components/features/settings.md))

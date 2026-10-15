@@ -107,9 +107,12 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 *administrator* of the admin manual. It belongs to the account, not to a broker.
 
 - **Granted** to the first account registered (`POST /api/v1/auth/register` when `count_users()`
-  is 0, accepted even when `enable_registration` is off), to every account created with
-  `./dev.py user create` (`scripts/user_cli.py` calls `user_service.create_user()` with
-  `is_superuser=True`), and by `./dev.py user promote`.
+  is 0, accepted even when `enable_registration` is off), to an account created with
+  `./dev.py user create` without `--role user` (`--role admin` is the default: `scripts/user_cli.py`
+  maps it to its internal `create-superuser` command, which calls `user_service.create_user()` with
+  `is_superuser=True`), and by `./dev.py user promote`. `./dev.py user create … --role user` maps to
+  the internal `create-user` command instead (`is_superuser=False`): a regular account, even as the
+  first account of an empty database.
 - **Promote and demote** go through `user_service.set_user_admin()`, which refuses a no-op
   (*already an admin*, *not an admin*) and does **not** check that another superuser remains. The
   only last-superuser guard is on self-deletion: `DELETE /api/v1/auth/users/me` answers `400` when
