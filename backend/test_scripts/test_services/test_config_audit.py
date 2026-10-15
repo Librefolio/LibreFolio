@@ -4,7 +4,7 @@ Configuration checks at startup (workstream H, platform, checkpoint CP3).
 Under test: ``backend/app/services/platform/config_audit.py``. Each check reads the configuration and returns a
 ``ConfigCheck``: an id, a severity, the i18n key of its message for the admin interface, the parameters of that message
 and an English summary for the log. ``log_configuration_audit()`` runs them at startup, from the lifespan of
-``backend/app/main.py``. The contract:
+``backend/app/services/platform/app_lifespan.py``. The contract:
 
 (a) Every check in every state: id, severity, i18n key and detail. ``JWT_SECRET`` unset, empty or blank is only info (a
     new signing key at every start is the default), shorter than 32 characters a warning naming where the key comes from
