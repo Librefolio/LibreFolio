@@ -19,8 +19,8 @@ An administrator manages the accounts from the API. Every route below sits behin
    by ``LIBREFOLIO_REGISTRATION``. A refusal issues nothing.
 3. ``DELETE /users/invites/{invite_id}`` → 204, and the invitation opens nothing any more; 404 when the id is not a live
    invitation: revoked, consumed, expired, never issued, or a token of another purpose (which stays as it was).
-4. ``GET /users`` → ``{items: [{id, username, email, is_active, is_superuser, created_at}], usage}``: every account,
-   active or not; no hash, no secret.
+4. ``GET /users`` → ``{items: [{id, username, email, is_active, is_superuser, created_at, protected}], usage}``: every
+   account, active or not; no hash, no secret. ``protected`` is added by lot A6a (point 12).
 5. ``PATCH /users/{user_id}`` ``{is_active?, is_superuser?}`` → 200 with the account as ``GET /users`` lists it; 404; 409
    ``LAST_ADMIN`` to deactivate or demote the last active administrator; 409 ``USER_LIMIT_REACHED`` (with the counts) to
    reactivate an account over the limit, which blocks nothing else. Deactivation and demotion end the account's sessions
@@ -37,6 +37,24 @@ An administrator manages the accounts from the API. Every route below sits behin
    and in no record of the application's loggers. The third-party loggers that ``configure_logging`` silences to WARNING
    (``aiosqlite``, ``sqlalchemy.engine``, …) are excluded: they log every statement with its parameters, the stored
    hash included, so a running server never emits those records.
+
+Lot A6a (plan phase01Accounts §A6.1) adds:
+
+10. ``GET /users/{user_id}/deletion-preview`` → 200 ``{user_id, username, brokers_deleted: [{id, name, transactions}],
+    brokers_left: [{id, name, role}], transfers_unpaired}``, both lists by broker id, ``role`` the UserRole value: what
+    deleting the account would take, by the rule ``delete_user`` applies (``BrokerService.leave_broker``); it writes
+    nothing. 404 for an account that does not exist.
+11. ``DELETE /users/{user_id}`` → 204 with no body: the account is gone, its sessions answer 401, its brokers follow the
+    preview — those of ``brokers_deleted`` gone with their transactions, those of ``brokers_left`` still there without
+    its access, the transfer half it leaves alone unlinked. 404 for an account that does not exist; 409
+    ``SELF_DELETION`` for the caller's own id (one's own account is deleted from the profile); 409 ``DEMOTE_FIRST`` for
+    an administrator, active or not; 409 ``ACCOUNT_PROTECTED`` from the hook; a technical failure → 500 «nothing was
+    deleted», and nothing is. One structured event, «Account deleted by an administrator», with ``user_id``,
+    ``username``, ``admin_id``, ``brokers_deleted`` and ``files_removed``; no session token and no password in any log.
+12. The hook of lot A7, ``user_service.account_protection(user) -> Optional[str]``, a plain function: ``PATCH`` refuses
+    to deactivate or demote an account it gives a reason for, ``DELETE`` refuses to delete it, both 409
+    ``ACCOUNT_PROTECTED``, changing nothing; ``GET /users`` and ``PATCH`` answer ``protected: bool`` (a reason exists).
+    Today it protects nobody: every account of the lane is ``protected: false``.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
@@ -60,22 +78,37 @@ active administrator» depends on every account of the lane's database. So:
   their session from ``get_session_generator``, as every handler does, and the accessors of ``config/accounts.py`` read
   the environment at each call.
 
+A6a's cases follow the same split. On the lane: the deletion and its preview on accounts and brokers the case writes
+(brokers and transactions straight into the lane's database, recorded once committed and deleted at teardown by id),
+the refusals that hold whatever the neighbours do (``SELF_DELETION``, ``DEMOTE_FIRST``), and «nobody is protected
+today». In-process: the hook (``user_service.account_protection``, replaced with ``monkeypatch``), the log, the technical
+failure. Their private database is not built by ``create_all`` but taken to head by the real migrations — in a child
+process, once for the module, then copied per test —: the models do not declare the ``ON DELETE CASCADE`` that
+``broker_user_access`` has in ``001_initial``, and a deletion relies on it. The BRIM report directory moves under
+``tmp_path`` there, because private broker ids start at 1 like the lane's, and ``delete_files_for_brokers`` is replaced
+by a spy. Assumed: the routes reach the hook as ``user_service.account_protection`` and the report cleanup as
+``brim_provider.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
+
 The unit is therefore write-scoped (the ``api`` category's default), with no ``exclusive_because``. bcrypt runs at its
 lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``, as in ``test_registration_api.py``); the lane's server
 keeps its own.
 
-Red until A5a: the routes do not exist.
+Red until A5a: the routes do not exist. Red until A6a: the two routes UADM-001 now also covers, UADM-040 to UADM-043,
+UADM-050 to UADM-054, and the ``protected`` field UADM-003, UADM-007, UADM-008 and UADM-028 now expect on every account.
 """
 
 import ast
+import contextlib
 import inspect
 import logging
 import re
+import sqlite3
 import textwrap
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
@@ -96,13 +129,17 @@ from backend.app.api.v1 import settings as settings_api
 from backend.app.api.v1 import users as users_api
 from backend.app.config import API_V1_PREFIX, get_settings
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
-from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, OnboardingFlow, User, UserOnboardingProgress
+from backend.app.db.models import AccountToken, AccountTokenPurpose, Broker, BrokerUserAccess, GlobalSetting, OnboardingFlow, Transaction, TransactionType, User, UserOnboardingProgress, UserRole
 from backend.app.db.session import get_async_engine, get_session_generator
+from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, consume_token, hash_token, issue_token
+from backend.app.services.brim import brim_provider
+from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_db.test_autoincrement_schema import _alembic_upgrade_head
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -127,7 +164,7 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at"})
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
@@ -147,6 +184,17 @@ NEVER_ISSUED_ID = 987_654_321
 CANARY = "canary: the capture sees the events of the admin endpoints' logger"
 
 STEP_FLOWS = {flow.value: tuple(steps) for flow, steps in ONBOARDING_FLOW_STEPS.items()}
+
+# Lot A6a: the deletion of an account by an administrator, and the hook of lot A7.
+#: The one event an administrator's deletion logs, word for word, and the fields it carries.
+ADMIN_DELETION_EVENT = "Account deleted by an administrator"
+ADMIN_DELETION_FIELDS = ("user_id", "username", "admin_id", "brokers_deleted", "files_removed")
+#: What the in-process stand-in of the hook answers for an account it protects.
+PROTECTION_REASON = "the paying administrator of this managed instance"
+#: What the spy of delete_files_for_brokers answers: a count no real call on an empty directory could give.
+FILES_REMOVED = 2
+TRANSACTION_DATE = date(2026, 1, 5)
+NOTHING_WAS_DELETED = "nothing was deleted"
 
 
 @pytest.fixture(scope="module")
@@ -247,11 +295,14 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return {key: _instant(value) if key.endswith("_at") else value for key, value in item.items()}
 
 
-def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its six fields, with these values."""
+def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False) -> list[str]:
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its seven fields, with these values.
+
+    ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
+    """
     if not isinstance(item, dict) or set(item) != USER_ITEM_KEYS:
         return [f"{account.username}: an account must be exactly {sorted(USER_ITEM_KEYS)}, no hash and no secret: {item}"]
-    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser}
+    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected}
     found = {key: item[key] for key in expected}
     violations = [] if found == expected else [f"{account.username}: expected {expected}, got {found}"]
     _expect(violations, _instant(item["created_at"]) is not None, f"{account.username}: created_at is not a timestamp: {item['created_at']!r}")
@@ -335,11 +386,12 @@ def _lane_engine() -> AsyncEngine:
 
 @dataclass
 class _LaneRows:
-    """What a lane case wrote: accounts by name (even one a red let through), tokens by id, the marker e-mails of invitations."""
+    """What a lane case wrote: accounts by name (even one a red let through), tokens by id, the marker e-mails of invitations, brokers by id (recorded once committed)."""
 
     usernames: list[str] = field(default_factory=list)
     token_ids: list[int] = field(default_factory=list)
     emails: list[str] = field(default_factory=list)
+    broker_ids: list[int] = field(default_factory=list)
 
     def new_username(self, prefix: str) -> str:
         username = f"{prefix}_{uuid.uuid4().hex[:12]}"
@@ -352,8 +404,25 @@ class _LaneRows:
         return email
 
 
+async def _delete_lane_brokers(engine: AsyncEngine, broker_ids: list[int]) -> list[str]:
+    """Delete the case's brokers still there, with their transactions, whoever holds them now (no access check); what failed.
+
+    Only ids recorded after their commit reach here: brokers have AUTOINCREMENT, so such an id was never anyone else's.
+    """
+    if not broker_ids:
+        return []
+    async with AsyncSession(engine) as session:
+        try:
+            surviving = sorted((await session.execute(select(Broker.id).where(Broker.id.in_(broker_ids)))).scalars().all())
+            response = await BrokerService(session).delete_bulk([BRDeleteItem(id=broker_id, force=True) for broker_id in surviving], user_id=0, as_user_id="all")
+            await session.commit()
+        except Exception as exc:  # the accounts still get their attempt; every failure is reported together
+            return [f"brokers {broker_ids}: {exc!r}"]
+    return [f"broker {result.id}: {result.message}" for result in response.results if not result.success]
+
+
 async def _delete_lane_rows(rows: _LaneRows) -> list[str]:
-    """Delete the case's tokens (by id, issued or consumed by its accounts, or to its marker e-mails), then its accounts; what failed."""
+    """Delete the case's tokens (by id, issued or consumed by its accounts, or to its marker e-mails), then its brokers, then its accounts; what failed."""
     errors: list[str] = []
     engine = _lane_engine()
     async with AsyncSession(engine) as session:
@@ -364,6 +433,7 @@ async def _delete_lane_rows(rows: _LaneRows) -> list[str]:
             await session.commit()
         except Exception as exc:  # the accounts still get their attempt; every failure is reported together
             errors.append(f"tokens: {exc!r}")
+    errors += await _delete_lane_brokers(engine, rows.broker_ids)
     for user_id in user_ids:
         async with AsyncSession(engine) as session:
             try:
@@ -567,15 +637,15 @@ async def _scene(lane: _LaneRows) -> _Scene:
 
 
 async def _footprint(scene: _Scene) -> dict[str, Any]:
-    """Everything an admin route could change in the scene, read fresh from the lane's database."""
+    """Everything an admin route could change in the scene, read fresh from the lane's database; the target None once it is gone."""
     target_id = scene.target.account.user_id
     async with AsyncSession(_lane_engine()) as session:
-        target = (await session.execute(select(User.is_active, User.is_superuser, User.session_version).where(User.id == target_id))).one()
+        target = (await session.execute(select(User.is_active, User.is_superuser, User.session_version).where(User.id == target_id))).one_or_none()
         invite = (await session.execute(select(AccountToken.consumed_at, AccountToken.revoked_at).where(AccountToken.id == scene.invite_id))).one()
         marker = (await session.execute(select(func.count()).select_from(AccountToken).where(AccountToken.email == scene.marker_email))).scalar_one()
         tour = (await session.execute(select(UserOnboardingProgress.status).where(UserOnboardingProgress.user_id == target_id, UserOnboardingProgress.flow == OnboardingFlow.INTRO_TOUR.value))).scalar_one_or_none()
     return {
-        "the target (is_active, is_superuser, session_version)": tuple(target),
+        "the target (is_active, is_superuser, session_version)": None if target is None else tuple(target),
         "the scene's invitation (consumed_at, revoked_at)": tuple(invite),
         "invitations to the marker e-mail": marker,
         "reset links of the target": await _lane_reset_links(target_id),
@@ -610,6 +680,9 @@ ADMIN_ROUTES = [
     pytest.param(_Route("POST", _on_target("/password-reset-link"), _no_body, 201), id="reset-link"),
     pytest.param(_Route("POST", _on_target("/sessions/revoke"), _no_body, 204), id="revoke-sessions"),
     pytest.param(_Route("POST", _on_target("/onboarding/reset"), lambda scene: {}, 204), id="reset-onboarding"),
+    # Lot A6a. In every case the administrator's call comes last: after the 204 the target is gone, and nothing reads the scene again.
+    pytest.param(_Route("GET", _on_target("/deletion-preview"), _no_body, 200), id="deletion-preview"),
+    pytest.param(_Route("DELETE", _on_target(""), _no_body, 204), id="delete-user"),
 ]
 
 
@@ -622,7 +695,9 @@ class TestOnlyAnAdministrator:
         """UADM-001: no session → 401, an ordinary account's session → 403, and after each the scene is as it was (the target's state and sessions, the invitation, no invitation issued, no reset link, the onboarding); then the administrator gets the route's success status.
 
         Each call acts on what a wrongly open route would visibly change: the deactivation of the target, an invitation to a
-        marker e-mail, the revocation of a live invitation, the target's sessions, reset links and completed intro_tour.
+        marker e-mail, the revocation of a live invitation, the target's sessions, reset links and completed intro_tour, and
+        (lot A6a) the target itself, which a wrongly open DELETE would remove. The preview of its deletion changes nothing
+        whoever calls it: there only the status codes speak.
         """
         scene = await _scene(lane)
         path, body = route.path(scene), route.body(scene)
@@ -672,7 +747,7 @@ class TestOnlyAnAdministrator:
 class TestAccountsListOnTheLane:
     @pytest.mark.asyncio
     async def test_lists_this_cases_accounts_with_their_flags_and_the_usage(self, lane: _LaneRows) -> None:
-        """UADM-003: GET /users → {items, usage}; this case's four accounts are there, found by id — the caller, an ordinary account, a second administrator, an inactive account — each exactly {id, username, email, is_active, is_superuser, created_at} with the right flags; usage is {used, max_users, billing_url}, and used counts at least this case's three active accounts."""
+        """UADM-003: GET /users → {items, usage}; this case's four accounts are there, found by id — the caller, an ordinary account, a second administrator, an inactive account — each exactly {id, username, email, is_active, is_superuser, created_at, protected} with the right flags, protected false (A6a: the hook protects nobody today); usage is {used, max_users, billing_url}, and used counts at least this case's three active accounts."""
         print_section("UADM-003: GET /users")
         admin = await _live_admin(lane)
         member = await _live_register(lane, "uadm_listed")
@@ -1024,6 +1099,229 @@ class TestSessionsAndOnboardingOnTheLane:
         assert response.status_code == 422, f"an unknown flow: expected 422, got {response.status_code} {response.text}"
         assert await _live_onboarding(await _live_sign_in(member.account)) == before, "a refused reset must reset nothing"
         print_success("422, nothing reset")
+
+
+# ============================================================================
+# LANE: DELETING AN ACCOUNT, AND WHAT IT WOULD TAKE (lot A6a)
+# ============================================================================
+
+
+def _deposit(broker_id: int) -> Transaction:
+    return Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=TRANSACTION_DATE, amount=Decimal("100"), currency="EUR")
+
+
+def _cash_leg(broker_id: int, amount: str) -> Transaction:
+    return Transaction(broker_id=broker_id, type=TransactionType.CASH_TRANSFER, date=TRANSACTION_DATE, amount=Decimal(amount), currency="EUR")
+
+
+def _grant(user_id: int, broker_id: int, role: UserRole) -> BrokerUserAccess:
+    return BrokerUserAccess(user_id=user_id, broker_id=broker_id, role=role, share_percentage=Decimal("0"))
+
+
+@dataclass(frozen=True)
+class _DeletionScene:
+    """An administrator, the target (signed in), its partner, and four brokers this case wrote in the lane's database.
+
+    - ``sole``: the target its only OWNER; two DEPOSITs and the outgoing leg of a cash transfer to ``co_owned`` → deleted;
+    - ``last_owner``: the target OWNER, the partner EDITOR, so the target is its last owner; a DEPOSIT → deleted;
+    - ``co_owned``: the target and the partner both OWNER; the incoming leg → left, the target an OWNER there;
+    - ``viewed``: the partner OWNER, the target VIEWER → left, the target a VIEWER there.
+
+    The incoming leg is the one transfer half the deletion leaves alone.
+    """
+
+    admin: _Signed
+    target: _Signed
+    partner: _Account
+    brokers: dict[str, int]
+    names: dict[int, str]
+    transactions: dict[int, int]
+
+    @property
+    def deleted(self) -> list[int]:
+        return sorted(self.brokers[key] for key in ("sole", "last_owner"))
+
+    @property
+    def left(self) -> dict[int, str]:
+        """The brokers left, with the target's role there as the API spells it."""
+        return {self.brokers["co_owned"]: UserRole.OWNER.value, self.brokers["viewed"]: UserRole.VIEWER.value}
+
+    def preview(self) -> dict[str, Any]:
+        """What GET /users/{target}/deletion-preview must answer, exactly: both lists by broker id."""
+        return {
+            "user_id": self.target.account.user_id,
+            "username": self.target.account.username,
+            "brokers_deleted": [{"id": broker_id, "name": self.names[broker_id], "transactions": self.transactions[broker_id]} for broker_id in self.deleted],
+            "brokers_left": [{"id": broker_id, "name": self.names[broker_id], "role": role} for broker_id, role in sorted(self.left.items())],
+            "transfers_unpaired": 1,
+        }
+
+
+@dataclass(frozen=True)
+class _LaneHoldings:
+    """What the lane holds of the target and of this case's four brokers, read fresh: every read scoped to them."""
+
+    target: bool
+    brokers: frozenset[int]
+    grants: frozenset[tuple[int, int, str]]
+    transactions: frozenset[tuple[int, int, Optional[int]]]
+
+
+async def _deletion_scene(lane: _LaneRows) -> _DeletionScene:
+    """Register the administrator, the target and the partner; write the four brokers with their grants and transactions; record the brokers once committed."""
+    admin = await _live_admin(lane)
+    target = await _live_member(lane, "uadm_leaver")
+    partner = await _live_register(lane, "uadm_partner")
+    t, p = target.account.user_id, partner.user_id
+    marker = uuid.uuid4().hex[:12]
+    async with AsyncSession(_lane_engine(), expire_on_commit=False) as session:
+        rows = {key: Broker(name=f"UADM {key} {marker}") for key in ("sole", "last_owner", "co_owned", "viewed")}
+        session.add_all(rows.values())
+        await session.flush()
+        b = {key: broker.id for key, broker in rows.items()}
+        grants = ((t, "sole", UserRole.OWNER), (t, "last_owner", UserRole.OWNER), (p, "last_owner", UserRole.EDITOR), (t, "co_owned", UserRole.OWNER), (p, "co_owned", UserRole.OWNER), (p, "viewed", UserRole.OWNER), (t, "viewed", UserRole.VIEWER))
+        session.add_all([_grant(user_id, b[key], role) for user_id, key, role in grants])
+        outgoing, incoming = _cash_leg(b["sole"], "-25"), _cash_leg(b["co_owned"], "25")
+        session.add_all([_deposit(b["sole"]), _deposit(b["sole"]), _deposit(b["last_owner"]), outgoing, incoming])
+        await session.flush()
+        outgoing.related_transaction_id, incoming.related_transaction_id = incoming.id, outgoing.id
+        await session.commit()
+    # Recorded only now: an id flushed then rolled back could be handed to a neighbour, and the teardown deletes by id.
+    lane.broker_ids.extend(b.values())
+    counts = {b["sole"]: 3, b["last_owner"]: 1, b["co_owned"]: 1, b["viewed"]: 0}
+    return _DeletionScene(admin=admin, target=target, partner=partner, brokers=b, names={broker.id: broker.name for broker in rows.values()}, transactions=counts)
+
+
+async def _lane_holdings(scene: _DeletionScene) -> _LaneHoldings:
+    broker_ids = list(scene.brokers.values())
+    async with AsyncSession(_lane_engine()) as session:
+        target = await session.scalar(select(User.id).where(User.id == scene.target.account.user_id))
+        brokers = (await session.execute(select(Broker.id).where(Broker.id.in_(broker_ids)))).scalars().all()
+        grants = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role).where(BrokerUserAccess.broker_id.in_(broker_ids)))).all()
+        transactions = (await session.execute(select(Transaction.id, Transaction.broker_id, Transaction.related_transaction_id).where(Transaction.broker_id.in_(broker_ids)))).all()
+    return _LaneHoldings(
+        target=target is not None,
+        brokers=frozenset(brokers),
+        grants=frozenset((broker_id, user_id, UserRole(role).value) for broker_id, user_id, role in grants),
+        transactions=frozenset((tx_id, broker_id, related) for tx_id, broker_id, related in transactions),
+    )
+
+
+def _after_deleting(before: _LaneHoldings, scene: _DeletionScene) -> _LaneHoldings:
+    """What deleting the target must leave: the deleted brokers gone with their grants and transactions, the target and its grants gone, the half left alone unlinked; nothing else."""
+    deleted, target_id = set(scene.deleted), scene.target.account.user_id
+    gone = {tx_id for tx_id, broker_id, _ in before.transactions if broker_id in deleted}
+    return _LaneHoldings(
+        target=False,
+        brokers=before.brokers - deleted,
+        grants=frozenset(grant for grant in before.grants if grant[0] not in deleted and grant[1] != target_id),
+        transactions=frozenset((tx_id, broker_id, None if related in gone else related) for tx_id, broker_id, related in before.transactions if broker_id not in deleted),
+    )
+
+
+async def _lane_account(user_id: int) -> Optional[tuple[bool, bool, int]]:
+    """(is_active, is_superuser, session_version) of one of this case's accounts, read fresh; None once it is gone."""
+    async with AsyncSession(_lane_engine()) as session:
+        row = (await session.execute(select(User.is_active, User.is_superuser, User.session_version).where(User.id == user_id))).one_or_none()
+    return None if row is None else (bool(row[0]), bool(row[1]), int(row[2]))
+
+
+class TestAccountDeletionOnTheLane:
+    """GET /users/{id}/deletion-preview and DELETE /users/{id} on this case's own accounts and brokers. The caller is an active administrator, never the target unless the case says so."""
+
+    @pytest.mark.asyncio
+    async def test_the_preview_says_what_would_go_and_what_would_stay_and_writes_nothing(self, lane: _LaneRows) -> None:
+        """UADM-040: GET /users/{target}/deletion-preview → 200, exactly {user_id, username, brokers_deleted: [sole (3 transactions), last_owner (1)], brokers_left: [co_owned OWNER, viewed VIEWER], transfers_unpaired: 1}, both lists by id; the target, the four brokers, their grants and transactions are as before, and the target's session still works."""
+        print_section("UADM-040: the preview of a deletion")
+        scene = await _deletion_scene(lane)
+        target_id = scene.target.account.user_id
+        before = await _lane_holdings(scene)
+
+        response = await _live("GET", f"/users/{target_id}/deletion-preview", cookie=scene.admin.cookie)
+
+        after = await _lane_holdings(scene)
+        violations: list[str] = []
+        _expect(violations, _answer(response) == (200, scene.preview()), f"expected 200 with exactly {scene.preview()}, got {_answer(response)}")
+        _expect(violations, after == before, f"the preview must write nothing: before {before}, after {after}")
+        _expect(violations, await _live_me_id(scene.target.cookie) == target_id, "the preview must end no session of the target")
+        assert not violations, f"GET /users/{{id}}/deletion-preview broke its contract:{_verdict(violations)}"
+        print_success("two brokers would go, two would stay, one transfer half left alone; nothing written")
+
+    @pytest.mark.asyncio
+    async def test_the_deletion_takes_what_the_preview_said_and_ends_the_sessions(self, lane: _LaneRows) -> None:
+        """UADM-041: after a preview (200, the presence barrier of the 404s below), DELETE /users/{target} → 204 with no body; the target and its grants are gone, sole and last_owner are gone with their transactions and grants, co_owned and viewed stay with the partner's grants, the incoming leg stays unlinked — exactly what the preview said, nothing else; the target's session answers 401; the preview and a second DELETE of it → 404; the administrator's session does not notice."""
+        print_section("UADM-041: DELETE /users/{id}")
+        scene = await _deletion_scene(lane)
+        target_id, cookie = scene.target.account.user_id, scene.admin.cookie
+        preview = await _live("GET", f"/users/{target_id}/deletion-preview", cookie=cookie)
+        assert preview.status_code == 200, f"Presence barrier: the preview of an existing account must answer 200, or the 404 below proves nothing: {preview.status_code} {preview.text}"
+        assert await _live_me_id(scene.target.cookie) == target_id, "Presence barrier: the target's session must work before the deletion"
+        before = await _lane_holdings(scene)
+
+        response = await _live("DELETE", f"/users/{target_id}", cookie=cookie)
+
+        after = await _lane_holdings(scene)
+        previewed = preview.json()
+        previewed_deleted = {item.get("id") for item in previewed.get("brokers_deleted", [])}
+        previewed_left = {item.get("id") for item in previewed.get("brokers_left", [])}
+        violations: list[str] = []
+        _expect(violations, (response.status_code, response.content) == (204, b""), f"expected 204 with no body, got {response.status_code} {response.text}")
+        _expect(violations, previewed == scene.preview(), f"the preview: expected {scene.preview()}, got {previewed}")
+        _expect(violations, not after.brokers & previewed_deleted and previewed_left <= after.brokers, f"the brokers must follow the preview: deleted {sorted(previewed_deleted)}, left {sorted(previewed_left)}, still there {sorted(after.brokers)}")
+        _expect(violations, after == _after_deleting(before, scene), f"the deletion must take the target, its grants and the brokers it was the last owner of, unlinking the half left alone, and nothing else: expected {_after_deleting(before, scene)}, found {after}")
+        _expect(violations, (await _live_me(scene.target.cookie))[0] == 401, f"the deleted account's session must answer 401: {await _live_me(scene.target.cookie)}")
+        _expect(violations, (await _live("GET", f"/users/{target_id}/deletion-preview", cookie=cookie)).status_code == 404, "the preview of a deleted account must answer 404")
+        _expect(violations, (await _live("DELETE", f"/users/{target_id}", cookie=cookie)).status_code == 404, "deleting a deleted account must answer 404")
+        _expect(violations, await _live_me_id(scene.admin.cookie) == scene.admin.account.user_id, "the administrator's session must not notice")
+        assert not violations, f"DELETE /users/{{id}} broke its contract:{_verdict(violations)}"
+        print_success("204: the account and the two brokers it was the last owner of gone, the other two left, the session 401, then 404")
+
+    @pytest.mark.asyncio
+    async def test_an_administrator_deletes_neither_itself_nor_another_administrator(self, lane: _LaneRows) -> None:
+        """UADM-042: DELETE of the caller's own id → 409 SELF_DELETION (one's own account is deleted from the profile); of an active administrator, and of an inactive one → 409 DEMOTE_FIRST; each of the three is as it was, version included, and the caller is still signed in as an administrator.
+
+        Presence barrier first: an ordinary account of this case is deleted with 204, so the route exists and refuses
+        only these. Deterministic on the lane: the caller is an active administrator, and the others are this case's.
+        """
+        print_section("UADM-042: SELF_DELETION and DEMOTE_FIRST")
+        admin = await _live_admin(lane)
+        ordinary = await _live_register(lane, "uadm_deletable")
+        active_admin = await _live_register(lane, "uadm_other_admin")
+        dormant_admin = await _live_register(lane, "uadm_dormant_admin")
+        await _lane_set(active_admin.username, admin=True)
+        await _lane_set(dormant_admin.username, admin=True)
+        await _lane_set(dormant_admin.username, active=False)
+        barrier = await _live("DELETE", f"/users/{ordinary.user_id}", cookie=admin.cookie)
+        assert barrier.status_code == 204, f"Presence barrier: DELETE of an ordinary account of this case must answer 204, or the 409s below prove nothing: {barrier.status_code} {barrier.text}"
+        accounts = {"the caller": admin.account.user_id, "an active administrator": active_admin.user_id, "an inactive administrator": dormant_admin.user_id}
+        before = {label: await _lane_account(user_id) for label, user_id in accounts.items()}
+
+        answers = {label: _refusal(await _live("DELETE", f"/users/{user_id}", cookie=admin.cookie)) for label, user_id in accounts.items()}
+
+        after = {label: await _lane_account(user_id) for label, user_id in accounts.items()}
+        expected = {"the caller": (409, "SELF_DELETION"), "an active administrator": (409, "DEMOTE_FIRST"), "an inactive administrator": (409, "DEMOTE_FIRST")}
+        violations: list[str] = []
+        _expect(violations, answers == expected, f"expected {expected}, got {answers}")
+        _expect(violations, after == before, f"a refused deletion must change nothing, the version included: before {before}, after {after}")
+        _expect(violations, (await _live("GET", "/users", cookie=admin.cookie)).status_code == 200, "the caller must still be signed in as an administrator")
+        assert not violations, f"An administrator must delete neither itself nor another administrator:{_verdict(violations)}"
+        print_success("409 SELF_DELETION, 409 DEMOTE_FIRST twice, nothing changed")
+
+    @pytest.mark.asyncio
+    async def test_every_account_of_the_lane_is_listed_unprotected_today(self, lane: _LaneRows) -> None:
+        """UADM-043: GET /users → every account carries ``protected: false``: today the hook of lot A7 protects nobody, whatever the neighbours registered. Presence barrier: this case's two accounts are listed."""
+        print_section("UADM-043: nobody is protected today")
+        admin = await _live_admin(lane)
+        member = await _live_register(lane, "uadm_unprotected")
+
+        response = await _live("GET", "/users", cookie=admin.cookie)
+
+        assert response.status_code == 200, f"GET /users as an administrator: {response.status_code} {response.text}"
+        items = response.json()["items"]
+        assert {admin.account.user_id, member.user_id} <= {item.get("id") for item in items}, "Presence barrier: this case's two accounts must be listed"
+        flagged = [(item.get("username"), item.get("protected", "<missing>")) for item in items if item.get("protected") is not False]
+        assert flagged == [], f"every account must be listed with protected false today: {flagged}"
+        print_success(f"{len(items)} accounts, none protected")
 
 
 # ============================================================================
@@ -1559,3 +1857,252 @@ class TestStructuredLogs:
         _expect(violations, hash_records == [], f"records of the application's loggers carrying a token's hash: {hash_records}")
         assert not violations, f"Every admin action logs, and no log carries a token:{_verdict(violations)}"
         print_success(f"{len(actions)} actions logged; {len(events)} events and {len(caplog.records)} records without a plaintext, no hash outside {sorted(SQL_LOGGERS)}")
+
+
+# ============================================================================
+# IN-PROCESS, ON THE MIGRATED SCHEMA: THE HOOK OF LOT A7, THE LOG, A FAILURE (lot A6a)
+# ============================================================================
+
+
+@pytest.fixture(scope="module")
+def head_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A new database taken to head by the real migrations, in a child process, once for the module. Read-only: each test works on a copy."""
+    data_dir = tmp_path_factory.mktemp("users-admin-head") / "data"
+    db = data_dir / "sqlite" / "app.db"
+    _alembic_upgrade_head(db, data_dir)
+    return db
+
+
+@pytest_asyncio.fixture
+async def private_head(head_template: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Private]:
+    """A private instance with the schema production has — a copy of the migrated template — and the default settings; no accounts variable; bcrypt at cost 4. Disposed at teardown.
+
+    The BRIM report directory moves under tmp_path: private broker ids start at 1 like the lane's, and the cleanup of a
+    deleted private broker would otherwise remove a neighbour's reports.
+    """
+    for name in ACCOUNTS_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    reports = tmp_path / "broker_reports"
+    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
+    database = tmp_path / "instance.db"
+    with contextlib.closing(sqlite3.connect(head_template)) as source, contextlib.closing(sqlite3.connect(database)) as copy:
+        source.backup(copy)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database}", poolclass=NullPool)
+    try:
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _Private(engine=engine, app=_private_app(engine))
+    finally:
+        await engine.dispose()
+
+
+def _protect(monkeypatch: pytest.MonkeyPatch, *user_ids: int) -> None:
+    """Replace the hook of lot A7, a plain function: a reason for the accounts ``user_ids``, None for every other one.
+
+    ``raising=False``: before A6a the hook does not exist, and the red is then the route's answer, not this setup.
+    """
+    protected = frozenset(user_ids)
+
+    def account_protection(user: User) -> Optional[str]:
+        return PROTECTION_REASON if user.id in protected else None
+
+    monkeypatch.setattr(user_service, "account_protection", account_protection, raising=False)
+
+
+def _spy_on_report_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[list[int]]:
+    """Replace delete_files_for_brokers, under both names a caller may reach, by a spy answering FILES_REMOVED; the broker ids of each call."""
+    calls: list[list[int]] = []
+
+    def delete_files_for_brokers(broker_ids: Any) -> int:
+        calls.append([int(broker_id) for broker_id in broker_ids])
+        return FILES_REMOVED
+
+    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", delete_files_for_brokers)
+    monkeypatch.setattr(user_service, "delete_files_for_brokers", delete_files_for_brokers, raising=False)
+    return calls
+
+
+async def _private_broker(private: _Private, name: str, grants: list[tuple[int, UserRole]], *, deposits: int = 0) -> int:
+    """A broker of the private instance with these grants and DEPOSITs, committed; its id."""
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        broker = Broker(name=name)
+        session.add(broker)
+        await session.flush()
+        session.add_all([_grant(user_id, broker.id, role) for user_id, role in grants])
+        session.add_all([_deposit(broker.id) for _ in range(deposits)])
+        await session.commit()
+    return broker.id
+
+
+async def _private_holdings(private: _Private) -> dict[str, Any]:
+    """Every account (flags and session version), broker, grant and transaction of the private instance: the test owns them all."""
+    async with AsyncSession(private.engine) as session:
+        accounts = (await session.execute(select(User.username, User.is_active, User.is_superuser, User.session_version))).all()
+        brokers = (await session.execute(select(Broker.id, Broker.name))).all()
+        grants = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role))).all()
+        transactions = (await session.execute(select(Transaction.id, Transaction.broker_id, Transaction.related_transaction_id))).all()
+    return {
+        "accounts": sorted(tuple(row) for row in accounts),
+        "brokers": sorted(tuple(row) for row in brokers),
+        "grants": sorted((broker_id, user_id, UserRole(role).value) for broker_id, user_id, role in grants),
+        "transactions": sorted(tuple(row) for row in transactions),
+    }
+
+
+def _logged(event: dict[str, Any]) -> dict[str, Any]:
+    """The fields of an administrator's deletion an event carries, a sequence read as a list."""
+    return {key: list(value) if isinstance(value, (list, tuple)) else value for key, value in event.items() if key in ADMIN_DELETION_FIELDS}
+
+
+async def _failing_delete_bulk(self: BrokerService, *args: Any, **kwargs: Any) -> Any:
+    raise RuntimeError("injected technical failure while deleting a broker")
+
+
+class TestAccountProtectionInProcess:
+    """The hook of lot A7, replaced in this process: a reason for one account. root, the caller, is an active administrator the hook never protects."""
+
+    @pytest.mark.asyncio
+    async def test_a_protected_account_is_neither_deactivated_nor_demoted(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-050: boss, an active administrator the hook protects: PATCH {is_active: false} and PATCH {is_superuser: false} → 409 ACCOUNT_PROTECTED, and boss is as it was, version included.
+
+        Barrier: the same two calls on peer, an administrator the hook does not protect, → 200. root stays an active
+        administrator throughout, so LAST_ADMIN never applies: only the hook can refuse.
+        """
+        print_section("UADM-050: PATCH on a protected account")
+        _, cookie = await _admin(private_head)
+        boss = await _add_user(private_head, "boss", admin=True)
+        peer = await _add_user(private_head, "peer", admin=True)
+        _protect(monkeypatch, boss.user_id)
+        before = await _private_user(private_head, boss.user_id)
+
+        deactivate = await _call(private_head, "PATCH", f"/users/{boss.user_id}", cookie=cookie, json={"is_active": False})
+        demote = await _call(private_head, "PATCH", f"/users/{boss.user_id}", cookie=cookie, json={"is_superuser": False})
+        after = await _private_user(private_head, boss.user_id)
+        peer_demoted = await _call(private_head, "PATCH", f"/users/{peer.user_id}", cookie=cookie, json={"is_superuser": False})
+        peer_deactivated = await _call(private_head, "PATCH", f"/users/{peer.user_id}", cookie=cookie, json={"is_active": False})
+
+        violations: list[str] = []
+        _expect(violations, _refusal(deactivate) == (409, "ACCOUNT_PROTECTED"), f"deactivating a protected account: expected 409 ACCOUNT_PROTECTED, got {deactivate.status_code} {deactivate.text}")
+        _expect(violations, _refusal(demote) == (409, "ACCOUNT_PROTECTED"), f"demoting a protected account: expected 409 ACCOUNT_PROTECTED, got {demote.status_code} {demote.text}")
+        _expect(violations, after == before, f"a refused change must change nothing, the version included: {before} → {after}")
+        _expect(violations, (peer_demoted.status_code, peer_deactivated.status_code) == (200, 200), f"Barrier: the same changes on an administrator the hook does not protect go through: {peer_demoted.status_code} {peer_demoted.text}; {peer_deactivated.status_code} {peer_deactivated.text}")
+        _expect(violations, (await _private_user(private_head, peer.user_id))[:2] == (False, False), "the unprotected administrator must end up inactive and demoted")
+        assert not violations, f"The hook must stop the deactivation and the demotion of the account it protects:{_verdict(violations)}"
+        print_success("409 ACCOUNT_PROTECTED twice, the protected account untouched; the unprotected one changed")
+
+    @pytest.mark.asyncio
+    async def test_a_protected_account_is_not_deleted(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-051: patron, an ordinary account the hook protects and the only OWNER of a broker with a DEPOSIT: DELETE → 409 ACCOUNT_PROTECTED; every account, broker, grant and transaction as before, and no report file touched. Barrier: DELETE of other, an ordinary account the hook does not protect, → 204, gone."""
+        print_section("UADM-051: DELETE of a protected account")
+        _, cookie = await _admin(private_head)
+        patron = await _add_user(private_head, "patron")
+        other = await _add_user(private_head, "other")
+        await _private_broker(private_head, "Patron's broker", [(patron.user_id, UserRole.OWNER)], deposits=1)
+        _protect(monkeypatch, patron.user_id)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        before = await _private_holdings(private_head)
+
+        refused = await _call(private_head, "DELETE", f"/users/{patron.user_id}", cookie=cookie)
+        after = await _private_holdings(private_head)
+        calls_after_refusal = list(calls)
+        allowed = await _call(private_head, "DELETE", f"/users/{other.user_id}", cookie=cookie)
+        usernames = [row[0] for row in (await _private_holdings(private_head))["accounts"]]
+
+        violations: list[str] = []
+        _expect(violations, _refusal(refused) == (409, "ACCOUNT_PROTECTED"), f"deleting a protected account: expected 409 ACCOUNT_PROTECTED, got {refused.status_code} {refused.text}")
+        _expect(violations, after == before, f"a refused deletion must change nothing: before {before}, after {after}")
+        _expect(violations, calls_after_refusal == [], f"a refused deletion must touch no report file: {calls_after_refusal}")
+        _expect(violations, allowed.status_code == 204 and other.username not in usernames, f"Barrier: an account the hook does not protect is deleted: {allowed.status_code} {allowed.text}, accounts now {usernames}")
+        assert not violations, f"The hook must stop the deletion of the account it protects:{_verdict(violations)}"
+        print_success("409 ACCOUNT_PROTECTED, everything in place; the unprotected account deleted")
+
+    @pytest.mark.asyncio
+    async def test_protected_says_whether_the_hook_gives_a_reason(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-052: the hook protects boss: GET /users lists root, boss and member with exactly their seven fields, ``protected`` true for boss alone; PATCH promoting member answers it with ``protected`` false."""
+        print_section("UADM-052: the protected field")
+        root, cookie = await _admin(private_head)
+        boss = await _add_user(private_head, "boss", admin=True)
+        member = await _add_user(private_head, "member")
+        _protect(monkeypatch, boss.user_id)
+
+        listed = await _call(private_head, "GET", "/users", cookie=cookie)
+        promoted = await _call(private_head, "PATCH", f"/users/{member.user_id}", cookie=cookie, json={"is_superuser": True})
+
+        assert (listed.status_code, promoted.status_code) == (200, 200), f"GET /users {listed.status_code} {listed.text}; PATCH {promoted.status_code} {promoted.text}"
+        items = {item.get("id"): item for item in listed.json()["items"]}
+        violations = _user_item_violations(items.get(root.user_id), root, active=True, superuser=True)
+        violations += _user_item_violations(items.get(boss.user_id), boss, active=True, superuser=True, protected=True)
+        violations += _user_item_violations(items.get(member.user_id), member, active=True, superuser=False)
+        violations += [f"PATCH: {problem}" for problem in _user_item_violations(promoted.json(), member, active=True, superuser=True)]
+        assert not violations, f"protected must say whether the hook gives a reason:{_verdict(violations)}"
+        print_success("protected true for the account the hook protects, false for the others")
+
+
+class TestAccountDeletionInProcess:
+    """DELETE /users/{id} on a private instance with the production schema: what only this process can see — its log, an injected failure."""
+
+    @pytest.mark.asyncio
+    async def test_the_deletion_logs_one_structured_event_and_no_token_nor_password(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """UADM-053: root deletes leaver, the only OWNER of one broker and a co-OWNER of another with partner: 204; exactly one structlog event «Account deleted by an administrator» with user_id, username, admin_id, brokers_deleted [leaver's own broker] and files_removed (what the report cleanup answered); the cleanup ran once, for that broker; no structlog event and no stdlib record, whatever the logger, carries a session token (root's or leaver's) or the password; leaver and its own broker are gone, the shared broker stays.
+
+        Barriers first, as UADM-030: a canary through the users module's logger name reaches both captures.
+        """
+        print_section("UADM-053: the administrator's deletion, in the log")
+        root, root_cookie = await _admin(private_head)
+        leaver = await _add_user(private_head, "leaver")
+        partner = await _add_user(private_head, "partner")
+        leaver_cookie = await _sign_in(private_head, leaver)
+        sole = await _private_broker(private_head, "Leaver's broker", [(leaver.user_id, UserRole.OWNER)], deposits=1)
+        shared = await _private_broker(private_head, "Shared broker", [(leaver.user_id, UserRole.OWNER), (partner.user_id, UserRole.OWNER)], deposits=1)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        monkeypatch.setattr(logging.getLogger(users_api.__name__), "disabled", False)
+        caplog.set_level(logging.DEBUG)
+        caplog.set_level(logging.DEBUG, logger=users_api.__name__)
+
+        with capture_logs() as events:
+            structlog.get_logger(users_api.__name__).info(CANARY)
+            logging.getLogger(users_api.__name__).info(CANARY)
+            response = await _call(private_head, "DELETE", f"/users/{leaver.user_id}", cookie=root_cookie)
+
+        assert any(event.get("event") == CANARY for event in events), "barrier: structlog events of the users module's logger do not reach capture_logs"
+        assert any(record.getMessage() == CANARY for record in caplog.records), "barrier: stdlib records of the users module's logger do not reach caplog"
+        holdings = await _private_holdings(private_head)
+        deletions = [_logged(event) for event in events if event.get("event") == ADMIN_DELETION_EVENT]
+        expected = {"user_id": leaver.user_id, "username": leaver.username, "admin_id": root.user_id, "brokers_deleted": [sole], "files_removed": FILES_REMOVED}
+        secrets = [root_cookie, leaver_cookie, PRIVATE_PASSWORD]
+        secret_events = [event for event in events if any(secret in repr(event) for secret in secrets)]
+        secret_records = [f"{record.name}: {record.getMessage()}" for record in caplog.records if _carries(record, secrets)]
+        violations: list[str] = []
+        _expect(violations, (response.status_code, response.content) == (204, b""), f"expected 204 with no body, got {response.status_code} {response.text}")
+        _expect(violations, deletions == [expected], f"exactly one «{ADMIN_DELETION_EVENT}» event with {expected}: {deletions}")
+        _expect(violations, calls == [[sole]], f"the report files of the deleted broker must be removed once: {calls}")
+        _expect(violations, secret_events == [], f"structlog events carrying a session token or the password: {secret_events}")
+        _expect(violations, secret_records == [], f"stdlib records carrying a session token or the password: {secret_records}")
+        _expect(violations, leaver.username not in [row[0] for row in holdings["accounts"]] and [row[0] for row in holdings["brokers"]] == [shared], f"leaver and its own broker must be gone, the shared broker left: {holdings}")
+        assert not violations, f"The administrator's deletion must log one event, without secrets:{_verdict(violations)}"
+        print_success("one structured event with the five fields, no token, no password")
+
+    @pytest.mark.asyncio
+    async def test_a_technical_failure_answers_500_and_deletes_nothing(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UADM-054: BrokerService.delete_bulk raises when the deletion reaches leaver's own broker — the shared broker, of a lower id, is already left inside the transaction: DELETE → 500 «nothing was deleted», as for one's own account; every account, broker, grant and transaction as before, and no report file touched."""
+        print_section("UADM-054: a technical failure deletes nothing")
+        _, cookie = await _admin(private_head)
+        leaver = await _add_user(private_head, "leaver")
+        partner = await _add_user(private_head, "partner")
+        await _private_broker(private_head, "Shared broker", [(leaver.user_id, UserRole.OWNER), (partner.user_id, UserRole.OWNER)], deposits=1)
+        await _private_broker(private_head, "Leaver's broker", [(leaver.user_id, UserRole.OWNER)], deposits=1)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        monkeypatch.setattr(BrokerService, "delete_bulk", _failing_delete_bulk)
+        before = await _private_holdings(private_head)
+
+        response = await _call(private_head, "DELETE", f"/users/{leaver.user_id}", cookie=cookie)
+
+        after = await _private_holdings(private_head)
+        status, body = _answer(response)
+        violations: list[str] = []
+        _expect(violations, status == 500 and NOTHING_WAS_DELETED in str(body), f"expected 500 saying «{NOTHING_WAS_DELETED}», got {status} {body}")
+        _expect(violations, after == before, f"a failed deletion must change nothing: before {before}, after {after}")
+        _expect(violations, calls == [], f"a failed deletion must touch no report file: {calls}")
+        assert not violations, f"A technical failure must delete nothing:{_verdict(violations)}"
+        print_success("500, nothing deleted, no file touched")

@@ -77,7 +77,7 @@ values the new type forbids.
 | `cash` | `{code, amount} \| null` | ISO 4217 code and decimal string, edited with `CompactCashCell` |
 | `tags` | `string[]` | Free tags, with suggestions from `availableTags` |
 | `description` | `string` | Free-text memo |
-| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`) |
+| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`). **+ New event** in the picker (not in `view` mode) opens a stacked `EventCreateMiniModal` (`zIndex + 10`), which sends the new event with `mode: "create"`. On `EVENT_EXISTS` it shows `EventExistsPanel`: **Use this** (writes nothing), **Edit this** for manual events only (the form then saves that event by its `id`, `mode: "upsert"`), **Cancel**. The field then holds the id the response names (`results[0].event_ids[0]`), or the id of the event chosen with **Use this** |
 | `cost_basis_override` | `{code, amount} \| null` | Manual cost basis (see [WAC State](#wac-state)) |
 | `link_uuid` | `string \| null` | Pairing UUID; shown read-only when set |
 

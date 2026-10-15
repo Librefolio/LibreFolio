@@ -36,8 +36,9 @@ settings and system, mounted as ``api/v1/router.py`` mounts them, in an app of t
 ``get_session_generator`` is a private SQLite file under ``tmp_path``; the variables are set with ``monkeypatch`` in
 this process only. On the lane's server run only the cases that need no global change, in the lane's mode, which must be
 ``open`` (asserted first, from ``GET /system/instance``): each registers its own account and issues its own tokens in
-the lane's database, then deletes them, and never writes a setting. The unit is therefore write-scoped, in the parallel
-pass, with no ``exclusive_because``.
+the lane's database, then deletes them, and never writes a setting. A case that opens an account first checks that the
+lane already holds one — the api setup's (``db populate``) —, since on an empty lane it would be the first account,
+hence the lane's administrator. The unit is therefore write-scoped, in the parallel pass, with no ``exclusive_because``.
 
 bcrypt runs at its lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``); the lane's server keeps its own.
 """
@@ -690,7 +691,7 @@ class TestInstanceAccounts:
 
     @pytest.mark.asyncio
     async def test_the_public_configuration_says_nothing_about_users(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile`` and ``accounts``, ``accounts`` exactly its two fields, and the link nowhere."""
+        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts`` and ``email``, ``accounts`` exactly its two fields, and the link nowhere."""
         owner = await _add_user(private.engine, "alice", admin=True)
         await _issue(private.engine, created_by_user_id=owner)
         monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
@@ -701,7 +702,7 @@ class TestInstanceAccounts:
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts"}, f"the public configuration holds nothing undeclared: {body}"
+        assert set(body) == {"profile", "accounts", "email"}, f"the public configuration holds nothing undeclared: {body}"
         assert set(body["accounts"]) == {"registration_mode", "registration_locked"}, f"accounts says nothing about users: {body['accounts']}"
         assert BILLING_LINK not in response.text
 
@@ -875,6 +876,19 @@ async def lane(test_server) -> AsyncIterator[_LaneRows]:
         assert not errors, f"Teardown: could not delete what this test wrote in the lane: {errors}"
 
 
+async def _assert_lane_has_an_account() -> None:
+    """Precondition of a live registration, read in the lane's database before it: the lane already holds an account.
+
+    On an empty lane the account about to register would be its first, hence its administrator in every mode, and with
+    a valid invitation of any role, which it spends: the case would make the shared lane's administrator. An invalid
+    invitation is refused even then, so LIVE-001 needs no check. Existence only, never a count: the lane is shared, and
+    its accounts come and go with every concurrent unit.
+    """
+    async with AsyncSession(_lane_engine()) as session:
+        someone = (await session.execute(select(User.id).limit(1))).scalar()
+    assert someone is not None, "Precondition: the lane has no account yet, so this registration would make its administrator: the api setup (db populate) did not run on this lane"
+
+
 async def _live_register(username: str, **body: Any) -> httpx.Response:
     async with httpx.AsyncClient() as client:
         return await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": PASSWORD, **body}, timeout=TIMEOUT)
@@ -912,6 +926,7 @@ class TestOnTheLane:
     @pytest.mark.asyncio
     async def test_an_invitation_opens_its_account_and_is_consumed_by_it(self, lane: _LaneRows) -> None:
         """LIVE-002: an invitation issued in the lane's database opens a regular account (201) and is consumed by that account. A user invitation: no administrator is ever made on the shared lane."""
+        await _assert_lane_has_an_account()
         issued = await _issue(_lane_engine())
         lane.token_ids.append(issued.record.id)
         username = lane.new_username("live_invited")
@@ -920,13 +935,14 @@ class TestOnTheLane:
 
         assert response.status_code == 201, f"{response.status_code} {response.text}"
         user = response.json()["user"]
-        assert user["is_superuser"] is False
+        assert user["is_superuser"] is False, f"a user invitation opened an administrator account, {username}: the invitation's role was not applied, or {username} registered as the lane's first account, hence its administrator: the api setup (db populate) did not run on this lane"
         assert (await _token_row(_lane_engine(), issued.record.id)).consumed_by_user_id == user["id"], "the invitation must be consumed by the account it opened"
 
     @pytest.mark.asyncio
     async def test_a_reset_link_is_inspected_used_and_signs_the_account_out(self, lane: _LaneRows) -> None:
         """LIVE-003: an account of this test with two reset links: inspect → valid with its username; reset → 200; the session from before → 401; the new password signs in; the other link → revoked."""
         print_section("LIVE-003: a reset link on the lane's server")
+        await _assert_lane_has_an_account()
         username = lane.new_username("live_reset")
         registered = await _live_register(username)
         assert registered.status_code == 201, f"setup: {registered.status_code} {registered.text}"

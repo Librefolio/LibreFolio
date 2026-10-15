@@ -141,6 +141,12 @@ class FAEventUpsert(StrictModel):
     - ``"create"``: «+ New event». An event on a date and type the asset already has,
       manual or from a provider, is refused (409 ``EVENT_EXISTS``, with the existing
       events), never overwritten. A create item names no event id.
+
+    ``delete_ids`` (``upsert`` items only): events of the asset, manual or from a provider (one
+    comes back with its next sync), deleted first, in the same transaction as the rest of the
+    request, so an edit can take the date and type of an event deleted in the same save (the
+    event editor's save, all or nothing: decision 22). An item may only delete; it needs at least
+    one event or one id to delete.
     """
 
     asset_id: int = Field(..., description="Asset ID")
@@ -148,12 +154,34 @@ class FAEventUpsert(StrictModel):
         "upsert",
         description="upsert: an event without id updates the manual event with the same date and type. create: an event on a date and type the asset already has (manual or provider) is refused with 409 EVENT_EXISTS.",
     )
-    events: List[FAEventUpsertPoint] = Field(..., min_length=1, description="List of event points")
+    events: List[FAEventUpsertPoint] = Field(default_factory=list, description="List of event points (empty when the item only deletes)")
+    delete_ids: List[int] = Field(
+        default_factory=list,
+        description="upsert only: ids of events of this asset (manual, or from a provider: it comes back with its next sync) deleted first, in the same transaction. An id that is not an event of the asset is refused (400 EVENT_NOT_DELETABLE), an event linked to transactions too (409 EVENT_IN_USE).",
+    )
+
+    @model_validator(mode="after")
+    def validate_item_not_empty(self) -> FAEventUpsert:
+        if not self.events and not self.delete_ids:
+            raise ValueError("An upsert item needs at least one event or one id to delete")
+        return self
 
     @model_validator(mode="after")
     def validate_create_names_no_id(self) -> FAEventUpsert:
         if self.mode == "create" and any(event.id is not None for event in self.events):
             raise ValueError("A create item cannot name an event id: edit an event with mode 'upsert'")
+        if self.mode == "create" and self.delete_ids:
+            raise ValueError("A create item cannot delete events: delete them with mode 'upsert'")
+        return self
+
+    @model_validator(mode="after")
+    def validate_delete_ids(self) -> FAEventUpsert:
+        repeated = sorted({event_id for event_id in self.delete_ids if self.delete_ids.count(event_id) > 1})
+        if repeated:
+            raise ValueError(f"Duplicate id in delete_ids: {', '.join(str(event_id) for event_id in repeated)}")
+        both = sorted(set(self.delete_ids) & {event.id for event in self.events if event.id is not None})
+        if both:
+            raise ValueError(f"An event cannot be deleted and edited in one item: {', '.join(str(event_id) for event_id in both)}")
         return self
 
     @model_validator(mode="after")
@@ -172,6 +200,7 @@ class FAEventUpsertResult(StrictModel):
     count: int
     message: str
     event_ids: List[int] = Field(default_factory=list, description="The id of the event each point of the item wrote, in request order")
+    deleted_ids: List[int] = Field(default_factory=list, description="The ids of delete_ids, all deleted, in request order")
 
 
 class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):

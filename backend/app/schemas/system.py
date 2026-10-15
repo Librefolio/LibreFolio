@@ -9,6 +9,7 @@ from pydantic import Field, RootModel, model_validator
 
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.common import StrictModel
+from backend.app.schemas.email import EmailInstanceConfig
 from backend.app.utils.runtime.network import ClientClass
 
 
@@ -113,6 +114,7 @@ class InstanceConfigResponse(StrictModel):
 
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
     accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
+    email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
 
 
 class InstanceBlockResponse(StrictModel):
@@ -123,3 +125,7 @@ class InstanceBlockResponse(StrictModel):
 
     blocked: bool = Field(description="Whether the hosting provider blocked this instance: then every API call but a few answers 423")
     deletion_date: date | None = Field(default=None, description="The day the hosting provider will delete this instance and its data, when it gave one")
+    billing_url: str | None = Field(
+        default=None,
+        description="Where the hosting provider's customer manages the subscription (LIBREFOLIO_BILLING_URL), for administrators only: null for other users, and when it is not set or not a valid http(s) address",
+    )
