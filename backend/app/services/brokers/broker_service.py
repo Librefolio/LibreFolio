@@ -32,6 +32,7 @@ from backend.app.db.models import (
     Transaction,
     UserRole,
 )
+from backend.app.db.session import begin_writes
 from backend.app.schemas.brokers import (
     BRBulkCreateResponse,
     BRBulkDeleteResponse,
@@ -448,75 +449,85 @@ class BrokerService(BrokerAccessMixin, BrokerSummaryMixin):
         total_deleted = 0
         errors: List[str] = []
 
+        # Each broker in its own savepoint: a failure half-way through one (W-B20) rolls back that broker's writes only,
+        # never the brokers before or after it. begin_writes opens the transaction first, so the savepoints nest in it.
+        await begin_writes(self.session, Broker)
         for item in items:
             try:
-                broker = await self.session.get(Broker, item.id)
-                if not broker:
-                    results.append(
-                        BRDeleteResult(
-                            id=item.id,
-                            success=False,
-                            deleted_count=0,
-                            message=f"Broker {item.id} not found",
-                        )
-                    )
-                    continue
-
-                # Determine access check
-                skip_access_check = as_user_id == "all"
-                check_user_id = user_id if as_user_id is None else (None if skip_access_check else int(as_user_id))
-
-                if not skip_access_check and check_user_id is not None:
-                    # Only OWNER can delete broker
-                    role = await self._check_user_access(item.id, check_user_id, min_role=UserRole.OWNER)
-                    if not role:
-                        results.append(BRDeleteResult(id=item.id, success=False, deleted_count=0, message="Access denied"))
-                        continue
-
-                # Count transactions
-                tx_count = await self._count_transactions(item.id)
-
-                if tx_count > 0 and not item.force:
-                    results.append(
-                        BRDeleteResult(
-                            id=item.id,
-                            success=False,
-                            deleted_count=0,
-                            message=(f"Broker has {tx_count} transactions. " f"Use force=True to delete all."),
-                            transaction_count=tx_count,
-                        )
-                    )
-                    continue
-
-                # Delete transactions if force
-                transactions_deleted = 0
-                if tx_count > 0 and item.force:
-                    transactions_deleted = await self.tx_service.delete_by_broker(item.id)
-                    await self.session.flush()
-
-                # Delete broker
-                await self.session.delete(broker)
-
-                results.append(
-                    BRDeleteResult(
-                        id=item.id,
-                        success=True,
-                        deleted_count=1,
-                        transactions_deleted=transactions_deleted,
-                        message=None,
-                    )
-                )
+                async with self.session.begin_nested():
+                    result = await self._delete_one(item, user_id, as_user_id)
+            except Exception as e:
+                result = BRDeleteResult(id=item.id, success=False, deleted_count=0, message=str(e))
+            results.append(result)
+            if result.success:
                 success_count += 1
                 total_deleted += 1
-
-            except Exception as e:
-                results.append(BRDeleteResult(id=item.id, success=False, deleted_count=0, message=str(e)))
 
         return BRBulkDeleteResponse(
             results=results,
             success_count=success_count,
             total_deleted=total_deleted,
             errors=errors,
+        )
+
+    async def _delete_one(
+        self,
+        item: BRDeleteItem,
+        user_id: int,
+        as_user_id: Union[int, Literal["all"], None],
+    ) -> BRDeleteResult:
+        """Delete one broker of ``delete_bulk``, inside its savepoint, and answer its result.
+
+        Its writes are flushed here, so an error surfaces before the savepoint is released and the broker is reported
+        failed, not deleted.
+        """
+        broker = await self.session.get(Broker, item.id)
+        if not broker:
+            return BRDeleteResult(
+                id=item.id,
+                success=False,
+                deleted_count=0,
+                message=f"Broker {item.id} not found",
+            )
+
+        # Determine access check
+        skip_access_check = as_user_id == "all"
+        check_user_id = user_id if as_user_id is None else (None if skip_access_check else int(as_user_id))
+
+        if not skip_access_check and check_user_id is not None:
+            # Only OWNER can delete broker
+            role = await self._check_user_access(item.id, check_user_id, min_role=UserRole.OWNER)
+            if not role:
+                return BRDeleteResult(id=item.id, success=False, deleted_count=0, message="Access denied")
+
+        # Count transactions
+        tx_count = await self._count_transactions(item.id)
+
+        if tx_count > 0 and not item.force:
+            return BRDeleteResult(
+                id=item.id,
+                success=False,
+                deleted_count=0,
+                message=(f"Broker has {tx_count} transactions. " f"Use force=True to delete all."),
+                transaction_count=tx_count,
+            )
+
+        # Delete transactions if force
+        transactions_deleted = 0
+        if tx_count > 0 and item.force:
+            transactions_deleted = await self.tx_service.delete_by_broker(item.id)
+            await self.session.flush()
+
+        # Delete broker
+        await self.session.delete(broker)
+        await self.session.flush()
+
+        return BRDeleteResult(
+            id=item.id,
+            success=True,
+            deleted_count=1,
+            transactions_deleted=transactions_deleted,
+            message=None,
         )
 
     async def _count_transactions(self, broker_id: int) -> int:

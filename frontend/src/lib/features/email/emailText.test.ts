@@ -21,7 +21,15 @@
  *   - the class maps hold whole class strings of colour roles only (theme-roles skill): no palette class, no colour
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
  *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
- *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box.
+ *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box;
+ *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the seven states of the page of a
+ *     verification link — `checking`, the four refusals of the link, `missing`, `error` — with
+ *     `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
+ *     `email.verification.resendErrors.<CODE>` for the five codes the owner can act on, the minutes until the next
+ *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
+ *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
+ *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
+ *     `{username}`), is in the four catalogues with exactly the placeholders the code fills.
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -40,7 +48,8 @@ import es from '$lib/i18n/es.json';
 import {LEGACY_CLASS_RE, ROLE_CLASS_RE, readTokens, roleNames} from '../../../../scripts/theme/theme-roles.mjs';
 import type {EmailTestFailure} from './emailApi';
 import type {LinksProbeState} from './emailLinks';
-import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
+import type {ResendFailure} from './verificationApi';
+import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, resendFailureMessage, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage, VERIFY_PAGE_KEYS, type VerifyPageStatus} from './emailText';
 
 /** The problem codes of `backend/app/config/email.py`, each with a message of its own. */
 const PROBLEM_CODES = ['SMTP_HOST_INVALID', 'SMTP_TLS_INVALID', 'SMTP_PORT_INVALID', 'SMTP_FROM_MISSING', 'SMTP_FROM_INVALID', 'SMTP_REPLY_TO_INVALID', 'SMTP_MAX_PER_HOUR_INVALID', 'SMTP_PASSWORD_UNREADABLE', 'SMTP_CREDENTIALS_INCOMPLETE'];
@@ -333,5 +342,54 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
     it('ETX-06: the states drawn as a warning are exactly those linksProbeWarns offers a second look for', () => {
         const drawnAsWarnings = LINKS_STATES.filter((state) => familiesOf(LINKS_PROBE_CLASSES[state]).includes('warning'));
         expect(drawnAsWarnings).toEqual(LINKS_STATES.filter((state) => linksProbeWarns(state)));
+    });
+});
+
+// =====================================================================================================================
+/** The seven states of the page of a verification link. */
+const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error'];
+
+/** What `resendFailureMessage` asked the translator for, how many times, and what it returned. */
+function askedResend(failure: ResendFailure): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
+    const translate = vi.fn<Translate>((key) => `«${key}»`);
+    const answer = resendFailureMessage(translate, failure);
+    const [key, options] = translate.mock.calls[0] ?? [];
+    return {calls: translate.mock.calls.length, key, values: options?.values, answer};
+}
+
+/** One failure of each kind `resendFailureMessage` words, with the key and values it must ask for. */
+const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string; values?: Values}> = [
+    {label: 'INVALID_CREDENTIALS', failure: {errorCode: 'INVALID_CREDENTIALS'}, key: 'email.verification.resendErrors.INVALID_CREDENTIALS'},
+    {label: 'EMAIL_RATE_LIMITED, 180 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 180}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 3}},
+    {label: 'EMAIL_RATE_LIMITED, 61 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 61}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 2}},
+    {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
+    {label: 'EMAIL_VERIFICATION_NOT_NEEDED', failure: {errorCode: 'EMAIL_VERIFICATION_NOT_NEEDED'}, key: 'email.verification.resendErrors.EMAIL_VERIFICATION_NOT_NEEDED'},
+    {label: 'USER_LIMIT_REACHED', failure: {errorCode: 'USER_LIMIT_REACHED'}, key: 'email.verification.resendErrors.USER_LIMIT_REACHED'},
+    {label: 'ACCOUNT_DISABLED', failure: {errorCode: 'ACCOUNT_DISABLED'}, key: 'email.verification.resendErrors.ACCOUNT_DISABLED'},
+    ...['EMAIL_UNAVAILABLE', 'EMAIL_LINKS_UNAVAILABLE', 'EMAIL_DELIVERY_FAILED', 'EMAIL_RECIPIENT_INVALID'].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.verification.resendErrors.unavailable'})),
+    ...['UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.verification.resendErrors.generic'})),
+];
+
+describe('the verification of an address (lot E5a) — its words', () => {
+    it('ETX-07: VERIFY_PAGE_KEYS words each of the seven states of the page with a key of its own', () => {
+        expect(VERIFY_PAGE_KEYS).toEqual(Object.fromEntries(VERIFY_PAGE_STATES.map((state) => [state, `email.verification.page.${state}`])));
+    });
+
+    it.each(VERIFY_PAGE_STATES)('ETX-07: the page’s %s is in the four catalogues, without a placeholder', (state) => {
+        expectInEveryCatalogue(VERIFY_PAGE_KEYS[state], []);
+    });
+
+    it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing', () => {
+        expectInEveryCatalogue('email.verification.verified', ['username']);
+        for (const key of ['loginRequired', 'resend', 'resending', 'resent']) expectInEveryCatalogue(`email.verification.${key}`, []);
+    });
+
+    it.each(RESEND_FAILURES)('ETX-09: resendFailureMessage of $label — one call, its key and values, the answer untouched', ({failure, key, values}) => {
+        expect(askedResend(failure)).toEqual({calls: 1, key, values, answer: `«${key}»`});
+    });
+
+    it.each(RESEND_FAILURES)('ETX-10: the message of $label is in the four catalogues, naming the values it is asked with', ({failure}) => {
+        const {key, values} = askedResend(failure);
+        expectInEveryCatalogue(key ?? '', Object.keys(values ?? {}));
     });
 });

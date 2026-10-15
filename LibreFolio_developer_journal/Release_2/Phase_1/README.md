@@ -149,3 +149,10 @@ Sono tutti locali: la push la fa il developer.
 | 60 | 15/10 21:36 | Z: correzione della E2E del flash dal vivo (attesa del primo poll e orologio in pausa), solo test | `93292909d` |
 | 61 | 15/10 22:13 | E3p: sonda dei link della scheda Email dal browser dell'admin (decisione 45) | `e54ae96bb` |
 | 62 | 15/10 22:14 | A: G-15 (la barra delle schede di Settings scorre invece di tagliare; `TabBar` `scrollable`) | `369204ab5` |
+| 63 | 15/10 22:36 | W: F36 (report BRIM senza broker solo al caricatore e all'admin; `/parse` chiede EDITOR sul broker della richiesta; `file_id` non UUID → 404; `can_delete` nella lista; decisione 36, W-B3/W-B4) | `434af2925` |
+| 64 | 15/10 22:38 | J: CP-4d (risolutore MWRR verificato, Newton + Brent, `None` senza radice; via il ritentativo a freddo e `MWRR_SERIES_UNRELIABLE`; golden native-cash rigenerato solo sui `mwrr_*`) | `40f44f364` |
+| 65 | 15/10 22:47 | Z: Z2a (presenza dell'utente e richieste in corso, `ActivityMiddleware` in testa a `MIDDLEWARE_STACK`; D-S1; nessun effetto visibile) | `8b2d4782d` |
+| 66 | 15/10 23:02 | H: CP-U1 (decisione 36: scopo dei file caricati comune/personale, regola legacy alla lettura, personale altrui → 404, `PATCH` scopo, miniature `private`; I/O su disco fuori dal loop) | `6a3a2a1cc` |
+| 67 | 15/10 23:26 | X: X-RL, X1–X8 (pausa dei fornitori su «troppe richieste» sopra Z7a: eccezioni `RATE_LIMITED`, confini `call_provider`/`call_fx_provider`, Yahoo senza ritentativi, `error_code`/`retry_after` nei risultati, la sonda mostra fino a quando; decisione 34) | `da21c48c4` |
+| 68 | 15/10 23:38 | E: E5a (verifica dell'email, parti solo di E: servizio `verification.py`, `POST /email/verification/confirm` e `/resend`, pagina `/verify-email`; inerte fino a E5b; decisione 44) | `e9a993e00` |
+| 69 | 15/10 23:45 | W: W-B20 (un savepoint per broker nella cancellazione multipla; `begin_writes` in `db/session.py`) | `23ff56b95` |

@@ -29,6 +29,7 @@ function staticFile(id: string, original_name: string, uploaded_by_user_id: numb
         id,
         original_name,
         uploaded_by_user_id,
+        scope: 'common',
         mime_type: 'text/plain',
         size_bytes: 128,
         uploaded_at: CREATED_AT,
@@ -61,10 +62,11 @@ function brimFile(file_id: string, filename: string, uploaded_by_user_id: number
 }
 
 const REPORTS = {
-    atlas: brimFile('b0000000-0000-4000-8000-000000000041', 'review-atlas.csv', 41),
-    unknown: brimFile('b0000000-0000-4000-8000-000000008080', 'review-unknown.csv', 8080),
+    // List items: the page's user is OWNER of the reports' broker (the brokers contract below), so each one is deletable.
+    atlas: {...brimFile('b0000000-0000-4000-8000-000000000041', 'review-atlas.csv', 41), can_delete: true},
+    unknown: {...brimFile('b0000000-0000-4000-8000-000000008080', 'review-unknown.csv', 8080), can_delete: true},
     // Null is a valid BRIM wire identity, but NOT a valid UploadFileInfo owner.
-    none: brimFile('b0000000-0000-4000-8000-000000000000', 'review-unattributed.csv', null),
+    none: {...brimFile('b0000000-0000-4000-8000-000000000000', 'review-unattributed.csv', null), can_delete: true},
 };
 
 /**

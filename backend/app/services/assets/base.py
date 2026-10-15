@@ -12,6 +12,7 @@ The runtime the core gives every plugin call (thread isolation, caches, paramete
 """
 
 import functools
+import re
 from abc import ABC, abstractmethod
 from datetime import date as date_type
 from typing import Dict, Literal, Optional
@@ -32,6 +33,7 @@ from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.utils.runtime.cooldown import RateLimitedError, retry_after_seconds
 
 # Initialize structured logger
 logger = get_logger(__name__)
@@ -53,6 +55,68 @@ class AssetSourceError(Exception):
         self.message = message
         self.error_code = error_code
         self.details = details or {}
+
+
+class AssetRateLimitedError(AssetSourceError, RateLimitedError):
+    """The provider refused for too many requests, or is paused after such a refusal: ``error_code="RATE_LIMITED"``.
+
+    ``retry_after`` is a wait in seconds: the provider's ``Retry-After`` (or None) when a plugin raises it, the pause the
+    call boundary decided when it reaches a caller (``core.call_provider``). ``scope`` narrows the pause to a part of the
+    provider, such as the host of a scraped site. A subclass of ``AssetSourceError``: every ``except AssetSourceError``
+    keeps catching it. A plugin raises it and never retries in its thread: the boundary pauses the provider.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None, scope: str | None = None, details: Optional[dict] = None):
+        AssetSourceError.__init__(self, message, "RATE_LIMITED", details)
+        self.retry_after = retry_after
+        self.scope = scope
+
+
+def rate_limited_from_response(response: object, provider_name: str, *, scope: str | None = None) -> AssetRateLimitedError | None:
+    """An ``AssetRateLimitedError`` when ``response`` (``httpx`` or ``requests``) is an HTTP 429, else None.
+
+    The error carries the response's ``Retry-After`` in seconds, None when absent or unreadable.
+    """
+    if getattr(response, "status_code", None) != 429:
+        return None
+    headers = getattr(response, "headers", None)
+    retry_after = retry_after_seconds(headers.get("Retry-After")) if headers is not None and hasattr(headers, "get") else None
+    return AssetRateLimitedError(f"{provider_name}: too many requests (HTTP 429)", retry_after=retry_after, scope=scope)
+
+
+#: The words of a library that reports an HTTP 429 only in its message: «Got status 429», «HTTP 429», «HTTP Error 429»
+#: (urllib), «status code 429», or the reason phrase «Too Many Requests» (requests, httpx, urllib). 429 as a whole number.
+_STATUS_429_IN_TEXT = re.compile(r"\b(?:status(?:\s+code)?|http(?:\s+error)?)\s*:?\s*429\b|too many requests", re.IGNORECASE)
+
+
+def rate_limited_from_exception(error: BaseException, provider_name: str, *, scope: str | None = None) -> AssetRateLimitedError | None:
+    """An ``AssetRateLimitedError`` when ``error`` is a refusal for too many requests, else None.
+
+    Recognised: an ``AssetRateLimitedError`` already (returned as it is); an exception with a ``response`` that is an
+    HTTP 429 (``requests.HTTPError``, ``httpx.HTTPStatusError``, with its ``Retry-After``); a message that says
+    «status 429», «status code 429», «HTTP 429», «HTTP Error 429» or «Too Many Requests», as libraries without an error
+    class of their own do. For a plugin's ``except``.
+    """
+    if isinstance(error, AssetRateLimitedError):
+        return error
+    refused = rate_limited_from_response(getattr(error, "response", None), provider_name, scope=scope)
+    if refused is not None:
+        return refused
+    if _STATUS_429_IN_TEXT.search(str(error)):
+        return AssetRateLimitedError(f"{provider_name}: too many requests (HTTP 429)", scope=scope)
+    return None
+
+
+def raise_if_rate_limited(error: BaseException, provider_name: str, *, scope: str | None = None) -> None:
+    """Raise an ``AssetRateLimitedError`` (from ``error``) when ``error`` is a refusal for too many requests.
+
+    For the first line of a plugin's ``except``: the other errors go on to the plugin's own handling.
+    """
+    refused = rate_limited_from_exception(error, provider_name, scope=scope)
+    if refused is error:
+        raise refused
+    if refused is not None:
+        raise refused from error
 
 
 # ============================================================================
@@ -692,6 +756,14 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
         Returns:
             URL string or None if provider has no web page for assets
+        """
+        return None
+
+    def cooldown_scope(self, identifier: str, identifier_type: IdentifierType | None = None, provider_params: dict | None = None) -> str | None:
+        """The part of this provider a pause after «too many requests» applies to, for this identifier.
+
+        None, the default, pauses the whole provider. A provider that reaches many sites (the CSS scraper) returns the
+        site's host, so a refusal from one site pauses that site only. Called before every call: no I/O here.
         """
         return None
 

@@ -218,7 +218,10 @@ return them **all as a list**. The orchestration flattens the result and **de-du
 Each item must match the search-item shape
 (`identifier`, `identifier_type`, `display_name`, `currency`, `type`, `provider_params`) so the
 create-asset flow can consume it directly. `resolve_url` must be **best-effort** — parse/fetch
-errors return `None`, never raise.
+errors return `None`, never raise. The one exception is a refusal for too many requests: raise it
+as `AssetRateLimitedError`, so that the core pauses the provider
+([Too Many Requests](../../architecture/patterns/asset_plugin_guide.md#too-many-requests)); the
+link-finder then skips that URL without reporting an error.
 
 !!! note "Scope"
 

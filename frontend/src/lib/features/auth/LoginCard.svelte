@@ -38,7 +38,7 @@
     }
 </script>
 
-<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="login-modal">
+<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="login-modal">
     <!-- Header Section (brand green) -->
     <div class="bg-lf-brand p-8 flex flex-col items-center justify-center space-y-3">
         <div class="flex items-center space-x-3 text-lf-on-brand">
@@ -74,7 +74,7 @@
                     autocapitalize="none"
                     autocomplete="username"
                     bind:value={username}
-                    class="w-full pl-12 pr-4 py-3 rounded-lg border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:border-lf-focus focus:ring-1 focus:ring-lf-focus transition-all disabled:opacity-50"
+                    class="w-full pl-12 pr-4 py-3 rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:border-lf-focus focus:ring-1 focus:ring-lf-focus transition-all disabled:opacity-50"
                     data-testid="login-username"
                     disabled={$isAuthLoading}
                     id="login-username"
