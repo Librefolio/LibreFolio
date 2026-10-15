@@ -1962,11 +1962,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
-- **H-1 · Nella prosa della devWiki restano 9 menzioni dei percorsi spostati da CP1** — minimo; H, 14/10.
-  - Stanno in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`, `features/F-011.md:20`,
-    `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
-  - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
-  - Nella tabella di `domains/scheduler.md:82` la riga dice ancora «(planned) … (not yet created)».
+- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1 e CP2a** — minimo; H, 14-15/10.
+  - **CP1**: 9 menzioni in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`,
+    `features/F-011.md:20`, `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
+    - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
+    - Nella tabella di `domains/scheduler.md:82` la riga dice ancora «(planned) … (not yet created)».
+  - **CP2a**: 9 menzioni di `backend/app/config.py` (oggi `backend/app/config/__init__.py`) in 8 pagine:
+    `concepts/runtime-lanes.md:29`, `decisions/prod-test-data-separation.md:28`, `utils-leaf-functions-only.md:83`,
+    `port-6040-scheme.md:34`, `problems/db-path-argument-ignored-by-alembic.md:22`, `features/F-011.md:20`,
+    `F-064.md:20`, `sources/r2-parallel-features-pwa-borsa-fx.md:82` e `:91`. L'ultima è una tabella sotto un
+    titolo che il controllo dei percorsi non legge.
   - È lo stesso caso di T-W1.
 
   Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
