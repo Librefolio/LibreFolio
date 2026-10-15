@@ -2088,7 +2088,7 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > - **Avvio del server condiviso fallito una volta** (codice 1), 0 s dopo la fine di `api users-admin`; non si è
 >   ripetuto. L'output del server condiviso è scartato, quindi la causa non si vede. H-12 nel backlog.
 
-### Lotto «billing_url e rotte dei link», H-12 e la regressione di `/system/instance` (2026-10-15, pomeriggio) — provato in leggero, `all-backend` da fare
+### Lotto «billing_url e rotte dei link», H-12 e la regressione di `/system/instance` (2026-10-15, pomeriggio) — ✅ provato
 
 > **Richiesta** del coordinatore (15:54), piano approvato (15:59): quattro punti in ordine. Per H-12 serve
 > `all-backend`, perché tocca `dev.py`. Sul mio ramo a `8b5e94be6`, che contiene già A5.
@@ -2159,3 +2159,28 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   inglese di riserva punta a `configuration.it.md`, che non ha ancora la sezione Accounts di A5. Ora il link va alla
 >   pagina.
 > - test-author ha aggiornato anche `test_openapi_documents_the_block_page`, che fissava le proprietà dello schema.
+>
+> **`all-backend`** (slot 1, 16:51–17:21): 7/7, **13 792 passed, 3 skipped, 0 failed**. Committato dal coordinatore:
+> `eaba49c6e`, `a4e770365`, `87f9ed6b5`, `9893aeb9d`, `530ed9262`.
+
+#### Ingresso dopo A6a: l'anteprima della cancellazione e A-15 ✅ (2026-10-15, sera)
+
+> **Base**: `69a7f0eb4`, merge di `dev_release2` (`ca4ec658e`, con A6a e il C-94 di J in `cmd_server`), senza conflitti.
+> A6a è entrato prima di H, quindi la riga la aggiunge H (regola delle 15:58).
+>
+> **Note implementazione**:
+>
+> - `auth.preview_own_account_deletion` (`GET /auth/users/me/deletion-preview`) entra in `ALLOWED_WHEN_BLOCKED`, accanto
+>   alla cancellazione che descrive; il suo pin, per nome e rotta, in `test_instance_block.py`.
+> - **A-15**:
+>   - la sonda dell'indirizzo `GET /auth/address-probe` nella docstring di `instance_block.py`, fra le rotte pubbliche
+>     fuori dall'elenco: a istanza bloccata risponde 401 senza intestazioni CORS, e il controllo dell'admin la mostra
+>     come non verificabile, come voluto da A6a;
+>   - la sonda anche fra le letture pubbliche del test (`PUBLIC_READS_OUTSIDE_THE_LIST`), e in
+>     `hosting_providers.en.md`. `security.md` la citava già, con A6a.
+> - **Prove** (corsia 6181, una alla volta, con `nice`):
+>   - `api instance-block` 54, `api system` 117;
+>   - `utils dev-port-check` 5, `test-server-preparation` 63, `runtime-isolation` 195;
+>   - `api sync`; `front check` 0/0; Vitest `InstanceBlockedPage` 22; `front build --debug`;
+>   - E2E `files-uploader` 8/8, `header-scroll` 4/4;
+>   - `check-orphans` pulito; `mkdocs build` stretto e `check-links`.
