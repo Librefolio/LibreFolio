@@ -44,7 +44,7 @@ from backend.app.schemas.risk import (  # noqa: E402
     RiskQueryRequest,
     RiskResultStatus,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402
 from backend.app.services.risk import service as risk_service_module  # noqa: E402
 from backend.app.services.risk.eligibility import (  # noqa: E402
     PriceWindowFacts,

@@ -7,7 +7,7 @@ verbatim from the already-computed ``fx.current_rate`` / ``fx.conversion_provena
 sibling components - never recomputed) or a pure function of the genuine,
 observed daily rate series loaded through
 ``backend.app.services.ai_export.components.technical_shared.load_fx_rate_series``
-(routed through ``backend.app.services.fx.convert_bulk`` - no invented economics).
+(routed through ``backend.app.services.fx.conversion.convert_bulk`` - no invented economics).
 
 Design rules (task ``ai-adequacy-v1-remediate-fx``, goal A):
 

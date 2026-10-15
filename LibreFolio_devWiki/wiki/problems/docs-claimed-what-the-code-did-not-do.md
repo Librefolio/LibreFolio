@@ -63,9 +63,9 @@ migrations need no command.
 | Role | Path |
 |------|------|
 | Generic CSV header mapping | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
-| Scheduler leader election | `backend/app/services/scheduler/leader.py` |
+| Scheduler leader election | `backend/app/services/platform/scheduler/leader.py` |
 | Risk-free rate per period | `backend/app/services/risk/metrics.py` |
-| Session cookie setting | `backend/app/config.py` |
+| Session cookie setting | `backend/app/config/__init__.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | SNB provider | `backend/app/services/fx_providers/snb/plugin.py` |
 | Migrations at startup | `backend/app/main.py` |

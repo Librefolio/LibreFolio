@@ -137,8 +137,14 @@
         return '';
     }
 
-    /** Set of all existing dates for duplicate prevention */
-    let existingDates = $derived(new Set(rows.map((r) => r.date)));
+    /**
+     * The dates `row` may not move to: those of the other rows, or, with `importMatchKeys`
+     * (events), only those of the rows with the same key values: one date holds a DIVIDEND
+     * and an INTEREST.
+     */
+    function takenDates(row: DataRow): Set<string> {
+        return new Set(rows.filter((other) => other.rowId !== row.rowId && importMatchKeys.every((k) => String(other.values[k] ?? '') === String(row.values[k] ?? ''))).map((other) => other.date));
+    }
 
     /** Catalog keys of the status badges and of the status filter's options: one wording for both. */
     const STATUS_LABEL_KEYS: Record<RowStatus, string> = {
@@ -157,8 +163,8 @@
                 cell: (r) => {
                     // Editable date for appended rows
                     if (r.status === 'appended' && !isReadonly) {
-                        // disabledDates: all dates except this row's current date
-                        const disabled = new Set(existingDates);
+                        // disabledDates: the dates taken for this row, except its current date
+                        const disabled = takenDates(r);
                         disabled.delete(r.date);
                         return {
                             type: 'custom',
@@ -416,7 +422,7 @@
     function handleDateChange(rowId: string, newDate: string) {
         const row = rows.find((r) => r.rowId === rowId && r.status === 'appended');
         if (!row || row.date === newDate) return;
-        if (rows.some((r) => r.date === newDate)) return;
+        if (takenDates(row).has(newDate)) return;
         row.date = newDate;
         row.rowId = uniqueRowId(newDate); // the date itself for price rows
         rows = [...rows];
@@ -649,7 +655,7 @@
                         onclick={() => (hideStale = !hideStale)}
                         role="switch"
                         aria-checked={hideStale}
-                        aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
+                        aria-label={hideStale ? $t('dataEditor.staleShow', {values: {n: staleCount}}) : $t('dataEditor.staleHide', {values: {n: staleCount}})}
                     >
                         <span
                             class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
@@ -659,13 +665,13 @@
                 </div>
             {/if}
             {#if modifiedCount > 0}
-                <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
+                <span class="text-blue-600 dark:text-blue-400">{$t('dataEditor.counter.edited', {values: {n: modifiedCount}})}</span>
             {/if}
             {#if deletedCount > 0}
-                <span class="text-red-600 dark:text-red-400">{deletedCount} deleted</span>
+                <span class="text-red-600 dark:text-red-400">{$t('dataEditor.counter.deleted', {values: {n: deletedCount}})}</span>
             {/if}
             {#if appendedCount > 0}
-                <span class="text-emerald-600 dark:text-emerald-400">{appendedCount} new</span>
+                <span class="text-emerald-600 dark:text-emerald-400">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
             {/if}
             {#if selectedIds.length > 0}
                 <button

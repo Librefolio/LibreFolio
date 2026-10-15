@@ -164,7 +164,7 @@ Server side:
 
 - **Size** — `get_max_upload_mb()` (`max_file_upload_mb`, default 10) is enforced on both
   `POST /uploads` and `POST /brokers/import/upload`: `413` above the limit.
-- **Static files** (`validate_upload_security()` in `services/static_uploads.py`) — the extension
+- **Static files** (`validate_upload_security()` in `services/files/static_uploads.py`) — the extension
   must not be in `BLOCKED_EXTENSIONS` (`.exe`, `.dll`, `.sh`, `.py`, `.js`, `.jar`, …); when
   `python-magic` (libmagic) loads, the content's detected type must not be in
   `BLOCKED_MIME_TYPES`, otherwise the type is guessed from the extension (`mimetypes`). A

@@ -77,7 +77,7 @@ For detailed architectural documentation of specific subsystems, see:
 - 📉 **[Risk Engine](../backend/risk/architecture.md)**: Bulk risk analytics over a portfolio, a broker, an asset or a selection of assets — plugin catalogue, eligibility verdicts, and simulation and optimization in spawned worker pools.
 - 🧰 **[Tool Plugins](patterns/tool_plugins.md)**: Atomic, typed calculations behind a versioned catalogue (first tool: the PAC allocator), each computed in a spawned process the executor owns.
 - 🧭 **[Onboarding Guides](../frontend/onboarding.md)**: Welcome setup, intro tour and contextual guides, with versioned per-user progress kept by the backend.
-- 📁 **File Upload System**: Custom uploads stored with a JSON metadata sidecar, and the default avatars seeded at startup (`backend/app/services/static_uploads.py`); image previews go through an in-memory cache (`PreviewCache` in `backend/app/api/v1/uploads.py`: 50 MB by default, `PREVIEW_CACHE_MAX_MB`, entries expire after 1 hour). Broker report files belong to [BRIM](../backend/brim/architecture.md). Where all these files live: [Data Directory on Disk](database/index.md#data-directory).
+- 📁 **File Upload System**: Custom uploads stored with a JSON metadata sidecar, and the default avatars seeded at startup (`backend/app/services/files/static_uploads.py`); image previews go through an in-memory cache (`PreviewCache` in `backend/app/api/v1/uploads.py`: 50 MB by default, `PREVIEW_CACHE_MAX_MB`, entries expire after 1 hour). Broker report files belong to [BRIM](../backend/brim/architecture.md). Where all these files live: [Data Directory on Disk](database/index.md#data-directory).
 
 ## 🔄 Request Flow Example: Displaying Portfolio
 
@@ -94,16 +94,17 @@ For detailed architectural documentation of specific subsystems, see:
 The FastAPI lifespan (`lifespan()` in `backend/app/main.py`) prepares everything before the first request, in this order:
 
 1. Logs `Starting LibreFolio` with the version, the database path and the test mode.
-2. Checks the signal-plugin runtime (`validate_signal_runtime()`) and discovers the signal plugins.
-3. Loads the [Tool](patterns/tool_plugins.md) catalogue (`ToolPluginRegistry.get_snapshot()`, in a thread).
-4. Creates the [data directories](database/index.md#data-directory) (`ensure_data_dirs()`).
-5. Loads the [risk](../backend/risk/architecture.md) scenario catalogue (`initialize_risk_scenario_catalog()`).
-6. Seeds the default avatars (`seed_default_avatars()`).
-7. Creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
-8. Runs the [post-migration fixes](database/index.md#post-migration-fixes), which never stop the startup.
-9. Seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
-10. Starts, in the background, the provider cache pre-warm (`_prewarm_provider_caches()`) and the market-holiday table, built in its own process (`start_market_holiday_prewarm()`).
-11. Starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
+2. Runs the [configuration checks](security.md#configuration-checks) (`log_configuration_audit()`, in a thread): a configured secret that cannot be used stops the server, every other finding is logged.
+3. Checks the signal-plugin runtime (`validate_signal_runtime()`) and discovers the signal plugins.
+4. Loads the [Tool](patterns/tool_plugins.md) catalogue (`ToolPluginRegistry.get_snapshot()`, in a thread).
+5. Creates the [data directories](database/index.md#data-directory) (`ensure_data_dirs()`).
+6. Loads the [risk](../backend/risk/architecture.md) scenario catalogue (`initialize_risk_scenario_catalog()`).
+7. Seeds the default avatars (`seed_default_avatars()`).
+8. Creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
+9. Runs the [post-migration fixes](database/index.md#post-migration-fixes), which never stop the startup.
+10. Seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
+11. Starts, in the background, the provider cache pre-warm (`_prewarm_provider_caches()`) and the market-holiday table, built in its own process (`start_market_holiday_prewarm()`).
+12. Starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
 
 On shutdown it stops the Tool executor and the scheduler, then shuts down the asset, FX and BRIM providers, the BRIM parse pool, the quant worker pools and any market-holiday build, and closes the TTL caches.
 

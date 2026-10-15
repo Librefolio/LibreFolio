@@ -5,17 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-from backend.app.schemas.pac_allocator import (
-    EntityIssuePath,
-    FieldIssuePath,
-    PlannerIssue,
-    PlannerIssueCode,
-    PlannerIssueEntityKind,
-    PlannerIssueParam,
-    PlannerIssuePath,
-    PlannerIssueSection,
-    SectionIssuePath,
-)
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode
+from backend.app.schemas.pac_allocator.issues import EntityIssuePath, FieldIssuePath, PlannerIssue, PlannerIssueEntityKind, PlannerIssueParam, PlannerIssuePath, PlannerIssueSection, SectionIssuePath
 
 type IssueKind = Literal["missing", "invalid", "unsupported", "constraint", "proof", "info"]
 type IssueSeverity = Literal["info", "warning", "error"]

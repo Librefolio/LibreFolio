@@ -45,6 +45,6 @@ related:
 
 | Role | Path |
 |------|------|
-| Asset source service | `backend/app/services/asset_source.py` |
+| Asset source service | `backend/app/services/assets/provider_management.py` |
 | Test assign/refresh | `backend/test_scripts/test_services/test_asset_source.py` |
 

@@ -8,7 +8,7 @@ The helper returns a *patch dict* — only fields that must change, so
 callers (currently ``get_current_prices_bulk``) can ``setattr`` them on
 the ORM row without clobbering stable columns.
 
-Spec: ``backend/app/services/asset_source.py::_extend_ohlc_bounds`` (L2968+).
+Spec: ``backend/app/services/assets/price_query.py::_extend_ohlc_bounds``.
 
 Rules under test:
 - ``low``    = min(existing.low, new_close)  when existing.low is set; else new_close
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ---------------------------------------------------------------------------

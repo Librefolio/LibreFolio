@@ -8,13 +8,14 @@ applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.p
 
 - **Plugins**: one folder per indicator, `services/signal_plugins/<code>/` (`__init__.py` with the docstring only,
   `plugin.py` with the code, `i18n/` with its `signals.<ns>.*` texts), extending `SignalPlugin` (`signal_plugins/base.py`,
-  which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/provider_registry.py`).
+  which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/signals/registry.py`; the decorator is in
+  `services/provider_registry.py`).
   Import and patch from `….signal_plugins.<code>.plugin`. Keys several indicators share (`signals.reference.*`,
   `signals.riskRollingReturn.*`) stay in the `charts` subsystem of the catalogue.
 - **Runtime**: `signal_service.py` (planning, execution, annotations, validation), `signal_runtime.py`,
   `signal_annotations.py`, `signal_series_preparation.py` (quote days, prepared series). `series_preparation.py` is
   shared with the risk engine.
-- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets.py` and `api/v1/fx.py`. The frontend
+- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets/prices.py` and `api/v1/fx/currencies.py`. The frontend
   renders the declaration with no indicator-specific code (`frontend-signals.instructions.md`).
 
 ## Rules

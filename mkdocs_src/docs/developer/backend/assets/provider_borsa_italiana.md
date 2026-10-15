@@ -115,12 +115,12 @@ This lets an externally discovered page URL (e.g. found via `web_link_finder`, o
     the full contract (three layers, `hints`, identifier filter, config, invariants) lives on
     [Asset Search & Link-Finder](search_link_finder.md), which is the source of truth.
 
-`backend/app/services/web_link_finder.py` is a **LibreFolio-level** module (deliberately *not* inside the scraping library, so the choice of external engine stays a LibreFolio concern). It turns a free-text query/ISIN into candidate **provider-domain** URLs, used **only at search time** as a last resort when a provider's on-site search yields nothing.
+`backend/app/services/assets/web_link_finder.py` is a **LibreFolio-level** module (deliberately *not* inside the scraping library, so the choice of external engine stays a LibreFolio concern). It turns a free-text query/ISIN into candidate **provider-domain** URLs, used **only at search time** as a last resort when a provider's on-site search yields nothing.
 
 - **Best-effort**: any failure (rate-limit, anomaly page, network/parse error) yields `[]` and is never fatal — the search always completes and emits `done`.
 - **Async-safe**: sync I/O runs in `asyncio.to_thread`; short timeout, small TTL cache, domain-filtered hits, structured logs.
 - **Pluggable engine**: default `DdgsEngine` wraps the [`ddgs`](https://pypi.org/project/ddgs/) metasearch library (bing/brave/google/DuckDuckGo/… aggregated via `backend="auto"`) with an `ApiKeyEngine` seam for a paid API (Brave/Bing/SerpAPI) later; `searxng` reserved for a deferred Fase B.
-- **Config** (all optional env vars): `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` (`1`/`0`, default `1`), `_ENGINE` (`ddgs`|`apikey`), `_API_KEY`, `_DDGS_REGION` (default `wt-wt`), `_DDGS_BACKEND` (default `auto`), `_TIMEOUT` (s), `_MAX`.
+- **Config**: optional environment variables, read in `backend/app/config/plugins.py`; the full list (including `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` for Docker secrets) is in [Asset Search & Link-Finder](search_link_finder.md#configuration-env-vars-all-optional).
 
 !!! warning "Invariant"
 

@@ -2,7 +2,7 @@
 Geographic area utilities for LibreFolio.
 
 Provides functions to normalize country codes to ISO-3166-A3 format.
-Weight validation and quantization is handled by BaseDistribution in schemas/assets.py.
+Weight validation and quantization is handled by BaseDistribution in schemas/assets/metadata.py.
 
 Usage:
     from backend.app.utils.asset.geo import normalize_country_keys

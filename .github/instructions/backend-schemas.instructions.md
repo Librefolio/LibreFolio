@@ -9,14 +9,23 @@ applyTo: "backend/app/schemas/**"
 ```text
 backend/app/schemas/
 ├── common.py          # Shared base classes (Currency, BackwardFillInfo, BaseBulkResponse, etc.)
-├── assets.py          # Asset CRUD schemas (FAAssetCreateItem, FAinfoResponse, etc.)
+├── assets/            # Asset schemas, one module per theme (C3):
+│   ├── assets.py      #   the asset and its CRUD (FAAssetCreateItem, FAinfoResponse, patch, merge, etc.)
+│   ├── metadata.py    #   distributions, classification, metadata (FAClassificationParams, FAGeographicArea, etc.)
+│   ├── scheduled_investment.py  # financial enums and the interest schedule (FAScheduledInvestmentSchedule, etc.)
+│   └── events.py      #   asset events (FAAssetEventPoint, event CRUD)
 ├── prices.py          # Price schemas (FAUpsert, FAPriceQueryItem, etc.)
 ├── provider.py        # Provider schemas (FAProviderInfo, FAProviderAssignmentItem, etc.)
 ├── refresh.py         # Refresh/sync schemas
 ├── fx.py              # FX rate schemas
 ├── brim.py            # Broker import schemas (BRIMPluginInfo, BRIMExtractedAssetInfo, etc.)
 ├── brokers.py         # Broker CRUD schemas
-├── transactions.py    # Transaction schemas
+├── transactions/      # Transaction schemas (TX*), one module per theme; __init__.py holds only a docstring
+│   ├── transactions.py   # Items: TXCreateItem, TXReadItem, TXUpdateItem, TXQueryParams, TXDeleteItem
+│   ├── batch.py          # POST /transactions/validate and /commit: TXMixedBatch, TXBatchResponse, TXValidationIssue, …
+│   ├── event_suggest.py  # POST /transactions/events/suggest
+│   ├── promotion.py      # Pair promotion and its suggestions (POST /transactions/transfers/promote, …)
+│   └── type_metadata.py  # TX_TYPE_METADATA, event type metadata, GET /transactions/types
 ├── auth.py            # Auth schemas
 ├── settings.py        # Settings schemas
 ├── uploads.py         # File upload schemas

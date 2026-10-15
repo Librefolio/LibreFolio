@@ -17,9 +17,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from backend.app.schemas.brim import BRIMParseOutput, BRIMRefusal
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _scalable
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 
 @register_provider(BRIMProviderRegistry)

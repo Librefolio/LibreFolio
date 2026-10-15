@@ -44,7 +44,7 @@
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAccessibleBrokers, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
@@ -592,9 +592,11 @@
         onClose();
     }
 
+    /** Display lookups (names, icons, issue messages): every broker the user can see, read-only ones
+     *  included, so a pair landing on a VIEWER broker names it. New rows default to an editable broker. */
     let brokers = $derived.by<BrokerInfo[]>(() => {
         void $brokerStoreVersion;
-        return getEditableBrokers();
+        return getAccessibleBrokers();
     });
 
     // =========================================================================
@@ -3206,7 +3208,7 @@
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
-                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue" data-code={issue.code} data-row-label={getVisualRowLabel(issue)}>
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
                                         {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
@@ -3247,7 +3249,7 @@
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
-                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue" data-code={issue.code} data-row-label={getVisualRowLabel(issue)}>
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
                                         {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
