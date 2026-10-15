@@ -35,7 +35,8 @@ catalogue, `SETTINGS_REGISTRY`.
       `LIBREFOLIO_*` and read with `env_secret()`: its `_FILE` form then works, and the startup check
       of secrets set twice covers it without a list to update. `INSTANCE_TRUST_SECRETS` lists, in
       both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
-      `scripts/cli_base.py`).
+      `scripts/cli_base.py`), like the rest of the instance's configuration: see
+      [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
