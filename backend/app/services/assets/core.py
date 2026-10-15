@@ -3,7 +3,9 @@ Asset pricing core: the runtime shared by the asset service modules and every pl
 
 This module provides:
 - the provider caches (history, current value, metadata, search results, search queries)
-- _run_provider_in_thread(): every provider call runs in a dedicated thread with its own event loop
+- configured_provider(): a new provider instance with its plugin settings bound (services/plugin_settings/)
+- call_provider(): the one boundary of every provider call — NOT_CONFIGURED, the secrets masked in the call's errors
+  and log lines, then _run_provider_in_thread(), where the call runs in a dedicated thread with its own event loop
 - the provider parameter helpers (_provider_params_hash, _parse_provider_params)
 - _json_safe_details(): the sanitizer of ``AssetSourceError.details`` for API responses
 
@@ -30,10 +32,16 @@ Design principles:
 import asyncio
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from typing import Optional
 
 from backend.app.logging_config import get_logger
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
+from backend.app.utils.runtime.secret_masking import exception_renders_secret, mask_exception, masked_description, secrets_in_flight
 
 # Initialize structured logger
 logger = get_logger(__name__)
@@ -85,6 +93,68 @@ def _parse_provider_params(raw_params):
 # ============================================================================
 # THREAD ISOLATION FOR PROVIDER CALLS
 # ============================================================================
+
+
+async def configured_provider(code: str, *, user_id: int | None = None) -> AssetSourceProvider | None:
+    """A new instance of the provider ``code`` with its settings bound, or ``None`` for an unknown code.
+
+    ``user_id`` only for a call made for a user (search, the probe of a configuration): the user's own values then
+    reach the plugin too. Prices, history, metadata and scheduled jobs serve every user: they pass none.
+    """
+    provider = AssetProviderRegistry.get_provider_instance(code)
+    if provider is None:
+        return None
+    return await configure_instance(provider, "asset", user_id=user_id)
+
+
+def settings_cache_part(provider: AssetSourceProvider) -> str:
+    """The part of a cache key that depends on the provider's settings: empty when it declares none."""
+    return provider.settings.fingerprint if isinstance(provider, PluginSettingsMixin) else ""
+
+
+async def settings_cache_part_for(code: str) -> str:
+    """The settings part of the cache keys of the provider ``code``, as a call would compute it now.
+
+    For the code that drops cache entries by key. An entry stored under other settings has another key: no lookup
+    reaches it any more, and it expires with its TTL.
+    """
+    provider = await configured_provider(code)
+    return settings_cache_part(provider) if provider is not None else ""
+
+
+async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:
+    """The one boundary of every call to an asset provider.
+
+    ``provider`` is the configured instance (``configured_provider``), ``fn`` a zero-argument callable that returns the
+    provider coroutine, for example ``lambda: provider.get_current_value(identifier, identifier_type, params)``.
+
+    - A required setting left without a value refuses the call before any I/O: ``AssetSourceError`` with
+      ``NOT_CONFIGURED`` and the missing field keys in ``details["missing"]``.
+    - The provider's secrets are in flight for the call: masked in every line logged meanwhile, here and in the
+      provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
+      An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
+      ``AssetSourceError`` with ``PROVIDER_ERROR``, its masked description and no link to the original.
+    - ``scope`` is the cooldown scope of the call, for the pause registry of Z7: X1–X7 consult
+      ``provider_cooldown`` here, ``check`` before the thread and ``refused``/``succeeded`` after it.
+    """
+    del scope  # used from X1–X7 (Z7): the cooldown key is (provider code, scope)
+    if not isinstance(provider, PluginSettingsMixin):  # a test double: no settings to check or mask
+        return await _run_provider_in_thread(fn, timeout=timeout)
+    settings = provider.settings
+    if settings.missing:
+        missing = list(settings.missing)
+        raise AssetSourceError(f"Provider {provider.provider_code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
+    secrets = settings.secret_values()
+    with secrets_in_flight(secrets):
+        try:
+            return await _run_provider_in_thread(fn, timeout=timeout)
+        except BaseException as error:
+            mask_exception(error, secrets)
+            if not isinstance(error, Exception) or not exception_renders_secret(error, secrets):
+                raise
+            description = masked_description(error, secrets)
+    # Raised out of the except block: the new error keeps no link to the one that still shows a secret.
+    raise AssetSourceError(f"Provider {provider.provider_code} failed: {description}", "PROVIDER_ERROR")
 
 
 async def _run_provider_in_thread(coro_factory, *, timeout: float = 60.0):

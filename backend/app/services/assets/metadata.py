@@ -26,7 +26,6 @@ from backend.app.schemas.provider import (
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
-from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
 
@@ -92,8 +91,8 @@ class MetadataOperations:
                     )
                     continue
 
-                # Get provider instance
-                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+                # Get provider instance, with the instance's settings
+                provider = await core.configured_provider(assignment.provider_code)
                 if not provider:
                     results.append(
                         FAMetadataRefreshResult(
@@ -113,6 +112,7 @@ class MetadataOperations:
                         assignment.provider_code,
                         assignment.identifier,
                         str(assignment.identifier_type),
+                        core.settings_cache_part(provider),
                     )
                     cached_meta, meta_ok = core._asset_metadata_cache.get(meta_cache_key)
                     if meta_ok:
@@ -122,7 +122,8 @@ class MetadataOperations:
                         _id = assignment.identifier
                         _id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
                         _params = provider_params
-                        patch_item = await core._run_provider_in_thread(
+                        patch_item = await core.call_provider(
+                            provider,
                             lambda _p=provider, _i=_id, _it=_id_type, _pr=_params: _p.fetch_asset_metadata(_i, _it, _pr),
                             timeout=30.0,
                         )

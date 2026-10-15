@@ -139,3 +139,13 @@ Sono tutti locali: la push la fa il developer.
 | 51 | 15/10 19:37 | W: N2 (regola del costo dai metadati; modifiche controllate solo se toccano tipo, quantità, costo, valuta o evento) | `f421e418a` |
 | 52 | 15/10 20:00 | H: CP2b (`main.py` diviso in `app_lifespan`, `lifecycle`, `middleware`, `static_site`, `database_bootstrap`; passi nominati; uno spegnimento che fallisce non salta gli altri); `main.py` scongelato | `4fb017a9a` |
 | 53 | 15/10 20:24 | B8: token del pannello per i backup (`LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `/backup/panel/jobs`, anche a istanza bloccata) | `56d3d3182` |
+| 54 | 15/10 20:33 | A6b: scheda Users (110), eliminazione con anteprima, sonda dell'indirizzo dal browser, A-12; scatto `settings/users` | `09ca36b9d` |
+| 55 | 15/10 20:41 | J: CP-4c (`financial_math/portfolio/period.py`: P&L di periodo; costi unitari nella casa; valori identici) | `a180ea0b7` |
+| 55b | 15/10 20:56 | B: scatto `settings/backup-ready` (rivisto da G), da solo prima di B2a | `ab2ddf86e` |
+| 56 | 15/10 21:04 | X: CP10, impostazioni dei plugin (migrazione 007, segreti cifrati, `/settings/plugins`, confine unico per famiglia, mascheramento), X-R6 | `9fb7fe6c9` |
+| 57 | 15/10 21:24 | Y8: correzioni ai grafici (I-01, I-03, O-16, 47-1 etichette sull'asse zoomato, 48-1 pulsanti); CHANGELOG scritto da Y | `160562b56` |
+| 58 | 15/10 21:28 | Z6b parte 2: watchdog e scadenza dei passi nel lifespan, processi figli chiusi; spegnimento entro 8 s (decisione 35) | `967094d81` |
+| 59 | 15/10 21:31 | E3 + E3s: link nelle email solo da `LIBREFOLIO_PUBLIC_URL`, `POST /email/links`, «password dimenticata» (spenta fino ad A6e, revisione di sicurezza), controllo `email.links` | `8f908623b` |
+| 60 | 15/10 21:36 | Z: correzione della E2E del flash dal vivo (attesa del primo poll e orologio in pausa), solo test | `93292909d` |
+| 61 | 15/10 22:13 | E3p: sonda dei link della scheda Email dal browser dell'admin (decisione 45) | `e54ae96bb` |
+| 62 | 15/10 22:14 | A: G-15 (la barra delle schede di Settings scorre invece di tagliare; `TabBar` `scrollable`) | `369204ab5` |

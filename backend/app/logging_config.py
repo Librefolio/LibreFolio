@@ -41,6 +41,7 @@ import structlog.stdlib
 from structlog.types import EventDict
 
 from backend.app.config import get_data_dir
+from backend.app.utils.runtime.secret_masking import SecretMaskingFilter, mask_event_dict
 
 # TRACE level constant — importable by other modules
 TRACE: int = 5
@@ -165,6 +166,7 @@ class _QueryCredentialFilter(logging.Filter):
 
 
 _QUERY_CREDENTIAL_FILTER = _QueryCredentialFilter()
+_SECRET_MASKING_FILTER = SecretMaskingFilter()
 
 
 def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True) -> None:
@@ -223,6 +225,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # Console handler (always enabled) - human-readable format
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
+    # The secrets a plugin call carries, masked in the records of every logger while the call runs (plugin settings).
+    console_handler.addFilter(_SECRET_MASKING_FILTER)
     handlers.append(console_handler)
 
     # File handler with weekly rotation (if enabled)
@@ -240,6 +244,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
             utc=True,  # Use UTC for rotation timing
         )
         file_handler.setLevel(numeric_level)
+        file_handler.addFilter(_SECRET_MASKING_FILTER)
 
         # Enable compression of rotated files
         file_handler.rotator = _compress_rotated_file
@@ -259,6 +264,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        # After the traceback is formatted and before rendering: JSON would escape a secret into another text.
+        mask_event_dict,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
     ]

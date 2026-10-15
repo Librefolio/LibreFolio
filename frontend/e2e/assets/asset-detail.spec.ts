@@ -8062,9 +8062,9 @@ test.describe('Live price direction flash', () => {
      * Intercepts POST /api/v1/assets/prices/current and answers with
      * `price.value` (as of today) for every requested asset id. `price` is a
      * mutable box the test mutates between polls to simulate a new tick —
-     * every intercepted request (from either of the detail page's two live
-     * price pollers) reads whatever value is current at call time, so the
-     * mock stays correct regardless of call count/order.
+     * every intercepted request (from the detail page's single live price
+     * poller, every 30 s) reads whatever value is current at call time, so
+     * the mock stays correct regardless of call count/order.
      */
     async function mockCurrentPrice(page: import('@playwright/test').Page, price: {value: number}) {
         await page.route('**/api/v1/assets/prices/current', async (route) => {
@@ -8111,6 +8111,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         // New tick with a HIGHER value than the previous poll.
         price.value = 105;
@@ -8137,6 +8148,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         // New tick with a LOWER value than the previous poll.
         price.value = 95;
@@ -8161,6 +8183,17 @@ test.describe('Live price direction flash', () => {
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+        // Before any live poll the element shows the chart's last close (seeded
+        // Apple, ~185) and is already neutral: only the first live poll can show
+        // 100.00, so after this the previous value is 100.
+        await expect(priceEl).toHaveText('100.00', {timeout: 5_000});
+        // Pause the clock: running in real time, the ~1.3 s flash-decay timer fires by
+        // itself, and a stall of the page or the worker longer than that would hide the
+        // flash from the checks; paused, fastForward(30_000) fires the next poll and
+        // fastForward(1_500) the decay, deterministically. pauseAt refuses the past: page
+        // time + 5 s leaves room for the round trip and fires nothing (next poll ~30 s
+        // after the first, idle pause at 2 min, no decay timer while neutral).
+        await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
 
         price.value = 101;
         await page.clock.fastForward(30_000);
