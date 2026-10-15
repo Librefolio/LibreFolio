@@ -1066,7 +1066,13 @@ def _published_gap(primal: str | None, dual: str | None, absolute_gap: float | N
 
 
 def _decimal_text(value: Decimal) -> str:
-    """Positional, canonical decimal text (no exponent, no trailing zeros)."""
+    """Positional, canonical decimal text (no exponent, no trailing zeros).
+
+    A zero of any sign or exponent is «0»: the wire pattern refuses «-0», and a
+    solver's -0.0 is the same observation as 0.0.
+    """
+    if value.is_zero():
+        return "0"
     text = format(value, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")
