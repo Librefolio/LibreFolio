@@ -191,7 +191,7 @@ def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
     """Test dev.py inside the image's file set (no backend/test_scripts) and the image's HEALTHCHECK port."""
     print_section("Utils: dev.py in the Docker image")
     print_info("Testing: dev.py on a copy of the image's /app tree (tmp_path), Dockerfile HEALTHCHECK vs CMD vs compose")
-    print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB, the role user create and create-user give an account (L12)")
+    print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB, the role user create and create-user give an account (L12), backup create/inspect on the image's DB (B1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_image.py", test_names)
     return run_command(cmd, "dev.py image tests", verbose=verbose)
 
@@ -349,6 +349,15 @@ def utils_normalize_dashboard_fixture(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Dashboard fixture normalizer tests", verbose=verbose)
 
 
+def utils_backup_cli(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup command line: output path, switch to the data directory's owner, create, inspect."""
+    print_section("Utils: Backup CLI")
+    print_info("Testing: scripts/backup_cli.py (_output_path, _drop_root_privileges, _dispatch, cmd_create, cmd_inspect), python scripts/backup_cli.py")
+    print_info("Tests: --output folder/file/relative/~, root → setgroups/setgid/setuid of the owner or a message, exit codes of create and inspect, the script end to end")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli.py", test_names)
+    return run_command(cmd, "Backup CLI tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -437,7 +446,7 @@ Tests for utility modules and helper functions:
         "dev-cli-image",
         utils_dev_cli_image,
         name="dev.py in the Docker image",
-        desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user and db run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the role of a created account (L12): user create is an administrator by default and with --role admin, an ordinary account with --role user even alone in an empty DB, an unknown role an argparse error that creates nobody, and user_cli.py create-user an ordinary account (❌ and exit 1 on a weak password or a taken username) while create-superuser stays an administrator; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
+        desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user, db and backup run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the role of a created account (L12): user create is an administrator by default and with --role admin, an ordinary account with --role user even alone in an empty DB, an unknown role an argparse error that creates nobody, and user_cli.py create-user an ordinary account (❌ and exit 1 on a weak password or a taken username) while create-superuser stays an administrator; dev.py backup (B1): listed in --help, group help exits 0, backup create on the image's DB writes exactly one librefolio-backup-*.zip into <data dir>/backups/ with no job folder left and that DB inside, inspect exits 0 on it and 1 on a missing file; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
         # A copy of the image tree and a temporary DB under tmp_path, dev.py in
         # subprocesses: no lane DB, no server, no network, no repo writes.
         isolation="pure",
@@ -644,6 +653,17 @@ Tests for utility modules and helper functions:
         desc="The gallery dashboard fixture normalizer scales money (currency objects and money-named plain numbers, per-unit prices included) to the target net worth and leaves quantities, percents, the allocation shares (summary and history, every dimension), the Yield on Cost fraction and the one-day price change fraction alone, whatever their money-like key name; after the transform every non-empty allocation list sums to 100 within the rounding of its shares, every available Yield on Cost equals gross income per unit over WAC, and every market-priced holding's one-day price change matches its one-day P&L change percent, or the script exits 1 without writing; its failure messages name the path family, never a sum, a share, a ratio, a Yield on Cost or a price change; the committed fixture passes the script's own invariants",
         # Synthetic reports under tmp_path, plus a read-only copy of frontend/e2e/dashboard-report.json:
         # no DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli",
+        utils_backup_cli,
+        name="Backup CLI",
+        desc="scripts/backup_cli.py: the archive goes to <data dir>/backups/, into an existing --output folder, or to the --output file (relative to the working directory, ~ expanded); run as root on a data directory owned by another user it drops its groups, takes the owner's group then user, and stops with a message if it cannot, nothing changing when it is not root, the owner is root or there is no geteuid; no subcommand exits 1; inspect exits 0 on an intact archive (--no-verify reads the manifest only) and 1 on a missing file, a file that is not a zip, a zip without manifest, an altered, added or damaged entry; create exits 1 without data directory, without database, on an existing --output file and when the switch to the owner fails, writing nothing, and 0 with a 0600 archive where asked and its job folder removed; python scripts/backup_cli.py create then inspect exit 0",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked
+        # before each command), children with the same data directory and without LIBREFOLIO_*/COVERAGE_*, identity
+        # calls replaced: no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

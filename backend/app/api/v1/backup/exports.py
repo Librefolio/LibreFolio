@@ -68,7 +68,7 @@ async def backup_asset_prices(
 ):
     """Stream the full price history of an asset as CSV or JSON.
 
-    Columns (same in both formats, see ``backup_service.PRICE_COLUMNS``):
+    Columns (same in both formats, see ``series_export.PRICE_COLUMNS``):
     ``date, open, high, low, close, volume, currency, source_plugin_key, fetched_at``.
 
     ``currency`` is the per-row verbatim value from ``price_history.currency``

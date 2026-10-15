@@ -262,7 +262,7 @@ def api_http_compression(verbose: bool = False, test_names: list = None) -> bool
 def api_backup(verbose: bool = False, test_names: list = None) -> bool:
     """Test backup API."""
     print_section("Backup API Tests")
-    print_info("Testing: backup/instance.py placeholder endpoints")
+    print_info("Testing: instance backup jobs (start, poll, download, delete; admin only) and the /backup route order")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_api.py", test_names)
     return run_command(cmd, "Backup API tests", verbose=verbose)
@@ -744,7 +744,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
-    add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints, route order (C2)")
+    add_test(api, "backup", api_backup, name="Backup API", desc="Instance backup jobs (admin only): start, poll, download, delete, busy, job ids, removed placeholders; route order (C2)")
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
