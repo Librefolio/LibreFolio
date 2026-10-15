@@ -388,7 +388,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Italiana, e l'import CSV delle distribuzioni per settore e paese sono nella 1.2.0, ma il capitolo non li nomina. Due
   strade: aggiungerle come correzione dopo il rilascio, in 4 lingue con lo stamp del pezzo (il capitolo è rilasciato,
   quindi `translate-validate` è severo), oppure lasciare il capitolo com'è. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voci 8 e 17.
-- **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
+- ✅ **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
   verificare; W, 15/10 (`all-backend` della revisione combinata di I1). Due `PytestUnhandledThreadExceptionWarning`
   («Event loop is closed») nel gruppo parallelo, worker 1, in
   `test_ai_export_components_portfolio_broker_financial.py::TestPerformanceBuckets::test_performance_path_uses_detail_owned_uniform_density[broker-broker.performance-components1-full-30]`.
@@ -396,6 +396,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
   «Revisione combinata `123c21efc`», passo 6.
   - 15/10: non riprodotto nella `all-backend` di J sulla revisione `b17f8fb85` (13 810 passed, nessun avviso).
+  - ✅ **Chiusa il 15/10** da J (`12bcf7e99`; in `dev_release2` con `c412f8dad`). Causa trovata, verdetto «stato
+    condiviso»: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite. Erano 3 in `broker_adequacy`, senza
+    `engine.dispose()`, e 4 test di composizione in `portfolio_broker_integration`, che eseguivano SQL vero sulla
+    sessione senza tabelle e passavano per una via d'errore casuale. Riprodotto in modo deterministico: un GC in un
+    thread con un loop corrente chiuso dà i 2 avvisi identici. Curato con una fixture che chiude il motore, scenari
+    ermetici e una guardia sulla sessione senza tabelle. Verificato con `all-backend --workers 2`: 0 connessioni
+    lasciate aperte, nessun avviso. Dettagli: piano J, §10 «C-93».
 - **C-94 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — basso, infrastruttura;
   J, 14/10 (era J-2), con una nota del coordinatore. In un worktree nuovo il primo `all-backend` cade anche dopo
   `npm ci`: prima di uvicorn `dev.py server --test` fa la build di debug del frontend (~4 min) e quella del sito, se
@@ -2209,6 +2216,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
+- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
+  15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
+  `asyncio.to_thread`) imposta un loop nuovo, lo chiude e non lo toglie: chi poi, nello stesso thread, chiama
+  `asyncio.get_event_loop()` riceve un loop chiuso. È il contesto in cui una connessione aiosqlite raccolta dal GC
+  muore con «Event loop is closed». Cura di una riga: `asyncio.set_event_loop(None)` nel `finally`, oppure
+  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
@@ -2303,12 +2317,8 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,
   `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
   J, §10 «A — rinomina», «Restano di proposito».
-- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; J, 15/10 (C-93),
-  file di X. `services/assets/core.py:114-119` (`_sync_runner`, dentro `asyncio.to_thread`) imposta un loop nuovo, lo
-  chiude e non lo toglie: chi poi, nello stesso thread, chiama `asyncio.get_event_loop()` riceve un loop chiuso. È il
-  contesto in cui una connessione aiosqlite raccolta dal GC muore con «Event loop is closed». Cura di una riga:
-  `asyncio.set_event_loop(None)` nel `finally`, oppure `asyncio.Runner`. Lo assegna il coordinatore. Dettagli: piano
-  J, §10 «C-93», «Triage».
+- ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
+  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4.
 - **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
   (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
   d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
