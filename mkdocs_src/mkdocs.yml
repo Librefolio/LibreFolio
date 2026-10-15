@@ -1163,6 +1163,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
