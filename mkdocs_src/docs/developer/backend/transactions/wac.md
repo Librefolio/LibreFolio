@@ -16,7 +16,7 @@ moves with today's exchange rate.
 ```mermaid
 flowchart LR
     AC["compute_average_costs()<br/>financial_math/average_cost.py"]
-    FX["fx.convert_bulk()"]
+    FX["fx.conversion.convert_bulk()"]
     Engine["PortfolioCalculationEngine<br/>DailyStateBuilder replay"]
     PS["PortfolioService<br/>summary · contribution · holdings"]
     Facade["compute_wac_iterative()<br/>facade"]

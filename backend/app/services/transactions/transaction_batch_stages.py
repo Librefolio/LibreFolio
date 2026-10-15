@@ -11,16 +11,8 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 from pydantic import ValidationError
 
 from backend.app.db.models import UserRole
-from backend.app.schemas.transactions import (
-    TXBatchOperation,
-    TXBatchResponse,
-    TXCreateItem,
-    TXPromoteBatchItem,
-    TXSplitBatchItem,
-    TXUpdateItem,
-    TXValidationCode,
-    TXValidationIssue,
-)
+from backend.app.schemas.transactions.batch import TXBatchOperation, TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_batch_context import (
     BalanceValidationError,
     TransactionBatchContext,

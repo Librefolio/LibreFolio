@@ -73,6 +73,6 @@ helper is right but unwired (`resolveFormItemsFromOps`).
 | Settings UI | `frontend/src/lib/features/settings/` |
 | Broker sharing | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` |
 | Scheduler config | `frontend/src/lib/features/settings/SchedulerConfigModal.svelte` |
-| FX service and consumers | `backend/app/services/fx/fx.py` |
+| FX service and consumers | `backend/app/services/fx/` |
 | Bulk modal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md` and three companions (untracked) |
