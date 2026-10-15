@@ -271,6 +271,12 @@ permesso e la ricerca diventano quindi due livelli, con un punto unico ciascuno 
 
 ### 4.4 Impostazioni dei plugin
 
+> **Aggiornato dal disegno approvato il 15/10 (sezione «CP10» in fondo).** Restano validi contratto, precedenza,
+> cifratura e permessi; cambiano otto punti: due tabelle al posto di una con indici parziali; scrittura tutto o niente;
+> percorsi `GET /api/v1/settings/plugins` e `PATCH /api/v1/settings/plugins/bulk`; l'ambiente blocca solo i campi di
+> sistema; `test_only` al posto dei nomi di prova scritti a mano; il confine `call_provider` nasce nel CP10; il
+> mascheramento nei log con un ContextVar; le funzioni del ripristino sulle sottochiavi.
+
 **Contratto** (`plugin_settings/fields.py`, `contract.py`): ogni base di famiglia (asset, FX, BRIM dopo PL5, tools) eredita
 un mixin con `settings_fields: ClassVar[tuple[PluginSettingField, ...]] = ()`. Un campo dichiara: `key`, `type`
 (`string|number|integer|boolean|select`), `scope` (`user` = personale | `system` = solo admin), `secret` (solo `string`),
@@ -1974,3 +1980,310 @@ piano 03 resta fuori dallo stage (la committa lui a parte).
    di X-R1/R2).
    > **⚠️ Fuori pista**: un rosso da carico. Proposta al coordinatore, fuori dal mio perimetro: il runner potrebbe stampare
    > il carico a inizio e fine run, così una run satura si vede nel log e non solo dai tempi.
+
+FE5b-1, FE5b-2, X-R11a e X-R1/R2 integrati in `dev_release2` il 15/10 (pomeriggio); journal `e78eb7b6f`.
+
+## CP10 — impostazioni dei plugin, backend ✅ (15/10, 16:36–20:40; FROZEN, in attesa del checkpoint)
+
+### Analisi su `14d58cc61` e via (15/10)
+
+Il coordinatore ha chiesto alle 16:20 l'ordine dei lotti e l'analisi del CP10 sulla base nuova; analisi mandata alle
+16:33; **via alle 16:36**, con tutte le scelte approvate. Worktree portato a `dae4de4fa` (= `dev_release2`) con un
+avanzamento veloce del coordinatore.
+
+**Ordine dei lotti** (confermato): CP10 → X1–X8 (dopo Z7a) → CP11 (UI delle impostazioni; la riga della scheda in
+`settingsTabs.ts`, file di A, va dichiarata nel checkpoint, aggiunta pura) → CP6 (profilo gestito; nota da Z6b: la doc
+del profilo gestito dice `kill_signal = "SIGTERM"` e `kill_timeout = 10` per Fly) → CP13 (F21 + C-90 + C-66) → FE4,
+FE5a, FE5c col via dei colori → CP12, CP5.
+
+**Stato reale** (letto dagli oggetti di git su `14d58cc61`):
+- `cryptography 50.0.2` nel lock (`cffi 2.1.1`, `pycparser 3.11`); testa delle migrazioni `006_registration_mode`, la 007
+  è mia (C7); `instance_key.py` ha solo `derive_key(purpose, length)`; `LIBREFOLIO_PROFILE` (`selfhosted|managed`) in
+  `Settings`; `.env.example` ha la sezione «Plugins», vuota; `config/plugins.py` c'è (web_link_finder).
+- `get_plugin_instance` crea un'istanza nuova a ogni chiamata (`provider_registry.py:143`); 13 siti di creazione per gli
+  asset e 9 chiamate in thread; 5 siti per i cambi, chiamate sul loop principale.
+- La ricerca ha due cache (query 15 min, elementi 24 h) che vogliono l'impronta delle impostazioni.
+- `config-env-example` vede solo i nomi letterali; `db_schema_validate` controlla gli indici solo per numero.
+- `delete_user` cancella la riga; il DB fa la cascata. Nessun middleware legge i corpi; `httpx` è a WARNING.
+- `/backup/export` e `/backup/restore` sono segnaposti (501): `derive_key_from` (H) serve solo al ripristino.
+
+**Scelte approvate dal coordinatore (16:36)**:
+1. Due tabelle, `plugin_system_settings` e `plugin_user_settings` (`user_id` NOT NULL, `ON DELETE CASCADE`), vincoli unici
+   normali; AAD e `key_id` invariati.
+2. Scrittura tutto o niente: si valida tutto, ogni rifiuto ha il suo codice, 422 e niente scritto; altrimenti una sola
+   transazione (il contratto di `/settings/global/bulk`).
+3. `GET /api/v1/settings/plugins` e `PATCH /api/v1/settings/plugins/bulk`, modulo `api/v1/plugin_settings.py`, una riga in
+   `router.py` (la scrivo io, dichiarata nel checkpoint).
+4. L'ambiente blocca solo i campi di sistema.
+5. `test_only` sulla classe del plugin: toglie i fornitori di prova da catalogo ed elenchi, al posto di
+   `api/v1/assets/providers.py:62` e `api/v1/fx/providers.py:80`; `mockprov` e `mockfx` dichiarano campi per i test.
+6. Il confine `call_provider` nasce nel CP10, con il punto d'aggancio di X1–X7 (`check`/`refused`/`succeeded` del registro
+   di Z7a, che non tocco). Disegno di Z7: commit `4992b864b`, piano 06, «Z7 — disegno».
+7. Mascheramento nei log: un processore di structlog in `logging_config.py` (lo scrivo io, dichiarato), per valore, dai
+   segreti della chiamata in corso, in un ContextVar.
+8. `rekey_plugin_secrets` e `count_unreadable_secrets` sulle sottochiavi, `plugin_secrets_key_status(session)`; la
+   variante con la chiave dello zip dopo `derive_key_from` di H; il controllo all'avvio è di H.
+9. X-R6 (TIMEOUT e MAX di `web_link_finder`) entra nel CP10, se resta piccolo.
+Rischio alto: la `security-review` va fatta **prima** del checkpoint. Slot pesanti (anche `all-backend`) chiesti al
+coordinatore; prove singole e medie una alla volta, con `nice -n 10`.
+
+**Il confine, deciso nel mio perimetro.** Z7 si aspetta `call_provider(provider_code, fn, *, timeout, scope=None)`. Il
+primo argomento diventa **l'istanza configurata**: ne ricava il codice (`provider.provider_code`), le impostazioni
+consegnate (per `NOT_CONFIGURED` e per i segreti da mascherare) e, in X1–X7, `cooldown_scope`. Con il solo codice il
+confine non saprebbe quali segreti mascherare; un argomento facoltativo si potrebbe dimenticare. Lo dico al coordinatore
+per Z, che non chiama il confine. Per i cambi il confine è `_fetch_provider` di `fx/sync.py`.
+
+### Passi
+
+1. ✅ (2026-10-15) Contratto: `services/plugin_settings/fields.py` (campo dichiarato) e `contract.py` (mixin `settings_fields`,
+   `settings`, `bind_settings`), validazione alla registrazione in `provider_registry.py`; mixin su `AssetSourceProvider`
+   e `FXRateProvider`; `test_only` al posto dei nomi scritti a mano; campi di prova in `mockprov` e `mockfx`.
+   > **Note implementazione**: `fields.py` (foglia, solo stdlib): `PluginSettingField` (chiave, tipo, scope, etichetta e
+   > descrizione inglesi con le chiavi i18n, `secret`, `required`, `default`, opzioni, lunghezze, limiti, alias `env`),
+   > `validate_declaration` per famiglia (`FAMILY_RULES`: gli asset ammettono campi personali e segreti; i cambi solo campi
+   > di sistema, perché un sync serve tutti), `validate_value` e `parse_env_value`, i cui messaggi non contengono mai il
+   > valore; un segreto è testo, senza default, di almeno 8 caratteri salvo dichiarazione (mai sotto 4: il mascheramento
+   > per valore toccherebbe parole comuni); `env_name` dà `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>`. `contract.py`:
+   > `BoundSettings` (`get` per i valori normali, `secret` per i segreti, `missing`, `secret_values`; il `repr` nomina i
+   > segreti e non li mostra) e `PluginSettingsMixin` (`settings_fields`, `test_only`, `settings`, `bind_settings`).
+   > `provider_registry.py`: `settings_family()` (asset, fx) e il controllo della dichiarazione in `register`: un plugin
+   > con una dichiarazione sbagliata non si registra, come uno che non si importa. `mockprov` dichiara un campo di ogni
+   > tipo (sistema e personale, normale e segreto, con un alias `env`) e, cercando `lf-settings-echo`, descrive le
+   > impostazioni ricevute (i segreti solo come «set» o «unset»); `mockfx` un segreto e un intero di sistema. `test_only`
+   > sostituisce `code == "mockprov"` e `MOCKFX`/`MOCKFX_FAIL` nei due elenchi; `MANUAL` resta nascosto per nome (è la
+   > sentinella dei tassi inseriti a mano, non un fornitore di prova). Prova: scoperta senza errori (6 asset, 7 cambi),
+   > `test_only` su `mockprov`, `MOCKFX`, `MOCKFX_FAIL`; ruff e black puliti.
+   > **⚠️ Fuori pista**: il frontend filtra ancora `mockprov` per nome (`AssetSearchAutocomplete.svelte:132`,
+   > `ProviderAssignmentSection.svelte:185`): ridondante, il backend non lo elenca già. Lasciato: il CP10 è solo backend;
+   > da togliere nel FE5a.
+2. ✅ (2026-10-15) Modelli e migrazione `007_plugin_settings` (due tabelle), upgrade e downgrade su un DB 1.2 popolato.
+   > **Note implementazione**: `PluginSystemSetting` (`plugin_system_settings`: famiglia, codice, campo, `value_json` |
+   > `secret_ciphertext` + `key_id`, `updated_at`, `updated_by_user_id` `SET NULL`) e `PluginUserSetting`
+   > (`plugin_user_settings`: le stesse più `user_id` NOT NULL, `CASCADE`), dopo `GlobalSetting` in `db/models.py`
+   > (`LargeBinary` aggiunto agli import); vincoli unici per campo e due CHECK per tabella: esattamente uno fra valore e
+   > cifrato, `key_id` se e solo se c'è un cifrato. `db/base.py` e `db/__init__.py` non cambiano: le tabelle entrano nei
+   > metadati con il modulo. Migrazione idempotente nei due sensi, come la 005; il downgrade perde valori e segreti, e lo
+   > dice. Prova a mano su un file temporaneo (`/tmp/libreFolio_x_cp10_mig_smoke.py`): upgrade da zero alla testa,
+   > `compare_metadata` senza differenze sulle due tabelle, i quattro casi dei CHECK e il doppione rifiutati, cascata
+   > all'eliminazione dell'utente, downgrade a 006 senza le tabelle, secondo downgrade senza effetti, upgrade di nuovo
+   > alla 007. La prova su un DB 1.2 popolato la scrive test-author (passo 7).
+3. ✅ (2026-10-15) Cifratura (`crypto.py`): AES-256-GCM, AAD di contesto, `key_id`, sottochiave `plugins.settings.v1`; ripristino.
+   > **Note implementazione**: blob = byte di formato `1` + nonce casuale da 96 bit + cifrato con tag; AAD = JSON di
+   > `["lf-plugin-setting/v1", famiglia, plugin, campo, scope, user_id]`; `key_id` = 16 byte di
+   > `HMAC-SHA256(sottochiave, etichetta)` in esadecimale; sottochiavi `plugins.settings.v1` (cifratura) e
+   > `plugins.settings.fingerprint.v1` (impronta delle cache). `plugin_secrets_key_status(session)` conta per `key_id`
+   > senza decifrare, e senza segreti salvati non legge nessuna chiave (un controllo all'avvio non crea il file della
+   > chiave). `rekey_plugin_secrets` e `count_unreadable_secrets` su una `sqlite3.Connection`, dentro un `SAVEPOINT`.
+   > Prova a mano (`/tmp/libreFolio_x_cp10_crypto_smoke.py`): una riga copiata su un altro utente risulta illeggibile;
+   > dentro una transazione del chiamante il lavoro sparisce con il suo rollback; da sola fa il commit; il secondo giro
+   > non scrive niente; la decifratura con il contesto di un'altra riga fallisce.
+4. ✅ (2026-10-15) Archivio e risoluzione: ambiente (accessore in `config/plugins.py`), DB, default; blocco; profilo gestito;
+   «illeggibile»; impronta per le cache.
+   > **Note implementazione**: `config/plugins.py`: `plugin_setting_env(name)` = `env_secret(name)`, quindi ogni campo
+   > accetta anche `_FILE`. `resolver.py`: `resolve_plugin_fields` (sincrona, in un thread: legge l'ambiente, i file e la
+   > chiave d'istanza) dà per campo `FieldState` (fonte `env|db|default|none`, `locked`, la variabile che blocca, il
+   > problema `unreadable|invalid_env|invalid_stored`); una variabile impostata vince e blocca anche con un valore non
+   > valido (problema, mai un ripiego muto); il catalogo giudica un segreto dal `key_id`, senza decifrare. Un segreto
+   > illeggibile si scrive nel log una volta per processo (campo e plugin, mai il valore). `build_bound_settings` dà i
+   > valori di una chiamata con l'impronta: SHA-256 dei soli valori normali, HMAC con la sottochiave quando ci sono
+   > segreti. `runtime.py`: `configure_instance` legge le righe in una sessione propria e corta (mai quella del chiamante:
+   > la ricerca chiama i fornitori in parallelo), salta il DB per un plugin senza campi o, senza utente, senza campi di
+   > sistema; un errore del DB lascia ambiente e default e scrive un avviso. Il profilo gestito tocca solo il catalogo
+   > (passo 6). Lo «store.py» del disegno non serve: lettura in `runtime.py`, scritture nel servizio dell'API.
+5. ✅ (2026-10-15) Il confine: `call_provider` per gli asset, `_fetch_provider` per i cambi; consegna; `NOT_CONFIGURED`; mascheramento
+   (eccezioni e log); impronta nelle cache della ricerca.
+   > **Note implementazione**: `utils/runtime/secret_masking.py` (foglia della stdlib): `secrets_in_flight` (ContextVar,
+   > copiato da `to_thread` nel thread del fornitore), `mask_text` (il valore e le sue forme URL-encoded), `mask_exception`
+   > (sul posto: argomenti, `message`, `details`, catena `__cause__`/`__context__`, gruppi; tipo e traceback restano, quindi
+   > gli `except` dei chiamanti non cambiano), il processore `mask_event_dict` dopo `format_exc_info` e prima del JSON, e
+   > `SecretMaskingFilter` sui due handler (console e file) per i logger delle librerie. `assets/core.py`:
+   > `configured_provider(code, *, user_id=None)`, `call_provider(provider, fn, *, timeout, scope=None)` (`NOT_CONFIGURED`
+   > prima di ogni I/O, poi segreti in volo; il punto d'aggancio di X1–X7 è scritto lì), `settings_cache_part`,
+   > `settings_cache_part_for`. `fx/runtime.py` (nuovo): `configured_fx_provider`, `call_fx_provider`,
+   > `FXNotConfiguredError` in `fx/base.py`; tutte le chiamate ai fornitori FX passano di lì (`ensure_rates_multi_source`,
+   > `_fetch_provider`, il catalogo). Siti cambiati: ricerca (anche in streaming e `resolve_url`, con `user_id` dagli
+   > endpoint), prova della configurazione (con `user_id`), metadati, prezzo dal vivo, refresh; ogni cache dei risultati di
+   > un fornitore ha l'impronta nella chiave (query di ricerca, metadati, storico e corrente, scaricamento FX, valute FX:
+   > per un fornitore senza campi la chiave del catalogo FX resta il codice, come prima). Restano istanze semplici dove non
+   > c'è una chiamata: elenco dei fornitori, `get_asset_url`, il controllo del tipo parametrico, il validatore dei parametri,
+   > il preriscaldamento, la capacità di volume. Un oggetto che non è un plugin (un doppio di test) passa dal confine senza
+   > controlli. Prova a mano (`/tmp/libreFolio_x_cp10_mask_smoke.py`, logging vero dell'app): un plugin che solleva e
+   > scrive nel log il proprio segreto dal thread (structlog e `logging`), poi un `logger.exception` dopo il confine: il
+   > messaggio, i `details` e la causa sono mascherati, nel log né il segreto né la sua forma codificata, 7 `***`; un campo
+   > obbligatorio senza valore dà `NOT_CONFIGURED` con `details.missing`.
+   > **⚠️ Fuori pista**: l'impronta nelle chiavi dello storico e del corrente avrebbe spento in silenzio due invalidazioni
+   > che ricostruiscono la chiave a mano (`currency_change.py`, `provider_management.py`): allineate con
+   > `settings_cache_part_for`. Un'entrata salvata con altre impostazioni ha un'altra chiave: nessuna lettura la raggiunge
+   > e scade con il suo TTL. Trovata anche, preesistente e non toccata, la chiave della cache dei metadati senza
+   > `provider_params`.
+   > **Nota per Z** (da girare): il primo argomento di `call_provider` è l'istanza configurata, non il codice; per i cambi
+   > il confine unico è `call_fx_provider` (`fx/runtime.py`), usato anche da `_fetch_provider`.
+6. ✅ (2026-10-15) API e schemi: catalogo, scrittura tutto o niente, permessi, segreti in sola scrittura.
+   > **Note implementazione**: `schemas/plugin_settings.py` (letture: nessun campo per il valore di un segreto, solo
+   > `is_set`, `source`, `locked`, `problem`; scrittura: `value` | `secret_value: SecretStr` | `clear`, da 1 a 100 voci) e
+   > `api/v1/plugin_settings.py`: `GET /api/v1/settings/plugins` (filtri `family`, `plugin_code`; un plugin `test_only`
+   > solo se nominato) e `PATCH /api/v1/settings/plugins/bulk` (422 con `detail.results` di ogni voce, 409, 503).
+   > Regole in `services/plugin_settings/service.py`: campi di sistema scritti solo da un amministratore, letti da tutti
+   > (un segreto solo come impostato o no); campi personali solo del loro utente, mai mostrati ad altri, amministratore
+   > compreso; un campo bloccato dall'ambiente dà `LOCKED_BY_ENV` e, nel profilo gestito, non compare e dà `UNKNOWN_FIELD`;
+   > ogni voce controllata prima di scrivere, poi una transazione; il log dice chi ha scritto quali campi, mai i valori.
+   > Riga in `api/v1/router.py` dopo `settings.router` (file condiviso, da dichiarare). Prova dal vivo sulla corsia (server
+   > `--test --port 6183 --no-scheduler --no-reload`, DB popolato passato da 005 a 007 all'avvio):
+   > `/tmp/libreFolio_x_cp10_api_smoke.py`, 38/38 — catalogo e filtri, i rifiuti tutto o niente (ogni voce col suo
+   > esito, niente scritto), i valori fuori limite, il doppione, il segreto nel campo sbagliato, scope sbagliato, scritture
+   > di admin e utente, isolamento fra i due, consegna al plugin con la ricerca `lf-settings-echo` (l'utente riceve i suoi
+   > campi, l'admin i default), cancellazione, nel DB nessun marcatore in chiaro (`iterdump`), pulizia a zero righe; in 22
+   > risposte, nel log del server e in `librefolio.log` della corsia nessuna traccia dei marcatori. I cambi: `MOCKFX` col
+   > suo segreto e il suo intero, in sola lettura per l'utente (`FORBIDDEN_SCOPE`); l'elenco dei fornitori FX resta
+   > `BOE, ECB, FED, SNB`. `api schema` contro la base (`git archive dae4de4fa` in `/tmp`, `app.openapi()` dei due alberi):
+   > solo aggiunte, 2 percorsi e 14 schemi `PluginSetting*`, nessuna operazione o schema esistente cambiato; `api sync`
+   > senza file tracciati cambiati (il client generato è ignorato).
+   > **⚠️ Fuori pista**: la prova ha trovato una fuga. Il 422 di validazione di FastAPI rimanda l'`input`, e con un campo
+   > mancante, con 101 voci o con un segreto non testuale il segreto tornava in chiaro (solo a chi l'aveva mandato, ma un
+   > toast o un proxy lo mostrano). Corretto con una `route_class` del solo router (`_NoInputEchoRoute`, come `ToolRoute`
+   > in `tools.py`): stesso 422, senza `input`, rilanciato fuori dall'`except` perché non tenga l'errore originale. Riprova
+   > dei cinque casi (`/tmp/libreFolio_x_cp10_leak_probe.py`): nessun eco, `loc`/`msg`/`type`/`ctx` intatti. Da coprire
+   > nelle prove del passo 7.
+7. ✅ (2026-10-15) Prove (test-author): unità, API, migrazione, sicurezza (segreto marcatore in risposte, log, errori, AI Export;
+   permessi; chiave cambiata; cascata); voci del runner.
+   > **Note implementazione**: 8 file nuovi, 8 unità nuove, tutte verdi. Services, `pure` (DB privati sotto
+   > `tmp_path`, motore privato al posto di `runtime.get_async_engine`, chiave di prova con monkeypatch, nessun file di
+   > chiave nella corsia):
+   >
+   > | unità | test |
+   > |---|---|
+   > | `plugin-settings-contract` | 190 |
+   > | `plugin-settings-crypto` | 30 |
+   > | `plugin-settings-runtime` | 79 |
+   > | `plugin-settings-service` | 54 |
+   > | `secret-masking` | 48 |
+   > | `plugin-settings-guards` | 25 |
+   >
+   > Le altre due:
+   > - db `migration-007` (29, `pure`);
+   > - api `plugin-settings` (11, 24 s, verde due volte), **esclusiva**. Ragione scritta: scrive e cancella i campi di
+   >   sistema di `mockprov`, la cui impronta sta nelle chiavi di cache di ogni chiamata a `mockprov`, quindi un'unità
+   >   concorrente perderebbe le sue voci a metà prova.
+   >
+   > Dati: i campi personali solo su utenti che la prova crea e cancella; la metà SET NULL con un admin usa e getta;
+   > `MOCKFX` solo letto via HTTP. Il guard: le variabili dei campi di sistema dei plugin veri in `.env.example`
+   > (barriera sintetica, nessun plugin vero ne dichiara), nomi derivati unici, nessun alias letto dall'app stessa
+   > (barriera: `LIBREFOLIO_INSTANCE_KEY`), `services/ai_export/` non importa le impostazioni.
+   >
+   > X-R6 in `test_config_package.py` (di H, dichiarato): sei casi e i nomi dei due test aggiornati alla regola nuova.
+   > Voci in `_backend_services.py`, `_backend_api.py`, `_backend_db.py` (`migration-007` anche in `db_order`).
+   > Orfani: puliti (305 file). Unità esistenti verdi (services `config-package` 656, `config-env-example` 36,
+   > `config-audit` 90, `provider-registry` 7, `provider-registry-misc` 23, `provider-contracts` 435, `web-link-finder`
+   > 29, `fx-catalog` 8, `settings` 23; api `fx` 21, `assets-provider` 24, `account-deletion` 6; db `validate` 17,
+   > `migration-006` 37, `post-migration` 41; schemas `assets` 70, `fx-routes` 34).
+   > **⚠️ Fuori pista**: le prove hanno trovato due difetti del CP10.
+   > (1) `configure_instance` cadeva su un oggetto senza `settings_fields` (i doppi dei test): 500 in `fx-unit`, rossi in
+   > `asset-source` e `provider-core-cache`. Corretto con `getattr(..., "settings_fields", ())`, come i confini.
+   > (2) `refresh.py` non esponeva più `AssetProviderRegistry`, che due test degli asset prendevano da lì: riparati da
+   > test-author importando la classe dal suo modulo (`assets/registry.py`).
+   > Prima dell'irrobustimento le prove avevano visto anche due fughe del mascheramento (il messaggio di un gruppo di
+   > eccezioni, valori non testuali nei log): chiuse dall'irrobustimento del passo 9 e coperte.
+8. ✅ (2026-10-15) X-R6, documentazione (docs-writer), `.env.example`.
+   > **Note implementazione**: X-R6 nel codice dal passo 5 (`config/plugins.py`, `web_link_finder.py`), chiusa nel
+   > backlog. docs-writer, solo inglese:
+   > - nuova `developer/architecture/patterns/plugin_settings.md`;
+   > - una sezione «Settings» in `asset_plugin_guide.md` e `fx_plugin_guide.md`;
+   > - la frase sulla registrazione in `registry_pattern.md`;
+   > - `## 🧩 Plugin Settings` in `admin/configuration.en.md`;
+   > - le due tabelle in `database/users_access.md` e la 007 in `database/index.md`;
+   > - la riga di `core.py` e le chiavi di cache in `backend/assets/architecture.md`;
+   > - TIMEOUT e MAX in `search_link_finder.md`;
+   > - una riga in `admin/hosting_providers.en.md`, `architecture/settings.md` e `api/index.md`.
+   >
+   > Una riga nella nav di `mkdocs.yml`. Nessun timbro di traduzione: il debito è reale e tocca solo
+   > `admin/configuration.{it,fr,es}.md`.
+   > `.env.example`: la sezione «Plugins» (lo schema dei nomi, alias solo per un segreto, una variabile non valida ferma
+   > il plugin) e «at least 1» per TIMEOUT e MAX.
+   > **⚠️ Fuori pista**: la rilettura del codice di docs-writer ha portato alle due correzioni di prodotto del passo 9
+   > (variabile non valida; chiave inutilizzabile). Restano per H due note su `architecture/security.md`, che è sua e
+   > non ho toccato: l'elenco dei segreti di `env_secret()` non nomina le variabili dei plugin, e il «known limitation»
+   > dice «planned» per un controllo della chiave che il CP10 rende possibile (`key_id` per riga,
+   > `plugin_secrets_key_status`).
+9. ✅ (2026-10-15) `security-review`, poi `all-backend` (slot del coordinatore), poi il checkpoint.
+   > **Note implementazione (security-review, 15/10)**: fatta prima del checkpoint, come chiesto, su tutto il diff del
+   > CP10 (test e documentazione esclusi, in scrittura). Esito: **nessuna vulnerabilità sfruttabile**. Verificati: nonce,
+   > completezza dell'AAD, `key_id` e impronta come oracolo, IDOR su `user_id`, profilo gestito, plugin `test_only`
+   > raggiungibili per nome, corpi dei 422/409/503, flusso SSE, ordine dei processori del log, percorso `_FILE`,
+   > downgrade. Tre lacune latenti (nessun plugin vero dichiara oggi un segreto), chiuse subito perché nel codice del CP10:
+   >
+   > | # | Gravità | File | Lacuna | Cura |
+   > |---|---|---|---|---|
+   > | 1 | ⚪ LOW (latente) | `utils/runtime/secret_masking.py` | un valore non testuale (un URL `httpx`, byte, un'eccezione nei `details`) non veniva mascherato, e `_json_safe_details` lo trasformava in testo per la prova: un segreto di sistema poteva arrivare a un utente qualsiasi | ogni valore giudicato dal testo che mostra (`str`/`repr`); chiavi dei dict, attributi e note delle eccezioni, nomi di file di `OSError`; un errore che mostra ancora un segreto (`__str__` su stato irraggiungibile) è sostituito al confine da `PROVIDER_ERROR` / `FXServiceError` senza legami con l'originale |
+   > | 2 | ⚪ LOW (latente) | `plugin_settings/fields.py` | due plugin potevano leggere la stessa variabile (`foo_bar`+`baz` e `foo`+`bar_baz`, o un alias): il segreto di uno poteva comparire come valore normale dell'altro, che il catalogo mostra a tutti | una variabile appartiene a un solo campo di un solo plugin (`claim_env_variables`, alla registrazione, dopo i controlli dei codici doppi); alias solo su un campo segreto di sistema e fuori da `LIBREFOLIO_PLUGIN_`; nessuna chiave che finisca in `_file` |
+   > | 3 | ⚪ LOW (latente) | `plugin_settings/fields.py` | il mascheramento come oracolo: la prova rimanda l'identificativo e maschera il segreto, quindi con 4 caratteri un utente poteva provare a indovinarlo | `SECRET_MIN_LENGTH_FLOOR` da 4 a 8 (= il default) |
+   >
+   > Prova a mano (`/tmp/libreFolio_x_cp10_hardening_smoke.py`, 29/29): dichiarazioni, collisioni rifiutate anche dal
+   > registro vero (il plugin non viene salvato), rilascio dei claim, mascheramento di URL, byte, chiavi, `OSError`,
+   > note; ai due confini l'errore mascherabile tiene il tipo, quello opaco è sostituito senza `__cause__` né
+   > `__context__`, `CancelledError` mai. Riprova del vecchio smoke del mascheramento col logging vero: invariato (7 `***`,
+   > nessun segreto nel log). Scoperta: 6 asset e 7 cambi senza errori; ruff e black puliti. test-author e docs-writer
+   > avvisati dei cambi mentre scrivevano.
+   > **⚠️ Fuori pista**: `NOT_CONFIGURED` e `PROVIDER_ERROR` non hanno una chiave `providerErrors.*`: la prova mostra il
+   > messaggio inglese (il ripiego di `resolveProviderError.ts`). Le chiavi nelle 4 lingue vanno nel CP11, con la UI.
+   > **⚠️ Fuori pista (dalla rilettura di docs-writer, 15/10)**: due lacune di prodotto, corrette.
+   > (1) Una variabile impostata ma non valida (valore o `_FILE` illeggibile) non lasciava traccia nel log, e un campo
+   > facoltativo col default arrivava al plugin come `None`, rompendo il contratto «un campo col default ha sempre un
+   > valore». Ora il campo conta in `missing` anche se facoltativo: il plugin non è configurato e il confine rifiuta con
+   > `NOT_CONFIGURED`; un avviso per processo e per variabile, col motivo e mai il valore. Mai il default: è il «mai un
+   > ripiego muto» del disegno approvato. Così è vera anche la frase della sezione «Secrets» di `.env.example`.
+   > (2) Con la chiave d'istanza inutilizzabile (un file generato guasto: H fa partire il server lo stesso, con un errore
+   > nel log) `GET /settings/plugins` dava 500 appena c'era un segreto salvato, e un segreto dall'ambiente faceva fallire
+   > le chiamate (l'HMAC dell'impronta). Ora i segreti salvati risultano `unreadable` (catalogo e chiamate), un errore
+   > nel log per processo, quelli dall'ambiente arrivano ancora, e l'impronta senza chiave usa i soli nomi dei segreti
+   > (con la chiave guasta solo l'ambiente fornisce segreti, fissi per il processo). `plugin_secrets_key_status` dà i
+   > totali come illeggibili invece di sollevare, e deriva la chiave in `asyncio.to_thread`: prima la leggeva dentro un
+   > `async def`, contro la regola dell'I/O. Prova: `/tmp/libreFolio_x_cp10_env_key_smoke.py`, 11/11.
+   > Restano, accettati e scritti nella guida: la lista delle valute di riserva di un fornitore FX (5 minuti dopo un
+   > errore) è per codice, non per impostazioni; una ricerca senza `providers` interroga anche i plugin `test_only`
+   > (`search.py:204` e `:348`, preesistente): da escludere nel FE5a, quando il frontend smette di filtrare `mockprov` per
+   > nome.
+   > **`all-backend --workers 2`** (slot pesante 2 del coordinatore, 19:37–20:21, corsia 6183,
+   > `--log-dir /tmp/libreFolio_x_cp10_allbackend`): 5 categorie su 7 verdi (External, DB 18/18, Utils, Schemas, E2E).
+   > Le fasi parallele: 3364, 5268 (1 saltato), 1308, 1230, 705, 1000 test. Due rossi, uno per categoria:
+   > - services `fx-sync-service`, **del CP10**: `test_sync_pairs_bulk_repeated_provider_cache_hit_preserves_source_and_steps`
+   >   fissa la chiave della cache di `_fetch_provider` a tre elementi, e dal CP10 c'è l'impronta come quarto. test-author
+   >   l'ha riparato tenendo l'intento (la chiave intera con `settings_cache_part`) e ha cercato altre chiavi scritte a mano.
+   >   Ne ha trovata un'altra, verde ma svuotata dal CP10:
+   >   `test_provider_core_cache.py::TestProbeBypassesCache::test_probe_bypasses_all_core_caches_and_executes_each_operation_through_thread_boundary`.
+   >   La prova pianta sentinelle sotto le chiavi che i percorsi con cache calcolerebbero, per mostrare che la prova di
+   >   configurazione non le legge. Senza la parte delle impostazioni, una prova che usasse la cache le avrebbe mancate
+   >   passando lo stesso. Ora ogni chiave chiude con `settings_cache_part`.
+   >   Riprove da sole, come chiesto dal coordinatore (ruff e black puliti sui due file): services `fx-sync-service` 5,
+   >   utils `provider-core-cache` 29, services `fx-catalog` 8, api `fx` 21, tutte verdi; i due test riparati risultano
+   >   PASSED nei log.
+   > - api `pac-planner-tool`, **non del CP10**: vedi il «Fuori pista» sotto.
+   > Slot liberato alle 20:21 e detto al coordinatore (niente secondo `all-backend`, d'accordo col coordinatore).
+   > **⚠️ Fuori pista (ambiente)**: `test_pac_planner_tool_api.py::test_pac_compute_plans_the_compact_twin_like_the_explicit_request`
+   > dà `(1, 1)` invece di `(2, 0)`. Da sola passa 12/12 in 18 s, con la macchina a 80. Verdetto (`test-triage`):
+   > **environment**. Girava nel passo consolidato delle API con la macchina a 75–121 su 10 core, e il CP10 non tocca il
+   > percorso dei Tools. La causa esatta non si recupera: i Tools non scrivono un elemento fallito nel log, e la prova
+   > controlla i conteggi prima di stampare i risultati. Il suggerimento (`results` nel messaggio dell'asserzione) lo
+   > gira il coordinatore a J.
+
+### Note arrivate durante il CP10 (15/10, sera)
+
+- **X-R12, da W (E1b), girata dal coordinatore e valutata**: il refresh chiede la storia fino a ieri
+  (`refresh.py:227`), e un evento del fornitore datato oggi (un dividendo, uno split) arriva il giorno dopo.
+  - Il taglio è voluto per i prezzi: la chiusura di oggi non c'è ancora, e il valore di oggi viene da
+    `get_current_value`.
+  - Per gli eventi no: viaggiano solo nella stessa chiamata.
+  - Nessun errore di valore: uno split sposta le posizioni con la transazione ADJUSTMENT legata all'evento
+    (`portfolio/engine.py:213-223`). Solo un giorno di ritardo per l'evento, per il suo collegamento e per AI Export.
+  - Cura proposta: storia fino a oggi, poi via il prezzo di oggi prima della cache e della scrittura, tenendo gli
+    eventi. Due cose da verificare: la copertura `dates` della cache, e `end_date` inclusivo in ogni plugin (e
+    `scheduled_investment`).
+  - Un lotto piccolo dopo X1–X8, fuori dal CP10. Voce nel backlog, sezione X.
+- **Z7a è in `dev_release2`** (`2ab8a3a43`): `services/platform/provider_cooldown.py` e `utils/runtime/cooldown.py`.
+  X1–X8 può chiamarlo da `call_provider` / `call_fx_provider`, dove il punto d'aggancio è scritto. La previsione dei
+  conflitti contro `10d5ccd2d` non tocca i miei confini: Z7a non ha cambiato `assets/core.py` né `fx/`.
+- **`backend/app/main.py` congelato** fino al CP2b di H, che lo divide in `services/platform/lifecycle.py`,
+  `middleware.py`, `static_site.py` e `database_bootstrap.py`. Un passo d'avvio o di spegnimento, o un middleware, di un
+  mio lotto aspetta il CP2b, e poi è una riga nel modulo giusto. Il CP10 non tocca `main.py`.
+- **X-R13, per il FE5c** (dal programma colori, DV-3): con DV `AllocationEntry` perde `emoji`, ma il `map` dei settori
+  in `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`) lo calcola ancora: da togliere col taglio della
+  pagina. Voce nel backlog, sezione X.
