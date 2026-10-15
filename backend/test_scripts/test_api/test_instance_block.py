@@ -111,6 +111,7 @@ PUBLIC_READS_OUTSIDE_THE_LIST = [
     pytest.param("/utilities/currencies", id="utilities-currencies"),
     pytest.param("/settings/global", id="global-settings"),
     pytest.param("/ai-export/catalog", id="ai-export-catalog"),
+    pytest.param("/auth/address-probe", id="address-probe"),
 ]
 
 #: Every endpoint allowed on a blocked instance, by name, with the one route it serves. An addition goes through the
@@ -122,6 +123,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.auth.inspect_link_token": ("POST", "/api/v1/auth/tokens/inspect"),
     "backend.app.api.v1.auth.reset_password_with_link": ("POST", "/api/v1/auth/password-reset"),
     "backend.app.api.v1.auth.delete_own_account": ("DELETE", "/api/v1/auth/users/me"),
+    "backend.app.api.v1.auth.preview_own_account_deletion": ("GET", "/api/v1/auth/users/me/deletion-preview"),
     "backend.app.api.v1.system.block.get_instance_block": ("GET", "/api/v1/system/block"),
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
     "backend.app.api.v1.system.health.health_check": ("GET", "/api/v1/system/health"),
