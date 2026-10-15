@@ -11,6 +11,7 @@ Cash flow sign convention (standard finance):
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -69,6 +70,20 @@ class MWRRPoint:
 
     date: date
     mwrr: Decimal | None
+
+
+@dataclass(frozen=True)
+class PeriodRebase:
+    """The inputs of a period's return metrics: where the period starts, and what it sees from there.
+
+    ``nav_snapshots`` start at the period's opening snapshot; ``cash_flows`` open with a synthetic
+    deposit of the opening NAV (``-start_nav``) and follow with the flows after the opening date.
+    """
+
+    start_date: date | None
+    start_nav: Decimal
+    nav_snapshots: tuple[NAVSnapshot, ...]
+    cash_flows: tuple[CashFlowInput, ...]
 
 
 _PREC_PCT = Decimal("0.000001")  # 6 decimals for percentages
@@ -135,6 +150,62 @@ def cumulative_to_annualized(total_return: Decimal | None, days: int, min_days: 
         return Decimal(str(annualized)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
     except (OverflowError, InvalidOperation, ValueError):
         return None
+
+
+def rebase_to_period(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], date_from: date | None) -> PeriodRebase:
+    """Rebase a whole-history NAV series and its flows on the period that starts at ``date_from``.
+
+    The period opens at the last snapshot dated on or before ``date_from``: its NAV enters as a
+    synthetic deposit on its date, the snapshots start there, and only the flows strictly after
+    that date follow, since a flow of the opening date is already inside the opening NAV. When
+    ``date_from`` precedes every snapshot the period opens empty (NAV 0) on the first snapshot's
+    date, and the flows of that date are left out for the same reason: the first snapshot is taken
+    after them, and counting them again would double the deposit and drag the XIRR to a pole.
+
+    Without ``date_from``, or without snapshots, the inputs pass through with an opening NAV of 0
+    and the first snapshot's date (None without snapshots); a caller that needs a calendar date
+    there supplies its own.
+    """
+    snapshots = tuple(nav_snapshots)
+    flows = tuple(cash_flows)
+    if date_from is None or not snapshots:
+        return PeriodRebase(start_date=snapshots[0].date if snapshots else None, start_nav=Decimal("0"), nav_snapshots=snapshots, cash_flows=flows)
+    start_index: int | None = None
+    for index, snapshot in enumerate(snapshots):
+        if snapshot.date <= date_from:
+            start_index = index
+    if start_index is None:
+        start_date, start_nav, period_snapshots = snapshots[0].date, Decimal("0"), snapshots
+    else:
+        start_date, start_nav, period_snapshots = snapshots[start_index].date, snapshots[start_index].nav, snapshots[start_index:]
+    period_flows = (CashFlowInput(date=start_date, amount=-start_nav), *(flow for flow in flows if flow.date > start_date))
+    return PeriodRebase(start_date=start_date, start_nav=start_nav, nav_snapshots=period_snapshots, cash_flows=period_flows)
+
+
+def net_holding_return(market_pnl: Decimal | None, income: Decimal, costs: Decimal, cost_basis: Decimal) -> Decimal | None:
+    """Net return of a holding on its cost: (market P&L + income − costs) / cost basis.
+
+    A missing market P&L (no price) counts as 0, so a holding valued at cost still shows the return
+    of its coupons and dividends net of fees and taxes. None when the cost basis is 0.
+    """
+    if cost_basis == 0:
+        return None
+    market = market_pnl if market_pnl is not None else Decimal("0")
+    return (market + income - costs) / cost_basis
+
+
+def gain_loss_ratio(gain: Decimal | None, base: Decimal | None, *, positive_base: bool) -> Decimal | None:
+    """A gain or loss as a fraction of its base: ``gain / base``, unrounded.
+
+    None when either is missing or the base is 0, and with ``positive_base`` also when the base is
+    negative: a capital at or below zero has no meaningful return. Each caller states its guard and
+    keeps its own fallback for None.
+    """
+    if gain is None or base is None or base == 0:
+        return None
+    if positive_base and base < 0:
+        return None
+    return gain / base
 
 
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:

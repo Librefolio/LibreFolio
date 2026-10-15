@@ -1,15 +1,10 @@
 """
-Backup/Export API Endpoints.
+Per-series snapshot exports (``/backup/asset/{id}/prices``, ``/backup/asset/{id}/events``,
+``/backup/fx/{base}/{quote}/rates``).
 
-Two families of endpoints live here:
-
-1. **Per-series snapshot exports** (``/backup/asset/{id}/prices``,
-   ``/backup/asset/{id}/events``, ``/backup/fx/{base}/{quote}/rates``).
-   Implemented. Stream CSV/JSON of the current state of one historical
-   series. Primary use case: the "download before destructive operation"
-   UX (currency change wipe, pair teardown).
-2. **Full portfolio export/restore** (``/backup/export``, ``/backup/restore``).
-   Still placeholder (501).
+They stream CSV/JSON of the current state of one historical series. Primary use case: the "download before
+destructive operation" UX (currency change wipe, pair teardown). ``backup_router`` (``__init__.py``) gives these routes
+the ``/backup`` prefix and the ``Backup & Export`` tag, after the full-instance routes of ``instance.py``.
 
 The legacy endpoint ``GET /api/v1/assets/prices/{id}/export`` has been
 removed (pre-beta, no external consumers). Use
@@ -17,11 +12,9 @@ removed (pre-beta, no external consumers). Use
 """
 
 from datetime import date as date_type
-from enum import StrEnum
-from typing import List, Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
@@ -29,7 +22,7 @@ from starlette.responses import StreamingResponse
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, AssetEvent, FxRate, PriceHistory, User
 from backend.app.db.session import get_session_generator
-from backend.app.services.platform.backup_service import (
+from backend.app.services.platform.series_export import (
     EVENT_COLUMNS,
     FX_RATE_COLUMNS,
     PRICE_COLUMNS,
@@ -39,160 +32,7 @@ from backend.app.services.platform.backup_service import (
     stream_rows_as_json,
 )
 
-backup_router = APIRouter(
-    prefix="/backup",
-    tags=["Backup & Export"],
-)
-
-
-# =============================================================================
-# SCHEMAS — full-portfolio placeholders (kept as-is)
-# =============================================================================
-
-
-class ExportFormat(StrEnum):
-    """Supported export formats."""
-
-    JSON = "json"
-    CSV = "csv"
-    SQLITE = "sqlite"  # Full database backup
-
-
-class ExportScope(StrEnum):
-    """What to include in export."""
-
-    ALL = "all"
-    TRANSACTIONS = "transactions"
-    ASSETS = "assets"
-    BROKERS = "brokers"
-    SETTINGS = "settings"
-
-
-class ExportRequest(BaseModel):
-    """Request for data export."""
-
-    format: ExportFormat = ExportFormat.JSON
-    scope: List[ExportScope] = [ExportScope.ALL]
-    include_price_history: bool = False  # Can be large
-    broker_ids: Optional[List[int]] = None  # Filter by broker (None = all)
-
-
-class ExportResponse(BaseModel):
-    """Response with export file info."""
-
-    download_url: str
-    filename: str
-    size_bytes: int
-    expires_at: str  # ISO datetime
-
-
-class RestoreRequest(BaseModel):
-    """Request to restore from backup."""
-
-    file_id: str  # UUID of uploaded backup file
-    overwrite_existing: bool = False  # If true, replaces existing data
-
-
-class RestoreResponse(BaseModel):
-    """Response from restore operation."""
-
-    success: bool
-    restored_count: dict  # e.g., {"brokers": 2, "assets": 50, "transactions": 1000}
-    warnings: List[str] = []
-
-
-# =============================================================================
-# ENDPOINTS
-# =============================================================================
-
-
-@backup_router.post("/export", response_model=ExportResponse)
-async def export_data(request: ExportRequest, _current_user: User = Depends(get_current_user)):
-    """
-    Export portfolio data to file.
-
-    **Supported Formats:**
-    - `json`: Human-readable JSON file
-    - `csv`: Multiple CSV files in ZIP archive
-    - `sqlite`: Full SQLite database file
-
-    **Scope Options:**
-    - `all`: Export everything
-    - `transactions`: Only transactions
-    - `assets`: Only assets and metadata
-    - `brokers`: Only broker definitions
-    - `settings`: Only user settings
-
-    **Note:** This endpoint is not yet implemented.
-    """
-    raise HTTPException(status_code=501, detail="Export functionality is not yet implemented. Coming soon!")
-
-
-@backup_router.post("/restore", response_model=RestoreResponse)
-async def restore_data(request: RestoreRequest, _current_user: User = Depends(get_current_user)):
-    """
-    Restore portfolio data from backup file.
-
-    **Important:**
-    - If `overwrite_existing=False` (default), only imports new data
-    - If `overwrite_existing=True`, replaces all existing data
-
-    **Supported Formats:**
-    - JSON export files created by `/export`
-    - SQLite database files
-
-    **Note:** This endpoint is not yet implemented.
-    """
-    raise HTTPException(status_code=501, detail="Restore functionality is not yet implemented. Coming soon!")
-
-
-@backup_router.get("/formats")
-async def list_export_formats(_current_user: User = Depends(get_current_user)):
-    """
-    List available export formats.
-
-    Returns information about each supported format.
-    """
-    return {
-        "formats": [
-            {
-                "code": "json",
-                "name": "JSON Export",
-                "description": "Human-readable JSON file with all data",
-                "extension": ".json",
-                "available": False,  # Not yet implemented
-            },
-            {
-                "code": "csv",
-                "name": "CSV Archive",
-                "description": "ZIP file containing CSV files for each table",
-                "extension": ".zip",
-                "available": False,
-            },
-            {
-                "code": "sqlite",
-                "name": "SQLite Database",
-                "description": "Full database backup as SQLite file",
-                "extension": ".db",
-                "available": False,
-            },
-        ]
-    }
-
-
-@backup_router.get("/status")
-async def backup_status(_current_user: User = Depends(get_current_user)):
-    """
-    Get backup/export system status.
-
-    Returns current implementation status.
-    """
-    return {
-        "status": "placeholder",
-        "message": "Backup/Export functionality is planned for a future release",
-        "implemented_endpoints": ["/backup/formats", "/backup/status"],
-        "planned_endpoints": ["/backup/export", "/backup/restore"],
-    }
+exports_router = APIRouter()
 
 
 # =============================================================================
@@ -204,7 +44,7 @@ async def backup_status(_current_user: User = Depends(get_current_user)):
 # mechanism used by the currency-change wipe UX (Policy D), but they are
 # also useful as a general audit/export trail.
 #
-# Shape conventions (see ``backup_service.py`` for details):
+# Shape conventions (see ``series_export.py`` for details):
 #   * ``?format=csv`` (default): ``text/csv`` with fixed column order.
 #   * ``?format=json``: uniform envelope ``{scope, entity, exported_at,
 #     row_count, rows:[...]}``.
@@ -219,7 +59,7 @@ def _build_filename(scope: str, slug_parts: list[str], fmt: str) -> str:
     return f"{scope}_{slug}_{today}.{fmt}"
 
 
-@backup_router.get("/asset/{asset_id}/prices")
+@exports_router.get("/asset/{asset_id}/prices")
 async def backup_asset_prices(
     asset_id: int,
     format: Literal["csv", "json"] = "csv",
@@ -228,7 +68,7 @@ async def backup_asset_prices(
 ):
     """Stream the full price history of an asset as CSV or JSON.
 
-    Columns (same in both formats, see ``backup_service.PRICE_COLUMNS``):
+    Columns (same in both formats, see ``series_export.PRICE_COLUMNS``):
     ``date, open, high, low, close, volume, currency, source_plugin_key, fetched_at``.
 
     ``currency`` is the per-row verbatim value from ``price_history.currency``
@@ -274,7 +114,7 @@ async def backup_asset_prices(
     )
 
 
-@backup_router.get("/asset/{asset_id}/events")
+@exports_router.get("/asset/{asset_id}/events")
 async def backup_asset_events(
     asset_id: int,
     format: Literal["csv", "json"] = "csv",
@@ -331,7 +171,7 @@ async def backup_asset_events(
     )
 
 
-@backup_router.get("/fx/{base}/{quote}/rates")
+@exports_router.get("/fx/{base}/{quote}/rates")
 async def backup_fx_rates(
     base: str,
     quote: str,

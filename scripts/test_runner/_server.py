@@ -51,7 +51,9 @@ SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
 STARTUP_TIMEOUT = int(os.environ.get("LIBREFOLIO_TEST_STARTUP_TIMEOUT", "300"))
 #: Flushing coverage takes real time; a SIGKILL during it loses everything.
 SHUTDOWN_GRACE_COVERAGE = 30
-SHUTDOWN_GRACE_PLAIN = 5
+#: The server's own shutdown budget (LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, 8 s by default) plus a margin, like
+#: Docker's 10 s: a server still alive after it has broken its budget, and the warning below says so.
+SHUTDOWN_GRACE_PLAIN = 10
 
 #: How many concurrent clients one uvicorn worker is expected to serve.
 #: Browser workers spend most of their time rendering, so the gallery has long

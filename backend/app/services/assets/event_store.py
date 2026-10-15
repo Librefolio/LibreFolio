@@ -227,7 +227,7 @@ class EventStoreOperations:
         except Exception:
             await session.rollback()
             raise
-        return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0)}
+        return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0 or r["deleted_ids"])}
 
     @staticmethod
     async def _write_manual_item(session: AsyncSession, item_index: int, item) -> dict:
@@ -238,6 +238,8 @@ class EventStoreOperations:
             if asset is None:
                 raise AssetSourceError(f"EVENT_ASSET_NOT_FOUND: asset {asset_id} does not exist", "EVENT_ASSET_NOT_FOUND")
             default_currency = asset.currency or "USD"
+            # Deletions first (I-10): an edit may take the date and type of an event deleted in the same save.
+            deleted_ids = await EventStoreOperations._delete_item_events(session, asset_id, list(getattr(item, "delete_ids", None) or []))
             EventStoreOperations._reject_currency_mismatches(asset, item.events)
             points = EventStoreOperations._as_upsert_points(item.events)
             edits, new_events = EventStoreOperations._split_manual_events(points)
@@ -250,7 +252,48 @@ class EventStoreOperations:
             raise
         # The row of each event, in request order: an edit keeps its id, the others take the one they wrote.
         event_ids = [point.id if point.id is not None else next(new_ids) for point in points]
-        return {"asset_id": asset_id, "count": len(event_ids), "message": f"Upserted {len(event_ids)} manual events", "event_ids": event_ids}
+        message = f"Upserted {len(event_ids)} manual events" + (f", deleted {len(deleted_ids)}" if deleted_ids else "")
+        return {"asset_id": asset_id, "count": len(event_ids), "message": message, "event_ids": event_ids, "deleted_ids": deleted_ids}
+
+    @staticmethod
+    async def _delete_item_events(session: AsyncSession, asset_id: int, delete_ids: list[int]) -> list[int]:
+        """Delete the ``delete_ids`` of a manual upsert item, then flush; answer them in request order.
+
+        Every id must be an event of the asset, manual or from a provider — as ``DELETE /assets/events`` allows: a
+        provider event comes back with its next sync. An event a transaction is linked to is not deleted: the whole
+        request is refused, naming it.
+
+        Raises:
+            AssetSourceError(code="EVENT_NOT_DELETABLE"): ``details["ids"]``, the ids that are not an event of the
+                asset (unknown, gone, or of another asset).
+            AssetSourceError(code="EVENT_IN_USE"): ``details["events"]``, each event linked to transactions with
+                ``linked_transactions``, their number (no transaction id: they may belong to other users).
+        """
+        if not delete_ids:
+            return []
+        stmt = select(AssetEvent).where(AssetEvent.id.in_(delete_ids), AssetEvent.asset_id == asset_id)
+        rows = {row.id: row for row in (await session.execute(stmt)).scalars().all()}
+        refused = sorted(set(delete_ids) - set(rows))
+        if refused:
+            raise AssetSourceError(
+                f"EVENT_NOT_DELETABLE: no event of asset {asset_id} has id {', '.join(str(i) for i in refused)}",
+                "EVENT_NOT_DELETABLE",
+                {"ids": refused},
+            )
+        linked_stmt = select(Transaction.asset_event_id, func.count(Transaction.id)).where(Transaction.asset_event_id.in_(list(rows))).group_by(Transaction.asset_event_id)
+        linked = dict((await session.execute(linked_stmt)).all())
+        if linked:
+            in_use = sorted((rows[event_id] for event_id in linked), key=lambda row: (row.date, str(row.type), row.id))
+            first = in_use[0]
+            raise AssetSourceError(
+                f"EVENT_IN_USE: the {first.type} event of asset {asset_id} on {first.date.isoformat()} is linked to transactions" + (f" (+{len(in_use) - 1} more)" if len(in_use) > 1 else ""),
+                "EVENT_IN_USE",
+                {"events": [{"id": row.id, "date": row.date.isoformat(), "type": str(row.type), "linked_transactions": int(linked[row.id])} for row in in_use]},
+            )
+        for row in rows.values():
+            await session.delete(row)
+        await session.flush()
+        return list(delete_ids)
 
     @staticmethod
     def _reject_currency_mismatches(asset: Asset, events: Optional[list]) -> None:

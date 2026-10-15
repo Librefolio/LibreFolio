@@ -237,7 +237,8 @@ The main fields; `lib/components/table/types.ts` has the full interface.
 | `hiddenByDefault` | `boolean` | Hidden until the user shows it. |
 | `pinned` | `'left' \| 'right'` | Sticky column. |
 | `align` | `'left' \| 'center' \| 'right'` | Cell and header alignment. |
-| `headerTooltip`, `headerTooltipUrl` | `string \| () => string` | Info icon on the header, optionally linking a documentation page. |
+| `headerTooltip`, `headerTooltipUrl` | `string \| () => string` | `headerTooltip` alone puts a tooltip on the header label. With `headerTooltipUrl` as well, an info icon appears that opens the documentation page in a new tab. |
+| `headerTooltipLinkMode` | `'direct' \| 'gesture'` | How the info icon opens the page: a plain link (`'direct'`, the default), or a button that opens it on double click, Shift+Enter or long press (`'gesture'`). |
 | `urlKey` | `string` | URL parameter of the column's filter (default: the id). |
 | `integerOnly` | `boolean` | Integer-only number filter. |
 
@@ -259,7 +260,9 @@ The `cell` function can return a simple string/number or a structured object:
 
 !!! warning "`html` is rendered as-is"
 
-    `html` cells, `headerHtml` and `html` footer cells go through `{@html}` without sanitising.
+    `html` cells, `headerHtml` and `html` footer cells go through `{@html}` without sanitising, in
+    `DataTableCellContent.svelte` (cells and footer cells) and `DataTableColumnHeader.svelte`
+    (`headerHtml`), both listed as reviewed sinks in `frontend/src/htmlSink.gate.test.ts`.
     Escape every user- or provider-supplied value with `escapeHtml`
     (`$lib/utils/core/escapeHtml.ts`) when you build the string. The gate
     `frontend/src/htmlInterpolation.gate.test.ts` flags HTML templates that interpolate such a
@@ -275,3 +278,24 @@ The component uses Svelte 5 Runes for internal state:
 - The pure decision logic — cell value extraction, filter predicates, typed comparison, min/max and
   enum options — lives in `dataTableLogic.ts`, unit-tested in `dataTableLogic.test.ts`;
   `DataTable.test.ts` covers the wiring and the public methods.
+
+**Where DataTable's code lives.** Consumers use `DataTable.svelte` only. It renders two children
+that are internal — `table/index.ts` does not export them — and that hold markup and styles, but no
+table state:
+
+| File | Holds |
+|:--|:--|
+| `DataTable.svelte` | The public API (the `Props` interface and the public methods), all the table's state (`$state`, `$derived`), its effects and its handlers. The structure of the table: `table`, `thead`, `tbody`, `tfoot`; the rows with their handlers (click, double click, middle click, context menu, long press); every `th` and `td` with its classes, sticky offsets and test ids; the selection and actions columns, the loading and empty rows, the pagination, the context menu and the two confirm modals. And the styles of all that, structural rules included: sticky columns, z-index, row states. |
+| `DataTableColumnHeader.svelte` | The content of one data-column header (`div.header-content` inside `th.th-data`): the sort button with the `header` text or the `headerHtml`, wrapped in the `headerTooltip` when there is one; with a `headerTooltipUrl` as well, the info icon — a link, or with `headerTooltipLinkMode: 'gesture'` a button that opens the URL on double click, Shift+Enter or long press; the filter button and its `DataTableColumnFilter` popover; the resize handle. The parent's state and handlers arrive as props under their parent names, and `openFilterColumnId` is bound, since the parent owns it; the header's only `$state` is `filterBtn`, the popover's anchor. The tooltip's long-press timer stays in the parent, whose `onDestroy` cancels it. |
+| `DataTableCellContent.svelte` | The switch over the kinds of `CellContent` listed above, with their styles and the input handling of the editable kinds. Footer cells render through it too — `FooterCellContent` (text, number or `html`) is a subset of `CellContent` — so a clickable `html` footer cell with a `testId` now carries its `data-testid`, exactly like a body cell. |
+| `dataTableLogic.ts` | The pure logic of the last bullet above. Each component imports what it uses: the parent the filter predicate and the comparison, the header the filter's boundaries and options, the cell `formatCellDate`. |
+
+Like the parent, each child imports `$lib/theme/components/table.css`, the area file of the
+`--lf-cmp-datatable-*` tokens it reads: the token gate
+(`frontend/src/themeComponentTokens.gate.test.ts`) requires that import in every component that
+reads a token. Svelte scopes styles per component, so the selectors that cross the boundary use
+`:global` — the parent's `:has(:global(.cell-editable-select-wrapper))`, on the `td` and the
+`tbody tr` that hold an editable select, and the header's `:global(th:hover) .resize-handle` — and
+Svelte checks neither against the other side's markup: a rename there breaks them silently. The
+`.filter-btn` rules are in both files, the same in each: the parent's for the "show selected only"
+toggle of the selection header, the header's for the column filter.
