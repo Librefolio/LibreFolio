@@ -792,3 +792,99 @@ di `dev_release2` a `05c21b2b6` (A3: frontend di Settings e login, cataloghi `au
    transactions-modals` 25, `front-asset asset-data-editor` 26 (sulle rotte degli eventi spostate da X), `front-fx
    fx-csv-import` 21, `front-fx fx-editor` 4.
 6. ✅ **`mkdocs build`** stretto verde; `git diff --check` pulito; porta 6184 libera (04:04).
+
+   > **Note implementazione (coordinatore, 15/10 ~04:06)**: K1 in `dev_release2` con l'avanzamento veloce a `d915c869f`;
+   > record in `0229dbc6a` (CHANGELOG con le 4 righe; chiuse O-12, C-89, V-38, W-B8 e la parte W di P-15; I-10 S3 chiusa
+   > senza codice nel README del 38; W-B13 spostata nella sezione X). Il mio ramo è avanzato a `0229dbc6a`, pulito.
+   > `ui/data-editor` ora è di T (avvisato, con la nota su `asset-data-editor.spec.ts:384`).
+
+### W4 — CP6–CP7, PL5: `services/brim/` ⏳ (2026-10-15) — CP6 🧊 checkpoint inviato, FROZEN
+
+**Via del coordinatore** (15/10 ~04:06): «Via per W4 (`services/brim/`, PL5: rinomina, poi taglio con la guardia;
+aggiorna le due costanti del cancello `gate-event-loop-io`; `applyTo`, skill, guida U-B8). W3 (`api/v1/brokers/`) e
+W5–W6 (`uploads.py`) aspettano un commit del coordinatore su quei file, e git non segue il codice spostato. Se W4 finisce prima, passa a K2 o W7. Le run pesanti di W4 vanno chiuse prima delle
+08:45, o fatte dopo l'avviso di fine della finestra della galleria.» Base: HEAD `0229dbc6a`, pulito, porta libera (04:06).
+
+**Forma** (piano 43, P2.1; §6 del piano generale, C1 e «Regole di ogni lotto di riordino»): `brim_provider.py` è
+rinominato **e** tagliato, quindi due checkpoint in fila.
+
+- **CP6, rinomina**: `brim_provider.py`, `brim_report_sets.py`, `brim_parse_pool.py`, `brim_gap_fix.py` →
+  `services/brim/`, stessi nomi (C1), accanto al `registry.py` di X; riferimenti di app, test, runner, script,
+  `coverage_analysis` (prefisso del pacchetto, come per transazioni e broker), doc per sviluppatori, `.github` (`applyTo`
+  `backend/app/services/brim/**`, skill `brim-plugin`), devWiki (C6), commenti di `frontend/src/lib/utils/brim/`; le due
+  costanti del cancello `gate-event-loop-io`; U-B8 (il passo «Capacity table» della guida). Nessun cambio di
+  comportamento; JSON di `api schema` identici.
+  - Eccezione: la docstring dell'enum `IdentifierType` (`backend/app/db/models.py:127`) cita
+    `backend/app/services/brim_provider.py` ed è pubblicata nell'OpenAPI; resta com'è per tenere lo schema identico,
+    come X ha lasciato `asset_source.py` nella stessa docstring. Residuo nel backlog.
+- **CP7, taglio**: `services/brim/brim_provider.py` per tema (piano 43: contratto, file e lock, report set, parsing,
+  candidati, duplicati; moduli nuovi con nomi brevi, C1), con lo stato di modulo (`_BROKER_LOCKS`) in un modulo solo, le
+  patch dei test sul modulo che definisce, e la guardia contro le patch mute (C4).
+
+**Passi CP6**:
+
+1. ✅ **Spostamento e riscrittura** (04:08–04:10): `mv` (non `git mv`: lo stage è del coordinatore) di
+   `brim_provider.py`, `brim_report_sets.py`, `brim_parse_pool.py`, `brim_gap_fix.py` in `backend/app/services/brim/`;
+   `/tmp/libreFolio_w4a_rename.py --apply`: 96 file, 146 riferimenti (forme puntata, con le barre, e `from
+   backend.app.services import <moduli BRIM>`; nessuna riga d'import mescolava moduli BRIM e altri). Lo scarto fra il
+   `grep` dei vecchi percorsi e la prova a secco era la sola `models.py`, esclusa apposta.
+
+   > **⚠️ Fuori pista**: la regola dell'import non vede le sorgenti scritte dentro le stringhe (`\n` letterale dopo
+   > l'import) né una docstring spezzata su due righe: nel cancello `gate-event-loop-io` 5 casi di controllo e la
+   > docstring sono rimasti sulla forma vecchia, e i controlli sarebbero caduti (il modulo legato non era più quello
+   > sorvegliato). Corretti a mano, con la forma relativa `from ...services.brim import brim_provider` e la costante
+   > `BRIM_PROVIDER` (percorso per componenti).
+2. ✅ **A mano**: `scripts/coverage_analysis.py` col prefisso di pacchetto `backend/app/services/brim/` (HIGH) e
+   `services/brim/` fra i servizi del nucleo, come transazioni e broker (non tocca `brim_providers/`);
+   `.github/instructions/backend-providers-brim.instructions.md`, `applyTo` →
+   `backend/app/services/brim_providers/**,backend/app/services/brim/**`; la skill `brim-plugin` dice ora da dove vengono
+   `BRIMProvider` e `BRIMProviderRegistry` (`services/brim/`: contratto in `brim_provider.py`, registro in
+   `registry.py`; il contratto andrà in `base.py` col taglio); **U-B8**: tolto il passo 3 «Capacity table» della guida
+   (`brim_plugin_guide.md`, la tabella «Importer Capabilities» non c'è più) e rinumerati i passi seguenti (3 Nav,
+   4 Validate, 5 Developer providers overview); nessun altro riferimento a quella tabella in `mkdocs_src/docs`.
+3. ✅ **Prove a secco e statiche** (04:10–04:16):
+   - vecchi percorsi: 0 in `backend/` (salvo la docstring esclusa di `models.py:127`), `scripts/`, `dev.py`, `.github/`,
+     `mkdocs_src/docs/developer/`, devWiki, `frontend/src/lib/utils/brim/`; `check_source_paths.py` 5, come prima;
+   - import: `backend.app.main` e i 4 moduli si importano; il registro BRIM scopre 33 plugin;
+   - patch dei test (`/tmp/libreFolio_merge_patch_guard.py backend.app.services.brim`): 7 siti, tutti efficaci;
+   - somiglianza col file di base: `brim_provider.py` 100 % (nessuna riga cambiata), `brim_report_sets.py` 99,56 %,
+     `brim_parse_pool.py` 99,31 %, `brim_gap_fix.py` 99,15 %;
+   - `ruff check --select I --fix` sui 64 file Python toccati (46 blocchi d'import riordinati: il percorso nuovo cambia
+     l'ordine, soprattutto nei plugin), poi `ruff` pulito; `black` invariato (la sola `coverage_analysis.py`, già fra i 29
+     file sporchi della base); `lint --dead-code` senza reperti nuovi (i due di `brim_provider.py` col percorso nuovo; il
+     resto delle differenze da I1 viene dagli spostamenti di X e H);
+   - **`api schema` identico** a quello di `0229dbc6a` (OpenAPI e contratti dei Tool; riferimento esportato da un albero
+     `git archive` in `/tmp/libreFolio_w_ref_0229/`).
+4. ✅ **Selettori del dominio** (04:12–04:13): `services brim-provider-base` 37, `brim-parse-pool` 8, `brim-report-sets`
+   259, `brim-gap-fix` 99; `utils gate-event-loop-io` 14, `gate-plugin-layout` 33, `gate-plugin-i18n-ownership` 45.
+5. ✅ **`all-backend`** (04:13–04:27, `--workers 2`; log `/tmp/libreFolio_w4a_all_backend.log`, unità in
+   `/tmp/libreFolio_w4a_testlog/`): **7/7 verdi, 13 749 passed, 28 skipped, 0 failed**. Non ho una run completa della
+   base `0229dbc6a` (il coordinatore la fa coprire dalla run di J su `1d1c7e67d`, stesso codice): i conteggi li provo con
+   la raccolta, file per file, dei 17 file di test toccati dalla rinomina, uguali alla base (1 876 test da tutte e due le
+   parti, `pytest --collect-only` nell'albero `git archive 0229dbc6a` e nel worktree). La raccolta intera dell'albero di
+   base non si fa in `/tmp`: alcuni test leggono file fuori da `backend/` e `scripts/` (doc, workflow).
+6. ✅ **Doc**: `mkdocs build` stretto verde, `check-links` 95 validi; `git diff --check` pulito; porta 6184 libera
+   (04:30). Prettier pulito sui due commenti di `frontend/src/lib/utils/brim/`.
+
+   > **Note implementazione**: CP6 pronto il 15/10 alle 04:30: rinomina pura, schema identico, stessi test.
+   >
+   > **Disegno di CP7 (taglio)**, dalla mappa AST (`/tmp/libreFolio_w4b_map.txt`) e dai chiamanti
+   > (`/tmp/libreFolio_w4b_callers.txt`). Con C1 e C4 (la classe resta nel suo file col suo nome),
+   > `services/brim/brim_provider.py` tiene il contratto: `BRIMProvider`, `BRIMParseError`, `BRIMSetRequiredError`,
+   > `TEXT_ENCODINGS`. Così i 38 plugin non cambiano. Escono per tema:
+   > - `storage.py`: cartella e firma, lock e stato `_BROKER_LOCKS*`, sidecar, salvataggio, elenco, lettura, spostamenti,
+   >   cancellazioni, `_update_metadata`, `_iter_metadata_paths`, `_unlink_report_set_references`;
+   > - `combined_files.py`: i file combinati dei report set (`write_combined_csv`, `save_combined_file`,
+   >   `find_reusable_combined`, `read_combine_summary`, `_members_key`). Nome breve diverso da `brim_report_sets.py`,
+   >   per non avere due moduli «report_sets»;
+   > - `parsing.py`: `parse_file`, `check_file_with_plugin`, `_check_path`, `_refusal_message`, `_relocated_path`;
+   > - `candidates.py`: la ricerca degli asset, singola e in blocco;
+   > - `duplicates.py`: `detect_tx_duplicates`.
+   >
+   > Dipendenze in un solo verso (storage ← combined_files, parsing; nessun ciclo). Le patch dei test
+   > (`get_broker_reports_dir`, `detection_signature`) vanno su `storage`, e solo `storage` chiama
+   > `get_broker_reports_dir` direttamente. Il cancello `gate-event-loop-io` sorveglia i moduli sincroni (storage,
+   > combined_files, parsing).
+   >
+   > Volume: circa 18 righe in `api/v1/brokers.py`, 8 in `brim_report_sets.py`, 1 in `auth.py`, 1–2 in
+   > `brim_parse_pool.py`, circa 150 riferimenti nei test.
