@@ -110,7 +110,7 @@ from backend.app.db.models import Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMFileInfo, BRIMFileStatus, BRIMNotice, BRIMParseOutput, BRIMParseResponse, BRIMPluginInfo
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_provider
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
@@ -3131,7 +3131,7 @@ def _store_as_1_1_0_did(root: Path, name: str) -> str:
     """One Danske sample, stored on ``BROKER_ID`` as 1.1.0's ``save_uploaded_file`` stored an upload; returns its file id.
 
     The data file, then a sidecar with the twelve keys 1.1.0 wrote and no other: no ``batch_id``, no
-    ``plugins_signature``, no ``kind`` (``git show v1.1.0:backend/app/services/brim/brim_provider.py``).
+    ``plugins_signature``, no ``kind`` (``git show v1.1.0:backend/app/services/brim_provider.py``).
     ``compatible_plugins`` is what 1.1.0's catalogue detected: nothing, it had no Danske plugin.
     """
     content = (DANSKE_SAMPLE_DIR / name).read_bytes()

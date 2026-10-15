@@ -939,3 +939,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
 > solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
 > X-R8, proposta: cache di 24 ore dell'elenco delle valute dei fornitori, con l'ultimo elenco noto in caso d'errore.
+
+### W7, gli schemi delle transazioni come pacchetto, integrato ✅ (2026-10-15, 05:40)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1cd7300f3`. Due commit, perché il nucleo resta sotto la
+> soglia di somiglianza di git: W7a `00a19bf72`, la rinomina pura (`R100`) di `schemas/transactions.py` in
+> `schemas/transactions/transactions.py`; W7b `e28aad42f`, il taglio in `batch`, `event_suggest`, `promotion` e
+> `type_metadata` (59/59 nomi identici al controllo del coordinatore). Validazione di W: revisione con A4 (`304e6d176`)
+> `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
+> e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
+> coordinatore su `brokers.py` e `uploads.py`.
