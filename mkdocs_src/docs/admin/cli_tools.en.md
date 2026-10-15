@@ -1,11 +1,11 @@
 # 🛠️ Command-Line Tools
 
-`dev.py`, at the root of the project, runs the administration tasks: starting the server, managing users and maintaining the database. Each section says when a command needs the server stopped.
+`dev.py`, at the root of the project, runs the administration tasks: starting the server, managing users, maintaining the database and backing up the instance. Each section says when a command needs the server stopped.
 
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create` and `backup inspect` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -221,6 +221,126 @@ pipenv run ./dev.py db create-clean
 !!! warning "All data is lost"
 
     `db create-clean` deletes the database and creates an empty one. Like `db upgrade`, it refuses to run while the server is up. Uploaded files and broker reports stay on disk: see [Database Initialization & Reset](host_installation.md#database-reset).
+
+---
+
+## 💾 Back Up the Instance {: #backup }
+
+`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
+
+### 📦 Create an Archive
+
+```bash
+# Write an archive into <data dir>/backups/
+pipenv run ./dev.py backup create
+
+# Write it into another folder, which must already exist
+pipenv run ./dev.py backup create -o /mnt/nas/librefolio/
+
+# Or give the archive a name of your own
+pipenv run ./dev.py backup create -o /mnt/nas/librefolio/before-update.zip
+```
+
+- 🟢 The server keeps working, and writing, during the backup: the database is copied with SQLite's `VACUUM INTO`, a consistent snapshot, then SQLite's integrity check and foreign-key check run on the copy.
+- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`. In a folder that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
+- 📁 `--output` (`-o`) is checked before the backup starts, and the command must be able to write there. An existing folder receives the archive under its default name. Any other path is the archive's file, even one that ends with `/`: a folder that does not exist yet becomes the archive's name. That file must not exist yet, and its name is never changed. Its missing folders are created only when the archive is moved there, so a failed backup leaves no empty folder behind. Prefer absolute paths: a relative one starts at the project root, wherever you run the command from.
+- 💽 Before writing anything, the command checks the free space where it builds the archive, in the data directory's `backups/` folder, even with `-o`: about twice the size of the database, plus the files, plus a small margin. When it is short, or when the disk or a quota fills up during the backup all the same, the command stops with `❌ Backup failed (backup_no_space): not enough free space`. When `-o` is on another disk, the space there is checked once the archive is built and its size known.
+- 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, and the command exits with `1`. A move that fails half-way leaves no partial file behind.
+- 🚦 One backup runs at a time: while another one is running, the command stops and asks you to try again when it ends.
+- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, any warnings, and a reminder that the archive holds every user's data. It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
+- 🔒 The archive is not encrypted and has no password: LibreFolio writes it so that only its owner can read and write it (`0600`). Keep it, and every copy, as private as the data directory.
+- 🗑️ LibreFolio never deletes the archives it puts in `backups/`: they stay there until you remove them. That folder is on the same disk as the data, so copy them to another disk, a NAS or off-site, or write them there directly with `-o`.
+- 🔗 Keep `backups/` a real folder, never a link to a NAS or another disk: every archive is built inside it first, even with `-o`. A link, or a file, in its place stops the command with `❌ <data dir>/backups is not a plain folder (a link, or a file): …`.
+- 🧪 `backup --test-db create` backs up the test data directory instead: a development option.
+
+??? note "⚠️ Warnings and errors — what the messages mean"
+
+    **Warnings**: the archive is written all the same.
+
+    - `The database failed its integrity check` or `The database has foreign-key violations`: the archive keeps the database as it is, and `backup inspect` shows the integrity result.
+    - `Left out (<n>): links, special files, files or folders that could not be read, or files removed during the backup`, followed by the entries, at most 50: they are not in the archive. Links are never followed, even when a whole folder such as `custom-uploads/` is a link to another disk.
+
+    **Not where you asked**: the archive is written, and the command exits with `1`.
+
+    - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`. Move it where you want it.
+    - `❌ <reason>: the archive stays in <path>. Move it within the hour: the next backup after that removes it.`: `backups/` could not take it either. It is still in the backup's work folder, inside `backups/.jobs/`, which the first backup started after that hour removes: move the archive out before then.
+
+    **Errors**: no archive is written, and the command exits with `1`.
+
+    - `❌ No data directory at <path>` or `❌ No database at <path>: nothing to back up`: the command backs up the [data directory](filesystem.md) LibreFolio is configured with; check `LIBREFOLIO_DATA_DIR`.
+    - `❌ <path> already exists: choose another name or folder`, `❌ <path> is not a folder: choose another path` (a file stands where the path needs a folder) or `❌ cannot write into <folder>: choose another folder, or run the command as a user who can`: `-o` cannot receive the archive. The backup has not started, and nothing was created.
+    - `❌ <data dir>/backups is not a plain folder (a link, or a file): …`: make `backups/` a real folder again. `❌ The backup could not run in <data dir>/backups: <reason>`: the command could not prepare its work folder there, for example because it cannot write into the data directory.
+    - `❌ Backup failed (backup_no_space): not enough free space`: the free space was short at the start, or the disk or a quota filled up during the backup, even in the middle of a file. Free some space on the disk of the data directory.
+    - `❌ Backup failed (backup_failed): the cause is in the log above`: any other failure. One of them is a file that fails while it is being copied into the archive, such as a read error in the middle of the file: part of a file cannot be taken back out of a zip, so the whole backup stops. A file that fails before its copy starts is left out with the warning above instead.
+
+### 🗂️ What the Archive Holds
+
+The archive has the layout of the data directory, and holds only:
+
+| Entry | What it is |
+| --- | --- |
+| `manifest.json` | The description of the archive, see below |
+| `sqlite/app.db` | The copy of the database |
+| `custom-uploads/` | The files uploaded in the app |
+| `broker_reports/` | The broker reports |
+| `scenario_catalog/` | Your own stress scenarios, if you added any |
+
+Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `backups/` folder itself, the `.librefolio-production-data` marker, and SQLite's working files next to the database: `app.db-wal`, `app.db-shm`, `app.db.post-migration.lock` and the `.bak` copies of the [post-migration fixes](#post-migration-fixes). The copy of the database already holds what was waiting in `app.db-wal`. Symbolic links and special files are never followed nor archived.
+
+!!! warning "🔑 The instance key is not in the archive"
+
+    The archive leaves out `secrets/`, which holds the [instance key](configuration.md#instance-key). Back it up separately, as [Filesystem Structure → Backup](filesystem.md#backup) explains, and keep the copy as private as the archives. Before you start LibreFolio on the data of an archive, put `secrets/` back with it: without its key, what LibreFolio encrypted can no longer be read.
+
+??? info "📋 `manifest.json` — what it records"
+
+    - the format, `librefolio-backup`, and its version;
+    - the LibreFolio version that made the archive, how (`cli` for this command) and when, in UTC;
+    - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations and the rows in each table;
+    - every entry, the database first, with its path, its size and its SHA-256;
+    - whether the instance key is included: it is not.
+
+### 🔍 Check an Archive
+
+```bash
+# Check every entry against the manifest, and show what the archive holds
+pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip
+
+# Faster: compare the entry names with the manifest, without reading the entries
+pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip --no-verify
+```
+
+- 🟢 It works on any archive, with the server running or stopped, and needs no data directory. As with `-o`, a relative path starts at the project root.
+- 📋 It shows who made the archive and when (`Made by LibreFolio <version> (cli) on <date> UTC`), the database's migration revision, size and integrity check, its rows and tables, the number and size of the files, and whether the instance key is included.
+- 🔎 It compares the size and SHA-256 of every entry with the manifest, and ends with `✅ Every entry matches the manifest`. `--no-verify` compares only the entry names, without reading the entries, and ends with `ℹ️ The entry names match the manifest; their contents were not read (--no-verify)`.
+- ❌ It exits with `1` when entries are missing, differ from the manifest or are not in it (it names the first five of each), and when the file is not an archive it can read: the message then ends with a code, such as `archive_unreadable` (not a zip file, or one cut short), `manifest_missing`, `manifest_unknown_format` (not a LibreFolio backup) or `manifest_newer_format` (made by a newer LibreFolio: check it with that version or a newer one).
+
+### 🚚 Use an Archive on Another Installation
+
+There is no restore command yet. To start LibreFolio on the data of an archive, by hand:
+
+1. **Stop LibreFolio** on the installation that receives the data.
+2. **Unzip the archive into an empty [data directory](filesystem.md)** (`LibreFolio-data/` with Docker Compose): if it holds anything, move it aside first. Nothing of the old data may mix with the archive's, not even SQLite's `app.db-wal` and `app.db-shm`.
+3. **Put `secrets/` back** in the data directory, from the copy you saved separately.
+4. **Start LibreFolio**, the version that made the archive or a newer one: the pending migrations run by themselves at start.
+
+- ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive.
+- 🧹 The `manifest.json` left at the root of the data directory is harmless: you can delete it.
+- 👤 With Docker, the container gives the data directory to its user at every start, so the owner of the unzipped files does not matter. On a host installation, unzip as the user that runs LibreFolio, so that the files belong to it.
+
+### 🐳 Back Up with Docker {: #backup-docker }
+
+```bash
+# Write an archive: on the host, it appears in ./LibreFolio-data/backups/
+docker compose exec librefolio python dev.py backup create
+
+# Check it, with its path inside the container
+docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+```
+
+- 👤 `docker compose exec` runs as root: the command switches to the owner of the data directory, so everything it writes belongs to the server's user. If it cannot switch, it stops and asks you to run it as that user: `docker compose exec --user <uid>:<gid> librefolio python dev.py backup create`, with the numbers from the message.
+- 📂 `-o` and the archive of `inspect` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
+- 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.
+- 💻 From a source checkout, `./dev.py docker exec backup create` does the same.
 
 ---
 

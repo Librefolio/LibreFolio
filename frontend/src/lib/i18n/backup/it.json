@@ -1,0 +1,49 @@
+{
+  "backup": {
+    "tab": "Backup",
+    "intro": "I dati di questo LibreFolio in un solo archivio, da conservare al sicuro o da portare in un'altra installazione.",
+    "download": {
+      "title": "Backup dell'istanza",
+      "description": "Un archivio con il database, i file caricati, i report dei broker e gli scenari di rischio. I log e la chiave dell'istanza non sono inclusi.",
+      "privacy": "L'archivio contiene i dati di tutti gli utenti e non è cifrato: conservalo in un posto riservato.",
+      "create": "Crea backup",
+      "createAgain": "Crea un nuovo backup",
+      "creating": "Creazione del backup…",
+      "checking": "Controllo del backup…",
+      "phase": {
+        "preparing": "Preparazione",
+        "database": "Copia del database",
+        "files": "Aggiunta dei file",
+        "finalizing": "Chiusura"
+      },
+      "progress": "{done} di {total}",
+      "ready": "Backup pronto",
+      "readyDetails": "{name}, {size}, creato il {date}",
+      "download": "Scarica",
+      "delete": "Elimina dal server",
+      "deleting": "Eliminazione del backup…",
+      "retention": "L'archivio resta sul server per un'ora, poi viene eliminato.",
+      "recheck": "Controlla di nuovo",
+      "retry": "Riprova",
+      "warningsTitle": "Backup completato, con avvisi",
+      "warnings": {
+        "database_integrity": "Il database non ha superato il controllo d'integrità: è stato archiviato così com'è.",
+        "foreign_key_violations": "Il database ha riferimenti non validi fra le tabelle: è stato archiviato così com'è.",
+        "files_skipped": "Alcuni file sono stati esclusi: collegamenti, file speciali, file o cartelle illeggibili, o file eliminati durante il backup."
+      },
+      "errors": {
+        "backup_busy": "È già in corso un altro backup: riprova quando finisce.",
+        "backup_no_space": "Non c'è abbastanza spazio libero sul server per il backup.",
+        "backup_folder_unusable": "La cartella dei backup sul server è un collegamento o un file: LibreFolio crea i backup solo in una cartella vera della sua cartella dati.",
+        "backup_failed": "Il backup non è riuscito: i dettagli sono nel log del server.",
+        "backup_interrupted": "Il backup è stato interrotto, per esempio da un riavvio: creane uno nuovo.",
+        "backup_job_not_found": "Questo backup non è più sul server: creane uno nuovo.",
+        "network": "Il server non risponde.",
+        "unexpected": "Il server ha risposto con un errore: ricarica la pagina e riprova."
+      },
+      "toast": {
+        "warnings": "Backup pronto, con avvisi: controllali prima di farci affidamento."
+      }
+    }
+  }
+}

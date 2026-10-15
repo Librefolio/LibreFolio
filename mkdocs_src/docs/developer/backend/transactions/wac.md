@@ -529,11 +529,25 @@ A `BUY` costs the absolute cash amount, in its cash currency. A `TRANSFER` or
 `ADJUSTMENT` adding quantity costs `cost_basis_override × quantity`, in
 `cost_basis_currency`, converted at its own date like any other acquisition. A
 `BUY` without amount is a free acquisition; a `TRANSFER` or `ADJUSTMENT` without
-override has an unknown cost (see [Diagnostics](#diagnostics)). The batch rejects
-such a row without an override (`costBasisRequired`) whether it is created,
-updated, or made the receiving side of a promoted pair (see
-[Promote boundary](#promote-boundary)); a row in Auto is given the computed WAC
-instead. An acquisition of unknown cost therefore comes from:
+override has an unknown cost (see [Diagnostics](#diagnostics)). Which rows need an
+override is read from `TX_TYPE_METADATA`, the table `GET /transactions/types`
+serves: `TransactionService._requires_cost_basis()` calls `cost_basis_required()`
+(`backend/app/schemas/transactions/type_metadata.py`), which takes the type's
+`cost_basis_pair` when it has one — `[1]` for a positive quantity, the receiving
+side, `[0]` otherwise — and its `cost_basis_mode` if not; `required_qty_pos` asks
+for an override when the quantity is positive.
+
+The batch rejects such a row without an override (`costBasisRequired`) when it is
+created or made the receiving side of a promoted pair (see
+[Promote boundary](#promote-boundary)), and when an update changes its type,
+quantity, cost basis or its asset event link, or names a `cost_basis_mode`; a row
+in Auto is given the computed WAC instead. The update check,
+`_check_update_cost_basis()`, compares the row's `cost_fields()` — type, quantity,
+`cost_basis_override`, `cost_basis_currency`, `asset_event_id` — with
+`stored_cost_fields`, which `_load_existing_transactions()` takes when the batch
+loads its rows. So an update of only the notes, tags or date of a row stored
+without an override passes, and the row keeps its unknown cost. An acquisition of
+unknown cost therefore comes from:
 
 - data the batch never checked: written outside it, or promoted by an earlier
   version, which did not check promoted pairs; or
@@ -639,7 +653,8 @@ other row:
 - a new row is checked as a create, unless it is in Auto: `costBasisRequired` on
   operation `create`, with its index;
 - a saved row also present in `updates[]` is checked as that update, unless it is
-  in Auto; and
+  in Auto: the promote changes its type, so even an update of its notes alone is
+  checked; and
 - any other saved row without a cost basis gets `costBasisRequired` on operation
   `promote`, with the promote's index and `ref_id` set to that row
   (`_check_promoted_saved_cost_basis()`).

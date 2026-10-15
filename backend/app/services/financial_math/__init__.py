@@ -25,8 +25,9 @@ Modules:
   currencies, the pool after every movement, and the conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
   their value in the report currency on any day, and the period flows by type and position.
-* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, and the
-  conversion between cumulative and annualized returns.
+* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
+  conversion between cumulative and annualized returns, a period's start (rebasing), the
+  net return of a holding and a gain or loss as a fraction of its base.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.

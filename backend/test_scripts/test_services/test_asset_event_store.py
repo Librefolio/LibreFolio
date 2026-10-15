@@ -26,6 +26,13 @@ What is pinned (W E1a is not written yet; each test says how it fails before the
 * Delete scoped by asset (decision 21, I-12a) -- ``delete_events_bulk(asset_id, event_ids,
   session, current_user)``: an id of another asset is "not_found" and stays. Before: no
   ``asset_id`` parameter.
+* Deletions inside the upsert (lot E1b, decision of 15/10 16:20) -- ``FAEventUpsert.delete_ids``:
+  the editor saves in ONE request, deletions first, so an edit may take the key a deletion frees
+  (I-10) and a refusal anywhere keeps the deletions too (decision 22). Any event of the item's
+  asset can be deleted, manual or provider (correction of 15/10 17:49: the 1.2 editor deleted a
+  provider event through ``DELETE``, and the next sync writes it back); an id that is not an event
+  of that asset is EVENT_NOT_DELETABLE, and an event a transaction realises, provider ones
+  included, is EVENT_IN_USE. Before: ``delete_ids`` is an unknown field.
 
 "Nothing persisted" is read on a fresh connection (the engine has no pool) with raw SQL, so a
 row stored with an invalid type cannot crash the check. A refused request runs as the
@@ -257,15 +264,17 @@ def _ev(offset: int, kind: str, amount: str, *, event_id: int | None = None, cur
     return payload
 
 
-def _item(asset_id: int, events: list[dict], *, mode: str | None = None) -> FAEventUpsert:
+def _item(asset_id: int, events: list[dict], *, mode: str | None = None, delete_ids: list[int] | None = None) -> FAEventUpsert:
     """An upsert item validated as the endpoint validates it.
 
-    Called in the test body: before the fix ``mode`` is an unknown field, and the ValidationError
-    fails only the tests that need it, not the whole module.
+    Called in the test body: before the fix ``mode`` (E1a) and ``delete_ids`` (E1b) are unknown
+    fields, and the ValidationError fails only the tests that need them, not the whole module.
     """
     payload: dict = {"asset_id": asset_id, "events": events}
     if mode is not None:
         payload["mode"] = mode
+    if delete_ids is not None:
+        payload["delete_ids"] = delete_ids
     return FAEventUpsert.model_validate(payload)
 
 
@@ -879,3 +888,344 @@ async def test_delete_keeps_the_in_use_breakdown_of_its_own_events(owned):
 
     assert [(item.event_id, item.status, item.accessible_transactions, item.hidden_transactions_count) for item in response.results] == [(linked_id, "in_use", [], 1)]
     assert linked_id in await _snapshot(owned)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Deletions inside the upsert: ``delete_ids`` (lot E1b)
+#
+# The editor used to save in two requests, upserts then ``DELETE``: an edit could not take the
+# key of an event deleted in the same save (I-10), and a refused upsert left the deletions done.
+# Decided on 15/10 (16:20): ``FAEventUpsert.delete_ids``, per item, upsert mode only. In the
+# item's transaction and BEFORE any check on its events, every id must be an event of that asset,
+# manual or provider (else EVENT_NOT_DELETABLE, ``ids``: unknown, gone, or another asset's) that no
+# transaction realises (else EVENT_IN_USE, ``events`` with ``linked_transactions``: counts, never
+# transaction ids); then the rows are deleted and flushed, so the key checks and a later ``create``
+# see the freed keys. Any refusal keeps the deleted events: all or nothing (decision 22). The
+# result adds ``deleted_ids``, in request order. The separate ``DELETE /assets/events`` stays as it
+# is (pinned above). Provider events are deletable since the correction of 15/10 17:49: the 1.2
+# editor deleted them through that ``DELETE``, and the next sync writes them back.
+#
+# Before E1b ``delete_ids`` is an unknown field: the schema tests fail on it, and the database
+# tests fail where ``_item(..., delete_ids=...)`` validates the request. Against the first cure
+# (manual events only), the two provider tests are red: their provider id is EVENT_NOT_DELETABLE.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _results(result) -> list:
+    """The per-item results, in request order: the only way to tell two items on one asset apart."""
+    return list(result["results"] if isinstance(result, dict) else result.results)
+
+
+def _not_an_unknown_field(exc: ValidationError) -> None:
+    """The refusal is the new rule, not today's "unknown field ``delete_ids``" (extra_forbidden)."""
+    assert not [err for err in exc.errors() if err["type"] == "extra_forbidden"], exc.errors()
+
+
+def test_an_upsert_item_carries_no_deletions_by_default():
+    """``delete_ids`` defaults to empty. Before: no such field (reads as None)."""
+    item = FAEventUpsert.model_validate({"asset_id": 1, "events": [_ev(0, "DIVIDEND", "1.00")]})
+    assert getattr(item, "delete_ids", None) == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"asset_id": 1, "delete_ids": [5, 3]}, id="no-events"),
+        pytest.param({"asset_id": 1, "events": [], "delete_ids": [5, 3]}, id="empty-events"),
+    ],
+)
+def test_an_item_may_carry_only_deletions(payload):
+    """An item that only deletes is valid, its ids kept in request order. Before: ValidationError."""
+    item = FAEventUpsert.model_validate(payload)
+    assert list(item.delete_ids) == [5, 3]
+    assert list(item.events or []) == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"asset_id": 1}, id="no-events"),
+        pytest.param({"asset_id": 1, "events": []}, id="empty-events"),
+    ],
+)
+def test_guard_an_item_with_no_events_and_no_deletions_is_still_refused(payload):
+    """GUARD (green before E1b too): an item that writes nothing is malformed."""
+    with pytest.raises(ValidationError):
+        FAEventUpsert.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"asset_id": 1, "delete_ids": []}, id="empty-deletions"),
+        pytest.param({"asset_id": 1, "events": [], "delete_ids": []}, id="empty-both"),
+    ],
+)
+def test_an_item_with_empty_deletions_and_no_events_is_refused(payload):
+    """Neither events nor deletions: a 422. Before: refused too, but for the unknown field ``delete_ids``."""
+    with pytest.raises(ValidationError) as raised:
+        FAEventUpsert.model_validate(payload)
+    _not_an_unknown_field(raised.value)
+
+
+def test_deletions_are_refused_in_a_create_item():
+    """«+ New event» only creates: a create item deleting events is malformed. Before: the field is unknown."""
+    with pytest.raises(ValidationError) as raised:
+        FAEventUpsert.model_validate({"asset_id": 1, "mode": "create", "events": [_ev(0, "DIVIDEND", "1.00")], "delete_ids": [5]})
+    _not_an_unknown_field(raised.value)
+
+
+def test_an_id_both_deleted_and_edited_in_one_item_is_refused():
+    """An event cannot be edited and deleted at once. Before: the field is unknown."""
+    with pytest.raises(ValidationError) as raised:
+        FAEventUpsert.model_validate({"asset_id": 1, "events": [_ev(0, "DIVIDEND", "1.00", event_id=5)], "delete_ids": [5]})
+    _not_an_unknown_field(raised.value)
+
+
+def test_the_upsert_result_carries_the_deleted_ids():
+    """``FAEventUpsertResult.deleted_ids`` exists, in the order given. Before: an unknown field."""
+    result = FAEventUpsertResult.model_validate({"asset_id": 1, "count": 0, "message": "Deleted 2 events", "event_ids": [], "deleted_ids": [7, 3]})
+    assert result.deleted_ids == [7, 3]
+
+
+@pytest.mark.asyncio
+async def test_one_item_deletes_an_event_and_moves_another_onto_its_key(owned):
+    """I-10 inside one request: B, edited by id, takes the (date, type) the deletion of A frees.
+
+    A = (D1, DIVIDEND), B = (D2, DIVIDEND), both manual. One item: ``delete_ids=[A]`` and B moved
+    to D1. Before E1b: ``delete_ids`` is unknown; through two requests the move came first and was
+    refused (EVENT_KEY_CONFLICT) while A still held D1.
+    Contract: A gone, B on D1 under its own id; ``deleted_ids == [A]``, ``event_ids == [B]``.
+    """
+    a_id = await _add_manual(owned.asset_id, 110, AssetEventType.DIVIDEND, "1.00", notes="A")
+    b_id = await _add_manual(owned.asset_id, 111, AssetEventType.DIVIDEND, "2.00", notes="B")
+    request = [_item(owned.asset_id, [_ev(110, "DIVIDEND", "2.50", event_id=b_id, notes="B moved")], delete_ids=[a_id])]
+
+    result = await _upsert(request)
+
+    row = _item_result(result, owned.asset_id)
+    assert _field(row, "deleted_ids") == [a_id]
+    assert _field(row, "event_ids") == [b_id]
+    assert [(r.id, r.date, r.type, r.value, r.notes) for r in await _rows(owned.asset_id)] == [(b_id, _day(110), AssetEventType.DIVIDEND, Decimal("2.50"), "B moved")]
+
+
+@pytest.mark.asyncio
+async def test_an_item_of_deletions_only_deletes_them_and_names_them_in_request_order(owned):
+    """An item may only delete. ``deleted_ids`` follows the request, not the ids' order.
+
+    Before E1b: ``delete_ids`` is unknown (and an item needs events).
+    """
+    a_id = await _add_manual(owned.asset_id, 115, AssetEventType.DIVIDEND, "1.00")
+    b_id = await _add_manual(owned.asset_id, 116, AssetEventType.INTEREST, "0.50")
+    assert a_id < b_id
+    request = [FAEventUpsert.model_validate({"asset_id": owned.asset_id, "delete_ids": [b_id, a_id]})]
+
+    result = await _upsert(request)
+
+    row = _item_result(result, owned.asset_id)
+    assert _field(row, "deleted_ids") == [b_id, a_id]
+    assert _field(row, "event_ids") == []
+    assert await _snapshot(owned) == {}
+
+
+@pytest.mark.asyncio
+async def test_an_id_that_is_not_an_event_of_the_asset_is_not_deletable(owned):
+    """Only events of the item's asset can be deleted; an id that is not there is not ignored.
+
+    delete_ids: the asset's own event (deletable), an unknown id (never there, or gone), and an
+    event of another asset.
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: EVENT_NOT_DELETABLE, ``details`` {"asset_id", "item_index", "ids": the two refused};
+    nothing deleted, the deletable one included.
+    """
+    own_id = await _add_manual(owned.asset_id, 120, AssetEventType.DIVIDEND, "1.00")
+    foreign_id = await _add_manual(owned.other_asset_id, 120, AssetEventType.DIVIDEND, "1.00")
+    unknown_id = await _unknown_event_id()
+    before = await _snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [], delete_ids=[own_id, unknown_id, foreign_id])])
+
+    assert refused.error_code == "EVENT_NOT_DELETABLE"
+    assert await _snapshot(owned) == before
+    details = _plain(refused.details)
+    assert {**details, "ids": sorted(details.get("ids") or [])} == {"asset_id": owned.asset_id, "item_index": 0, "ids": sorted([unknown_id, foreign_id])}
+
+
+@pytest.mark.asyncio
+async def test_a_provider_event_of_the_asset_is_deleted_like_a_manual_one(owned):
+    """``delete_ids`` takes any event of the item's asset, manual or provider (correction of 15/10 17:49).
+
+    The 1.2 editor deleted a provider event through ``DELETE /assets/events``, which still allows it;
+    the next sync writes it back. P (provider), M1 and M2 (manual); one item deletes P and M1.
+    Before the correction: EVENT_NOT_DELETABLE naming P, nothing deleted.
+    Contract: ``deleted_ids == [P, M1]`` (request order), ``event_ids == []``; only M2 left.
+    """
+    provider_id = await _add_provider(owned, 121, AssetEventType.DIVIDEND, "1.50")
+    deleted_manual_id = await _add_manual(owned.asset_id, 122, AssetEventType.DIVIDEND, "1.00")
+    kept_manual_id = await _add_manual(owned.asset_id, 123, AssetEventType.INTEREST, "0.50")
+
+    result = await _upsert([_item(owned.asset_id, [], delete_ids=[provider_id, deleted_manual_id])])
+
+    row = _item_result(result, owned.asset_id)
+    assert _field(row, "deleted_ids") == [provider_id, deleted_manual_id]
+    assert _field(row, "event_ids") == []
+    assert [r.id for r in await _rows(owned.asset_id)] == [kept_manual_id]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_event_in_use_is_not_deleted(owned):
+    """A provider event a transaction realises is in use, like a manual one: EVENT_IN_USE.
+
+    Before the correction: EVENT_NOT_DELETABLE (the provider id is refused before its links are read).
+    Contract: EVENT_IN_USE, ``details`` {"asset_id", "item_index": 0, "events": [{"id": P, "date",
+    "type", "linked_transactions": 1}]}; nothing deleted.
+    """
+    provider_id = await _add_provider(owned, 124, AssetEventType.DIVIDEND, "1.50")
+    await _link_tx(owned, provider_id, 124)
+    before = await _snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [], delete_ids=[provider_id])])
+
+    assert refused.error_code == "EVENT_IN_USE"
+    assert await _snapshot(owned) == before
+    assert _plain(refused.details) == {
+        "asset_id": owned.asset_id,
+        "item_index": 0,
+        "events": [{"id": provider_id, "date": _day(124).isoformat(), "type": "DIVIDEND", "linked_transactions": 1}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_event_in_use_is_not_deleted_and_nothing_of_the_request_is_saved(owned):
+    """An event a transaction realises cannot go; the whole request is refused (decision 22).
+
+    Item 0 (other asset) adds an event. Item 1 deletes D (free) and L (realised by two
+    transactions) and edits E.
+    Before E1b: ``delete_ids`` is unknown; the separate DELETE answers ``in_use`` for L per row
+    and deletes D anyway.
+    Contract: EVENT_IN_USE, ``details`` {"asset_id", "item_index": 1, "events": [{"id", "date",
+    "type", "linked_transactions": 2}]} — counts only, no transaction ids; nothing saved.
+    """
+    free_id = await _add_manual(owned.asset_id, 125, AssetEventType.DIVIDEND, "1.00")
+    linked_id = await _add_manual(owned.asset_id, 126, AssetEventType.DIVIDEND, "1.00")
+    edited_id = await _add_manual(owned.asset_id, 127, AssetEventType.INTEREST, "0.50")
+    await _link_tx(owned, linked_id, 126)
+    await _link_tx(owned, linked_id, 126)
+    before = await _snapshot(owned)
+    request = [
+        _item(owned.other_asset_id, [_ev(125, "DIVIDEND", "3.00")]),
+        _item(owned.asset_id, [_ev(127, "INTEREST", "0.75", event_id=edited_id)], delete_ids=[free_id, linked_id]),
+    ]
+
+    refused = await _upsert_refused(request)
+
+    assert refused.error_code == "EVENT_IN_USE"
+    assert await _snapshot(owned) == before
+    assert _plain(refused.details) == {
+        "asset_id": owned.asset_id,
+        "item_index": 1,
+        "events": [{"id": linked_id, "date": _day(126).isoformat(), "type": "DIVIDEND", "linked_transactions": 2}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_the_deletions_of_an_item_are_checked_before_its_events(owned):
+    """An undeletable id is the refusal, even when an event of the same item is wrong as well.
+
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: EVENT_NOT_DELETABLE, not EVENT_CURRENCY_MISMATCH; nothing saved.
+    """
+    unknown_id = await _unknown_event_id()
+    before = await _snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [_ev(130, "DIVIDEND", "1.00", currency="EUR")], delete_ids=[unknown_id])])
+
+    assert refused.error_code == "EVENT_NOT_DELETABLE"
+    assert await _snapshot(owned) == before
+
+
+@pytest.mark.asyncio
+async def test_a_currency_mismatch_keeps_the_events_its_item_deletes(owned):
+    """All or nothing inside one item: a refused event leaves the deletion undone.
+
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: EVENT_CURRENCY_MISMATCH naming item 0 and its event 0; A still stored.
+    """
+    a_id = await _add_manual(owned.asset_id, 135, AssetEventType.DIVIDEND, "1.00")
+    before = await _snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [_ev(136, "DIVIDEND", "1.00", currency="EUR")], delete_ids=[a_id])])
+
+    assert refused.error_code == "EVENT_CURRENCY_MISMATCH"
+    assert await _snapshot(owned) == before, f"event {a_id} was deleted although its item was refused"
+    assert _plain(refused.details) == {
+        "asset_id": owned.asset_id,
+        "item_index": 0,
+        "expected": "USD",
+        "events": [{"event_index": 0, "date": _day(136).isoformat(), "type": "DIVIDEND", "currency": "EUR"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_key_conflict_keeps_the_events_its_item_deletes(owned):
+    """The key checks run after the deletion, and a conflict they find undoes it.
+
+    A (D, INTEREST) is deleted; B moves onto (D', DIVIDEND), which C — kept — holds.
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: EVENT_KEY_CONFLICT on (D', DIVIDEND); A, B and C as they were.
+    """
+    a_id = await _add_manual(owned.asset_id, 140, AssetEventType.INTEREST, "0.50")
+    b_id = await _add_manual(owned.asset_id, 141, AssetEventType.DIVIDEND, "1.00")
+    await _add_manual(owned.asset_id, 142, AssetEventType.DIVIDEND, "2.00")
+    before = await _snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [_ev(142, "DIVIDEND", "1.00", event_id=b_id)], delete_ids=[a_id])])
+
+    assert refused.error_code == "EVENT_KEY_CONFLICT"
+    assert await _snapshot(owned) == before, f"event {a_id} was deleted although its item was refused"
+    assert _plain(refused.details) == {"asset_id": owned.asset_id, "item_index": 0, "date": _day(142).isoformat(), "type": "DIVIDEND"}
+
+
+@pytest.mark.asyncio
+async def test_a_refused_later_item_keeps_the_events_an_earlier_item_deletes(owned):
+    """All or nothing across items: item 1 refused, item 0's deletion undone.
+
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: EVENT_CURRENCY_MISMATCH naming item 1; A still stored.
+    """
+    a_id = await _add_manual(owned.asset_id, 145, AssetEventType.DIVIDEND, "1.00")
+    before = await _snapshot(owned)
+    request = [
+        _item(owned.asset_id, [], delete_ids=[a_id]),
+        _item(owned.other_asset_id, [_ev(146, "DIVIDEND", "1.00", currency="EUR")]),
+    ]
+
+    refused = await _upsert_refused(request)
+
+    assert refused.error_code == "EVENT_CURRENCY_MISMATCH"
+    assert _plain(refused.details)["item_index"] == 1
+    assert await _snapshot(owned) == before, f"event {a_id} was deleted although the request was refused"
+
+
+@pytest.mark.asyncio
+async def test_a_create_item_sees_the_key_an_earlier_item_freed(owned):
+    """The deletions are flushed before the next item is checked: a create may take the freed key.
+
+    Item 0 (upsert) deletes A = (D, DIVIDEND); item 1 (create) adds a DIVIDEND on D.
+    Before E1b: ``delete_ids`` is unknown.
+    Contract: no EVENT_EXISTS; A gone, one new row on D; per item, in request order, item 0
+    ``deleted_ids == [A]`` and item 1 ``event_ids == [the new row]``.
+    """
+    a_id = await _add_manual(owned.asset_id, 150, AssetEventType.DIVIDEND, "1.00")
+    request = [
+        _item(owned.asset_id, [], delete_ids=[a_id]),
+        _item(owned.asset_id, [_ev(150, "DIVIDEND", "1.20", notes="created")], mode="create"),
+    ]
+
+    result = await _upsert(request)
+
+    new_id = await _row_id(owned.asset_id, 150, AssetEventType.DIVIDEND)
+    assert new_id != a_id
+    first, second = _results(result)
+    assert (_field(first, "deleted_ids"), _field(second, "event_ids")) == ([a_id], [new_id])
+    assert [(r.id, r.notes) for r in await _rows(owned.asset_id)] == [(new_id, "created")]
