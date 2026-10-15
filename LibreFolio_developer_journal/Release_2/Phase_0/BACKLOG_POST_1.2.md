@@ -1898,7 +1898,7 @@ plugin.
   - Il percorso strutturale del selettore di anteprima si rompe se il DOM cambia.
 
   Dettagli: pagina developer `designer-lab.md`, «Known Limits».
-- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.** ✅ **Chiusa il 15/10** nel checkpoint L-10, sulla base `9d57aa4c0` (commit del coordinatore).
+- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.** ✅ **Chiusa il 15/10**: commit `a6f29298e` (base `9d57aa4c0`), fuso con `dev_release2` in `fb2526cc4` e validato lì.
   - Classi `*-lf-<nome>`: il conteggio va esteso nello scanner **e** in `color_inventory.py` con una riga ciascuno, per tenere la parità. La riga Python di `tw_custom_re` è **assegnata a L** come estensione di ④ (coordinatore, 14/10 alle 21:59). Si fanno entrambe nello stesso cambio; la parità si verifica dopo, sullo stesso albero; i numeri prima e dopo vanno nell'handoff.
   - Catena `@theme inline`: `--color-lf-card: var(--lf-surface-card)` è un alias che a runtime non esiste. La palette e le «Variabili dell'app» devono mandare la modifica a `--lf-surface-card`, non all'alias.
   - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.

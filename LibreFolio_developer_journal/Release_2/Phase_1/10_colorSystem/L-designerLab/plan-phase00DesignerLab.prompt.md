@@ -1132,3 +1132,30 @@ Comando: `/tmp/libreFolio_L10_validate.sh slot`, tutto in sequenza nella corsia 
 > - `package.json` e lock cambiano solo la versione: niente `npm ci`.
 >
 > Dopo l'aggiornamento della base conviene comunque un giro `front-designer-lab all` sul fuso.
+
+**✅ Validazione del fuso `fb2526cc4` (15/10, 15:59–16:08).** Il coordinatore ha committato L-10 in `a6f29298e`: padre `9d57aa4c0`, gli stessi 22 file. Poi ha fuso `dev_release2` (`7adda8a3c`: H, A5, Y1 e i suoi registri) in `fb2526cc4`, senza conflitti.
+- Il fuso non tocca superfici del Lab: cambia solo la versione in `package.json` e nel lock.
+- Porta la migrazione 006 e 11 file di API.
+
+Prima del giro: HEAD verificato, albero pulito, porta libera. Comando: `/tmp/libreFolio_L10m_validate.sh`, in sequenza nella corsia 6152. Log in `/tmp/libreFolio_L10/val-merged/` e negli artefatti di sessione.
+
+| Passo | Esito |
+|---|---|
+| `dev.py api sync` | exit 0, albero ancora pulito |
+| unit del Lab | 15 file, **422/422** |
+| `npm run check` | 0 errori, 0 warning |
+| gate (gli stessi 10 file) | **168/168** |
+| `theme-roles --check` | pulito |
+| Prettier | pulito |
+| scanner + inventario + parità | **identica**: `custom` 942, hex 1291, fn 238, tw 10490, `var_defs` 945, 1120 file |
+| ruoli | 37 voci `lf`, **tutte con ruolo**, 178 usi in 15 file; 45 alias `--color-lf-*`, tutti `inline` con `alias_of` |
+| build di release | exit 0; marker 0, catalogo 0, indice 0 |
+| `dev.py front build --debug` | exit 0; `.build-debug=1`, 10 file col marker |
+| `front-designer-lab all`, 1 worker | exit 0: **13/13 E2E** in 44,5 s + 422 unit; 5 azioni ✓; una sola build, nessuna ricostruzione a metà giro (L-12) |
+| `check-orphans` | raggiungibili 122 e2e, 407 unit, 293 backend |
+| porta a fine giro | 6152 libera; resta la build di debug |
+
+> **Note implementazione**:
+> - Il passaggio di `custom` da 912 a 942 viene dal codice fuso, non dal Lab. C'è una voce nuova, `--color-lf-page` → `--lf-surface-page` (`bg-lf-page`), e 5 file nuovi con utility di ruolo: `AuthCard`, `AuthPageFrame`, `LinkStatusCard`, `ResetPasswordCard`, `InstanceBlockedPage`. Il Lab li riconosce tutti col loro ruolo senza cambi di codice: è il meccanismo generico di L-10 al lavoro.
+> - Il test `layout.authGate.test.ts` arrivato con H è un test funzionale del layout, non un gate di sorgente, e non entra nel mio insieme.
+> - Il giro a 4 worker non l'ho ripetuto sul fuso: era verde alle 15:33 sulla revisione di prima, e il coordinatore ha chiesto `all`.
