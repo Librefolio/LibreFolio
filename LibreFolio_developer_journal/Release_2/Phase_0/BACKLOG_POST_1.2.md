@@ -2172,7 +2172,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `live_price_check` 0.
 
   Dettagli: piano della 56, passo 8.
-- **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
+- ✅ **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
   coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
   - Causa (prodotto, verificata nel codice):
     - `seed_default_avatars()` (`backend/app/services/files/static_uploads.py:480`) scrive tutti gli avatar con lo
@@ -2189,6 +2189,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
     solo fra file caricati nello stesso istante. **Instradata alla 1.3 dal coordinatore il 15/10** (difetto del
     prodotto, probabilmente H, che ha `services/files`): la voce nella sezione di chi la prende la scrive lui.
+  - ✅ **15/10, chiusa da H** con `b4533a949` (`fix(uploads): list same-instant uploads in a stable order`), entrata in
+    `dev_release2` con `744f5a0ee`.
+    - `list_uploads()` ordina sempre per `uploaded_at`, dal più recente. A parità di data ora decide il nome originale,
+      senza distinguere le maiuscole, e poi l'id: gli avatar del seed, che hanno tutti la stessa data, escono sempre
+      nello stesso ordine.
+    - Test di H in `backend/test_scripts/test_services/test_static_uploads.py`.
+    - Nella gallery si aspetta un ordine fisso in `media/asset-picker-modal`, `files/static-tab` e `files/static-grid`, e
+      la stessa miniatura in ogni corsia. Da confermare alla prossima coppia di run dello stesso giorno sul target.
+    - Voce collegata nella sezione di H: H-10, sulla cartella degli upload svuotata dal test dei servizi.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
@@ -2210,7 +2219,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 - **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
-  G-9; voce aperta su richiesta del coordinatore. **Proprietario da instradare.**
+  G-9; voce aperta su richiesta del coordinatore. **Instradata alla 1.3 dal coordinatore il 15/10**, perché
+  `SignalTreeSelect.test.ts` è del perimetro dei grafici: la voce nella sezione di chi la prende la scrive lui.
   - Da G-9 (`5da3c9eba`), `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts`) non tocca più il menu con il
     puntatore. Apre con ↓, aspetta il focus sulla ricerca, sposta l'evidenziazione con ↓/↑ leggendo
     `aria-activedescendant`, apre la famiglia chiusa con → e sceglie con Invio.

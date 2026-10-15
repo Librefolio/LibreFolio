@@ -869,3 +869,25 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - 15:48–15:56 i test con rossi di carico, da soli a 1 worker: 5 verdi su 5 → **G-9 ✅, DoD 10/10** (passo 8).
   - 15:56 porta 6153 libera, comunicata al coordinatore: lo slot passa alla gallery Y2 della 1.3.
   - Handoff per l'ingresso; delta non committato: il passo 8, queste righe e il backlog (G-9 ✅). FROZEN.
+- **15/10, 16:00 — G-9 in `dev_release2`** (coordinatore): `1470bd693`, merge di `c635da129` (il journal di G-9). Il
+  ramo di G è stato portato al target con un avanzamento veloce: HEAD `1470bd693`, albero pulito. La base contiene la
+  correzione di H per G-10 (`b4533a949`, entrata con `744f5a0ee`).
+  - **G-10 ✅** nel backlog, con il commit di H.
+  - **G-12 instradata alla 1.3** dal coordinatore: `SignalTreeSelect.test.ts` è del perimetro dei grafici.
+  - **Cosa resta del piano di G:**
+    - *Nel perimetro di G resta solo G-11*: l'header visibile in spagnolo su mobile in `assets/detail-measures`, 1
+      variante su 16, peso basso. Serve una run filtrata con un osservatore delle transizioni dell'header, quindi uno
+      slot pesante e test-author.
+    - *G-1 e la DoD della 56:* la misura `g-final3` del 15/10 l'ha raggiunta: 6 instabili su 177 contro 27, maschere e
+      `stability.json`, fallimenti sotto carico analizzati (G-2, G-3, G-8). Dopo la misura sono arrivati il checkpoint 2
+      (4 inquadrature), G-9 e G-10, verificati solo con run mirate. Alla prossima coppia di run dello stesso giorno ci
+      si aspetta 0 instabili di inquadratura, salvo la variante di G-11. Fra quelle di contenuto resterebbe
+      `brokers/import-nway-compare`, mentre `media/asset-picker-modal` dovrebbe diventare stabile.
+    - *Decisione del coordinatore e del developer:* chiudere G-1 e la 56 adesso, lasciando G-11 in backlog, oppure
+      dopo la conferma con la prossima coppia di run sul target. In entrambi i casi senza gallery complete dedicate a G.
+    - *Fuori da G, aperte:* G-7, il varco di G-6 negli E2E fuori dalla gallery, senza correzione per decisione del
+      coordinatore; G-12, nella 1.3.
+    - *Dipendenza:* in `dev.py` il default dei worker della gallery è ancora `os.cpu_count()`, cioè 10 su questa
+      macchina. Finché C-94 di J non entra nel target, le gallery complete vanno lanciate con `-- --workers 6`, come
+      dice il README del toolkit.
+  - Delta non committato: questa riga e il backlog (G-10 ✅, G-12 instradata). FROZEN.
