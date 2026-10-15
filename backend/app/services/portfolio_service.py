@@ -85,8 +85,6 @@ from backend.app.services.financial_math.average_cost import (
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
 from backend.app.services.financial_math.returns import (
-    CashFlowInput,
-    NAVSnapshot,
     annualized_to_cumulative,
     calculate_mwrr,
     calculate_mwrr_series,
@@ -95,6 +93,9 @@ from backend.app.services.financial_math.returns import (
     calculate_twrr,
     calculate_twrr_series,
     cumulative_to_annualized,
+    gain_loss_ratio,
+    net_holding_return,
+    rebase_to_period,
 )
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.financial_math.yield_on_cost import (
@@ -674,6 +675,7 @@ class PortfolioService:
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
+        from backend.app.services.financial_math.portfolio.data_quality import transaction_implied_assets_to_report  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
@@ -821,7 +823,7 @@ class PortfolioService:
                 broker_market_values[ps.broker_id] += current_value
 
             gain_loss = ps.unrealized_pnl
-            gain_loss_pct = (gain_loss / ps.cost_basis) if gain_loss is not None and ps.cost_basis != 0 else None
+            gain_loss_pct = gain_loss_ratio(gain_loss, ps.cost_basis, positive_base=False)
 
             price_change_1d: Decimal | None = None
             gain_loss_change_1d: Decimal | None = None
@@ -876,11 +878,10 @@ class PortfolioService:
             holding_first_tx = first_lot_txn_dates.get((ps.broker_id, ps.asset_id))
             holding_annualized = None
             if ps.cost_complete and ps.cost_basis and ps.cost_basis != 0 and holding_first_tx is not None:
-                market_component = gain_loss if gain_loss is not None else Decimal("0")
                 pos_income = income_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
                 pos_fees = fees_taxes_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
-                net_holding_return = (market_component + pos_income - pos_fees) / ps.cost_basis
-                holding_annualized = cumulative_to_annualized(net_holding_return, (valuation_date - holding_first_tx).days)
+                holding_return = net_holding_return(gain_loss, pos_income, pos_fees, ps.cost_basis)
+                holding_annualized = cumulative_to_annualized(holding_return, (valuation_date - holding_first_tx).days)
 
             all_holdings.append(
                 PortfolioHolding(
@@ -936,7 +937,8 @@ class PortfolioService:
                 broker_capital = contribution.capital_contribution if contribution is not None else Decimal("0")
                 broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0")) + broker_in_transit
                 broker_gain = broker_nav - broker_capital
-                broker_gl_pct = (broker_gain / broker_capital) if broker_capital > 0 else Decimal("0")
+                broker_gl_ratio = gain_loss_ratio(broker_gain, broker_capital, positive_base=True)
+                broker_gl_pct = broker_gl_ratio if broker_gl_ratio is not None else Decimal("0")
                 by_broker_list.append(
                     BrokerBreakdown(
                         broker_id=broker_id,
@@ -967,31 +969,11 @@ class PortfolioService:
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
 
         # Period re-basing: when date_from is set, compute metrics for that period only
-        if date_from and nav_snapshots:
-            pre_period = [s for s in nav_snapshots if s.date <= date_from]
-            if pre_period:
-                period_start_nav_perf = pre_period[-1].nav
-                period_start_date_perf = pre_period[-1].date
-            else:
-                period_start_nav_perf = Decimal("0")
-                period_start_date_perf = nav_snapshots[0].date
-
-            synthetic_cf = CashFlowInput(date=period_start_date_perf, amount=-period_start_nav_perf)
-            if period_start_nav_perf > 0:
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
-            else:
-                # Data-less start (e.g. a Sunday): the first NAV snapshot already
-                # contains any flow dated on it, so those flows must be EXCLUDED
-                # from the XIRR input — otherwise the deposit is counted twice
-                # (inside the NAV and as a flow) and the solver is dragged to a
-                # pole (beta report: MWRR cumulative +9.94% on a −1.5% period).
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
-            period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
-        else:
-            period_cfs = cash_flows_perf
-            period_navs = nav_snapshots
-            period_start_nav_perf = Decimal("0") if nav_snapshots else Decimal("0")
-            period_start_date_perf = nav_snapshots[0].date if nav_snapshots else today
+        period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
+        period_cfs = list(period.cash_flows)
+        period_navs = list(period.nav_snapshots)
+        period_start_nav_perf = period.start_nav
+        period_start_date_perf = period.start_date if period.start_date is not None else today
 
         # Net invested for the period (sum of deposits minus withdrawals)
         period_net_invested = sum(-cf.amount for cf in period_cfs)
@@ -1037,7 +1019,8 @@ class PortfolioService:
             total_gl = last_state.total_pnl
         else:
             total_gl = engine_nav - total_invested
-        total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
+        total_gl_ratio = gain_loss_ratio(total_gl, total_invested, positive_base=True)
+        total_gl_pct = total_gl_ratio if total_gl_ratio is not None else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         # ── Period P&L breakdown: NAV, unrealized delta, income, fees ──
@@ -1074,7 +1057,8 @@ class PortfolioService:
         # any asset ever valued at cost — e.g. funds that only get quotes from their first
         # provider sync onward stayed flagged forever despite a fresh current price.
         # The grace period still suppresses a brand-new acquisition whose first market
-        # price simply has not landed yet (e.g. BTP collocamento lag).
+        # price simply has not landed yet (e.g. BTP collocamento lag); it counts from the
+        # last market quote (decision 30), see transaction_implied_assets_to_report.
         first_position_date_by_asset: dict[int, date_type] = {}
         for (_b_id, a_id), d in first_position_dates.items():
             if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
@@ -1082,11 +1066,13 @@ class PortfolioService:
 
         implied_asset_ids: set[int] = set()
         if last_state is not None:
-            for aid in last_state.transaction_implied_asset_ids:
-                first_dt = first_position_date_by_asset.get(aid)
-                if first_dt is not None and (last_state.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
-                    continue
-                implied_asset_ids.add(aid)
+            implied_asset_ids = transaction_implied_assets_to_report(
+                last_state.transaction_implied_asset_ids,
+                last_state.transaction_implied_last_quote_dates,
+                first_position_date_by_asset,
+                last_state.date,
+                TRANSACTION_IMPLIED_GRACE_DAYS,
+            )
 
         transaction_implied_assets: list[MissingPriceAsset] = []
         for ps in end_positions:
@@ -1242,32 +1228,9 @@ class PortfolioService:
         nav_snapshots, cash_flows = views.build_performance_inputs()
 
         # Period re-basing for ROI metrics
-        if date_from and nav_snapshots:
-            pre_period = [s for s in nav_snapshots if s.date <= date_from]
-            if pre_period:
-                period_start_nav = pre_period[-1].nav
-                period_start_date = pre_period[-1].date
-            else:
-                # date_from is before any portfolio data — NAV was 0
-                period_start_nav = Decimal("0")
-                period_start_date = nav_snapshots[0].date
-
-            synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
-            # When period_start_nav > 0, CFs on start date are already embedded in starting NAV (exclude with >)
-            # When period_start_nav == 0 (data-less start), the first NAV snapshot is
-            # post-flow: flows dated on it are already inside that NAV, so they too are
-            # excluded (>) — including them double-counts the deposit and poles the XIRR.
-            if period_start_nav > 0:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
-            else:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
-            period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
-            # When period_start_nav > 0, ensure first snapshot matches so MWRR series is consistent
-            if period_start_nav > 0 and period_nav_snapshots and period_nav_snapshots[0].nav != period_start_nav:
-                period_nav_snapshots = [NAVSnapshot(date=period_start_date, nav=period_start_nav)] + period_nav_snapshots
-        else:
-            period_cash_flows = cash_flows
-            period_nav_snapshots = nav_snapshots
+        period = rebase_to_period(nav_snapshots, cash_flows, date_from)
+        period_cash_flows = list(period.cash_flows)
+        period_nav_snapshots = list(period.nav_snapshots)
 
         twrr_map: dict[date_type, Decimal] = {}
         roi_map: dict[date_type, Decimal] = {}
