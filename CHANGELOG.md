@@ -103,6 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
 - Editing only the notes, tags or date of a received transfer, or of an incoming adjustment, saved without a cost basis is no longer refused by the API; changing its type, quantity, cost or linked event still needs one.
 - Stopping the server: a component that fails to stop no longer keeps the others from stopping (scheduler, data providers, broker-import and risk workers, caches); the failure is logged.
+- **The growth chart's % view comes back by itself.** With a period or a broker that has no rate-of-return data, the chart shows **Abs**, and returns to **%** as soon as the data has percentages again, unless you pick another view meanwhile. Before, only the view restored at opening fell back; otherwise **%** stayed pressed and greyed out.
+- **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
+- The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
 
 ### ⚠️ Breaking changes
 
