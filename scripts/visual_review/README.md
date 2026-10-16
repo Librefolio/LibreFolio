@@ -16,10 +16,11 @@ else `~/LibreFolio_visual_review`.
 
 | File | What it does |
 |---|---|
-| `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json` and the log |
-| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `browse` (HTML pages, light and dark side by side) |
+| `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json`, the log and `mixed_elements.json` |
+| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `mixed` (the elements that mix role and legacy colour classes, by area), `browse` (HTML pages, light and dark side by side) |
 | `live_price_check.py` | Checks, in the lane's backend log, that no live-price request reached the backend while a snapshot was captured (exit 1: capture again) |
 | `build_designer_package.py` | Offline package for the designer: `APRI_QUI.html`, `desktop.html`, `mobile.html`, `note_designer.txt`, images, zip |
+| `build_designer_round.py` | The package of a later round: today, before and after, the colours left by reason, the open questions, the role palette; every page in HTML and Markdown |
 | `build_review_notes.py` | The team's Markdown working notes: navigation per shot, role vocabulary, decisions |
 | `designer_live.sh` | Test server with the gallery's data on its own lane (default port 6160), reachable from the local network |
 | `color_inventory.py` | Quantitative colour inventory of `frontend/src` (Markdown summary and CSVs) |
@@ -129,6 +130,33 @@ Gallery shots missing from the map are still published, with «?» as navigation
 
 Build the frontend first (`./dev.py front build`): the palette table reads the real Tailwind OKLCH values from `frontend/build`.
 
+### 3b. A later review round: today, before and after, colours left, questions
+`build_designer_round.py` builds the package of a later round (giro 3 on 16/10). Every page comes in HTML and in
+Markdown, with relative image paths, and `LEGGIMI.md` indexes them for a designer's AI. Run it on the snapshot's commit:
+```bash
+pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/baseline-r2 $W/snapshots/cand --out $W/diffs/baseline-r2__vs__cand
+pipenv run python -m scripts.visual_review.gallery_tool sheet $W/diffs/baseline-r2__vs__cand --lang it
+pipenv run python -m scripts.visual_review.color_inventory --out $W/inventory/cand
+pipenv run python -m scripts.visual_review.build_designer_round $W/snapshots/cand --before $W/snapshots/baseline-r2 \
+    --diff $W/diffs/baseline-r2__vs__cand --inventory $W/inventory/cand --reasons <motivi.csv> --questions <domande.md> \
+    --name LibreFolio_review_colori_giroN_<date> --round N --copy-to ~/Downloads
+```
+- **Pages:**
+  - `desktop`/`mobile`: the screens of today.
+  - `prima-e-dopo-desktop`/`-mobile`: before and after, light and dark. The new and gone shots come first, then the
+    most visible change (`visible.json` of `sheet`).
+  - `colori-residui`: the legacy palette classes left, file by file, grouped by reason, with the colour each one
+    paints.
+  - `domande-aperte` and `palette-ruoli`: the Markdown files given, copied as they are and rendered.
+  - `APRI_QUI` and `LEGGIMI.md`.
+- **The colours left** come from `color_inventory.py`, kept only where the colour gate would count them: production
+  code outside comments (`codeOf` of `theme-roles.mjs`), legacy classes as the gate defines them. On 16/10 this gave
+  the gate's own files: 185 against 185.
+- **The reasons** come from a `path;motivo;dettaglio;chi` file (path under `frontend/src`). A file without a reason is
+  listed under «Da classificare» and named on the console.
+- **Images** are WebP lossless by default: the same pixels as the PNG, about half the size (`--format png` keeps PNG).
+  One language of two galleries, the before-and-after included, makes a zip of about 140 MB.
+
 ### 4. Live server for the designer
 ```bash
 scripts/visual_review/designer_live.sh            # --refresh to re-copy the latest gallery data
@@ -142,6 +170,33 @@ scripts/visual_review/designer_live.sh            # --refresh to re-copy the lat
 pipenv run python -m scripts.visual_review.color_inventory            # → $W/inventory/00_inventory_summary.md + CSVs
 pipenv run python -m scripts.visual_review.build_review_notes $W/snapshots/ref   # → $W/notes/NOTE_DESIGNER.md
 ```
+
+### 6. Mixed elements (the runtime twin of G3)
+The colour gate G3 (`frontend/scripts/theme/theme-roles.mjs`) forbids an element that mixes role utilities
+(`bg-lf-card`) with legacy colour classes (`text-gray-500`): `app.css` exempts every element carrying `-lf-` from its
+legacy dark remap, so such an element breaks in dark. G3 reads the sources, and cannot see a class composed at runtime:
+a `className` or `contentClass` prop passed between areas, an imported constant, a concatenation.
+
+So every snapshot scans each shot, after the capture, with the gate's own patterns. The scan is
+`frontend/e2e/fixtures/galleryMixed.ts`, on only when `gallery_snapshot.sh` sets `LF_GALLERY_MIXED_DIR`. It only
+reports: a scan error is a record, never a red, and the PNG does not change.
+- `mixed_elements.json` in the snapshot has one record per shot: the elements with classes, with a role class, with a
+  legacy class, and the mixed ones (tag, test id, nearest test id above it, selector, classes, on screen or not).
+- A run's log shows `🎨 <shot>: N mixed` for a shot that has some.
+
+```bash
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand                # by folder of the candidate file
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --by section    # by gallery section
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --area lib/components/assets --on-screen
+```
+- The summary checks that every PNG has its record, and prints each distinct mixed element once, with its shots.
+- **The candidate file is a hint, not a proof.** It is the file that writes the element's test id, or its nearest
+  ancestor's: after a test-id key (`data-testid=`, `testid=`, `testId:`), whole, else composed from its longest prefix
+  (`global-settings-category-{cat.id}`). The element may belong to a child component, and its class may come from the
+  caller. An id found only as a plain string (`'chart'`) is a weak clue: such elements sit in their own group, not in
+  an area.
+- `gallery_tool mixed <snapshot> --collect` merges the records by hand, for example after a run interrupted before the
+  script's end. On a retry, the latest record of a shot wins.
 
 ## Known gallery behaviour (16/10/2026, commit `a2c1c39f4`, G-13)
 

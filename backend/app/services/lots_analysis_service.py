@@ -9,7 +9,7 @@ from typing import Iterable, Mapping, Sequence
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
     DataQualityReport,
@@ -31,13 +31,27 @@ from backend.app.services.financial_math.average_cost import AverageCost, CostPo
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
-from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, needs_market_series, unconvertible_ids
+from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
-from backend.app.services.financial_math.lots.histories import PerformanceSourceContext, build_performance_history, build_price_history, build_return_history, build_value_history, fragment_active_on_date, group_closures, group_fragments, known_cumulative_proceeds, known_realized_pnl, trim_dates
+from backend.app.services.financial_math.lots.histories import (
+    PerformanceSourceContext,
+    build_performance_history,
+    build_price_history,
+    build_return_history,
+    build_value_history,
+    fragment_active_on_date,
+    group_closures,
+    group_fragments,
+    known_buyback_cost,
+    known_cumulative_proceeds,
+    known_realized_pnl,
+    trim_dates,
+)
 from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.financial_math.returns import cumulative_to_annualized
+from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
@@ -286,7 +300,7 @@ class LotsAnalysisService:
         active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
         # The unified price resolver is the SINGLE valuation brain for this asset: fed the
-        # asset-system price rows AND every observed trade (BUY/SELL + priced ADJUSTMENT carryover)
+        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
         # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
         # none exists, to the same-day / last-observed trade mark. Both the open-lot valuation
         # (``market_prices`` -> NAV / value / return / performance) and the chart price line
@@ -561,12 +575,7 @@ class LotsAnalysisService:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
-        split_candidate_ids = [tx.id for tx in transactions if tx.id is not None and tx.asset_event_id is not None]
-        if not split_candidate_ids:
-            return {}
-        stmt = select(Transaction.id, AssetEvent.value).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_candidate_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        rows = (await self.db.execute(stmt)).all()
-        return dict(rows)
+        return {link.transaction_id: link.ratio for link in await load_split_links(self.db, transactions)}
 
     async def _load_broker_shorting(self, scope_broker_ids: Sequence[int]) -> dict[int, bool]:
         stmt = select(Broker.id, Broker.allow_asset_shorting).where(Broker.id.in_(scope_broker_ids))
@@ -727,6 +736,8 @@ class LotsAnalysisService:
                 for fragment in engine_result.active_fragments(lot_id=lot_id)
             ]
             known_proceeds = known_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            # A short lot's closing purchases (0 for a long lot): its P&L is what it sold minus what it bought back.
+            known_buybacks = known_buyback_cost(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
             raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_lookup, quote_base_quantity)
@@ -749,8 +760,8 @@ class LotsAnalysisService:
                     if lot.direction == "LONG":
                         total_value = open_value + known_proceeds
                         pnl = total_value - opening_value if opening_value is not None else None
-                    else:
-                        total_value = known_proceeds - open_value
+                    elif known_buybacks is not None:
+                        total_value = known_proceeds - known_buybacks - open_value
                         pnl = total_value
                 if pnl is not None and lot_realized_pnl is not None:
                     market_pnl = pnl - lot_realized_pnl
@@ -811,7 +822,8 @@ class LotsAnalysisService:
                     realized_pnl=lot_realized_pnl,
                     cumulative_proceeds=known_proceeds,
                     reference_unit_price=reference_unit_price,
-                    reference_price_source=reference_price_source,
+                    # T-B6: a reference that could not be converted has no source, as in the return history.
+                    reference_price_source=reference_price_source if reference_unit_price is not None else None,
                     states=sorted(engine_result.get_lot_states(lot_id)),
                     current_custody=current_custody,
                     open_value=open_value,
@@ -1036,10 +1048,7 @@ class LotsAnalysisService:
             if closure.lot_id not in selected:
                 continue
             lot = lots_by_id[closure.lot_id]
-            converted_open = fx_resolver.convert(closure.open_unit_price, lot.currency, closure.close_date)
-            converted_close = fx_resolver.convert(closure.close_unit_price, lot.currency, closure.close_date)
-            converted_pnl = fx_resolver.convert(closure.realized_pnl, lot.currency, closure.close_date)
-            converted_proceeds = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
+            converted = convert_closure(closure, lot, fx_resolver)
             rows.append(
                 LotTimelineEventSchema(
                     lot_id=closure.lot_id,
@@ -1052,11 +1061,11 @@ class LotsAnalysisService:
                     destination_broker_id=None,
                     fragment_id=closure.fragment_id,
                     quantity=closure.quantity,
-                    unit_price=converted_close,
-                    open_unit_price=converted_open,
-                    close_unit_price=converted_close,
-                    realized_pnl=converted_pnl,
-                    proceeds=converted_proceeds,
+                    unit_price=converted.close_unit_price,
+                    open_unit_price=converted.open_unit_price,
+                    close_unit_price=converted.close_unit_price,
+                    realized_pnl=converted.realized_pnl,
+                    proceeds=converted.proceeds,
                     ratio=None,
                 )
             )

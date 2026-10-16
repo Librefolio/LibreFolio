@@ -12,7 +12,7 @@ command line, through environment variables, or in the app's **Admin** and **Use
 - 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
 - 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
-- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, how to block an instance, backups for your hosting panel and the upload limit of a restore.
+- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel and the upload limit of a restore.
 - 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, and wake it on a schedule: a hosting panel or a cron job brings prices and exchange rates up to date.
 
 ### ⚙️ System Configuration
@@ -22,7 +22,7 @@ command line, through environment variables, or in the app's **Admin** and **Use
 - 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 
 ### 🧹 Maintenance & Operations
-- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
+- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades, instance backups).
 - 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
 
 ---

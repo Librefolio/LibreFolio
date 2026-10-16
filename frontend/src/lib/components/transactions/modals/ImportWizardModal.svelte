@@ -1516,7 +1516,7 @@
      *                 automatic choice may be wrong and deserves a look.
      */
     function duplicateTierBadgeClass(tier: DuplicateTier): string {
-        return tier === 'sure' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-700' : 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700';
+        return tier === 'sure' ? 'bg-lf-success-soft text-lf-success-on-soft ring-lf-success-line' : 'bg-lf-warning-soft text-lf-warning-on-soft ring-lf-warning-line';
     }
 
     function toggleDuplicateGroup(groupKey: string) {
@@ -1585,7 +1585,7 @@
             }
             return '';
         });
-        const diffCls = ' rounded bg-amber-100/70 px-1 dark:bg-amber-900/40';
+        const diffCls = ' rounded bg-lf-warning-soft/70 px-1';
         return [
             {
                 id: 'keep',
@@ -1615,9 +1615,9 @@
                 minWidth: 80,
                 cell: (mt) => {
                     if (defaultKeeperIndices(group).has(mt.index)) {
-                        return {type: 'html', html: `<span class="inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">${$t('importWizard.resolver.defaultKeeper')}</span>`};
+                        return {type: 'html', html: `<span class="inline-block rounded-full bg-lf-success-soft px-1.5 py-0.5 text-[10px] font-medium text-lf-success">${$t('importWizard.resolver.defaultKeeper')}</span>`};
                     }
-                    return {type: 'html', html: `<span class="inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">${$t('importWizard.resolver.duplicateBadge')}</span>`};
+                    return {type: 'html', html: `<span class="inline-block rounded-full bg-lf-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-lf-warning">${$t('importWizard.resolver.duplicateBadge')}</span>`};
                 },
             },
             {
@@ -1672,7 +1672,7 @@
                         const c = cash as {code: string; amount: string};
                         return {type: 'html', html: `<span class="inline-block${hl}">${formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})}</span>`};
                     }
-                    return {type: 'html', html: `<span class="text-gray-400${hl}">—</span>`};
+                    return {type: 'html', html: `<span class="text-lf-muted${hl}">—</span>`};
                 },
             },
             {
@@ -1685,7 +1685,7 @@
                 width: 170,
                 minWidth: 130,
                 getValue: (mt) => getSourceFileName(mt.sourceFileId),
-                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${escapeHtml(getSourceFileName(mt.sourceFileId))}">${escapeHtml(getSourceFileName(mt.sourceFileId))}</span>`}),
+                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-lf-secondary" title="${escapeHtml(getSourceFileName(mt.sourceFileId))}">${escapeHtml(getSourceFileName(mt.sourceFileId))}</span>`}),
             },
             {
                 id: 'description',
@@ -1698,17 +1698,17 @@
                 cell: (mt) => {
                     const raw = String(mt.tx.description ?? '').trim();
                     const hl = descOutliers.has(mt.index) ? diffCls : '';
-                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${escapeHtml(raw)}">${escapeHtml(raw || '—')}</span>`};
+                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-lf-primary${hl}" title="${escapeHtml(raw)}">${escapeHtml(raw || '—')}</span>`};
                 },
             },
         ];
     }
 
     function confidenceBadgeClass(conf: string): string {
-        if (conf === 'exact') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-        if (conf === 'high') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-        if (conf === 'medium') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+        if (conf === 'exact') return 'bg-lf-success-soft text-lf-success-on-soft';
+        if (conf === 'high') return 'bg-lf-info-soft text-lf-info-on-soft';
+        if (conf === 'medium') return 'bg-lf-warning-soft text-lf-warning-on-soft';
+        return 'bg-lf-panel text-lf-secondary';
     }
 
     // ── N-way compare: shared source/cell/column builders ───────────────────
@@ -2007,14 +2007,14 @@
                     if (beforeHistoryIndices.has(mt.index)) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300" data-testid="import-wizard-before-history-badge"><span>⏮</span><span class="hidden sm:inline">${$t('importWizard.reportSet.beforeHistoryStatus')}</span></span>`,
+                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-neutral text-lf-secondary" data-testid="import-wizard-before-history-badge"><span>⏮</span><span class="hidden sm:inline">${$t('importWizard.reportSet.beforeHistoryStatus')}</span></span>`,
                             tooltip: {text: $t('importWizard.reportSet.beforeHistoryTooltip'), position: 'top', maxWidth: '300px'},
                         };
                     }
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 cursor-pointer"><span>⛔</span><span class="hidden sm:inline">${$t('importWizard.status.beforeOpening')}</span><span class="text-gray-500 dark:text-gray-300">· ${$t('importWizard.status.editBrokerDate')}</span></span>`,
+                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-neutral text-lf-secondary cursor-pointer"><span>⛔</span><span class="hidden sm:inline">${$t('importWizard.status.beforeOpening')}</span><span class="text-lf-muted">· ${$t('importWizard.status.editBrokerDate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.beforeOpening'), position: 'top', maxWidth: '280px'},
                             onClick: () => openBrokerOpeningEdit(mt),
                             testId: `import-wizard-edit-broker-opening-${mt.index}`,
@@ -2025,7 +2025,7 @@
                     if (isUnresolved) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"><span class="sm:hidden">✗</span><span class="hidden sm:inline">${$t('importWizard.status.unresolved')}</span></span>`,
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-danger-soft text-lf-danger-on-soft"><span class="sm:hidden">✗</span><span class="hidden sm:inline">${$t('importWizard.status.unresolved')}</span></span>`,
                             tooltip: {
                                 html: `<strong>${$t('importWizard.status.tooltip.unresolvedReason')}</strong> ${$t('importWizard.status.tooltip.unresolvedAction')}`,
                                 position: 'top',
@@ -2037,7 +2037,7 @@
                     if (mt.duplicateStatus === 'likely') {
                         return {
                             type: 'html',
-                            html: `<span data-duplicate-status="likely" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
+                            html: `<span data-duplicate-status="likely" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-warning-soft text-lf-warning-on-soft cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2046,7 +2046,7 @@
                     if (mt.duplicateStatus === 'pending_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span data-duplicate-status="pending_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.pendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2055,7 +2055,7 @@
                     if (mt.duplicateStatus === 'pending_possible_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span data-duplicate-status="pending_possible_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_possible_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.possiblePendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2064,7 +2064,7 @@
                     if (mt.duplicateStatus === 'possible') {
                         return {
                             type: 'html',
-                            html: `<span data-duplicate-status="possible" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
+                            html: `<span data-duplicate-status="possible" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-info-soft text-lf-info-on-soft cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2072,7 +2072,7 @@
                     }
                     return {
                         type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"><span class="sm:hidden">✓</span><span class="hidden sm:inline">${$t('importWizard.status.unique')}</span></span>`,
+                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-lf-success-soft text-lf-success-on-soft"><span class="sm:hidden">✓</span><span class="hidden sm:inline">${$t('importWizard.status.unique')}</span></span>`,
                     };
                 },
             },
@@ -2178,7 +2178,7 @@ ${arrow}<span>${label}</span></span>`,
                             }
                             const key = String(assetId);
                             if (!opts.has(key)) {
-                                opts.set(key, {value: key, label: getAssetDisplayName(assetId), dotColor: '#dc2626'});
+                                opts.set(key, {value: key, label: getAssetDisplayName(assetId), dotColor: 'var(--lf-danger)'});
                             }
                             continue;
                         }
@@ -2195,7 +2195,7 @@ ${arrow}<span>${label}</span></span>`,
                 })(),
                 cell: (mt) => {
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
-                    if (assetId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    if (assetId === null) return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                     if (isFakeAssetId(assetId)) {
                         const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
                         if (res?.resolvedAssetId) {
@@ -2204,10 +2204,10 @@ ${arrow}<span>${label}</span></span>`,
                             const rIconUrl = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
                             const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
                             const origName = getAssetDisplayName(assetId);
-                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
+                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-lf-success" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
                         }
                         const name = getAssetDisplayName(assetId);
-                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${escapeHtml(name)}</span></span>`};
+                        return {type: 'html', html: `<span class="text-lf-danger inline-flex items-center gap-1">✗ <span class="truncate">${escapeHtml(name)}</span></span>`};
                     }
                     const info = getAssetInfo(assetId);
                     const name = info?.display_name ?? `#${assetId}`;
@@ -2243,7 +2243,7 @@ ${arrow}<span>${label}</span></span>`,
                 })(),
                 cell: (mt) => {
                     const brokerId = getBrokerIdForTx(mt);
-                    if (brokerId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    if (brokerId === null) return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                     const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
                     const name = b?.name ?? `#${brokerId}`;
                     const iconUrl = b?.icon_url ?? null;
@@ -2253,7 +2253,7 @@ ${arrow}<span>${label}</span></span>`,
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${escapeHtml(name)}</span><span class="shrink-0">✏️</span></span>`,
+                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-lf-secondary hover:text-lf-link" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${escapeHtml(name)}</span><span class="shrink-0">✏️</span></span>`,
                             onClick: () => openBrokerOpeningEdit(mt),
                             testId: `import-wizard-broker-edit-${mt.index}`,
                         };
@@ -2276,7 +2276,7 @@ ${arrow}<span>${label}</span></span>`,
                 getValue: (mt) => Number(mt.tx.quantity ?? 0),
                 cell: (mt) => {
                     const q = mt.tx.quantity;
-                    if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    if (!q || q === '0') return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
                     const n = parseFloat(q);
                     const formatted = isNaN(n) ? q : formatFixed(n, 8, {trim: true});
                     return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
@@ -2324,7 +2324,7 @@ ${arrow}<span>${label}</span></span>`,
                         }
                         return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
                     }
-                    return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
                 },
             },
             {
@@ -2346,7 +2346,7 @@ ${arrow}<span>${label}</span></span>`,
                 getMultiValue: (mt) => txTagsToArray(mt.tx.tags),
                 cell: (mt) => {
                     const tags = txTagsToArray(mt.tx.tags);
-                    if (tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    if (tags.length === 0) return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
                     const html = tags
                         .map((tag) => {
                             const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -2373,7 +2373,7 @@ ${arrow}<span>${label}</span></span>`,
                 getValue: (mt) => parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId,
                 cell: (mt) => {
                     const name = parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId;
-                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`} as const;
+                    return {type: 'html', html: `<span class="text-xs text-lf-muted truncate max-w-[180px] block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`} as const;
                 },
             });
         }
@@ -4092,7 +4092,7 @@ ${arrow}<span>${label}</span></span>`,
                 if (!row.set) return {type: 'icon-text', icon: FileText, text: row.fileName} as const;
                 // A set is one row: its label, and the files it was combined from underneath.
                 const members = row.set.memberNames.map((member) => escapeHtml(member)).join(' + ');
-                return {type: 'html', html: `<div class="min-w-0" data-testid="parse-row-set"><div class="truncate font-medium">${escapeHtml(row.fileName)}</div><div class="truncate text-xs text-gray-500 dark:text-gray-400">${members}</div></div>`} as const;
+                return {type: 'html', html: `<div class="min-w-0" data-testid="parse-row-set"><div class="truncate font-medium">${escapeHtml(row.fileName)}</div><div class="truncate text-xs text-lf-muted">${members}</div></div>`} as const;
             },
             type: 'text',
             sortable: true,
@@ -4129,7 +4129,7 @@ ${arrow}<span>${label}</span></span>`,
                 const name = row.pluginName || row.pluginUsed;
                 const icon = iconUrl
                     ? `<img src="${escapeHtml(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
-                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
+                    : `<span class="w-5 h-5 rounded-full bg-lf-neutral flex items-center justify-center text-xs font-bold text-lf-muted shrink-0">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
                 return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${escapeHtml(name)}</span></div>`} as const;
             },
             type: 'text',
@@ -4150,7 +4150,7 @@ ${arrow}<span>${label}</span></span>`,
                 if (row.status === 'error') {
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${escapeHtml($t('common.error'))}</span>`,
+                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-lf-danger-soft text-lf-danger">${escapeHtml($t('common.error'))}</span>`,
                         tooltip: {text: row.errorMessage ?? $t('common.error'), position: 'top', maxWidth: '28rem'},
                     } as const;
                 }
@@ -4207,7 +4207,7 @@ ${arrow}<span>${label}</span></span>`,
                 if (!row.response?.asset_mappings?.length) return '—';
                 const unresolved = row.response.asset_mappings.filter((m) => m.selected_asset_id == null).length;
                 if (unresolved === 0) return 0;
-                return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 font-medium">${unresolved}</span>`} as const;
+                return {type: 'html', html: `<span class="text-lf-danger font-medium">${unresolved}</span>`} as const;
             },
             type: 'number',
             width: 40,
@@ -4221,7 +4221,7 @@ ${arrow}<span>${label}</span></span>`,
                 const count = (row.response?.validation_issues as unknown[] | undefined)?.length ?? 0;
                 if (row.status !== 'done') return '—';
                 if (count === 0) return 0;
-                return {type: 'html', html: `<span class="text-amber-600 dark:text-amber-400 font-medium">${count}</span>`} as const;
+                return {type: 'html', html: `<span class="text-lf-warning font-medium">${count}</span>`} as const;
             },
             type: 'number',
             width: 40,
@@ -4236,7 +4236,7 @@ ${arrow}<span>${label}</span></span>`,
                 const todos = (row.response?.field_todos as {severity: string}[] | undefined) ?? [];
                 if (todos.length === 0) return 0;
                 const hasBlocker = todos.some((t) => t.severity === 'blocker');
-                const color = hasBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400';
+                const color = hasBlocker ? 'text-lf-danger' : 'text-lf-warning';
                 return {type: 'html', html: `<span class="${color} font-medium">${todos.length}</span>`} as const;
             },
             type: 'number',
@@ -4361,9 +4361,9 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Header -->
     <!-- ================================================================== -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{$t('importWizard.title')}</h2>
-        <button type="button" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" onclick={handleClose} data-testid="import-wizard-close">
+    <div class="flex items-center justify-between p-4 border-b border-lf-subtle">
+        <h2 class="text-lg font-semibold text-lf-primary">{$t('importWizard.title')}</h2>
+        <button type="button" class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted" onclick={handleClose} data-testid="import-wizard-close">
             <span class="sr-only">Close</span>
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
@@ -4372,7 +4372,7 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Stepper Bar -->
     <!-- ================================================================== -->
-    <div class="flex items-center justify-center gap-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800" data-testid="import-wizard-stepper">
+    <div class="flex items-center justify-center gap-0 px-6 py-3 border-b border-lf-subtle" data-testid="import-wizard-stepper">
         {#each visibleSteps as step, i}
             {@const stepNum = i + 1}
             {@const isCompleted = i < currentStepIndex}
@@ -4381,13 +4381,13 @@ ${arrow}<span>${label}</span></span>`,
             {@const isClickable = i < currentStepIndex}
 
             {#if i > 0}
-                <div class="w-8 sm:w-12 h-0.5 mx-1 {isCompleted || isCurrent ? 'bg-libre-green' : 'bg-gray-200 dark:bg-gray-700'}"></div>
+                <div class="w-8 sm:w-12 h-0.5 mx-1 {isCompleted || isCurrent ? 'bg-lf-checked' : 'bg-lf-neutral'}"></div>
             {/if}
 
             <button
                 type="button"
                 class="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors
-                    {isClickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700' : 'cursor-default'}
+                    {isClickable ? 'cursor-pointer hover:bg-lf-hover' : 'cursor-default'}
                     {isCurrent ? 'font-semibold' : ''}"
                 onclick={() => isClickable && goToStep(step.id)}
                 disabled={isFuture}
@@ -4397,9 +4397,9 @@ ${arrow}<span>${label}</span></span>`,
             >
                 <span
                     class="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold
-                        {isCompleted ? 'bg-libre-green text-white' : ''}
-                        {isCurrent ? 'bg-libre-green text-white' : ''}
-                        {isFuture ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : ''}"
+                        {isCompleted ? 'bg-lf-checked text-lf-on-checked' : ''}
+                        {isCurrent ? 'bg-lf-checked text-lf-on-checked' : ''}
+                        {isFuture ? 'bg-lf-neutral text-lf-muted' : ''}"
                 >
                     {#if isCompleted}
                         <Check size={14} />
@@ -4407,7 +4407,7 @@ ${arrow}<span>${label}</span></span>`,
                         {stepNum}
                     {/if}
                 </span>
-                <span class="hidden sm:inline text-xs {isFuture ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}">
+                <span class="hidden sm:inline text-xs {isFuture ? 'text-lf-muted' : 'text-lf-secondary'}">
                     {$t(`importWizard.${step.titleKey}`)}
                 </span>
             </button>
@@ -4419,7 +4419,7 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto" data-testid="import-wizard-content" data-guide-scroll-root aria-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing} data-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing}>
         {#if candidatesError}
-            <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="import-wizard-candidates-error">
+            <div role="alert" class="rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger" data-testid="import-wizard-candidates-error">
                 <p>{candidatesError}</p>
                 <button type="button" class="mt-2 underline disabled:opacity-50" disabled={candidatesRefreshing} onclick={() => void refreshCandidates()} data-testid="import-wizard-candidates-retry">{$t('common.retry')}</button>
             </div>
@@ -4729,21 +4729,21 @@ ${arrow}<span>${label}</span></span>`,
      decision the user should see before the data lands, not noise to skip. -->
 <ModalBase open={showWarningConfirm} maxWidth="4xl" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
     <!-- Header -->
-    <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
-        <div class="p-2 {step3HasWarningSeverity ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-sky-100 dark:bg-sky-900/30'} rounded-full shrink-0">
+    <div class="flex items-center gap-3 p-4 border-b border-lf-subtle">
+        <div class="p-2 {step3HasWarningSeverity ? 'bg-lf-warning-soft' : 'bg-lf-info-soft'} rounded-full shrink-0">
             {#if step3HasWarningSeverity}
-                <AlertTriangle size={18} class="text-amber-600 dark:text-amber-400" />
+                <AlertTriangle size={18} class="text-lf-warning" />
             {:else}
-                <Info size={18} class="text-sky-600 dark:text-sky-400" />
+                <Info size={18} class="text-lf-info" />
             {/if}
         </div>
         <div class="flex-1 min-w-0">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{step3HasWarningSeverity ? $t('importWizard.warningConfirmTitle') : $t('importWizard.noticeConfirmTitle')}</h2>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <h2 class="text-base font-semibold text-lf-primary">{step3HasWarningSeverity ? $t('importWizard.warningConfirmTitle') : $t('importWizard.noticeConfirmTitle')}</h2>
+            <p class="text-xs text-lf-muted mt-0.5">
                 {step3HasWarningSeverity ? $t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}}) : $t('importWizard.noticeConfirmMessage', {values: {n: step3Warnings.length}})}
             </p>
         </div>
-        <button type="button" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 shrink-0" onclick={() => (showWarningConfirm = false)}>
+        <button type="button" class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted shrink-0" onclick={() => (showWarningConfirm = false)}>
             <X size={16} />
         </button>
     </div>
@@ -4752,7 +4752,7 @@ ${arrow}<span>${label}</span></span>`,
         {#each step3NoticeSections as section}
             <div class="space-y-2">
                 {#if step3NoticeSections.length > 1}
-                    <h3 class="flex items-center gap-1.5 text-xs font-semibold {section.severity === 'info' ? 'text-sky-700 dark:text-sky-300' : 'text-amber-700 dark:text-amber-300'}">
+                    <h3 class="flex items-center gap-1.5 text-xs font-semibold {section.severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}">
                         {#if section.severity === 'info'}
                             <Info size={13} class="shrink-0" />
                         {:else}
@@ -4762,19 +4762,15 @@ ${arrow}<span>${label}</span></span>`,
                     </h3>
                 {/if}
                 {#each section.files as group}
-                    <details open class="border {section.severity === 'info' ? 'border-sky-200 dark:border-sky-800' : 'border-amber-200 dark:border-amber-800'} rounded-lg overflow-hidden">
-                        <summary
-                            class="flex items-center justify-between px-3 py-2 cursor-pointer {section.severity === 'info'
-                                ? 'bg-sky-50 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/30'
-                                : 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'} transition-colors list-none"
-                        >
+                    <details open class="border {section.severity === 'info' ? 'border-lf-info-line' : 'border-lf-warning-line'} rounded-lg overflow-hidden">
+                        <summary class="flex items-center justify-between px-3 py-2 cursor-pointer {section.severity === 'info' ? 'bg-lf-info-soft hover:bg-lf-info-line' : 'bg-lf-warning-soft hover:bg-lf-warning-line'} transition-colors list-none">
                             <!-- No file-preview button here: every notice below carries its own
                                  "open at row N" jump, which lands on the rows that matter. -->
-                            <span class="text-xs font-medium {section.severity === 'info' ? 'text-sky-800 dark:text-sky-200' : 'text-amber-800 dark:text-amber-200'} truncate flex-1 mr-2">
+                            <span class="text-xs font-medium {section.severity === 'info' ? 'text-lf-info-on-soft' : 'text-lf-warning-on-soft'} truncate flex-1 mr-2">
                                 {group.fileName} <span class="opacity-70">({group.warnings.length})</span>
                             </span>
                         </summary>
-                        <div class="px-4 py-2 bg-white dark:bg-slate-800">
+                        <div class="px-4 py-2 bg-lf-card">
                             <BrimNoticeList notices={group.warnings} dense collapsibleEvidence onGotoRow={(lines) => openPreview(group.fileId, 85, lines)} />
                         </div>
                     </details>
@@ -4783,11 +4779,11 @@ ${arrow}<span>${label}</span></span>`,
         {/each}
     </div>
     <!-- Footer -->
-    <div class="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
-        <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={() => (showWarningConfirm = false)}>
+    <div class="flex justify-end gap-2 p-4 border-t border-lf-subtle">
+        <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showWarningConfirm = false)}>
             {$t('common.cancel')}
         </button>
-        <button type="button" class="px-4 py-2 text-sm rounded-lg {step3HasWarningSeverity ? 'bg-amber-500 hover:bg-amber-600' : 'bg-sky-500 hover:bg-sky-600'} text-white transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
+        <button type="button" class="px-4 py-2 text-sm rounded-lg {step3HasWarningSeverity ? 'bg-lf-warning hover:bg-lf-warning-hover' : 'bg-lf-info hover:bg-lf-info-hover'} text-lf-on-status transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
             {$t('importWizard.warningConfirmOk')}
         </button>
     </div>
@@ -4887,10 +4883,10 @@ ${arrow}<span>${label}</span></span>`,
                 testid="create-primary-chooser"
             />
             <div class="mt-5 flex justify-end gap-2">
-                <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" onclick={() => (createAssetForFakeId = null)} data-testid="create-primary-cancel">
+                <button type="button" class="rounded border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => (createAssetForFakeId = null)} data-testid="create-primary-cancel">
                     {$t('assets.identifiers.primaryChooser.cancel')}
                 </button>
-                <button type="button" class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" onclick={confirmCreatePrimary} data-testid="create-primary-confirm">
+                <button type="button" class="rounded bg-lf-info px-3 py-1.5 text-sm font-medium text-lf-on-status hover:bg-lf-info-hover" onclick={confirmCreatePrimary} data-testid="create-primary-confirm">
                     {$t('assets.identifiers.primaryChooser.confirm')}
                 </button>
             </div>
@@ -4976,10 +4972,10 @@ ${arrow}<span>${label}</span></span>`,
                 testid="identifier-prompt-chooser"
             />
         {:else}
-            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-3">
+            <h2 class="text-base font-semibold text-lf-primary mb-3">
                 {$t('importWizard.addIdentifier.title')}
             </h2>
-            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" data-testid="identifier-prompt-body">
+            <p class="text-sm text-lf-secondary leading-relaxed" data-testid="identifier-prompt-body">
                 {@html sanitizeHtml(
                     $t('importWizard.addIdentifier.body', {
                         values: {
@@ -4993,19 +4989,19 @@ ${arrow}<span>${label}</span></span>`,
         {/if}
 
         {#if identifierPromptExtraOther.length > 0}
-            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400" data-testid="identifier-prompt-extra-keys">
+            <p class="mt-3 text-xs text-lf-muted" data-testid="identifier-prompt-extra-keys">
                 {$t('importWizard.addIdentifier.alsoKeys', {values: {keys: identifierPromptExtraOther.join(', ')}})}
             </p>
         {/if}
 
         <div class="flex justify-end gap-2 flex-nowrap mt-5">
-            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap" onclick={cancelAddIdentifier} data-testid="identifier-prompt-cancel">
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-lf-subtle text-lf-secondary hover:bg-lf-hover transition-colors whitespace-nowrap" onclick={cancelAddIdentifier} data-testid="identifier-prompt-cancel">
                 {identifierPromptLabels.cancel}
             </button>
-            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-libre-green/40 text-libre-green hover:bg-libre-green/10 transition-colors whitespace-nowrap" onclick={skipAddIdentifier} data-testid="identifier-prompt-skip">
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-lf-focus/40 text-lf-link hover:bg-lf-selected transition-colors whitespace-nowrap" onclick={skipAddIdentifier} data-testid="identifier-prompt-skip">
                 {identifierPromptLabels.skip}
             </button>
-            <button type="button" disabled={identifierPromptSaving} class="px-3 py-1.5 text-sm rounded-lg bg-libre-green hover:bg-libre-green/90 text-white disabled:opacity-50 transition-colors whitespace-nowrap" onclick={confirmAddIdentifier} data-testid="identifier-prompt-confirm">
+            <button type="button" disabled={identifierPromptSaving} class="px-3 py-1.5 text-sm rounded-lg bg-lf-action hover:bg-lf-action-hover text-lf-on-action disabled:opacity-50 transition-colors whitespace-nowrap" onclick={confirmAddIdentifier} data-testid="identifier-prompt-confirm">
                 {identifierPromptSaving ? '…' : identifierPromptLabels.confirm}
             </button>
         </div>

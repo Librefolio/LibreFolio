@@ -83,8 +83,6 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST, Nat
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
-    calculate_mwrr,
-    calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
@@ -92,6 +90,9 @@ from backend.app.services.financial_math.returns import (
     cumulative_to_annualized,
     gain_loss_ratio,
     net_holding_return,
+    period_mwrr,
+    period_mwrr_series,
+    realized_gain,
     rebase_to_period,
 )
 from backend.app.services.financial_math.valuation import compute_holding_value
@@ -657,7 +658,7 @@ class PortfolioService:
 
         # Realized G/L of the SELLs in the period: proceeds minus the historical cost the
         # engine's average-cost pool gave up, both in base currency with the owner's share.
-        _realized_accum = sum((sale.proceeds - sale.cost for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to)), Decimal("0"))
+        _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
@@ -863,7 +864,6 @@ class PortfolioService:
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
         period_cfs = list(period.cash_flows)
         period_navs = list(period.nav_snapshots)
-        period_start_nav_perf = period.start_nav
         period_start_date_perf = period.start_date if period.start_date is not None else today
 
         # Net invested for the period (sum of deposits minus withdrawals)
@@ -878,19 +878,9 @@ class PortfolioService:
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-            if period_net_invested > 0:
-                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
-                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
-                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
-                mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    period_cfs,
-                    initial_nav_for_mwrr,
-                    engine_nav,
-                    period_start_date_perf,
-                    date_to or today,
-                )
-                mwrr_result = mwrr_point.mwrr
+        # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
+        # (D-MF5): no rate without net invested capital or with a value at or below zero.
+        mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
@@ -999,10 +989,43 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
+        # VALUED_AT_COST: an open position with no price at all (no quote, no BUY or SELL), counted at its
+        # book cost (J-17). Same grace as TRANSACTION_IMPLIED, counted from the asset's first acquisition:
+        # it has no quote, and no BUY or SELL (an ADJUSTMENT or a TRANSFER opened it), so the BUY/SELL
+        # first position date would list it at once. Only for an asset with a provider: for a manual
+        # asset the cost is its intended value.
+        first_acquisition_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_lot_txn_dates.items():
+            if a_id not in first_acquisition_by_asset or d < first_acquisition_by_asset[a_id]:
+                first_acquisition_by_asset[a_id] = d
+        at_cost_ids = {ps.asset_id for ps in end_positions if ps.valuation_source == ValuationSource.ESTIMATED_AT_COST}
+        at_cost_reported = transaction_implied_assets_to_report(at_cost_ids, {}, first_acquisition_by_asset, last_state.date, TRANSACTION_IMPLIED_GRACE_DAYS) if last_state is not None else set()
+        valued_at_cost_assets: list[MissingPriceAsset] = []
+        for ps in end_positions:
+            if ps.asset_id not in at_cost_reported or ps.asset_id not in assets_with_provider:
+                continue
+            asset = assets_map.get(ps.asset_id)
+            if not asset:
+                continue
+            broker = brokers_map.get(ps.broker_id)
+            valued_at_cost_assets.append(
+                MissingPriceAsset(
+                    asset_id=ps.asset_id,
+                    symbol=asset.identifier_ticker,
+                    name=asset.display_name,
+                    broker_id=ps.broker_id,
+                    broker_name=broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}"),
+                    first_position_date=first_lot_txn_dates.get((ps.broker_id, ps.asset_id)),
+                    quantity=ps.quantity,
+                    open_cost_basis=ps.cost_basis if ps.cost_basis != 0 else None,
+                    currency=base_currency,
+                )
+            )
+
         # STALE_PRICE: an open position valued at a market price carried forward past the
         # threshold, for an asset with a provider — the case a price sync can fix. A manual
         # asset valued at its last trade price (crowdfunding, HOLD) is stale by design, and a
-        # provider asset with no quote at all is TRANSACTION_IMPLIED's case. One entry per asset.
+        # provider asset with no quote at all is TRANSACTION_IMPLIED's or VALUED_AT_COST's case. One entry per asset.
         stale_price_dates: dict[int, date_type] = {}
         for ps in end_positions:
             if not ps.valuation_stale or ps.valuation_source != ValuationSource.MARKET_PRICE:
@@ -1022,6 +1045,7 @@ class PortfolioService:
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+            valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
@@ -1128,7 +1152,8 @@ class PortfolioService:
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
+            # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
+            mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
@@ -1570,8 +1595,11 @@ class PortfolioService:
         # ── Realized gain/loss from SELLs in period: proceeds minus the historical cost the
         # engine's average-cost pool gave up (base currency, owner share applied) ──
         for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to):
+            gain = realized_gain(sale.proceeds, sale.cost)
+            if gain is None:
+                continue
             pos_key = (sale.broker_id, sale.asset_id)
-            per_realized[pos_key] += sale.proceeds - sale.cost
+            per_realized[pos_key] += gain
             per_cost_sold[pos_key] += sale.cost
 
         # ── Unrealized delta: 2-point computation per position ──
@@ -1853,7 +1881,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration
         self,
         user_id: int,
         query: PortfolioReportQuery,

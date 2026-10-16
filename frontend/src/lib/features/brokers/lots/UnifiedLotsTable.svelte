@@ -18,7 +18,6 @@
     import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
-    import '$lib/theme/components/table.css';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -168,7 +167,7 @@
         const content = formatLotQuantityCell(row.quantityOpen, row.quantityOriginal, row.primaryState === 'PARTIALLY_CLOSED');
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(content)}</span>`,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(content)}</span>`,
         };
     }
 
@@ -176,7 +175,7 @@
         if (value == null) return '—';
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatLotQuantityMasked(value))}</span>`,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(formatLotQuantityMasked(value))}</span>`,
         };
     }
 
@@ -184,7 +183,7 @@
         if (value == null) return '—';
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency))}</span>`,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(formatCurrencyAmountPlain(value, currency))}</span>`,
         };
     }
 
@@ -198,7 +197,7 @@
         if (value == null) return '—';
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}))}</span>`,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}))}</span>`,
         };
     }
 
@@ -224,7 +223,7 @@
         const tip = escapeHtml(label('brokers.lots.netMetricsUnavailable', 'Net metrics unavailable: degraded economic pool'));
         return {
             type: 'html',
-            html: `<span class="tabular-nums text-gray-400 dark:text-gray-500" title="${tip}">—</span>`,
+            html: `<span class="tabular-nums text-lf-muted" title="${tip}">—</span>`,
         };
     }
 
@@ -723,14 +722,14 @@
     });
 </script>
 
-<section class="rounded-lg border border-gray-200/80 bg-gray-50/80 dark:border-slate-700 dark:bg-slate-900/30" data-testid="unified-lots-table">
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200/80 px-4 py-3 dark:border-slate-700">
+<section class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary" data-testid="unified-lots-table">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-lf-subtle/80 px-4 py-3">
         <div class="flex min-w-0 items-center gap-3">
             <div>
-                <div class="text-base font-semibold text-gray-900 dark:text-gray-100">{label('brokers.lots.unifiedLots', 'Lots')}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">{label('brokers.lots.unifiedLotsHint', 'Unified FIFO lots view with multi-selection and custody drill-down.')}</div>
+                <div class="text-base font-semibold text-lf-primary">{label('brokers.lots.unifiedLots', 'Lots')}</div>
+                <div class="text-xs text-lf-muted">{label('brokers.lots.unifiedLotsHint', 'Unified FIFO lots view with multi-selection and custody drill-down.')}</div>
             </div>
-            <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-gray-700 dark:bg-slate-700 dark:text-gray-200">
+            <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary">
                 {lots.length}
             </span>
         </div>
@@ -786,27 +785,27 @@
 
     :global {
         .unified-lots-table-wrap tr.lot-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 26%, var(--lf-cmp-lots-table-row-tinted-bg));
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 26%, var(--lf-surface-card));
         }
         .dark .unified-lots-table-wrap tr.lot-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 14%, var(--lf-cmp-lots-table-row-tinted-bg-dark));
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 14%, var(--lf-surface-card));
         }
         .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td {
-            --lot-highlight-base: var(--lf-cmp-lots-table-lot-highlight-base);
-            --lot-highlight-peak: var(--lf-cmp-lots-table-lot-highlight-peak);
+            /* A highlighted row is the selection tint (palette, `--lf-selected`); the pulse peaks on a deeper one. */
+            --lot-highlight-base: var(--lf-selected);
+            --lot-highlight-peak: color-mix(in oklab, var(--lf-checked) 20%, transparent);
             background: var(--lot-highlight-base) !important;
             animation: tinted-lot-highlight-pulse 0.6s ease-in-out 3;
         }
-        .dark .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td {
-            --lot-highlight-base: var(--lf-cmp-lots-table-lot-highlight-base-dark);
-            --lot-highlight-peak: var(--lf-cmp-lots-table-lot-highlight-peak-dark);
-            background: var(--lot-highlight-base) !important;
+        /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15). */
+        .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td .text-lf-muted {
+            color: var(--lf-text-secondary);
         }
         .unified-lots-table-wrap tr.lot-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 68%, var(--lf-cmp-lots-table-row-tinted-bg));
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 68%, var(--lf-surface-card));
         }
         .dark .unified-lots-table-wrap tr.lot-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-cmp-lots-table-row-tinted-bg-dark));
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-surface-card));
         }
     }
 </style>

@@ -17,6 +17,7 @@ from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts.password_policy import password_rules_public
 from backend.app.services.accounts.registration_service import effective_registration_mode, first_account_open
 from backend.app.services.email.links import email_instance_config
+from backend.app.services.platform.instance_links import support_link
 
 instance_router = APIRouter()
 
@@ -30,4 +31,5 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
         accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked, first_account_open=await first_account_open(session), password_rules=password_rules_public()),
         # The email configuration may come from a password file: read off the event loop.
         email=await asyncio.to_thread(email_instance_config),
+        support_url=support_link(),
     )

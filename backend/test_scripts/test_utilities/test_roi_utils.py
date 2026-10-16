@@ -89,8 +89,10 @@ def test_calculate_mwrr_includes_intermediate_cash_flow(monkeypatch):
     assert result.mwrr == Decimal("0.150000")
 
 
-def test_calculate_mwrr_series_warm_start_extreme_falls_back(monkeypatch):
-    """Warm-start branch retries from the default guess when the first rate is extreme."""
+def test_calculate_mwrr_series_keeps_an_extreme_rate_as_the_single_solve_does(monkeypatch):
+    """MF-K1, one root policy: a series point is solved once, from 0.1, and the rate the solver returns
+    is the point's rate, even an extreme one, as in ``calculate_mwrr``. The warm start's retry from the
+    default guess, which preferred a smaller |r| (here the 0.2 a second call would give), is gone."""
     x0_values = []
     returned_rates = iter([3.0, 0.2])
 
@@ -106,12 +108,11 @@ def test_calculate_mwrr_series_warm_start_extreme_falls_back(monkeypatch):
             NAVSnapshot(date(2026, 1, 1), Decimal("1200")),
         ],
         [],
-        use_warm_start=True,
     )
 
     assert len(series) == 1
-    assert series[0].mwrr == Decimal("0.200000")
-    assert x0_values == [0.1, 0.1]
+    assert series[0].mwrr == Decimal("3.000000")
+    assert x0_values == [0.1]
 
 
 def test_calculate_mwrr_series_short_input_returns_empty():
@@ -138,7 +139,6 @@ def test_calculate_mwrr_series_includes_intermediate_cash_flows(monkeypatch):
             NAVSnapshot(date(2026, 1, 1), Decimal("1250")),
         ],
         [roi_utils.CashFlowInput(date(2025, 7, 1), Decimal("-100"))],
-        use_warm_start=False,
     )
 
     assert [point.mwrr for point in series] == [Decimal("0.100000"), Decimal("0.150000")]
@@ -148,14 +148,15 @@ def test_calculate_mwrr_series_includes_intermediate_cash_flows(monkeypatch):
     assert sorted(calls[1][0]) == sorted([(0.0, -1000.0), (1.0, 1250.0), (181 / 365, -100.0)])
 
 
-def test_calculate_mwrr_series_extreme_retry_resets_prev_guess(monkeypatch):
-    """If retry still extreme, next point must restart from default guess."""
+def test_calculate_mwrr_series_starts_every_point_from_the_default_guess(monkeypatch):
+    """MF-K1, one root policy: every point starts from 0.1, never from the previous point's rate (the
+    warm start, removed), and keeps the rate its one solve returns: 3.0, then 0.3, then 0.2."""
     x0_values = []
-    returned_rates = iter([3.0, 2.5, 0.2])
+    returned_rates = iter([3.0, 0.3, 0.2])
 
     def fake_solve_xirr(flows, x0):
         x0_values.append(x0)
-        return next(returned_rates)
+        return next(returned_rates, 9.9)
 
     monkeypatch.setattr(roi_utils, "_solve_xirr", fake_solve_xirr)
 
@@ -164,10 +165,10 @@ def test_calculate_mwrr_series_extreme_retry_resets_prev_guess(monkeypatch):
             NAVSnapshot(date(2025, 1, 1), Decimal("1000")),
             NAVSnapshot(date(2026, 1, 1), Decimal("1200")),
             NAVSnapshot(date(2027, 1, 1), Decimal("1300")),
+            NAVSnapshot(date(2028, 1, 1), Decimal("1400")),
         ],
         [],
-        use_warm_start=True,
     )
 
-    assert [point.mwrr for point in series] == [Decimal("2.500000"), Decimal("0.200000")]
+    assert [point.mwrr for point in series] == [Decimal("3.000000"), Decimal("0.300000"), Decimal("0.200000")]
     assert x0_values == [0.1, 0.1, 0.1]

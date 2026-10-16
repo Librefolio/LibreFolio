@@ -5,6 +5,7 @@
     import {t} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {fetchToolCatalog} from './client';
     import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
@@ -129,7 +130,8 @@
             entries = [];
             error = null;
             loading = next.authenticated;
-            if (next.authenticated) void loadCatalog();
+            // The catalog holds the page's Refresh button (Y11).
+            if (next.authenticated) void pageBusy.track('tools-catalog', () => loadCatalog());
         });
         return () => {
             alive = false;
@@ -143,50 +145,51 @@
     });
 </script>
 
-<section class="min-w-0 space-y-6" data-testid="tools-hub" use:guideAnchor={'tools.hub'} data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="min-w-0 space-y-6 text-lf-primary" data-testid="tools-hub" use:guideAnchor={'tools.hub'} data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-2">
         <div class="flex min-w-0 items-center justify-between gap-3">
-            <h1 bind:this={heading} tabindex="-1" class="flex items-center gap-2 text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">
-                <Wrench size={24} aria-hidden="true" class="shrink-0 text-libre-green dark:text-green-400" />
+            <h1 bind:this={heading} tabindex="-1" class="flex items-center gap-2 text-2xl font-bold text-lf-primary outline-none">
+                <Wrench size={24} aria-hidden="true" class="shrink-0 text-lf-link" />
                 {$t('tools.title', {default: 'Tools'})}
             </h1>
             <button
                 type="button"
-                onclick={() => loadCatalog(true)}
-                disabled={busy || !account.authenticated}
-                class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                onclick={() => void pageBusy.track('tools-refresh', () => loadCatalog(true))}
+                disabled={busy || pageBusy.busy || !account.authenticated}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-lf-input bg-lf-card px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={$t('common.refresh')}
                 data-testid="tools-hub-refresh"
             >
-                <RefreshCw size={16} aria-hidden="true" />
+                <RefreshCw size={16} aria-hidden="true" class={pageBusy.busy ? 'animate-spin' : ''} />
                 <span class="hidden sm:inline">{$t('common.refresh')}</span>
             </button>
         </div>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+        <p class="text-sm text-lf-secondary">
             {$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}
         </p>
     </header>
 
     {#if loading}
-        <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300" role="status" data-testid="tools-catalog-loading">
+        <div class="flex items-center gap-2 rounded-xl border border-lf-subtle bg-lf-card p-6 text-sm text-lf-secondary" role="status" data-testid="tools-catalog-loading">
             <LoaderCircle size={20} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
             {$t('common.loading')}
         </div>
     {:else if !account.authenticated}
-        <p class="text-sm text-gray-600 dark:text-gray-400" role="status" data-testid="tools-auth-required">
+        <p class="text-sm text-lf-secondary" role="status" data-testid="tools-auth-required">
             {$t('tools.authRequired', {default: 'Sign in to use tools.'})}
         </p>
     {:else if error && errorCopy}
-        <div class="space-y-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="tools-catalog-error" data-error-code={error.code}>
+        <div class="space-y-3 rounded-xl border border-lf-danger-line bg-lf-danger-soft p-5 text-lf-danger-on-soft" role="alert" data-testid="tools-catalog-error" data-error-code={error.code}>
             <h2 class="font-semibold">{$t('common.error')}</h2>
             <p class="text-sm">{$t(errorCopy.key, {default: errorCopy.fallback})}</p>
-            <button type="button" onclick={() => loadCatalog(true)} class="rounded-lg border border-current px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tools-catalog-retry">
+            <button type="button" onclick={() => void pageBusy.track('tools-retry', () => loadCatalog(true))} class="rounded-lg border border-current px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tools-catalog-retry">
                 {$t('common.retry')}
             </button>
         </div>
     {:else if catalog}
         {#if catalog.unavailable.length > 0 || frontendUnavailable > 0}
-            <aside class="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" role="status" data-testid="tools-catalog-degraded">
+            <aside class="space-y-2 rounded-xl border border-lf-warning-line bg-lf-warning-soft p-4 text-sm text-lf-warning-on-soft" role="status" data-testid="tools-catalog-degraded">
                 <AlertTriangle size={18} aria-hidden="true" />
                 {#if catalog.unavailable.length > 0}
                     <p>{$t('tools.catalog.degraded', {default: 'Unavailable backend entries: {count}.', values: {count: catalog.unavailable.length}})}</p>
@@ -199,11 +202,11 @@
         {/if}
 
         {#if entries.length === 0}
-            <div class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800" role="status" data-testid="tools-catalog-empty">
-                <h2 class="font-semibold text-gray-900 dark:text-gray-100">
+            <div class="rounded-xl border border-lf-subtle bg-lf-card p-6" role="status" data-testid="tools-catalog-empty">
+                <h2 class="font-semibold text-lf-primary">
                     {$t('tools.catalog.emptyTitle', {default: 'No tools available'})}
                 </h2>
-                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                <p class="mt-2 text-sm text-lf-secondary">
                     {$t('tools.catalog.emptyDescription', {default: 'No healthy tools were returned by this catalogue. Reload after a tool is installed or repaired.'})}
                 </p>
             </div>
@@ -214,56 +217,48 @@
                     {@const Icon = toolIcon(descriptor.icon_key)}
                     {@const documentation = toolDocumentationPath(descriptor)}
                     <li
-                        class={`relative flex min-w-0 flex-col gap-4 rounded-xl border bg-white p-5 transition dark:bg-gray-800 ${
-                            entry.interfaceState === 'ready' ? 'group border-gray-200 hover:border-libre-green/50 hover:shadow-sm dark:border-gray-700 dark:hover:border-green-500/50' : 'border-gray-200 dark:border-gray-700'
-                        }`}
+                        class={`relative flex min-w-0 flex-col gap-4 rounded-xl border bg-lf-card p-5 transition ${entry.interfaceState === 'ready' ? 'group border-lf-subtle hover:border-lf-link/50 hover:shadow-sm hover:shadow-lf-shadow-card' : 'border-lf-subtle'}`}
                         data-testid={`tool-card-${descriptor.tool_code}`}
                         data-interface-state={entry.interfaceState}
                     >
                         <div class="flex items-start gap-3">
-                            <Icon size={22} class="shrink-0 text-libre-green dark:text-green-400" aria-hidden="true" />
-                            <h2 class="min-w-0 flex-1 break-words font-semibold text-gray-900 dark:text-gray-100">{toolName(descriptor, $t)}</h2>
+                            <Icon size={22} class="shrink-0 text-lf-link" aria-hidden="true" />
+                            <h2 class="min-w-0 flex-1 break-words font-semibold text-lf-primary">{toolName(descriptor, $t)}</h2>
                             {#if documentation}
                                 <span class="relative z-20 shrink-0">
                                     <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
                                 </span>
                             {:else}
-                                <span class="relative z-20 shrink-0 text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
+                                <span class="relative z-20 shrink-0 text-xs text-lf-muted" data-testid="tool-docs-unavailable">
                                     {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
                                 </span>
                             {/if}
                         </div>
-                        <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-                        <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-compatibility-versions">
+                        <p class="break-words text-sm text-lf-secondary">{toolDescription(descriptor, $t)}</p>
+                        <p class="break-words text-xs text-lf-muted" data-testid="tool-compatibility-versions">
                             {$t('tools.backendVersion', {default: 'Backend/API'})}
                             {descriptor.contract_version}
                             · {$t('tools.uiVersion', {default: 'UI'})}
                             {descriptor.ui.version}
                         </p>
                         {#if entry.interfaceState === 'loading'}
-                            <p class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400" role="status" data-testid="tool-interface-loading">
+                            <p class="flex items-center gap-2 text-sm text-lf-muted" role="status" data-testid="tool-interface-loading">
                                 <LoaderCircle size={16} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
                                 {$t('tools.host.loadingInterface', {default: 'Loading tool interface…'})}
                             </p>
                         {:else if entry.interfaceState === 'error'}
-                            <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" data-testid="tool-interface-error">
+                            <p class="rounded-lg bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="tool-interface-error">
                                 {$t('tools.errors.componentLoad', {default: 'The tool interface could not be loaded.'})}
                             </p>
                         {:else if entry.resolution.status === 'unavailable'}
                             {@const message = unavailableMessage(entry.resolution.reason)}
-                            <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" data-testid="tool-interface-unavailable" data-reason={entry.resolution.reason}>
+                            <p class="rounded-lg bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="tool-interface-unavailable" data-reason={entry.resolution.reason}>
                                 {$t(message.key, {default: message.fallback})}
                             </p>
                         {/if}
                         {#if entry.interfaceState === 'ready'}
-                            <a
-                                href={toolRoute(descriptor)}
-                                class="absolute inset-0 z-10 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:focus-visible:outline-green-400"
-                                aria-label={toolName(descriptor, $t)}
-                                data-testid="tool-open"
-                                data-sveltekit-preload-code="eager"
-                            ></a>
-                            <ArrowRight size={18} class="pointer-events-none absolute bottom-5 right-5 text-libre-green transition-transform group-hover:translate-x-1 dark:text-green-400" aria-hidden="true" data-testid="tool-open-arrow" />
+                            <a href={toolRoute(descriptor)} class="absolute inset-0 z-10 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" aria-label={toolName(descriptor, $t)} data-testid="tool-open" data-sveltekit-preload-code="eager"></a>
+                            <ArrowRight size={18} class="pointer-events-none absolute bottom-5 right-5 text-lf-link transition-transform group-hover:translate-x-1" aria-hidden="true" data-testid="tool-open-arrow" />
                         {/if}
                     </li>
                 {/each}
@@ -271,9 +266,9 @@
         {/if}
 
         {#if catalog.unavailable.length > 0}
-            <section class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800" data-testid="tools-unavailable-entries">
-                <h2 class="font-semibold text-gray-900 dark:text-gray-100">{$t('tools.catalog.unavailableEntries', {default: 'Unavailable backend entries'})}</h2>
-                <ul class="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+            <section class="rounded-xl border border-lf-subtle bg-lf-card p-5" data-testid="tools-unavailable-entries">
+                <h2 class="font-semibold text-lf-primary">{$t('tools.catalog.unavailableEntries', {default: 'Unavailable backend entries'})}</h2>
+                <ul class="mt-3 space-y-2 text-sm text-lf-secondary">
                     {#each catalog.unavailable as unavailable}
                         <li class="flex flex-wrap items-center justify-between gap-2" data-testid="tool-unavailable-entry">
                             <span class="break-words">{unavailable.tool_code ?? $t('tools.catalog.unknownTool', {default: 'Unidentified tool'})}</span>

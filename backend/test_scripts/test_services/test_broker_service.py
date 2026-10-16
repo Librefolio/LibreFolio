@@ -813,6 +813,39 @@ class TestGetSummaryHoldingCost:
         assert _cost_view(_only_holding(summary, asset)) == expected_view
         assert summary.missing_fx_pairs == [], "an unknown cost basis is not a missing rate"
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("cost_per_unit", "expected"),
+        [
+            pytest.param("100", ("500", "100", "100", "20.00"), id="control-a-positive-cost"),
+            pytest.param("0", ("0", "0", "600", None), id="a-zero-cost-has-no-percent"),
+            pytest.param("-10", ("-50", "-10", "650", "-1300.00"), id="a-negative-cost-still-has-a-percent"),
+        ],
+    )
+    async def test_get_summary_unrealized_percent_divides_by_any_non_zero_cost(self, session, test_user, cost_per_unit, expected):
+        """BR-U-094 (pin, J-14): 5 X in by an ADJUSTMENT at ``cost_per_unit`` EUR a unit, quoted 120 → worth 600; (total cost, average, P&L, %).
+
+        unrealized_pnl_percent is the unrealized P&L over the total cost × 100, to the cent, on any cost but 0 — since J-14
+        through returns.gain_loss_ratio(positive_base=False), with the values of the division it replaced: 100 / 500 → 20.00;
+        on a cost of 0 the P&L is known, 600, and the percent is None; on a negative cost (no screen writes one) it is still a
+        percent, 650 / −50 → −1300.00. Green before J-14 and after.
+        """
+        broker_id = await _owned_broker(session, test_user, "Unrealized percent")
+        asset = await _own_asset(session, "EUR")
+        await _add(session, _row(broker_id, asset, TransactionType.ADJUSTMENT, date(2019, 9, 2), "5", cbo=cost_per_unit), _price(asset, date(2019, 9, 3), "120"))
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        total, average, pnl, percent = expected
+        assert _cost_view(_only_holding(summary, asset)) == {
+            "quantity": Decimal("5"),
+            "total_cost": Currency(code="EUR", amount=Decimal(total)),
+            "average_cost_per_unit": Decimal(average),
+            "current_value": Currency(code="EUR", amount=Decimal("600")),
+            "unrealized_pnl": Currency(code="EUR", amount=Decimal(pnl)),
+            "unrealized_pnl_percent": None if percent is None else Decimal(percent),
+        }
+
 
 # ============================================================================
 # 4.4c GET_SUMMARY — AS OF A DAY (W-B5: B15, D-J16)

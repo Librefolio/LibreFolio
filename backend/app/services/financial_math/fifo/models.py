@@ -170,6 +170,15 @@ class FragmentInterval:
 
 @dataclass(frozen=True, slots=True)
 class LotClosure:
+    """A piece of a lot closed by one transaction, in native amounts.
+
+    ``open_unit_price`` is in the lot's currency; ``close_unit_price`` and ``proceeds`` are in
+    ``close_currency``, the currency of the closing price (None counts as the report currency, as the
+    lots analysis reads it). ``realized_pnl`` is native too, so it is None when the two currencies
+    differ: the engine has no rates. The report-currency figures come from
+    ``financial_math.lots.conversions.convert_closure``, each leg at its own date (decision 26).
+    """
+
     lot_id: int
     transaction_id: int
     quantity: Decimal
@@ -178,8 +187,9 @@ class LotClosure:
     fragment_id: str
     open_unit_price: Decimal
     close_unit_price: Decimal
-    realized_pnl: Decimal
+    realized_pnl: Decimal | None
     proceeds: Decimal
+    close_currency: str | None = None
 
 
 @dataclass(slots=True)
@@ -196,8 +206,10 @@ class FifoLot:
     currency: str | None
     open_quantity: Decimal
     realized_quantity: Decimal = Decimal("0")
-    realized_pnl: Decimal = Decimal("0")
-    cumulative_proceeds: Decimal = Decimal("0")
+    # Native sums in the lot's currency: None once a closure is in another currency (see LotClosure). A short
+    # lot's cumulative proceeds are its opening proceeds, which its closures never change.
+    realized_pnl: Decimal | None = Decimal("0")
+    cumulative_proceeds: Decimal | None = Decimal("0")
     reference_unit_price: Decimal | None = None
     reference_price_source: ReferencePriceSource | None = None
 

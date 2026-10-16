@@ -226,23 +226,7 @@ class ProviderManagementOperations:
                     #    also drop the stale entry explicitly so it doesn't linger
                     #    for 15 min).
                     try:
-                        old_params_dict = None
-                        if existing.provider_params:
-                            try:
-                                old_params_dict = json.loads(existing.provider_params)
-                            except Exception:
-                                old_params_dict = None
-                        old_hash = core._provider_params_hash(old_params_dict)
-                        old_identifier = existing.identifier or ""
-                        old_key = (
-                            existing.provider_code,
-                            old_identifier,
-                            str(existing.identifier_type),
-                            old_hash,
-                            await core.settings_cache_part_for(existing.provider_code),
-                        )
-                        core._asset_history_cache.delete(old_key)
-                        core._asset_current_cache.delete(old_key)
+                        await core.drop_asset_cache_entries(existing.provider_code, existing.identifier, existing.identifier_type, existing.provider_params)
                     except Exception as cache_err:
                         logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
                     logger.info(
