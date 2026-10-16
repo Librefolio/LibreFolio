@@ -606,6 +606,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
 | 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
+| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
+| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
+| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | 🔄 prove leggere verdi (gate 71/71, `--check` pulito); impatto in sola lettura nullo sul target `f77743d47` e sui 6 worktree |
 
 ## Avanzamento
 
@@ -2223,3 +2226,188 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > 65/65; `front check` 0 e 0; `core-unit` 6.233/6.233; `component-unit` 4.006/4.006; `front-ai-export unit` 547/547;
 > E2E a 1 worker: `asset-data-editor` 26 (le righe 287, 346 e 384 sugli agganci), `fx-editor` 4, `fx-csv-import` 21 (53
 > e 56), `front-ai-export panel` 6 e `catalog` 4. Nessun rosso. Porta libera.
+
+> ✅ **Base merge col target `d5c3c3ae3`, poi lo STOP** (08:43–08:50; Y3, Y5, Y6, Y9, Y10, C-34, J CP-10a, E5b). Il
+> coordinatore ha aperto la merge nel worktree; conflitto atteso solo sulla baseline (le righe rinominate da Y contro le
+> mie). Risolta con `node frontend/scripts/theme/theme-roles.mjs --resolve` e messa in stage da sola (nessun altro file
+> toccato); sulla revisione unita `--check` pulito (m1 8.249), `api sync` rc 0, Vitest dei due gate 65/65, `front check`
+> 0 e 0. Alle 08:50 lo STOP del developer: niente altro, nessun processo, porta libera. Il commit di merge l'ha fatto il
+> coordinatore (`6efadbc78`), poi l'ingresso `eb4040cd1` (10:20).
+
+### Skill del design system (D-T29) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 10:38, «prima di tutto»). Testuale, il developer: «nel migrare cerca di seguire i colori dei
+> temi che la designer ci ha intanto dato, e anzi, crea un file skill comune in cui metti nero su bianco i 2 temi, i
+> nomi, la palette principale e tutte le altre regole, così che in futuro i nuovi componenti vengono già fatti seguendo
+> le regole, e cita questa skill dentro il file dell'agente frontend». Base `8f2824046` (fast-forward: il quarto lotto,
+> L-18, i registri del mattino). In `.github/agents/` non c'è un agente frontend: la citazione va in
+> `.github/instructions/frontend.instructions.md` e nella riga dei colori di `.github/copilot-instructions.md`.
+> Aggiunta del developer (10:5x, dal coordinatore): una sezione esplicita sulla cartella condivisa
+> `frontend/src/lib/theme/` come casa unica dei colori, con la mappa dei file letta dal codice.
+
+> ✅ **1 · Lo skill** `.github/skills/design-tools/design-system/SKILL.md` (nuovo, in inglese, 522 righe):
+> - i due temi, «Stone and Sage» e «Slate and Sage» (i nomi del CHANGELOG; «Pietra e Salvia» e «Ardesia e Salvia» della
+>   designer), da dove vengono (giro 2, D-T17) e come si applicano;
+> - la cartella condivisa `lib/theme/`: la regola (i componenti prendono, al massimo si aggiunge lì), il gate che la fa
+>   rispettare (m2 fuori da `lib/theme/**`, R2 e R3) e i 14 file uno per uno, letti dal codice: cosa contengono, quando
+>   li usa un componente, chi li possiede (T i ruoli, i token di componente e i toni; DV i grafici e `drawnColors.ts`;
+>   gli strumenti condivisi) e come si aggiunge una voce;
+> - la palette: tutti i 95 ruoli di `tokens.css`, con utility, valore chiaro, valore scuro e «quando si usa», in 11
+>   gruppi;
+> - 11 regole (solo ruoli; niente `dark:`; G3 e le catene di classi via prop; la regola 8; i minimi WCAG con le coppie
+>   del gate; i tooltip col tema opposto, Q10; guadagno e perdita distinti da successo ed errore; focus visibile; il
+>   bordo delle superfici che galleggiano, N3; lo stato per i test; le categorie fuori dai grafici); i grafici
+>   (GR1–GR5, `chartCategories.ts`, `chartRoles`); come si chiede un ruolo nuovo (solo T, D-T28);
+> - le decisioni (D-T, N, Q, GR) coi rimandi ai documenti, e le quattro domande aperte alla designer segnate come tali
+>   (grafici giro 3, toast e banner, `panel` = `hover`, l'acceso degli interruttori), più i valori che aspettano la sua
+>   conferma (TC-8: le sette correzioni di contrasto, i ruoli provvisori, D-T25 e D-T26).
+> - **⚠️ Fuori pista:** nella prima stesura i valori da confermare erano «tre correzioni in chiaro»; TC-8 e i commenti
+>   di `tokens.css` dicono sette (quattro in chiaro, tre in scuro). Corretto prima della consegna.
+
+> ✅ **2 · Le citazioni:** in `frontend.instructions.md`, blocco «Design System», un punto nuovo in testa e il rimando
+> della palette completa allo skill nuovo; in `copilot-instructions.md`, solo la riga «Colours and dark mode»; in
+> `theme-roles` un rimando inverso in testa (la tabella classe → ruolo resta lì, non duplicata).
+
+> ✅ **3 · Prove leggere** (`/tmp` era vuota dopo il riavvio della macchina: cartella ricreata):
+> - `/tmp/libreFolio_T_r2/design_system_tokens.py`: legge `tokens.css` (i blocchi chiaro, derivato, scuro e
+>   `@theme inline`), risolve ogni ruolo nei due temi. Il modo `fill` ha scritto i 190 valori della tabella dai
+>   segnaposto; il modo `check` confronta ogni riga con `tokens.css` (valore chiaro, valore scuro, utility del ruolo) e
+>   vuole ogni ruolo una volta sola: **95 righe su 95 ruoli, OK**. Controllo positivo: una copia con un valore sbagliato,
+>   un'utility di un altro ruolo e una riga tolta dà 4 errori e rc 1.
+> - Link relativi: i 12 dello skill risolvono tutti; i percorsi tra apici esistono. Forma delle 15 tabelle: ogni riga
+>   con le celle dell'intestazione. `git diff --check` pulito.
+
+> ✅ **4 · Integrato** dal coordinatore: `6e569084a` (11:02), il mio ramo portato avanti con fast-forward.
+
+### Palette a parte, ruoli nuovi e correzioni di DV (D-T29, seguito) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 11:02–11:2x). Tre punti, approvati dopo l'elenco dei file:
+> 1. alleggerire lo skill, caricato nel contesto di ogni worker (ora sette): la palette completa in `palette.md`, accanto;
+> 2. ruoli nuovi: `--lf-gain-soft`, `--lf-gain-on-soft`, `--lf-loss-soft`, `--lf-loss-on-soft` (alias delle tinte di
+>    success e danger, per i badge di segno di `OtherPeriodEffectsTable`, chiesti da DV), `--lf-success-hover` e
+>    `--lf-info-hover` (chiesti da IW, D2, e da TR, punto 4), il testo sul fondale (chiesto da IM e BK), con le coppie
+>    nel gate; più `SIGN_BADGE` in `toneClasses.ts`;
+> 3. le nove correzioni di DV alla sezione «Charts», verificate sul codice.
+
+> ✅ **1 · La palette in `palette.md`.** Lo script `/tmp/libreFolio_T_r2/skill_split.py` ha spostato le 11 tabelle (i
+> ruoli, coi valori e l'uso) in `.github/skills/design-tools/design-system/palette.md`; in `SKILL.md` restano i temi, la
+> mappa di `lib/theme/`, una tabella corta dei ruoli per famiglia (utility e uso, nessun valore), le regole, i grafici,
+> come si chiede un ruolo, le decisioni, le domande aperte. `SKILL.md` passa da 45,6 a ~35 KB. Il rimando inverso di
+> `theme-roles` punta anche a `palette.md`. Lo script di controllo ha un modo nuovo, `names`: ogni utility e ogni
+> `--lf-*` nominati nei file devono esistere in `tokens.css` (controllo positivo: due nomi sbagliati, rc 1).
+
+> ✅ **2 · I ruoli** in `frontend/src/lib/theme/tokens.css`, tutti nel blocco derivato, con 7 utility:
+> - `--lf-gain-soft` = `var(--lf-success-soft)`, `--lf-gain-on-soft` = `var(--lf-success-on-soft)`, e lo stesso per
+>   `loss` su danger; niente `-line` (i badge non hanno bordo);
+> - `--lf-success-hover` e `--lf-info-hover` = `color-mix(in oklab, var(--lf-X) 80%, var(--lf-text-primary))`,
+>   provvisori: l'hover si allontana sempre dal testo `on-status` (chiaro `#1f6744` 6,58:1, `#1854c2` 6,54:1; scuro
+>   `#81dcab` 10,63:1, `#639efa` 6,47:1). Un hover più scuro in scuro farebbe scendere info sotto 4,5:1 (la pastiglia
+>   piena è a 4,99:1). I valori calcolati con il risolutore del gate (`/tmp/libreFolio_T_r2/candidates.mjs`);
+> - `--lf-on-overlay` = `#ffffff` nei due temi, provvisorio: 4,98:1 nel caso peggiore, il fondale composto su un campo
+>   bianco (`#edf2f0` farebbe 4,40:1).
+>
+> 102 ruoli, 98 utility. `SIGN_BADGE = {gain, loss}` in `toneClasses.ts`, dopo `SIGN_BAR`. Prettier verde sui due file.
+> Nello skill: le 7 righe in `palette.md` (102 su 102, OK), le famiglie in `SKILL.md`, le coppie nella regola 5, i tre
+> ruoli fra le domande aperte (5), insieme al fatto che gli hover della designer scuriscono anche in scuro.
+
+> ✅ **3 · Le nove correzioni di DV** in `SKILL.md`: i ranghi 4–6 di GR4 verso il polo opposto (`#1C2420` in chiaro, il
+> bianco in scuro; oltre il sesto il ciclo riparte, `familyShade`); l'eccezione delle linee dei broker (`index % 8`: il
+> nono ripete il primo, DV-8); la riga di `chartPalettes.ts` (`growthBrokerColor` legge `categoryColor` a ogni disegno,
+> TD-1b; `SIGNAL_DEFAULT_PALETTE` ancora unica, S9); la riga di `chartTheme.ts` (per allocazione, semi-ciambella, mappe
+> e correlazione solo la cornice: mai una categoria lì); la riga di `roleColors.ts` (un ruolo si aggiunge col suo primo
+> lettore, o fallisce il controllo dei ruoli morti); i proprietari (`drawnColors.ts` di T, creato da R in `0b660632f`;
+> `chartColorScales.ts` di T e DV); il ridisegno al segnale C4 (TD-1b, `renderChart(true)`); le decisioni 6 e 7 di DV
+> sui segnali; la domanda aperta 1 con 2.2, 2.8, 2.9 (verificato: 2,61:1 in chiaro, 2,65:1 in scuro sulla card) e
+> l'eccezione di TD-1.
+
+> ✅ **4 · Il gate** (`test-author`, solo `frontend/src/themeTokens.gate.test.ts`): 168 coppie (erano 140): `gain` e
+> `loss` sulle 6 superfici; le quattro coppie degli stati sulle tinte `gain-soft` e `loss-soft`; `on-status` anche su
+> `success-hover` e `info-hover`; `on-overlay` sul fondale composto su ciascuna superficie. **L'estensione `over`:** una
+> coppia può nominare la superficie opaca su cui il suo fondo traslucido va composto (`over()` di `theme-roles.mjs`); un
+> fondo traslucido senza `over` è rifiutato come prima; un `over` traslucido o inesistente ha il suo messaggio; il nome
+> della coppia, il controllo «una volta sola» e le eccezioni contano anche `over`. La misura è in `measurePair`, con un
+> controllo positivo nuovo (mezzo velo nero sul bianco: grigio opaco, il bianco a 3,98:1). 18 test → 19. Mutazioni
+> (fatte e annullate da test-author nel solo file del gate): `over` traslucido o sbagliato, coppia senza `over`,
+> doppione, eccezione senza `over`, riga della composizione tolta: tutte rosse come atteso.
+> - Le coppie più strette (4,52, 4,53, 4,54) ripetono coppie degli stati già misurate, perché i ruoli di segno copiano
+>   i valori degli stati: saranno le prime da guardare se la designer separa le tinte.
+> - Suggerimento di test-author, non fatto: un controllo che il fondale abbia lo stesso valore nei due temi (la
+>   misura sul campo bianco del tema chiaro copre il caso peggiore del tema scuro solo finché è così).
+
+> ✅ **5 · Due voci in più** (DV, dal coordinatore, 11:3x): `SIGN_TEXT.riskTable` (le tabelle del rischio) e
+> `SIGN_BAR.histogram` (le barre dell'istogramma dei rendimenti, traslucide come `tornado`), con i valori che DV usa già in
+> W6-a; le adotta dopo l'ingresso di questo lotto.
+
+> ✅ **6 · Prove leggere** (sotto `nice`; carico 141 alle 11:28, la 1.3 ha le sue corsie pesanti): Prettier verde su
+> `tokens.css`, `toneClasses.ts` e il gate; `--check` pulito; Vitest dei due gate 66/66; i 10 file mirati (i due gate,
+> `roleColors.test.ts`, i test del Designer Lab che leggono `tokens.css`) 414/414; `front check` 0 e 0 (copre i tipi del
+> gate, che test-author non poteva controllare); `svelte-check` 0 e 0 dopo le due voci; `palette.md` 102 su 102 contro
+> `tokens.css`; nomi di `SKILL.md` e `palette.md` tutti esistenti; `git diff --check` pulito.
+
+> ✅ **7 · Integrato** dal coordinatore: `f043c1b58` (11:36), il mio ramo portato avanti con fast-forward.
+
+### Il gate e i commenti nelle espressioni del markup (bug trovato da AF) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 11:4x, prima del lotto del resto della UI). AF, lotto 8: `--check` dava G3 su
+> `routes/(app)/assets/+page.svelte:1639`, l'attributo `onfitperiod={(range) => {…}}` di `<AssetSetRiskPanel>`, che non
+> ha classi. Causa: `codeOf` toglieva i commenti solo da `<script>` e `<style>`; un `//` dentro l'espressione, con un
+> apostrofo («picker's») e dei backtick, faceva leggere a `closing`/`endOfString` una stringa chiusa al primo backtick
+> utile, 60 righe sotto: il valore dell'attributo inghiottiva il markup, e gli elementi inghiottiti non venivano
+> controllati (un punto cieco). AF ha riscritto quel commento per sbloccarsi.
+
+> ✅ **1 · La correzione** in `frontend/scripts/theme/theme-roles.mjs`: `codeOf` divide il file Svelte lasciando interi i
+> blocchi `<script>` e `<style>`, e nel markup toglie i commenti di ogni espressione `{…}` (`blankExpressionComments`),
+> trovando la `}` di chiusura con un percorso che salta stringhe e commenti (`expressionEnd`). Lunghezze e righe
+> invariate (i commenti diventano spazi). Prova (`/tmp/libreFolio_T_r2/g3_probe.mjs`, la copia vecchia dello scanner in
+> `/tmp/libreFolio_T_r2/old/`): sul caso costruito come quello di AF il vecchio dà G3 sulla riga dell'attributo e m1 3
+> (conta anche la classe scritta nel commento), il nuovo G3 sulla riga dell'elemento davvero misto e m1 2; la stringa
+> `'https://…'` col suo `//` resta. `--check` pulito; Prettier verde.
+
+> ✅ **2 · L'impatto, in sola lettura** (`/tmp/libreFolio_T_r2/g3_impact.mjs` e `g3_blind.mjs`, vecchio contro nuovo):
+> - sul target `f77743d47` (estratto con `git archive` in `/tmp`, senza leggere il checkout principale; rimisurato alle
+>   12:02 dopo la caduta della rete, la prima misura su `e36e45f0d` dava lo stesso esito) e sui worktree di IW, TR, AF,
+>   BK, IM e DV, ciascuno col suo `tokens.css`: **nessun G3 nuovo né sparito, nessun conteggio m1 o m2 cambiato, file per
+>   file** (la grammatica dà 0 violazioni ovunque, prima e dopo; m1 si misura sul testo intero, e nessun commento nel
+>   markup conteneva una classe legacy). Log: `/tmp/libreFolio_T_r2/g3_impact2.log` e `g3_blind2.log`;
+> - **il punto cieco era reale:** in 4 file lo scanner vecchio non leggeva parte del markup: `AssetSetRiskPanel` (3 tag
+>   letti su 56), `DataTable` (25 su 51), `routes/(app)/assets/+page.svelte` (75 su 113; in AF già 113, col commento
+>   riscritto), `TransactionBulkModal` (36 su 40). Oggi nessuno ha un elemento misto; ora sono controllati per intero.
+
+> ⚠️ **Fuori pista:** fra le 11:53 e le 11:57 la rete è caduta; il primo giro di test-author è morto senza toccare
+> nulla, e il mio turno si è chiuso con errore. Rilanciato test-author; rifatta la misura d'impatto sul target nuovo.
+
+> ✅ **3 · Il test di regressione** (test-author, solo `frontend/src/themeRoles.gate.test.ts`, 85 righe aggiunte, 0
+> tolte): una sezione nuova, «C'. Comments inside markup expressions», col sorgente della prova costruito come il caso
+> di AF, in cinque test: G3 solo sull'elemento davvero misto e m1 2 (la classe nel commento non conta); i 7 tag di
+> apertura letti tutti, e senza l'elemento misto nessun G3; `codeOf` conserva lunghezze e righe, toglie «picker's» e
+> lascia `href={'https://…'}`; i blocchi `<script>` e `<style>` perdono solo i loro commenti (un `url(https://…)` resta);
+> un commento a blocco in un'espressione di testo misura `{m1: 0, m2: []}`. In più una riga nei due controlli esistenti
+> «ignora i commenti» (m1 e m2), per il commento dentro un'espressione. **Prova di mutazione:** col modulo vecchio 6 test
+> rossi (i quattro nuovi che toccano la correzione e i due controlli estesi), il quarto verde come deve; ognuna delle 10
+> asserzioni sulla correzione fallisce da sola sul vecchio e passa sul nuovo. **Le mie verifiche** (carico 75, sotto
+> `nice`): Vitest dei due gate 71/71 (52 + 19); Prettier verde su `theme-roles.mjs` e sul test; `--check` pulito;
+> `git diff --check` pulito.
+
+### Campi nativi: testo e segnaposto (osservazione di TR) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 12:1x). TR ha notato che `app.css` dà testo e segnaposto ai campi nativi in scuro solo
+> finché non hanno una classe `-lf-` (`html.dark input/select/textarea:where(:not([class*='-lf-']))`, righe 237–247):
+> un campo migrato passa al preflight di Tailwind, cioè colore ereditato e segnaposto al 50 % di quello. La regola
+> chiesta: «un campo nativo migrato porta sempre `text-lf-primary`, e `placeholder:text-lf-placeholder` se ha un
+> segnaposto». Il controllo del coordinatore (`native_field_check.py --all`, in sola lettura) trova 4 casi sul mio
+> albero: 2 miei, `ui/input/TagInput.svelte:214` e `ui/select/TreeSelect.svelte:357` (senza ruolo del testo), e 2 di
+> DV, `charts/ChartAestheticsSection.svelte:217` e `:233` (senza ruolo del segnaposto; glielo dice il coordinatore).
+
+> ✅ **1 · La regola negli skill:** in `design-system`, regola 1, un punto accanto a «text role on the root» e «every
+> `border` names its role»; in `theme-roles`, un sotto-punto della regola 3 (senza rinumerare: la regola 8 si cita per
+> numero). Nomi delle utility esistenti (`design_system_tokens.py names`), link validi, larghezza ≤ 120,
+> `git diff --check` pulito.
+
+> ⏳ **2 · I due campi miei**, nel lotto del resto della UI: `text-lf-primary` sull'`<input>` di `TagInput` e su quello
+> di `TreeSelect`. Oggi nessun effetto visibile: il genitore dà già `text-lf-primary` (`tag-input-wrapper` e il
+> trigger del `TreeSelect`); la regola protegge dai genitori che cambiano.
+
+> ⏳ **3 · Un controllo del gate** (G6, nel lotto del G5 e del fondale): un `<input>` di tipo testuale, `<textarea>` o
+> `<select>` con una classe `-lf-` deve avere un ruolo `text-lf-…` di base, e `placeholder:text-lf-…` se ha
+> `placeholder`. Costruito sui `startTags` dello scanner, con la stessa lista di tipi esenti del controllo del
+> coordinatore.

@@ -23,7 +23,9 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     step, and a test of its own constraint with ``assert_in_relative_order``, without touching this file's tests;
     ``FINALLY_STEPS`` is the tool executor alone; the BRIM parse pool is released off the event loop under a deadline.
     A step reaches its function through the module's name when it runs, so
-    ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it.
+    ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it. The check of the stored plugin secrets (1.3.0,
+    H-15) runs after ``global-settings`` and before ``scheduler``, and its step returns the check for the runner to
+    await, run here with ``get_async_engine`` and ``plugin_secrets_key_status`` replaced: no database is opened.
 (e) Middleware: GZip outside CORS, with their options, checked in relative order so that a workstream adds an entry,
     and a test of its own constraint, without touching this file's tests; ``install_middleware`` adds any stack with
     its first entry outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
@@ -43,6 +45,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import importlib
 import inspect
 import threading
 import time
@@ -60,6 +63,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.routing import iter_route_contexts
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 from starlette.routing import Mount
 from structlog.testing import capture_logs
 
@@ -68,6 +73,7 @@ from backend.app.config import API_V1_PREFIX
 from backend.app.services.platform import app_lifespan, lifecycle, static_site
 from backend.app.services.platform.lifecycle import MIN_STEP_SECONDS, Step, current_step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.middleware import MIDDLEWARE_STACK, MiddlewareEntry, install_middleware
+from backend.app.services.plugin_settings.crypto import UnreadableSecrets
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: The startup steps of CP2b, in their order. A step a workstream adds may stand anywhere among them: the order of these
@@ -625,6 +631,44 @@ def test_a_step_reaches_its_function_through_the_module_when_it_runs(tuple_name:
     assert calls == [((), {})], f"the step did not call app_lifespan.{function_name} as it is when the step runs"
     assert result is sentinel
     print_success("✓ the replaced function was called")
+
+
+def test_the_plugin_secrets_check_runs_after_the_global_settings_and_before_the_scheduler() -> None:
+    print_section("STARTUP_STEPS: plugin-secrets-check between global-settings and scheduler")
+    # Relative order only: other steps (admin-bootstrap, after global-settings) may stand before or after it
+    assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("global-settings", "plugin-secrets-check", "scheduler"), "STARTUP_STEPS")
+    print_success("✓ global-settings, then plugin-secrets-check, then scheduler")
+
+
+@pytest.mark.asyncio
+async def test_the_plugin_secrets_check_step_returns_the_check_awaited_to_its_end(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    print_section("STARTUP_STEPS plugin-secrets-check: run() returns the check, awaited to its end")
+    step = _step(app_lifespan.STARTUP_STEPS, "plugin-secrets-check")
+    plugin_secrets_check = importlib.import_module("backend.app.services.platform.plugin_secrets_check")
+    # Were anything to look for the instance key, it could only meet a data dir in tmp_path, with no key configured.
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
+    for variable in ("LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_INSTANCE_KEY_FILE"):
+        monkeypatch.delenv(variable, raising=False)
+    sessions: list[Any] = []
+
+    async def nothing_unreadable(session: Any) -> UnreadableSecrets:
+        sessions.append(session)
+        return UnreadableSecrets()
+
+    # An engine on a private file that the replaced status never opens: no database is touched.
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'never-opened.db'}", poolclass=NullPool)
+    monkeypatch.setattr(plugin_secrets_check, "get_async_engine", lambda: engine)
+    monkeypatch.setattr(plugin_secrets_check, "plugin_secrets_key_status", nothing_unreadable)
+    try:
+        returned = step.run()
+        assert inspect.isawaitable(returned), f"the step must return the check for the runner to await, not {returned!r}"
+        await asyncio.wait_for(returned, GENEROUS_SECONDS)
+    finally:
+        await engine.dispose()
+
+    assert len(sessions) == 1, f"awaiting the step must run the check once, to its end: plugin_secrets_key_status was called {len(sessions)} times"
+    print_success("✓ the step's awaitable ran the check to its end")
 
 
 # =============================================================================

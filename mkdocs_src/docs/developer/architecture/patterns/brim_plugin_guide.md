@@ -747,9 +747,9 @@ skips its conversion legs with a warning, and the Generic CSV refuses the paired
 - exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
 - the **same type** on both legs (`pairTypeMismatch`);
 - **two distinct brokers** for a `TRANSFER` or a `CASH_TRANSFER` (`pairSameBroker`); an
-  `FX_CONVERSION` may stay on one. Every row a plugin emits carries the one target `broker_id`
-  that `parse()` receives, so a transfer pair saved as the plugin emitted it is refused at this
-  check;
+  `FX_CONVERSION` must stay on **one** (`pairBrokerMismatch`). Every row a plugin emits carries
+  the one target `broker_id` that `parse()` receives, so a transfer pair saved as the plugin
+  emitted it is refused at this check, while an `FX_CONVERSION` pair saved the same way passes it;
 - for a `TRANSFER`, **one asset** on both legs (`pairAssetMismatch`) and **exactly opposite
   quantities** (`pairQuantityMismatch`, compared as `Decimal`, with no tolerance): what leaves
   one broker arrives at the other, so both legs carry the same quantity, rounded alike, with
