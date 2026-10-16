@@ -37,7 +37,8 @@ Error codes raised by `get_current_value()` (history always raises `NOT_IMPLEMEN
 | `INVALID_PARAMS` | `decimal_format` other than `us` / `eu` | `decimal_format must be 'us' or 'eu'` |
 | `NOT_FOUND` | The selector matches nothing | `Price element not found with selector` |
 | `PARSE_ERROR` | Empty or non-numeric text | `Empty price text` / `Failed to parse price` |
-| `HTTP_ERROR` | Non-2xx response | `HTTP error {status}: {reason}` |
+| `RATE_LIMITED` | HTTP 429: `AssetRateLimitedError` with the response's `Retry-After`, scoped to the page's host | `CSS Web Scraper: too many requests (HTTP 429)` |
+| `HTTP_ERROR` | Any other non-2xx response | `HTTP error {status}: {reason}` |
 | `REQUEST_ERROR` | Network error or timeout (`httpx.RequestError`) | `Request failed` |
 | `SCRAPE_ERROR` | Anything else | `Scraping failed` |
 | `NOT_AVAILABLE` | `httpx` / `beautifulsoup4` not installed | `httpx and beautifulsoup4 not available` |
@@ -78,7 +79,7 @@ The parser first removes whitespace and the symbols `€ $ £ ¥ %`. It then dro
 - **No Historical Data**: `supports_history = False`. It can only fetch the current value.
 - **Fragile**: If the website's layout changes, the CSS selector may break. Use the **probe** endpoint to test before saving.
 - **Requires Public Access**: It cannot access pages that require a login, nor read prices that JavaScript adds after the page loads.
-- **Rate limits**: No built-in rate limiting. High-frequency sync may trigger the target site's anti-bot protection.
+- **Rate limits**: No built-in rate limiting. High-frequency sync may trigger the target site's anti-bot protection. An HTTP 429 pauses that site only: `cooldown_scope()` returns the host of the identifier URL (lowercase, without the port), so the other scraped sites keep working ([Provider Pauses](architecture.md#provider-pauses)).
 
 ---
 

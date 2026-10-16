@@ -8,7 +8,8 @@ Reference: backend/app/services/brokers/broker_service.py
 """
 
 import sys
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -45,6 +46,7 @@ from backend.app.db.models import (
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import (
     BRAssetHolding,
+    BRBulkDeleteResponse,
     BRCreateItem,
     BRDeleteItem,
     BRSummary,
@@ -54,7 +56,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
-from backend.app.services.transactions import auto_cost
+from backend.app.services.transactions import auto_cost, transaction_service
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk
@@ -1771,3 +1773,378 @@ class TestDeleteBulkCrossBrokerPair:
         finally:
             await session.rollback()
             await _remove_committed(engine, user_id=user_id, broker_ids=broker_ids, asset_id=asset_id)
+
+
+# ============================================================================
+# 4.10 DELETE_BULK — ONE BROKER, ONE SAVEPOINT (W-B20)
+# ============================================================================
+#
+# DELETE /brokers hands its brokers to delete_bulk in one session and commits when response.errors is empty
+# (api/v1/brokers.py); delete_bulk catches a broker's failure into that broker's result and never fills errors. So
+# whatever TransactionService.delete_by_broker wrote before it failed is committed with the rest of the request. The
+# cure decided for W-B20: delete_bulk starts the write transaction once (begin_writes, db/session.py), then deletes
+# each broker inside a savepoint of its own — a broker that fails leaves nothing behind, the brokers before and after
+# it in the same request are deleted, and its result carries the error.
+#
+# Where the failure comes. Deleting the sender of a TRANSFER whose receiving half has no cost basis (older data:
+# _seed_cross_pair with receiver_cost_basis=None), delete_by_broker (transactions/transaction_service.py)
+#   1. writes on the receiving half the sender's Auto cost (_write_auto_cost: 20 EUR, the 10 X it bought for 200),
+#   2. unlinks the sender's own same-broker pair, its FX_CONVERSION, with an UPDATE — autoflushing step 1 first,
+#   3. converts the receiving half with make_standalone: patched here, in transaction_service's namespace where
+#      delete_by_broker looks it up (it is imported from batch_edits), to raise once it has seen step 1 on the row,
+#   4. never reaches the deletes.
+#
+# Why BR-U-082. pysqlite defers BEGIN to the first write: a savepoint opened from a session that has only read becomes
+# SQLite's outermost transaction, and releasing it commits (the no-op UPDATE of AssetCRUDService.delete_assets_bulk;
+# devWiki problems/sqlite-savepoint-without-write-begins-as-transaction). Only a caller that rolls back after a broker
+# of its request was deleted can see it — delete_user does, when a later broker cannot be released.
+#
+# Unlike the rest of this file these cases COMMIT, as the router does. Each commits a world of its own — users,
+# brokers, an asset, rows, none shared —, sends its request from a session of its own, reads every column of what it
+# owns through another, and the `committed` fixture removes it all at teardown.
+
+_INJECTED = "W-B20 injected failure"
+
+
+class _InjectedFailure(RuntimeError):
+    """The failure a 4.10 case provokes inside delete_by_broker, after its first write."""
+
+
+@dataclass
+class _Committed:
+    """What a 4.10 case committed, recorded only once committed: an id that was rolled back can go to a neighbour's row."""
+
+    user_ids: list[int] = field(default_factory=list)
+    broker_ids: list[int] = field(default_factory=list)
+    asset_ids: list[int] = field(default_factory=list)
+
+    def record(self, *, users: Iterable[int] = (), brokers: Iterable[int] = (), assets: Iterable[int] = ()) -> None:
+        self.user_ids.extend(users)
+        self.broker_ids.extend(brokers)
+        self.asset_ids.extend(assets)
+
+
+@pytest_asyncio.fixture
+async def committed(engine):
+    """Whoever commits, cleans up: every row a 4.10 case recorded, removed after it in foreign-key order, whatever state the case left it in."""
+    owned = _Committed()
+    yield owned
+    async with AsyncSession(engine) as cleaner:
+        await cleaner.execute(delete(Transaction).where(Transaction.broker_id.in_(owned.broker_ids)))
+        await cleaner.execute(delete(BrokerUserAccess).where(BrokerUserAccess.broker_id.in_(owned.broker_ids)))
+        await cleaner.execute(delete(Broker).where(Broker.id.in_(owned.broker_ids)))
+        await cleaner.execute(delete(Asset).where(Asset.id.in_(owned.asset_ids)))
+        await cleaner.execute(delete(User).where(User.id.in_(owned.user_ids)))
+        await cleaner.commit()
+
+
+async def _view(session: AsyncSession, broker_ids: list[int]) -> dict[str, dict[int, dict]]:
+    """Every column of the brokers ``broker_ids``, of their access rows and of their transactions, by table then id, as
+    ``session`` sees them now — its pending changes flushed first: read through a request's session, what its commit would keep."""
+    await session.flush()
+    view: dict[str, dict[int, dict]] = {}
+    for name, table, owner in (("brokers", Broker.__table__, "id"), ("access", BrokerUserAccess.__table__, "broker_id"), ("rows", Transaction.__table__, "broker_id")):
+        result = await session.execute(select(table).where(table.c[owner].in_(broker_ids)))
+        view[name] = {row.id: dict(row._mapping) for row in result}
+    return view
+
+
+async def _view_of(engine, broker_ids: list[int]) -> dict[str, dict[int, dict]]:
+    """``_view`` through a session of its own: what the database holds, committed."""
+    async with AsyncSession(engine) as reader:
+        return await _view(reader, broker_ids)
+
+
+def _labels(view: dict[str, dict[int, dict]], brokers: dict[str, int]) -> dict[str, dict[int, str]]:
+    """Names for ``_changed``, from a ``_view``: a broker by the case's label, an access row by its broker and role, a
+    transaction by its broker, its type and its signed quantity (its amount for cash). Unique, or two rows would merge."""
+    by_id = {broker_id: label for label, broker_id in brokers.items()}
+
+    def signed(row: dict) -> str:
+        return format((row["amount"] if row["asset_id"] is None else row["quantity"]).normalize(), "f")
+
+    labels = {
+        "brokers": by_id,
+        "access": {access_id: f"{by_id[row['broker_id']]}'s {row['role']} access" for access_id, row in view["access"].items()},
+        "rows": {row_id: f"{by_id[row['broker_id']]}'s {row['type']} {signed(row)}" for row_id, row in view["rows"].items()},
+    }
+    for table, names in labels.items():
+        assert len(set(names.values())) == len(names), f"two {table} share a label: {names}"
+    return labels
+
+
+def _differences(before: dict, after: dict, labels: dict[str, dict[int, str]]) -> dict[str, dict[str, object]]:
+    """What differs between two ``_view``s, table by table, as ``_changed`` names it: gone, new, or the changed columns as (before, after)."""
+    return {table: _changed(before[table], after[table], labels[table]) for table in ("brokers", "access", "rows")}
+
+
+def _all_gone(before: dict, labels: dict[str, dict[int, str]], broker_ids: list[int]) -> dict[str, dict[str, object]]:
+    """The ``_differences`` of deleting ``broker_ids`` and changing nothing else: each broker gone, with its access rows and its transactions."""
+    return {
+        "brokers": {labels["brokers"][broker_id]: "gone" for broker_id in broker_ids},
+        "access": {labels["access"][access_id]: "gone" for access_id, row in before["access"].items() if row["broker_id"] in broker_ids},
+        "rows": {labels["rows"][row_id]: "gone" for row_id, row in before["rows"].items() if row["broker_id"] in broker_ids},
+    }
+
+
+async def _new_user(setup: AsyncSession, label: str) -> User:
+    marker = uuid4().hex[:12]
+    user = User(username=f"w_b20_{label}_{marker}", email=f"w_b20_{label}_{marker}@test.com", hashed_password="fakehash", is_active=True)
+    setup.add(user)
+    await setup.flush()
+    return user
+
+
+async def _broker_with_deposits(setup: AsyncSession, owner: User, label: str, amounts: tuple[str, ...]) -> int:
+    """A broker ``owner`` owns (``_owned_broker``), holding one EUR DEPOSIT per amount and nothing linked."""
+    broker_id = await _owned_broker(setup, owner, label)
+    await _add(setup, *(_cash_row(broker_id, TransactionType.DEPOSIT, PAIR_FUNDING_DAY, amount, "EUR") for amount in amounts))
+    return broker_id
+
+
+@dataclass
+class _PairWorld:
+    """A committed world around a cross-broker TRANSFER: the user who sends the requests, its brokers by label, the two halves."""
+
+    user_id: int
+    brokers: dict[str, int]  # "sender", "receiver", and the labels of the other brokers
+    departure_id: int  # the sender's half: TRANSFER −4 X
+    arrival_id: int  # the receiver's half: TRANSFER +4 X, without cost basis
+
+
+async def _commit_pair_world(engine, committed: _Committed, clean: tuple[str, ...] = ()) -> _PairWorld:
+    """Commit, for a new user, ``_seed_cross_pair``'s TRANSFER of 4 X from a sender to a receiver whose half has no cost
+    basis, and per label of ``clean`` one more broker holding a DEPOSIT of 100 EUR and nothing linked."""
+    async with AsyncSession(engine, expire_on_commit=False) as setup:
+        user = await _new_user(setup, "pair")
+        pair = await _seed_cross_pair(setup, user, TransactionType.TRANSFER, receiver_cost_basis=None)
+        brokers = dict(pair.brokers)
+        for label in clean:
+            brokers[label] = await _broker_with_deposits(setup, user, label, ("100",))
+        await setup.commit()
+    committed.record(users=[user.id], brokers=brokers.values(), assets=[pair.asset.id])
+    return _PairWorld(user_id=user.id, brokers=brokers, departure_id=pair.legs["sender"].id, arrival_id=pair.legs["receiver"].id)
+
+
+def _assert_pair_as_seeded(before: dict, world: _PairWorld) -> None:
+    arrival = before["rows"].get(world.arrival_id, {})
+    observed = {name: arrival.get(name) for name in ("type", "related_transaction_id", "cost_basis_override", "cost_basis_currency")}
+    expected = {"type": TransactionType.TRANSFER, "related_transaction_id": world.departure_id, "cost_basis_override": None, "cost_basis_currency": None}
+    assert observed == expected, f"precondition broken: the receiving half must be a TRANSFER linked to the sender's, without cost basis: {observed}"
+
+
+async def _delete_as_the_router_does(engine, user_id: int, items: list[BRDeleteItem]) -> BRBulkDeleteResponse:
+    """DELETE /brokers from a session of its own that has done nothing yet: delete_bulk, then a commit when errors is
+    empty and a rollback otherwise (api/v1/brokers.py)."""
+    async with AsyncSession(engine, expire_on_commit=False) as request:
+        response = await BrokerService(request).delete_bulk(items, user_id=user_id)
+        if not response.errors:
+            await request.commit()
+        else:
+            await request.rollback()
+    return response
+
+
+def _fail_conversions(monkeypatch) -> list[tuple[int, bool]]:
+    """Make delete_by_broker fail when it converts a surviving half: make_standalone, replaced where delete_by_broker
+    looks it up, raises. Returns the conversions reached, each as (row id, whether the row already carried a cost
+    basis) — the proof that the failure comes after a write."""
+    reached: list[tuple[int, bool]] = []
+
+    def make_standalone(transaction: Transaction, standalone_type: TransactionType) -> None:
+        reached.append((transaction.id, transaction.cost_basis_override is not None and transaction.cost_basis_currency is not None))
+        raise _InjectedFailure(f"{_INJECTED}: converting row {transaction.id} into {standalone_type}")
+
+    monkeypatch.setattr(transaction_service, "make_standalone", make_standalone)
+    return reached
+
+
+class TestDeleteBulkOneSavepointPerBroker:
+    """W-B20: a broker whose deletion fails leaves nothing behind; the rest of the request is deleted, inside the caller's transaction."""
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_keeps_nothing_of_a_broker_whose_deletion_fails_half_way(self, engine, committed, monkeypatch):
+        """BR-U-081 (RED): a broker whose deletion fails half way keeps every row as it was, and so does the other half of
+        its pair; the brokers before and after it in the same request are deleted.
+
+        One request, as DELETE /brokers?force=true sends it — the first broker, the sender, the last broker —, from a
+        session of its own. The sender's deletion writes its Auto cost on the receiving half and unlinks its own
+        FX_CONVERSION pair, then fails converting the receiving half. The request commits, as the router does when
+        errors is empty. Today that commit keeps both writes — a receiving TRANSFER half with a cost basis, a sender's
+        FX_CONVERSION pair without its link — on a sender that still holds every row. After the cure, the sender's
+        savepoint takes them back.
+        """
+        world = await _commit_pair_world(engine, committed, clean=("first", "last"))
+        first, sender, last = world.brokers["first"], world.brokers["sender"], world.brokers["last"]
+        broker_ids = list(world.brokers.values())
+        before = await _view_of(engine, broker_ids)
+        _assert_pair_as_seeded(before, world)
+        labels = _labels(before, world.brokers)
+        conversions = _fail_conversions(monkeypatch)
+
+        response = await _delete_as_the_router_does(engine, world.user_id, [BRDeleteItem(id=broker_id, force=True) for broker_id in (first, sender, last)])
+
+        after = await _view_of(engine, broker_ids)
+        assert conversions == [(world.arrival_id, True)], f"precondition broken: the sender's deletion was to fail once, converting the receiving half after writing its Auto cost; reached {conversions}"
+        assert [(result.id, result.success, result.transactions_deleted) for result in response.results] == [(first, True, 1), (sender, False, 0), (last, True, 1)]
+        sender_message = next(result.message for result in response.results if result.id == sender)
+        assert _INJECTED in (sender_message or ""), f"the error belongs in the sender's result: {sender_message!r}"
+        assert _differences(before, after, labels) == _all_gone(before, labels, [first, last])
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_leaves_its_caller_a_rollback_that_brings_back_every_broker_of_the_request(self, engine, committed, monkeypatch):
+        """BR-U-082 (RED today on its first half; after the cure, the guard of begin_writes): delete_bulk never commits
+        for its caller — a caller that rolls back gets back every broker of the request, the one deleted before the
+        failure included.
+
+        The request deletes the first broker, then the sender, whose deletion fails as in BR-U-081, from a session that
+        has done nothing yet: up to its first savepoint it only reads (the broker, the access check, the count). The
+        caller then rolls back, as delete_user does when a broker cannot be released (accounts/user_service.py).
+
+        - In the request's transaction, once delete_bulk returns: the first broker gone, nothing of the sender's attempt
+          left. Today the Auto cost and the unlinked pair are still there: red.
+        - After the rollback: everything as before. Today it is, the rollback undoing it all. A cure that opens the
+          savepoints without starting the write transaction first (begin_writes) fails here: the first broker's
+          savepoint is SQLite's outermost transaction, releasing it commits that deletion, and the rollback cannot bring
+          the broker back. A request of the sender alone could not tell: rolling back to an outermost savepoint restores
+          it all the same, only a released one commits.
+        """
+        world = await _commit_pair_world(engine, committed, clean=("first",))
+        first, sender = world.brokers["first"], world.brokers["sender"]
+        broker_ids = list(world.brokers.values())
+        before = await _view_of(engine, broker_ids)
+        _assert_pair_as_seeded(before, world)
+        labels = _labels(before, world.brokers)
+        conversions = _fail_conversions(monkeypatch)
+
+        # Nothing runs in the request's session before delete_bulk: up to its first savepoint, delete_bulk only reads.
+        async with AsyncSession(engine, expire_on_commit=False) as request:
+            response = await BrokerService(request).delete_bulk([BRDeleteItem(id=first, force=True), BRDeleteItem(id=sender, force=True)], user_id=world.user_id)
+            inside = await _view(request, broker_ids)
+            await request.rollback()  # the caller gives the request up, as delete_user does when a broker cannot be released
+        after = await _view_of(engine, broker_ids)
+
+        assert conversions == [(world.arrival_id, True)], f"precondition broken: the sender's deletion was to fail once, converting the receiving half after writing its Auto cost; reached {conversions}"
+        assert [(result.id, result.success) for result in response.results] == [(first, True), (sender, False)]
+        assert {
+            "in the request's transaction, once delete_bulk returns": _differences(before, inside, labels),
+            "after the caller's rollback": _differences(before, after, labels),
+        } == {
+            "in the request's transaction, once delete_bulk returns": _all_gone(before, labels, [first]),
+            "after the caller's rollback": _all_gone(before, labels, []),
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_commits_the_conversion_of_a_broker_deleted_with_its_cross_broker_pair(self, engine, committed):
+        """BR-U-083 (guard, green today): a request that deletes the sender with force commits what N1b-1 decided and
+        nothing else — the sender, its access and its five rows gone; the receiving half an ADJUSTMENT without link,
+        carrying the sender's Auto cost (20 EUR: 200 for its 10 X, the transfer's halves left out) and stamped by the
+        conversion; every other row of the receiver, its broker and its access as they were."""
+        world = await _commit_pair_world(engine, committed)
+        sender = world.brokers["sender"]
+        broker_ids = list(world.brokers.values())
+        before = await _view_of(engine, broker_ids)
+        _assert_pair_as_seeded(before, world)
+        labels = _labels(before, world.brokers)
+
+        response = await _delete_as_the_router_does(engine, world.user_id, [BRDeleteItem(id=sender, force=True)])
+
+        after = await _view_of(engine, broker_ids)
+        differences = _differences(before, after, labels)
+        arrival = labels["rows"][world.arrival_id]
+        conversion = differences["rows"].get(arrival)
+        stamp = conversion.pop("updated_at", None) if isinstance(conversion, dict) else None  # make_standalone stamps the row it converts
+        expected = _all_gone(before, labels, [sender])
+        expected["rows"][arrival] = {
+            "type": (TransactionType.TRANSFER, TransactionType.ADJUSTMENT),
+            "related_transaction_id": (world.departure_id, None),
+            "cost_basis_override": (None, Decimal("20")),
+            "cost_basis_currency": (None, "EUR"),
+        }
+        assert {
+            "results": [result.model_dump() for result in response.results],
+            "counts": (response.success_count, response.total_deleted, response.errors),
+            "differences": differences,
+            "the receiving half's updated_at": "moved forward" if stamp and stamp[1] > stamp[0] else stamp,
+        } == {
+            "results": [{"id": sender, "success": True, "deleted_count": 1, "transactions_deleted": 5, "transaction_count": 0, "message": None}],
+            "counts": (1, 1, []),
+            "differences": expected,
+            "the receiving half's updated_at": "moved forward",
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_without_force_refuses_a_broker_with_transactions_and_deletes_an_empty_one(self, engine, committed):
+        """BR-U-084 (guard, green today): without force, a broker holding two transactions is refused with their count
+        and keeps everything; an empty broker later in the same request is deleted."""
+        async with AsyncSession(engine, expire_on_commit=False) as setup:
+            user = await _new_user(setup, "noforce")
+            brokers = {"refused": await _broker_with_deposits(setup, user, "refused", ("100", "200"))}
+            brokers["empty"] = await _broker_with_deposits(setup, user, "empty", ())
+            await setup.commit()
+        committed.record(users=[user.id], brokers=brokers.values())
+        refused, empty = brokers["refused"], brokers["empty"]
+        before = await _view_of(engine, [refused, empty])
+        assert sorted(row["broker_id"] for row in before["rows"].values()) == [refused, refused], "precondition broken: two rows on the refused broker, none on the empty one"
+        labels = _labels(before, brokers)
+
+        response = await _delete_as_the_router_does(engine, user.id, [BRDeleteItem(id=refused, force=False), BRDeleteItem(id=empty, force=False)])
+
+        after = await _view_of(engine, [refused, empty])
+        assert {
+            "results": [result.model_dump() for result in response.results],
+            "counts": (response.success_count, response.total_deleted, response.errors),
+            "differences": _differences(before, after, labels),
+        } == {
+            "results": [
+                {"id": refused, "success": False, "deleted_count": 0, "transactions_deleted": 0, "transaction_count": 2, "message": "Broker has 2 transactions. Use force=True to delete all."},
+                {"id": empty, "success": True, "deleted_count": 1, "transactions_deleted": 0, "transaction_count": 0, "message": None},
+            ],
+            "counts": (1, 1, []),
+            "differences": _all_gone(before, labels, [empty]),
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_answers_not_found_and_access_denied_and_deletes_the_users_own_broker(self, engine, committed):
+        """BR-U-085 (guard, green today): with force, a broker an earlier request deleted answers not found; a broker the
+        user is only EDITOR of, and one it has no access to, answer Access denied and keep everything; the user's own
+        broker, later in the same request, is deleted."""
+        async with AsyncSession(engine, expire_on_commit=False) as setup:
+            requester = await _new_user(setup, "requester")
+            owner = await _new_user(setup, "owner")
+            brokers = {"gone": await _owned_broker(setup, requester, "gone")}
+            brokers["edited"] = await _broker_with_deposits(setup, owner, "edited", ("100",))
+            setup.add(BrokerUserAccess(user_id=requester.id, broker_id=brokers["edited"], role=UserRole.EDITOR, share_percentage=Decimal("0")))
+            brokers["unseen"] = await _broker_with_deposits(setup, owner, "unseen", ("100",))
+            brokers["own"] = await _broker_with_deposits(setup, requester, "own", ("100",))
+            await setup.commit()
+        committed.record(users=[requester.id, owner.id], brokers=brokers.values())
+        gone, edited, unseen, own = brokers["gone"], brokers["edited"], brokers["unseen"], brokers["own"]
+        # An earlier request deleted "gone": its id existed, and AUTOINCREMENT never hands it out again.
+        async with AsyncSession(engine) as earlier_request:
+            await earlier_request.execute(delete(BrokerUserAccess).where(BrokerUserAccess.broker_id == gone))
+            await earlier_request.execute(delete(Broker).where(Broker.id == gone))
+            await earlier_request.commit()
+        before = await _view_of(engine, [gone, edited, unseen, own])
+        assert gone not in before["brokers"], "precondition broken: the broker an earlier request deleted is still there"
+        access_before = sorted((row["broker_id"], row["user_id"], row["role"]) for row in before["access"].values())
+        assert access_before == sorted([(edited, owner.id, UserRole.OWNER), (edited, requester.id, UserRole.EDITOR), (unseen, owner.id, UserRole.OWNER), (own, requester.id, UserRole.OWNER)]), f"precondition broken: {access_before}"
+        labels = _labels(before, {"edited": edited, "unseen": unseen, "own": own})
+
+        response = await _delete_as_the_router_does(engine, requester.id, [BRDeleteItem(id=broker_id, force=True) for broker_id in (gone, edited, unseen, own)])
+
+        after = await _view_of(engine, [gone, edited, unseen, own])
+        assert {
+            "results": [result.model_dump() for result in response.results],
+            "counts": (response.success_count, response.total_deleted, response.errors),
+            "differences": _differences(before, after, labels),
+        } == {
+            "results": [
+                {"id": gone, "success": False, "deleted_count": 0, "transactions_deleted": 0, "transaction_count": 0, "message": f"Broker {gone} not found"},
+                {"id": edited, "success": False, "deleted_count": 0, "transactions_deleted": 0, "transaction_count": 0, "message": "Access denied"},
+                {"id": unseen, "success": False, "deleted_count": 0, "transactions_deleted": 0, "transaction_count": 0, "message": "Access denied"},
+                {"id": own, "success": True, "deleted_count": 1, "transactions_deleted": 1, "transaction_count": 0, "message": None},
+            ],
+            "counts": (1, 1, []),
+            "differences": _all_gone(before, labels, [own]),
+        }

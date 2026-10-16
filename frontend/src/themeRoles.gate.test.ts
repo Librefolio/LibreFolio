@@ -43,7 +43,8 @@
  *
  * Move the colours to the roles (skill `.github/skills/design-tools/theme-roles/SKILL.md`). A file split in parts is
  * declared in the commit of the split — `node frontend/scripts/theme/theme-roles.mjs --split OLD:NEW1,NEW2` — and
- * the parts share the old file's budget. A drop is banked with `--update`. Only the module writes the baseline:
+ * the parts share the old file's budget. A drop is banked with `--update`. A merge conflict on the baseline is settled
+ * by `--resolve`, a three-way merge that keeps a file one side accepted (TC-7). Only the module writes the baseline:
  * widening a line to pass switches the gate off for that file.
  *
  * ## What it cannot see
@@ -414,6 +415,103 @@ describe('writing the baseline, on synthetic scans and baselines', () => {
 });
 
 // ---------------------------------------------------------------------------
+// B''. --resolve: the three-way merge of the baseline (TC-7)
+// ---------------------------------------------------------------------------
+
+/**
+ * The TC-7 regression. On 15/10 R, then X, merged a baseline that carried an `--accept`: `themeStore.ts`, taken as it
+ * is with D3's correction of the title-bar pair, which the m2 multiset reads as a swap. Both times `--resolve` took the
+ * accepted colour back out of the record — the old mergeBaselines gave a line present on both sides the values both
+ * held, blind to the base and to the `~accept` — so the merged baseline no longer allowed what the accepting branch
+ * had passed, and the `--accept` had to be given again by hand.
+ *
+ * mergeBaselines is now a three-way merge. Per file line: a side that left it as the base had it takes the other
+ * side's, removal and addition included. Changed on both sides, the side with a NEW `~accept` for the file — one the
+ * base does not hold — wins; both sides accepting is refused, since only the merged tree can be accepted; otherwise
+ * the tighter side wins, the lower m1 and the literals both hold, and a line one side removed stays removed. The
+ * declarations: those of both sides, once.
+ */
+describe('mergeBaselines, the TC-7 regression: R and X lost an --accept to --resolve on 15/10', () => {
+    const FILE = 'lib/x.svelte';
+    /** FILE's line in the base, and what a side may make of it: widen it (an accepted file), or tighten it. */
+    const AS_IN_BASE = m(2, '#000000', '#ffffff');
+    const WIDENED = m(3, '#000000', '#16a34a', '#ffffff');
+    const TIGHTENED = m(1, '#ffffff');
+    /** The `~accept` lines of FILE: one new on each side, each with its own reason, and one the base already held. */
+    const ACCEPT_OURS = `~accept\t${FILE}\ttaken as it is on our side`;
+    const ACCEPT_THEIRS = `~accept\t${FILE}\ttaken as it is on their side`;
+    const ACCEPT_IN_BASE = `~accept\t${FILE}\ttaken as it is before the sides parted`;
+
+    /** A side of the merge: FILE's line — `null` when the side removed it — beside a line no case touches. */
+    const side = (line: Measure | null, declarations: string[] = []): Baseline => recorded({...(line ? {[FILE]: line} : {}), 'lib/kept.svelte': m(1)}, declarations);
+    /** The lines a merge must give: FILE's, if any, and the untouched one. */
+    const linesWith = (line: Measure | null): string[] => linesOf(side(line).files);
+
+    interface Merge {
+        what: string;
+        base: Baseline;
+        ours: Baseline;
+        theirs: Baseline;
+        merged: string[];
+    }
+
+    /** The cases that merge, (1)–(6) and (8); (7) is refused, (9) swaps the sides of these, (10) reads the declarations. */
+    const MERGES: readonly Merge[] = [
+        {
+            what: "(1) ours accepted a widened line, theirs left it as the base had it: ours' line — the old merge narrowed it back",
+            base: side(AS_IN_BASE),
+            ours: side(WIDENED, [ACCEPT_OURS]),
+            theirs: side(AS_IN_BASE),
+            merged: linesWith(WIDENED),
+        },
+        {what: "(2) ours accepted a widened line, theirs tightened the same line: ours' line", base: side(AS_IN_BASE), ours: side(WIDENED, [ACCEPT_OURS]), theirs: side(TIGHTENED), merged: linesWith(WIDENED)},
+        {what: "(3) ours accepted a widened line, theirs removed it: ours' line", base: side(AS_IN_BASE), ours: side(WIDENED, [ACCEPT_OURS]), theirs: side(null), merged: linesWith(WIDENED)},
+        {what: "(4) ours left the line as the base had it, theirs tightened it: theirs' line", base: side(AS_IN_BASE), ours: side(AS_IN_BASE), theirs: side(TIGHTENED), merged: linesWith(TIGHTENED)},
+        {what: '(5) ours left the line as the base had it, theirs removed it: removed', base: side(AS_IN_BASE), ours: side(AS_IN_BASE), theirs: side(null), merged: linesWith(null)},
+        {
+            what: '(6) both changed the line, neither accepted it: the lower m1 and the literals both hold — a widening nobody accepted does not survive',
+            base: side(AS_IN_BASE),
+            ours: side(m(1, '#000000', '#ffffff')),
+            theirs: side(m(3, '#16a34a', '#ffffff')),
+            merged: linesWith(m(1, '#ffffff')),
+        },
+        {what: '(6) both changed the line, neither accepted it, one side removed it: removed', base: side(AS_IN_BASE), ours: side(TIGHTENED), theirs: side(null), merged: linesWith(null)},
+        {
+            what: '(8) an ~accept the base already held is not new: both changed the line, so the tighter side wins, and nothing is refused',
+            base: side(AS_IN_BASE, [ACCEPT_IN_BASE]),
+            ours: side(WIDENED, [ACCEPT_IN_BASE]),
+            theirs: side(TIGHTENED, [ACCEPT_IN_BASE]),
+            merged: linesWith(TIGHTENED),
+        },
+    ];
+
+    for (const {what, base, ours, theirs, merged} of MERGES) {
+        it(what, () => {
+            expect(linesOf(mergeBaselines(base, ours, theirs).files)).toEqual(merged);
+        });
+    }
+
+    it('(7) both sides accepted the file anew, each its own way: refused, whichever side is ours — merge the sources, then --accept the merged file', () => {
+        const base = side(AS_IN_BASE);
+        const ours = side(WIDENED, [ACCEPT_OURS]);
+        const theirs = side(m(2, '#000000', '#dc2626', '#ffffff'), [ACCEPT_THEIRS]);
+        expect(() => mergeBaselines(base, ours, theirs)).toThrow(/lib\/x\.svelte: accepted on both sides/);
+        expect(() => mergeBaselines(base, theirs, ours), 'the sides swapped').toThrow(/lib\/x\.svelte: accepted on both sides/);
+    });
+
+    it('(9) each of (1)–(6) and (8) gives the same lines with ours and theirs swapped: whichever branch runs --resolve', () => {
+        const asymmetric = MERGES.filter(({base, ours, theirs, merged}) => linesOf(mergeBaselines(base, theirs, ours).files).join('\n') !== merged.join('\n')).map(({what}) => what);
+        expect(asymmetric, 'these cases merge to other lines once ours and theirs are swapped').toEqual([]);
+    });
+
+    it('(10) an ~accept line carried by both sides is written once, beside the new one', () => {
+        const merged = mergeBaselines(side(AS_IN_BASE, [ACCEPT_IN_BASE]), side(WIDENED, [ACCEPT_IN_BASE, ACCEPT_OURS]), side(AS_IN_BASE, [ACCEPT_IN_BASE]));
+        expect(linesOf(merged.files), 'theirs left the line as it was: ours, accepted').toEqual(linesWith(WIDENED));
+        expect([...merged.declarations].sort(byText), 'the declarations of both sides, each once').toEqual([ACCEPT_IN_BASE, ACCEPT_OURS].sort(byText));
+    });
+});
+
+// ---------------------------------------------------------------------------
 // C. The grammar of the roles
 // ---------------------------------------------------------------------------
 
@@ -480,10 +578,25 @@ describe('the tree: the colour gates', () => {
         expect(scan.sources, 'the scan reads what the walk lists').toEqual(sources);
     });
 
-    it('measures legacy classes in more than 100 files and literals in more than 20 (positive control)', () => {
-        const measures = [...scan.files.values()];
-        expect(measures.filter((measure) => measure.m1 > 0).length, 'm1: a pattern that matches nothing would pass the ratchet in silence').toBeGreaterThan(100);
-        expect(measures.filter((measure) => measure.m2.length > 0).length, 'm2: the same, for the literals').toBeGreaterThan(20);
+    it('measures each metric while the baseline still records it, with no floor on how much is left (positive control)', () => {
+        // "Nothing rose" is also what a pattern or a filter that suddenly matches nothing would report: the ratchet would
+        // pass in silence. How much legacy colour is left is not the question: it falls wave after wave, down to zero at
+        // the clean-up, so there is no floor here and no ratio to the baseline (one lot legitimately moved 95% of the
+        // literals into lib/theme/ between two tightenings). The clean-up empties the baseline in the same change: while
+        // the baseline still records a metric, a scan that measures none of it is blind, not finished.
+        const recordedTotals = totalsOf(readBaseline().files.values());
+        const scannedTotals = totalsOf(scan.files.values());
+        const metrics = [
+            ['m1', 'legacy colour classes'],
+            ['m2', 'colour literals'],
+        ] as const;
+        const blind = metrics
+            .filter(([metric]) => recordedTotals[metric] > 0 && !(scannedTotals[metric] > 0))
+            .map(
+                ([metric, what]) =>
+                    `${metric}, the ${what}: a scan that measures ${scannedTotals[metric]} while the baseline still records ${recordedTotals[metric]} is a broken pattern or filter of frontend/scripts/theme/theme-roles.mjs, not a finished migration: the clean-up empties the baseline in the same change.`,
+            );
+        expect(blind, 'the scan is blind to a metric the baseline still records').toEqual([]);
     });
 
     it('R1–R4: no total and no file rose above src/themeRoles.baseline.tsv', () => {

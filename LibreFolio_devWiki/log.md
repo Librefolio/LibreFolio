@@ -3567,3 +3567,28 @@ The Y8 entry above says «on a phone». The compact axis policy also applies bel
 its labels under zoom on desktop too: 33 is the step for a year of days in an 800 px chart, 90 or more on a phone.
 Corrected in the row of [[concepts/echarts-chart-gotchas]]; the CHANGELOG line was already right.
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-15] file | DataTable on phones and column resize — workstream Y, lot Y7
+Y's lot Y7 closed the two DataTable problems the wiki still held as open or as hypotheses.
+
+- [[problems/datatable-actions-column-on-mobile]]: the hypothesis of 2026-10-10 was right, confirmed red in a browser
+  (`layout/datatable-mobile.spec.ts`). At 768 px and below the selection and actions columns now scroll with the
+  table, header and cells alike (D-Y17). The lesson is the specificity: a bare class cannot undo a pin that a
+  `thead … th` rule carries.
+- [[problems/datatable-column-resize-noop]]: the old cause («`onColumnResize` not read by the parent») was wrong.
+  Measured: auto layout shares spare width in proportion to the given widths (+57 px for a +80 px drag), the drag
+  started from the configured width, and the handle answered the mouse only (D-Y18). The cure follows the drawn width,
+  uses Pointer Events, and pins a resized column's width as its minimum.
+- The two index rows are updated. `check_source_paths.py` gives 5 missing (8 occurrences) before and after, all
+  pre-existing.
+
+Filed: [[problems/datatable-actions-column-on-mobile]], [[problems/datatable-column-resize-noop]].
+
+## [2026-10-15] update | SQLite savepoint without an outer write transaction commits on release
+W-B20 built (workstream W): `begin_writes()` in `backend/app/db/session.py` opens the transaction before the per-broker
+savepoints of `BrokerService.delete_bulk`, so a broker that fails half-way leaves nothing behind and account deletion
+stays all or nothing. Red first (BR-U-081…085); a mutation without the helper turns BR-U-082 and the account's
+all-or-nothing tests red. The page gains the fix, a testing lesson (only a *released* outermost savepoint commits
+early) and its source files.
+Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+Graph: not updated; graphify is not available in this worktree.
