@@ -575,6 +575,19 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     const queued = {status: 'queued', isFallback: false};
     let scrollTo: ReturnType<typeof vi.spyOn>;
 
+    /**
+     * The budget of every wait on the viewer chain (the two imports, the assets, `init`, the registry, the subscriptions).
+     * Alone the chain takes 66–276 ms: testing-library's default of 1 s left about 4× headroom, not enough with Vitest's
+     * workers in parallel on a loaded machine. 3 s is over 10× the slowest case alone, and stays inside a test's 5 s budget.
+     */
+    const VIEWER_WAIT = {timeout: 3_000};
+
+    // The first dynamic imports of a file are the slow part of the viewer chain: paid here, once, outside every wait.
+    // Both modules are mocked above, so this returns the mocks and leaves them loaded for the preview's own `import()`s.
+    beforeAll(async () => {
+        await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
+    });
+
     beforeEach(async () => {
         await setupI18n();
         viewer.reset();
@@ -598,7 +611,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
             expect(viewer.opened).toHaveLength(1);
             expect(viewer.failed).toHaveLength(1);
             expect(viewer.tiles).toHaveLength(1);
-        });
+        }, VIEWER_WAIT);
         return screen.getByTestId('file-preview-pdf');
     }
 
@@ -778,7 +791,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     it('listens to a viewer whose registry arrives late, while the preview is open', async () => {
         const release = holdRegistry();
         mount({preview: pdfPreview()});
-        await waitFor(() => expect(viewer.registryAsks).toBe(1));
+        await waitFor(() => expect(viewer.registryAsks).toBe(1), VIEWER_WAIT);
         expect(viewer.opened, 'nothing subscribed before the registry').toHaveLength(0);
 
         release();
@@ -792,7 +805,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     it('never listens to a viewer whose registry arrives after the preview is gone', async () => {
         const release = holdRegistry();
         const view = mount({preview: pdfPreview()});
-        await waitFor(() => expect(viewer.registryAsks).toBe(1));
+        await waitFor(() => expect(viewer.registryAsks).toBe(1), VIEWER_WAIT);
 
         // The same late registry, behind the same boundary, as above; only, the preview is gone when it arrives.
         view.unmount();
@@ -853,7 +866,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         const otherFile = pdfPreview({filename: 'other.pdf', source_url: '/files/other.pdf'}) as unknown as FilePreviewResponse;
         await view.rerender({preview: otherFile});
         // The next viewer is up and listened to.
-        await waitFor(() => expect(viewer.tiles).toHaveLength(2));
+        await waitFor(() => expect(viewer.tiles).toHaveLength(2), VIEWER_WAIT);
         await queuedJobsRun();
 
         const [dropped, next] = viewer.viewers;
@@ -879,7 +892,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         viewer.initError = new Error('The viewer did not start');
         const {onRequestClose} = mount({preview: pdfPreview()});
 
-        await screen.findByTestId('file-preview-pdf-fallback');
+        await screen.findByTestId('file-preview-pdf-fallback', {}, VIEWER_WAIT);
         await queuedJobsRun();
 
         // The fallback stays: the viewer was started once, and the browser keeps showing the file.
