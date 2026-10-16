@@ -147,6 +147,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The image picker no longer reloads its list over and over when it has nothing to show.
 - **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
 - **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
+- A dividend or split dated today now shows up the same day, not the next one.
+- API: when a transaction breaks two or more rules at once, each message of the validation and import responses names the transaction type ("BUY requires asset_id") instead of a literal `{type}`.
 
 #### 🔒 Security
 
