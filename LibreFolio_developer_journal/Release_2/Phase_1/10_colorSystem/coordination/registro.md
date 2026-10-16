@@ -2161,3 +2161,59 @@
 - **18:09, G pronta per `settings/plugins`** (`-f "Settings plugins"`, 16 PNG, desktop e mobile; script in `files/runs/filtered.sh` della sessione di G). Decise **due run a e b** sullo stesso build, per la classe di stabilità: circa 12 minuti, contro i 9 di una sola.
   - Ordine dopo lo slot D di AF: prima G (promessa alla 1.3 per le 18:45), poi l'E2E breve di DV, poi l'ingresso di DV.
 - **18:15, commit dei record** (fermi dalle 10:37). Nel piano generale l'esito del 16/10 sera, le regole nuove, le scelte provvisorie e gli stati della tabella dei workstream; la riga «Programma colori» nell'indice del backlog; questo registro copiato in `coordination/registro.md`.
+- **18:11, record nel target: `bf0f2f8ac`** (piano generale, registro, riga «Programma colori» dell'indice del backlog). La 1.3: nessuno dei suoi 10 worktree tocca i 3 file di DV, via libero all'ingresso; G `0ab2b6095` annotato; E non è ancora entrato. Comunicata la punta `bf0f2f8ac`.
+- **18:10, slot D di AF:** `api sync`, build, `front check` e `component-unit` verdi; dalle 18:06 l'E2E `asset-detail` a 1 worker (carico 84).
+- **18:15, la 1.3 nel target: X-R27 + X-R28, punta `ccfabfd6d`** (backend `services/assets/`, il test, 2 pagine della doc developer, una riga 🐛 del CHANGELOG, il diario di X). Nessun file del frontend; `bf0f2f8ac` è nella storia.
+  - G (`633109f56`) si porta alla punta con un fast-forward subito prima della run filtrata.
+  - AF e DV fanno la base merge subito prima del loro ingresso; poi i gate pre-ingresso. Il delta della punta non ha frontend, quindi le loro E2E restano valide.
+  - **Incrocio AF ↔ DV su `text-gray-800`:** il lotto 9 di AF toglie `html.dark .text-gray-800` da `app.css`. Nel ramo di DV resta un solo uso, in `AssetDetailHeader.svelte:51`, che è un file del lotto 9 e che AF migra. Con l'ingresso di AF spariscono insieme l'uso e la regola: nessun conflitto.
+- **18:15, slot D di AF:** verdi `asset-detail`, `designer-lab picker` (con la regola `text-gray-800` tolta) e `asset-browse`; in corso `live-pause`.
+- **18:25, slot D di AF tutto VERDE** (17:53–18:25 su `dc360b486`, nessun passo saltato): `api sync`, `front build --debug`, `front check` 0 e 0, `component-unit` 4.092/4.092; **E2E 102/102** su 11 spec (asset-detail 34, designer-lab picker 4, asset-browse 8, live-pause 8, asset-modal 17, asset-event-delete 4, asset-event-editor-save 4, risk-asset-detail 5, tx-import-asset-inspector 5, fx-settings 3, fx-destructive 10). Il test del picker di L-20, senza la regola `text-gray-800`, prende da solo un'altra classe ancora rimappata.
+- **18:27, AF nel target: `c179a5144`** (base merge `c403534c7` con `ccfabfd6d`, albero = simulazione, frontend identico a `dc360b486`, gate 119/119). Entrano AF-6 (`8dc5b864c`, `AssetModalDetails`), il lotto 9 (`8aa3904a6`) con AF-4 (`tone="danger"`) e `app.css` C4 (tolta `html.dark .text-gray-800`), più i docs `830a805a3` e `8347b7713`. **Target m1 936 (91,8 %), m2 2**; con DV si arriva a 934.
+  - Avvisata la 1.3 con i 12 file del frontend. AF scrive il checkpoint docs dello slot D, che entra da solo.
+- **18:27, G: fast-forward a `ccfabfd6d`** e via alla run `settings/plugins` (a e b, 6153; carico 21).
+- **18:27, DV: base merge `baac53f99`** con `c179a5144` (albero = simulazione; nessun uso di `text-gray-800` fuori da `app.css`; gate 119/119). L'E2E `pac-allocator-real` parte dopo G, sullo stesso albero.
+- **18:29, handoff finale di AF:**
+  - area m1 1.946 → 170 e m2 6 → 0, in 13 file; 323 E2E verdi in 3 slot;
+  - aperte AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (ruolo di T);
+  - revisione del developer da fare: le schermate sono nella sezione 12 del piano di AF;
+  - dati della corsia in `/tmp/librefolio-r2-af`, cancellabili.
+  - Checkpoint docs committato `3b646bc3d`, entrato da solo: **`5eaf67ff1`**. Prima la punta era `bab52635d`, un commit diretto della 1.3 (`fix(db): keep quantity and price decimals`, 46 file, 6 del frontend: i18n delle transazioni e `resolveValidationMessage`), non annunciato e senza sovrapposizioni.
+  - AF è in idle, **tecnicamente completo** per la migrazione 1:1.
+- **18:29, DV: base merge `ec3d54ca3`** con `5eaf67ff1` (albero = simulazione, gate 119/119). L'E2E gira su questa revisione dopo G. Comunicata alla 1.3 la punta `5eaf67ff1`.
+- **18:30, la 1.3:** C-97a (W, issue #43, `bab52635d`) e i record `5609b16d7` (CHANGELOG, README), sopra `5eaf67ff1`. **Punta `5609b16d7`**, senza frontend: l'ingresso di DV la prende con la simulazione, senza un'altra base merge.
+- **18:34, G: `settings/plugins` verde e stabile** su `ccfabfd6d`: run a e b sullo stesso build (carico 23–28), 2/2 test per run, 16 PNG; a↔b 16 identiche su 16 (`stable`); `live_price_check` pulito; G-18 a 0 misti. A occhio: rese corrette, le card intere, badge e pulsanti neutri, nessun trabocco in spagnolo per `e2e_test_user` (G-15 era della vista admin). Snapshot `g-plugins-a`/`-b`, diff `diffs/g-plugins__a__vs__b/`. Inoltrato alla 1.3. G ha una riga del piano non committata, che va col prossimo checkpoint; FROZEN.
+- **18:36, via allo slot breve di DV** su `ec3d54ca3` (6156): Vitest di `ChartSignalsSection`, `SignalTreeSelect` e `SignalOptionContent`, poi `front-utility pac-allocator-real` a 1 worker. La sezione dei segnali sta anche in `assets/[id]` e `fx/[pair]`: TC-15 cambia solo classi e nessun test le legge, quindi lo slot resta breve.
+- **18:38, slot breve di DV partito** su `ec3d54ca3` (6156, carico 20). Vitest `ChartSignalsSection`, `SignalTreeSelect`, `TreeSelect` (che disegna `SignalOptionContent`, che non ha un test suo) e `htmlSink.gate`, che ha un'eccezione su `SignalOptionContent`; poi `pac-allocator-real` a 1 worker.
+- **18:40, raccolta per la designer:** aggiunti AF-10 al punto 12 (un neutro «sopra panel» con il suo hover) e il punto 26, AF-8 (l'hover `action-hover` dato a due pulsanti che prima avevano un hover morto). In tutto 26 punti.
+- **18:39, la 1.3:** H-12 (`7ac8b17de`: `_server.py` e `_backend_utils.py` del runner, doc developer) e J CP-13a (`0452e592c`: backend risk e financial_math, i18n `risk/*` nelle 4 lingue, docs). Nessun `.svelte`. **Punta `0452e592c`**.
+- **18:42, slot breve di DV VERDE** su `ec3d54ca3` (18:37–18:42): `api sync` (0 file cambiati), `ChartSignalsSection` 21/21, `SignalTreeSelect` 28/28, `TreeSelect` 28/28, `htmlSink.gate` 7/7, E2E `pac-allocator-real` 1/1 senza tentativi ripetuti (231 s, quasi tutti di build e popolamento).
+- **18:44, DV nel target: `81bc305b9`.** Piano committato in `e1124f488`; base merge `986c26a0b` con `0d20399cc` (la punta della 1.3 si era già spostata: J CP-13a più i record dei treni 124–125); albero = simulazione; il frontend, a parte i18n `risk/*`, è identico a `ec3d54ca3`; gate 119/119.
+  - Entrano TC-15 (`ChartSignalsSection`, `SignalOptionContent`) e G-18 (`BackendTimingBar`). **Target m1 934, m2 2: ogni ramo colore committato è nel target.**
+  - Avvisata la 1.3.
+  - Proposto a DV il micro-lotto W6-e: `DistributionDialog:102` e `TargetsStep:63`, 5 classi nelle stringhe HTML (binario `bg-gray-100 dark:bg-slate-700` e riempimento `bg-libre-green`). Chiesto alla 1.3 se qualche worktree li ha aperti.
+- **18:46, anteprima 6160 in aggiornamento:** fermata `preview6160i` (era a `eb4040cd1`); fast-forward di `preview-colori` a `81bc305b9`, build di debug sotto `nice`, poi DB nuovo (`test db populate --force --clean --with-static --with-reports` in `/tmp/librefolio-color-review`), perché C-97a ha cambiato `001_initial.py`. Poi si riavvia `designer_live.sh` staccato. Script `/tmp/libreFolio_preview_refresh.sh`.
+  - **⚠️ Fuori pista:** fermando `dev.py server` (6324) e la shell (6323), il processo uvicorn figlio (7456) è rimasto orfano e in ascolto sulla 6160. Lo script si è fermato a «6160 still busy». Ho fermato anche 7456, dopo aver verificato `LIBREFOLIO_TEST_DATA_DIR=/private/tmp/librefolio-color-review`, e rilanciato lo script senza lo stop (18:48). **Regola:** per fermare un server di test, ferma il PID che ascolta sulla porta (`lsof -t`) e verifica che la porta sia libera.
+- **18:48, analisi W6-e di DV: non è 1:1.**
+  - `TargetsStep`: un binario `neutral` ha ΔE00 0 dal riempimento `pacTargetBar.unknown` (`neutral`), quindi la barra sparisce. Il commento di T in `toneClasses.ts` lo prevedeva.
+  - `DistributionDialog`: il riempimento `bg-libre-green` è un dato (distribuzione attuale, fluo in scuro: TD-1). Binario sul ruolo e riempimento legacy nello stesso letterale farebbero rosso G3.
+  - **Scelta del coordinatore, (a):** DV porta `pacTargetBar.unknown` a `bg-lf-input`. È una modifica fuori area in un file di T, ammessa perché `pacTargetBar` lo usa solo `TargetsStep`, e va dichiarata nel checkpoint. I due binari vanno su `bg-lf-neutral`; il riempimento di `DistributionDialog` resta legacy, in due costanti interpolate, con la nota in DV-7.
+  - Punto 27 nella raccolta per la designer. DV aspetta la conferma della 1.3 prima di toccare i file.
+- **18:53, anteprima 6160 di nuovo attiva** sulla punta `81bc305b9` (m1 934): build di debug rc 0, DB nuovo (populate rc 0, 35 s), worktree `preview-colori` pulito, shell staccata `preview6160j` (listener PID 98616). `/` e `/designer-lab` rispondono 200.
+- **18:53, la 1.3:** nessun suo worktree ha aperto `DistributionDialog` o `TargetsStep`. Il mio controllo sui 31 rami locali: nessuna modifica a `toneClasses.ts` o ai due file fuori dal target. **Via a W6-e** (DV, opzione a).
+- **18:54, W6-e, correzione di DV:** `input` sul binario `neutral` fa 2,69/2,73:1, sotto il 3:1 non testuale. **Scelta: `unknown` su `bg-lf-secondary`** (5,77/5,84:1 sul binario, 7,5/7,1 sulla card), cioè il colore che l'obiettivo ha già nel risultato del PAC (`ResultCell`:78, legenda di `AssetTable`:148). Punto 27 della raccolta corretto.
+- **18:58, W6-e committato: `63880bc8b`** (6 file: i binari di `TargetsStep` e `DistributionDialog` su `bg-lf-neutral`; `FILL` legacy in una costante, uguale all'originale; `toneClasses.ts` `pacTargetBar.unknown` → `bg-lf-secondary`, fuori area e dichiarato; TSV m1 934 → 930; piano e DV-7). Prove leggere verdi; contrasto «riempimento sul binario» misurato a mano (secondary 5,77/5,84; gli stati da 4,0 a 7,9). Simulazione dell'ingresso pulita su `81bc305b9`. Via all'E2E `pac-allocator-real` (6156); lo scatto di galleria si rimanda alla prossima galleria completa.
+- **19:09, slot W6-e di DV VERDE** su `63880bc8b` (18:59–19:09, carico 62–91 per le altre sessioni): `api sync` 0 file, E2E `pac-allocator-real` 1/1 senza tentativi ripetuti (532 s, di cui 411 di build). Piano committato in `8601987ee`.
+- **19:10, W6-e nel target: `e3d85fdc8`.** La punta era ferma a `81bc305b9`; il frontend dell'unione è identico a `63880bc8b`, dove DV aveva passato i gate 119/119 alle 18:55. Carico 74, quindi non li ho rilanciati; `--check` pulito prima e dopo. **Target m1 930, m2 2.**
+  - Avvisata la 1.3: i due file del PAC tornano liberi.
+  - DV in idle: W6-d aspetta W7 di Y.
+  - `toneClasses.ts` (di T) ha una riga cambiata da DV (`pacTargetBar.unknown`): T lo vedrà alla prossima base merge.
+- **19:10, G:** la riga del piano sulla run `settings/plugins` è committata in `2c40b5b00` ed entrata da sola: **`b9679a7d8`**.
+- **19:15, residuo per motivo** (incrocio di TSV e `designer/colori-residui-motivi.csv`): m1 930, cioè 541 categorie, 253 file riservati alla 1.3, 109 interruttori e 27 ruoli mancanti.
+  - I 253 sono `LotCustodyModal` 205 (poi L4 di BK) e `PositionsPanel` più `ExposureTable` 48 (dopo W7 di Y).
+  - CSV aggiornato:
+    - `[id]/+page.svelte` → interruttore (AF-1);
+    - `DistributionDialog` → categoria (il dato);
+    - `TargetsStep` tolto (0);
+    - aggiunti i 3 file di `detail/` (accenti di sezione, AF-1).
+  - Commit dei record: piano generale (esito della sera, stati di G, anteprima, DV e AF), riga dell'indice del backlog, registro.
