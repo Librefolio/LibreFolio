@@ -3954,6 +3954,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
+- **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** — basso; X, 16/10 (trovato dal test-author di
+  F21/P20, fuori perimetro).
+  - Quando falliscono sia lo streaming sia il ripiego REST, la tendina mostra `e.message` così com'è, oppure
+    `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
+  - Cura: una chiave `assets.search.failed` in 4 lingue. L'errore tecnico resta nel log (`console.error`).
+  - Il timeout ha già la sua chiave (`assets.search.timeout`).
 
 ## W · Import e transazioni (fase 01)
 
