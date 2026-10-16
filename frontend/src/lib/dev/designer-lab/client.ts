@@ -57,7 +57,9 @@ const hook: LabHook = {
     active: () => engine?.isActive() ?? false,
     picking: () => picker?.isArmed() ?? false,
     chartColors: async (selector) => (await import('./engine/charts')).chartColorsOf(selector),
-    stats: () => engine?.stats() ?? {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0},
+    stats: () => engine?.stats() ?? {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0, categoryOverrides: 0},
+    // Asked by every chart category on every draw (contract C3): nothing until a state with an effect loads the engine.
+    categoryColor: (kind, key, dark) => engine?.categoryColor(kind, key, dark),
 };
 
 /** Start the client: re-apply the saved state, then follow what other tabs write. Idempotent. */

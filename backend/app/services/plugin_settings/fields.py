@@ -239,6 +239,10 @@ def _check_field(declared: PluginSettingField, rules: FamilyRules) -> None:  # n
         raise SettingsDeclarationError(f"{name}: an English label is required")
     if declared.scope is SettingScope.USER and not rules.user_scope:
         raise SettingsDeclarationError(f"{name}: this family delivers only the instance's values, so a field cannot be a user's")
+    if declared.scope is SettingScope.USER and declared.required:
+        # Prices, history and scheduled jobs are made for nobody: a required personal field would leave them NOT_CONFIGURED
+        # for ever, while every user's catalogue says «configured».
+        raise SettingsDeclarationError(f"{name}: a personal field cannot be required: the calls made for nobody (prices, scheduled jobs) never receive it")
     if declared.secret:
         if not rules.secrets:
             raise SettingsDeclarationError(f"{name}: this family calls no external source, so a field cannot be secret")

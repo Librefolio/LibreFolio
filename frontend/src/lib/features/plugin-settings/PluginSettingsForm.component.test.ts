@@ -36,7 +36,9 @@
  *     toast, and the plugin read again for `onsaved`. Key unavailable, failed: `pluginSettings.save.failed` with its
  *     reason and a toast, the edits kept, nothing read again;
  *   - a field named like a property every object inherits (`constructor`, which the backend's key pattern allows) is a
- *     field like any other: no edit, no problem and no refusal it does not have, and its own when it has them.
+ *     field like any other: no edit, no problem and no refusal it does not have, and its own when it has them; a secret
+ *     one, unset, shows an empty input — never the text of what every object inherits — and sends exactly what was
+ *     typed.
  *
  * Mocks, all owned here:
  *   - `./pluginSettingsApi`: `savePluginSettings` and `fetchPluginEntry` are fakes the test answers, with outcomes and
@@ -187,6 +189,12 @@ async function typeIn(key: string, value: string): Promise<void> {
 
 async function typeSecret(key: string, value: string): Promise<void> {
     await fireEvent.input(inSetting(key, 'plugin-setting-secret-input'), {target: {value}});
+}
+
+/** Types `value` where keystrokes land: after whatever the secret input already holds, which is then sent with it. */
+async function typeSecretAfterItsContent(key: string, value: string): Promise<void> {
+    const input = inSetting(key, 'plugin-setting-secret-input') as HTMLInputElement;
+    await fireEvent.input(input, {target: {value: input.value + value}});
 }
 
 /** Opens the field's select and picks the option: its options are looked for inside the field, never elsewhere. */
@@ -867,5 +875,32 @@ describe('PluginSettingsForm — a field named like a property every object inhe
 
         expect(queryInSetting('constructor', 'plugin-setting-refusal'), 'editing it takes its refusal down').toBeNull();
         expect(inSetting('constructor', 'plugin-setting-problem'), 'its declared rules apply').toHaveAttribute('data-code', 'tooLong');
+    });
+
+    it('PSF-25: a secret named constructor, unset and editable, shows an empty input; typed, it is a secret edit like any other, and Save sends exactly the text typed', async () => {
+        const CONSTRUCTOR_KEY = field({key: 'constructor', secret: true, label: 'Constructor', min_length: 8});
+        fake.save.mockResolvedValue({kind: 'saved'} satisfies SaveOutcome);
+        fake.fetchEntry.mockResolvedValue(entry([field({...CONSTRUCTOR_KEY, is_set: true, source: 'db', updated_at: UPDATED_AT})], {configured: true}));
+        mount(entry([CONSTRUCTOR_KEY]));
+
+        expect(setting('constructor')).toHaveAttribute('data-edit', '');
+        expect(inSetting('constructor', 'plugin-setting-secret-input'), 'nothing every object inherits shows as the secret').toHaveValue('');
+        expect(queryInSetting('constructor', 'plugin-setting-secret-state'), 'unset and editable: the input, nothing else').toBeNull();
+        expect(queryInSetting('constructor', 'plugin-setting-problem'), 'no problem it does not have').toBeNull();
+        expect(saveButton(), 'nothing to save').toBeDisabled();
+
+        await typeSecretAfterItsContent('constructor', SECRET);
+
+        expect(setting('constructor')).toHaveAttribute('data-edit', 'secret');
+        expect(inSetting('constructor', 'plugin-setting-secret-input')).toHaveValue(SECRET);
+        expect(saveButton()).toBeEnabled();
+
+        await pressSave();
+
+        await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledTimes(1));
+        await settled();
+        expect(fake.save.mock.calls, 'exactly what was typed, nothing in front of it').toStrictEqual([[[{family: 'asset', plugin_code: 'mockprov', field_key: 'constructor', scope: 'user', secret_value: SECRET}]]]);
+        expect(inSetting('constructor', 'plugin-setting-secret-input'), 'sent once, then forgotten: empty again').toHaveValue('');
+        expect(setting('constructor')).toHaveAttribute('data-edit', '');
     });
 });

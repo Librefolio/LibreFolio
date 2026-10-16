@@ -10,6 +10,7 @@
     import {onMount} from 'svelte';
     import {Puzzle} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import PluginSettingsForm from './PluginSettingsForm.svelte';
     import {fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
     import {FAMILY_TITLE_KEYS, groupByFamily, NOTE_CLASSES} from './pluginSettingsForm';
@@ -48,12 +49,15 @@
 </script>
 
 <section aria-busy={loading} class="space-y-6 text-lf-primary" data-busy={loading ? 'true' : 'false'} data-testid="plugin-settings-tab">
-    <header class="space-y-1">
-        <h2 class="flex items-center gap-2 text-lg font-semibold">
-            <Puzzle aria-hidden="true" class="h-5 w-5 text-lf-link" />
-            {$_('pluginSettings.tab.title')}
-        </h2>
-        <p class="text-sm text-lf-secondary">{$_('pluginSettings.tab.intro')}</p>
+    <header class="flex items-start justify-between gap-4">
+        <div class="space-y-1">
+            <h2 class="flex items-center gap-2 text-lg font-semibold">
+                <Puzzle aria-hidden="true" class="h-5 w-5 text-lf-link" />
+                {$_('pluginSettings.tab.title')}
+            </h2>
+            <p class="text-sm text-lf-secondary">{$_('pluginSettings.tab.intro')}</p>
+        </div>
+        <DocsLink icon="book" label={$_('common.documentation')} path="user/settings/plugins/" size={18} testId="plugin-settings-docs" />
     </header>
 
     {#if loadFailed}

@@ -40,10 +40,30 @@
  * the account name, inside the same form. The account name comes from
  * `currentUser`, mocked below as a writable so a test can rename the user, or
  * end the session, under a mounted dialog.
+ *
+ * Accounts lot A6c (decision 37) takes the password rules out of the dialog. The
+ * backend writes them once, refuses a new password that breaks one with a 400
+ * `{detail: {error_code: "PASSWORD_TOO_WEAK", message, rules}}`, and exposes
+ * them in `GET /system/instance` (`accounts.password_rules`), where the meter,
+ * `PasswordStrength`, reads them. The dialog keeps no copy any more: it binds
+ * the meter's `valid`, as `ResetPasswordCard` does since A5b, and both Save and
+ * the submit guard follow it. Its old copy hard-wired eight characters and
+ * ASCII classes, so the A6c describe tells the two apart with rules only the
+ * server could have given: twelve characters asked for, a rule set that asks
+ * only for length, an answer that lands while the dialog is open, a code this
+ * build does not know (never a reason to withhold Save: the server decides). The
+ * configuration is a fake with the real store's shape — `reactiveBox` behind
+ * getters, as in `LoginCard.test.ts` — and starts every test without
+ * `password_rules`, so every other case runs on the defaults, the five rules of
+ * before. The server's refusal is an object `detail`, which the dialog's
+ * `onError` used to lower-case as if it were a sentence: it must be drawn as
+ * `auth.validation.passwordTooWeak`, the key the dialog's own check already
+ * shows, never as the server's English, and leave the form usable.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable, writable} from 'svelte/store';
 import {tick} from 'svelte';
+import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // The identity translator: components render i18n keys verbatim, so the tests
@@ -56,6 +76,33 @@ vi.mock('$lib/api', () => ({zodiosApi: {change_password_api_v1_auth_change_passw
 // store until the component subscribes to it.
 vi.mock('$lib/stores/app/auth', () => ({
     currentUser: {subscribe: (run: (value: unknown) => void) => signedIn.subscribe(run)},
+}));
+// The instance configuration the meter reads its rules from (A6c): a fake with the real store's shape, enumerable
+// getters over `$state` (`reactiveBox`), so an answer a test lands reaches the meter the way the server's does.
+const mocks = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    /** What the store holds until the server answers (`DEFAULT_INSTANCE_CONFIG`), and what a backend older than A6c answers: no `password_rules`. */
+    const BEFORE_ANSWER = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}} as InstanceConfig;
+    return {
+        BEFORE_ANSWER,
+        instance: reactiveBox<{config: InstanceConfig; loaded: boolean}>({config: BEFORE_ANSWER, loaded: false}),
+        instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
+    };
+});
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
+    DEFAULT_INSTANCE_CONFIG: mocks.BEFORE_ANSWER,
+    instanceConfig: {
+        get config() {
+            return mocks.instance.config;
+        },
+        get loaded() {
+            return mocks.instance.loaded;
+        },
+        get failed() {
+            return false;
+        },
+        load: mocks.instanceLoad,
+    },
 }));
 
 import PasswordChangeModal from './PasswordChangeModal.svelte';
@@ -128,12 +175,37 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; rejec
     return {promise, resolve, reject};
 }
 
+/** One entry of `accounts.password_rules`, as the server sends it (A6c). */
+type RuleAnswer = {code: string; value?: number | null};
+/** The five rules of before, as a server of A6c sends them: the defaults, in their order. */
+const FIVE: RuleAnswer[] = [{code: 'min_length', value: 8}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}];
+/** The five, asking for `value` characters. */
+const withMinLength = (value: number): RuleAnswer[] => [{code: 'min_length', value}, ...FIVE.slice(1)];
+
+/** The server's answer lands: from now on the configuration carries these rules. */
+function answer(password_rules: RuleAnswer[]): void {
+    mocks.instance.config = {...mocks.BEFORE_ANSWER, accounts: {...mocks.BEFORE_ANSWER.accounts, password_rules}} as InstanceConfig;
+    mocks.instance.loaded = true;
+}
+
+/** GOOD_PASSWORD and one more digit: twelve characters, all five classes. */
+const TWELVE = 'Str0ng!pass1';
+/** Twenty-eight characters of lower case and spaces: no capital, no digit, no symbol. */
+const PASSPHRASE = 'correct horse battery staple';
+/** What the dialog says of a password the rules refuse, its own check or the server's. */
+const WEAK_KEY = 'auth.validation.passwordTooWeak';
+
 beforeEach(() => {
     changePassword.mockReset();
     changePassword.mockResolvedValue({message: 'Password changed successfully'} as never);
     // `trySave` logs every failure to the console by contract; the failure paths
     // below are deliberate, so the noise is suppressed rather than read.
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Every test starts before the server's answer: no password_rules, so the meter checks the defaults.
+    mocks.instance.config = mocks.BEFORE_ANSWER;
+    mocks.instance.loaded = false;
+    mocks.instanceLoad.mockReset();
+    mocks.instanceLoad.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -511,6 +583,91 @@ describe('PasswordChangeModal — the submit event bypasses the button that guar
 
         await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
         expect(changePassword).toHaveBeenCalledWith({current_password: '', new_password: GOOD_PASSWORD});
+    });
+});
+
+describe("PasswordChangeModal — the password rules are the server's, read through the meter (A6c)", () => {
+    it("withholds Save for a new password the server's rules refuse, though it meets the five of before: min_length 12", async () => {
+        answer(withMinLength(12));
+        mount();
+        await fillValid(); // GOOD_PASSWORD: eleven characters, all five classes — what the old copy let through
+
+        expect(saveButton()).toBeDisabled();
+        // The meter under the field says which rule: one set of rules decides both.
+        expect(screen.getByTestId('password-rule-minLength')).toHaveAttribute('data-passed', 'false');
+    });
+
+    it('offers Save for a new password of the length the server asks for', async () => {
+        // The barrier of the case above: the same rules, twelve characters, and Save is there.
+        answer(withMinLength(12));
+        mount();
+        await fillValid({next: TWELVE});
+
+        expect(saveButton()).toBeEnabled();
+    });
+
+    it("offers Save, and sends, a password the server's rules accept though the old copy refused it: a rule set that asks only for length", async () => {
+        answer([{code: 'min_length', value: 16}]);
+        mount();
+        await fillValid({next: PASSPHRASE});
+        expect(saveButton()).toBeEnabled();
+
+        await fireEvent.click(saveButton());
+
+        await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
+        expect(changePassword).toHaveBeenCalledWith({current_password: OLD_PASSWORD, new_password: PASSPHRASE});
+    });
+
+    it('follows an answer that lands while the dialog is open, both ways, without a remount', async () => {
+        mount();
+        await fillValid();
+        expect(saveButton(), 'the defaults: eleven characters are enough').toBeEnabled();
+
+        answer(withMinLength(12));
+        await tick();
+        expect(saveButton(), 'the answer asks for twelve').toBeDisabled();
+
+        answer(FIVE);
+        await tick();
+        expect(saveButton(), 'a later answer asks for eight again').toBeEnabled();
+    });
+
+    it("refuses through the submit event as well, by the server's rules, and says so", async () => {
+        // The guard inside `handleSubmit` reads the same `valid` as Save: no second copy there either.
+        answer(withMinLength(12));
+        const {container} = mount();
+        await fillValid();
+
+        await fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+
+        expect(changePassword).not.toHaveBeenCalled();
+        expect(banner()).not.toBeNull();
+        expect(within(banner()!).getByText(WEAK_KEY)).toBeInTheDocument();
+    });
+
+    it('never withholds Save for a rule code it does not know: the server checks it', async () => {
+        answer([{code: 'no_dictionary_word'}, ...FIVE, {code: 'not_in_this_build', value: 3}]);
+        mount();
+        await fillValid();
+
+        expect(saveButton()).toBeEnabled();
+    });
+
+    it("shows the server's PASSWORD_TOO_WEAK as auth.validation.passwordTooWeak, never its sentence, and lets the user retry", async () => {
+        // The meter let the password through and the server did not: its rules changed after the page had read them.
+        changePassword.mockRejectedValue(serverError({error_code: 'PASSWORD_TOO_WEAK', message: 'An English sentence the user must not read', rules: ['min_length']}));
+        mount();
+        await fillValid();
+
+        await fireEvent.click(saveButton());
+
+        await waitFor(() => expect(banner()).not.toBeNull());
+        const shown = banner()!.textContent ?? '';
+        expect(shown).toContain(WEAK_KEY);
+        expect(shown, "never the server's English").not.toContain('An English sentence the user must not read');
+        // The form is usable again: the draft is kept, and Save is back once the request is over.
+        expect(screen.getByTestId('password-new')).toHaveValue(GOOD_PASSWORD);
+        expect(saveButton()).toBeEnabled();
     });
 });
 
