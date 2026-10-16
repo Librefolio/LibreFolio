@@ -51,17 +51,9 @@ lib/components/transactions/form/TxFormBanners.svelte	6
 lib/components/transactions/form/TxFormOptionalSection.svelte	25
 lib/components/transactions/form/TxFormPairSection.svelte	93
 lib/components/transactions/form/TxFormSingleSection.svelte	50
-lib/components/transactions/import/AssetGroupStep.svelte	108
-lib/components/transactions/import/BrimEvidenceTable.svelte	52
-lib/components/transactions/import/BrimNoticeList.svelte	8
-lib/components/transactions/import/FixFlaggedStep.svelte	205
-lib/components/transactions/import/GapFixStep.svelte	95
+lib/components/transactions/import/AssetGroupStep.svelte	14
 lib/components/transactions/import/GapFixToggle.svelte	4
-lib/components/transactions/import/ImportAssetPicker.svelte	20
-lib/components/transactions/import/ReportSetCard.svelte	75
-lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1
-lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
-lib/components/transactions/modals/ParseDetailModal.svelte	141
+lib/components/transactions/modals/ImportWizardModal.svelte	8
 lib/components/transactions/modals/PromoteAllModal.svelte	32
 lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
 lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2
@@ -72,12 +64,6 @@ lib/components/transactions/modals/TransactionPickerModal.svelte	20
 lib/components/transactions/shared/TransactionResultBanner.svelte	18
 lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
 lib/components/transactions/wac/WacPreviewSection.svelte	94
-lib/components/transactions/wizard/AnalyzeStep.svelte	67
-lib/components/transactions/wizard/DuplicatesStep.svelte	77
-lib/components/transactions/wizard/ReviewStep.svelte	86
-lib/components/transactions/wizard/SelectFilesStep.svelte	22
-lib/components/transactions/wizard/UploadStep.svelte	20
-lib/components/transactions/wizard/WizardFooter.svelte	101
 lib/components/ui/data-editor/DataEditor.svelte	5
 lib/components/ui/display/BrokerIcon.svelte	4
 lib/components/ui/display/KpiDivergingFlowBar.svelte	18
@@ -179,7 +165,7 @@ lib/theme/toneClasses.ts	22
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
-lib/utils/transactions/pairCellHtml.ts	6
+lib/utils/transactions/pairCellHtml.ts	2
 routes/(app)/assets/+page.svelte	234
 routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/+page.svelte	38
