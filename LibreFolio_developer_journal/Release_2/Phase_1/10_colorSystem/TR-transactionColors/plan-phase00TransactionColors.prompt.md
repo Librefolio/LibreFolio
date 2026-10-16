@@ -441,5 +441,35 @@ deve essere vuoto.
    >
    > **⚠️ Fuori pista:** il nome «TR-5» del lotto si scontrava con la voce TR-5 del backlog (scrollbar). Il lotto si
    > chiama «lotto 5» nel backlog e qui.
-7. ⏳ Slot A+B insieme (verso le 14:45, coordinatore).
+7. ⏳ Slot A+B insieme. **Coordinatore, 12:57:** `front-transaction all` al posto delle 25 azioni singole (un server e
+   un populate, e copre di più); niente `front check`, perché vale lo `svelte-check` della build delle 12:24 sullo
+   stesso albero. Lo slot è il **2, prestato dalla 1.3**, dopo L-20, verso le 13:40, con **fine tassativa alle
+   14:30**: dopo le 14:20 non partono passi nuovi. I rossi fuori dalle mie spec passano prima da `test-triage`.
+   > Script `slot_ab2.sh` (cartella di sessione), tre passi in serie: `api sync`; `front-utility component-unit`;
+   > `front-transaction all`.
+   > - Ogni passo gira in un gruppo di processi suo (`set -m`). Dopo le 14:20 non ne parte uno nuovo.
+   > - Alle 14:30 il passo in corso riceve SIGINT al gruppo, poi SIGTERM; mai SIGKILL, così il runner smonta il suo
+   >   server.
+   > - Quello che resta nel gruppo riceve SIGTERM e viene elencato.
+   > - Provato a vuoto con `sleep` e una scadenza a 3 s: taglio, passo dopo saltato, gruppo pulito.
+   > **Preparazione della corsia** (coordinatore, 12:23: «come BK e IW, uno alla volta, sotto `nice` e con carico sotto
+   > 50, senza server»). Lo script `prep_lane.sh` e i log stanno nella cartella di sessione. Comandi, in serie:
+   > - `front build --debug`;
+   > - `mkdocs build`;
+   > - `test --test-port 6154 --data-dir /tmp/librefolio-r2-tr db populate --force --clean --with-reports`, lo stesso
+   >   populate che il runner del frontend fa prima degli E2E (`_frontend_common._ensure_db_populated`).
+   >
+   > Il secondo checkpoint è committato in tre: `70bae91b4` (le conferme), `a5e229084` (lo spec), `505a28289` (il
+   > diario). Lo SHA di TR-2 è nel backlog.
+   >
+   > **Esito della preparazione** (12:24–12:53, tre comandi, uscita 0 per tutti; porta 6154 libera alla fine):
+   > - `front build --debug`: 467 s. `svelte-check` dentro la build: **0 errori, 0 avvisi**, un primo segnale per
+   >   `front check`.
+   > - `mkdocs build`: 204 s; tutti i 3.076 URL relativi del sito si risolvono.
+   > - populate: 34 s. Dati in `/tmp/librefolio-r2-tr` (`sqlite/`, `custom-uploads/`, `broker_reports/`, `logs/`);
+   >   l'istantanea del DB va nella cartella dei log del runner, `.testLog/00_archive/`, ignorata da git.
+   >
+   > **⚠️ Fuori pista:** il log complessivo di `tee` non si è scritto, perché la cartella `prep/` non c'era ancora
+   > quando `tee` l'ha aperta. Per questo lo script esce con 1, mentre i suoi tre passi escono con 0. I log dei passi
+   > ci sono.
 8. ⏳ Checkpoint finale, FROZEN.
