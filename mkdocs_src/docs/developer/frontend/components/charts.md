@@ -253,9 +253,20 @@ the chart is converted, and each Asset comparison gets an item of its own — `i
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
 so every line uses one window and one currency. A page-local wrapper,
 `queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
-malformed result does not discard the response. The plugin is `catalog_visible = False`
-(see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
-selector offers it.
+malformed result does not discard the response.
+
+The same plugin is also in the signal catalog (see
+[Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)): in
+`'price'` mode the Signals panel offers it in its Risk group as **Rolling Return**, a config of
+`signalType` `asset-calendar-rolling-return` whose card edits `window_days` (30 by default, at
+least 1). `buildBackendSignalRequestPlan()` requests it like any other backend indicator, and its
+`calendar_return` line is drawn over the prices on a secondary axis of its own,
+`independent:calendar_return`. Overlay and mode compute the same metric, the price return against
+the resolved close `window_days` calendar days earlier, but never in the same request:
+`loadChartData()` requests the overlay only in `'price'` mode, with its card's window, and the
+mode's series only in `'calendar-return'` mode, with the **Window** control's days. In
+`'calendar-return'` mode the overlay config stays saved and hidden, like every config but the
+Asset comparisons.
 
 `calendarReturnWindow.ts` turns the **Window** control into days: presets `1w`, `1m`, `3m`, `1y`
 are 7, 30, 90 and 365 days, and a custom amount is multiplied by 7, 30 or 365 (weeks, months,
@@ -327,6 +338,21 @@ Saving a scope default (`setGlobalSettings(settings, scope)`) deletes every over
 scope, detail pages included, and leaves the other scope alone. The period is not a chart
 setting: `dateRangeStore.svelte.ts` keeps it in `sessionStorage` (`librefolio_dateRange`), shared
 by the Dashboard, broker, asset and FX pages of the tab.
+
+The stored document carries a `version`, `STORAGE_VERSION` (3). When the store reads it,
+`migratePersistedChartSettings()` brings a version 1 or 2 document to version 3, in the global
+settings and in every override; a document of any other version is ignored, and the defaults
+apply. Version 3 follows the developer's decision 29, one Rolling Return measured in calendar
+days: the observation-count `RISK_ROLLING_RETURN` plugin is gone, so every saved
+`risk-rolling-return` config becomes an `asset-calendar-rolling-return` one. Its `window` param
+becomes `window_days`, with the same number; the style of its `rolling_return` output moves to
+`calendar_return` in `componentStyles`; and the secondary-axis scale saved under
+`independent:risk_return` moves to `independent:calendar_return`, unless that key already holds
+one. Every other field and every other signal stay as they were. A window of N observations thus
+becomes N calendar days: 30 observations of an exchange-traded asset, about 42 calendar days,
+become 30 days, while a crypto-asset, quoted every day, sees no change. The store writes the
+migrated document back to `localStorage` at once; `chartSettingsStore.migration.test.ts` covers
+both the function and that rewrite.
 
 ### Axis rows and ranges
 

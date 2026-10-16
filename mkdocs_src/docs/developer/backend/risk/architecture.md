@@ -45,7 +45,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/metrics.py` | Pure numeric primitives: volatility, Sharpe and Sortino, drawdown episodes, VaR/CVaR, correlation, risk contributions, buy-and-hold replay. |
 | `backend/app/services/risk/acquired.py` | Measures re-implemented from the Riskfolio-Lib catalogue in the project's sign conventions; the library is their test oracle, never a runtime dependency. |
 | `backend/app/services/risk/analytic_helpers.py` | Extraction helpers that turn a missing input into a declared refusal (`require_primary_returns`, `prepared_scope_series`, …). |
-| `backend/app/services/risk/signal_helpers.py` | Adapters reused by the five risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) (drawdown and rolling return, volatility, Sharpe, beta). |
+| `backend/app/services/risk/signal_helpers.py` | Adapters reused by the four risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) that read the prepared series (drawdown and rolling volatility, Sharpe, beta). |
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |

@@ -46,7 +46,7 @@ class RollingVolatilityParams(BaseModel):
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.window",
             "x-control-order": 1,
-            "x-suffix": "days",
+            "x-suffix": "observations",
             "x-step": 1,
             "x-tooltip-key": "signals.tooltips.riskWindow",
         },

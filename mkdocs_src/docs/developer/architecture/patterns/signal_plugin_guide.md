@@ -277,11 +277,12 @@ and documentation links without a signal-specific UI implementation.
 
 `catalog_visible` (inherited `True`) decides whether the plugin appears in that catalog:
 `SignalPluginRegistry.list_definitions()` skips a plugin that sets it to `False`, so no
-selector offers it, while a request naming its code still runs. Of the 23 registered plugins,
-`calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is the one hidden: the asset chart
-requests it for its **Rolling Return** mode (see
+selector offers it, while a request naming its code still runs. None of the 22 registered
+plugins sets it today. `calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is in the
+catalog like the others, as the **Rolling Return** of the Risk group, and the asset chart also
+requests it by its code for its **Rolling Return** mode (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-prices-and-rolling-return)).
-The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 visible plugins whose
+The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 plugins whose
 `compatible_domains` include `ASSET`, which is all of them; the FX catalog,
 `GET /api/v1/fx/currencies/signals`, lists the 9 close-only ones that also declare `FX`: EMA,
 SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
@@ -307,7 +308,7 @@ Set `computes_on_quote_days = False` only when:
 - the windows are calendar spans by definition, as in `calendar_rolling_return`: its
   input keeps every calendar point, and its window is declared in days;
 - the plugin uses the prepared series (`input_requirements.uses_prepared_asset_series`),
-  as the five prepared-series risk signals do (drawdown and rolling beta, return, Sharpe,
+  as the four prepared-series risk signals do (drawdown and rolling beta, Sharpe,
   volatility): that series is already on the quote calendar, and the service never
   filters it.
 
@@ -635,10 +636,12 @@ a new plugin lands in the `charts` subsystem, which owns the `signals` prefix.
 Keys outside the plugin's space stay in the `charts` subsystem, where `add` puts them by itself:
 the parameter captions and tooltips named by `x-i18n-key` and `x-tooltip-key`
 (`chartSettings.params.*`, `chartSettings.tooltips.*`), the units (`signals.units.*`), and the
-keys several plugins share — `signals.reference.zero`, and `signals.riskRollingReturn.*`, the space
-of the two rolling-return plugins. `./dev.py test utils gate-plugin-i18n-ownership` keeps every key
-the plugin declares in its space — `display_name_key`, `description_key`, and the `label_key` and
-`description_key` of its outputs, reference levels and regions — in its fragment
+keys several plugins share — `signals.reference.zero`, and `signals.tooltips.riskWindow`, the
+window tooltip of Rolling Volatility, Sharpe and Beta. A tooltip inside the plugin's space belongs
+to its fragment like any other key: `calendar_rolling_return` keeps
+`signals.riskRollingReturn.windowTooltip` there. `./dev.py test utils gate-plugin-i18n-ownership`
+keeps every key the plugin declares in its space — `display_name_key`, `description_key`, and the
+`label_key` and `description_key` of its outputs, reference levels and regions — in its fragment
 ([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
@@ -666,8 +669,12 @@ period: int = Field(
 `x-suffix` names the unit shown next to the input. A period counted in sessions
 declares `"x-suffix": "sessions"` and the shared tooltip
 `chartSettings.tooltips.sessionPeriod`, unless the period needs its own explanation
-(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A calendar window
-declares `"x-suffix": "days"` (`calendar_rolling_return` and the rolling risk windows).
+(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A window over the
+prepared return series counts its return observations, one per quote day with a return, and
+declares `"x-suffix": "observations"` with the shared tooltip `signals.tooltips.riskWindow`:
+the `window` of Rolling Volatility, Sharpe and Beta. A calendar window declares
+`"x-suffix": "days"`: the `window_days` of `calendar_rolling_return`, with its own tooltip
+`signals.riskRollingReturn.windowTooltip`.
 `SignalParamControl.svelte` renders the suffix through the i18n key
 `signals.units.<suffix>` and falls back to the raw value when the key is missing: a
 symbol such as `%` or `σ` needs no key, while a word unit needs `signals.units.<suffix>`
@@ -741,7 +748,9 @@ event selection, and tests.
 2. Define a strict Pydantic parameter model.
 3. Declare required price fields/events and compatible domains.
 4. Decide what the periods count: sessions (keep the inherited
-   `computes_on_quote_days = True`, declare `"x-suffix": "sessions"`) or a calendar
+   `computes_on_quote_days = True`, declare `"x-suffix": "sessions"`), the return
+   observations of the prepared series (`uses_prepared_asset_series`,
+   `computes_on_quote_days = False`, `"x-suffix": "observations"`), or a calendar
    span (`computes_on_quote_days = False`, `"x-suffix": "days"`).
 5. Declare every canonical output in `output_specs`.
 6. If AI Export will curate the plugin, declare fixed or parameter-matched
@@ -786,7 +795,8 @@ Useful commands:
 - Never compact missing dates or fields silently; dropping the carried days from a
   quote-day plugin's input is the declared contract, not compaction.
 - Count a period over trading activity in sessions (inherited
-  `computes_on_quote_days = True`); a window that is a calendar span by definition sets
+  `computes_on_quote_days = True`); a window over the prepared return series counts return
+  observations and declares them; a window that is a calendar span by definition sets
   `computes_on_quote_days = False` and declares days.
 - Return canonical line, area, bar, or band series only.
 - Use finite numeric output; `NaN` may represent warm-up gaps, infinity may not.
