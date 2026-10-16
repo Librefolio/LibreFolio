@@ -1145,7 +1145,8 @@ tool.
 > - per il pool BRIM, il passo dei processi figli, che termina i worker e fa tornare `shutdown(wait=True)`.
 
 1. Test di `test-author`, rossi: le unità, i processi veri con l'app minima su un socket Unix, `entrypoint.sh` e la
-   grazia del runner. ⏳ (parte 1 ✅ 2026-10-15: unità, `entrypoint.sh` e grazie; i test di processo dopo CP2b)
+   grazia del runner. ✅ (parte 1 il 15/10: unità, `entrypoint.sh` e grazie; i test di processo, SDP e
+   `services shutdown-process`, nella parte 2, passi 2–3, il 15/10; segnato il 16/10)
 
    > **Note implementazione** (parte 1): `backend/test_scripts/test_services/test_shutdown_budget.py`, SDB-001…041,
    > 178 casi, azione `services shutdown-budget` (PURE):
@@ -1208,8 +1209,9 @@ tool.
    > ruff e black puliti sui file del lotto. In `dev.py` ruff conta gli stessi 42 reperti di prima, e nessuno è sulle
    > mie righe. Black segnala riformattazioni già presenti in `dev.py` e in `_server.py`, e nessuna tocca le mie
    > righe.
-4. Verdi e guardie; poi, su uno slot del coordinatore, un ciclo di vita vero del backend della corsia. ⏳ (parte 1 ✅
-   2026-10-15)
+4. Verdi e guardie; poi, su uno slot del coordinatore, un ciclo di vita vero del backend della corsia. ✅ (parte 1
+   il 15/10; il ciclo di vita vero nella parte 2, passo 4, il 15/10 sera: `api system` 117/117 sul backend della
+   corsia; segnato il 16/10)
 
    > **Note implementazione** (parte 1; corsia 6186, `nice -n 15`, una prova alla volta):
    > - `services shutdown-budget` **178/178** in 11,3 s;
@@ -1264,8 +1266,8 @@ tool.
    > puliti sui file nuovi, le ammonizioni a posto e `git diff --check` pulito. In quel commit `services
    > shutdown-process` è rosso, perché `lifecycle` non c'è ancora; dopo il merge resta rosso solo SDP-007, il
    > cablaggio, fino alle 3 righe.
-5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳ (`.env.example` ✅ con la parte 1; doc
-   in bozza ✅ 2026-10-15, entra con la parte 2)
+5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ✅ (`.env.example` con la parte 1; la doc e il
+   CHANGELOG con la parte 2: `fb3f98a0c`, CHANGELOG `4294ba12a`, entrati in `967094d81`; segnato il 16/10)
 
    > **Note implementazione** (doc, da `docs-writer`, solo EN, nessuna build, niente stamp):
    > - `admin/configuration.en.md`: sezione nuova «⏹️ Stopping the Server» `{: #shutdown }`, fra «Startup Checks» e
@@ -1369,7 +1371,8 @@ tool.
    >
    > Poi la pausa delle prove chiesta dal coordinatore (20:46, galleria di DV): niente in esecuzione.
 4. Ciclo di vita vero (`api system` ed E2E con l'osservatore), poi `mkdocs build` e `check-links`, sullo slot del
-   coordinatore. ⏳ (`api system` ✅)
+   coordinatore. ✅ 15/10 sera (`api system` 117/117, `front-utility settings` 46/46, `mkdocs build` 0 avvisi,
+   `check-links` 96: note sotto; segnato il 16/10)
 
    > **Note implementazione** (slot pesante 1 del coordinatore, dalle 20:54; `/tmp/libreFolio_z6b_run.sh`,
    > `nice -n 10`):
@@ -1637,7 +1640,10 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      sull'arco, la domanda del rombo accorciata: i dettagli sono nelle sezioni sotto) e motore Dagre, il default
      della regola di `mkdocs.instructions.md` per i grafi semplici: 82% di scala, 1005 px d'altezza, flusso
      dall'alto in basso. Ricostruito: build 0 warning, `check-links` 96 validi.
-   - ⏳ Dopo le 01:15: `api system`, `db post-migration`, `test_market_calendar.py`.
+   - ✅ Dopo le 01:15: `api system`, `db post-migration`, `test_market_calendar.py`. Superati (segnato il 16/10):
+     `api system` 117/117 alle ~01:45 nelle prove di Z4 («anche le prove d'ingresso di Z3», sezione Z4, passo 3);
+     `db post-migration` 41/41 e `test_market_calendar.py` 37/37 nelle prove di Z2b del 16/10 notte, su una base
+     che contiene Z3.
 
 ### Z4 — `POST /api/v1/system/wake-sync`
 
@@ -1960,7 +1966,8 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
 3. Verdi:
    - ✅ 16/10 ~05:12: `front-utility component-unit Z7c-2` 26/26; cancello dei colori pulito; `i18n check` stretto;
      ruff, black e Prettier puliti.
-   - ⏳ Dopo il fermo: `api scheduler` (ricostruisce il frontend), `component-unit` intero, `api sync`.
+   - ✅ Dopo il fermo: `api scheduler` (ricostruisce il frontend), `component-unit` intero, `api sync`: fatti alle
+     07:08, voce sotto (segnato il 16/10).
    - ✅ 16/10 07:08, al via del coordinatore («Blocco finito, go», slot 1 fino alle 07:05), uno alla volta con `nice`
      e il carico sotto 70 (`/tmp/libreFolio_z7c_run.sh`), sulla revisione combinata `8aeabc41b`:
      - `api scheduler` 16/16 (SAPI-001…014; SAPI-009 compreso, sul backend della corsia), 10 min 42 s con la
@@ -1978,7 +1985,8 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    - `developer/backend/scheduler.md`: tolta la frase diventata falsa («Neither passes on…»); le due rotte passano i
      campi, con i default per i file scritti prima; un paragrafo nuovo sul pannello (`pendingSchedulerRetry()`).
    - `developer/architecture/database/index.md`: la riga di `scheduler_state.json` con i quattro campi.
-   - `git diff --check` pulito; righe nuove ≤ 119 caratteri. ⏳ `mkdocs build` e `check-links` dopo il fermo.
+   - `git diff --check` pulito; righe nuove ≤ 119 caratteri. `mkdocs build` e `check-links` dopo il fermo: ✅ alle
+     07:08, con i verdi del passo 3 (0 avvisi, 97 validi; segnato il 16/10).
    > **Limite noto**: la scheda legge lo stato una volta sola, all'apertura (`loadSchedulerState()`), e decide lì se
    > un'ora è «ancora avanti». Una pagina lasciata aperta oltre quell'ora mostra un'ora passata fino al ricaricamento,
    > come il resto della riga di stato. Non lo curo qui.
@@ -2622,3 +2630,134 @@ Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104
    del caricamento (`scheduler/settings.py`) restano per i valori salvati prima del controllo o scritti a mano.
 2. ✅ 16/10 16:28 — La frase di «Configuration Integration» riscritta così, senza citare il commit (la pagina descrive
    lo stato di oggi). Solo inglese: la pagina per sviluppatori non ha traduzioni. Backlog: Z-17 chiusa.
+
+### Chiusura del piano: prova su Fly, foglio delle decisioni, pulizia (16/10, dopo Z-17)
+
+> **Via** (coordinatore, 16/10 16:31): «Yes to all three proposals, in this order: 1. Fly acceptance test: the protocol
+> in plan 06 and the «Check that it works» section in `admin/sleep_wake.en.md` (EN only). It's useful for the Cloud
+> control panel too […]; 2. sheet of the decisions «to review» in plan 06 […]; 3. plan 06 cleanup: close the
+> outdated ⏳ with proof. Docs/journal only: one checkpoint at the end with the three items.» Z-17 salvato
+> (`e6f152622` e `68b59450d`). Base: HEAD `68b59450d`.
+
+#### 1. Prova di accettazione su una macchina Fly vera (per il developer, prima del lancio)
+
+Finora la sospensione e `wake-sync` sono provati solo contro dei finti (`services sleep-wake-suspend`,
+`api system-wake`). La prova dice se reggono sulla piattaforma vera; la sezione «Check That It Works» di
+`admin/sleep_wake.en.md` (`#check-it-works`) ne è la versione per gli amministratori.
+
+**Prerequisiti.**
+- App Fly con volume; macchina con al più 2 GB di memoria, senza swap, aggiornata dopo il 20/06/2024
+  (`fly machine update <machine-id> --yes`); `fly.toml` come in `admin/sleep_wake.en.md#idle-suspend-fly`
+  (`auto_stop_machines = "off"`, `auto_start_machines = true`, `min_machines_running = 0`, `kill_signal = "SIGTERM"`,
+  `kill_timeout = 10`).
+- `[env]`: `LIBREFOLIO_IDLE_SUSPEND_MODE = "fly"`, `LIBREFOLIO_IDLE_SUSPEND_MINUTES = "5"`; il token con
+  `fly secrets set LIBREFOLIO_WAKE_TOKEN=$(openssl rand -hex 32)`; per il profilo del cloud anche
+  `LIBREFOLIO_PROFILE = "managed"` (H).
+- Almeno un asset e una coppia FX con un fornitore, perché i job abbiano qualcosa da fare.
+
+**Casi** (azione → atteso → prova da conservare; T0 = l'ora dell'ultima richiesta dell'utente):
+
+| # | Azione | Atteso | Prova |
+|---|---|---|---|
+| A1 | `fly deploy` | `fly logs`: `Idle monitor started`, `mode=fly`, `minutes=5` | la riga |
+| A2 | Login, Dashboard, chiudere la scheda a T0 | entro T0 + 5 min 30 s: `Idle suspend requested` (`idle_s` ≈ 300–330); `fly machine list`: `suspended`. Accettazione F26: entro N + 1 minuti | orari, righe, stato |
+| A3 | Pagina Assets in primo piano, nessun input da T0 | dopo 2 min nessuna richiesta del prezzo dal vivo e la pillola «Aggiornamento in pausa» (la specifica chiedeva 10 min); `suspended` entro T0 + 7 min 30 s | pannello Rete del browser, orari |
+| A4 | Riaprire l'app | la prima richiesta riprende la macchina; recupero dei giri persi; «Aggiornamento prezzi…» se un job era dovuto, poi sparisce; il Dashboard aperto si aggiorna da solo dopo un recupero che ha cambiato qualcosa | tempo di ripresa (clic → pagina), righe dello scheduler |
+| A5 | Avviare un backup o un calcolo lungo di un Tool, chiudere la scheda | nessuna sospensione finché il lavoro gira; `suspended` entro 30 s dalla fine, passati i minuti | orari |
+| A6 | A macchina sospesa: `curl -N -X POST -H "Authorization: Bearer $TOKEN" https://<app>.fly.dev/api/v1/system/wake-sync` | `200`, spazi, poi il report JSON (`status`, `jobs`); `Wake-up run started` / `Wake-up run finished`; 2 s dopo la fine dei job `Idle suspend requested` e `suspended` | uscita di `curl` con `time`, righe |
+| A7 | `wake-sync` senza intestazione, con un token sbagliato, due volte insieme, senza token sul server | `401` `wake_unauthorized`; `401`; `409` `wake_in_progress` alla seconda; `404` | stati e corpi |
+| A8 | Un monitor su `/api/v1/system/health` ogni 5 min | ogni chiamata riprende la macchina, che torna `suspended` entro 1–2 min (dopo una richiesta di sospensione il controllo successivo aspetta 60 s) | orari |
+| A9 | `fly deploy` di nuovo, a macchina accesa | il server si ferma entro gli 8 s del budget dopo SIGTERM, prima dei 10 s di `kill_timeout` (C-49) | righe di spegnimento |
+
+**Misure per il pannello del cloud** (le raccoglie chi fa la prova): il tempo di ripresa; la durata di un `wake-sync`
+(`finished_at − started_at` del report) e il suo `retry_at` quando c'è; il tempo da T0 a `suspended`; la memoria a
+riposo. **Esito**: una riga per caso (osservato, ok/ko); un ko diventa una voce del backlog di Z.
+
+#### 2. Foglio delle decisioni «da rivedere» (per il developer, prima del rilascio)
+
+Una riga per ogni decisione presa di notte o su delega e marcata «da rivedere» in questo piano: cosa fa oggi il codice
+e cosa cambierebbe se il developer decide altrimenti. Le decisioni già prese dal developer o dal coordinatore (D1–D11
+dell'analisi del 14/10, D-S1–D-S3, quelle di Z7 del 15/10, D1 della pillola) non ci sono. Tre decisioni senza nome nel
+piano prendono qui il loro: N-Z2b-7, N-Z3-doc, N-Z7c2-1. Percorsi relativi a `backend/app/` e `frontend/src/lib/`.
+
+| ID | Lotto | Cosa fa oggi | Cosa cambierebbe | Dove |
+|---|---|---|---|---|
+| N-Z2b-1 | Z2b | `LIBREFOLIO_IDLE_SUSPEND_MODE` sconosciuto vale `none` (un ERROR); maiuscole indifferenti; `MINUTES` illeggibile o fuori da 1–1440 vale 5 (un ERROR) | Rifiutare l'avvio con un valore sbagliato, o un altro default dei minuti | `config/sleep_wake.py`, `sleep_wake/idle_monitor.py` |
+| N-Z2b-2 | Z2b | Un controllo ogni 30 s (`IDLE_CHECK_SECONDS`), più uno 2 s dopo la fine di un `wake-sync` (`WAKE_CHECK_DELAY_SECONDS`) | Un intervallo più corto (sospensione più puntuale) o più lungo (macchina sveglia più a lungo) | `sleep_wake/idle_monitor.py` |
+| N-Z2b-3 | Z2b | Dopo una richiesta di sospensione, riuscita o no, 60 s prima del controllo dopo (`RESUME_GRACE_SECONDS`): la visita che sveglia fa in tempo a contare | Meno (rischio di risospendere prima che la visita conti) o più (più tempo sveglia dopo ogni monitor) | `sleep_wake/idle_monitor.py` |
+| N-Z2b-4 | Z2b | Sospensione fallita: WARNING alla prima di una serie, poi DEBUG; nuovo tentativo dopo 30 s, il doppio ogni volta, fino a 10 min; un successo azzera | Ogni fallimento a WARNING, o un altro tetto | `sleep_wake/idle_monitor.py` |
+| N-Z2b-5 | Z2b | I controlli di «lavoro in corso» (`tools`, `backup`) si registrano all'avvio del monitor; girano in un thread | Ogni servizio registra il suo controllo | `sleep_wake/idle_monitor.py`, `sleep_wake/activity.py` |
+| N-Z2b-6 | Z2b | Nei passi di H: `idle-monitor` subito dopo `scheduler` all'avvio, primo allo spegnimento | Un altro ordine dei passi | `services/platform/app_lifespan.py` |
+| N-Z2b-7 | Z2b | Il controllo dopo un `wake-sync` chiude anche l'attesa di 60 s: dopo un risveglio senza nessuno la macchina torna a dormire subito | Rispettare sempre i 60 s: ~1 min di macchina sveglia in più a ogni risveglio programmato | `sleep_wake/idle_monitor.py` |
+| D-Z3-1 | Z3 | Dopo un primo giro, è dovuto anche uno slot di un giorno configurato perso fra l'ultimo giro e adesso, fino a 7 giorni indietro (`MISSED_SLOT_LOOKBACK_DAYS`) | Solo gli slot di oggi (prima di Z3: uno slot perso di notte aspettava il giorno configurato dopo), o un'altra finestra | `scheduler/scheduler.py` |
+| D-Z3-2 | Z3 | I giri «return» e «wake» aspettano 2 s prima di leggere l'ora (`CLOCK_SETTLE_SECONDS`): dopo un resume di Fly l'orologio è indietro | Nessuna attesa (rischio di un'ora sbagliata) o un'altra | `scheduler/scheduler.py` |
+| D-Z3-3 | Z3 | I job girano solo nel worker leader; un altro risponde `not_leader` (documentato; l'immagine Docker ha un solo worker) | Un lock su file per farli girare in qualunque worker (Z-11) | `scheduler/scheduler.py` |
+| D-Z3-4 | Z3 | Su un'istanza bloccata non gira nessun job, per nessuna ragione (esito `blocked`); sbloccata, il primo giro recupera | Lasciar girare i job anche da bloccata | `scheduler/scheduler.py` |
+| N-Z3-doc | Z3 | Il diagramma della doc dello scheduler è semplificato (i due job in un nodo) e usa Dagre | Il diagramma completo con ELK, largo il 44% di più | `developer/backend/scheduler.md` |
+| N-Z4-1 | Z4 | Passati token e concorrenza, `wake-sync` risponde sempre 200 e lo `status` del corpo dice com'è andata | Uno stato HTTP per esito: impossibile dopo il primo spazio dello streaming | `api/v1/system/wake.py` |
+| N-Z4-2 | Z4 | Un'eccezione del giro dà `status: "error"`, `error` col nome della classe, `jobs` vuoto; il messaggio solo nel log | Il messaggio anche nella risposta (rischio di esporre dettagli) | `api/v1/system/wake.py` |
+| N-Z4-3 | Z4 | Se il chiamante chiude la connessione il giro continua fino alla fine; intanto un altro risveglio riceve 409 | Interrompere il giro (job lasciati a metà) | `api/v1/system/wake.py` |
+| N-Z4-4 | Z4 | Le regole del token sono quelle del token dei backup di B (almeno 32 caratteri ASCII visibili) | Regole proprie del risveglio | `config/sleep_wake.py`, `config/backup.py` |
+| N-Z4-5 | Z4 | Il corpo è `WakeSyncResponse`: `status`, orari, `error`, `jobs[]`; niente `reason` | Campi in più, per esempio `next_wake_at` (Z-7) | `schemas/sleep_wake.py` |
+| N-Z4-6 | Z4 | Il primo spazio parte subito, poi uno ogni 15 s finché il giro dura (il proxy di Fly chiude dopo 60 s senza byte) | Un altro intervallo | `api/v1/system/wake.py` |
+| N-Z5-1 | Z5 | «Aggiornamento prezzi…» solo per i giri di recupero (avvio, ritorno, risveglio) e solo mentre un job gira; mai per i giri regolari | Mostrarlo anche per i giri regolari | `scheduler/scheduler.py`, `features/price-refresh/priceRefresh.ts` |
+| N-Z5-2 | Z5 | Il frontend scopre il recupero da un'intestazione delle risposte, poi chiede lo stato ogni 3 s solo finché dura; mai a vuoto | Chiedere lo stato a intervalli fissi (visite in più: la macchina resta sveglia) | `sleep_wake/activity.py`, `priceRefresh.ts` |
+| N-Z5-3 | Z5, poi Z-13 e Z-13b | Dopo un recupero che ha aggiornato qualcosa, `notifyPricesCaughtUp()`: le cache del portafoglio segnano stale e Dashboard e pagina del broker aperte ricaricano il report in background | Ricaricare anche quando nulla è cambiato; ricaricare anche i pannelli (Z-15) | `priceRefresh.ts`, `stores/portfolio/portfolioMutation.ts`, le due pagine |
+| N-Z5-4 | Z5 | L'avviso è `info` e senza chiusura: sparisce da solo | Chiudibile dall'utente | `priceRefresh.ts` |
+| N-Z5-5 | Z5 | L'intestazione la scrive `ActivityMiddleware`, non una voce nuova della pila di H | Un middleware a sé nella pila di H | `sleep_wake/activity.py` |
+| N-Z7b-1 | Z7b | Un elemento `RATE_LIMITED` è rimandato, né riuscito né fallito; job `ok` senza rimandati né falliti, `error` se tutto il resto è fallito e niente è rimandato, `partial` negli altri casi | Contare i rimandati come falliti (più `error` nel pannello) | `scheduler/jobs.py` |
+| N-Z7b-2 | Z7b | Dopo un'eccezione, `last_error` è il solo nome della classe | Il messaggio intero nel pannello | `scheduler/scheduler.py` |
+| N-Z7b-3 | Z7b | Un job che solleva non tocca `last_run_at` (lo slot perso resta dovuto); lo trattiene `next_attempt_at` | Segnarlo come fatto: lo slot perso non torna | `scheduler/scheduler.py` |
+| N-Z7b-4 | Z7b | Rinvio e attesa dopo un errore stanno nelle funzioni del «dovuto»: valgono per giro, ritorno e risveglio | Un risveglio che li ignora e forza i job | `scheduler/scheduler.py` |
+| N-Z7b-5 | Z7b | Il report dei job e la risposta di `wake-sync` hanno `items_deferred` e `retry_at`; un job non dovuto porta `retry_at` se un tentativo è in attesa | Niente `retry_at` nella risposta: il pannello non sa quando tornare | `scheduler/scheduler.py`, `schemas/sleep_wake.py` |
+| N-Z7b-6 | Z7b | `load_state` ignora le chiavi che non conosce: un file più nuovo non azzera lo stato | Azzerare lo stato davanti a chiavi sconosciute | `scheduler/state.py` |
+| N-Z7b-7 | Z7b | Superata: l'API dello stato e il frontend li ha estesi Z7c-2 | — | — |
+| N-Z7c2-1 | Z7c-2 | Nel registro dello scheduler un elemento rimandato ha l'icona `CirclePause` col ruolo `text-lf-warning` e «Deferred»; l'ora del nuovo tentativo sta nell'intestazione della voce e nella riga di stato; le voci scritte prima di Z7b restano valide | Un'altra icona o un altro colore; l'ora altrove | `features/settings/SchedulerLogModal.svelte`, `schemas/settings.py` |
+| N-Z7c1-1 | Z7c-1 | Tutti gli asset in pausa con un'attesa nota: nessun raddoppio, il giro dopo alla fine della prima pausa; almeno uno senza attesa: conta come fallimento e l'attesa raddoppia | Raddoppiare sempre | `services/livePriceService.ts` |
+| N-Z7c1-2 | Z7c-1 | L'attesa fra due giri non scende mai sotto l'intervallo normale | — | `features/live-updates/activePolling.ts` |
+| N-Z7c1-3 | Z7c-1 | Un'eccezione del codice della pagina dopo la richiesta (riepilogo, testa del grafico) conta come giro fallito | Contare solo gli errori della richiesta (un `try` in più nelle pagine) | le pagine degli asset |
+| N-Z7c1-4 | Z7c-1 | `Retry-After` si legge solo con 429 e 503, in secondi (anche decimali) o come data HTTP futura | Leggerlo anche con altri stati | `activePolling.ts`, `livePriceService.ts` |
+| N-Z7c1-5 | Z7c-1 | «Aggiorna» con un giro in volo non ne avvia un secondo: quel giro vale come l'aggiornamento chiesto | Un secondo giro subito | `features/live-updates/activePolling.ts` |
+| N-Z13-1 | Z-13, rivista in Z-13b | Dopo un recupero ricaricano solo Dashboard e pagina del broker, in background, senza force, senza toccare `refreshVersion` né `requestPortfolioRefresh()` (vincolo di Y11) | Ricaricare anche i pannelli di rischio e dei lotti (Z-15, con Y) | le due pagine |
+| Z-5/D1 | Z-5 | La sync storica parte dall'orizzonte, o dal giorno dopo l'ultimo dato salvato se più vecchio; senza dati salvati, l'orizzonte | Per chi non ha dati, la storia intera | `scheduler/jobs.py` |
+| Z-5/D2 | Z-5 | Al massimo 365 giorni indietro, costante; nessuna regola né variabile nuova | Una regola nel pannello, o nessun tetto | `scheduler/jobs.py` |
+| Z-5/D3 | Z-5 | Cambi: una sola chiamata, dal più vecchio degli inizi (una coppia indietro allarga i giorni di tutte) | Una chiamata per gruppo d'inizio: più richieste ai fornitori | `scheduler/jobs.py` |
+| Z-5/D4 | Z-5 | L'ultimo dato salvato è il più recente: un buco in mezzo a una serie, più vecchio dell'orizzonte, resta | Cercare anche i buchi interni (più costoso) | `scheduler/jobs.py` |
+| Z-5/D5 | Z-5 | Una riga di log, `Scheduler: history sync reaches back`, solo quando la finestra si allarga; nulla nel registro né nel pannello | Mostrarlo nel registro dello scheduler | `scheduler/jobs.py` |
+| Z-5/D6 | Z-5 | I testi della UI sull'orizzonte restano («How many days back…»); la doc spiega l'allargamento | Aggiornare `horizonHint` e la descrizione nelle quattro lingue | i18n `settings` |
+
+#### 3. Pulizia del piano
+
+✅ 16/10 16:37 — Chiusi i sette ⏳ superati, ognuno con la prova di quando è stato fatto:
+- Z6b, parte 1, passi 1, 4 e 5: i test di processo, il ciclo di vita vero e la doc col CHANGELOG sono stati fatti
+  nella parte 2 (passi 2–4, 15/10) ed entrati in `967094d81`;
+- Z6b, parte 2, passo 4: `api system`, `front-utility settings`, `mkdocs build` e `check-links` del 15/10 sera, già
+  nelle note del passo;
+- Z3, passo 6: `api system` nelle prove di Z4 (~01:45), `db post-migration` e `test_market_calendar.py` in quelle di
+  Z2b, su basi che contengono Z3;
+- Z7c-2, passi 3 e 4: i verdi dopo il fermo e la doc, alle 07:08.
+
+Resta aperto, di proposito, un solo ⏳: il test dello spinner di Y11 (Z-13, passo 6), che aspetta Y11 nella mia
+base.
+
+#### Passi del lotto
+
+1. ✅ 16/10 16:33 — Il protocollo della prova su Fly (sopra, punto 1), scritto da me.
+2. ✅ 16/10 16:32–16:51 — La sezione «✅ Check That It Works» (`#check-it-works`) di `admin/sleep_wake.en.md` e una
+   frase nell'introduzione, da docs-writer, rivista da me (la riga di `curl` letta nel testo grezzo: il visore la
+   maschera). Sei prove: acceso, si addormenta, una visita lo sveglia, il lavoro lo tiene sveglio, il risveglio
+   programmato, i rifiuti; poi «If the machine does not sleep».
+   > **⚠️ Fuori pista**: docs-writer ha trovato un fatto sbagliato nel mio brief e due passi superati della pagina
+   > (Z2b), verificati da me sul codice. Un calcolo di un Tool gira dentro la sua richiesta, quindi la prova 4 usa
+   > solo un backup. Una richiesta dell'utente è segnata ai due capi (`activity.py:110–131`): un lavoro che è esso
+   > stesso una richiesta (un download lungo, un calcolo di un Tool) riavvia i minuti quando finisce, non «entro
+   > 30 s dalla fine». La scheda **Backup** legge l'avanzamento ogni secondo (`backupJob.svelte.ts`, `pollMs`
+   > 1000), anche in background, e ogni lettura è una visita. Corretti i due passi («When It Sleeps and Wakes»,
+   > «What Keeps the Machine Awake») e allineata la prova 4. Controllo dei cicli di rete fuori dall'aiutante di F26:
+   > c'è solo quello del backup, che si ferma con il job; gli altri timer sono dell'interfaccia. Nessuna voce nuova
+   > nel backlog.
+3. ✅ 16/10 16:35 — Il foglio delle decisioni (sopra, punto 2): 43 righe.
+4. ✅ 16/10 16:37 — La pulizia (sopra, punto 3): sette ⏳ chiusi con la prova, uno resta aperto di proposito.
+5. ✅ 16/10 16:54 — `mkdocs build` stretto, atteso il carico sotto 50: nessun avviso della pagina, solo quello noto di dev
+   (`wac.md`, corretto in `ed500643f`, non ancora nella base); `check-links` 97 validi.
+6. ✅ 16/10 16:56 — Checkpoint FROZEN inviato: due file (`admin/sleep_wake.en.md`, questo piano).
