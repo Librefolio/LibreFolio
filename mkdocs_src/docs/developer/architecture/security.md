@@ -32,6 +32,11 @@ LibreFolio uses **stateless JWT (JSON Web Token)** authentication stored in **HT
 3. The browser **automatically includes** this cookie on all subsequent requests
 4. `<img>` tags, `fetch()` calls, and page navigations all send the cookie seamlessly
 
+A refused sign-in is logged without what was typed, because the field takes an email address too and no address goes
+in a log (workstream E's rule, lot A-22): *Login failed: user not found* carries nothing about the identifier, *Login
+failed: wrong password* and *Login failed: user inactive* carry the account's `user_id`. Tests: `./dev.py test api
+auth`, `TestSignInLogsNoTypedIdentifier` (LOGIN-027 to LOGIN-033, in-process).
+
 !!! success "Why cookies over Bearer headers?"
 
     HTTP-only cookies are **automatically sent** by the browser for all same-origin requests — including `<img src>`, `<link href>`, and AJAX calls. This means uploaded files and plugin assets are served securely without any special frontend handling.
