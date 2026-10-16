@@ -3296,6 +3296,19 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
   passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
   oggi passano dal testo o dalla posizione. Dopo il FE5c.
+- **X-R21 · `fxRoutesStore.test.ts` va in timeout sotto carico, e il secondo caso eredita il primo** — basso, test; X,
+  16/10 (triage durante la verifica della base `fa97791f6`).
+  - **Il caso**: in `core-unit`, con la macchina a carico ~100, il file ha impiegato 7,5 s. Il primo caso è andato in
+    timeout ai 5 s di default di Vitest; il secondo ha fallito con «`listRoutes` chiamata 2 volte». Da solo il file
+    passa in 2,1 s, e il primo caso impiega 437 ms.
+  - **Verdetto del triage: assunzione (il tempo)**. Ogni caso fa `vi.resetModules()` e poi un `import()` a freddo di
+    `fxRoutesStore`, che si porta dietro tutto il grafo di `fxStoreRegistry`, dentro i 5 s di default.
+  - **La cascata**: il caricamento rimasto in sospeso chiama il mock condiviso (`vi.hoisted`) durante il caso
+    successivo.
+  - **Cura, solo nel test**:
+    - scaldare il grafo una volta sola, in un `beforeAll` con un timeout ampio, prima dei `resetModules`;
+    - dare a ogni caso il suo mock, così un timeout non si propaga.
+  - Mio, perché è nell'area del FE4. Dettagli: piano 03, sezione «CP13».
 
 ## W · Import e transazioni (fase 01)
 
