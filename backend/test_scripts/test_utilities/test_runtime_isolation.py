@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import urllib.parse
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -327,6 +328,37 @@ def case_variant_alias() -> tuple[Path, Path]:
     return production_dir, candidate
 
 
+#: Mode 000 is how these tests make a folder untraversable: it denies nothing to root, and Windows has no POSIX mode.
+needs_permission_denial = pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="mode 000 denies nothing to root, and Windows has no POSIX directory permissions")
+
+
+@contextlib.contextmanager
+def untraversable(folder: Path) -> Iterator[Path]:
+    """``folder`` at mode 000 for the block: nothing in it can be listed, nor even looked up.
+
+    Mode 0o700 comes back in a ``finally``, so ``tmp_path`` stays removable whatever the block raises. Where the mode
+    still lets this user search the folder, there is no scenario to check, and the test is skipped rather than green.
+    """
+    folder.chmod(0o000)
+    try:
+        if os.access(folder, os.X_OK):
+            pytest.skip("mode 000 does not deny this user the folder here: there is no untraversable folder to check")
+        yield folder
+    finally:
+        folder.chmod(0o700)
+
+
+def validation_refusal(test_root: Path, production_root: Path) -> ValueError:
+    """The ``ValueError`` that ``validate_test_data_dir`` refuses ``test_root`` with: a raw ``OSError`` or a pass fails the test, saying which."""
+    try:
+        backend_config.validate_test_data_dir(test_root, production_data_dir=production_root)
+    except ValueError as refusal:
+        return refusal
+    except OSError as raw:
+        pytest.fail(f"validate_test_data_dir let a raw {type(raw).__name__} escape instead of refusing with a ValueError: {raw}")
+    pytest.fail(f"validate_test_data_dir accepted {test_root}, which it could not verify: the guard must fail closed")
+
+
 class TestDataDirResolution:
     @pytest.mark.parametrize("resolver", ["backend", "cli"])
     @pytest.mark.parametrize("override", ["/isolated/lane-test-data", "runtime/lane-test-data", None], ids=["absolute", "relative", "default"])
@@ -443,6 +475,35 @@ class TestDataDirResolution:
             cli_base.configure_test_runtime(port=6199, data_dir=str(test_root))
 
         assert runtime_state() == before
+
+    @needs_permission_denial
+    @pytest.mark.parametrize("managed_file", ["sqlite/app.db", "secrets/instance.key"], ids=["sqlite", "secrets"])
+    def test_an_untraversable_managed_folder_is_refused_with_a_value_error(self, runtime_env, tmp_path, managed_file):
+        # H-4: the subtree scan skips a folder it cannot list, so the managed path inside it is the first one the guard
+        # cannot look up. Both roots are synthetic, the canonical production root included.
+        production_root, test_root, relative = tmp_path / "synthetic-production-data", tmp_path / "synthetic-test-data", Path(managed_file)
+        production_root.mkdir()
+        (test_root / relative.parent).mkdir(parents=True)
+        (test_root / relative).write_bytes(b"")
+        runtime_env.setattr(backend_config, "DEFAULT_PROD_DATA_DIR", production_root)
+        with untraversable(test_root / relative.parent):
+            refusal = validation_refusal(test_root, production_root)
+
+        assert str(refusal).startswith(f"Cannot verify test data path: {relative}"), f"the refusal must name the managed path it could not check: {refusal}"
+        assert isinstance(refusal.__cause__, PermissionError), f"the refusal must be chained from the OSError it turns into a ValueError, not from {refusal.__cause__!r}"
+
+    @needs_permission_denial
+    def test_an_untraversable_test_root_is_refused_with_a_value_error(self, runtime_env, tmp_path):
+        # H-4, the production-marker check: a root nobody can search could hold a marker nobody can see.
+        production_root, test_root = tmp_path / "synthetic-production-data", tmp_path / "synthetic-test-data"
+        production_root.mkdir()
+        test_root.mkdir()
+        runtime_env.setattr(backend_config, "DEFAULT_PROD_DATA_DIR", production_root)
+        with untraversable(test_root):
+            refusal = validation_refusal(test_root, production_root)
+
+        assert str(refusal).startswith("Cannot verify the test data directory"), f"the refusal must say the directory itself could not be checked: {refusal}"
+        assert isinstance(refusal.__cause__, PermissionError), f"the refusal must be chained from the OSError it turns into a ValueError, not from {refusal.__cause__!r}"
 
     @pytest.mark.parametrize(("test_mode", "expected_marker"), [(False, True), (True, False)], ids=["production", "test"])
     def test_ensure_data_dirs_marks_only_a_synthetic_production_root(self, runtime_env, tmp_path, test_mode, expected_marker):
