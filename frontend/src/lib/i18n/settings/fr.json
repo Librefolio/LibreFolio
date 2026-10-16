@@ -30,6 +30,8 @@
     "passwordChanged": "Mot de passe modifié avec succès",
     "passwordChangeFailed": "Échec de la modification du mot de passe",
     "currentPasswordIncorrect": "Le mot de passe actuel est incorrect",
+    "currentPasswordRequired": "Saisissez votre mot de passe actuel pour changer d'e-mail",
+    "emailPasswordHint": "Pour changer d'e-mail, saisissez votre mot de passe actuel. Vos autres appareils seront déconnectés.",
     "passwordsMustMatch": "Les mots de passe doivent correspondre",
     "passwordMustBeDifferent": "Le nouveau mot de passe doit être différent de l'actuel",
     "language": "Langue",

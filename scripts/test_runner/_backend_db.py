@@ -278,6 +278,16 @@ def db_migration_007(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 007 tests", verbose=verbose)
 
 
+def db_migration_008(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 008_registration_invite_default on temporary databases: an install with accounts and no registration row stays open."""
+    print_section("DB Test: Migration 008 (registration default)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, open written only for accounts without a row, an existing row untouched, no accounts no row, idempotence, a no-op downgrade, a 1.1 install at head")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_008_registration_default.py", test_names)
+    return run_command(cmd, "Migration 008 tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -323,7 +333,7 @@ def db_all(verbose: bool = False) -> bool:
         "post-migration-event-types",  # temporary databases only: needs none of the steps below
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
-        "migration-005", "migration-006", "migration-007", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "migration-005", "migration-006", "migration-007", "migration-008", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -410,6 +420,10 @@ Note: No backend server required. Tests operate directly on test DB.
     # PURE, as migration-005 and 006, whose in-process Alembic harness it reuses: private files under tmp_path only.
     add_test(cat, "migration-007", db_migration_007, name="Migration 007 Plugin Settings",
              desc="007_plugin_settings: the two tables with their CHECKs, uniques, CASCADE and SET NULL; models = migration; a populated 006 install kept; downgrade and idempotence both ways",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 007, whose in-process Alembic harness it reuses: private files under tmp_path only.
+    add_test(cat, "migration-008", db_migration_008, name="Migration 008 Registration Default",
+             desc="008_registration_invite_default: registration_mode open where accounts exist without the row; an existing row untouched; nothing without accounts; idempotent; downgrade a no-op",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",

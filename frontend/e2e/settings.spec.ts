@@ -1339,3 +1339,162 @@ test.describe('G-15: the tab bar keeps every tab reachable', () => {
         });
     }
 });
+
+// A6e (release 1.3, workstream A): changing the email asks for the current password.
+//
+// PUT /api/v1/auth/profile moved the address on the session cookie alone: with the «forgotten password» mail, a few minutes
+// at somebody else's unlocked session became the account for good. The server now wants `current_password` beside a new
+// email, checked before anything else — 400 with detail.error_code CURRENT_PASSWORD_REQUIRED without it,
+// CURRENT_PASSWORD_INVALID when it is wrong — and once the address has changed it ends every other session of the
+// account, while this one gets a new `session` cookie in the same response, as POST /auth/change-password does. The
+// Profile tab asks for the password while the email differs from the stored one. Its states, field by field, are the
+// component test's (ProfileTab.test.ts); what only a browser on the real backend can show is here:
+// - the refusal as the backend really answers it, reaching the tab: `profile-error` with its data-error-code, the new
+//   address still typed — and nothing changed on the server, nobody signed out;
+// - the change: the request carries the password, the address moves (GET /auth/me), this browser stores the re-issued
+//   cookie and opens the Profile again on a new document, and a device signed in before the change is signed out.
+// The per-row Save buttons carry no data-testid, only a translated title: the email is saved through `profile-save-all`,
+// which, with the email alone changed, sends exactly the email's request.
+// The account is the test's own, deleted in `finally`: changing a shared E2E user's email would sign out every spec
+// running beside it. Both contexts live and die inside the one test, so the block stays parallel.
+test.describe('A6e: changing the email asks for the current password', () => {
+    const PROFILE_URL = '/settings?tab=profile';
+
+    /** The values of the `session` cookies a browser context holds: what its pages, and its `request`, send. */
+    async function sessionCookies(context: BrowserContext): Promise<string[]> {
+        return (await context.cookies()).filter((cookie) => cookie.name === 'session').map((cookie) => cookie.value);
+    }
+
+    /** GET /auth/me through `api`: its status, and the account it answers for when it answers 200. */
+    async function whoAmI(api: APIRequestContext): Promise<{status: number; user: {id: number; email: string} | null}> {
+        const me = await api.get('/api/v1/auth/me');
+        if (me.status() !== 200) return {status: me.status(), user: null};
+        return {status: 200, user: ((await me.json()) as {user: {id: number; email: string}}).user};
+    }
+
+    /** The answer to the tab's PUT /api/v1/auth/profile. */
+    function isProfilePut(response: Response): boolean {
+        return response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/v1/auth/profile';
+    }
+
+    /**
+     * Sign the browser in as `user` through the login form and open Settings → Profile by its URL. A fresh account is
+     * gated on /welcome: every flow still due is skipped over the API, for this account only, and the page enters
+     * through the gate, which forwards to returnTo only once it has re-read that welcome is done — so landing on the
+     * Profile proves the gate let it in.
+     */
+    async function openProfile(page: Page, user: DisposableUser): Promise<void> {
+        await login(page, user);
+        await skipDueFlowsExcept(page, []);
+        await navigateTo(page, `/welcome?returnTo=${encodeURIComponent(PROFILE_URL)}`);
+        await expect(page).toHaveURL((url) => url.pathname === '/settings' && url.searchParams.get('tab') === 'profile', {timeout: 15_000});
+        const shell = page.getByTestId('app-shell');
+        await expect(shell).toBeVisible();
+        await expect(shell).toHaveAttribute('data-guide-inert', 'false');
+        await expect(page.getByTestId('settings-tab-profile')).toHaveAttribute('aria-selected', 'true');
+        // The tab shows the account the change will apply to.
+        await expect(page.getByTestId('profile-username')).toHaveValue(user.username, {timeout: 10_000});
+        await expect(page.getByTestId('profile-email')).toHaveValue(user.email);
+    }
+
+    test('a wrong password is refused and the new address stays typed; the right one moves it, keeps this browser signed in and signs the other device out', async ({page, browser, request}) => {
+        // A registration, a sign-in through the form, a skip per due flow, two app documents, two saves, and API sign-ins
+        // and reads across two devices: as much as the password-change test above, so that on a loaded lane a red still
+        // ends on its own assertion — and the clean-up in `finally` still runs.
+        test.setTimeout(90_000);
+        const user = await registerDisposableUser(request, 'a6email');
+        const newEmail = `a6e_${uniqueSuffix()}@example.com`;
+        const wrongPassword = `${user.password}-wrong`;
+        let deviceB: BrowserContext | undefined;
+        try {
+            // Device A, this test's page, on the Profile of the account.
+            await openProfile(page, user);
+            const tab = page.getByTestId('profile-tab');
+            await expect(tab).toHaveAttribute('data-busy', 'false');
+            const cookieOfA = await sessionCookies(page.context());
+            expect(cookieOfA, 'Premise: device A holds one session cookie').toHaveLength(1);
+
+            // Device B, a browser context of its own, signed in over the API before any change: the cookie lands in B's jar.
+            deviceB = await browser.newContext();
+            const signedInB = await deviceB.request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(signedInB.status(), 'Device B signs in').toBe(200);
+            expect((await whoAmI(deviceB.request)).status, 'Premise: device B is signed in before the change').toBe(200);
+
+            // A new address: the tab asks for the current password, and the save waits for it.
+            await page.getByTestId('profile-edit-toggle').click();
+            const emailInput = page.getByTestId('profile-email');
+            await expect(emailInput).toBeEnabled();
+            await emailInput.fill(newEmail);
+            await expect(emailInput).toHaveValue(newEmail);
+            const password = page.getByTestId('profile-email-password');
+            await expect(password, 'An email change asks for the current password').toBeVisible();
+            await expect(password).toHaveAttribute('type', 'password');
+            await expect(password).toHaveAttribute('autocomplete', 'current-password');
+            await expect(password).toHaveValue('');
+            await expect(page.getByTestId('profile-email-password-hint')).toBeVisible();
+            const saveAll = page.getByTestId('profile-save-all');
+            await expect(saveAll, 'No email save without the current password').toBeDisabled();
+
+            // A wrong password: refused with its code; the new address stays typed for a retry, the password is emptied.
+            await password.fill(wrongPassword);
+            await expect(password).toHaveValue(wrongPassword);
+            await expect(saveAll).toBeEnabled();
+            const refusal = page.waitForResponse(isProfilePut);
+            await saveAll.click();
+            const refused = await refusal;
+            expect(refused.request().postDataJSON(), 'The email goes with the password typed beside it').toEqual({email: newEmail, current_password: wrongPassword});
+            expect(refused.status(), 'PUT /auth/profile refuses a wrong current password').toBe(400);
+            expect(((await refused.json()) as {detail?: {error_code?: string}}).detail?.error_code, 'The refusal names its reason').toBe('CURRENT_PASSWORD_INVALID');
+            const banner = page.getByTestId('profile-error');
+            await expect(banner, 'The tab shows the refusal with its code').toHaveAttribute('data-error-code', 'CURRENT_PASSWORD_INVALID');
+            await expect(tab).toHaveAttribute('data-busy', 'false');
+            await expect(emailInput, 'The new address stays typed: only the password has to be typed again').toHaveValue(newEmail);
+            await expect(password, 'The wrong password is emptied').toHaveValue('');
+            await expect(saveAll).toBeDisabled();
+            // Nothing changed on the server, and nobody was signed out.
+            const afterRefusal = await whoAmI(page.request);
+            expect(afterRefusal.status, 'Device A is still signed in after the refusal').toBe(200);
+            expect(afterRefusal.user?.email, 'A refused change leaves the address as it was').toBe(user.email);
+            expect((await whoAmI(deviceB.request)).status, 'A refused change signs no device out').toBe(200);
+
+            // The right password: the address moves.
+            await password.fill(user.password);
+            await expect(password).toHaveValue(user.password);
+            await expect(saveAll).toBeEnabled();
+            const change = page.waitForResponse(isProfilePut);
+            await saveAll.click();
+            const changed = await change;
+            expect(changed.request().postDataJSON(), 'The email goes with the password typed beside it').toEqual({email: newEmail, current_password: user.password});
+            expect(changed.status(), 'PUT /auth/profile accepts the right current password').toBe(200);
+            // The save is over once the tab is no longer busy: the request, then the session read again.
+            await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(emailInput).toHaveValue(newEmail);
+            // The address is the stored one now: the field it asked for, there a moment ago, is gone, and no error shows.
+            await expect(password).toBeHidden();
+            await expect(banner).toBeHidden();
+
+            // A stays signed in. Stored: its jar holds the cookie the response set, in place of the old one…
+            await expect.poll(() => sessionCookies(page.context()), {message: 'Device A stores the session cookie the change re-issued', timeout: 5_000}).not.toEqual(cookieOfA);
+            expect(await sessionCookies(page.context()), 'Device A holds one session cookie: the re-issued one replaced the old').toHaveLength(1);
+            // …used: GET /auth/me through the same browser session answers for the account, at its new address…
+            const afterChange = await whoAmI(page.request);
+            expect(afterChange.status, 'Device A is still signed in after the change').toBe(200);
+            expect(afterChange.user?.id, 'GET /auth/me answers for the account this test registered').toBe(user.id);
+            expect(afterChange.user?.email, 'The address moved').toBe(newEmail);
+            // …and a new document, whose requests carry only what the jar holds, opens the Profile again, not the login.
+            await navigateTo(page, PROFILE_URL);
+            await expect(page.getByTestId('profile-tab'), 'Device A, which changed the email, still opens the app').toBeVisible({timeout: 15_000});
+            await expect(page).toHaveURL((url) => url.pathname === '/settings');
+            await expect(page.getByTestId('login-page')).toBeHidden();
+            await expect(page.getByTestId('profile-email')).toHaveValue(newEmail, {timeout: 10_000});
+
+            // B, signed in before the change, is signed out: the server refuses the cookie it still holds.
+            expect((await whoAmI(deviceB.request)).status, 'Device B is signed out: the cookie it was issued before the change is refused').toBe(401);
+        } finally {
+            await deviceB?.close();
+            // The username and the password never change here: the account is deleted through the test's own API client,
+            // never through A or B, whose sessions may be the very thing that broke.
+            await deleteDisposableUser(request, user);
+        }
+    });
+});
