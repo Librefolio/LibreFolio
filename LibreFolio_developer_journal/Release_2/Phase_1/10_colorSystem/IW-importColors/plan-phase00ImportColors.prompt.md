@@ -316,7 +316,17 @@ duplicati (D1); la timeline della card del set (12).
       (cartella della corsia, assente fino a ora; `--with-reports` come il populate che il runner degli E2E rifà da
       sé all'inizio di una corsa): uscita 0 in 34 s; istantanea del DB nell'archivio ignorato `.testLog/00_archive/`.
    Porta 6151 libera alla fine; nessun server avviato.
-7. ⏳ Slot pesante unico (~15:30, dopo TR, sulla base attuale): `front check`, `front-utility core-unit`,
+7. ✅ C4 dopo la base merge `b2466931d` (16/10, 14:58–15:01; il coordinatore ha unito la punta `e402d3b87`, con TR, BK e
+   DV, e committato le note del giornale in `1bcf00187`): sull'albero unito `text-gray-900` non ha più usi, perché gli
+   ultimi li ha tolti l'import, e C4 è rosso. In `frontend/src/app.css` il selettore doppio `html.dark .text-gray-800,
+   html.dark .text-gray-900 {` perde la seconda riga; la regola resta su `.text-gray-800`, che ha ancora un uso (L-20).
+   Verifica con `classUses()` dello scanner: `text-gray-900` 0, `text-gray-800` 1, nessun'altra classe del
+   rimappaggio scuro senza usi. Prove: `--check` pulito, Prettier pulito su `app.css`, `git diff --check` pulito,
+   Vitest `themeTokens.gate.test.ts` **19/19**, `themeRoles.gate.test.ts` **52/52**.
+   > **⚠️ Fuori pista**: `app.css` appartiene a T; questa è l'unica eccezione del kickoff («se il gate C4 ti chiede di
+   > togliere un selettore del rimappaggio scuro, perché hai tolto il suo ultimo uso, lo togli e lo dichiari nel
+   > checkpoint»).
+8. ⏳ Slot pesante unico (~15:30, dopo TR, sulla base attuale): `front check`, `front-utility core-unit`,
    `front-utility component-unit`, poi le 13 spec di `front-transaction`.
 
 ## Definizione di fatto
