@@ -4230,3 +4230,13 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+
+## MF · Matematica finanziaria (fase 01)
+
+Workstream nato il 16/10 (decisione del developer su P21). Piano:
+[`Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md`](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md);
+punto di partenza, l'audit dello stesso giorno:
+[`Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md`](../Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md).
+
+- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Le voci per lotto le
+  scrive MF dopo la sua analisi.
