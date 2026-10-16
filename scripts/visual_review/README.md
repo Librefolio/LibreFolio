@@ -20,6 +20,7 @@ else `~/LibreFolio_visual_review`.
 | `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `mixed` (the elements that mix role and legacy colour classes, by area), `browse` (HTML pages, light and dark side by side) |
 | `live_price_check.py` | Checks, in the lane's backend log, that no live-price request reached the backend while a snapshot was captured (exit 1: capture again) |
 | `build_designer_package.py` | Offline package for the designer: `APRI_QUI.html`, `desktop.html`, `mobile.html`, `note_designer.txt`, images, zip |
+| `build_designer_round.py` | The package of a later round: today, before and after, the colours left by reason, the open questions, the role palette; every page in HTML and Markdown |
 | `build_review_notes.py` | The team's Markdown working notes: navigation per shot, role vocabulary, decisions |
 | `designer_live.sh` | Test server with the gallery's data on its own lane (default port 6160), reachable from the local network |
 | `color_inventory.py` | Quantitative colour inventory of `frontend/src` (Markdown summary and CSVs) |
@@ -128,6 +129,33 @@ Before a new review, update `review_content.py` (hints, palette table, questions
 Gallery shots missing from the map are still published, with «?» as navigation.
 
 Build the frontend first (`./dev.py front build`): the palette table reads the real Tailwind OKLCH values from `frontend/build`.
+
+### 3b. A later review round: today, before and after, colours left, questions
+`build_designer_round.py` builds the package of a later round (giro 3 on 16/10). Every page comes in HTML and in
+Markdown, with relative image paths, and `LEGGIMI.md` indexes them for a designer's AI. Run it on the snapshot's commit:
+```bash
+pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/baseline-r2 $W/snapshots/cand --out $W/diffs/baseline-r2__vs__cand
+pipenv run python -m scripts.visual_review.gallery_tool sheet $W/diffs/baseline-r2__vs__cand --lang it
+pipenv run python -m scripts.visual_review.color_inventory --out $W/inventory/cand
+pipenv run python -m scripts.visual_review.build_designer_round $W/snapshots/cand --before $W/snapshots/baseline-r2 \
+    --diff $W/diffs/baseline-r2__vs__cand --inventory $W/inventory/cand --reasons <motivi.csv> --questions <domande.md> \
+    --name LibreFolio_review_colori_giroN_<date> --round N --copy-to ~/Downloads
+```
+- **Pages:**
+  - `desktop`/`mobile`: the screens of today.
+  - `prima-e-dopo-desktop`/`-mobile`: before and after, light and dark. The new and gone shots come first, then the
+    most visible change (`visible.json` of `sheet`).
+  - `colori-residui`: the legacy palette classes left, file by file, grouped by reason, with the colour each one
+    paints.
+  - `domande-aperte` and `palette-ruoli`: the Markdown files given, copied as they are and rendered.
+  - `APRI_QUI` and `LEGGIMI.md`.
+- **The colours left** come from `color_inventory.py`, kept only where the colour gate would count them: production
+  code outside comments (`codeOf` of `theme-roles.mjs`), legacy classes as the gate defines them. On 16/10 this gave
+  the gate's own files: 185 against 185.
+- **The reasons** come from a `path;motivo;dettaglio;chi` file (path under `frontend/src`). A file without a reason is
+  listed under «Da classificare» and named on the console.
+- **Images** are WebP lossless by default: the same pixels as the PNG, about half the size (`--format png` keeps PNG).
+  One language of two galleries, the before-and-after included, makes a zip of about 140 MB.
 
 ### 4. Live server for the designer
 ```bash
