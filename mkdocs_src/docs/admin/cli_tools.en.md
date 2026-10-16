@@ -297,7 +297,7 @@ Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `bac
 
     - the format, `librefolio-backup`, and its version;
     - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface, `panel` for a [hosting panel](hosting_providers.md#panel-backups)) and when, in UTC;
-    - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations and the rows in each table;
+    - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations, the rows in each table and the ledger's control totals, the cash of every broker in each currency and the quantity of every position (an archive made before them has none);
     - every entry, the database first, with its path, its size and its SHA-256;
     - whether the instance key is included: it is not.
 
@@ -345,8 +345,14 @@ It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`,
 - 🩹 The post-migration fixes that changed something on the copy, if any.
 - 🔢 The rows, the tables and the size of the database, then the tables whose rows the upgrade changed, as `<table> (<before> → <after>)`, with `—` for a table that did not exist.
 - 📁 The number and size of the files, and whether the instance key is included.
+- ⚖️ The ledger's control totals: the cash of every broker in each currency and the quantity of every position, summed from the transactions alone, with no price, exchange rate, cost or date. The backup recorded them in its manifest, and the check reads them again on the copy once it is up to date. A difference is a warning, never a refusal: a migration may correct data. The report says one of:
+    - `Ledger totals: the same as when the backup was made`;
+    - `⚠️ Ledger totals differ from the backup's (<n> lines):`, then the lines that differ, cash first, at most 20: `broker <id>, <currency> cash: <before> → <after>` or `broker <id>, asset <id> quantity: <before> → <after>`, the backup's amount before the arrow and the copy's after it, with `—` for zero. `… and <n> more` counts the lines left out;
+    - `Ledger totals: not recorded in this archive`: an archive made by an earlier LibreFolio, from before the totals, records none, nor does one whose totals could not be read when it was made;
+    - `Ledger totals: recorded by another version of the method, not compared`;
+    - `⚠️ Ledger totals: could not be read on the copy`.
 - 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.`, `The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.` and `An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.`
-- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, or `The upgrade added broken references to the copy`.
+- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)` or `The ledger's totals could not be read on the copy`.
 - ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
 
 It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
