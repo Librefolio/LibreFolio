@@ -17,7 +17,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {SIGN_TEXT} from '$lib/theme/toneClasses';
+    import {SIGN_BADGE, SIGN_TEXT} from '$lib/theme/toneClasses';
     import '$lib/theme/components/table.css';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
@@ -54,11 +54,11 @@
     function categoryBadgeClass(category: string): string {
         switch (category) {
             case 'Income':
-                return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+                return SIGN_BADGE.gain;
             case 'Cost':
-                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                return SIGN_BADGE.loss;
             default:
-                return 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-300';
+                return 'bg-lf-panel text-lf-secondary';
         }
     }
 
@@ -112,7 +112,7 @@
             getValue: (row) => descriptionWithBroker(row),
             cell: (row) => ({
                 type: 'html' as const,
-                html: `<div class="block max-w-[18rem] truncate text-gray-700 dark:text-gray-200" title="${escapeHtml(descriptionWithBroker(row))}">${escapeHtml(descriptionWithBroker(row))}</div>`,
+                html: `<div class="block max-w-[18rem] truncate text-lf-secondary" title="${escapeHtml(descriptionWithBroker(row))}">${escapeHtml(descriptionWithBroker(row))}</div>`,
             }),
         },
         {
@@ -177,13 +177,13 @@
                 if (row.brokerName) {
                     return {
                         type: 'html' as const,
-                        html: `<span class="block truncate text-gray-600 dark:text-gray-300">${escapeHtml(row.brokerName)}</span>`,
+                        html: `<span class="block truncate text-lf-secondary">${escapeHtml(row.brokerName)}</span>`,
                     };
                 }
 
                 return {
                     type: 'html' as const,
-                    html: '<span class="text-gray-400 dark:text-gray-500">—</span>',
+                    html: '<span class="text-lf-muted">—</span>',
                 };
             },
         },
@@ -227,12 +227,12 @@
 </script>
 
 {#if rows.length > 0}
-    <section class="mt-3 rounded-lg border border-gray-200/80 bg-gray-50/80 dark:border-slate-700 dark:bg-slate-900/30" data-testid="other-period-effects-table">
-        <div class="border-b border-gray-200/80 px-3 py-2 dark:border-slate-700" data-testid="other-period-effects-header">
-            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">
+    <section class="mt-3 rounded-lg border border-lf-subtle/80 bg-lf-panel/80" data-testid="other-period-effects-table">
+        <div class="border-b border-lf-subtle/80 px-3 py-2" data-testid="other-period-effects-header">
+            <h3 class="text-[11px] font-semibold uppercase tracking-wide text-lf-secondary">
                 {translateOr($_, 'dashboard.otherPeriodEffects', 'Other Period Effects')}
             </h3>
-            <p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+            <p class="mt-0.5 text-[11px] text-lf-muted">
                 {translateOr($_, 'dashboard.otherPeriodEffectsSubtitle', 'Effects that contribute to period P&L but are not linked to a specific asset')}
             </p>
         </div>

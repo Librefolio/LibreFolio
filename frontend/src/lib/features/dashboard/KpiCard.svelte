@@ -43,26 +43,26 @@
     const isPositive = $derived(positive ?? (changePercent !== undefined ? changePercent >= 0 : undefined));
 </script>
 
-<div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6 flex flex-col gap-1 overflow-hidden" data-testid="kpi-card">
+<div class="relative bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-6 flex flex-col gap-1 overflow-hidden" data-testid="kpi-card">
     <!-- Subtle accent line on top based on positive/negative state -->
     {#if isPositive !== undefined}
         <div class="absolute top-0 left-0 right-0 h-0.5 {isPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
     {/if}
 
     <!-- Label -->
-    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500" title={label}>
+    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-medium uppercase tracking-wide text-lf-muted" title={label}>
         {label}
     </p>
 
     {#if loading}
         <!-- Skeleton -->
-        <div class="mt-1 h-8 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+        <div class="mt-1 h-8 w-3/4 bg-lf-neutral rounded animate-pulse"></div>
         {#if subLabel !== undefined}
-            <div class="mt-1 h-4 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+            <div class="mt-1 h-4 w-1/2 bg-lf-panel rounded animate-pulse"></div>
         {/if}
     {:else}
         <!-- Primary value (reduced opacity when refreshing for stale-while-revalidate) -->
-        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-2xl font-bold text-gray-800 dark:text-gray-100 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-value" title={value}>
+        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-2xl font-bold text-lf-primary transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-value" title={value}>
             {value}
         </p>
 
@@ -75,7 +75,7 @@
 
         <!-- Sub-label (e.g. TWRR / MWRR breakdown) -->
         {#if subLabel}
-            <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-gray-400 dark:text-gray-500 mt-0.5 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-sublabel" title={subLabel}>
+            <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-lf-muted mt-0.5 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-sublabel" title={subLabel}>
                 {subLabel}
             </p>
         {/if}

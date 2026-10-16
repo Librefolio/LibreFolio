@@ -123,7 +123,7 @@ docker compose start librefolio
 
     Avec Docker, la base de données est `./LibreFolio-data/sqlite/app.db`. Cela ne copie que la base de données : copiez les dossiers ci-dessous comme d'habitude.
 
-### ✅ Éléments à sauvegarder
+### ✅ Éléments à sauvegarder {: #what-to-back-up }
 
 Au minimum, sauvegardez :
 

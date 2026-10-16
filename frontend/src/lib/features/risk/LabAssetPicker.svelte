@@ -67,7 +67,7 @@
         <Tooltip text={room > 0 ? $t('risk.assetSet.addAsset') : $t('risk.assetSet.maxAssets')} position="top" interactiveChild>
             <button
                 type="button"
-                class="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-gray-300 px-2.5 text-xs font-medium text-gray-500 transition-colors hover:border-libre-green hover:text-libre-green disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:text-gray-500 dark:border-slate-500 dark:text-gray-400"
+                class="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-lf-input px-2.5 text-xs font-medium text-lf-muted transition-colors hover:border-lf-link hover:text-lf-link disabled:opacity-40 disabled:hover:border-lf-input disabled:hover:text-lf-muted"
                 onclick={(event) => {
                     // Not up to the Tooltip wrapper: its click would pin the hint over the list.
                     event.stopPropagation();
