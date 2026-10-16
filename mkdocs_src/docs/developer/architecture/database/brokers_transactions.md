@@ -97,19 +97,19 @@ The single source of truth for all financial operations. Each transaction belong
 | `asset_id` | FK to asset — nullable for cash-only ops (DEPOSIT, WITHDRAWAL) |
 | `type` | `TransactionType` value: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER. A plain `VARCHAR(32)` with no `CHECK` constraint; databases created before 22/09/2026 still declare `VARCHAR(14)`, which SQLite does not enforce — see [Migrations](index.md#enum-column-length) |
 | `date` | Settlement date |
-| `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL |
-| `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL |
+| `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL. `RealDecimal(22, 10)`: up to 10 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
+| `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL. `Numeric(18, 6)`: up to 6 decimal places |
 | `currency` | ISO 4217 code — required when amount ≠ 0 |
 | `related_transaction_id` | Bidirectional self-FK for paired ops (TRANSFER, FX_CONVERSION, CASH_TRANSFER) |
 | `tags` | Comma-separated user tags |
 | `description` | Free-text |
-| `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below) |
+| `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below). A per-unit price, so `RealDecimal(24, 12)` like the prices: up to 12 decimal places, read back as written (see [Decimal Columns](index.md#decimal-columns)) |
 | `cost_basis_currency` | ISO currency code for `cost_basis_override`; nullable with the amount |
 | `asset_event_id` | FK to AssetEvent — links transaction to a global asset event |
 
 **Design rules:**
 
-- `quantity` and `amount` are **signed** and **NOT NULL** — enables simple `SUM()` for balance calculation
+- `quantity` and `amount` are **signed** and **NOT NULL** — a balance is the plain sum of the rows, done in Python by `financial_math`, never with an SQL `SUM()` (see [Decimal Columns](index.md#decimal-columns))
 - Paired transactions are **bidirectional** (A→B and B→A) using `DEFERRABLE INITIALLY DEFERRED` FK
 - `link_uuid` is accepted by create payloads only as transient batch correlation; it is not a `transactions` column
 - Tags are stored as CSV for simple `LIKE` queries without a join table

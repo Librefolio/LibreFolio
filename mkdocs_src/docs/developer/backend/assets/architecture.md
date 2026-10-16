@@ -14,7 +14,7 @@ responsibility:
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price refused, a provider's truncated), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
@@ -163,6 +163,15 @@ Persistence intentionally does **not** claim one atomic transaction for the whol
 `last_fetch_at` is committed separately afterwards. This keeps SQLite writer-lock windows bounded
 and preserves truthful partial results when one step fails. Provider-generated events remain
 scoped by `provider_assignment_id`, so manual events are not replaced.
+
+`bulk_upsert_prices()` writes `open`, `high`, `low` and `close` through
+`truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
+significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see
+[Decimal Columns](../../architecture/database/index.md#decimal-columns)). That truncation is
+for a provider's long floats. A manual call (`source_plugin_key="MANUAL"`, the default, used by
+`POST /assets/prices`) is checked first instead: `_reject_prices_over_the_limit()` refuses the
+whole call when a price exceeds either limit, before anything of it is written — a
+`ValueError`, which the route answers with HTTP 400 naming the asset, the maxima and the dates.
 
 ---
 
@@ -414,13 +423,13 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 decimal places or 15 significant digits refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
-| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
 | `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |
