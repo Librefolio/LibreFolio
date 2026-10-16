@@ -4557,6 +4557,24 @@ da Y il 15/10.
     «Passo 4 · BK e TR».
   - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
     altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
+- **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10.
+  - Il `$effect` di `GrowthChart` (976–980) chiama `onRequestPnlCandles()`. Il caricatore parte in modo sincrono,
+    sia con `join` sia, prima, con `track`.
+  - Le sue letture (`canAsk`, `pnlCandles`, la cache dei report) diventano così dipendenze di quell'effetto. È il
+    cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
+  - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
+    Y, «Passo 4b».
+- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+  prima di Y11; `test-author` di Y, 16/10.
+  - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
+    `contribution-table`. Dettagli: piano di Y, «Passo 4b».
+- **Y-18 · Le candele non hanno un indicatore di caricamento proprio** — minimo; Y, 16/10, una conseguenza di N55 da
+  rivedere con il developer.
+  - Con N55, se l'utente passa direttamente alle Candele a pagina ferma, il pulsante della pagina non gira più.
+  - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
+    indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
+  - Dettagli: piano di Y, «Passo 4b».
 
 ## MF · Matematica finanziaria (fase 01)
 
