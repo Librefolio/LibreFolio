@@ -544,8 +544,9 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
 
     The cost, proceeds, realized, income/fee/tax, total and net totals are `None` as soon as one lot's
     part is unknown (a missing FX rate, or no market value). Market-value totals (open value, unrealized
-    P&L, potential gain and loss) keep summing the valued open lots, with their coverage stated in
-    `value_coverage_status` and the valued/unavailable open lot counts.
+    P&L, potential gain and loss) sum the same lots — the valued open lots, whose value and unrealized P&L
+    are both known (v3, T-B8) — with their coverage stated in `value_coverage_status` and the
+    valued/unavailable open lot counts.
     """
 
     rows = tuple(rows)
@@ -595,8 +596,8 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
         residual_cost_basis=_sum_complete("residual_cost_basis"),
         cumulative_proceeds=_sum_complete("cumulative_proceeds"),
         realized_pnl=_sum_complete("realized_pnl"),
-        open_value=_sum_optional("open_value", open_rows),
-        unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
+        open_value=_sum_optional("open_value", valued_open_rows),
+        unrealized_pnl=_sum_optional("unrealized_pnl", valued_open_rows),
         potential_gain=potential_gain,
         potential_loss=potential_loss,
         total_pnl=_sum_complete("total_pnl"),
