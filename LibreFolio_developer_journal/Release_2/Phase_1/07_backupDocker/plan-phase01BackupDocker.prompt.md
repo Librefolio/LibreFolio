@@ -84,6 +84,9 @@
    dati (`admin/filesystem.en.md`, «💾 Backup»: `cp -r`, `sqlite3 .backup`). Perché il criterio d'accettazione e il
    cancello del §9 siano veri, il ripristino accetta anche un archivio senza manifest, con la revisione letta dal DB
    (D-B5).
+   **Superato dalla decisione 42 (respinta, 15/10)**: dalla UI si ripristinano solo i backup di LibreFolio, con
+   `manifest.json`; uno zip senza manifest è rifiutato (`not_a_backup`). Il passaggio dalla 1.2 alla 1.3 è
+   l'aggiornamento sul posto: migrazioni e correzioni dopo le migrazioni, all'avvio.
 3. **Specifica del fondatore contro D-X2**: la specifica mette sempre i segreti nello zip, D-X2 solo con password.
    Seguo D-X2, la cui spiegazione aspetta ancora la conferma del developer (D-B2).
 4. **Piano di H**: «`derive_key` serve a B». Il disegno qui non usa `derive_key` per i backup scaricabili (una password
@@ -423,12 +426,21 @@ Ogni default lascia il self-hosted com'è; ogni segreto accetta `_FILE`.
    resta e i segreti si ricifrano**. Alternativa: adottare la chiave del backup (più semplice, ma due istanze con la
    stessa chiave, e impossibile quando la chiave è configurata).
 3. **D-B3, le sessioni**: **tutte chiuse dopo un ripristino** (§3.6).
+   **Deciso (40, 15/10)**: `JWT_SECRET` non cambia e non va nel backup; il DB ripristinato porta l'ora del ripristino:
+   al commit `session_version = max(ora in ms, massimo del DB ripristinato + 1, massimo del DB di prima + 1)` per ogni
+   account (forma (a) e `max`, decisione notturna del 16/10, da rivedere col developer); l'anteprima elenca gli admin
+   del backup, e senza admin il ripristino è bloccato.
 4. **D-B4, il backup automatico**: **uno zip in `backups/` (l'ultimo), più il ritorno indietro automatico se il primo
    avvio fallisce**. Alternativa: tenere `previous/` come backup (nessuno spazio in più, ma una cartella invece di un
    file scaricabile).
+   **Deciso (41, 15/10)**: la copia fatta prima del ripristino serve solo a tornare indietro: è `.restore/previous/`,
+   cancellata dopo un primo avvio riuscito; se il primo avvio fallisce, LibreFolio rimette da solo i dati di prima. Non
+   resta scaricabile dalla scheda.
 5. **D-B5, archivi senza manifest** (copie a mano, quindi le 1.2): **accettati**, con un avviso.
+   **Respinta (42, 15/10)**: solo backup di LibreFolio, con `manifest.json`.
 6. **D-B6, il limite di caricamento**: **una variabile d'ambiente**, perché nel cloud il cliente è admin e il limite lo
    decide l'hoster; `0` = senza limite nel self-hosted. Non un'impostazione globale.
+   **Approvata (43, 15/10)**: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `0` di default, 500 nel profilo gestito.
 7. **D-B7, percorsi dell'API** (§3.9), con la rimozione dei 4 segnaposto.
 8. **D-B8, `backup_service.py` → `series_export.py`**: **sì, rinomina pura dopo E1**; oppure lasciarlo.
 9. **D-B9, la prova «stessi totali»**: **un sottoprocesso su una cartella temporanea**, senza un secondo server (regola
@@ -517,16 +529,18 @@ Percorso minimo per il cloud: B1 → B2 → B3 → B5 (più B4 se approvata) →
   simulata a ogni passo.
 - Uscita per il riavvio: `restart.py` con segnale e bersaglio iniettati (test unitari), mai un vero `kill` sulla
   corsia. La prova vera è quella Docker.
-- **«Stessi totali»** (D-B9): backup della corsia popolata via API → ripristino in una cartella temporanea vuota, con
-  le funzioni d'avvio in un sottoprocesso (`apply_pending_restore`, `ensure_database_exists`, fix post-migrazione) →
-  totali del motore ufficiale nel sottoprocesso, confrontati con l'API della corsia (`POST /portfolio/report`, con una
-  data fissa).
-- **Backup della 1.2**: fixture costruita nel test con le migrazioni vere fino a `004_release_1_2_0_schema` e le righe
-  del costruttore di `test_post_migration` e `test_migration_005_accounts` (lì è già «la vera 1.2»), zippata con e
-  senza manifest → prova → conferma → righe e totali uguali. Più il rifiuto di una revisione sconosciuta o più nuova.
-- **Cancello del §9 sulla 1.2 vera**: una cartella dati popolata da `git archive v1.2.0` (sola lettura, nessun
-  worktree) con `db populate` in una cartella `/tmp`, zippata a mano e ripristinata nella corsia. Procedura in `/tmp`,
-  eseguita da me col via o dal developer.
+- **«Stessi totali»** (D-B9; **aggiornato il 16/10**, `e2e backup-roundtrip`): una sorgente popolata in `tmp_path`
+  (`populate_mock_data --force` in un processo figlio in modalità test), archiviata con `jobs.run_backup` →
+  `backup_cli.py restore ARCHIVE --yes` su un'istanza vuota → «un avvio» in un processo nuovo (i passi da
+  `pending-restore` a `restore-commit`) → righe, file e report del motore ufficiale per ogni account con un broker,
+  sorgente e destinazione calcolati uno dopo l'altro. Nessun secondo server, la corsia mai letta né scritta.
+- **Backup a una revisione precedente** (al posto del «backup della 1.2», decisione 42): un archivio di LibreFolio il
+  cui DB sta a `005_accounts_invites`, costruito nel test con le migrazioni vere → prova (aggiornamento della copia) →
+  conferma → avvio → al commit, alla head, con le righe del report. Più il rifiuto di una revisione sconosciuta o più
+  nuova.
+- **Il passaggio dalla 1.2** (decisione 42): è l'aggiornamento sul posto, non un ripristino. Lo coprono i test delle
+  migrazioni e delle correzioni dopo le migrazioni (`db post-migration`, `test_migration_005_accounts`) e il cancello
+  d'aggiornamento della release, non un cancello di B.
 - **Docker** (B7, daemon acceso): Litestream spento (avvio come oggi) e acceso, con una replica `file://` su un volume:
   replica, `docker stop` entro il limite (misurato), DB cancellato → ripristino automatico all'avvio, ripristino dalla
   UI con Litestream acceso, spike della linea della replica. S3 locale (MinIO) facoltativo.
@@ -575,9 +589,11 @@ Percorso minimo per il cloud: B1 → B2 → B3 → B5 (più B4 se approvata) →
 ## 10. Definizione di fatto
 
 - **Accettazione del fondatore**, automatizzata: backup di un'istanza popolata → ripristino su un'istanza vuota →
-  stessi totali; backup della 1.2 ripristinato sulla 1.3 con prova e conferma; rifiuto di un backup più nuovo.
-- **Cancelli del §9**: ripristino di un backup della 1.2 vera con la prova su copia; immagine con Litestream spento e
-  acceso; `docker stop` entro il limite; revisione di sicurezza del backup.
+  stessi totali; un backup di LibreFolio a una revisione precedente ripristinato sulla 1.3 con prova e conferma (al
+  posto del «backup della 1.2», decisione 42); rifiuto di un backup più nuovo.
+- **Cancelli del §9**: immagine con Litestream spento e acceso; `docker stop` entro il limite; revisione di sicurezza
+  del backup. Il passaggio dalla 1.2 è l'aggiornamento sul posto (decisione 42): cancello d'aggiornamento della
+  release, non di B.
 - Per lotto: verdi mirati, `all-backend` = base + test nuovi, statici puliti, `api sync`, `front check` 0/0, gate dei
   colori puliti, `i18n check`, `mkdocs build` stretto e `check-links`, guardie `config-package` e
   `config-env-example`, `check_source_paths.py` non peggiora.
@@ -2376,6 +2392,175 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **⚠️ Fuori pista — `all-backend` e i file nuovi**: verificato che `all-backend` lancia solo le voci del catalogo
 >   (`_suites.run_all_backend_tests`, nessun glob) e non fa il controllo degli orfani: i file di B3 non registrati non
 >   entrano nella run d'ingresso di B2.
+
+### Checkpoint `rows_changed` committato; la formula delle sessioni (2026-10-16, 00:17) — B3 in corso
+
+> - **Coordinatore**: `484b75231` `fix(backup): rows_changed ignores tables created or dropped empty` e `94a95284d`
+>   (journal). HEAD verificato `94a95284d`; fuori, non tracciati, solo i due file nuovi di B3. `all-backend` verso le
+>   01:35 su `94a95284d`: lo annuncia lui.
+> - **Decisione notturna, da rivedere col developer — la formula delle sessioni dopo un ripristino** (40, forma (a)): al
+>   commit, per ogni account,
+>
+>   ```text
+>   session_version = max(ora del ripristino in ms, massimo del DB ripristinato + 1, massimo del DB di prima + 1)
+>   ```
+>
+>   Approvata dal coordinatore («è più robusto»). Con un orologio sano è sempre l'ora in ms: un tempo, non un contatore.
+>   Il `max` serve quando l'orologio è indietro, o quando un DB porta già i valori di un ripristino precedente. Un cambio
+>   di password dopo fa ancora `+1`. Nei rossi (test-author 2): l'orologio indietro; un ripristino sopra un altro
+>   ripristino; poi un cambio di password che aggiunge 1.
+> - **Test di B3, seconda tornata** (test-author 1, 00:20): i sei punti applicati;
+>   `test_backup_restore_apply.py` 67 test, `test_backup_cli_restore.py` 44, statici puliti, non registrati né lanciati.
+>   Un `--collect-only` lanciato con il carico a 76,5, sopra il limite di 70: leggero (10 s), nient'altro in corso.
+> - **Scelta notturna, da rivedere — un ripristino confermato e poi un blocco dell'istanza** (`LIBREFOLIO_BLOCKED`,
+>   decisione 12): il ripristino in attesa si applica comunque al prossimo avvio. I dati sono entrati prima del blocco
+>   (caricati e confermati), e il passo d'avvio resta senza legami con il blocco di H. Sull'istanza bloccata l'admin non
+>   può annullarlo dalla UI (tutte le rotte del ripristino sono bloccate); dalla CLI sì. L'alternativa (aspettare,
+>   `waiting = instance_blocked`) è piccola, se il developer la preferisce.
+
+### B3 — i rossi (2026-10-16, 00:30-00:58) ✅ — il codice aspetta l'`all-backend`
+
+> - **test-author 2** (`994eb260`, 00:30-00:52): `test_services/test_backup_apply.py` (163 test: percorsi, errori e
+>   modelli, avvii, lettura dello stato, `confirm_restore`, `cancel_restore`, `apply_pending_restore` con gli scambi, il
+>   giornale, gli arresti dopo ogni rinomina dello scambio e del ritorno indietro, i guasti, l'attesa, la corsa fra due
+>   worker; `finish_pending_restore`; le sessioni con i tre casi del coordinatore; i passi d'avvio; `restart`; il giro
+>   completo con archivi veri alla head e a `OLDER`) e `test_e2e/test_backup_roundtrip.py` (3 test, §9). I suoi 10
+>   punti, decisi: `.restore` file o link → `BackupPathError` prima del report; `B = 0` per un DB senza account;
+>   `global_settings` dopo l'avvio (coppie controllate uguali, chiavi aggiunte solo default); le sue tre scelte dove il
+>   contratto taceva, accettate; `current_boot` legge `restart.server_pid` alla chiamata (corretto nella bozza).
+> - **⚠️ Fuori pista — l'e2e leggeva il DB della corsia**: sotto `all-backend` la categoria `services` lo ricrea vuoto,
+>   ed `e2e` non lo popola; in più una lettura può lasciare un `-shm` accanto a un DB in WAL della corsia. Deciso
+>   (00:58): sorgente autonoma, un'istanza in `tmp_path` popolata da `populate_mock_data --force` in un processo figlio in
+>   modalità test su quella cartella; i totali della sorgente e della destinazione calcolati uno dopo l'altro alla fine.
+>   Isolamento `pure`. In riscrittura.
+> - **Il rosso** (00:54:26-00:54:59, carico 30-34, `nice -n 10`, `/tmp/libreFolio_b3_red.sh`, log in
+>   `/tmp/libreFolio_b3_red_*.log`):
+>
+>   | File | Esito | Motivi |
+>   |---|---|---|
+>   | `test_backup_apply.py` | 163 rossi, 0 errori | moduli `apply` e `restart` assenti; nomi nuovi di `paths`; passi d'avvio assenti |
+>   | `test_backup_restore_apply.py` | 67 rossi | modulo `apply` assente; rotte nuove 404 «Not Found» |
+>   | `test_backup_cli_restore.py` | 44 rossi | modulo `apply` assente; `pending` sconosciuto ad argparse; il messaggio «Only --dry-run» di B2 |
+>
+>   Le fixture si costruiscono con il codice di oggi.
+> - **⚠️ Fuori pista — rosso con pytest diretto**: i tre file non sono registrati, perché registrarli prima
+>   dell'`all-backend` di B2 metterebbe dei rossi in quella run. Li ho lanciati con `python -m pytest` e lo stesso
+>   ambiente che il runner dà alla corsia (`LIBREFOLIO_TEST_MODE=1`, `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r13-b`,
+>   `TEST_PORT=6187`, `PIPENV_DONT_LOAD_ENV=1`): sono puri, nessun server. Dopo la registrazione si passa dal runner.
+> - **Regola nuova del coordinatore** (00:56): niente prove né build di nessun tipo fino a verso le 01:40, poi il suo
+>   via; le prove spostate slittano dopo. Detto ai due test-author (niente pytest, nemmeno `--collect-only`).
+> - **L'e2e riscritto, autonomo** (test-author 2, 01:00-01:10; non raccolto né lanciato, per la regola): la sorgente è
+>   popolata da `populate_mock_data --force` in un figlio, in una cartella di `tmp_path` (20-56 s nei log del runner);
+>   poi i file del modulo (dopo il populate, che svuota `broker_reports/`), il primo avvio, `jobs.run_backup`. Nei figli
+>   `PYTHONHASHSEED=0` (stesso ordine delle liste costruite da insiemi) e il `bin` dell'interprete in testa al `PATH` (il
+>   populate lancia `alembic` per nome). I totali della sorgente e della destinazione uno dopo l'altro, dopo il ripristino.
+>   Isolamento `pure`; nessun populate nel runner.
+> - **Bozze riviste contro i test** (00:58-01:15, sola lettura): `current_boot` legge `restart.server_pid` alla chiamata;
+>   la riga «rolled back» della CLI finisce con il codice. Il resto combacia (ordine dei rifiuti, conteggi delle
+>   rinomine, lock nel `finally`, `flock` bloccante e rilettura, OpenAPI, segnale dopo la risposta). Registrazione dei
+>   quattro file pronta in `files/b3-wip/register_b3.py` (ancore verificate).
+> - **Messaggio vecchio dalla coda** (arrivato alle 01:07): la checklist di G per lo scatto `settings/backup-ready`,
+>   «seguila mentre scrivi». Lo scatto è già scritto e committato (`a675d2eb2`) e G-13 l'ha girato due volte, verde.
+>   Riletto contro la checklist: rotta prima della navigazione, `login`, `forEachLanguageAndTheme`,
+>   `navigateTo('/settings?tab=backup')`, `aria-selected`, `waitForSettled`, `extendScreenToBlock` e `restoreTallScreen`,
+>   corpo tipizzato, date assolute, nessun backup vero. Diverso solo il titolo del test (`backup ready (admin) - …`); il
+>   nome dello scatto è `settings/backup-ready` come chiesto. Nessuna azione.
+> - **Altro messaggio vecchio dalla coda** (arrivato alle 01:08; scritto il 15/10 dopo le 17:40): le decisioni 41–43
+>   alla lettera, «B2 e B3 possono partire con il mio via, dopo B8». Già registrate qui dal 15/10, 20:12; B8 è entrato,
+>   B2 è committato, B3 ha il via dalle 23:45. Una richiesta era ancora aperta, e l'ho fatta: **riscritti i paragrafi
+>   dell'analisi** che le decisioni superano (§2 punto 2, §4 D-B3/D-B4/D-B5/D-B6, §8, §10). Il cancello «ripristinare un
+>   backup della 1.2» diventa «un backup di LibreFolio a una revisione precedente»; il passaggio dalla 1.2 è
+>   l'aggiornamento sul posto, cancello della release e non di B. Va nel prossimo checkpoint.
+> - **Terzo messaggio vecchio** (01:09; del 15/10, prima di CP2b): `main.py` congelato fino a CP2b, il passo di B3 come
+>   una riga in `STARTUP_STEPS` dopo il suo ingresso. CP2b è nella mia base (`app_lifespan.py`), e la bozza aggiunge
+>   proprio una riga per passo lì. Nessuna azione. **Quarto** (01:09): il rosso di E2 in `core-unit`
+>   (`htmlInterpolation.gate`), corretto in `be7de95b6`: riguarda il merge di base del 15/10 (18:42-19:05), già
+>   committato. Nessuna azione.
+> - **Quinto** (01:10; del 15/10, ~19:30): CP2b entrato; i due passi di B3 in `STARTUP_STEPS` di `app_lifespan.py`,
+>   «fissali con `assert_in_relative_order` nel test `services app-lifecycle`». L'ordine è fissato in
+>   `services backup-apply` (sezione (j)): lo stesso controllo, in un test nostro, come chiede la docstring di
+>   `assert_in_relative_order` («A workstream checks a constraint of its own with it, in a test of its own»). Con una
+>   copia locale di 6 righe, perché importare `test_app_lifecycle` tira dentro `backend.app.main`, e
+>   `configure_logging()` scrive `logs/` nella cartella dati configurata. Da dichiarare all'handoff; se il coordinatore
+>   vuole anche la riga nel file di H, è un'aggiunta di una riga.
+> - **Sesto** (01:10; del 15/10, ~21:00): lo scatto entrato da solo (`ab2ddf86e`), «continua con B2a». Passato: B2 è
+>   committato. Nessuna azione.
+> - **Regola della notte** (coordinatore, 01:10): le decisioni del developer vanno al coordinatore in 3-4 righe, con la
+>   proposta per prima, e il punto va in pausa; le scelte tecniche nel mio perimetro le decido io, come «Decisione
+>   notturna, da rivedere». Mandato (01:12): il caso «ripristino confermato, poi istanza bloccata» per la lista di
+>   domattina, con la proposta «si applica comunque»; intanto il codice fa così. Offerta l'analisi di B5b in bozza.
+> - **Decisione notturna, da rivedere — più worker e un primo avvio che fallisce**: con `--workers N` il «boot» è il
+>   master di uvicorn, che rilancia un worker morto. Se un passo dopo `pending-restore` fallisce sempre, i worker
+>   ripartono in ciclo e il ritorno indietro avviene solo quando il master si ferma e il server riparte. Nell'immagine
+>   Docker c'è un processo solo, e il ritorno indietro è automatico al riavvio del container. Lo lascio così, documentato
+>   come limite; un riavvio del server lo risolve.
+> - **Da H CP7b, per B7 e B4** (coordinatore, 01:11, solo informazione):
+>   - `stop_grace_period` resta a me (B7): H mette nei compose solo un commento che rimanda al budget di Z (8 s dentro
+>     i 10 s di `docker stop`);
+>   - con Litestream (B7), che avvolge uvicorn, il budget deve coprire anche il suo sync finale: se ne tiene conto per
+>     `stop_grace_period` e `shutdown-sync-timeout`;
+>   - `derive_key_from(key, purpose, length)` arriva con le note di X in coda a CP7b: per ricifrare i segreti in B4 si usa
+>     quella, mai una mia.
+> - **Analisi di B5b mandata** (01:15, su richiesta del coordinatore, per la lista di domattina). Disegno: `RestoreCard`
+>   (stato del ripristino, scelta del file, caricamento con avanzamento, prova con le fasi), `RestoreReportModal` (report,
+>   admin per nome con l'avviso della 40, blocco senza admin, conferma scritta), `RestartOverlay` (attesa di
+>   `/system/ready`, poi il login; dopo 60 s «avvia di nuovo»), `restoreFlow.svelte.ts`, i18n `backup.restore.*`.
+>   Punti aperti, con la mia raccomandazione:
+>   1. l'esito dopo il riavvio solo nella scheda, con il login che riporta a `/settings?tab=backup`; un avviso globale
+>      chiede una riga in `(app)/+layout.svelte` (condiviso): backlog, o la riga dichiarata;
+>   2. la conferma scritta con la parola tradotta mostrata nella finestra, senza badare a maiuscole e spazi (la CLI resta
+>      `restore`);
+>   3. `upload_limit_mb` in `GET /backup/restore/status`, per rifiutare subito un file troppo grande: un campo in più nella
+>      risposta di B3.
+>
+>   Scelta tecnica mia: la E2E fa per davvero caricamento, prova e report, ma finge conferma, stato, annullamento e
+>   riavvio, perché un ripristino in attesa lasciato nella corsia si applicherebbe al prossimo avvio del suo server.
+> - **Risposte del coordinatore su B5b** (01:13):
+>   - punto 3, **sì, in B3 adesso**: `upload_limit_mb` (11° campo di `RestoreStatus`, in ogni risposta: `0` senza
+>     limite, `500` nel profilo gestito se non impostato, il valore della variabile, `null` se illeggibile con un errore
+>     nel log). Aggiunto alla bozza e al contratto; test a test-author 1;
+>   - punti 1 e 2 nella lista di domattina, con le mie raccomandazioni come scelta di partenza (esito solo nella scheda
+>     con il login che torna a `/settings?tab=backup`; parola tradotta senza badare a maiuscole e spazi);
+>   - E2E con conferma, stato, annullamento e riavvio finti: d'accordo;
+>   - lo scatto della galleria lo concorda lui con i colori quando B5b è pronto;
+>   - l'ordine resta B3, B5, B4.
+
+### B3 applicato e tolto; `all-backend` di B2 (2026-10-16, 01:33-) — in corso
+
+> - **01:33, ripresa**: «applica B3 e lancia le prove leggere; il tuo `all-backend` per B2 fra ~15 minuti». Applicato
+>   B3 (moduli nuovi, script di modifica, registrazione dei quattro file); test-author 1 ha aggiornato i due test
+>   registrati che B3 rompe (precondizione delle rotte, test del file mancante con e senza `--yes`, `yes=False`
+>   nell'aiuto).
+> - **01:44, contrordine**: «fai entrare B2 da solo» (Z2b aspetta `backup_in_progress()`). I messaggi si sono incrociati.
+>   **B3 salvato fuori dal repo** (`files/b3-applied/`, 19 file con `MANIFEST.txt`, uguali byte per byte) e **worktree
+>   riportato a `94a95284d`**: i 13 file tracciati riscritti con `git show HEAD:<file>`, i 6 nuovi tolti (salvati). Solo
+>   il piano resta modificato. Nessun comando git che scrive.
+> - **01:48, `all-backend`** nello slot pesante 1: `--workers 2`, `nice -n 10`, corsia 6187, revisione `94a95284d`; log
+>   `/tmp/libreFolio_b_all_backend_94a95.log`.
+> - **Durante la run, nella copia salvata** (niente nel worktree):
+>   - ruff: ordine degli import in `apply.py` (vero); `cmd_restore` troppo complessa (13 > 10) → divisa in
+>     `_restore_already_active`, `_check_on_a_copy` e il resto; i quattro I001 sugli altri file sono falsi positivi del
+>     controllo fuori dal repo (nel worktree non c'erano); black segnala solo due `print_info` già in HEAD;
+>   - la descrizione di `utils backup-cli` nel catalogo, rimasta vecchia: «restore of a missing file, with or without
+>     --dry-run, exits 1 creating nothing».
+> - **⚠️ Fuori pista — i link monouso del backup** (nota di E per B3, rimasta fuori dal contratto): un ripristino
+>   rianima gli inviti e i link di reset ancora vivi nel backup. **Decisione notturna, in attesa del developer** (mandata
+>   al coordinatore alle 01:55 per la lista di domattina, con la proposta per prima): al commit, nella stessa
+>   transazione di `session_version`, `revoked_at` = l'ora del ripristino su ogni riga di `account_tokens` non
+>   consumata e non revocata, come fa `token_service.revoke_tokens`. Nel log il conteggio; il report della CLI aggiunge
+>   «send new ones after the restore». Codice nella copia salvata (`_close_the_way_in`); test a test-author 2.
+> - **Analisi di B4 mandata** (01:55, sola lettura, durante la run; testo in `files/b4-analysis-draft.md` della sessione):
+>   `envelope.py` (intestazione con i parametri di scrypt limitati alla lettura, blocchi AES-256-GCM da 1 MiB in
+>   costruzione STREAM, intestazione come dati associati); creazione con `password` facoltativa (mai dal pannello), chiave
+>   d'istanza solo se generata e solo con la password; ripristino con `password` alla prova, ricifratura con
+>   `rekey_plugin_secrets` di X o conteggio dei segreti illeggibili; CLI `--password-file`/`--password-stdin` e `decrypt`.
+>   Dipende da H (`derive_key_from`, lettura della chiave generata). Tre punti per la lista di domattina: il costo di
+>   scrypt (`2^17`, 128 MiB, raccomandato), la password (almeno 12 caratteri, due volte), lo zip in chiaro per un attimo
+>   sul disco durante la creazione (accettato, raccomandato).
+> - **Sequenza dopo il via**: `all-backend` di B2 su `94a95284d`; poi nel worktree il codice di B3 (`apply.py`,
+>   `restart.py`, le modifiche in `paths`, `restore_jobs`, schemi, API, CLI, `app_lifespan` con le due righe dichiarate),
+>   la registrazione dei quattro file, i due test registrati che B3 rompe, il verde mirato, `api sync`, `front check`, la
+>   doc (docs-writer).
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
