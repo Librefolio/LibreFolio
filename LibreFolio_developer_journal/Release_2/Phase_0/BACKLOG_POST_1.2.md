@@ -3555,6 +3555,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   manuale, manda `null` e il backend tiene il costo di prima senza dirlo. Da decidere: un modo esplicito di togliere il
   costo (con la regola del costo obbligatorio che poi lo rifiuta dove serve) o un messaggio. Dettagli: piano 04, sezione
   N2.
+  ✅ 16/10 (decisione P5 del developer, lettura (B) del coordinatore delle 11:42, da rivedere dal developer): in un update un
+  `cost_basis_override: null` esplicito (la chiave in `model_fields_set`) toglie il costo manuale, importo e valuta, dove il
+  tipo e il lato finali della riga lo prendono (`cost_basis_allowed`), e lì N2 rifiuta con `costBasisRequired` (con la
+  tabella di oggi sempre: i lati che prendono un costo lo vogliono); altrove, e con Auto, il `null` si ignora (i costi di
+  consegna della 47 restano); la chiave assente lascia il costo com'è. Rosso visto, `services transaction-cost-basis-rule`
+  80/80. Dettagli: piano 04, sezione W-B30. Residuo → W-B49.
 - **W-B31 · La regola 12 del costo è una seconda copia scritta a mano** — minimo, codice; W, 15/10 (N2, test-author).
   `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`, regola 12,
   `costBasisModeIncompatible`) ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, a mano, mentre
@@ -3580,6 +3586,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `api sync`): la descrizione di `TXCreateItem.asset_event_id` «(DIVIDEND/INTEREST/ADJUSTMENT only)» e quella di
   `cost_basis_pair` (`type_metadata.py`: «qty<0» per l'indice 0, che vale ≤ 0, ed etichette italiane «Da»/«A»).
   Dettagli: piano 04, sezione W-B36.
+  ✅ 16/10 (W-B36b, decisione **P6** del developer: «solo quando cambia il campo interessato»): i quattro punti valgono
+  negli update quando cambia il campo (la cassa per i casi 1 e 4, la quantità per il 2 e il 3), confrontato per valore con
+  la riga salvata prima del batch (`changed_rule_fields`); un promote cambia il tipo e li controlla tutti; CREATE com'era.
+  Codice nuovo `cashNonzero` (4 lingue). Le righe salvate fuori dalla tabella restano modificabili (note, tag, data, valori
+  rimandati com'erano); sulla copia dei dati del developer nessuna riga fuori regola (i 4 conteggi a 0). Rossi visti (7 e
+  TX-S-110), `services transaction` 96/96. Di W-B36 restano aperte solo le due copie nei testi dell'API qui sopra.
+  Dettagli: piano 04, sezione W-B36b.
 - **W-B37 · Il modale dei report del broker cancella in blocco anche i file non cancellabili** — minimo, chiarezza; W,
   16/10 (H, CP-U2, docs-writer). Dopo CP-U2 `FilesTable` nasconde «elimina» sulle righe con `can_delete: false` in
   tutte e due le schede, quindi anche nel modale; ma `handleDeleteMultiple`
@@ -3653,6 +3666,74 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   anche `cash_currency: different` per FX_CONVERSION, che nessuna regola di creazione controlla: una FX_CONVERSION nella
   stessa valuta passa dall'API. Leggerla cambia ciò che l'API accetta → da decidere. Cura: le regole delle coppie lette dalla
   tabella, come W-B31/W-B36 per le regole 5–12, con le eccezioni nominate. Dettagli: piano 04, sezione W-B17.
+- **W-B47 · La barra di stato dell'editor CSV solo in inglese** — minimo, chiarezza; W, 16/10 (W-B43). In
+  `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` (~507-513) «N valid row(s)», «• N error(s)» e «• duplicate
+  …s» sono scritti a mano in inglese, in ogni import CSV (prezzi, eventi, cambi): un utente in IT, FR o ES li legge in inglese.
+  Cura: chiavi i18n con plurale ICU (base `csvImport.*`), nelle 4 lingue. File dell'area T dei colori: prima di scriverci,
+  avvisare il coordinatore. Anche il piede di `frontend/src/lib/components/ui/data-editor/DataImportModal.svelte` scrive a
+  mano «• N error(s)» e «• duplicates», senza `data-state`. Dettagli: piano 04, sezione W-B43.
+- **W-B48 · Altri selettori per testo e un altro `if` vuoto in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`** —
+  minimo, test; W, 16/10 (W-B43, test-author). In `frontend/e2e/assets/asset-data-editor.spec.ts`: `/Import \(N\)/` (righe
+  293, 307, 330, 344, 370, 399, 463, 477; c'è già `data-import-confirm` con `data-valid-rows` e `data-error-count`),
+  `button:has-text("Save")` (216, 245, 264, 353, 408) e `toHaveText(/Save \(\d+\)/)` (357; c'è `asset-editor-save-btn`),
+  `button:has-text("Cancel")` (220, 277; c'è `asset-editor-cancel-btn`), la classe `span.rounded-full` (259), il glifo ✕
+  di un pulsante senza `data-testid` (232). In `frontend/e2e/fx/fx-csv-import.spec.ts`: `'Import (2)'` e `'Import (1)'`
+  (178, 196, 223, 264, 397, 479, 490), `text=Discard import` (280; c'è `data-import-discard-confirm`), `hasText: 'Cancel'`
+  (291; c'è `data-import-cancel`), e il test 14 («info banner reflects current direction», 319–336) dentro due `if (count()
+  > 0)` che lo fanno passare senza asserire nulla (lo stesso difetto del test 21). Cura: i `data-testid` e gli attributi che
+  esistono già, nessun codice di prodotto; tranne il ✕, che chiede un `data-testid` (file dell'area dei colori). Dettagli:
+  piano 04, sezione W-B43.
+- **W-B49 · Svuotare il costo nel modulo: il rifiuto arriva solo a «Salva tutto», e tre testi dicono ancora «vuoto = Auto»**
+  — minimo, chiarezza; W, 16/10 (W-B30, docs-writer). (1) Ogni modifica passa dalla Bulk, che apre il modulo; il controllo
+  dal vivo del modulo su una coppia (`collectDualUpdates` → `diffDualItem`,
+  `frontend/src/lib/utils/transactions/txPayloadHelpers.ts`) lascia fuori un costo manuale svuotato: la gamba ricevente
+  costruita da `buildDualCreatePayloads` non ha la chiave `cost_basis_override` quando il campo è vuoto. Il costo non resta
+  in silenzio (il «Salva tutto» della Bulk passa da `buildUpdateDiff`, che manda il `null`, e W-B30 lo rifiuta), ma l'utente
+  vede il rifiuto solo lì. (2) Il tooltip `transactions.costBasisOverride.tooltip` («If empty, auto-calculated from
+  purchases at save», 4 lingue, `WacPreviewSection.svelte:352`) e la riga «Normal transfer» della tabella di
+  `mkdocs_src/docs/financial-theory/instruments/transaction-types/adjustment.en.md:95` («Leave empty — auto-calculated»; IT
+  e FR alla 76–77) dicono ancora che vuoto vuol dire Auto: da N2, vuoto in **Manuale** è rifiutato e l'Auto si sceglie.
+  Cura: `diffDualItem` manda `null` quando la bozza non ha costo e la riga salvata sì, come `buildUpdateDiff`, con un rosso
+  Vitest; i testi riscritti nelle 4 lingue (file `.ts`, `.json` e `.md`, nessun `.svelte`). Dettagli: piano 04, sezione
+  W-B30.
+- **W-B50 · Quattro debolezze nei due spec del wizard di import** — minimo, test; W, 16/10 (IW-8: note del lotto dei
+  colori dell'import, passate dal coordinatore). In `frontend/e2e/transactions/tx-brim-import.spec.ts`: (1) T4 (221–243)
+  asserisce dentro due `if (… isVisible …)` che saltano il controllo proprio quando qualcosa si rompe; (2) la guardia
+  esterna di T3 e T4 cerca il testo tradotto `text=Resolve Assets` (200, 232), mentre la sezione ha
+  `data-testid="import-wizard-resolve-section"` (`frontend/src/lib/components/transactions/wizard/ReviewStep.svelte:116`);
+  (3) T1 non importa mai col suo campione: il ramo `if (isEnabled)` (160) non gira. In
+  `frontend/e2e/transactions/tx-import-resolution.spec.ts`: (4) i commenti del «badge ambra» (riga 43 e IWR-001, 478)
+  diventano falsi coi lotti dei colori dell'import. Cura: solo i due spec, coi `data-testid` che esistono; dopo l'ingresso
+  del lotto di IW (`48ecea1e2`, che tocca T4 alle righe 234–235) e l'aggiornamento della mia base. Dettagli: piano di IW,
+  `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/IW-importColors/plan-phase00ImportColors.prompt.md`
+  (sul ramo di IW), passo 1, «Spec T4».
+- **W-B51 · La tolleranza dei duplicati BRIM è grossa per le quantità crypto** — minimo, dati; W, 16/10 (C-97, analisi).
+  `detect_tx_duplicates` (`backend/app/services/brim/brim_provider.py`, ~2156) confronta le quantità con
+  `QUANTITY_TOLERANCE = Decimal("0.0001")`: con le quantità a 10 decimali di C-97, due acquisti di bitcoin diversi lo stesso
+  giorno (0,00015 e 0,00008 BTC) coincidono sulla quantità, e un import che li ritrova li segna come doppioni probabili
+  (deselezionati per default) se anche l'importo coincide a 0,01. Cura: una tolleranza relativa alla scala (o l'uguaglianza,
+  ora che le quantità tornano esatte), con un rosso; dopo C-97a. Dettagli: piano 04, sezione C-97.
+- **W-B52 · Svuotare il massimo di un prezzo rifiuta la data** — minimo, dati; W, 16/10 (C-97a, test-author). In
+  `bulk_upsert_prices` (`backend/app/services/assets/price_store.py`, ~194–197) il controllo OHLC confronta i valori
+  ricevuti, sentinella compresa: con `high = -1` (svuota il massimo), da solo o con `low = -1`, vale `low <= close <= -1`,
+  falso, e la data è scartata come «impossible OHLC (close outside [low, high])» invece di svuotare il campo. Cura: il
+  controllo sui valori dopo la fusione delle sentinelle (`merged_low`, `merged_high`), con un rosso. Dettagli: piano 04,
+  sezione C-97a.
+- **W-B53 · La prima analisi BRIM dopo l'avvio supera i 30 s del test** — minimo, test e prestazioni; W, 16/10 (J-30 di J,
+  passato dal coordinatore; visto da H, J e forse MF). Il primo `POST /brokers/import/files/{id}/parse` dopo l'avvio del
+  server crea il pool di processi BRIM (`_get_pool`, `backend/app/services/brim/brim_parse_pool.py`, `forkserver`): sotto carico
+  ci mette 31–49 s, contro i 30 s fissi di `backend/test_scripts/test_api/test_brim_api.py` (`TIMEOUT`, `TestParseEndpoint`);
+  poi circa 1 s. Anche un utente aspetta il primo import. Cura (proposta di J): **scaldare il pool all'avvio**, in background,
+  come fa già il calendario dei mercati (`start_market_holiday_prewarm`, `backend/app/services/platform/app_lifespan.py`),
+  oppure una fixture che lo scaldi prima dei test a tempo; **non** un tempo più lungo. Un lotto piccolo dopo C-97a. Dettagli:
+  messaggio del coordinatore, 16/10 17:45.
+- **W-B54 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** — minimo, test; W, 16/10 (C-97a, slot API). Il
+  setup della categoria `api` (`_api_setup`, `scripts/test_runner/_backend_api.py`: `db_populate(force=True)`) gira solo con
+  la categoria intera; `dev.py test … api brim` da solo usa il DB com'è, e dopo una prova `services` (che lo ricrea vuoto) i
+  test che entrano come `e2e_test_admin` cadono sulla loro premessa (401, «the api setup, db populate, seeds it»): 6 rossi su
+  118 il 16/10, verdetto ambiente. Cura: il runner rifà il seed quando un'azione `api` singola trova il DB senza gli utenti
+  di fixture, o lo dice prima di partire. Registro del runner: superficie condivisa, decide il coordinatore. Dettagli: piano 04,
+  sezione C-97a.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -3679,6 +3760,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   W: solo chi ha un ruolo sul broker e l'admin, 404 agli altri (come i file di F36); unico chiamante del frontend
   `BrokerSharingPanel`; da cambiare ACCESS-002/003 e `test_account_deletion_api.py:351-352`. Inviata al coordinatore il
   15/10 (regola della notte). Dettagli: piano 04, sezione «Lotto di doc A-14».
+  ⊘ 16/10, **decisione del developer (P4): non si restringe**, nessun lotto. Il motivo, suo: gli utenti devono sapere che
+  esistono altri broker, per capire perché un nome non si può riusare e a chi chiedere. L'elenco resta leggibile da ogni
+  utente autenticato, come descrivono le docstring (W-B35) e `access_control.md` (lotto A-14). Dettagli: messaggio del
+  coordinatore, 16/10 11:11.
 - **W-B35 · Docstring e commenti superati dell'accesso ai broker** — minimo, chiarezza; W, 15/10 (lotto di doc A-14,
   docs-writer). `backend/app/services/brokers/access.py:98` («skip access check»: `list_accesses()` non ne fa, e i suoi
   argomenti `user_id`/`is_superuser` non servono); `access.py:141` e `backend/app/api/v1/brokers.py:496` (un controllo
