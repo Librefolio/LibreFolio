@@ -33,6 +33,11 @@ never undoes one under a process that may have read the restored data. A restore
 still runs, or by another boot at the commit, stops the start (``RestoreInUseError``) rather than serve uncommitted
 data.
 
+**Never on a blocked instance** (developer decision P7). While the hosting provider blocks the instance
+(``LIBREFOLIO_BLOCKED``), a pending restore is not applied: it waits for the first start after the unblock
+(``instance_blocked``). The undo of a swap a start left half done, and the commit of the restore this start applied,
+still run: the first repairs the data directory, and the block cannot change during one start.
+
 An ordinary start, with no restore, only finds that ``.restore/restore.json`` does not exist: it creates no folder and
 no lock file.
 """
@@ -61,6 +66,7 @@ except ImportError:  # pragma: no cover - not POSIX: the restores of one process
     fcntl = None  # type: ignore[assignment]
 
 from backend.app.config import get_data_dir
+from backend.app.config.platform import instance_blocked
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup import restart
 from backend.app.services.platform.instance_backup.jobs import _lock_held
@@ -95,8 +101,8 @@ RestorePhase = Literal["pending", "applying", "applied", "rolling_back", "commit
 RollbackReason = Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"]
 #: Why a pending restore was not applied at a start, and still waits: a backup was running; the data directory is not
 #: the one the restore was confirmed for (a copy of it); another server process was serving it (a worker started again
-#: under its running siblings, or a second server).
-WaitReason = Literal["backup_running", "other_data_directory", "server_running"]
+#: under its running siblings, or a second server); the hosting provider blocked the instance (developer decision P7).
+WaitReason = Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"]
 #: The phases of a restore not finished yet: its copy is kept, and no other restore can be confirmed.
 ACTIVE: frozenset[str] = frozenset({"pending", "applying", "applied", "rolling_back"})
 
@@ -610,11 +616,24 @@ def _swap(data_dir: Path, state: RestoreState, boot: Boot, now: datetime) -> Res
         return applied
 
 
+def _blocked() -> bool:
+    """Whether the hosting provider blocks the instance (``LIBREFOLIO_BLOCKED``). A value that cannot be read counts as
+    blocked: the startup checks stop the server on it anyway, and a restore is never applied on a guess."""
+    try:
+        return instance_blocked()
+    except ValueError:
+        logger.error("LIBREFOLIO_BLOCKED cannot be read: the restore waits, as on a blocked instance")
+        return True
+
+
 def _not_applicable(data_dir: Path, state: RestoreState, now: datetime, *, served: bool) -> RestoreState | None:
     """Why a pending restore is not applied at this start, as the state then recorded; ``None`` when it can be."""
     if str(data_dir.resolve()) != state.data_dir:
         logger.warning("A restore waits for another data directory: it is not applied here", stage_id=state.stage_id)
         return _record(data_dir, state.model_copy(update={"waiting": "other_data_directory"}))
+    if _blocked():
+        logger.warning("The hosting provider blocked the instance: the restore waits until it is unblocked", stage_id=state.stage_id)
+        return _record(data_dir, state.model_copy(update={"waiting": "instance_blocked"}))
     if served:
         logger.error("A server serves the data directory: the restore waits for a start of the whole server", stage_id=state.stage_id)
         return _record(data_dir, state.model_copy(update={"waiting": "server_running"}))
