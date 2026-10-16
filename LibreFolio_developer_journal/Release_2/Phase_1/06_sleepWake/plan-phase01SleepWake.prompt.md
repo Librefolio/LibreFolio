@@ -2771,3 +2771,84 @@ base.
    produzione solo per i test. `--dead-code` segnala `reset_provider_cooldowns()` (Z7a) e
    `reset_shutdown_budget_state()` (Z6b), verificate sul codice: le chiamano solo `test_provider_cooldown.py` e
    `test_shutdown_budget.py`. Nel backlog come Z-19, da allineare nel prossimo lotto di codice di Z.
+
+### Lotto B — Z-18 e il test dello spinner: il Dashboard non si dice «occupato» per una ricarica in background
+
+> **Via** (coordinatore, 16/10 20:39): «Base: your branch is fast-forwarded to `27994759a` (the dev tip), clean.
+> Order: lot B first, lot A after. Lot B (Dashboard: Z-18 + the spinner test): go now. The colour team has no pending
+> lots on the Dashboard (DV W6-d has entered), and the change is `<script>` only […]. Then a short E2E slot. Lot A
+> (Z-3, Z-8, Z-19): after C-66 […]. Prepare lot A's reds now, without touching those files.» Base: `27994759a`.
+
+**Stato reale** (su `27994759a`). Y11 (passi 1–4b) è entrato: i pulsanti «Aggiorna» del Dashboard (`sync-button`) e
+della pagina del broker (`broker-refresh`) seguono `pageBusy.busy`, e la ricarica dopo un recupero
+(`reloadAfterPriceCatchUp()` → `loadAll()` / `loadOverview()`, senza `track`) non li fa girare. Sul Dashboard la radice
+(`dashboard-page`, `+page.svelte:847–848`) lega `aria-busy` e `data-busy` a `reportLoading || contributionLoading ||
+contributionRefreshing || syncLoading`, e la ricarica ne accende due: `reportLoading` (`loadAll()`, riga 584) e
+`contributionRefreshing` (`loadContribution()`, riga 641, chiamata da `loadAll()` quando il contributo in cache è
+stale, cioè sempre dopo un recupero). Con i dati sullo schermo `reportLoading` guida solo la radice e la guardia della
+valuta (riga 212); i due scheletri lo vogliono insieme a «nessun dato». La pagina del broker non ha `aria-busy` sulla
+radice e i suoi scheletri vogliono anch'essi «nessun dato»: nessuna modifica lì.
+
+**Disegno** (solo `<script>` del Dashboard, decisioni N-ZB-1…3, «da rivedere»):
+- N-ZB-1: `loadAll(force, propagateError, {background})`: in background non accende `reportLoading`; tutto il resto è
+  uguale (`loadSeq` scarta una risposta superata, il `finally` spegne `reportLoading` se è l'ultima chiamata).
+- N-ZB-2: `loadContribution({background})`: in background, con un contributo in cache, un segno non reattivo
+  (`contributionInBackground`) al posto di `contributionRefreshing`: tiene la guardia contro una seconda richiesta, ma
+  non tocca la radice. Senza cache resta lo scheletro di `contributionLoading`, come oggi.
+- N-ZB-3: `reloadAfterPriceCatchUp()` chiama `loadAll(false, false, {background: true})`. Le chiamate dell'utente
+  restano come sono: la radice si dice ancora «occupata» per un caricamento chiesto.
+
+**Test** (test-author, rossi prima; `e2e/portfolio/price-refresh-reload.spec.ts`, azione `front-portfolio
+price-refresh`): il registratore della pagina segna ogni cambio di `data-busy` della radice e dei due pulsanti. (a)
+Durante la ricarica del Dashboard né la radice né `sync-button` passano a `true`: rosso oggi per la radice. (b) Durante
+quella della pagina del broker `broker-refresh` resta `false`: verde oggi, fissa Y11 (il test dello spinner). Controllo
+positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` al registratore.
+
+**Passi.**
+1. ✅ 16/10 20:42–21:00 — Rossi (test-author) in `price-refresh-reload.spec.ts`: due test nuovi in un blocco a sé,
+   (d) Dashboard ed (e) pagina del broker. Il registratore della pagina segna ogni valore di `data-busy` della radice
+   e dei due pulsanti (un `MutationObserver` sul documento, con `attributeOldValue`: anche un passaggio vero→falso
+   nello stesso tick si vede) e i clic, con lo stesso `seq`. Finestra: dalla fine del recupero (`mark`) al clic del
+   controllo; premesse: ogni elemento a `false` all'apertura; controllo positivo: un clic su «Aggiorna» fa vedere
+   `true` e poi `false`. Atteso, non eseguito: rosso solo (d) all'ultima asserzione (la radice); (e) verde, fissa Y11.
+   > **⚠️ Fuori pista**: test-author ha trovato due casi di `page-busy.spec.ts` (Y11) che usano il `data-busy="true"`
+   > della radice come barriera durante la ricarica trattenuta (righe ~648 e ~778), più `waitForSettled(dashboard)`
+   > come prova d'atterraggio: con Z-18 diventano rossi. Via del coordinatore (16/10 ~20:58): li adatta il mio
+   > test-author nel lotto B (radice `false` durante la ricarica; dopo il rilascio le barriere d'atterraggio dello
+   > spec); Y li rivede al checkpoint. Nessun ramo ha il file aperto.
+   Il codice in bozza: `files/zb-draft/apply_zb.py` (`check`, `code`, `revert-code`; rifiuta un pezzo fuori dallo
+   `<script>`). Resa su una copia: precondizioni vere, `revert-code` esatto, Prettier invariato.
+2. Codice, controlli leggeri, doc:
+   - ✅ 16/10 21:02 — Applicato (`apply_zb.py code`, +18 −9, solo `<script>`); Prettier `--check` pulito; impronta
+     in `files/zb-draft/dashboard_applied.md5`.
+   - ✅ 16/10 21:05–21:15 — Test: i due casi di `page-busy.spec.ts` adattati da test-author (la radice `false` durante
+     la ricarica trattenuta; la prova che è in volo dal conteggio dei report; l'atterraggio da `landedAllBut`); e un
+     caso nuovo (f) nello spec di Z-13: il Dashboard sulla scheda Posizioni con la vista Performance salvata, dove la
+     ricarica chiede di nuovo anche il contributo (N-ZB-2): rosso atteso senza il codice, anche con il solo
+     `reportLoading` sistemato. Descrizione dell'azione `front-portfolio price-refresh` aggiornata (Z-18).
+   - ✅ 16/10 21:05–21:13 — Doc (docs-writer, verificata da me): `live-ticker.md#price-refresh` (i pulsanti seguono
+     `pageBusy.busy` da Y11; la ricarica in background non li tocca e, sul Dashboard, non accende `aria-busy`), la
+     tabella `#testing` ((d), (e) e la riga di `page-busy.spec.ts`), `domain-state.md` passo 5.
+   - ✅ 16/10 21:07–21:14 — `front check` e `core-unit` sul codice: un errore ciascuno, non miei. `front check`:
+     `pac-allocator/planner/source.ts:290` (`'ESTIMATED_AT_COST'` sconosciuto al client generato);
+     `core-unit` 6852/6853: `pluginSettingsApi.test.ts` («a plugin’s icon passes the generated schema…»). Il client
+     generato (ignorato da git) è vecchio dopo i 284 commit dell'aggiornamento della base: `api sync` nella catena
+     di preparazione dello slot (`files/zb_prep.sh`).
+   - La catena di preparazione (`files/zb_prep.sh`) ha atteso il carico sotto 50 dalle 21:16 senza partire: allo
+     slot l'ho fermata (nessun passo in corso) e i controlli leggeri vanno dopo lo slot.
+3. ✅ 16/10 21:20–21:46 — Slot 3 (coordinatore, cut-off 22:00), `files/zb_slot.sh`:
+   - A, la pagina com'è a HEAD (`apply_zb.py revert-code`, identica a HEAD), una ricostruzione: `front-portfolio
+     price-refresh` 2 rossi su 6, (d) e (f), all'ultima asserzione (la radice `dashboard-page` registra `true`
+     durante la ricarica; il pin di `sync-button` subito prima passa); `front-portfolio page-busy` 2 rossi su 12, i
+     due casi adattati (`Expected "false"`, `Received "true"` sulla radice). Gli altri 14 verdi.
+   - B, il codice (`apply_zb.py code`, identico all'impronta delle 21:02): `price-refresh` 6/6, `page-busy` 12/12,
+     `dashboard-cache` 6/6. Porta 6186 libera.
+   > **⚠️ Fuori pista**: alle 21:37 il carico era a ~150 (lavori altrui) e l'involucro di B aspettava sotto 70. Dentro
+   > lo slot ho fermato solo l'attesa (PID 25645, 41661 e il suo `sleep`; nessun test partito) e ho lanciato i tre
+   > passi di B con la soglia alzata (21:39–21:46).
+   Dopo lo slot, sotto carico 50 (21:54–22:20): `api sync`; `front check` 0/0; `core-unit` 6853/6853 (con il
+   cancello dei colori; `pluginSettingsApi.test.ts` di nuovo verde: era il client generato vecchio); `mkdocs build`
+   stretto senza avvisi (il fix `ed500643f` di dev è ora nella base); `check-links` 97 validi.
+4. ✅ 16/10 22:21 — Checkpoint FROZEN inviato: otto file (il Dashboard, due spec, il runner, due pagine di doc, il
+   piano, il backlog con Z-18 ✅). Il `.svelte` è nell'area DV, solo `<script>`: lo SHA va ai colori; i due casi di
+   `page-busy.spec.ts` li rivede Y.
