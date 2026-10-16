@@ -30,7 +30,7 @@ lib/features/brokers/BrokerCard.svelte	12
 lib/features/brokers/BrokerForm.svelte	4
 lib/features/brokers/BrokerSharingPanel.svelte	45
 lib/features/brokers/lots/LotComparisonChart.svelte	2
-lib/features/brokers/lots/LotCustodyModal.svelte	205
+lib/features/brokers/lots/LotCustodyModal.svelte	20
 lib/features/brokers/lots/LotGanttChart.svelte	4
 lib/features/brokers/lots/UnifiedLotsTable.svelte	60
 lib/features/dashboard/ExposureTable.svelte	2
