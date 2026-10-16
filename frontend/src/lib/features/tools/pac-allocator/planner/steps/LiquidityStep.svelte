@@ -88,29 +88,29 @@
 
 <div class="space-y-4" data-testid="pac-planner-liquidity">
     <div class="space-y-2">
-        <p class="text-sm text-gray-700 dark:text-gray-300">{$t('tools.pacAllocator.planner.liquidity.intro', {default: 'Where does the money to invest come from? You can combine several sources.'})}</p>
+        <p class="text-sm text-lf-secondary">{$t('tools.pacAllocator.planner.liquidity.intro', {default: 'Where does the money to invest come from? You can combine several sources.'})}</p>
         <div class="grid gap-2 sm:grid-cols-3">
             <button type="button" class={CHOICE_CARD} disabled={copyDisabled} data-testid="pac-planner-liquidity-copy-open" onclick={() => (copyOpen = true)}>
-                <span class="flex w-full items-center gap-2 font-medium text-gray-900 dark:text-gray-100">
+                <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><Briefcase class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.copy', {default: 'From your Brokers'})}</span>
-                    <Plus class="h-4 w-4 text-gray-400" aria-hidden="true" />
+                    <Plus class="h-4 w-4 text-lf-muted" aria-hidden="true" />
                 </span>
                 <span class={HINT}>{$t('tools.pacAllocator.planner.liquidity.copyHint', {default: 'Cash already on the Brokers registered in LibreFolio. You choose how much to use.'})}</span>
             </button>
             <button type="button" class={CHOICE_CARD} data-testid="pac-planner-contribution-add" onclick={addContribution}>
-                <span class="flex w-full items-center gap-2 font-medium text-gray-900 dark:text-gray-100">
+                <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><PiggyBank class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.addContribution', {default: 'New contribution'})}</span>
-                    <Plus class="h-4 w-4 text-gray-400" aria-hidden="true" />
+                    <Plus class="h-4 w-4 text-lf-muted" aria-hidden="true" />
                 </span>
                 <span class={HINT}>{$t('tools.pacAllocator.planner.liquidity.contributionHint', {default: 'New money you add, for example the PAC instalment. In the Broker step you choose which Broker receives it.'})}</span>
             </button>
             <button type="button" class={CHOICE_CARD} data-testid="pac-planner-manual-account-open" onclick={() => (manualOpen = true)}>
-                <span class="flex w-full items-center gap-2 font-medium text-gray-900 dark:text-gray-100">
+                <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><Landmark class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.addManual', {default: 'External account'})}</span>
-                    <Plus class="h-4 w-4 text-gray-400" aria-hidden="true" />
+                    <Plus class="h-4 w-4 text-lf-muted" aria-hidden="true" />
                 </span>
                 <span class={HINT}>{$t('tools.pacAllocator.planner.liquidity.manualHint', {default: 'A balance you already have on an account not registered in LibreFolio, for example at your bank. You declare how much is there and how much to use.'})}</span>
             </button>
@@ -133,7 +133,7 @@
                         <div class="flex flex-wrap items-start justify-between gap-2">
                             <div class="flex min-w-0 items-center gap-2">
                                 <PlannerBrokerIcon {broker} />
-                                <h3 id="{ids}-{cash.key}-title" class="flex min-w-0 flex-wrap items-center gap-x-2 font-semibold text-gray-900 dark:text-gray-100">
+                                <h3 id="{ids}-{cash.key}-title" class="flex min-w-0 flex-wrap items-center gap-x-2 font-semibold text-lf-primary">
                                     <span>
                                         {#if broker?.fundingOnly}
                                             {$t('tools.pacAllocator.planner.cash.manualTitle', {default: '{name} · external account', values: {name: brokerName(cash)}})}
@@ -187,7 +187,7 @@
                             </p>
                         </div>
                         {#if exceeds}
-                            <p class="text-sm text-red-700 dark:text-red-300" role="alert" data-testid="pac-planner-cash-exceeds">{$t('tools.pacAllocator.planner.problems.selectedExceedsAvailable', {default: "'Amount to use' exceeds the available amount in the same currency."})}</p>
+                            <p class="text-sm text-lf-danger" role="alert" data-testid="pac-planner-cash-exceeds">{$t('tools.pacAllocator.planner.problems.selectedExceedsAvailable', {default: "'Amount to use' exceeds the available amount in the same currency."})}</p>
                         {/if}
                         {#if broker?.fundingOnly}
                             <p class={HINT}>{$t('tools.pacAllocator.planner.cash.fundingOnly', {default: 'Nothing is bought from this account: in the Broker step you choose which Broker receives this money.'})}</p>
@@ -211,7 +211,7 @@
                                         aria-label={$t('tools.pacAllocator.planner.contribution.label', {default: 'Label'})}
                                         data-testid="pac-planner-contribution-label"
                                     />
-                                    <PenLine class="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 opacity-60 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100" aria-hidden="true" />
+                                    <PenLine class="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-lf-muted opacity-60 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100" aria-hidden="true" />
                                 </h3>
                             </div>
                             <OriginBadge origin="manual" testid="pac-planner-contribution-origin" />

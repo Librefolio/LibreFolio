@@ -95,13 +95,13 @@
     }
 </script>
 
-<div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group" data-row-id={result.id} data-status={result.status} data-testid="sync-result-row">
+<div class="flex items-center gap-2 text-xs text-lf-secondary group" data-row-id={result.id} data-status={result.status} data-testid="sync-result-row">
     {#if retryable && !syncing}
         {#if statusTooltip}
             <Tooltip text={statusTooltip} position="top">
                 <button
                     class="shrink-0 p-0.5 rounded transition-colors
-                        {result.status === 'failed' ? 'hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500' : 'hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-500'}"
+                        {result.status === 'failed' ? 'hover:bg-lf-danger-soft text-lf-danger' : 'hover:bg-lf-warning-soft text-lf-warning'}"
                     data-testid="sync-retry-row"
                     onclick={() => onRetry(result.id)}
                     type="button"
@@ -112,7 +112,7 @@
         {:else}
             <button
                 class="shrink-0 p-0.5 rounded transition-colors
-                    {result.status === 'failed' ? 'hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500' : 'hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-500'}"
+                    {result.status === 'failed' ? 'hover:bg-lf-danger-soft text-lf-danger' : 'hover:bg-lf-warning-soft text-lf-warning'}"
                 data-testid="sync-retry-row"
                 onclick={() => onRetry(result.id)}
                 type="button"
@@ -133,17 +133,17 @@
     </span>
 
     {#if hasCounters}
-        <span class="text-gray-400">—</span>
+        <span class="text-lf-muted">—</span>
         <span class="inline-flex items-center gap-0.5">
             {#if countIcon}
                 {@const CountIcon = countIcon}
-                <CountIcon size={13} class="text-gray-400 shrink-0" />
+                <CountIcon size={13} class="text-lf-muted shrink-0" />
             {/if}
             {result.points_fetched ?? 0}↓ {result.points_changed ?? 0}Δ
         </span>
         {#if (result.events_fetched ?? 0) > 0}
-            <span class="text-gray-400">·</span>
-            <span class="inline-flex items-center gap-0.5"><CalendarClock size={13} class="text-gray-400 shrink-0" />{result.events_fetched}↓ {result.events_changed ?? 0}Δ</span>
+            <span class="text-lf-muted">·</span>
+            <span class="inline-flex items-center gap-0.5"><CalendarClock size={13} class="text-lf-muted shrink-0" />{result.events_fetched}↓ {result.events_changed ?? 0}Δ</span>
         {/if}
         {#if result.provider_used && provider}
             {@render provider(result.provider_used)}
@@ -151,7 +151,7 @@
     {/if}
 
     {#if result.status === 'skipped' && result.message}
-        <span class="text-gray-400 italic truncate" data-testid="sync-row-skipped">{result.message}</span>
+        <span class="text-lf-muted italic truncate" data-testid="sync-row-skipped">{result.message}</span>
     {/if}
 
     {#if retryable}
@@ -160,11 +160,11 @@
              is the only way to get a multi-error payload out of the modal. -->
         <Tooltip text={fullError} position="top" maxWidth="500px">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <span class="{result.status === 'partial' ? 'text-amber-500' : 'text-red-500'} truncate inline-block max-w-[240px] align-middle cursor-help" data-testid="sync-row-error" ondblclick={copyError} ontouchend={handleTouchEnd} ontouchstart={handleTouchStart}>{shortError}</span>
+            <span class="{result.status === 'partial' ? 'text-lf-warning' : 'text-lf-danger'} truncate inline-block max-w-[240px] align-middle cursor-help" data-testid="sync-row-error" ondblclick={copyError} ontouchend={handleTouchEnd} ontouchstart={handleTouchStart}>{shortError}</span>
         </Tooltip>
     {/if}
 
     {#if result.elapsed_ms}
-        <span class="ml-auto text-gray-400 font-mono tabular-nums text-[10px]">{formatElapsed(result.elapsed_ms)}</span>
+        <span class="ml-auto text-lf-muted font-mono tabular-nums text-[10px]">{formatElapsed(result.elapsed_ms)}</span>
     {/if}
 </div>

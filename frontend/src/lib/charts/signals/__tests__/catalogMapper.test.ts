@@ -90,7 +90,7 @@ describe('signal catalog mapper', () => {
     });
 
     it('maps risk as a supported backend indicator group', () => {
-        const catalog = makeCatalog('RISK_ROLLING_RETURN', ['asset']);
+        const catalog = makeCatalog('RISK_ROLLING_VOLATILITY', ['asset']);
         catalog.category = 'risk';
 
         expect(mapBackendSignalDefinition(catalog).indicatorGroup).toBe('risk');

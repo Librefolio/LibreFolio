@@ -209,6 +209,17 @@ def gain_loss_ratio(gain: Decimal | None, base: Decimal | None, *, positive_base
     return gain / base
 
 
+def price_return(start: Decimal | None, end: Decimal | None) -> Decimal | None:
+    """The simple return from one price to a later one: ``end / start - 1``, unrounded.
+
+    None when a price is missing or the starting price is 0: never a division by zero. Callers that
+    show a percentage multiply by 100 themselves.
+    """
+    if start is None or end is None or start == 0:
+        return None
+    return end / start - 1
+
+
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:
     """ROI = (NAV - Invested) / Invested. Returns 0 if total_invested == 0."""
     if total_invested == Decimal("0"):

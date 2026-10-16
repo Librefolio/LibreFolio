@@ -27,7 +27,7 @@
             <h3 id="pac-planner-section-{id}-title" class="min-w-0">
                 <button
                     type="button"
-                    class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green"
+                    class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                     aria-expanded={open}
                     aria-controls="pac-planner-section-{id}-body"
                     data-testid="pac-planner-result-section-toggle"

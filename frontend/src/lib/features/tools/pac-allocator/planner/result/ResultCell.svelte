@@ -40,7 +40,7 @@
     let {cell}: Props = $props();
 
     const KEY = 'tools.pacAllocator.planner.result';
-    const TRACK = 'block h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700';
+    const TRACK = 'block h-2 w-full overflow-hidden rounded-full bg-lf-panel';
 </script>
 
 {#if cell.type === 'broker'}
@@ -75,7 +75,7 @@
     </span>
 {:else if cell.type === 'bars'}
     <span class="flex w-full min-w-24 flex-col gap-1" aria-hidden="true">
-        <span class={TRACK}><span class="block h-full rounded-full bg-gray-400 dark:bg-gray-500" style="width: {weightWidth(cell.target, cell.scale)}"></span></span>
+        <span class={TRACK}><span class="block h-full rounded-full bg-lf-secondary" style="width: {weightWidth(cell.target, cell.scale)}"></span></span>
         <span class={TRACK}><span class="block h-full rounded-full bg-libre-green" style="width: {weightWidth(cell.final, cell.scale)}"></span></span>
     </span>
 {:else if cell.type === 'money'}
@@ -86,7 +86,7 @@
     <span class="tabular-nums">{priceText(cell.price, $t, cell.digits)}</span>
 {:else if cell.type === 'instruction'}
     <span class="flex flex-wrap items-center gap-1.5">
-        <span class="font-medium text-gray-900 dark:text-gray-100" data-testid="pac-planner-plan-instruction">{instructionText(cell.order, $t, cell.digits)}</span>
+        <span class="font-medium text-lf-primary" data-testid="pac-planner-plan-instruction">{instructionText(cell.order, $t, cell.digits)}</span>
         {#if cell.autoConversion}<span class={BADGE.info} data-testid="pac-planner-plan-order-auto-conversion">{$t(`${KEY}.plan.autoConversion`, {default: 'Automatic conversion'})}</span>{/if}
     </span>
 {:else if cell.type === 'label'}
