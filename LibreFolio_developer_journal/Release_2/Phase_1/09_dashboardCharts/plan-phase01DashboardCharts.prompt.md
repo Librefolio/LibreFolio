@@ -2892,3 +2892,185 @@ scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkp
 >
 > I checkpoint sono due commit separati, con i file in `files/y12a2_stage_code.txt` (passo 2) e
 > `files/y12a3_stage_code.txt` (passo 3), più il journal (`files/y12a_stage_journal.txt`).
+
+## Y11 — il contratto di `pageBusy` (P3, decisione 48) ✅ approvato (2026-10-16, 12:20 e 12:35; nessun codice)
+
+Fonti: le decisioni del developer delle 11:19, e un'indagine `explore` sul codice di oggi (HEAD `9c42584e7`). Il codice
+viene dopo Y-12. Il coordinatore chiede ai colori i file delle loro aree (T, DV, BK, AF, TR) e mi gira la risposta
+prima che io cominci.
+
+### L'API
+
+Un modulo nuovo, `frontend/src/lib/stores/app/pageBusy.svelte.ts`: solo script, nessun markup.
+
+```ts
+export interface BusyToken { readonly id: number; readonly label: string }
+/** Past it the request counts as lost, for the button only: the request itself is not cancelled. */
+export const PAGE_BUSY_TIMEOUT_MS = 120_000;
+export const pageBusy: {
+    begin(label: string, options?: {timeoutMs?: number}): BusyToken; // a «big» request starts
+    end(token: BusyToken): void;                                     // it came back, well or badly; idempotent
+    track<T>(label: string, work: () => Promise<T>, options?: {timeoutMs?: number}): Promise<T>; // begin + finally end
+    readonly busy: boolean;              // reactive: at least one token pending on this page
+    readonly labels: readonly string[];  // the pending labels, for diagnostics and tests
+    reset(): void;                       // drops every token (route change)
+};
+```
+
+- **La lista**: un `$state` con i gettoni pendenti; `busy` vale «almeno uno». `end` di un gettone sconosciuto, già
+  chiuso, scaduto o di prima di un `reset` non fa niente.
+- **Il timeout**: ogni gettone ha il suo; quando scade si toglie dalla lista e scrive un `console.warn` con l'etichetta.
+  - Il valore è **120 s**. Un gettone avvolge una funzione di caricamento, che può fare fino a tre o quattro richieste
+    in fila; ognuna ha il timeout di axios a 30 s (`zodios-client.ts:33`).
+  - Le richieste da 120 s (le sincronizzazioni di cambi e prezzi della Dashboard) sono escluse: hanno i loro modali.
+  - Si può alzare per chiamata, con `timeoutMs`.
+- **La pagina**: `reset()` lo chiama un `onNavigate` nel layout `routes/(app)/+layout.svelte` quando cambia la route
+  (`from.route.id !== to.route.id`). Il layout oggi importa solo `afterNavigate`; `onNavigate` scatta prima che la
+  pagina nuova si monti, quindi i gettoni del suo primo caricamento non si perdono.
+  - Un cambio di parametro nella stessa route (da asset 1 ad asset 2) non azzera: la pagina ricarica comunque, con
+    gettoni nuovi.
+  - Niente `$app/state` nello store: in Vitest non ha un mock, mentre `$app/navigation` sì.
+- **Il pulsante**: in ogni pagina, l'icona gira (`animate-spin`, che non è un colore) e il pulsante è `disabled` (cioè
+  grigio) quando vale `pageBusy.busy`. La pressione stessa apre un gettone.
+  - Il pulsante pubblica `data-busy="true|false"` per i test (regola 10 della skill design-system).
+  - Le radici delle pagine tengono i loro `data-busy` di oggi, su cui contano le spec.
+  - Nessuna classe di colore cambia.
+- **Le prove**: `test-author` scrive i Vitest dello store (`begin`/`end`, idempotenza, timeout con orologio finto,
+  `reset`, `track` con un errore) e adatta le E2E.
+  - In E2E si prova il cuore della decisione: sulla Dashboard, un cambio di periodo fa girare `sync-button` senza
+    clic, e il pulsante si ferma quando il report torna.
+
+### Dove va `track()`: sui punti che fanno partire, mai dentro le funzioni di caricamento (vincolo di Z-13, 12:35)
+
+- **Il caso**: Z-13 (lotto di Z) a fine aggiornamento dei prezzi ricarica Dashboard e broker **in sfondo**, con
+  `loadAll()` e `loadOverview()`. P3 dice che un aggiornamento dei prezzi non fa girare il pulsante.
+- **Quindi `track()` sta sui punti che fanno partire il caricamento**, e mai nel corpo di `loadAll`, `loadOverview`,
+  `loadBase` o `loadMain`, né negli ascoltatori del bus:
+  - la chiamata del primo caricamento in `onMount`;
+  - il gestore di «Aggiorna»;
+  - gli `$effect` di periodo, ambito, filtro e scheda;
+  - l'apertura di un pannello e il cambio dei suoi parametri;
+  - nei pannelli del rischio e dei lotti, l'`$effect` di `refreshVersion`, che solo l'«Aggiorna» della pagina fa
+    salire (`dashboard :701`, `broker :429`).
+- **Il bus** (`stores/portfolio/portfolioMutation.ts`) ha due segnali:
+  - `kind: 'mutation'`: una scrittura vista dall'intercettore. Le cache si segnano vecchie e si aggiornano in sfondo,
+    senza rotazione;
+  - `kind: 'refresh'`, cioè `requestPortfolioRefresh()`, che è l'«Aggiorna» dell'utente.
+
+  **Per Z**: un ricaricamento in sfondo non usa né `requestPortfolioRefresh()` né `refreshVersion`, altrimenti i
+  pannelli girerebbero.
+
+### Le richieste «grandi», pagina per pagina
+
+**La regola**: è grande una richiesta che la pagina fa per (ri)costruire quello che mostra perché l'utente o la
+pagina l'hanno deciso. Quindi il primo caricamento, «Aggiorna», un cambio di periodo, di ambito, di filtro o di
+scheda, e il caricamento di un pannello: quando si apre, quando cambiano i suoi parametri, e quando lo ricarica
+l'«Aggiorna» della pagina. La rivalidazione della cache conta solo dentro uno di questi.
+
+**Non lo sono**:
+- il poller dei prezzi dal vivo, per decisione del developer;
+- le azioni con un modale o un indicatore proprio: sincronizzazione di prezzi e cambi, «Calcola» del PAC, il wizard
+  d'import, i salvataggi nei modali;
+- le richieste di sfondo piccole: la compatibilità dell'AI Export, i cataloghi dei segnali, le liste per i selettori
+  non attese.
+
+| Pagina | Pulsante | Gettoni | Escluse |
+|---|---|---|---|
+| Dashboard | `sync-button` (`R/dashboard/+page.svelte:964-971`) | `loadAll` (`:559`: primo caricamento, Aggiorna, gli `$effect` di periodo e ambito, la rivalidazione), `loadContribution` (`:627`), `loadPnlCandles` (`:668`), `loadTransactions` (`:315`); il pannello del rischio, `loadBase` (`RiskAnalysisPanel.svelte:456`) | sincronizzazione cambi (`:368`) e prezzi (`:449`); `loadAiExportCompatibility` |
+| Broker, lista | `brokers-refresh` (`R/brokers/+page.svelte:371`) | `loadBrokers` (`:152`: primo, Aggiorna, cambio di valuta) | — |
+| Broker, dettaglio | `broker-refresh` (`R/brokers/[id]/+page.svelte:599-606`) | `loadBroker` (`:277`), `loadOverview` (`:302`), `loadPnlCandles` (`:353`), `loadContribution` (`:365`), `loadTransactions` (`:382`); il pannello dei lotti, `loadMain` e `loadSelectionHistories` (`LotsAnalysisPanel.svelte:220`, `:264`); il rischio, `loadBase` | AI Export |
+| FX, lista | `fx-refresh-all-button` (`R/fx/+page.svelte:1100-1105`; oggi non è mai `disabled`) | `fetchAllPairData` (`:401`: primo e Aggiorna), `loadPairSources` (`:304`) | Sync All (modale); `loadAssetList` (non atteso); l'aggiornamento di una coppia dalla sua card (da verificare: indicatore proprio) |
+| FX, dettaglio | `fx-detail-refresh-btn` (`R/fx/[pair]/+page.svelte:1317-1323`) | `loadChartData` (`:743`: primo, Aggiorna, orientamento), `ensureFxRangeLoaded` dei sovrapposti, `maybeLoadComparison` | sincronizzazione (`:1022`); AI Export |
+| Asset, lista | **senza test id** (`R/assets/+page.svelte:~1610-1619`; mai `disabled`): gli do `assets-refresh-button` | `loadAssets` (`:536`), `fetchAllPriceData` (primo e Aggiorna) | **il poller dal vivo** (`startActivePolling` `:461`, `refreshLivePricesNow`); Sync All |
+| Asset, dettaglio | `asset-detail-refresh-btn` (`R/assets/[id]/+page.svelte:2875-2881`) | `reloadPage` (primo, cambio di asset), `loadChartData` (`:1697`: Aggiorna, intervallo); il rischio, `loadBase` | **il poller dal vivo** (`:1511`); sincronizzazione (`:2198`); AI Export |
+| Transazioni | `tx-refresh-button` (`R/transactions/+page.svelte:756-770`) | `reload` (`:128`: primo, Aggiorna, filtri, il ricaricamento leggero dopo una modifica) | i modali di modifica |
+| File | `files-refresh-button` (`R/files/+page.svelte:775-776`) | `loadFiles` (`:325`: primo, Aggiorna, scheda) | l'upload e l'import BRIM (UI propria) |
+| Tools, hub e host | `tools-hub-refresh` (`features/tools/ToolsHub.svelte:153-160`), `tool-host-refresh` (`ToolHost.svelte:259-266`) | `loadCatalog`, `requestReload` | «Calcola» del PAC |
+| Pannelli del rischio | `risk-refresh-button` **tolto** (`RiskPanelHeader.svelte:95-104`, `RiskAnalysisPanel.svelte:596-605`) | — (il rischio si ricarica dall'«Aggiorna» della pagina, tramite `refreshVersion`, che c'è già) | `risk-sync-button` resta |
+
+Impostazioni: `RefreshCw` in `GlobalSettingsTab` e in `CachePanel` è un'azione dei pannelli, non un «Aggiorna» di
+pagina; resta fuori, da verificare all'inizio del lotto.
+
+### I file, per area dei colori (vanno al coordinatore prima di scrivere)
+
+- **T**: lo store nuovo (`.ts`); `routes/(app)/+layout.svelte` (solo lo script); `routes/(app)/files/+page.svelte`.
+- **DV**: `routes/(app)/dashboard/+page.svelte`, `features/risk/RiskAnalysisPanel.svelte`,
+  `features/risk/levels/RiskPanelHeader.svelte`, `features/tools/ToolsHub.svelte`, `features/tools/ToolHost.svelte`.
+- **BK**: `routes/(app)/brokers/+page.svelte`, `routes/(app)/brokers/[id]/+page.svelte`,
+  `features/brokers/lots/LotsAnalysisPanel.svelte`.
+- **AF**: `routes/(app)/fx/+page.svelte`, `routes/(app)/fx/[pair]/+page.svelte`, `routes/(app)/assets/+page.svelte`.
+- **X**, fino all'ingresso di FE5c: `routes/(app)/assets/[id]/+page.svelte`.
+- **TR**: `routes/(app)/transactions/+page.svelte`.
+
+In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di `animate-spin` e di `disabled`, più
+`data-busy`; nessuna classe di colore. Nei pannelli del rischio si toglie un pulsante.
+
+### La risposta dei colori, file per file (coordinatore, 12:25)
+
+- **Lo `<script>` di ogni file è libero subito.**
+- **Pulsanti liberi subito**: `routes/(app)/+layout.svelte`, `files/+page.svelte`, `LotsAnalysisPanel.svelte`,
+  `dashboard/+page.svelte`. Fa eccezione la radice `<div data-testid="dashboard-page" … aria-busy>` della Dashboard
+  (`:825` nella base), che aspetta l'ingresso di DV: non la tocco, il suo `data-busy` resta com'è.
+- **Pulsanti dopo l'ingresso dei colori su quel file** (il coordinatore manda lo SHA di ciascuno):
+  - AF, verso le 13:00: `fx/+page.svelte`, `fx/[pair]/+page.svelte`, `assets/+page.svelte`;
+  - DV, verso le 14:00: `RiskAnalysisPanel`, `RiskPanelHeader` (vince la mia cancellazione), `ToolsHub`, `ToolHost`;
+  - BK, verso le 14:45: `brokers/+page.svelte`, `brokers/[id]/+page.svelte`;
+  - TR, più tardi: `transactions/+page.svelte`;
+  - X: `assets/[id]` dopo FE5c e il suo 9b, come ultimo passo.
+- **Ordine di lavoro che ne viene**:
+  1. lo store, con il rosso di `test-author` (`store-unit`, nel mio `_frontend_portfolio.py`);
+  2. dopo la corsa E2E di Y-12, il layout (`onNavigate`), File e Dashboard, script e pulsanti, e lo script del pannello
+     dei lotti;
+  3. gli altri pulsanti, a ogni ingresso dei colori.
+- **Una regola nuova della skill** (`a317392d4`): `text-lf-primary` più `placeholder:text-lf-placeholder` su un input
+  `-lf-`. Y11 non tocca campi.
+
+### Le spec toccate (le adatta `test-author`)
+
+- `risk-real`, `risk-analysis`, `risk-lab`, `data-quality-real`, `yield-on-cost-real` e `privacy-masking` usano
+  `risk-refresh-button` o i pulsanti di pagina.
+- `dashboard-cache` (`data-busy`).
+- `toolbar-width-sweep` e `onboarding-tour` (i pulsanti nella barra).
+- `brokers.spec`, `fx-detail`, `fx-destructive`, `transactions-table`, `tx-broker-icon-hydration`, `asset-detail`,
+  `asset-mobile-layout`, `ai-export-panel` e `ai-export-memory`.
+- La galleria aspetta i `data-busy` di pagina, che restano.
+- Nessun Vitest di oggi usa questi test id.
+
+### Domande per il via (risposte del coordinatore, 12:35)
+
+1. `assets/[id]` è di X fino a FE5c: aspetto l'ingresso di FE5c, oppure si concorda con X una modifica piccola allo
+   script e al pulsante?
+   → **Si aspetta**: X sta dividendo la pagina, e dopo viene il suo 9b. `assets/[id]` è l'ultimo passo di Y11,
+   dopo l'ingresso di 9b.
+2. Le pagine con `disabled` mancante (lista FX, lista asset) diventano grigie anche loro mentre lavorano: è quello che
+   dice la decisione 48 («diventa grigio»).
+   → **Sì**, alla lettera della decisione 48.
+
+## Y-12 — riscritto il controllo dei bottoni del confronto dei lotti (P25) ✅ (2026-10-16)
+
+> **Note implementazione**.
+> - **Il test morto**, `brokers-detail.spec.ts:569`, l'ha sostituito `test-author` con **due test** e tre aiutanti, nello
+>   stesso `describe` FIFO (60 s); +167/−29, Prettier pulito, non ancora lanciato.
+>   - **Test A**: un lotto scelto per id; i valori di partenza (modalità Valore, asse Auto, nessun controllo di Rendimento);
+>     l'asse di Valore su «Da 0»; poi Rendimento, con i suoi controlli, Abs e il suo asse su Auto: lo «Da 0» di Valore
+>     non passa a Rendimento; si torna a Valore, dove l'asse è ancora su «Da 0».
+>   - **Test B**: senza lotti scelti, cioè tutti i lotti visibili; in Rendimento, Abs e % e poi l'asse, nei due sensi.
+>   - Ogni coppia ha un solo bottone premuto (`aria-pressed`), e dopo ogni clic il grafico si ridisegna: lo prova il
+>     contatore di rendering, `chartRenders`.
+> - **Correzione al mio brief**: in Rendimento il valore di partenza è **Abs**, non % (`LotComparisonChart.svelte:168`;
+>   `returnUnit` è nato in `01b4132bb` già su `'abs'`). Niente finisce in localStorage.
+> - **Il lotto si sceglie per stato**: `dt-row-checkbox-{rowId}` e `data-selected` di `DataTable.svelte:1098-1149`, non per
+>   classe CSS.
+> - **Non si è potuto**: leggere l'opzione di ECharts e provare che l'asse parte da 0. Questo grafico non espone
+>   `__lfChart`, quindi il test si ferma allo stato dei bottoni e ai ridisegni.
+> - **Trovato fuori perimetro**:
+>   - due test vicini (il clic su un segmento del Gantt e quello sulla cella della custodia) controllano la selezione
+>     con la classe `selected` e non con `data-selected`. È la regola 10 della skill design-system: **Y-13** nel backlog;
+>   - `LotsAnalysisPanel.svelte:125` cita ancora un interruttore «Aggregato/Per-lotto»: è un commento vecchio. Lo
+>     correggo in Y11, che tocca quel file;
+>   - il pannello non pubblica quando ha finito di caricare i lotti scelti (`selectionLoading`): lo fa Y11, col
+>     `data-busy` dei pannelli.
+> - **La corsa E2E** (slot 2 del coordinatore, 12:33–12:43, scadenza 13:00): `front-broker detail` da solo,
+>   `--workers 2`, **38/38 in 3,9 minuti**, con il carico tra 80 e 168. I due test nuovi durano 15,1 s e 12,2 s. La porta
+>   6189 libera alla fine; log in `files/logs/y12_e2e_broker_detail.log`.
+> - **Checkpoint**: lo spec (`files/y12_stage_code.txt`) più il journal (`files/y12_stage_journal.txt`).
