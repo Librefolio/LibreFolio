@@ -83,8 +83,6 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST, Nat
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
-    calculate_mwrr,
-    calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
@@ -92,6 +90,8 @@ from backend.app.services.financial_math.returns import (
     cumulative_to_annualized,
     gain_loss_ratio,
     net_holding_return,
+    period_mwrr,
+    period_mwrr_series,
     realized_gain,
     rebase_to_period,
 )
@@ -864,7 +864,6 @@ class PortfolioService:
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
         period_cfs = list(period.cash_flows)
         period_navs = list(period.nav_snapshots)
-        period_start_nav_perf = period.start_nav
         period_start_date_perf = period.start_date if period.start_date is not None else today
 
         # Net invested for the period (sum of deposits minus withdrawals)
@@ -879,19 +878,9 @@ class PortfolioService:
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-            if period_net_invested > 0:
-                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
-                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
-                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
-                mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    period_cfs,
-                    initial_nav_for_mwrr,
-                    engine_nav,
-                    period_start_date_perf,
-                    date_to or today,
-                )
-                mwrr_result = mwrr_point.mwrr
+        # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
+        # (D-MF5): no rate without net invested capital or with a value at or below zero.
+        mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
@@ -1163,7 +1152,8 @@ class PortfolioService:
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
+            # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
+            mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
@@ -1891,7 +1881,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration
         self,
         user_id: int,
         query: PortfolioReportQuery,
