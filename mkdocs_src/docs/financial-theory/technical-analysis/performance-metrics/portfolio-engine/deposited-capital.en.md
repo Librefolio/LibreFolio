@@ -18,10 +18,10 @@ $$
 
 `InKindCapital` covers the securities that enter or leave the scope without cash:
 
-- ADJUSTMENT rows carrying a cost basis (`cost_basis_override`, not linked to a split), **at cost**: the cost an incoming row adds to the position, or the average cost an outgoing row removes;
-- TRANSFER legs whose other leg is not in the scope — it sits at a broker outside the view, is missing, or was never linked — **at market value** on their own date: $+$ for securities received, $-$ for securities sent. A security with no price at all on that date — no quote, no BUY or SELL on or before it — counts **at cost** instead, as an ADJUSTMENT does: the cost the leg moves in its position, the cost a received leg adds or the average cost a sent leg removes. An unknown cost counts as zero, as in the position's own cost. While the position's cost is complete, the NAV values the holding at that same cost and the leg is neutral; with part of the cost unknown, the holding has no value in the NAV, yet the leg still moves its known cost, so nothing is left in the capital once the units are gone. Nothing counts if the security cannot be valued that day: it has a price, but the exchange rate is missing.
+- ADJUSTMENT rows carrying a cost basis (`cost_basis_override`, not linked to a split): an incoming row **at cost**, the cost it adds to the position; an outgoing row **at the value it hands over**, its quantity times its cost basis, converted at the rate of its own date ([Outgoing Adjustments](#outgoing-adjustments));
+- TRANSFER legs whose other leg is not in the scope — it sits at a broker outside the view, is missing, or was never linked — **at market value** on their own date: $+$ for securities received, $-$ for securities sent. A security with no price at all on that date — no quote, no BUY or SELL on or before it — counts **at cost** instead: the cost the leg moves in its position, the cost a received leg adds or the average cost a sent leg removes. An unknown cost counts as zero, as in the position's own cost. While the position's cost is complete, the NAV values the holding at that same cost and the leg is neutral; with part of the cost unknown, the holding has no value in the NAV, yet the leg still moves its known cost, so nothing is left in the capital once the units are gone. Nothing counts if the security cannot be valued that day: it has a price, but the exchange rate is missing.
 
-These rows move value without cash: they are capital, not profit or loss.
+These rows move value without cash: they are capital, not profit or loss. An outgoing ADJUSTMENT also realizes the difference between the value it hands over and the average cost its position gives up, as a sale does.
 
 ---
 
@@ -33,10 +33,50 @@ These rows move value without cash: they are capital, not profit or loss.
 | CASH\_TRANSFER / FX\_CONVERSION whose other leg is outside the view, missing, or never linked (orphan) | ✅ Yes, at its amount, like a deposit or a withdrawal |
 | CASH\_TRANSFER / FX\_CONVERSION / TRANSFER with both legs in the view (internal pair) | ❌ No. Per broker, a pair across two brokers moves capital from the sender to the receiver on the arrival day, summing to zero ([Internal Transfers](#internal-transfers-broker-lines)) |
 | TRANSFER of securities whose other leg is outside the view, missing, or never linked (orphan) | ✅ Yes, in-kind capital at market value on its date, or at cost for a security with no price at all |
-| ADJUSTMENT with `cost_basis_override`, not split-linked | ✅ Yes, in-kind capital at cost |
+| ADJUSTMENT with `cost_basis_override`, not split-linked | ✅ Yes, in-kind capital: incoming at cost, outgoing at the value it hands over ([below](#outgoing-adjustments)) |
 | SPLIT-linked ADJUSTMENT | ❌ No, quantity rescale only |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ No |
 | Exchange-rate move on cash held in another currency (no transaction) | ❌ No: a result, part of TotalPnL; the capital flows (deposits, withdrawals, orphan cash legs) entered the baseline at the rate of their own dates |
+
+---
+
+## 📤 Outgoing Adjustments {: #outgoing-adjustments }
+
+An ADJUSTMENT that removes $|q|$ units of asset $a$ from broker $b$ on date $d$ with a per-unit cost basis $k$ — units given away, or moved to a broker LibreFolio does not track — hands them over at that cost, converted at the rate of its own date:
+
+$$
+D = s_b \cdot |q| \cdot k \cdot \mathrm{fx}(c_k, C^*, d)
+$$
+
+$c_k$ is the currency of the cost basis, the asset's currency when the row has none, and $s_b$ the broker's [ownership share](../../../../user/brokers/sharing.md). The position gives up the historical cost of those units, at its [average cost](../weighted-average-cost.md) before the adjustment, each purchase at the rate of its own date:
+
+$$
+C = s_b \cdot |q| \cdot w_{\text{pre}}(a,b)
+$$
+
+The adjustment is booked as a sale whose proceeds are $D$:
+
+$$
+\Delta\mathrm{CapitalBaseline}(d) = -D, \qquad \mathrm{Realized} = D - C
+$$
+
+- **Capital.** $D$ leaves the capital baseline, and the capital of broker $b$'s line: the mirror of an incoming ADJUSTMENT, which adds the cost it brings in. No cash moves, so the [cash pools](#three-pool-cash-model) do not change.
+- **Realized.** $D - C$ counts in the period's realized gain or loss and in the position's contribution ([Period P&L](period-pnl.md)), and is left out, as a sale is, when the position's cost is incomplete. In a single currency, with a cost basis equal to the average cost, it is zero.
+- **Returns.** TWRR and MWRR take their flows from the changes of the capital baseline, so the adjustment is a flow of $-D$ on $d$. When $D$ equals the units' market value that day — a cost basis at the day's market price — the adjustment leaves that day's return untouched; otherwise the difference between their market value and $D$ counts in it.
+- **No rate on or before $d$.** $D$ is unknown: the adjustment is left out of Realized, the missing pair is reported with its date, and the capital drops by $C$ instead.
+
+An outgoing ADJUSTMENT **without** a cost basis moves no capital and realizes nothing: its units leave the NAV, and their value comes off the TotalPnL.
+
+!!! example "Dollar units handed over after the dollar fell"
+
+    Report currency EUR. On a day when 1 USD = 0.90 EUR, a deposit of 1,000 USD — capital €900 — buys 10 units at 100 USD: $C = 900$. Later the price is still 100 USD but the rate is 0.80, so the units are worth €800. An ADJUSTMENT of −10 units with a cost basis of 100 USD hands them over at $D = 10 \times 100 \times 0.80 = 800$.
+
+    | Moment | NAV | CapitalBaseline | TotalPnL | Realized |
+    |--------|-----|-----------------|----------|----------|
+    | Before the adjustment | 800 | 900 | −100 | 0 |
+    | After the adjustment | 0 | 100 | −100 | −100 |
+
+    The €100 that the dollar's fall took from the position while it was held is now realized, and TotalPnL does not move. The day's flow is −800, the value that left: with the price and the rate unchanged since the day before, the TWRR shows no return that day. Taken out at their average cost instead, €900, the units would leave a capital of 0: TotalPnL would jump to 0, and the TWRR would read +12.5% that day, the loss erased by the handover.
 
 ---
 
@@ -103,7 +143,7 @@ For example, $A$ receives a deposit of 1,000 USD on day 0 at 0.90 EUR per USD ($
 - **No price at all.** A security with no observation on or before $t_{arr}$ moves at the cost its arrival adds to $B$'s position — the cost recorded on $B$'s leg, the sender's average cost when the transfer is saved with an automatic cost basis — whether or not $B$'s cost is complete. With $B$'s cost complete, that is the value $\mathrm{NAV}_B$ takes the units at, so with equal shares $B$'s line does not jump. The cost need not equal the value the units had at $A$ before leaving, $A$'s own cost basis or nothing when that cost was incomplete; the difference ends up in $A$'s line, and TotalPnL shows it too. With $B$'s cost incomplete — $B$ already held units of unknown cost — $B$'s holding has no value in the NAV, which is incomplete: $B$'s line takes the gap, its own unknown cost, and $A$'s line is the same as with a complete cost at $B$.
 - **Fees.** They are not part of $X$. A FEE row of 5 recorded at the sender, or the same 5 as a gap between the legs ($-1{,}000$ sent, $+995$ received, so $X = 995$), stays in $A$'s line as a loss of 5.
 - **Same-broker pairs.** Two legs on the same broker, such as a currency conversion inside one account, need no flow: the value never leaves the line.
-- **ADJUSTMENT pairs.** They are not internal pairs: each leg stays in-kind capital at cost (see the table above). The sender's capital drops by the average cost removed and the receiver's rises by the cost added, so the receiving line takes over the gain accrued at the sender. With the setup of the example below and both legs on day 2 at a cost of 10, the lines read $A = 0$, $B = +20$; a TRANSFER pair gives $A = +20$, $B = 0$.
+- **ADJUSTMENT pairs.** They are not internal pairs: each leg stays in-kind capital (see the table above). The sender's capital drops by the value its leg hands over, the receiver's rises by the cost its leg adds, and the sender realizes the difference between that value and its average cost ([Outgoing Adjustments](#outgoing-adjustments)). With the setup of the example below and both legs on day 2 at a cost of 10, $A$'s average cost, $A$ realizes nothing and the receiving line takes over the gain accrued at the sender: the lines read $A = 0$, $B = +20$. At a cost of 12, the day's price, $A$ realizes $+20$ and the lines read as for a TRANSFER pair: $A = +20$, $B = 0$.
 
 ### 🔍 Filtered Views
 

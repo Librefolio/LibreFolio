@@ -38,8 +38,10 @@ Modules:
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
-* ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, and
-  the rule for a usable split ratio.
+* ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
+  an average-cost replay marks as a rescale, and the rule for a usable split ratio.
+* ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
+  allocation, gross weights, and concentration (largest weight, Herfindahl index).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
