@@ -4575,3 +4575,82 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 - **Doc**: una frase in `user/settings/profile.en.md` («Only the capitals changed»: nessuna password). Debito di
   traduzione, nessun timbro.
 - **Prove**: `vitest` dei due file, `front check`; E2E `settings` se il cambio dell'indirizzo vi è coperto.
+
+### A-27 — I link di reset vivi muoiono con un cambio dell'indirizzo o della password — contratto (2026-10-16, 17:05)
+> Dalla revisione di sicurezza di E (E6.9), tramite il coordinatore; ambito a tre punti approvato dal coordinatore
+> (17:00). Base: `e4811dab3` (merge `1ca7a27c8` più A-24, nota C-97, giornale), albero pulito.
+
+- **C1 · Quando**: nella stessa transazione del cambio, in tre punti:
+  1. `user_service.update_profile` su un cambio **vero** dell'indirizzo (`not same_email(...)`, P18): vale per
+     `PUT /auth/profile` e per `./dev.py user set-email`;
+  2. la rotta `POST /auth/change-password` (`auth.py`, prima del `commit`, accanto a `end_sessions`);
+  3. `user_service.reset_password` (CLI `user reset`), prima del `commit`.
+- **C2 · Che cosa**: ogni link `PASSWORD_RESET` vivo dell'account (non consumato, non revocato), chiunque l'abbia creato
+  (la «password dimenticata» o un admin), con `token_service.revoke_tokens(session, user_id=…,
+  purpose=AccountTokenPurpose.PASSWORD_RESET)`, come già fanno `create_password_reset` e `complete_password_reset`.
+  Nient'altro: inviti, link di verifica e di setup restano (la verifica guarda già l'indirizzo, `confirm_email`).
+- **C3 · Quando no**: un cambio di sole maiuscole dell'indirizzo (C5 di P18: non è un cambio), un cambio del solo
+  username, un rifiuto (indirizzo occupato, password attuale sbagliata, password debole, stessa password): nessun link
+  revocato, nulla scritto.
+- **C4 · Log**: quello di `revoke_tokens` («Account tokens revoked», `count`, `user_id`, `purpose`), nessun indirizzo.
+- **Rossi** (`test-author`): in-process in `test_services/test_session_version.py` (`reset_password`, `update_profile`);
+  via HTTP sulla corsia in `test_api/test_session_revocation_api.py` (`change-password`, `PUT /auth/profile`): un link
+  creato prima dall'API admin (`POST /users/{id}/password-reset-link`) dopo il cambio è morto (`POST /auth/tokens/inspect`
+  e `POST /auth/password-reset`); guardie C3.
+- **Doc**: `developer/architecture/security.md` (tabella delle sessioni, link di reset), `admin/users.en.md` o
+  `cli_tools` (`user reset`), `user/settings/profile.en.md` (una frase). CHANGELOG: proposta 🔒.
+
+#### A-27.1 — Rossi scritti (2026-10-16, 16:58–17:20)
+> - **`test-author`**, solo scrittura, due file già registrati:
+>   - `test_services/test_session_version.py`: contratto 7 nel docstring, sezione «7. A-27». Rossi: `reset_password`;
+>     cambio vero dell'indirizzo `[another-address]` e `[a-letter-outside-a-z-in-capitals]` (émile → Émile, un cambio
+>     vero per P18). Guardie: le maiuscole dell'indirizzo proprio, lo username da solo, un rifiuto (l'indirizzo di un
+>     altro, anche in maiuscole). In ogni test: i due link vivi dell'account (uno suo, uno dell'admin) da revocare; un
+>     link speso e uno revocato con i loro tempi, un link di verifica e uno di setup vivi, un invito dell'account e il
+>     link vivo di un altro account da lasciare com'erano.
+>   - `test_api/test_session_revocation_api.py`: classe `TestTheResetLinksEndWithThePasswordOrTheAddress`, REVOKE-003
+>     (`change-password`) e REVOKE-004 (`PUT /auth/profile`) rossi; guardie REVOKE-005 (maiuscole), REVOKE-006 ×3
+>     (password attuale sbagliata, debole, uguale), REVOKE-007 ×2. Link creati dall'API admin come `e2e_test_admin`.
+> - **Il `test-author` ha confermato in-process che il buco è sfruttabile**: dopo il cambio, `POST /auth/password-reset`
+>   col vecchio link risponde 200 e imposta una password nuova.
+> - **Nota di W, D5** (17:05): nel punto 2 del docstring della 009 il costo unitario `cost_basis_override` (anche lui
+>   `NUMERIC(24, 12)`), alla lettera; il testo di prima era già nel commit `bbe6c35da`, quindi la modifica va nel
+>   prossimo checkpoint come commit a sé. `ruff`/`black` puliti.
+> - Bozza della correzione pronta (`work/a27/apply_a27.py`, a secco pulita).
+
+#### A-27.2 — Sosta del coordinatore, doc e runner (2026-10-16, 17:22–)
+> - **Sosta** (coordinatore, 17:22, fino a ~17:45: gallery completa dei colori, carico 130–170): nessun controllo nuovo.
+>   Il mio `units.sh red` stava solo aspettando il carico, nessun test partito: fermato. Porta libera.
+> - **Runner**: le descrizioni di `services session-version` e `api session-revocation` nominano A-27 (`ruff` pulito).
+> - **Doc** (`docs-writer`, senza build): `security.md` (paragrafo sotto la tabella delle sessioni, «The sessions.» del
+>   cambio dell'indirizzo, rimando in «Links in Use», riga dei test), `access_control.md` («Revoked» nei link di reset;
+>   più il punto «Password reset» di `user reset`, scritto da me), `admin/users.en.md` (🔒), `admin/cli_tools.en.md`
+>   (`user reset`, il ⏱️ dei link, `set-email`), `user/settings/profile.en.md` (una frase per l'indirizzo e una per la
+>   password). Debito di traduzione: `cli_tools`, `profile`.
+> - **Per E (E4)**: `security.md` «Only an administrator, or whoever runs the server, issues a link» e `access_control.md`
+>   «Issued by» saranno incompleti quando E4 accenderà la «password dimenticata» (`FORGOT_PASSWORD_HELD`): da dire nel
+>   handoff.
+
+#### A-27.3 — Rossi osservati, correzione, verdi (2026-10-16, 17:52–)
+> - **Via** del coordinatore (17:52). **Rossi osservati** (`work/a27/units.sh red`, carico 17 all'avvio): `services
+>   session-version` 3 rossi + 51 verdi (i tre del contratto 7, causa giusta: i due link ancora VALID e `revoked_at`
+>   vuoto dopo il cambio); `api session-revocation` 2 rossi (REVOKE-003, REVOKE-004) + 9 verdi. Porta libera.
+> - **Correzione** (`work/a27/apply_a27.py`, a secco poi scritta): `token_service.revoke_tokens(session, user_id=…,
+>   purpose=AccountTokenPurpose.PASSWORD_RESET)` in `update_profile` (dentro `if email_changed:`, dopo `end_sessions`,
+>   dopo ogni rifiuto), in `reset_password` (prima del `commit`) e nella rotta `change-password` (prima del `commit`).
+>   `ruff`/`black` puliti; 8+/2−.
+> - **Verdi** (`work/a27/greens.sh`): in corso. `all-backend` nello slot 1 dopo H (~18:45), sul worktree con A-27 verde,
+>   poi l'handoff (coordinatore, 17:56).
+> - **Verdi fatti** (17:59–18:23, carico < 50 a ogni avvio): `services session-version` 54 ✅ (i 3 rossi verdi),
+>   `services user-profile` 47 ✅, `services email-flows` 155 ✅, `db populate` ✅, `api session-revocation` 11 ✅
+>   (REVOKE-003/004 verdi), `api profile` 28 ✅, `api auth` 95 ✅, `api users-admin` 64 ✅, `api email` 160 ✅;
+>   `mkdocs build --strict` ✅, `check-links` ✅ 97. Porta libera; `git diff --check` pulito.
+> - **`all-backend --workers 2`** nello **slot 2** (il coordinatore l'ha liberato, 18:20), avviato alle 18:24 sul
+>   worktree `e4811dab3` + A-27 + la D5 di W nella 009 (`work/allbackend_a27/`).
+> - **Esito** (18:23:39–18:53:56): rc=0, **7/7** «ALL BACKEND TESTS PASSED», 30 min 13 s; quattro passate parallele verdi
+>   (166 unità in 448 s, 48 in 348 s, 12 in 8 s, API in 507 s), tutte le seriali PASSED; **20 767 passati** nei log per
+>   unità, nessun rosso. Copre P18 + A-24 + A-27 (e la 009 con la nota di W). Porta libera.
+
+#### A-27.4 — Handoff FROZEN 🧊 (2026-10-16, 18:56)
+> - HEAD `e4811dab3`, nessun merge aperto; delta di A-27 + la D5 di W + giornale, `git diff --check` pulito.
+> - Prossimo, dopo il commit del coordinatore: A-25 (ProfileTab), brief dei rossi in `work/a25_brief_reds.md`.
