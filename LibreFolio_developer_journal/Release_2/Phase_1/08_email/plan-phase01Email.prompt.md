@@ -3131,3 +3131,89 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > **Resta per E6**: lo scatto della galleria `settings/email`, che G mette nello stesso giro di B5b e X. Il dominio email
 > della 1.3 è così chiuso, salvo quello scatto e le decisioni del developer: il pulsante «Confirm», il messaggio
 > dell'email trattenuta, la revisione delle decisioni notturne.
+
+### E-10 — `/verify-email` su un'istanza bloccata (2026-10-16, sera)
+
+**Da dove viene** (la revisione di A7b fatta da H, 21:45, piano 01, punto 5, richiesta non bloccante (1)): su
+un'istanza bloccata, `POST /email/verification/confirm` è pubblico e fuori da `ALLOWED_WHEN_BLOCKED`, quindi
+`refuse_when_blocked` dà a un chiamante anonimo il 401 di `get_current_user`, e a uno con sessione il 423
+`instance_blocked`. A7b tiene le pagine anonime dei link sul 401 invece di mandarle al login (`zodios-client.ts`, non
+ancora in dev). Per `/verify-email`, però, quel 401 finisce nell'errore generico, con un «riprova» inutile.
+
+La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un lotto piccolo.
+
+#### E-10.0 — Analisi e disegno ✅ (2026-10-16, 22:10, base `56ed3587f`)
+> **Lo stato**:
+> - la pagina (`routes/verify-email/+page.svelte`) fa `status = readLinkRefusal(error) ?? 'error'`;
+> - `VerifyEmailCard.svelte` mostra `VERIFY_PAGE_KEYS[status]`, il «riprova» solo per `'error'` e il ritorno al login
+>   per ogni stato tranne `'checking'`;
+> - `readLinkRefusal()` (`verificationApi.ts`) legge solo il 400 `TOKEN_INVALID`.
+>
+> **Il disegno**, senza toccare nessun `.svelte` (quindi senza chiedere l'ok dei colori):
+> - uno stato nuovo, `'blocked'`, in `VerifyPageStatus` e in `VERIFY_PAGE_KEYS` (`emailText.ts`), con la chiave
+>   `email.verification.page.blocked` nei 4 cataloghi email. La card così mostra il testo e il ritorno al login, ma non
+>   il «riprova»;
+> - `readLinkRefusal()` restituisce `'blocked'` per un 401 (su questa rotta pubblica l'unico 401 è quello del blocco,
+>   come dice l'analisi di H) e per il 423 `instance_blocked`, quello di un browser con sessione. Il 423 lo riconosce
+>   `isInstanceBlockedError()` di H (`features/instance/instanceBlock.svelte.ts`), una casa sola, letto con
+>   `refusalBody()` di `emailApi.ts`;
+> - il testo dice che l'istanza è bloccata dal fornitore e che il link per ora non si può controllare. Il link non
+>   viene toccato, perché il blocco ferma la richiesta prima della rotta: si riapre a istanza sbloccata, e se intanto è
+>   scaduto si accede per averne uno nuovo, come per «expired».
+>
+> **Prima di A7b** un 401 manda ancora al login (l'intercettore di oggi). Lo stato `'blocked'` si vede già con il 423, e
+> con il 401 dopo A7b. Dopo A7b il commento di A cambia in «which the page receives», come ha chiesto H.
+>
+> **Prove**: Vitest (`verificationApi`, `emailText`, `VerifyEmailCard`, `routes/verify-email/page`), `i18n check`,
+> `front check`, `prettier`, `mkdocs build`. Nessuna E2E: il 401 arriva alla pagina solo con A7b.
+>
+> **Docs**: in `developer/backend/email.md`, il frontend della verifica e la tabella «Testing»; in `admin/email.en.md`,
+> l'istanza bloccata.
+
+#### E-10.1 — Test, codice, testi e docs ✅ (2026-10-16, 22:12–23:02)
+> **I test, scritti prima** dal `test-author`, in quattro file:
+> - `verificationApi.test.ts`, con VFA-19…22 nuovi:
+>   - VFA-19: ogni 401 è `blocked`, con tutti e due i portatori, AxiosError e ApiError;
+>   - VFA-20: il 423 `instance_blocked` è `blocked`;
+>   - VFA-21: gli altri 423, o il corpo del blocco sotto un altro status, danno `null`;
+>   - VFA-22: il 401 e il 423 passano dal client vero e dai suoi intercettori.
+> - `emailText.test.ts`: ETX-07 con otto stati;
+> - `VerifyEmailCard.test.ts`: `blocked` tra gli STATUSES di VEC-01, 03 e 06, più VEC-08;
+> - `routes/verify-email/page.test.ts`: VEP-11 (401 e 423 portano a `blocked`, senza riprova né navigazione) e VEP-12
+>   (dopo un errore di rete, il riprova incontra il blocco).
+>
+> Rossi attesi: 16 casi VFA, ETX-07, VEC-01/08 sul testo, e VEP-11/12.
+>
+> **Il codice**, solo `.ts`:
+> - `verificationApi.ts`: `readLinkRefusal()` dà `blocked` per un 401 e per il 423 di `isInstanceBlockedError()` di H;
+> - `emailText.ts`: lo stato `blocked` e la sua chiave.
+>
+> Nessun `.svelte` toccato.
+>
+> **Il testo** `email.verification.page.blocked` nelle 4 lingue: «This instance is blocked by its hosting provider, so
+> the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign
+> in to get a new one.»
+>
+> **Docs**:
+> - `developer/backend/email.md`: `readLinkRefusal()`, gli stati, la pagina, e nella tabella «Testing» VFA-01…22,
+>   VEC-01…08 e VEP-01…12;
+> - `admin/email.en.md`, nella verifica: un punto sull'istanza bloccata.
+>
+> **⚠️ Fuori pista: un difetto vicino, fuori dal lotto → E-11 nel backlog.**
+> - Lo stesso 401 del blocco arriva a «Send the link again» (`POST /email/verification/resend`, anche lei fuori lista),
+>   e `readResendFailure()` lo legge come `INVALID_CREDENTIALS`.
+> - I due 401 si distinguono solo dal testo di `detail`, e la configurazione pubblica non dice se l'istanza è bloccata.
+>   Le strade toccano H (`blocked` in `/system/instance`, oppure un codice nel rifiuto anonimo), quindi resta una
+>   decisione da prendere, non un pezzo di questo lotto.
+>
+> **Prove** (`files/tools/e10_checks.sh`, carico sotto 50):
+>
+> | Prova | Esito |
+> |---|---|
+> | `i18n build` e `i18n check` stretto | 4 789 chiavi ✅ |
+> | Vitest dei quattro file | 448 ✅ |
+> | `prettier` | pulito ✅ |
+> | `front check` | 0/0 ✅ |
+> | `mkdocs build` stretto | 0 ✅ (alle 23:00: il carico tra 70 e 200 l'ha fatta aspettare 25 minuti) |
+> | `check-links` | 97 ✅ |
+> | `git diff --check` | pulito ✅ |

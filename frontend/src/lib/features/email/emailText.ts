@@ -112,8 +112,9 @@ export function testFailureMessage(translate: Translate, failure: EmailTestFailu
     }
 }
 
-/** What the page of a verification link shows: the wait, why the link cannot be used, or a check that failed. */
-export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'missing' | 'error';
+/** What the page of a verification link shows: the wait, why the link cannot be used, a blocked instance, or a check
+ * that failed. */
+export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'blocked' | 'missing' | 'error';
 
 export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     checking: 'email.verification.page.checking',
@@ -121,6 +122,7 @@ export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     consumed: 'email.verification.page.consumed',
     revoked: 'email.verification.page.revoked',
     unknown: 'email.verification.page.unknown',
+    blocked: 'email.verification.page.blocked',
     missing: 'email.verification.page.missing',
     error: 'email.verification.page.error',
 };
