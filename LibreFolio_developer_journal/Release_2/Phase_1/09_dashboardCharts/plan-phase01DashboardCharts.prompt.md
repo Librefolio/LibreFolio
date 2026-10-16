@@ -4433,3 +4433,198 @@ vengono dal catalogo generato alle 18:27.
 > - **Prove leggere finali** (00:29): svelte-check 0/0 (`files/logs/y22_front-check.log`); Prettier pulito sulla spec
 >   e sui due test; `git diff --check` pulito.
 > - **Y-22 ✅, Y-23 ✅** nel backlog. Checkpoint di seguito mandato al coordinatore.
+
+## Y11 — il lotto `assets`: `assets/[id]`, `onmerged`, «Reload All» di Correlation (analisi 17/10, 00:35–00:50; HEAD `d7f3a49c3`)
+
+> **Base**: HEAD `d7f3a49c3` = dev, pulito, con dentro il lotto A di Z, A7b e FE8b. `api sync` a rc 0.
+> `y11_docrefs.py check`: 46/48. Si spostano `files/+page.svelte` 784→783 e `assets/+page.svelte` 1642→1644; li
+> correggo alla fine del lotto, perché `assets/+page.svelte` cambia ancora.
+
+### Stato reale
+
+- **`assets/[id]/+page.svelte`** (2 770 righe) non ha nessun gettone.
+  - Le chiamate che partono dall'utente, o dalla pagina per sé:
+    - `onMount` → `reloadPage()` (`:1106`);
+    - `$effect` sul cambio di `data.assetId` → `reloadPage()` (`:1114`);
+    - `$effect` sul cambio di valuta → `loadChartData().then(maybeLoadComparison)` (`:1166`);
+    - `handleDateRangeChange` (`:1750`);
+    - `handleSignalsChange` (`:1822`);
+    - `retryBackendSignals` (`:1043`);
+    - Refresh → `onrefresh={() => handleRefresh()}` (`:2269`).
+  - **`handleRefresh` ha 6 chiamanti**:
+    - il pulsante (`:2269`);
+    - dopo un sync: `handlePageSyncComplete` (`:1708`) e `handleFxPairCreationSynced` (`:1735`);
+    - dopo un salvataggio in un modale: `handleAssetUpdated` (`:2117`), `handleFxPairCreated` (`:1728`) e `onsave` del
+      modale dell'intervallo (`:2632`).
+    - Dentro c'è `riskRefreshVersion += 1` (`:1639`).
+  - Il poller dal vivo (`AssetDetailLive`) chiama `loadChartData` direttamente: resta senza gettone.
+- **`AssetDetailToolbarActions.svelte`** (`components/assets/detail/`, area AF; la usa solo la pagina): il pulsante
+  `asset-detail-refresh-btn` ha `disabled={loading}`, la rotazione su `loading` e nessun `data-busy`. La prop
+  `loading` serve solo a quel pulsante.
+- **`assets/+page.svelte`**:
+  - `onmerged` (`:1911`) fa `invalidateAfterMutation` più `loadAssets()` senza gettone, mentre `onupdated`, accanto
+    (`:1897`), ha già `assets-reload`;
+  - `risk-reload-button` (`:1581-1593`, solo nella scheda Correlation, al posto del pulsante della lista) ha
+    `disabled={!labPanel}`, nessun `data-busy` e nessuna rotazione.
+- **`AssetSetRiskPanel.reload()`** (`features/risk`, `:224`) fa `invalidateRisk()` e `syncGeneration += 1`. Ogni
+  sezione riceve quel numero come `refreshVersion` e ha il suo `createRiskPanelController`, quindi **i gettoni
+  `risk-refresh` e `risk-load` ci sono già**. Manca solo il contratto del pulsante.
+- **Il precedente della Dashboard** per il Rischio dopo un sync: i sync del banner della qualità dei dati (`:389`,
+  `:465`) portano `refreshVersion`, «as after Aggiorna». Il report della pagina si ricarica senza gettone, i pannelli
+  con il loro. Quindi sulla pagina dell'asset `riskRefreshVersion` resta in `handleRefresh`.
+  - Dopo un sync, con la scheda Rischio aperta, il pulsante gira mentre il Rischio si ricarica, come sulla Dashboard.
+  - È una sfumatura di P3, già in dev dalla 1.3 per la Dashboard: va nella revisione con il developer, con N55.
+
+### Cosa cambia
+
+1. `assets/[id]/+page.svelte`, gettoni sui punti che fanno partire, come nel dettaglio del cambio (passo 3):
+   - `asset-first-load` (`onMount`), `asset-change` (cambio di asset), `asset-currency` (cambio di valuta);
+   - `asset-period` (`handleDateRangeChange`), `asset-signals` e `asset-comparison` (`handleSignalsChange`),
+     `asset-signals-retry`;
+   - `asset-refresh` sul pulsante: `onrefresh={() => void pageBusy.track('asset-refresh', () => handleRefresh())}`;
+   - `asset-reload` dopo un salvataggio in un modale: `handleAssetUpdated`, `handleFxPairCreated`, `onsave`, come
+     `assets-reload` della lista;
+   - senza gettone dopo un sync (P3): `handlePageSyncComplete`, `handleFxPairCreationSynced`.
+2. `AssetDetailToolbarActions.svelte`: la prop `loading` diventa `busy`, con `disabled={busy}`,
+   `data-busy={busy ? 'true' : 'false'}` e la rotazione su `busy`. La pagina passa `busy={pageBusy.busy}`; il
+   componente resta di sola presentazione.
+3. `assets/+page.svelte`:
+   - `onmerged` → `await pageBusy.track('assets-reload', () => loadAssets())`, dopo `invalidateAfterMutation`;
+   - `risk-reload-button` → `disabled={!labPanel || pageBusy.busy}`, `data-busy` e la rotazione.
+4. Test (`test-author`):
+   - in `page-busy.spec.ts` i casi nuovi:
+     - dettaglio asset: Refresh e periodo aspettano; dopo un sync della pagina, con la scheda grafico aperta, il
+       pulsante non aspetta, con il suo controllo;
+     - Correlation: «Reload All» è disabilitato mentre le sezioni rileggono;
+   - da rivedere: `risk-lab.spec.ts:7049` (`toBeEnabled()` subito dopo che le richieste sono partite),
+     `fx-detail.spec.ts:1461` (`activateByKeyboard` sul pulsante), `asset-detail.spec.ts:232/532/2362`,
+     `asset-mobile-layout.spec.ts:386/416`.
+5. Documentazione: la tabella dei pulsanti e dei punti che fanno partire in `app-state.md#page-busy` (dettaglio asset,
+   Correlation), più i 2 riferimenti spostati.
+6. **E2E** nello slot: `page-busy`, `front-asset` (`asset-detail`, `asset-mobile-layout`, la lista), `fx-detail`,
+   `risk-lab`, `risk`. È una corsa lunga, da chiedere.
+7. Poi la **chiusura di Y11**: le righe del CHANGELOG del kit, la documentazione utente con la parola di Y-15, il
+   backlog.
+
+### Lotto `assets` · via e preparazione (17/10, 00:50–01:05)
+
+> **Note implementazione**.
+> - **Coordinatore**: FE5a (`components/assets/*` → `features/assets/`) non è nella coda di X stanotte e verrà dopo
+>   questo lotto. Prima i test e la documentazione; lo slot E2E (~40 min) dopo la risposta dei colori e il codice.
+> - **Il via dei colori su tutti e 3 i `.svelte`**:
+>   - nessuna classe di palette: la rotazione è solo `animate-spin` e l'icona prende il colore del testo del pulsante;
+>   - `theme-roles --check` entra nelle prove leggere;
+>   - le 42 classi storiche della pagina dell'asset (gli interruttori delle barre del grafico, AF-1) aspettano il
+>     designer, quindi non si toccano.
+> - **`test-author` (`09f0c986`)** scrive in `page-busy.spec.ts` i casi rossi:
+>   - dettaglio asset: Refresh, periodo, e P3 dopo il sync della pagina, con il suo controllo;
+>   - Correlation: «Reload All»;
+>   - facoltativo, `onmerged`.
+>   - Rivede anche le attese di `risk-lab:7049`, `fx-detail:1461`, `asset-detail` e `asset-mobile-layout`.
+> - **Il codice è pronto da applicare**: `files/scripts/y11_assets_apply.py`, 19 sostituzioni esatte, ciascuna unica
+>   (prova a secco verde).
+>   - In più rispetto all'analisi: il pulsante di `AssetDetailToolbarActions` prende
+>     `disabled:opacity-50 disabled:cursor-not-allowed`, come il pulsante Modifica dello stesso componente. Senza, il
+>     pulsante sarebbe «disabilitato ma non grigio», contro il contratto. Non sono classi di palette.
+>   - Un commento d'una riga ai due chiamanti dopo un sync, «no pageBusy token … (P3)», così nessuno ne aggiunge uno.
+> - **Ordine**:
+>   1. i rossi su oggi, con `page-busy` in uno slot breve;
+>   2. `--apply`;
+>   3. prove leggere: svelte-check, `theme-roles --check`, Prettier, `check-orphans`, e
+>      `onboarding-component-unit` se tocco il layout (non lo tocco);
+>   4. lo slot E2E lungo;
+>   5. la documentazione `#page-busy`: le righe del dettaglio asset e di Correlation, più i 2 riferimenti, con le righe
+>      vere dopo il codice.
+> - **I test sono scritti** (`test-author`, 01:05). È girato solo Prettier, che è pulito.
+>   - `page-busy.spec.ts` +373 righe, con un blocco nuovo «Page busy on the asset pages…» e i casi:
+>     - (a) Refresh;
+>     - (b) il preset 6M;
+>     - (c) P3 dopo il Sync della pagina, con il controllo;
+>     - (d) «Reload All» di Correlation.
+>   - Ogni caso controlla per primo che il pulsante pubblichi `data-busy`, quindi oggi va rosso in circa 3 s.
+>   - Nessuna scrittura e nessun fornitore: il Sync è stubbato nel browser e il poll dal vivo è rifiutato.
+>   - (d) gira sul motore del rischio vero, che legge e basta.
+>   - (e), `onmerged`, è saltato: l'aiuto per creare la coppia è privato di `asset-merge.spec.ts`, e un merge è
+>     irreversibile.
+>   - Altre attese:
+>     - `risk-lab.spec.ts:~7045`: `toBeEnabled({timeout: 15_000})` prima dei conteggi;
+>     - `fx-detail.spec.ts:~1459`: `toBeEnabled({timeout: 10_000})` prima di `activateByKeyboard`;
+>     - `asset-detail.spec.ts:7256`: tolto un `toBeDisabled()` che, con il cambio di finestra senza gettone, misurava
+>       solo la coda;
+>     - gli altri circa 40 usi sono invariati, con i verdetti nella risposta.
+> - **Trovati da `test-author`, decisi dal coordinatore** (01:15):
+>   - **tre scenari del test lungo di `asset-detail.spec.ts`** (`:3405/3412`, `:3907/3908`, `:7494`) premono Refresh
+>     mentre una richiesta grande è trattenuta. Col contratto il pulsante è disabilitato, quindi **si riscrivono**: la
+>     prima richiesta parte dal Sync della pagina, senza gettone, oppure prima si rilascia. Riscrittura affidata a
+>     `test-author` (01:16);
+>   - **N64** (decisione notturna, da rivedere con N55): `setPrimaryMode` → `asset-mode`, e
+>     `setCalendarPreset`/`setCalendarCustom` → `asset-calendar-window`. Sono già nelle 23 sostituzioni.
+> - **Slot breve per i rossi**: slot 2, dopo H (al suo via). Script `files/scripts/y11a_reds.sh`.
+> - **I rossi** (slot 1, 01:27–01:37; HEAD `d7f3a49c3` senza codice; carico 40–49): `files/scripts/y11a_reds.sh`, cioè
+>   `front-portfolio page-busy`, 16 test. Risultato: **4 rossi, i casi nuovi a–d, e 12 verdi**, quelli di prima.
+>   - Tutti e quattro per la ragione giusta: «…publishes no data-busy: it does not follow the big requests of its page
+>     (Y11)», con `Received string: ""`.
+>   - Il pulsante è `asset-detail-refresh-btn` per a–c e il `risk-reload-button` di Correlation per d.
+>   - Durata 14–18 s; log in `files/logs/y11a_reds_page-busy.log`.
+>   - La build di quella corsa lancia svelte-check solo come diagnostica, senza guardarne l'esito (`dev.py:677-678`), e
+>     Playwright carica solo `page-busy.spec.ts`. Quindi le modifiche in corso di `test-author` su
+>     `asset-detail.spec.ts` non toccavano la corsa.
+> - **Codice applicato** (01:38): `y11_assets_apply.py --apply`, 23 sostituzioni in 3 file (+36/−27).
+>   - `theme-roles --check` pulito: «0 files dropped below their record».
+>   - **⚠️ Fuori pista**: Prettier segnalava 2 file, che a HEAD erano puliti, per le mie righe. Con `--write`: la catena
+>     `.then` di `asset-change` va a capo, e gli attributi del pulsante di `AssetDetailToolbarActions` vanno uno per
+>     riga. Il diff di Prettier tocca solo quelle righe.
+> - **Poi**: la riscrittura dei 3 scenari (`test-author`, in corso), svelte-check, Prettier su tutti i file,
+>   `theme-roles --check` di nuovo, lo slot lungo, la documentazione.
+> - **I 3 scenari riscritti** (`test-author`, 01:5x), in `asset-detail.spec.ts`:
+>   - un aiuto nuovo, `refreshThroughPageSync()` (2622–2685): il Sync della pagina con ogni voce `skipped`, quindi
+>     niente accettato e niente scritto;
+>   - **scenario 1** (3449–3523): la prima generazione parte dal ricaricamento del Sync, senza gettone, e poi Refresh la
+>     sostituisce. È la mossa concordata;
+>   - **scenari 2 (3960–4031) e 3 (7544–7640)**: la richiesta più vecchia in volo viene da azioni sempre tracciate (il
+>     cambio del termine di confronto; MAX più due ritorni a Price). Quindi è il Sync che fa partire il refresh sotto
+>     prova, e le asserzioni restano tutte.
+>     - Rilasciare prima avrebbe perso l'intento: i dati che arrivano a metà refresh, e le risposte tardive, cioè il
+>       successore e il 503 provvisorio.
+>     - Il pulsante resta coperto dagli altri 29 clic del test e da `page-busy`. **Accettato**: rientra nel via del
+>       coordinatore («la prima richiesta parte dal Sync della pagina»);
+>   - 3405–3418: riordino precauzionale (attesa di Refresh abilitato, poi il cancello);
+>   - 7335–7337: torna il `toBeDisabled()` che con N64 ha di nuovo senso;
+>   - una rotta nuova nella fixture: `GET /api/v1/fx/providers` → lista vuota, che toglie anche una chiamata vera verso
+>     ECB e SNB.
+> - **Prove leggere sul tutto** (02:0x; carico 40–45): svelte-check 0/0 (`files/logs/y11a_front-check.log`); Prettier
+>   pulito sui 7 file di codice e di test; `theme-roles --check` pulito; `git diff --check` pulito.
+>   - `check-orphans` non serve: nessun file di test nuovo.
+> - **Slot lungo** da chiedere, con `files/scripts/y11a_e2e.sh`: `page-busy`, `asset-detail`, `asset-mobile-layout`,
+>   `asset-list`, `fx-detail`, `risk-lab`, `risk`.
+> - **Documentazione e runner** (02:1x, prima dello slot lungo, così la build del sito della corsa le comprende):
+>   `files/scripts/y11a_docs_apply.py`, 15 sostituzioni uniche.
+>   - `app-state.md#page-busy`, la tabella dei punti che fanno partire:
+>     - `asset-first-load`;
+>     - `asset-refresh` su `onrefresh`, con il perché: `handleRefresh()` gira anche dopo un sync;
+>     - `asset-period`, `asset-currency`, `asset-mode`, `asset-calendar-window`;
+>     - una riga nuova, «A reload after a save in a window» (`assets-reload` ×3, `asset-reload` ×3);
+>     - Correlation (`AssetSetRiskPanel.reload()` → `refreshVersion` delle sezioni).
+>   - «Never for»: il ricaricamento dopo un sync della pagina dell'asset, più la sfumatura scritta come comportamento.
+>     Un sync fa ancora aspettare un pannello aperto, attraverso `refreshVersion` e `riskRefreshVersion`.
+>   - Tabella dei pulsanti: le righe nuove «Asset detail» e «Assets list, Correlation tab»; File 784 → 783 e lista
+>     degli asset 1642 → 1645.
+>   - Test: i riferimenti di `page-busy.spec.ts` spostati dall'intestazione nuova (178, 214, 220/226, 338, 368,
+>     679–691), più il punto 6 sui casi delle pagine degli asset (l.1184).
+>   - `_frontend_portfolio.py`: la descrizione di `page-busy` nomina le pagine degli asset.
+>   - `y11_docrefs.py` ora tiene 69 riferimenti, ricatturati e controllati a occhio
+>     (`files/logs/y11_docrefs_capture3.log`).
+>   - Solo codice in linea, nessun link nuovo. Il WARNING della build va controllato nel log dello slot lungo.
+> - **Ordine nuovo del coordinatore** (01:54). DV è entrato in dev `323c61b73` con i neutri di tutti i grafici: 25 file in
+>   `components/charts/`, `features/dashboard/`, `CorrelationHeatmap`, `features/brokers/lots/`, più `chartTheme.ts` e
+>   `roleColors.ts`. Quindi la corsa lunga deve provare la revisione **combinata**:
+>   1. checkpoint FROZEN subito, con il lotto com'è;
+>   2. commit e fusione con dev;
+>   3. la corsa lunga, nello slot 2 dopo X.
+>   - **Checkpoint mandato alle 01:5x**: 10 percorsi, nessuno toccato da dev dopo `d7f3a49c3`. Le liste per lo stage
+>     sono `files/y11a_stage_{feat,tests,docs,journal}.txt`.
+>   - La documentazione era già fatta e verificata: va nel checkpoint come commit a parte. Lasciarla non committata
+>     avrebbe rischiato di fermare la fusione, perché `app-state.md` cambia spesso in dev.
+>   - **⚠️ Fuori pista**: nel controllo prima dell'handoff c'era un `git fetch -q` inutile (`dev_release2` è un ramo
+>     locale condiviso). Restava appeso, credo per la rete o l'autenticazione, e l'ho fermato dopo 30 s: nessun
+>     processo rimasto, nessun ref cambiato che importi. Non lo rifaccio.
