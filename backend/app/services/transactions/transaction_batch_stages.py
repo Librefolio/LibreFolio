@@ -6,11 +6,13 @@ splits, updates), ``batch_creates`` (creates, promotes, links) and ``batch_costs
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 
 from pydantic import ValidationError
 
-from backend.app.db.models import UserRole
+from backend.app.db.models import Transaction, UserRole
+from backend.app.db.precision import DECIMAL_PLACES_EXCEEDED, decimal_limit_issue
 from backend.app.schemas.transactions.batch import TXBatchOperation, TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_batch_context import (
@@ -80,6 +82,50 @@ def parse_inputs(context: TransactionBatchContext) -> None:
     context.issues.extend(update_issues)
     context.issues.extend(split_issues)
     context.issues.extend(promote_issues)
+
+
+# C-97: the fields of a create or an update whose digits are checked, with their labels in the English text.
+_DECIMAL_LIMIT_LABELS = {"quantity": "Quantity", "cash.amount": "Cash amount", "cost_basis_override": "Cost basis override"}
+
+
+def _decimal_limit_values(item: Any) -> Iterator[tuple[str, str, Decimal]]:
+    """The checked values of ``item``: (issue field, column of ``transactions``, value); a field left out has none."""
+    cash, cost = item.cash, item.cost_basis_override
+    candidates = (("quantity", "quantity", item.quantity), ("cash.amount", "amount", cash.amount if cash is not None else None), ("cost_basis_override", "cost_basis_override", cost.amount if cost is not None else None))
+    for field, column, value in candidates:
+        if value is not None:
+            yield field, column, value
+
+
+def check_decimal_limits(context: TransactionBatchContext) -> None:
+    """Refuse, never round, a quantity, cash amount or manual cost basis over its column's limit (C-97, issue #43).
+
+    A quantity keeps 10 decimal places, an amount 6, a per-unit cost basis 12 (a price: decision D5), any of them
+    15 significant digits
+    (``db/precision.decimal_limit_issue``, from the model). Over the limit the row gets one issue per field —
+    ``decimalPlacesExceeded`` or ``significantDigitsExceeded``, ``params`` ``{"max": N}`` — and the batch is not saved;
+    the row stays in the batch, so a linked pair is not broken by it. Checked here, at confirmation, and not when a
+    broker import builds its rows (decision D2): the import shows the refusal with the other issues of the batch.
+    """
+    for operation, parsed in (("create", context.parsed_creates), ("update", context.parsed_updates)):
+        for index, item in parsed:
+            for field, column, value in _decimal_limit_values(item):
+                limit = decimal_limit_issue(value, Transaction, column)
+                if limit is None:
+                    continue
+                code, maximum = limit
+                unit = "decimal places" if code == DECIMAL_PLACES_EXCEEDED else "significant digits"
+                context.issues.append(
+                    TXValidationIssue(
+                        operation=operation,
+                        index=index,
+                        ref_id=item.id if operation == "update" else None,
+                        error=f"{_DECIMAL_LIMIT_LABELS[field]}: at most {maximum} {unit}",
+                        code=code,
+                        params={"max": maximum},
+                        field=field,
+                    )
+                )
 
 
 async def preload_and_authorize(

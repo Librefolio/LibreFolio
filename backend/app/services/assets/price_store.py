@@ -13,7 +13,8 @@ from backend.app.db.models import (
     Asset,
     PriceHistory,
 )
-from backend.app.db.precision import truncate_priceHistory
+from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, truncate_priceHistory
+from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
 from backend.app.schemas import (
     FAAssetDelete,
     FABulkDeleteResponse,
@@ -21,6 +22,29 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.utils.datetime_utils import utcnow
+
+#: The prices a user types (C-97): over the column's limit they are refused, never truncated. Volume is a count.
+_PRICE_LIMIT_FIELDS = ("open", "high", "low", "close")
+
+
+def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
+    """Refuse a manual upsert holding a price over its column's limit, before anything is written (C-97, issue #43).
+
+    A price keeps 12 decimal places and 15 significant digits (``db/precision.decimal_limit_issue``): a typed price
+    over either is refused, naming the asset, the maxima and the dates, never truncated in silence. The ``-1``
+    sentinel of open, high and low has neither. A provider's prices are not checked here: their long floats are
+    truncated (``truncate_priceHistory``).
+
+    Raises:
+        ValueError: the router turns it into HTTP 400, as it does a currency mismatch.
+    """
+    for item in data:
+        offending = [f"{price.date.isoformat()} ({name})" for price in item.prices for name in _PRICE_LIMIT_FIELDS if getattr(price, name) is not None and decimal_limit_issue(getattr(price, name), PriceHistory, name) is not None]
+        if offending:
+            _precision, scale = get_model_column_precision(PriceHistory, "close")
+            shown = ", ".join(offending[:10]) + (f" (+{len(offending) - 10} more)" if len(offending) > 10 else "")
+            raise ValueError(f"Too many digits in the prices of asset {item.asset_id}: at most {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits; {len(offending)} value(s): {shown}")
+
 
 PRICE_UPSERT_CHUNK_SIZE = 1000
 
@@ -64,6 +88,8 @@ class PriceStoreOperations:
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
+        if source_plugin_key == "MANUAL":
+            _reject_prices_over_the_limit(data)
 
         total_inserted = 0
         results = []
