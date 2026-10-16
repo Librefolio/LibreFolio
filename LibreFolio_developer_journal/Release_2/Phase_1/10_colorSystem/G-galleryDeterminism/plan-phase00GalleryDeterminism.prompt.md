@@ -1131,3 +1131,29 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Prova a secco: diff `baseline-r2` → `g-cand16a`, inventario di HEAD.
   - Poi la galleria completa `designer-16b` sul target con il lotto di T, i fill dei rossi, il diff con `sheet` e il
     pacchetto `LibreFolio_review_colori_giro3_2026-10-16`.
+
+  > **Note implementazione**: builder committato dal coordinatore in `390aa3b11` (README §3b).
+  > - Prova a secco su `baseline-r2` → `g-cand16a`: zip da 133 MB in 630 s.
+  > - Link controllati: 6.543, tutti presenti nel pacchetto, tranne `SKILL.md` nella palette copiata così com'è.
+
+  > **⚠️ Fuori pista — pacchetto rimandato dal developer (16/10, 17:55)**: oggi la designer non ha tempo. Lo zip si
+  > farà quando sarà disponibile, su una galleria nuova, perché nel frattempo entreranno altri lotti.
+  > - La galleria `designer-16b` è finita; i fill non servono più e `package` non è stato lanciato.
+  > - Il builder resta pronto: `files/g16b/g16b.sh package` della sessione rifà inventario, diff, `sheet` e zip.
+- **Riferimento della sera del 16/10: lo snapshot `designer-16b`** (lasciato così com'è, su richiesta del coordinatore).
+  - Commit `fa374e41d`: il target con il lotto di T, più il builder.
+  - Cattura 16:53–17:52, 6 worker, carico 60–170: in parallelo W e Y della 1.3 e un vitest di B.
+  - 2.862 PNG; 249 test verdi, 1 saltato (`mobile menu open`, solo mobile), **10 rossi di carico, non recuperati**:
+    - desktop: dashboard empty state, data-quality banner, profile tab, transaction form modal e le varianti es/dark
+      e fr/light;
+    - import wizard conditional steps, image edit modal crop view, FX add pair direct routes, Asset detail signals RSI.
+  - Le loro immagini mancano dallo snapshot: sono in `stale_not_regenerated.txt`, 42 file.
+  - `live_price_check` pulito.
+  - **G-18, primo conto su una galleria completa:** 2.862 scatti scansionati, nessuno senza record, 0 errori.
+    - Per scatto, di mediana: 506 elementi con classi, 173 con un ruolo, 7 con una classe legacy.
+    - **72 elementi misti, 2 distinti**, tutti e due composti a runtime: il gate statico non li vede.
+      - `pac-planner-timing-segment` (`BackendTimingBar.svelte`): `border-white dark:border-gray-800` insieme a
+        `bg-lf-neutral`. 4 scatti PAC, 40 varianti.
+      - `lot-custody-modal > div` (`LotCustodyModal.svelte`): `border-lf-raised text-lf-primary` del modale insieme
+        a `bg-white dark:bg-slate-800`, probabilmente da una prop del chiamante. 2 scatti, 32 varianti; motivo
+        «attesa-1.3». In scuro lo sfondo resta il vecchio slate.
