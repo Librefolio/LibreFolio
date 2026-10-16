@@ -49,6 +49,7 @@ from backend.app.schemas.portfolio import (
     CostHistorySeries,
     DepositHistoryPoint,
     DepositHistorySeries,
+    HoldingGroupGainLoss,
     IncomeHistoryPoint,
     IncomeHistorySeries,
     MissingPriceAsset,
@@ -88,11 +89,13 @@ from backend.app.services.financial_math.returns import (
     calculate_twrr_series,
     cumulative_to_annualized,
     gain_loss_ratio,
+    group_gain_loss,
     net_holding_return,
     period_mwrr,
     period_mwrr_series,
     realized_gain,
     rebase_to_period,
+    timing_effect,
 )
 from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
@@ -993,6 +996,26 @@ class PortfolioService:
             period_to=valuation_date,
         )
 
+        # The day's change of the total P&L, from the engine's states of the valuation date and of the calendar day before.
+        day_change = period_math.day_change(engine_result.daily_states, valuation_date)
+
+        # Unrealized G/L of each broker's holdings, and of each asset type at each broker (the Dashboard treemap's groups).
+        group_members: dict[tuple[int, str | None], list[tuple[Decimal | None, Decimal | None]]] = defaultdict(list)
+        for holding in all_holdings:
+            group_members[(holding.broker_id, None)].append((holding.current_value, holding.gain_loss))
+            group_members[(holding.broker_id, holding.asset_type)].append((holding.current_value, holding.gain_loss))
+        holding_groups: list[HoldingGroupGainLoss] = []
+        for (group_broker_id, group_asset_type), members in sorted(group_members.items(), key=lambda item: (item[0][0], item[0][1] is not None, item[0][1] or "")):
+            group_gain, group_ratio = group_gain_loss(members)
+            holding_groups.append(
+                HoldingGroupGainLoss(
+                    broker_id=group_broker_id,
+                    asset_type=group_asset_type,
+                    gain_loss=Currency(code=base_currency, amount=group_gain) if group_gain is not None else None,
+                    gain_loss_percent=group_ratio,
+                )
+            )
+
         return PortfolioSummary(
             net_worth=Currency(code=base_currency, amount=engine_nav),
             total_invested=Currency(code=base_currency, amount=total_invested),
@@ -1029,11 +1052,16 @@ class PortfolioService:
             mwrr_annualized_percent=mwrr_result,
             mwrr_cumulative_percent=mwrr_cumulative,
             mwrr_period_days=mwrr_period_days,
+            timing_effect_percent=timing_effect(mwrr_cumulative, twrr_result),
+            pnl_change_1d=Currency(code=base_currency, amount=day_change.pnl_change) if day_change is not None else None,
+            pnl_change_1d_vs_total_pnl_percent=day_change.vs_total_pnl if day_change is not None else None,
+            pnl_change_1d_vs_nav_percent=day_change.vs_nav if day_change is not None else None,
             simple_roi_percent=simple_roi,
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
             allocation_by_geography=_alloc_from_engine(alloc_geo),
             holdings=all_holdings,
+            holding_groups=holding_groups,
             by_broker=by_broker_list if include_breakdown else None,
             missing_fx_pairs=merged_missing_fx_pairs,
             missing_price_assets=missing_price_assets,

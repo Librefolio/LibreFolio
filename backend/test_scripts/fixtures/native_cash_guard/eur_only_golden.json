@@ -9643,6 +9643,59 @@
           "unusable_assets": [],
           "warnings": []
         },
+        "holding_groups": [
+          {
+            "asset_type": null,
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "34.1218263386396526772793053",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.02303228690445599102874244862"
+          },
+          {
+            "asset_type": "ETF",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "3.6658263386396526772793053",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.003711650374159019937426776280"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "30.45600000",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.06167379471228615863141524106"
+          },
+          {
+            "asset_type": null,
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "HOLD",
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "B",
+            "gain_loss": null,
+            "gain_loss_percent": null
+          }
+        ],
         "holdings": [
           {
             "allocation_percent": "27.64",
@@ -9937,7 +9990,14 @@
           "amount": "0",
           "code": "EUR"
         },
+        "pnl_change_1d": {
+          "amount": "0E-23",
+          "code": "EUR"
+        },
+        "pnl_change_1d_vs_nav_percent": "0",
+        "pnl_change_1d_vs_total_pnl_percent": "0",
         "simple_roi_percent": "-0.017949",
+        "timing_effect_percent": "0.000153",
         "total_deposited": {
           "amount": "14000.00000000",
           "code": "EUR"
@@ -10141,6 +10201,59 @@
         "unusable_assets": [],
         "warnings": []
       },
+      "holding_groups": [
+        {
+          "asset_type": null,
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "34.1218263386396526772793053",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.02303228690445599102874244862"
+        },
+        {
+          "asset_type": "ETF",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "3.6658263386396526772793053",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.003711650374159019937426776280"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "30.45600000",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.06167379471228615863141524106"
+        },
+        {
+          "asset_type": null,
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "HOLD",
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "B",
+          "gain_loss": null,
+          "gain_loss_percent": null
+        }
+      ],
       "holdings": [
         {
           "allocation_percent": "27.64",
@@ -10435,7 +10548,14 @@
         "amount": "0",
         "code": "EUR"
       },
+      "pnl_change_1d": {
+        "amount": "0E-23",
+        "code": "EUR"
+      },
+      "pnl_change_1d_vs_nav_percent": "0",
+      "pnl_change_1d_vs_total_pnl_percent": "0",
       "simple_roi_percent": "-0.017949",
+      "timing_effect_percent": "0.000153",
       "total_deposited": {
         "amount": "14000.00000000",
         "code": "EUR"
@@ -13790,6 +13910,53 @@
           "unusable_assets": [],
           "warnings": []
         },
+        "holding_groups": [
+          {
+            "asset_type": null,
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "-33.4816856775609826547854594",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "-0.02260019094280237887757054739"
+          },
+          {
+            "asset_type": "ETF",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "-60.4576856775609826547854594",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "-0.06121342664289415387857028818"
+          },
+          {
+            "asset_type": "STOCK",
+            "broker_id": "A",
+            "gain_loss": {
+              "amount": "26.97600000",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0.05462674961119751166407465008"
+          },
+          {
+            "asset_type": null,
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          },
+          {
+            "asset_type": "HOLD",
+            "broker_id": "B",
+            "gain_loss": {
+              "amount": "0E-7",
+              "code": "EUR"
+            },
+            "gain_loss_percent": "0"
+          }
+        ],
         "holdings": [
           {
             "allocation_percent": "30.67",
@@ -14035,7 +14202,14 @@
           "amount": "-19.993685677560982654785459",
           "code": "EUR"
         },
+        "pnl_change_1d": {
+          "amount": "0E-23",
+          "code": "EUR"
+        },
+        "pnl_change_1d_vs_nav_percent": "0",
+        "pnl_change_1d_vs_total_pnl_percent": "0",
         "simple_roi_percent": "-0.014582",
+        "timing_effect_percent": "0.000053",
         "total_deposited": null,
         "total_gain_loss": {
           "amount": "-184.17768567756098265478546",
@@ -14243,6 +14417,53 @@
         "unusable_assets": [],
         "warnings": []
       },
+      "holding_groups": [
+        {
+          "asset_type": null,
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "-33.4816856775609826547854594",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "-0.02260019094280237887757054739"
+        },
+        {
+          "asset_type": "ETF",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "-60.4576856775609826547854594",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "-0.06121342664289415387857028818"
+        },
+        {
+          "asset_type": "STOCK",
+          "broker_id": "A",
+          "gain_loss": {
+            "amount": "26.97600000",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0.05462674961119751166407465008"
+        },
+        {
+          "asset_type": null,
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        },
+        {
+          "asset_type": "HOLD",
+          "broker_id": "B",
+          "gain_loss": {
+            "amount": "0E-7",
+            "code": "EUR"
+          },
+          "gain_loss_percent": "0"
+        }
+      ],
       "holdings": [
         {
           "allocation_percent": "30.67",
@@ -14488,7 +14709,14 @@
         "amount": "-19.993685677560982654785459",
         "code": "EUR"
       },
+      "pnl_change_1d": {
+        "amount": "0E-23",
+        "code": "EUR"
+      },
+      "pnl_change_1d_vs_nav_percent": "0",
+      "pnl_change_1d_vs_total_pnl_percent": "0",
       "simple_roi_percent": "-0.014582",
+      "timing_effect_percent": "0.000053",
       "total_deposited": null,
       "total_gain_loss": {
         "amount": "-184.17768567756098265478546",
