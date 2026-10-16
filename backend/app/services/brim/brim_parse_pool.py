@@ -22,6 +22,11 @@ interpreters, real cores.
 - Workers: ``min(cpu_count, MAX_WORKERS)``. More would be pointless — the number of parses
   in flight is bounded by the browser's own concurrency, which is smaller still.
 - The pool is created **lazily**, on the first parse: an import should never fork.
+- Its ``forkserver`` can start earlier, at application startup (``prewarm``, W-B53; opt-in, ``LIBREFOLIO_BRIM_PREWARM``,
+  ``config/brim.py``: off by default, on in test mode), and is in any case preloaded with the BRIM module and every
+  plugin **preloaded** (``brim_parse_preload``): every worker is forked from it with them already imported and
+  discovered. Without it the first parse after a start paid a fresh interpreter importing them, ~4 s idle and
+  31-49 s under load. The workers share the preloaded pages, so a pool of several workers also takes less memory.
 - Start method: ``forkserver`` when the platform has it, otherwise ``spawn``. Never plain
   ``fork`` — this process runs a thread pool and an event loop, and forking that is how
   you get deadlocks that only appear in production.
@@ -38,6 +43,7 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
+import multiprocessing.forkserver
 import os
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
@@ -56,6 +62,10 @@ MAX_WORKERS = 4
 
 _pool: Optional[ProcessPoolExecutor] = None
 _pool_disabled = False
+# Imported once by the forkserver, so that every worker is born with the BRIM module and its plugins (W-B53). Named,
+# not imported: importing it discovers every plugin, which this module must not do at import. The preload list and
+# the forkserver are one per process: this is the only forkserver user (tools, quant and the market calendar spawn).
+_PRELOAD = ["backend.app.services.brim.brim_parse_preload"]
 
 
 def _worker_count() -> int:
@@ -73,6 +83,9 @@ def _get_pool() -> Optional[ProcessPoolExecutor]:
         methods = multiprocessing.get_all_start_methods()
         method = "forkserver" if "forkserver" in methods else "spawn"
         ctx = multiprocessing.get_context(method)
+        if method == "forkserver":
+            # Only taken into account if the forkserver is not running yet (``prewarm`` already set it).
+            ctx.set_forkserver_preload(_PRELOAD)
         _pool = ProcessPoolExecutor(max_workers=_worker_count(), mp_context=ctx)
         logger.info("BRIM parse pool started", workers=_worker_count(), start_method=method)
         return _pool
@@ -80,6 +93,24 @@ def _get_pool() -> Optional[ProcessPoolExecutor]:
         _pool_disabled = True
         logger.warning("BRIM parse pool unavailable, falling back to threads", error=str(exc))
         return None
+
+
+def prewarm() -> None:
+    """Start the pool's ``forkserver`` now, with the BRIM module preloaded (W-B53): application startup, in a thread.
+
+    The forkserver imports the module in its own process; this call returns at once, and the first parse forks a
+    worker that already has it instead of starting a fresh interpreter. The pool itself stays lazy. Never raises:
+    whatever fails is logged, and the first parse starts everything as before. Nothing to do where only ``spawn``
+    exists, or when the pool has been given up.
+    """
+    if _pool_disabled or "forkserver" not in multiprocessing.get_all_start_methods():
+        return
+    try:
+        multiprocessing.get_context("forkserver").set_forkserver_preload(_PRELOAD)
+        multiprocessing.forkserver.ensure_running()
+        logger.info("BRIM parse pool forkserver started", preload=_PRELOAD)
+    except Exception as exc:  # noqa: BLE001 - startup goes on; the first parse starts the pool as before
+        logger.warning("BRIM parse pool prewarm failed; the first parse will start the pool", error=str(exc))
 
 
 async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutput:

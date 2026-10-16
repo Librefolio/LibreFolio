@@ -3949,3 +3949,103 @@ CP7a, e dire lo stato di C-96. HEAD `91cfe34b3`.
     > `>` sia con `--log-file`, è bufferizzato a blocchi. Alle 18:12 `allbackend.log` era fermo da 10 minuti alle
     > righe della build, che escono da un sottoprocesso; le righe del runner sono arrivate solo all'uscita. Il
     > comportamento c'era già prima di H-12, e il run non ne soffre.
+14. ✅ **Entrata e nuova voce** (18:39). H-12 è in `dev_release2` con il merge `7ac8b17de` (genitori `5609b16d7` e
+    `7f5a28f4f`, nessun conflitto); i miei commit sono `cca1c8b0a` (feat), `3934b4f8a` (docs) e `7f5a28f4f` (journal).
+    HEAD verificato, `7f5a28f4f`, albero pulito. Il coordinatore mi assegna **W-B54**, dalla sezione di W (commit
+    `d8c2a13c7`, letto dall'oggetto git), come **H-21** nel backlog, priorità bassa.
+    > **Note implementazione** (lettura del codice, nessuna modifica): `_api_setup()`
+    > (`scripts/test_runner/_backend_api.py:748`) rifà il seed con `db_populate(force=True)`. Lo chiama
+    > `run_category_setup("api")` (`_common.py:641`, una volta per invocazione) da `api_test()` (`:770`), cioè la
+    > categoria intera, e dal passaggio consolidato (`_cli.py:959-963`). `_run_exclusive_setups()` (`_cli.py:614`)
+    > riguarda solo i setup esclusivi. Un'azione singola passa da `dispatch_to_category()`, senza setup. Per la cura
+    > servono due cose: sapere se il DB della corsia ha gli utenti di fixture, con una lettura senza scritture, e
+    > decidere tra seed automatico e messaggio. Da fare in un lotto con l'assegnazione di scrittore del registro.
+
+### Lotto «H-21: un'azione `api` da sola rifà gli utenti di fixture» (W-B54, 2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (18:41), H scrittore: oggi il problema ha fatto perdere due run, a W e a J. Preferenza: un
+> seed con una riga di log visibile piuttosto che «stampa il comando», dentro la data-dir della corsia. Vincoli: A ha
+> aperti `_backend_api.py` e `_backend_services.py` (A-27, solo descrizioni), quindi i miei hunk vanno nella logica di
+> dispatch e setup, mai nelle righe `add_test`. MF ha in stage, dal merge di base, `_backend_services.py`,
+> `_backend_utils.py`, `_frontend_utility.py` e `_server.py`: non li tocco. Prima i rossi, poi prove leggere a carico
+> < 50, poi un checkpoint insieme ai due file del journal.
+
+1. ✅ **Contratto e rossi affidati** (18:50). Il test-author scrive in `test_test_runner_cli.py` (selettore `utils
+   test-runner-cli`, già registrato: nessuna riga nuova nel catalogo di `_backend_utils.py`), senza eseguire nulla.
+   > **Note implementazione**, il contratto:
+   > - `make_category(…, setup_needed=None, …)`: chiamabile che restituisce una ragione o `None`; sta in `_meta`
+   >   accanto a `setup`. Tutte le 16 chiamate passano argomenti per nome (verificato via AST), quindi aggiungerlo
+   >   prima di `default_isolation` è sicuro;
+   > - `_common.ensure_category_setup(category)`: niente se non c'è `setup` o `setup_needed`, o se il setup è già
+   >   girato in questa invocazione (il predicato non viene chiamato). Con una ragione: una riga `print_info` con
+   >   categoria e ragione, poi `run_category_setup()`. Un predicato che solleva vale come ragione;
+   > - `_cli.run_test_from_registry`: dopo il ritorno anticipato di `--list` (un elenco non fa seed), per
+   >   `action != "all"`; se il setup fallisce, l'azione non parte ed esce un errore con la categoria;
+   > - `_backend_api.API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")`, cioè gli utenti con cui entrano i test
+   >   API, creati da `populate_mock_data.py`. `_api_fixture_users_missing()` legge `get_test_db_path()`, il DB della
+   >   corsia, in `mode=ro` e senza mai crearlo: restituisce una ragione se il file manca, non si legge, o non ha uno
+   >   dei due utenti (una tabella `users` assente vale come entrambi mancanti);
+   > - `make_category` di `api`: `setup_needed=_api_fixture_users_missing`, accanto a `setup=_api_setup`.
+2. ✅ **Cura provata a secco** (18:58; `files/h21/apply_cure.py`, 8 sostituzioni su tre file, copie in
+   `files/h21/dry/`). Ruff: `_cli` e `_backend_api` puliti; `_common` ha gli stessi 5 `PLC0415` di HEAD, già
+   esistenti: il mio import interno ha `noqa` con il motivo (`_registry` importa il modulo). Black: 0 blocchi
+   cambiati su tutti e tre i file. Predicato provato a parte (`files/h21/check_predicate.py`): file mancante (e non
+   creato), nessuna tabella `users`, nessuno dei due, solo l'admin, entrambi → `None`, un file che non è un DB, un DB
+   WAL con entrambi.
+   > **⚠️ Fuori pista**: un DB in WAL aperto con `mode=ro` lascia accanto `-wal` e `-shm` vuoti; il file principale
+   > resta intatto. Verificato su file temporanei: rollback nessun file in più, WAL due. Il DB della corsia è in WAL
+   > (byte 18–19 dell'header `02 02`, `PRAGMA journal_mode=WAL` in `db/session.py`). Nel flusso normale il backend
+   > condiviso è già su quando parte il controllo, quindi `-wal` e `-shm` esistono già e la lettura non crea nulla.
+   > Con `--no-shared-server` restano due file vuoti, che il prossimo che apre il DB riusa. Scritto nel docstring.
+   > Il test-author verifica l'assenza di file accanto solo su un DB in modalità rollback.
+3. ✅ **Doc** (docs-writer, 19:00). In `runner_architecture.md`, sotto «Registry Entry Shape», le chiavi di `_meta`:
+   `setup`, `setup_exclusive`, `setup_needed`, `default_isolation`; poi la riga di `_common.py`, con
+   `run_category_setup` ed `ensure_category_setup`. In `test-walkthrough/api.md`, un paragrafo in fondo a
+   «Prerequisites».
+   > **Note implementazione**: il docs-writer ha sistemato anche gli spazi della lista: una riga vuota prima e
+   > rientri di 4 spazi. Senza, la lista finiva dentro il paragrafo e i sotto-punti non si annidavano; lo ha
+   > verificato sul sorgente di Python-Markdown. Scrive «several units» e non «tutte», perché la maggior parte dei
+   > test `api` registra il proprio utente. Ha aggiunto due link interni: `#declaring-a-class-and-earning-it` e
+   > `index.md#isolated-runtime-lanes`.
+   > **⚠️ Fuori pista** (osservazione del docs-writer, che spiega il caso di W): `_categories_in_scope()` restituisce
+   > la categoria qualunque sia l'azione, quindi anche **una singola azione `services`** ricrea il DB vuoto, tramite
+   > `_run_exclusive_setups()`. È così che W ha perso gli utenti.
+4. ✅ **Rossi** (19:03, carico 44). Il test-author ha consegnato 6 classi, 22 funzioni e 30 casi in
+   `test_test_runner_cli.py`: ruff verde; black lascia il file invariato. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc
+   nice -n 10 pipenv run python dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h utils test-runner-cli` →
+   **30 failed, 36 passed**, tutti sulle barriere `H-21:`. Per messaggio:
+   - `_api_fixture_users_missing is missing` ×11;
+   - `ensure_category_setup is missing` ×8;
+   - `run_test_from_registry ran a single action … without asking its setup_needed first` ×4;
+   - `make_category has no setup_needed` ×3;
+   - `API_FIXTURE_USERS is missing` ×2;
+   - `… did not ask _common.ensure_category_setup at call time` ×1;
+   - `the api category declares no setup_needed` ×1.
+
+   Log in `files/runs/h21-red.log`.
+   > **Note implementazione**, scelte del test-author dove il contratto lasciava spazio:
+   > - senza ragione, o senza una delle due metà, la categoria non va in `_SETUP_DONE`, così un `all` successivo
+   >   nella stessa invocazione rifà comunque il suo seed;
+   > - utenti simili come `e2e_test_user2` contano come mancanti, quindi niente `LIKE` o prefissi;
+   > - con il file mancante non si crea nulla, nemmeno le cartelle;
+   > - il caso `--list` passa dal ramo vero dell'elenco;
+   > - la costante è confrontata con `test_user_defs` letto con `ast` dal sorgente, senza importarlo.
+5. ✅ **Cura e verdi** (19:04–19:16, carico < 50 prima di ogni prova). La cura applicata coincide byte per byte con
+   la prova a secco. Prove (script `files/runs/h21-greens.sh`, log in `files/runs/h21-greens/`):
+   - `utils test-runner-cli` **66/66**;
+   - `utils runtime-isolation` **200/200**: l'altro file che tocca setup e dispatch;
+   - `check-orphans` verde.
+
+   **Prova reale dello scenario di W-B54** nella corsia:
+   - `db create` lascia 0 utenti di fixture;
+   - `api address-probe` stampa «⚙️  api: the test database /private/tmp/librefolio-r13-h/sqlite/app.db has no
+     fixture user e2e_test_admin, e2e_test_user — running the category setup before this action», poi «Populating
+     test database for API tests…» e «Test database populated»: **26/26**;
+   - la stessa azione una seconda volta: **26/26, senza riga di seed**, perché gli utenti ci sono.
+
+   Porta 6181 libera alla fine. `mkdocs build`: solo l'avviso noto di `wac.md`, quindi le due nuove ancore si
+   risolvono. `check-links`: 97 link validi.
+   > **Note implementazione**: la riga esce come «ℹ️  ⚙️  api: …», con due icone: `print_info` aggiunge la sua.
+   > Lasciata così: l'ingranaggio la lega al «⚙️ Populating…» di `_api_setup()` che segue. Nessuna modifica a
+   > `_backend_utils.py` (in stage da MF), quindi il `desc` del selettore `test-runner-cli` non nomina i casi nuovi:
+   > lo dice la docstring del file di test.

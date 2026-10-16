@@ -1,5 +1,6 @@
 <script lang="ts">
     import {getAllContexts, onMount, tick, untrack} from 'svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {get} from 'svelte/store';
     import {afterNavigate} from '$app/navigation';
     import {AlertTriangle, ArrowLeft, LoaderCircle, RefreshCw} from 'lucide-svelte';
@@ -191,18 +192,18 @@
     function requestReload(): void {
         if (busy || !account.authenticated) return;
         if (activeMount) confirmReload = true;
-        else void loadTool(toolCode, account.generation, undefined, true);
+        else void pageBusy.track('tool-reload', () => loadTool(toolCode, account.generation, undefined, true));
     }
 
     function acceptReload(): void {
         if (busy) return;
         confirmReload = false;
-        void loadTool(toolCode, account.generation, undefined, true);
+        void pageBusy.track('tool-reload', () => loadTool(toolCode, account.generation, undefined, true));
     }
 
     function retry(): void {
         if (busy) return;
-        void loadTool(toolCode, account.generation, errorStage === 'component' ? (binding ?? undefined) : undefined);
+        void pageBusy.track('tool-retry', () => loadTool(toolCode, account.generation, errorStage === 'component' ? (binding ?? undefined) : undefined));
     }
 
     onMount(() => {
@@ -227,7 +228,8 @@
         const {generation, authenticated} = account;
         if (!ready) return;
         untrack(() => {
-            if (authenticated) void loadTool(code, generation);
+            // The tool's catalog and component hold the page's Refresh button (Y11); its own actions keep their indicators.
+            if (authenticated) void pageBusy.track('tool-load', () => loadTool(code, generation));
             else phase = 'anonymous';
         });
     });
@@ -254,12 +256,13 @@
                 <button
                     type="button"
                     onclick={requestReload}
-                    disabled={busy || !account.authenticated}
+                    disabled={busy || pageBusy.busy || !account.authenticated}
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
                     class="inline-flex items-center gap-2 rounded-lg border border-lf-input bg-lf-card px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label={$t('common.refresh')}
                     data-testid="tool-host-refresh"
                 >
-                    <RefreshCw size={16} aria-hidden="true" />
+                    <RefreshCw size={16} aria-hidden="true" class={pageBusy.busy ? 'animate-spin' : ''} />
                     <span class="hidden sm:inline">{$t('common.refresh')}</span>
                 </button>
             </div>

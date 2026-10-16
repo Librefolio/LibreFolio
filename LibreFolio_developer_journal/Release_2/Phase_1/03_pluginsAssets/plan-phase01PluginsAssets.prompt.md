@@ -4514,3 +4514,85 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 >   rifatto il frontend (svelte-check e build di debug) e la documentazione.
 >   - Le build erano vecchie dopo il merge 17 e le mie pagine. Sono 5 minuti pesanti, partiti a carico 46.
 >   - Regola per la prossima volta: prima di un'unità API su build vecchie, chiedere uno slot.
+
+### O-20 e C-66 — la sync alla creazione, e l'avviso nel dialogo di sync ⏳ (2026-10-16, dalle 18:14)
+
+> - **Partenza**:
+>   - X-R27 e X-R28 sono in dev (`ccfabfd6d`), HEAD `f485c123a`;
+>   - dev ha 38 commit in più, ma nessuno sui file di questi lotti.
+>   - Ordine dato dal coordinatore: O-20 e C-66 insieme, poi F21/C-90, poi O-8.
+> - **O-20, analisi**: creando un asset con un fornitore dalla pagina Asset partono due sync.
+>   - La prima è quella di `AssetModal` (~1245): tutta la storia (`start: 'resume'`), in background, senza riscontro.
+>   - La seconda è quella della pagina (`oncreated` → `handleSyncAsset`, ~1855): con l'intervallo della pagina, la
+>     rotella, il toast dei conteggi e il ricaricamento.
+>   - La modale salta i fornitori parametrici, e assegnarne uno non crea prezzi. Per un investimento programmato
+>     creato dalla pagina Asset oggi la sync della pagina è quindi l'unica.
+> - **O-20, decisione (coordinatore, 18:2x)**: la modale tiene **una sola** sync e la annuncia con
+>   `onsynced(assetId, result)`, come fa `FxPairAddModal`. La pagina non sincronizza più.
+>   - Dettaglio mio, comunicato: la sync della modale copre anche i parametrici (`resume`, cioè tutto il piano). Il
+>     modulo delle transazioni e il wizard ne guadagnano.
+>   - `oncreated` riceve un `{syncing}` facoltativo, così la rotella non resta accesa se una sync non parte.
+>   - Il toast è estratto in `reportSyncResult()`; il tipo `AssetCreateSyncResult` sta in `syncHelpers.ts`.
+>   - La cura è pronta come innesto, nella cartella di sessione (`files/checks/o20_splice.py`, 9 sostituzioni, tutte
+>     verificate a vuoto). Si applica solo dopo il rosso.
+> - **Rosso di O-20**: un E2E che conta le `POST /assets/prices/sync` dopo una creazione dalla pagina Asset, con la
+>   rotta finta. Oggi sono 2, ne serve 1. Lo scrive il test-author, che non lo fa girare: gira nello slot 1 delle
+>   18:45 (cut-off 19:15).
+>   - Sequenza nello slot:
+>     1. il rosso sull'albero pulito: `frontend/src` non è cambiato dalla build delle 18:07, quindi nessuna nuova
+>        build;
+>     2. l'innesto;
+>     3. una build;
+>     4. i verdi: lo spec di O-20 e gli spec degli asset che creano asset.
+> - **C-66, decisione (coordinatore)**:
+>   - **(A)** adesso: il conteggio dei punti salvati nell'intervallo viene dai dati che la pagina mostra già, senza i
+>     riempiti all'indietro. `SyncModalBase` aggiunge una riga sotto la barra dell'intervallo.
+>   - (B) è X-R29, un endpoint che conta le righe manuali.
+>   - (C) è X-R30, una domanda al developer: la sync deve tenere i prezzi manuali?
+>   - Verificato: oggi la sync sovrascrive anche i `MANUAL`. I cambi saltano le coppie solo `MANUAL`.
+> - **C-66 non entra nello slot delle 18:45**: i conteggi vengono dai dati di tre pagine, e prima vengono i rossi di
+>   Vitest. È circa un'ora di lavoro, e l'E2E va nello slot successivo.
+>   - Non tocco `frontend/src` prima del rosso di O-20.
+> - **Approvato (18:29)**: O-20 con l'effetto collaterale, cioè che un investimento programmato creato dal modulo
+>   delle transazioni o dal wizard ha subito la sua storia. È un miglioramento: va nel piano e nella riga del
+>   CHANGELOG.
+> - **Risposta del developer a (C)**: vince il fornitore, i prezzi manuali non si tengono. L'avviso (A) basta, e il
+>   testo dice «modifiche manuali comprese». X-R30 è chiusa.
+> - AF è entrato in `assets/[id]` e in `components/assets/detail/` (punta `c179a5144`). `AssetModal.svelte` e la
+>   pagina lista non sono toccati.
+> - **La riga del CHANGELOG** si scrive subito dopo il rosso: `CHANGELOG*.md` fa scadere la build, e il rosso deve
+>   girare senza ricostruirla.
+> - **Slot 1 (18:37–18:49)**, anticipato perché H aveva finito:
+>   - **Rosso di O-20** sull'albero pulito, senza ricostruire: `front-asset asset-modal O-20` dà 1/1 rosso, «Received
+>     length: 2». Sono le due sync, quella della modale (`resume`) e quella della pagina (l'intervallo della pagina).
+>     Il test è `asset-modal.spec.ts`, «NR — One price sync per asset creation (O-20)».
+>   - Poi l'innesto (`o20_splice.py`, 3 file) e la riga 🐛 nel CHANGELOG, aggiunta dopo il rosso.
+>   - **Verdi**, con una sola build e svelte-check 0/0:
+>     - O-20 1/1;
+>     - `asset-modal` 18/18, compreso Bug K, che legge la sync della modale;
+>     - `asset-list` 28/28;
+>     - `tx-import-resolution` 15/15: il wizard crea gli asset con la stessa modale.
+>   - Alla fine la porta 6183 era libera; lo slot è stato restituito alle 18:49.
+> - **Prove leggere**: `core-unit` 186 file, 6783/6783; `component-unit` 8 rossi in `AssetModal.test.ts`.
+>   - **Verdetto: assunzione**. I casi fissavano `oncreated` chiamata con esattamente `[assetId]`, e il secondo
+>     argomento `{syncing}` è voluto.
+>   - Il test-author li aggiorna al contratto nuovo e aggiunge i casi di `onsynced`: risultato, `null` sul rifiuto,
+>     nessuna chiamata senza sync, e il parametrico che ora sincronizza.
+> - **C-66, analisi**: ogni punto delle pagine porta `backward_fill_info.days_back`. Un punto con `days_back` = 0, o
+>   senza l'informazione, è una riga salvata; gli altri sono riempiti all'indietro. È questo il criterio dei
+>   conteggi.
+>   - Le modifiche a `syncHelpers.ts` (`SyncSection`) aspettano il commit di O-20, che tocca lo stesso file.
+> - **`AssetModal.test.ts` riallineato** (test-author): da 32 casi, di cui 8 rossi, a **37/37**.
+>   - Gli 8 aspettano `oncreated(id, {syncing})`. Nel percorso dell'assegnazione fallita resta `oncreated(id)`, senza
+>     dettaglio, ed è fissato così.
+>   - 5 casi nuovi in «the one price sync of a creation (O-20)»:
+>     - `onsynced(id, results[0])` solo dopo la risposta;
+>     - `null` se la richiesta fallisce;
+>     - nessuna sync senza fornitore, né quando l'assegnazione fallisce;
+>     - il parametrico ora sincronizza da `resume` con `{syncing: true}`.
+> - **Dal test-author, preso**: `.then(onsynced).catch(…onsynced(null))` riferiva la sync una seconda volta, con
+>   `null`, se il gestore del chiamante lanciava. Ora è `.then(ok, ko)`: `ko` vale solo per il rifiuto della
+>   richiesta. Il file resta 37/37.
+> - **Dal test-author, non preso**:
+>   - la data `end` in UTC vicino alla mezzanotte, che c'era già prima;
+>   - `results` vuoto che diventa `null`, come un errore. Va bene: per il chiamante significa «nessun risultato».
