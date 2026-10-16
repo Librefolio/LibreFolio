@@ -466,19 +466,19 @@
      */
     const GROUP_TONE: Record<string, {section: string; heading: string; row: string}> = {
         trades: {
-            section: 'border-rose-200 bg-rose-50/50 dark:border-rose-900/60 dark:bg-rose-950/20',
-            heading: 'text-rose-900 dark:text-rose-200',
-            row: 'border-rose-200 bg-white dark:border-rose-900/70 dark:bg-slate-800',
+            section: 'border-lf-danger-line bg-lf-danger-soft/50',
+            heading: 'text-lf-danger-on-soft',
+            row: 'border-lf-danger-line bg-lf-card',
         },
         splits: {
-            section: 'border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/20',
-            heading: 'text-amber-900 dark:text-amber-200',
-            row: 'border-amber-200 bg-white dark:border-amber-900/70 dark:bg-slate-800',
+            section: 'border-lf-warning-line bg-lf-warning-soft/50',
+            heading: 'text-lf-warning-on-soft',
+            row: 'border-lf-warning-line bg-lf-card',
         },
         charges: {
-            section: 'border-sky-200 bg-sky-50/50 dark:border-sky-900/60 dark:bg-sky-950/20',
-            heading: 'text-sky-900 dark:text-sky-200',
-            row: 'border-sky-200 bg-white dark:border-sky-900/70 dark:bg-slate-800',
+            section: 'border-lf-info-line bg-lf-info-soft/50',
+            heading: 'text-lf-info-on-soft',
+            row: 'border-lf-info-line bg-lf-card',
         },
     };
 
@@ -507,9 +507,9 @@
     );
 
     function rowShellClass(row: FlaggedRow, groupId: string): string {
-        if (row.decision === 'corrected') return 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10';
-        if (row.decision === 'kept') return 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/60';
-        return GROUP_TONE[groupId]?.row ?? 'border-amber-200 bg-white dark:border-amber-800 dark:bg-slate-800';
+        if (row.decision === 'corrected') return 'border-lf-success-line bg-lf-success-soft/50';
+        if (row.decision === 'kept') return 'border-lf-subtle bg-lf-panel';
+        return GROUP_TONE[groupId]?.row ?? 'border-lf-warning-line bg-lf-card';
     }
 </script>
 
@@ -522,7 +522,7 @@
     </InfoBanner>
 
     {#if rows.length === 0}
-        <div class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" data-testid="fix-step-empty">
+        <div class="flex items-center gap-2 rounded-lg border border-lf-success-line bg-lf-success-soft px-3 py-3 text-sm text-lf-success-on-soft" data-testid="fix-step-empty">
             <CheckCircle size={16} />
             {$t('importWizard.fixStep.allDoneDetail', {values: {n: 0}})}
         </div>
@@ -530,18 +530,18 @@
         <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div class="flex flex-wrap items-center gap-3">
                 {#if pendingRows.length > 0}
-                    <span class="flex items-center gap-1.5 font-medium text-red-700 dark:text-red-300">
+                    <span class="flex items-center gap-1.5 font-medium text-lf-danger">
                         <AlertTriangle size={14} />
                         {$t('importWizard.fixStep.pending', {values: {n: pendingRows.length}})}
                     </span>
                 {:else}
-                    <span class="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
+                    <span class="flex items-center gap-1.5 font-medium text-lf-success">
                         <CheckCircle size={14} />
                         {$t('importWizard.fixStep.allDone')}
                     </span>
                 {/if}
                 {#if settledRows.length > 0}
-                    <span class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <span class="flex items-center gap-1 text-lf-success">
                         <Check size={13} />
                         {$t('importWizard.fixStep.settled', {values: {n: settledRows.length}})}
                     </span>
@@ -551,7 +551,7 @@
                 {#if resettableRows.length > 0}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-lf-input bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover"
                         onclick={() => resetAll()}
                         title={$t('importWizard.fixStep.resetAllHint')}
                         data-testid="fix-step-reset-all"
@@ -563,7 +563,7 @@
                 {#if pendingRows.length > 0}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-lf-input bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover"
                         onclick={() => onacceptall()}
                         title={$t('importWizard.fixStep.acceptAllHint')}
                         data-testid="fix-step-accept-all"
@@ -591,8 +591,8 @@
                             {/if}
                             <span class="min-w-0">
                                 <span class="text-sm font-semibold {tone.heading}">{$t(group.title)}</span>
-                                <span class="ml-1.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-medium {tone.heading} dark:bg-slate-900/50">{group.items.length}</span>
-                                <span class="mt-0.5 block text-xs text-gray-600 dark:text-gray-300">{$t(group.hint)}</span>
+                                <span class="ml-1.5 rounded-full bg-lf-card/70 px-1.5 py-0.5 text-[11px] font-medium {tone.heading}">{group.items.length}</span>
+                                <span class="mt-0.5 block text-xs text-lf-secondary">{$t(group.hint)}</span>
                             </span>
                         </button>
                         <!-- The same two verbs as the toolbar, scoped to this panel: with three
@@ -602,7 +602,7 @@
                             {#if groupSettled.length > 0}
                                 <button
                                     type="button"
-                                    class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-white dark:border-slate-600 dark:bg-slate-800/70 dark:text-gray-300 dark:hover:bg-slate-700"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-lf-input bg-lf-card/80 px-2 py-1 text-[11px] font-medium text-lf-secondary hover:bg-lf-card"
                                     onclick={() => resetAll(groupSettled)}
                                     title={$t('importWizard.fixStep.resetAllHint')}
                                     data-testid="fix-step-group-reset-all"
@@ -614,7 +614,7 @@
                             {#if groupPending.length > 0}
                                 <button
                                     type="button"
-                                    class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-white dark:border-slate-600 dark:bg-slate-800/70 dark:text-gray-200 dark:hover:bg-slate-700"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-lf-input bg-lf-card/80 px-2 py-1 text-[11px] font-medium text-lf-secondary hover:bg-lf-card"
                                     onclick={() => onacceptall(groupPending.map((r) => r.index))}
                                     title={$t('importWizard.fixStep.acceptAllHint')}
                                     data-testid="fix-step-group-accept-all"
@@ -633,38 +633,35 @@
                             <li class="rounded-lg border {rowShellClass(row, group.id)}" data-testid="fix-step-row" data-decision={row.decision ?? 'pending'} data-severity={rowIsBlocking(row) ? 'blocker' : 'warning'}>
                                 <button type="button" class="flex w-full items-start gap-2 px-3 py-2 text-left" onclick={() => ontoggle(row.index)} data-testid="fix-step-row-toggle">
                                     {#if isOpen}
-                                        <ChevronDown size={14} class="mt-0.5 shrink-0 text-gray-400" />
+                                        <ChevronDown size={14} class="mt-0.5 shrink-0 text-lf-muted" />
                                     {:else}
-                                        <ChevronRight size={14} class="mt-0.5 shrink-0 text-gray-400" />
+                                        <ChevronRight size={14} class="mt-0.5 shrink-0 text-lf-muted" />
                                     {/if}
                                     {#if row.decision === 'corrected'}
-                                        <Check size={14} class="mt-0.5 shrink-0 text-emerald-600" />
+                                        <Check size={14} class="mt-0.5 shrink-0 text-lf-success" />
                                     {:else if row.decision === 'kept'}
-                                        <Hand size={14} class="mt-0.5 shrink-0 text-slate-500" />
+                                        <Hand size={14} class="mt-0.5 shrink-0 text-lf-muted" />
                                     {:else if rowIsBlocking(row)}
-                                        <Wrench size={14} class="mt-0.5 shrink-0 text-red-500" />
+                                        <Wrench size={14} class="mt-0.5 shrink-0 text-lf-danger" />
                                     {:else}
-                                        <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-500" />
+                                        <AlertTriangle size={14} class="mt-0.5 shrink-0 text-lf-warning" />
                                     {/if}
                                     <span class="min-w-0 flex-1">
-                                        <span class="font-mono text-xs text-gray-400 dark:text-gray-500">#{row.index + 1}</span>
-                                        <span class="ml-1.5 text-sm {row.decision ? 'text-gray-600 dark:text-gray-300' : rowIsBlocking(row) ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{todoMessage(row.todos[0])}</span>
+                                        <span class="font-mono text-xs text-lf-muted">#{row.index + 1}</span>
+                                        <span class="ml-1.5 text-sm {row.decision ? 'text-lf-secondary' : rowIsBlocking(row) ? 'text-lf-danger' : 'text-lf-warning'}">{todoMessage(row.todos[0])}</span>
                                         {#if row.todos.length > 0 && !row.decision}
-                                            <span class="ml-1.5 text-xs {rowIsBlocking(row) ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({row.todos.map((td) => translateFieldName(td.field, $t)).join(', ')})</span>
+                                            <span class="ml-1.5 text-xs {rowIsBlocking(row) ? 'text-lf-danger' : 'text-lf-warning'}">({row.todos.map((td) => translateFieldName(td.field, $t)).join(', ')})</span>
                                         {/if}
                                     </span>
                                     {#if row.decision}
-                                        <span
-                                            class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium {row.decision === 'corrected' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100'}"
-                                            data-testid="fix-step-row-badge"
-                                        >
+                                        <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium {row.decision === 'corrected' ? 'bg-lf-success-soft text-lf-success-on-soft' : 'bg-lf-neutral text-lf-secondary'}" data-testid="fix-step-row-badge">
                                             {row.decision === 'corrected' ? $t('importWizard.fixStep.badgeCorrected') : $t('importWizard.fixStep.badgeKept')}
                                         </span>
                                     {/if}
                                 </button>
 
                                 {#if isOpen}
-                                    <div class="space-y-3 border-t px-3 py-3 {row.decision ? 'border-gray-200 dark:border-slate-700' : 'border-red-100 dark:border-red-900/50'}">
+                                    <div class="space-y-3 border-t px-3 py-3 {row.decision ? 'border-lf-subtle' : 'border-lf-danger-line'}">
                                         {#each row.todos as todo}
                                             {#each todo.evidence ?? [] as ev}
                                                 <BrimEvidenceTable evidence={ev} tone={row.decision ? 'warning' : rowIsBlocking(row) ? 'blocker' : 'warning'} onGotoRow={ongotosource ? (lines) => ongotosource(row.index, lines) : undefined} />
@@ -682,8 +679,8 @@
                                             {@const lines = splitLines(row)}
                                             {@const negative = (rowCash(row)?.amount ?? 0) < 0}
                                             {#if preview}
-                                                <div class="rounded-lg border border-amber-300 bg-white px-3 py-2.5 dark:border-amber-700 dark:bg-slate-900/60" data-testid="fix-step-split">
-                                                    <p class="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                                                <div class="rounded-lg border border-lf-warning-line bg-lf-card px-3 py-2.5" data-testid="fix-step-split">
+                                                    <p class="flex items-center gap-1.5 text-xs font-semibold text-lf-warning">
                                                         <Scissors size={13} />
                                                         {$t('importWizard.fixStep.splitTitle')}
                                                     </p>
@@ -695,21 +692,16 @@
                                                          answer to "how do you know". -->
                                                     <dl class="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
                                                         <div>
-                                                            <dt class="text-gray-500 dark:text-gray-400">{$t('importWizard.fixStep.splitRowAmountLabel')}</dt>
-                                                            <dd class="font-mono text-sm text-gray-800 dark:text-gray-100">{money(preview.total, preview.code, negative)}</dd>
+                                                            <dt class="text-lf-muted">{$t('importWizard.fixStep.splitRowAmountLabel')}</dt>
+                                                            <dd class="font-mono text-sm text-lf-primary">{money(preview.total, preview.code, negative)}</dd>
                                                         </div>
                                                         {#if facts}
                                                             <div>
-                                                                <dt class="text-gray-500 dark:text-gray-400">
+                                                                <dt class="text-lf-muted">
                                                                     {$t('importWizard.fixStep.splitNominalLabel')}
                                                                     {#if facts.nominalRow !== null}
                                                                         {#if ongotosource}
-                                                                            <button
-                                                                                type="button"
-                                                                                class="underline decoration-dotted underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300"
-                                                                                onclick={() => ongotosource(row.index, [facts.nominalRow as number])}
-                                                                                data-testid="fix-step-split-nominal-source"
-                                                                            >
+                                                                            <button type="button" class="underline decoration-dotted underline-offset-2 hover:text-lf-warning" onclick={() => ongotosource(row.index, [facts.nominalRow as number])} data-testid="fix-step-split-nominal-source">
                                                                                 {$t('importWizard.fixStep.splitNominalSource', {values: {row: facts.nominalRow}})}
                                                                             </button>
                                                                         {:else}
@@ -717,12 +709,12 @@
                                                                         {/if}
                                                                     {/if}
                                                                 </dt>
-                                                                <dd class="font-mono text-sm text-gray-800 dark:text-gray-100">{money(facts.nominal, preview.code, false)}</dd>
+                                                                <dd class="font-mono text-sm text-lf-primary">{money(facts.nominal, preview.code, false)}</dd>
                                                             </div>
                                                         {/if}
                                                     </dl>
                                                     {#if facts}
-                                                        <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{$t('importWizard.fixStep.splitNominalHint')}</p>
+                                                        <p class="mt-1 text-[11px] text-lf-muted">{$t('importWizard.fixStep.splitNominalHint')}</p>
                                                     {/if}
 
                                                     <!-- What the rest of the file says about this row. The user is being
@@ -730,19 +722,19 @@
                                                          which ones, and one of them prevents a real mistake — a charge
                                                          the file already books on its own must not be extracted twice. -->
                                                     {#if hints.length > 0}
-                                                        <ul class="mt-2 space-y-1 border-t border-amber-200/70 pt-2 text-[11px] text-gray-600 dark:border-amber-800/70 dark:text-gray-300" data-testid="fix-step-split-hints">
+                                                        <ul class="mt-2 space-y-1 border-t border-lf-warning-line/70 pt-2 text-[11px] text-lf-secondary" data-testid="fix-step-split-hints">
                                                             {#each hints as hint}
                                                                 <li class="flex items-start gap-1.5">
-                                                                    <Lightbulb size={12} class="mt-0.5 shrink-0 text-amber-500" />
+                                                                    <Lightbulb size={12} class="mt-0.5 shrink-0 text-lf-warning" />
                                                                     <span>{hint}</span>
                                                                 </li>
                                                             {/each}
                                                         </ul>
                                                     {/if}
 
-                                                    <div class="mt-2 border-t border-amber-200/70 pt-2 dark:border-amber-800/70">
-                                                        <p class="text-[11px] font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.fixStep.splitLegsLabel')}</p>
-                                                        <p class="text-[11px] text-gray-500 dark:text-gray-400">{$t('importWizard.fixStep.splitLegsHint')}</p>
+                                                    <div class="mt-2 border-t border-lf-warning-line/70 pt-2">
+                                                        <p class="text-[11px] font-medium text-lf-secondary">{$t('importWizard.fixStep.splitLegsLabel')}</p>
+                                                        <p class="text-[11px] text-lf-muted">{$t('importWizard.fixStep.splitLegsHint')}</p>
                                                         <div class="mt-1.5 space-y-1.5">
                                                             {#each lines as line, k}
                                                                 <div class="flex items-center gap-2" data-testid="fix-step-split-line">
@@ -754,7 +746,7 @@
                                                                             {#snippet selectedItem(option)}
                                                                                 <div class="flex min-w-0 items-center gap-2">
                                                                                     <img src={option.icon} alt="" class="h-4 w-4 shrink-0 object-contain" />
-                                                                                    <span class="truncate text-sm text-gray-900 dark:text-gray-100">{option.label}</span>
+                                                                                    <span class="truncate text-sm text-lf-primary">{option.label}</span>
                                                                                 </div>
                                                                             {/snippet}
                                                                             {#snippet item(option)}
@@ -769,7 +761,7 @@
                                                                         type="text"
                                                                         inputmode="decimal"
                                                                         autocomplete="off"
-                                                                        class="w-32 rounded-lg border bg-white px-2 py-1.5 text-sm dark:bg-slate-900 dark:text-gray-100 {preview.touched && !preview.valid ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-slate-600'}"
+                                                                        class="w-32 rounded-lg border bg-lf-field px-2 py-1.5 text-sm text-lf-primary placeholder:text-lf-placeholder {preview.touched && !preview.valid ? 'border-lf-danger' : 'border-lf-input'}"
                                                                         placeholder="0,00"
                                                                         value={line.amount}
                                                                         oninput={(e) => updateSplitLine(row, k, {amount: (e.currentTarget as HTMLInputElement).value})}
@@ -783,7 +775,7 @@
                                                                     {#if lines.length > 1}
                                                                         <button
                                                                             type="button"
-                                                                            class="rounded-md p-1 text-gray-400 hover:bg-amber-100 hover:text-gray-700 dark:hover:bg-amber-900/30 dark:hover:text-gray-200"
+                                                                            class="rounded-md p-1 text-lf-muted hover:bg-lf-warning-soft hover:text-lf-secondary"
                                                                             title={$t('importWizard.fixStep.splitRemoveLine')}
                                                                             onclick={() => removeSplitLine(row, k)}
                                                                             data-testid="fix-step-split-remove"
@@ -795,7 +787,7 @@
                                                             {/each}
                                                         </div>
                                                         {#if lines.length < CHARGE_KINDS.length}
-                                                            <button type="button" class="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-800 hover:underline dark:text-amber-300" onclick={() => addSplitLine(row)} data-testid="fix-step-split-add">
+                                                            <button type="button" class="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-lf-warning hover:underline" onclick={() => addSplitLine(row)} data-testid="fix-step-split-add">
                                                                 <Plus size={12} />
                                                                 {$t('importWizard.fixStep.splitAddLine')}
                                                             </button>
@@ -803,30 +795,30 @@
                                                     </div>
 
                                                     {#if preview.valid}
-                                                        <dl class="mt-2 space-y-0.5 border-t border-amber-200/70 pt-2 text-xs dark:border-amber-800/70" data-testid="fix-step-split-preview">
+                                                        <dl class="mt-2 space-y-0.5 border-t border-lf-warning-line/70 pt-2 text-xs" data-testid="fix-step-split-preview">
                                                             <div class="flex items-center justify-between gap-3">
-                                                                <dt class="flex min-w-0 items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                                <dt class="flex min-w-0 items-center gap-1.5 text-lf-secondary">
                                                                     <img src={getTransactionTypeIconUrl((draft.type ?? txType(row) ?? 'BUY') as TransactionTypeCode)} alt="" class="h-4 w-4 shrink-0 object-contain" />
                                                                     {$t(`transactions.types.${draft.type ?? txType(row)}`)}
                                                                 </dt>
-                                                                <dd class="font-mono text-gray-800 dark:text-gray-100" data-testid="fix-step-split-main">{money(preview.main, preview.code, negative)}</dd>
+                                                                <dd class="font-mono text-lf-primary" data-testid="fix-step-split-main">{money(preview.main, preview.code, negative)}</dd>
                                                             </div>
                                                             {#each preview.charges as charge}
                                                                 <div class="flex items-center justify-between gap-3">
-                                                                    <dt class="flex min-w-0 items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                                    <dt class="flex min-w-0 items-center gap-1.5 text-lf-secondary">
                                                                         <img src={getTransactionTypeIconUrl(chargeTxType(charge.kind))} alt="" class="h-4 w-4 shrink-0 object-contain" />
                                                                         {$t(`importWizard.fixStep.splitKind.${charge.kind}`)} · {$t(`transactions.types.${chargeTxType(charge.kind)}`)}
                                                                     </dt>
-                                                                    <dd class="font-mono text-gray-800 dark:text-gray-100" data-testid="fix-step-split-charge">{money(charge.amount, preview.code, true)}</dd>
+                                                                    <dd class="font-mono text-lf-primary" data-testid="fix-step-split-charge">{money(charge.amount, preview.code, true)}</dd>
                                                                 </div>
                                                             {/each}
-                                                            <div class="flex items-center justify-between gap-3 border-t border-amber-200 pt-0.5 text-emerald-700 dark:border-amber-800 dark:text-emerald-300">
+                                                            <div class="flex items-center justify-between gap-3 border-t border-lf-warning-line pt-0.5 text-lf-success">
                                                                 <dt class="flex items-center gap-1"><Check size={12} />{$t('importWizard.fixStep.splitTotalLabel')}</dt>
                                                                 <dd class="font-mono">{money(preview.total, preview.code, negative)}</dd>
                                                             </div>
                                                         </dl>
                                                     {:else if preview.touched}
-                                                        <p class="mt-2 text-xs text-red-600 dark:text-red-400" data-testid="fix-step-split-error">
+                                                        <p class="mt-2 text-xs text-lf-danger" data-testid="fix-step-split-error">
                                                             {preview.error === 'exceeds' ? $t('importWizard.fixStep.splitErrorExceeds', {values: {total: money(preview.total, preview.code, false)}}) : $t('importWizard.fixStep.splitErrorNonpositive')}
                                                         </p>
                                                     {/if}
@@ -835,12 +827,12 @@
                                         {/if}
 
                                         <div class="grid gap-3 {rule.quantityMode === 'forbidden' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}">
-                                            <div class="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                            <div class="flex flex-col gap-1 text-xs text-lf-secondary">
                                                 <span>{$t('transactions.fields.type')}</span>
                                                 <TransactionTypeSearchSelect value={(draft.type ?? 'BUY') as TransactionTypeCode} types={plausibleTypes(row)} compact testid="fix-step-type" onchange={(v) => setDraft(row.index, {type: v})} />
                                             </div>
 
-                                            <div class="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                            <div class="flex flex-col gap-1 text-xs text-lf-secondary">
                                                 <span>{$t('transactions.fields.asset_id')}</span>
                                                 <ImportAssetPicker
                                                     value={assetPickFor(row)}
@@ -858,13 +850,13 @@
                                             <!-- A fee or a tax has no quantity at all; a greyed-out box only invites
                                                  the user to wonder what they were meant to put in it. -->
                                             {#if rule.quantityMode !== 'forbidden'}
-                                                <label class="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                                <label class="flex flex-col gap-1 text-xs text-lf-secondary">
                                                     {$t('transactions.fields.quantity')}
                                                     <input
                                                         type="text"
                                                         inputmode="decimal"
                                                         autocomplete="off"
-                                                        class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
+                                                        class="rounded-lg border border-lf-input bg-lf-field px-2 py-1.5 text-sm text-lf-primary"
                                                         value={draft.quantity ?? ''}
                                                         oninput={(e) => setDraft(row.index, {quantity: (e.currentTarget as HTMLInputElement).value})}
                                                         onkeydown={(e) => {
@@ -880,25 +872,19 @@
 
                                         <div class="flex flex-wrap items-center justify-end gap-2">
                                             {#if rowIsResettable(row)}
-                                                <button
-                                                    type="button"
-                                                    class="mr-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700"
-                                                    onclick={() => reset(row)}
-                                                    title={$t('importWizard.fixStep.resetHint')}
-                                                    data-testid="fix-step-reset"
-                                                >
+                                                <button type="button" class="mr-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-lf-muted hover:bg-lf-hover" onclick={() => reset(row)} title={$t('importWizard.fixStep.resetHint')} data-testid="fix-step-reset">
                                                     <RotateCcw size={13} />
                                                     {$t('importWizard.fixStep.reset')}
                                                 </button>
                                             {/if}
-                                            <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700" onclick={() => accept(row)} data-testid="fix-step-accept">
+                                            <button type="button" class="rounded-lg px-3 py-1.5 text-xs text-lf-secondary hover:bg-lf-hover" onclick={() => accept(row)} data-testid="fix-step-accept">
                                                 {$t('importWizard.fixStep.acceptAsIs')}
                                             </button>
-                                            <button type="button" class="rounded-lg bg-libre-green px-3 py-1.5 text-xs text-white hover:bg-libre-green/90 disabled:cursor-not-allowed disabled:opacity-50" disabled={!draftIsValid(row)} onclick={() => apply(row)} data-testid="fix-step-apply">
+                                            <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-xs text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50" disabled={!draftIsValid(row)} onclick={() => apply(row)} data-testid="fix-step-apply">
                                                 {row.decision === 'corrected' ? $t('importWizard.fixStep.applyAgain') : $t('importWizard.fixStep.apply')}
                                             </button>
                                         </div>
-                                        <p class="text-right text-[11px] text-gray-400 dark:text-gray-500">{$t('importWizard.fixStep.acceptAsIsHint')}</p>
+                                        <p class="text-right text-[11px] text-lf-muted">{$t('importWizard.fixStep.acceptAsIsHint')}</p>
                                     </div>
                                 {/if}
                             </li>
