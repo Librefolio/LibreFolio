@@ -1,7 +1,7 @@
 # Piano — fase 01, 11: MF · Matematica finanziaria (1.3.0)
 
-> **Stato**: 🧊 analisi d'implementazione consegnata (16/10/2026), **nessun codice**. FROZEN fino alla revisione: la
-> prima approvazione è del developer, relayata dal coordinatore alla lettera.
+> **Stato**: ⏳ ondata 1 in corso (16/10/2026). Analisi committata `01b9758d8`; piano approvato dal developer (12:15,
+> §6b) con D-MF5 = (b) e D-MF1 aperta.
 >
 > - **Workstream MF** · worktree `LibreFolio-worktrees/e-alfy-turbo-waddle` · ramo `e-alfy-mf-matematica-finanziaria`
 >   (rinominato dall'app all'avvio).
@@ -279,14 +279,18 @@ minimo / piccolo / medio / grande (nessuna stima di tempo).
   vicina a 0,1); la serie a freddo se il costo misurato regge (soglia proposta: +30 % al massimo sul tempo di
   `get_report` del DB popolato), altrimenti il sommario legge l'ultimo punto della serie. `portfolio_service.py:871-893`:
   il NAV iniziale di ripiego e le guardie nella casa, **le stesse della serie**. Commento `noqa` di `get_report`.
-- **Numeri**: sì. In un periodo con prelievi netti (investito netto ≤ 0) la card MWRR mostra il valore che il grafico già
-  mostra (oggi «—»), e il «timing effect» con lei; con più radici, card = ultimo punto del grafico (0 casi nei 20 000 di
-  CP-4d). Decisione D-MF5.
-- **Dipendenze**: K1 (`returns.py`) subito; K2 (`portfolio_service.py`) dopo J.
-- **Prova**: rossi — periodo con prelievi netti (card = ultimo punto); parità card/serie sul corpus e sulle 20 000
-  sequenze di CP-4d (`test_mwrr_verified_root.py`); misura di costo.
-- **CHANGELOG** (🐛 Fixed): «Dashboard: the money-weighted return card now shows a value also for periods with net
-  withdrawals, matching the chart.»
+- **Numeri** (D-MF5 = **(b)**, developer 16/10): sì, nel grafico. Le guardie della card (investito netto del periodo
+  > 0, NAV > 0) diventano della casa e valgono **per ogni punto** della serie, con quel giorno come fine del periodo:
+  dove la card direbbe «—» il punto è «—», e l'ultimo punto è la card. In un periodo con prelievi netti la linea MWRR
+  sparisce dal giorno in cui l'investito netto scende a zero o sotto. Con più radici, card = ultimo punto (0 casi nei
+  20 000 di CP-4d).
+- **Dipendenze**: K1 (`returns.py`) subito, su pezzi diversi da quelli di CP-13a (`required_recovery_return` dopo
+  `price_return`); K2 (`portfolio_service.py`) dopo J.
+- **Prova**: rossi — un punto con investito netto ≤ 0 è None; un NAV ≤ 0 è None; ultimo punto = `calculate_mwrr` sugli
+  stessi dati; parità sul corpus e sulle 20 000 sequenze di CP-4d (`test_mwrr_verified_root.py`); misura di costo
+  della serie a freddo.
+- **CHANGELOG** (🐛 Fixed): «Dashboard: the money-weighted return line now follows the card: where the period has no
+  net invested capital (net withdrawals), both show "—".»
 - **Peso**: piccolo-medio.
 
 ### MF-L · `BRSummary.holdings`
@@ -373,7 +377,7 @@ Un checkpoint per lotto (o per coppia piccola: O+K1, M+G1, F+N); i lotti che cam
 | D-MF2 | H | Per una posizione arrivata con un trasferimento, la «detenzione» che annualizza parte **(a)** dall'arrivo nel broker **(b)** dall'acquisto d'origine | **(a)**, coerente con P22 («ogni broker risponde del suo tratto»); in ogni caso lo split non azzera più la data |
 | D-MF3 | F | Una correzione negativa di dividendo o interesse nei lotti: **(a)** riduce il reddito, come la Dashboard **(b)** resta in valore assoluto | **(a)**; lo stesso per un rimborso di commissione o tassa, se il controllo lo conferma |
 | D-MF4 | J2 | La scomposizione della cassa fra capitale e rendimenti dopo trasferimenti interni e cambi valuta: **(a)** l'arrivo porta la ripartizione della partenza (cambia quel grafico) **(b)** com'è oggi | **(a)**, togliendo il riscalamento solo se la deriva misurata è 0 |
-| D-MF5 | K | In un periodo con prelievi netti la card MWRR dice «—» e il grafico ha la linea: **(a)** la card mostra il valore, come il grafico **(b)** il grafico si spegne come la card | **(a)**: il MWRR è definito anche con prelievi netti |
+| D-MF5 | K | In un periodo con prelievi netti la card MWRR dice «—» e il grafico ha la linea: **(a)** la card mostra il valore, come il grafico **(b)** il grafico si spegne come la card | **(a)**: il MWRR è definito anche con prelievi netti. ✅ **Decisa (b)** dal developer (16/10 12:15): «se non ci sono dati per la card, anche la linea è corretto che sparisca» |
 | D-MF6 | P | **(a)** Variazione del P&L a un giorno, timing effect, G/L % dei gruppi: campi del backend. **(b)** L'aggregato dei lotti **selezionati** e le variazioni di prezzo/cambio su un intervallo scelto: misure interattive dichiarate nel codice (marcatore + guardia di Y), o anche loro dal backend | (a) sì; (b) dichiarate, tranne la tabella dei periodi fissi dell'asset (1G, 1S…), dal backend |
 | D-MF7 | C | Con NAV ≤ 0 il peso sul NAV: **(a)** «—» **(b)** com'è oggi | **(a)** |
 
@@ -394,6 +398,41 @@ Un checkpoint per lotto (o per coppia piccola: O+K1, M+G1, F+N); i lotti che cam
   periodo d'una posizione): la mappa (`__init__.py`, `financial-math.instructions.md`, `backend.instructions.md`) la
   aggiorno io a ogni lotto; `splits.py` diventa un punto di lettura del DB nominato nella regola 1. OK?
 - **Q7** — Slot pesanti: `all-backend` a fine ondata (1, 2, 3) e prima di ogni checkpoint che cambia numeri.
+
+## 6b. Risposte e decisioni (16/10, 12:15–12:25)
+
+- **Developer, alla lettera** (12:15, relayato dal coordinatore): «approvo il piano, con giusto dei chiarimenti, la
+  pagina broker via api non è la stessa api di sashboard? sicuro che nessuno usa quei dati? […] il resto fino a 4 ok.
+  riguardo 5 se non ci sono dati per la card, anche la linea è corretto che svompaia. su 6 pienamente daccordo. 7 ok».
+  - D-MF2, D-MF3, D-MF4, D-MF6, D-MF7: come raccomandato. **D-MF5: (b)**. **D-MF1: aperta** (il coordinatore ha
+    risposto alle sue domande e aspetta il sì).
+- **Q1**: ripartizione accettata da J, CP-3 compreso, con **quattro vincoli**:
+  1. `daily_state.py` resta di J fino all'ingresso di J-24: I1 non sposta `_cumulative_split_ratio` nell'ondata 1
+     (lo scambio dell'import va nell'ondata 2). `lots_analysis_service.py` riapre con CP-7b: la modifica di I1 lì entra
+     prima che CP-7b parta, oppure è una riga sola.
+  2. `returns.py`: CP-13a aggiunge `required_recovery_return` subito dopo `price_return`, più la sua riga nelle tre
+     mappe e in `financial_math.md`. K1 in parallelo, su pezzi diversi.
+  3. **Versioni dell'AI Export**: J-17 ha già portato `asset.provenance` e `asset.positions_by_broker` a 2,
+     `portfolio.provenance` e `broker.provenance` a 3: non salgono più nella 1.3. `catalog.py` e
+     `snapshotDataRenderer.ts` sono nel diff di J-17: **ogni cambio di versione aspetta l'ingresso di J-17**; poi il
+     renderer resta di J (D-J5): MF tocca solo le voci di `COMPACT_COMPONENT_VERSIONS` dei componenti che alza, nello
+     stesso cambio, e avvisa J.
+  4. `drawdown_context.py` (D): dopo CP-13a `remaining_to_peak_ratio` può essere None; se D alza i quattro componenti
+     del drawdown, li fa accettare None.
+- **Q2**: confermata con il vincolo 3: nessun aumento per un output identico byte per byte; +1 per release a chi
+  cambia valori, mai due volte nella 1.3.
+- **Q3**: confermata. G2 resta in W-B19 di W, allargata alle quantità: MF dà la funzione e rivede. L aspetta D-MF1 e poi
+  il via di W.
+- **Q4**: la sorgente del PAC è di J: G1 e M **dopo l'ingresso di J-17** (`test_portfolio_allocation_source.py` è nel
+  suo diff).
+- **Q5**: D prima di CP-9, ok (J d'accordo). **Q6**: ok; mappa aggiornata a ogni lotto; `splits.py` punto di lettura
+  nominato nella regola 1. **Q7**: ok, gli slot si chiedono con l'elenco delle corse e la durata.
+- **Ondata 1, rivista** (coordinatore, 12:25): O, K1, F, N, I1 (senza `daily_state.py`), D (gli aumenti di versione
+  dopo J-17). M e G1 dopo J-17. Rossi prima con test-author; un lotto che cambia numeri sempre da solo; prove leggere sotto
+  carico 50; nessun `.svelte` senza OK.
+  - **Conseguenza del vincolo 3, mia lettura**: N e la metà AI Export di F (`portfolio_income.py`) cambiano valori, quindi
+    vogliono l'aumento nello stesso cambio: entrano dopo J-17. Ora: F1 (FIFO), e di D solo le sostituzioni a output
+    identico (AI Export senza aumento, rischio).
 
 ## 7. Rischi
 
@@ -448,3 +487,199 @@ Un checkpoint per lotto (o per coppia piccola: O+K1, M+G1, F+N); i lotti che cam
 - Riassunto mandato al coordinatore (16/10). Scritti solo il giornale: questo piano e le righe MF-A…MF-P nella sezione
   MF di `Phase_0/BACKLOG_POST_1.2.md`. Nessun codice, nessuna prova, nessun server. **FROZEN** in attesa
   dell'autorizzazione del developer, relayata alla lettera.
+- ✅ Committato dal coordinatore: `01b9758d8` (`docs(journal): MF financial-math analysis and lots`).
+
+### Ondata 1 (via del coordinatore, 16/10 12:25) — HEAD `01b9758d8`
+
+- ✅ **Piano aggiornato** (12:30): §6b (decisioni, risposte Q1–Q7, i quattro vincoli di J), D-MF5 = (b) nella scheda
+  di MF-K.
+- **⚠️ Fuori pista**: le risposte Q1–Q7 non erano arrivate col via del piano (messaggio vuoto); richieste e ricevute
+  alle 12:25.
+
+#### MF-O — disegno (16/10)
+
+- **Stato reale**: `_resolve_conversion_context` (`yield_on_cost.py:439-482`) converte `wac_per_unit` da
+  `wac_currency` alla data `as_of`. L'unico chiamante (`portfolio_service.py:674-679`) passa
+  `DailyPositionState.wac_currency`, che è **sempre** la valuta del report (`daily_state.py:844`): oggi la conversione
+  è un'identità (`convert_bulk`, ramo `identity`, `fx/conversion.py:118`), senza provenienza (aggiunta solo se le valute
+  differiscono). Due test fissano il comportamento latente: `test_yield_on_cost.py:~1380-1420` (WAC in ZAR, report in
+  XTS, provenienza `("wac", as_of)`) e `test_converted_nonpositive_wac_is_typed_unavailable` (~1500-1570, WAC in USD
+  che la conversione finta rende ≤ 0).
+- **Disegno**: il WAC è un costo storico già nella valuta del report; un costo medio per unità non ha date, quindi non
+  si può convertire «al cambio della sua transazione» (P21). Un `wac_currency` diverso dalla valuta del report è un
+  errore del chiamante: **`ValueError`** all'ingresso di `calculate_yield_on_cost_for_positions`, mai una conversione.
+  Via la richiesta `"wac"` a `convert_bulk`, `wac_by_key` (il WAC è quello d'ingresso) e il controllo «WAC convertito ≤
+  0», che diventa irraggiungibile. Lo schema (`YieldOnCostFxProvenance.purpose` ammette ancora `"wac"`) resta: è di J
+  (`schemas/portfolio.py`).
+- **Numeri**: nessuno. Identità byte per byte nel percorso di produzione.
+- **Test** (test-author, finito): rosso «un WAC in un'altra valuta si rifiuta» e «il WAC nella valuta del report non
+  va mai a `convert_bulk`»; riscritti il test ZAR/XTS (WAC 10 XTS, nessuna provenienza `"wac"`) e quello del WAC
+  convertito ≤ 0 (ora: dove il rifiuto si ferma — `"eur"` minuscolo accettato, WAC o valuta mancanti → `MISSING_WAC`).
+  Nota del test-author: su `HEAD` un cambio mancante della coppia del WAC lasciava la posizione senza WAC mostrato; ora
+  quel percorso non esiste più. `"wac"` resta ammesso nello schema e nel frontend (`YieldOnCostCell.svelte`), senza più
+  produttori.
+- ✅ **Codice** (16/10, solo scrittura, nessuna prova: carico ~100): `yield_on_cost.py` — `ValueError` all'ingresso
+  per un `wac_currency` diverso dalla valuta del report (il messaggio dice «report currency»); via `wac_by_key`, il
+  campo `purpose` di `_ConversionSpec` (le conversioni sono solo dei redditi; la provenienza scrive `"income"`), la
+  conversione del WAC e il controllo irraggiungibile «WAC convertito ≤ 0»; `_input_wac` restituisce al chiamante il WAC
+  d'ingresso (None senza valuta, come prima); parametri `converted_wac` → `wac`. `convert_bulk` con zero richieste
+  ritorna senza query (`fx/conversion.py:105-106`).
+
+#### MF-K1 — disegno (16/10)
+
+- **Stato reale**: `calculate_mwrr` (`returns.py:461-505`) e `calculate_mwrr_series` (`:508-597`) costruiscono i flussi
+  ognuno a modo suo (il primo una riga per flusso, la seconda sommati per data) e scelgono la radice in due modi (il
+  punto singolo da 0,1; la serie dal punto precedente, con il tetto adattivo, il nuovo tentativo da 0,1 e il `|r|` più
+  piccolo). La guardia della card (investito netto > 0, NAV > 0) e il NAV iniziale di ripiego stanno nel servizio
+  (`portfolio_service.py:879-885`); il ripiego dà sempre `period_navs[0].nav` (riletto `rebase_to_period`, `:156-183`),
+  cioè il NAV iniziale che la serie usa già.
+- **Disegno** (solo `returns.py`, pezzi diversi da `price_return`/`required_recovery_return` di CP-13a):
+  1. un costruttore dei flussi, sommati per data in `Decimal` prima del passaggio a `float`;
+  2. una politica della radice: `_solve_xirr` da 0,1 per ogni punto (via `use_warm_start`, il tetto e il nuovo
+     tentativo). Per costruzione `calculate_mwrr_series(navs, flussi)[i]` = `calculate_mwrr` sugli stessi dati fino a quel
+     punto. Con il risolutore verificato di CP-4d calda e fredda coincidevano in tutte le 20 000 prove;
+  3. la regola della Dashboard nella casa: `period_mwrr(...)` per la card e `period_mwrr_series(...)` per la linea, con
+     la stessa guardia per ogni punto (flussi e NAV presenti, NAV > 0, investito netto fino a quel giorno > 0). K2 le
+     aggancia nel servizio (dopo J): lì cambia la linea (D-MF5 b).
+- **Numeri in K1**: nessuno atteso (le funzioni nuove non sono ancora agganciate). Prova: le 20 000 sequenze di CP-4d,
+  vecchio contro nuovo, punto singolo e serie; ogni scarto si dichiara prima. **Costo**: la serie a freddo misurata
+  contro quella calda su serie lunghe, prima di scegliere.
+- **Test** (test-author): riscrittura dei test calda/fredda (`test_utilities/test_roi_utils.py`,
+  `test_financial/test_roi_utils.py`, `test_financial_math/test_mwrr_verified_root.py`); rossi nuovi per
+  `period_mwrr` e `period_mwrr_series` e per l'identità punto per punto serie = punto singolo.
+- ✅ **Codice** (16/10, solo scrittura, nessuna prova): `returns.py` — `_MWRR_GUESS = 0.1`; `_flows_by_date` (somma per
+  data in `Decimal`); `_mwrr_point` (l'unico solve: costruttore dei flussi, `_solve_xirr`, quantizzazione);
+  `calculate_mwrr` e `calculate_mwrr_series` lo chiamano (via `use_warm_start`, il tetto e il nuovo tentativo); nuove
+  `period_mwrr` e `period_mwrr_series` (guardia per punto: NAV > 0 e investito netto fino a quel giorno > 0, contato in
+  avanti). Nessun chiamante dell'app passava `use_warm_start` (riletto: `portfolio_service.py:1132`).
+- **Confronto preparato** (`files/k1/compare.py` nella cartella di sessione, con `old_returns.py` = `HEAD`): le 20 000
+  sequenze di CP-4d, vecchio contro nuovo (punto singolo e serie), l'identità serie/prefisso a campione, e il costo
+  su serie giornaliere di 1, 3 e 10 anni.
+- ✅ **Confronto eseguito** (16/10, `nice -n 10`, carico 42–64, log `files/logs/k1_compare.log`): su 20 000 scenari e
+  753 491 punti, `calculate_mwrr` vecchio ≠ nuovo **0**, serie calda vecchia ≠ serie nuova **0**, punto della serie ≠
+  punto singolo sul prefisso (a campione) **0**. Costo della serie a freddo: 1 anno 0,027 → 0,089 s (×3,3), 3 anni 0,122
+  → 0,161 s (×1,3), 10 anni 0,829 → 0,893 s (×1,08): sotto la soglia (+30 %) dove il tempo conta. Quindi la serie
+  fredda resta e la card potrà leggere la stessa funzione (K2).
+- **Test** (test-author, finito): `test_utilities/test_roi_utils.py` (due test riscritti: fissavano la politica del
+  nuovo tentativo, 0,2 → 3,0, e la sequenza dei punti di partenza), `test_financial/test_roi_utils.py` (tre test calda/
+  fredda → identità esatta col punto singolo), `test_mwrr_verified_root.py` (una serie sola; proprietà «ogni punto =
+  punto singolo sul prefisso»; `use_warm_start` dà `TypeError`), `test_period_mwrr.py` nuovo (19 test).
+  - **Trovati**: (1) i test di parità di CP-4d non potevano vedere la differenza dei costruttori: il generatore non ha
+    mai due flussi nello stesso giorno; (2) la vecchia calda teneva la radice col `|r|` più piccolo anche dopo una radice
+    verificata; (3) `period_mwrr` conta nell'investito netto anche i flussi prima del primo punto, che l'XIRR non vede:
+    con gli ingressi della Dashboard (`rebase_to_period`) non succede, tenuto così e scritto qui.
+- **Mappe di K1**: la riga di `returns.py` nelle tre mappe e in `financial_math.md` la tocca anche CP-13a
+  (`required_recovery_return`, vincolo 2): la aggiorno (`period_mwrr`, `period_mwrr_series`) dopo il suo ingresso, per
+  non scontrarci sulla stessa riga.
+
+#### MF-F1 — il segno del reddito nei lotti (16/10)
+
+- **Controllo di D-MF3 sui costi**: la Dashboard tiene il segno del reddito (`portfolio_service.py:629-631`,
+  `signed_by_type`) ma conta FEE e TAX **in valore assoluto** (`absolute_by_type`, `costs_by_position`,
+  `native_cash.py:300-315`), e lo schema li vuole < 0 (`schemas/transactions/transactions.py:192-195`). Quindi «come la
+  Dashboard» vuol dire: reddito col segno, costi in assoluto. I pool FEE/TAX (`fifo/engine.py:~985`) restano.
+- ✅ **Codice** (solo scrittura): `fifo/engine.py`, `_allocate_income_pools` — i pool sommano gli importi col segno;
+  docstring. A valle `economic_events.py:161` tiene ogni reddito ≠ 0, negativi compresi.
+- **Test** (test-author): `test_financial/test_fifo_signed_income.py`, nuovo (file nuovo: `test_fifo_lot_engine.py` e
+  `test_lots_analysis_pure.py` sono di CP-7b). 17 test: 12 rossi attesi, 5 controlli (dividendo positivo, FEE e TAX in
+  assoluto, FEE orfana, `build_income_economic_events` già col segno).
+- **Trovati dal test-author**: (1) la timeline dei redditi dell'AI Export (`portfolio_income.py:379`) ha lo stesso `abs`
+  → è la metà AI di F (F2), dopo J-17; (2) **Yield on Cost** somma già i redditi col segno: se nella finestra le
+  correzioni superano i dividendi, il valore negativo è rifiutato dal validatore dello schema
+  (`schemas/portfolio.py:335-340`) e il report va in errore → **MF-O2** nel backlog (schema di J); (3) un TAX nello
+  stesso giorno d'una sola correzione si abbina come `SAME_DAY_INCOME`: comportamento invariato, solo annotato.
+- **Numeri**: reddito e rendimento netto dei lotti con una correzione negativa di dividendo o interesse (prima la
+  aumentava). AI Export: le righe dei lotti cambiano attraverso builder invariati, quindi nessun aumento di versione.
+- **CHANGELOG** (🐛 Fixed): «Lots: a negative dividend or interest correction now lowers the lot's income, as on the
+  Dashboard.»
+
+#### MF-I1 — un caricatore degli split (16/10)
+
+- ✅ **Codice** (solo scrittura): `financial_math/splits.py` nuovo (`SplitLink`, `load_split_links`: una query, righe
+  come sono, ordinate per id; `is_valid_split_ratio`); chiamanti `portfolio/engine.py` (stesso `ValueError` per un
+  rapporto inutilizzabile; via `AssetEvent`/`AssetEventType` dagli import), `yield_on_cost.py` (`_SplitRecord` →
+  `SplitLink`; le sue regole più strette restano sue, il rapporto da `is_valid_split_ratio`; l'impronta delle dipendenze
+  legge gli stessi campi), `lots_analysis_service.py` (il corpo di `_load_split_ratios` in una riga, più gli import:
+  vincolo 1). Restano per l'ondata 2: `_cumulative_split_ratio` (`daily_state.py`), `portfolio_service.py:161`,
+  `brokers/summary.py:225`, e una sesta copia trovata con la ricerca della regola 4: `transactions/auto_cost.py:75-79`
+  (W: «questa riga è legata a uno split?», una query per riga) → `load_split_links(session, [tx])`, col via di W.
+- ✅ **Mappe**: docstring di `financial_math/__init__.py` (punti di lettura del DB, modulo `splits`),
+  `financial-math.instructions.md` (tabella, regola 1), `backend.instructions.md` (tabella). La pagina dev
+  `financial_math.md` col docs-writer, a fine ondata.
+- **Test** (test-author, finito): `test_financial_math/test_splits.py`, nuovo, su SQLite privato, 29 casi. **Numeri**:
+  nessuno.
+- **Trovati dal test-author**: `asset_events.value` e `transactions.quantity` sono `NOT NULL` (il `None` del tipo è
+  difensivo; un test costruisce uno schema copiato apposta per il NULL); Yield on Cost deve continuare a scartare le
+  righe senza asset prima del suo indice (fatto: il filtro resta in `_load_split_records`); i lotti non validano il
+  rapporto (`_load_split_ratios`): un rapporto 0 arriverebbe al FIFO come divisione per zero — lo schema degli eventi lo
+  impedisce all'ingresso; da guardare con I2.
+
+#### MF-D (prima parte) — sostituzioni a output identico (16/10)
+
+- **Perimetro ora**: solo le sostituzioni che danno lo stesso numero, byte per byte, quindi nessun aumento di versione
+  (vincolo 3) e nessun `algorithm_version` del rischio. Restano fuori: `drawdown_context.py:498` (dopo CP-13a, con il
+  None del vincolo 4), i casi limite che diventerebbero None (vogliono l'aumento, dopo J-17), e R7–R9 del 43
+  (`period_returns_from_cumulative`, `compounded_return`, tasso → periodo): sono la matematica in `float` delle serie del
+  rischio, che per le istruzioni del rischio («Series statistics stay in `risk/metrics.py`») resta lì; la scrivo come
+  gemella dichiarata nella pagina dev con il docs-writer. R10 (`series_preparation.py`) usa già `price_return`.
+- ✅ **Codice** (solo scrittura):
+  - `ai_export/components/technical_shared.py` (rendimento del secchio), `fx_timing_context.py` (rendimento sui giorni,
+    del periodo, volatilità giornaliera, distanze dal minimo e dal massimo) → `returns.price_return`; le guardie sullo
+    zero e sul segno restano dov'erano;
+  - `ai_export/components/payloads/portfolio_broker.py`: il rendimento fra due TWRR cumulati e quello dal primo punto
+    → `price_return(1 + TWRR_a, 1 + TWRR_b)`, cioè il rendimento fra i due livelli di ricchezza (stessa espressione,
+    stesso None col denominatore zero); l'indice base 100 resta un livello;
+  - `risk/service.py` e `risk_plugins/comparison/plugin.py`: il fattore d'annualizzazione osservato →
+    `series_preparation.observed_annualization` (stessa espressione; le guardie dei 0 giorni restano ai chiamanti, ognuno
+    col suo ripiego); `_compounded` → `risk.metrics.compounded_return` per più di un rendimento (un rendimento solo resta
+    com'è, per non aggiungere un arrotondamento all'ultima cifra).
+- **Numeri**: nessuno. Prova: i test dei componenti e del rischio verdi senza toccare le attese.
+
+#### Ondata 1 — statici e rossi (16/10)
+
+- ✅ **Statici** (13:00, `files/wave1.sh lint`): ruff segnalava l'ordine degli import in `lots_analysis_service.py`
+  (I001: `splits` dopo `returns`), black voleva su una riga il `return_from_first_ratio` di `portfolio_broker.py`;
+  corretti, poi ruff e black puliti sui 19 file del backend toccati.
+- ✅ **Rossi sul codice vecchio** (12:53–12:54, `files/wave1.sh red`, `nice -n 10`, carico < 50): il codice del
+  prodotto tolto con `git apply -R` (patch `files/wave1/code.patch`, sha256 `23e6867c…`, più `splits.py` messo da parte),
+  i test nuovi tenuti; poi rimesso, stesso sha256.
+  - `services financial-math`: **49 failed**, 414 passed — `test_splits.py` 29 (`ModuleNotFoundError`),
+    `test_period_mwrr.py` 19 (18 `AttributeError`, più `TestOneFlowBuilder` che legge i flussi costruiti: due flussi
+    dello stesso giorno passati separati), `test_the_warm_start_keyword_is_gone` 1 (`DID NOT RAISE TypeError`);
+  - `utils roi-utils`: **2 failed**, 7 passed — i due test che fissavano la politica del nuovo tentativo;
+  - `services roi-fifo-utils -k "test_yield_on_cost or test_fifo_signed_income or test_roi_utils"`: **14 failed**, 123
+    passed — F1 12 (`14 ≠ 6`, `+4 ≠ −4`), O 2 (`DID NOT RAISE ValueError`; il WAC mandato a `convert_bulk`).
+  - Ogni rosso per la ragione dichiarata; i controlli verdi.
+- **Verdi sul codice nuovo** (`files/wave1.sh green`, `nice -n 10`, ognuna col carico < 50):
+  - ✅ `services financial-math` **464 passed** (i 463 del rosso più la guardia dei confini sul modulo nuovo:
+    `test_a_layer_module_imports_no_orchestration_service_api_or_feature[splits.py]`; 12:54);
+  - ✅ `utils roi-utils` **9 passed**;
+  - ✅ `services roi-fifo-utils` **757 passed** (intero: golden del motore, lotti, Yield on Cost, servizio del
+    portafoglio, FIFO col segno);
+  - ✅ `services lots-analysis-pure` **162 passed**; `services portfolio-engine` **40 passed** (anche i test di
+    `frame_start`, intatti);
+  - ✅ `services ai-export -k "technical or fx_timing or portfolio_broker"` **307 passed** (attese invariate: le
+    sostituzioni di D danno gli stessi numeri);
+  - ✅ `services risk-all -k "comparison or risk_service or annualiz"` **183 passed**.
+  - Porta 6190 mai aperta (le categorie `services`/`utils` non avviano il backend condiviso).
+- ✅ **Doc** (docs-writer, nessuna build né stamp): dev `financial_math.md` (mappa: `splits.py`; passo 2 del motore:
+  `load_split_links()` e il `ValueError`; regola 1: i link degli split come punto di lettura; selettore
+  `financial-math`; pagine di teoria: riga `splits.py` → `instruments/asset-events/split.md`); dev
+  `transactions/fifo_lot_engine.md` (reddito col segno, costi in assoluto; la riga `economic_accumulators_by_lot`, che
+  diceva «positive magnitudes» anche per il reddito); teoria `fifo-engine/fifo-lot-analysis.en.md` (una frase: una
+  correzione negativa abbassa il reddito del lotto). **Debito di traduzione**: solo `fifo-lot-analysis` (un paragrafo),
+  oltre a J-25 di J sulla stessa pagina — non stampata.
+  - **Trovato dal docs-writer**: la pagina di teoria di Yield on Cost dice il reddito ≥ 0 e i negativi non supportati,
+    mentre il codice li somma: è MF-O2.
+- ✅ **MkDocs** (13:07–13:10, `nice -n 10`): `mkdocs build` stretto verde (125,9 s; 3 076 URL relativi risolti);
+  `check-links` verde (97). `git diff --check` pulito. Porta 6190 libera.
+
+#### Checkpoint ondata 1 — 🧊 FROZEN (16/10, ~13:12), su `01b9758d8`
+
+Due commit, perché un lotto che cambia numeri va da solo:
+1. **O + K1 + I1 + D (nessun numero cambia)** — `refactor(math): one MWRR solve, split loader, YoC WAC contract`.
+2. **F1 (cambia numeri dei lotti)** — `fix(lots): signed dividend and interest corrections`. CHANGELOG (🐛 Fixed): «Lots:
+   a negative dividend or interest correction now lowers the lot's income, as on the Dashboard.»
+
+Restano dell'ondata 1, bloccati: N, F2 e gli aumenti di versione di D (dopo J-17), M e G1 (dopo J-17),
+`drawdown_context.py` (dopo CP-13a), le mappe di `returns.py` (dopo CP-13a).
