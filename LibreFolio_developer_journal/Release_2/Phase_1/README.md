@@ -175,3 +175,4 @@ Sono tutti locali: la push la fa il developer.
 | 86 | 16/10 03:52 | H: CP7b-1 (F15 sempre attivo: `nosniff` e `Referrer-Policy` su ogni risposta; F28: solo `_app/immutable/` immutabile; tipi MIME registrati dall'app; all-backend 17 084/0) | `1f4c5aeca` |
 | 87 | 16/10 03:55 | J: CP-6 (decisione 28: giorni «dirty» anche per i soli cambi dei titoli, per le quotazioni e per il primo giorno di un prezzo vecchio; `native_cash.change_days` unica; golden W1 rigenerato; J-20; B11 chiusa) | `628e3e49e` |
 | 88 | 16/10 04:24 | Z: Z2b (sospensione dopo l'inattività su Fly: `idle_monitor`, `FlySuspender`, attesa crescente fino a 10 min; spento di default) | `812ca49cc` |
+| 89 | 16/10 04:42 | W: coda della notte per cherry-pick, senza la 47 (W-B37 cancellazione multipla dei report che salta i file bloccati; C-34 `escapeHtml` nel Bulk; W-B35 docstring dell'accesso; W-B12 MULTI-008d pulisce i suoi broker) | `8129f8176` |
