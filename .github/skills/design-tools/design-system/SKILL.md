@@ -104,6 +104,11 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 - **The text role on the component's root** (`text-lf-primary`): in dark, `body` still passes the legacy text colour
   down until the clean-up (B6).
 - **Every `border` names its role** (`border border-lf-subtle`): Tailwind 4 draws an unnamed border in `currentColor`.
+- **A native field names its text and its placeholder:** an `<input>` of a text kind, a `<textarea>` and a `<select>`
+  write `text-lf-primary` themselves, and `placeholder:text-lf-placeholder` when they have a placeholder, even where
+  the parent already gives the colour. `app.css` colours the text and the placeholder of native fields in dark only
+  while they carry no `-lf-` class: a field on roles falls back to the Tailwind preflight, the inherited colour and a
+  placeholder at 50 % of it. Checkboxes, radios, ranges, file and colour pickers and the button kinds are exempt.
 - **Class names stay whole literals.** Never `'bg-lf-' + x`: Tailwind would not generate it, and the gate could not
   see it.
 - **The gate:** `src/themeRoles.gate.test.ts`. The ratchet (R1–R5: a new file starts with no legacy class and no colour
