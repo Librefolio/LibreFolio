@@ -3,15 +3,18 @@
  *
  * The scanner has two layers and so does this file. Counting mirrors `scripts/visual_review/color_inventory.py`: the
  * expected counts of the synthetic sources were derived by hand from that file's regular expressions. Annotation gives
- * every literal its zone, CSS rule, theme hint and live-preview layer: synthetic sources pin each rule. The real tree
- * is checked for shape and invariants only — its totals belong to whoever edits the app, so none is pinned here.
+ * every literal its zone, CSS rule, theme hint and live-preview layer — and, on a line of the chart category tables
+ * (`lib/theme/chartCategories.ts`, contract C1–C2 with DV), the category it colours: synthetic sources pin each rule. The
+ * real tree is checked for shape and invariants only — its totals belong to whoever edits the app, so none is pinned
+ * here; its categories are held to DV's own module (`CATEGORY_KEYS`, `categoryColor`), never to values written here.
  */
 
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
-import {CATALOG_SCHEMA, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
+import {CATALOG_SCHEMA, CATEGORY_FILE, categoryLines, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor as chartCategoryColor} from '$lib/theme/chartCategories';
 import {isInlineAlias} from './catalogView';
 import type {CatalogLiteral, ColorCatalog, TestidVia, ThemeContext, Zone} from './types';
 
@@ -334,7 +337,10 @@ describe('scanSource — layers', () => {
 
     it.each([
         ['a chart folder', 'src/lib/components/dashboard/Kpi.svelte'],
+        ['the dashboard feature folder', 'src/lib/features/dashboard/Kpi.svelte'],
         ['the risk folder', 'src/lib/components/risk/Heatmap.svelte'],
+        ['the risk feature folder', 'src/lib/features/risk/components/CorrelationHeatmap.svelte'],
+        ['the broker lots feature folder', 'src/lib/features/brokers/lots/LotsAnalysisPanel.svelte'],
         ['the PAC planner results', 'src/lib/features/tools/pac-allocator/planner/result/ExposureBars.svelte'],
         ['a file named after charts', 'src/lib/utils/chartColors.ts'],
     ])('recognises a chart by %s', (_label, rel) => {
@@ -347,8 +353,13 @@ describe('scanSource — layers', () => {
         expect(literal(result, 3, '#000043')).toMatchObject({layer: 'chart-color', chart: true});
     });
 
-    it('keeps the colours of any other module in the script layer', () => {
-        expect(literal(scan('src/lib/utils/format.ts', ["export const c = '#000044';"]), 1, '#000044')).toMatchObject({zone: 'ts', layer: 'script', preview: false, chart: false});
+    it.each([
+        ['a utility module', 'src/lib/utils/format.ts', 'ts'],
+        // Under `features/brokers` only `lots` is a chart folder (Y5): the rest of the feature is not.
+        ['the broker feature folder, outside its lots', 'src/lib/features/brokers/BrokerImportFilesModal.svelte', 'svelte-script'],
+    ])('keeps the colours of any other module in the script layer: %s', (_label, rel, zone) => {
+        const lines = rel.endsWith('.svelte') ? ['<script lang="ts">', "    const c = '#000044';", '</script>'] : ['', "export const c = '#000044';"];
+        expect(literal(scan(rel, lines), 2, '#000044')).toMatchObject({zone, layer: 'script', preview: false, chart: false});
     });
 });
 
@@ -865,6 +876,229 @@ describe('scanColors — the colour roles of a synthetic tree: aliases of `@them
     });
 });
 
+describe('scanColors — the class prefixes of a custom colour, aligned with the palette’s', () => {
+    it('counts a custom colour under every prefix of the palette — shadow, accent, decoration, a side of a border — and lists it under its variable', () => {
+        const root = makeTree({
+            // `shadow-lg` is a shadow size, not a colour: the control that the prefix alone does not count.
+            'src/lib/components/Card.svelte': ['<div class="shadow-lf-shadow hover:shadow-lf-shadow-card/40 accent-libre-green">', '    <p class="decoration-libre-green border-t-libre-green shadow-lg">x</p>', '</div>'],
+        });
+        const catalog = catalogOf({root});
+        expect(catalog.meta.parity).toMatchObject({tw: 0, custom: 5});
+        const card = catalog.files.indexOf('src/lib/components/Card.svelte');
+        expect(catalog.palette.map((p) => p.var)).toEqual(['--color-lf-shadow', '--color-lf-shadow-card', '--color-libre-green']);
+        expect(catalog.palette.find((p) => p.var === '--color-lf-shadow')).toEqual({var: '--color-lf-shadow', uses: 1, dark: 0, classes: {'shadow-lf-shadow': 1}, files: {[card]: 1}, occ: [[card, 1, 0]]});
+        // The utility is `lf-shadow-card`: its variable is the whole name, the opacity apart.
+        expect(catalog.palette.find((p) => p.var === '--color-lf-shadow-card')).toEqual({var: '--color-lf-shadow-card', uses: 1, dark: 0, classes: {'hover:shadow-lf-shadow-card/40': 1}, files: {[card]: 1}, occ: [[card, 1, 0]]});
+        expect(catalog.palette.find((p) => p.var === '--color-libre-green')).toEqual({
+            var: '--color-libre-green',
+            uses: 3,
+            dark: 0,
+            classes: {'accent-libre-green': 1, 'decoration-libre-green': 1, 'border-t-libre-green': 1},
+            files: {[card]: 3},
+            occ: [
+                [card, 1, 0],
+                [card, 2, 1],
+                [card, 2, 2],
+            ],
+        });
+    });
+});
+
+/**
+ * A synthetic `chartCategories.ts`: the layout of the real one (a doc comment at the margin between the tables, a
+ * comment before each entry, a key written bare, quoted or double-quoted), with made-up keys and values, plus what must
+ * name no category — a value outside any entry, an unrelated table right after one, a colour in a function.
+ */
+const CATEGORY_SOURCE = [
+    '/**',
+    ' * Synthetic chart categories.',
+    ' */',
+    '',
+    "import {themed, type ThemePair} from './themePair';",
+    '',
+    '/** The asset types. */',
+    'const ASSET_TYPE_COLORS: Readonly<Record<string, ThemePair>> = {',
+    '    // first family',
+    '    AAA: {',
+    "        light: '#111111',",
+    "        dark: '#222222',",
+    '    },',
+    '    // a comment between two entries',
+    '',
+    '    BB_CC: {',
+    "        light: '#333333',",
+    '        dark: "#444444",',
+    '    },',
+    "    light: '#0a0a0a',",
+    '};',
+    '/** The sectors: a doc comment at the margin, right after the table. */',
+    'export const SECTOR_COLORS: Readonly<Record<string, ThemePair>> = {',
+    '    Plain: {',
+    "        light: '#555555',",
+    "        dark: '#666666',",
+    '    },',
+    "    'Two Words': {",
+    "        light: '#777777',",
+    "        dark: '#888888',",
+    '    },',
+    '    "Double Quoted": {',
+    "        light: '#999999',",
+    "        dark: '#aaaaaa',",
+    '    },',
+    '};',
+    'const UNRELATED_COLORS: Readonly<Record<string, ThemePair>> = {',
+    '    Plain: {',
+    "        light: '#bbbbbb',",
+    "        dark: '#cccccc',",
+    '    },',
+    '};',
+    '',
+    '/** The cash. */',
+    'const LIQUIDITY_COLOR: ThemePair = {',
+    "    light: '#dddddd',",
+    "    dark: '#eeeeee',",
+    '};',
+    '',
+    '/** What has no category. */',
+    'const UNCLASSIFIED_COLOR: ThemePair = {',
+    "    light: '#121212',",
+    '    dark: `#343434`,',
+    '};',
+    '',
+    'export function fallback(dark: boolean): string {',
+    "    const pair = {light: '#565656', dark: '#787878'};",
+    '    return themed(pair, dark);',
+    '}',
+];
+
+/** The 1-based line of the synthetic source that holds `needle` (once). */
+function sourceLine(lines: string[], needle: string): number {
+    const at = lines.flatMap((l, i) => (l.includes(needle) ? [i + 1] : []));
+    expect(at, needle).toHaveLength(1);
+    return at[0];
+}
+
+/** The map `categoryLines` returns, as rows sorted by line: readable when it differs. */
+const rowsOf = (map: Map<number, {target: string; theme: 'light' | 'dark'}>) => [...map.entries()].sort((a, b) => a[0] - b[0]).map(([line, c]) => [line, c.target, c.theme]);
+
+/** The categories of the synthetic source, in table order, with the value each theme writes. */
+const SYNTHETIC_CATEGORIES = [
+    ['type:AAA', '#111111', '#222222'],
+    ['type:BB_CC', '#333333', '#444444'],
+    ['sector:Plain', '#555555', '#666666'],
+    ['sector:Two Words', '#777777', '#888888'],
+    ['sector:Double Quoted', '#999999', '#aaaaaa'],
+    ['bucket:Liquidity', '#dddddd', '#eeeeee'],
+    ['bucket:Unknown', '#121212', '#343434'],
+] as const;
+
+describe('categoryLines', () => {
+    it('names the category and the theme of every value line of the tables and the buckets, and of no other line', () => {
+        const at = (raw: string) => sourceLine(CATEGORY_SOURCE, raw);
+        expect(rowsOf(categoryLines(CATEGORY_SOURCE.join('\n')))).toEqual(
+            SYNTHETIC_CATEGORIES.flatMap(([target, light, dark]) => [
+                [at(light), target, 'light'],
+                [at(dark), target, 'dark'],
+            ]),
+        );
+    });
+
+    it('ends a table at any line written at the margin, and reads an entry only when its key opens a block of its own', () => {
+        const lines = [
+            'const ASSET_TYPE_COLORS = {',
+            '    AAA: {',
+            "        light: '#111111',",
+            '/** a doc comment at the margin, inside the entry */',
+            "        dark: '#222222',",
+            '    },',
+            '};',
+            'const SECTOR_COLORS = {',
+            '    Plain: {',
+            "        light: '#333333',",
+            '    },',
+            '    // C2, one literal per line: an entry written on one line is not one the Lab can edit.',
+            "    Inline: {light: '#444444', dark: '#555555'},",
+            'function interrupt() {}',
+            '    Late: {',
+            "        light: '#666666',",
+            '    },',
+        ];
+        expect(rowsOf(categoryLines(lines.join('\n')))).toEqual([
+            [sourceLine(lines, '#111111'), 'type:AAA', 'light'],
+            [sourceLine(lines, '#333333'), 'sector:Plain', 'light'],
+        ]);
+    });
+});
+
+describe('scanColors — the chart categories of a synthetic tree', () => {
+    const PIE = 'src/lib/components/charts/Pie.svelte';
+    // The same source where the scanner does not look for categories: a chart file all the same, so every layer stays.
+    const TWIN = 'src/lib/theme/chartCategoryTable.ts';
+    const others = {[PIE]: ['<script lang="ts">', "    const slice = '#111111';", '</script>', '<div class="bg-libre-green text-gray-500"></div>']};
+    let root: string;
+    let catalog: ColorCatalog;
+    let twin: ColorCatalog;
+    let file: number;
+
+    beforeAll(() => {
+        root = makeTree({...others, [CATEGORY_FILE]: CATEGORY_SOURCE});
+        catalog = catalogOf({root});
+        twin = catalogOf({root: makeTree({...others, [TWIN]: CATEGORY_SOURCE})});
+        file = catalog.files.indexOf(CATEGORY_FILE);
+    });
+
+    /** The id of the one literal `raw` of the categories file. */
+    const idOf = (raw: string) => {
+        const found = catalog.literals.filter((l) => l.file === file && l.raw === raw);
+        expect(found, raw).toHaveLength(1);
+        return found[0].id;
+    };
+
+    it('gives the colours of the category lines their category and theme, as chart colours, and no other colour a category', () => {
+        expect(file).toBeGreaterThanOrEqual(0);
+        const lines = categoryLines(CATEGORY_SOURCE.join('\n'));
+        const annotated = catalog.literals.filter((l) => 'category' in l);
+        expect(annotated.map((l) => [l.line, l.category, l.theme])).toEqual(rowsOf(lines));
+        for (const l of annotated) expect(l, l.raw).toMatchObject({file, layer: 'chart-color', preview: true});
+        // The same value elsewhere, and the colours of the file outside the tables, name no category.
+        expect(catalog.literals.filter((l) => l.raw === '#111111').map((l) => [catalog.files[l.file], l.category ?? null])).toEqual([
+            [PIE, null],
+            [CATEGORY_FILE, 'type:AAA'],
+        ]);
+        expect(catalog.literals.filter((l) => l.file === file && !('category' in l)).map((l) => l.raw)).toEqual(['#0a0a0a', '#bbbbbb', '#cccccc', '#565656', '#787878']);
+    });
+
+    it('lists the categories in table order — types, sectors, buckets — with the literal of each theme', () => {
+        expect(catalog.categories).toEqual(
+            SYNTHETIC_CATEGORIES.map(([target, light, dark]) => {
+                const colon = target.indexOf(':');
+                return {target, kind: target.slice(0, colon), key: target.slice(colon + 1), light: idOf(light), dark: idOf(dark)};
+            }),
+        );
+    });
+
+    it('counts what the counters count: the annotation changes no parity figure, and no field of a literal but its own', () => {
+        const counted = {files: 0, tw: 0, custom: 0, arbitrary: 0, hex: 0, fn: 0, var_uses: 0, var_defs: 0};
+        const distinct = new Set<string>();
+        for (const rel of listSourceFiles(root)) {
+            const s = scanSource(rel, readFileSync(join(root, rel), 'utf8')) as unknown as FileScan;
+            counted.files++;
+            counted.var_uses += s.varUses.length;
+            counted.var_defs += s.varDefs.length;
+            for (const u of s.varUses) distinct.add(u.name);
+            if (!isTestPath(rel)) for (const k of ['tw', 'custom', 'arbitrary', 'hex', 'fn'] as const) counted[k] += s.counts[k];
+        }
+        expect(catalog.meta.parity).toEqual({...counted, var_uses_distinct: distinct.size});
+        expect(catalog.meta.parity).toEqual(twin.meta.parity);
+        expect(catalog.meta.layers).toEqual(twin.meta.layers);
+        // Without the annotation: the same literals, no category anywhere.
+        const strip = ({category: _category, theme: _theme, ...rest}: CatalogLiteral) => rest;
+        expect(catalog.literals.map(strip)).toEqual(twin.literals.map(strip));
+        expect(twin.literals.filter((l) => 'category' in l)).toEqual([]);
+        expect(twin.categories).toEqual([]);
+    });
+});
+
 describe('scanColors — the real tree, invariants only', () => {
     let first: ColorCatalog;
     let second: ColorCatalog;
@@ -941,5 +1175,54 @@ describe('scanColors — the real tree, invariants only', () => {
         expect(first.css_vars.filter((v) => v.name.startsWith('--color-lf-') && v.defs.length && !isInlineAlias(v)).map((v) => v.name)).toEqual([]);
         // Every use of a role utility, defined or not, is a custom class of the inventory.
         expect(lf.reduce((n, p) => n + p.uses, 0)).toBeLessThanOrEqual(first.meta.parity.custom);
+    });
+
+    it('catalogues every chart category of DV’s tables once, each theme on the line that writes the colour the charts read', () => {
+        const categories = first.categories ?? [];
+        // In table order: the types and the sectors as `CATEGORY_KEYS` lists them, then the buckets.
+        const kinds = categories.map((c) => c.kind);
+        expect(kinds).toEqual([...kinds].sort((a, b) => ['type', 'sector', 'bucket'].indexOf(a) - ['type', 'sector', 'bucket'].indexOf(b)));
+        expect(categories.filter((c) => c.kind === 'type').map((c) => c.key)).toEqual([...CATEGORY_KEYS.type]);
+        expect(categories.filter((c) => c.kind === 'sector').map((c) => c.key)).toEqual([...CATEGORY_KEYS.sector]);
+        expect(
+            categories
+                .filter((c) => c.kind === 'bucket')
+                .map((c) => c.key)
+                .sort(),
+        ).toEqual([...CATEGORY_BUCKETS].sort());
+
+        const bad: string[] = [];
+        const expected = [...(['type', 'sector'] as const).flatMap((kind) => CATEGORY_KEYS[kind].map((key) => ({kind, key}))), ...CATEGORY_BUCKETS.map((key) => ({kind: 'bucket' as const, key}))];
+        for (const {kind, key} of expected) {
+            const target = `${kind}:${key}`;
+            const found = categories.filter((c) => c.target === target);
+            if (found.length !== 1) {
+                bad.push(`${target}: ${found.length} entries`);
+                continue;
+            }
+            for (const theme of ['light', 'dark'] as const) {
+                const id = found[0][theme];
+                const lit = id === null ? undefined : first.literals[id];
+                if (!lit) {
+                    bad.push(`${target} ${theme}: no literal`);
+                    continue;
+                }
+                // A bucket answers for both kinds: asked as a type, as the charts of the asset types do.
+                const read = chartCategoryColor(kind === 'bucket' ? 'type' : kind, key, theme === 'dark');
+                if (lit.raw.toLowerCase() !== read.toLowerCase()) bad.push(`${target} ${theme}: the line writes ${lit.raw}, the charts read ${read}`);
+                if (first.files[lit.file] !== CATEGORY_FILE || lit.category !== target || lit.theme !== theme) bad.push(`${target} ${theme}: literal ${lit.id} is ${first.files[lit.file]}:${lit.line} ${lit.category ?? '-'} ${lit.theme}`);
+            }
+        }
+        expect(bad).toEqual([]);
+        expect(categories).toHaveLength(expected.length);
+    });
+
+    it('writes no colour in the categories file outside its tables, and names no category anywhere else (C2)', () => {
+        const file = first.files.indexOf(CATEGORY_FILE);
+        expect(file, CATEGORY_FILE).toBeGreaterThanOrEqual(0);
+        const referenced = new Set((first.categories ?? []).flatMap((c) => [c.light, c.dark]));
+        // A colour of the file the scanner cannot tie to a category is one the Lab cannot edit by key.
+        expect(first.literals.filter((l) => l.file === file && !l.category).map((l) => `${l.line}: ${l.raw}`)).toEqual([]);
+        expect(first.literals.filter((l) => l.category && (l.file !== file || !referenced.has(l.id))).map((l) => `${first.files[l.file]}:${l.line}`)).toEqual([]);
     });
 });
