@@ -39,12 +39,10 @@
 </script>
 
 <div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
-    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.params.window')}</span>
+    <span class="text-xs text-lf-muted">{$t('chartSettings.params.window')}</span>
     {#each CALENDAR_RETURN_PRESETS as preset}
         <button
-            class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {selection.kind === 'preset' && selection.preset === preset.key
-                ? 'border-libre-green bg-libre-green text-white'
-                : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+            class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {selection.kind === 'preset' && selection.preset === preset.key ? 'border-lf-checked bg-lf-checked text-lf-on-checked' : 'border-lf-subtle text-lf-secondary hover:bg-lf-hover'}"
             data-testid={`asset-calendar-window-${preset.key}`}
             aria-pressed={selection.kind === 'preset' && selection.preset === preset.key}
             title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}

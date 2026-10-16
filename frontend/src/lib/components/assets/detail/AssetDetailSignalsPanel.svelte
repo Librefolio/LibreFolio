@@ -16,22 +16,22 @@
     let {open = $bindable(), children}: Props = $props();
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+<div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
     <div class="relative">
-        <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={open} aria-label={$t('common.signals')} onclick={() => (open = !open)}></button>
+        <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-lf-hover" data-testid="asset-detail-signals-toggle" aria-expanded={open} aria-label={$t('common.signals')} onclick={() => (open = !open)}></button>
         <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
-            <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-lf-secondary">
                 <TrendingUp class="text-blue-500" size={15} />
                 {$t('common.signals')}
             </span>
             <div class="flex-1"></div>
-            <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
+            <span class="flex items-center px-1 py-1 text-lf-secondary" data-testid="asset-detail-signals-chevron">
                 <ChevronDown class="transition-transform {open ? 'rotate-180' : ''}" size={15} />
             </span>
         </div>
     </div>
     {#if open}
-        <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+        <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-lf-subtle pt-3">
             {@render children()}
         </div>
     {/if}

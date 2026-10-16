@@ -18,9 +18,9 @@
     let {primaryMode, onselect}: Props = $props();
 </script>
 
-<div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+<div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
     <button
-        class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+        class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
         data-testid="asset-chart-primary-price"
         aria-pressed={primaryMode === 'price'}
         onclick={() => onselect('price')}
@@ -29,9 +29,7 @@
         {$t('assetDetail.pricesTab')}
     </button>
     <button
-        class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return'
-            ? 'bg-libre-green text-white'
-            : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+        class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-lf-subtle transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
         data-testid="asset-chart-primary-calendar-return"
         aria-pressed={primaryMode === 'calendar-return'}
         onclick={() => onselect('calendar-return')}
