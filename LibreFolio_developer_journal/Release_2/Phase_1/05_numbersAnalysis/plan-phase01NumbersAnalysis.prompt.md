@@ -3694,3 +3694,33 @@ seguono da CP-7a; la Dashboard no. Contratto (letto sul codice di oggi):
   `api portfolio` 51 (DB seminato subito prima). **Statici**: `api sync` senza file tracciati cambiati, `i18n check`
   stretto, `core-unit` 6 478, `check-orphans`, svelte-check 0/0, `mkdocs build` stretto e `check-links` verdi;
   `translate-validate` 63 errori nuovi → **J-32**. Ruff e black puliti.
+- ✅ **J-24 committato**: `9d702ae8d` (fix, 30 file con la devWiki) + `aa8959852` (diario). Ordine del coordinatore: ondata
+  1b di MF in dev, aggiornamento della mia base, prove leggere, `all-backend` in uno slot (~20:00) sulla revisione
+  combinata, ingresso con la riga del CHANGELOG.
+- **Avviso per i colori (galleria) — numeri dei dati di prova che cambiano con J-24** (stima letta sul DB della corsia
+  seminato oggi, in sola lettura: transazioni IBKR/AAPL e cambi EUR/USD alle loro date; i giorni sono relativi a «oggi»
+  di `populate_mock_data.py`):
+  - la riga `[wac-test] ADJUSTMENT AAPL -3 with override $160` su Interactive Brokers, al **giorno −20**, consegna 3 AAPL a
+    160 USD, mentre il pool IBKR/AAPL ha un costo medio di circa 220 USD (198,40 EUR) per le tre BUY dei giorni −50, −36
+    e −28 (`Initial AAPL purchase`, 15 a ~280 USD). **La mia stima di «pochi euro» era sbagliata.**
+  - **Prima** di J-24: capitale −595,21 EUR (il costo medio), nessun realizzato. **Dopo**: capitale −430,56 EUR (3 × 160
+    USD al cambio del giorno −20), **realizzato −164,65 EUR**.
+  - Effetti visibili (portafoglio di prova, utente dei fixture): P&L totale circa −165 EUR da quel giorno in poi; capitale
+    investito circa +165 EUR; card «Sales» (realizzato) circa −165 EUR in ogni periodo che contiene il giorno −20; flusso
+    TWRR/MWRR del giorno −431 al posto di −595 EUR (rendimenti del periodo leggermente diversi); la pagina del broker
+    IBKR (stessi numeri sulla sua linea); la vista Periodo («Other» più piccolo). NAV invariato; lotti invariati.
+  - Schermate della galleria toccate: Dashboard (card KPI, grafico di crescita e P&L da quel giorno, tabella Performance),
+    dettaglio broker IBKR, vista Periodo. L'altra riga in uscita dei dati di prova (`[promote-test]` AAPL −2) non ha costo
+    e non cambia.
+- ✅ **Base aggiornata** dal coordinatore: merge `a7b70ea6a` (genitori `aa8959852` + `8d244d1c6`, ondata 1b di MF, treno
+  128), pulito. **Prove leggere sulla revisione combinata** (19:37–19:56, carico < 50, log `files/j/j24/merged_*`):
+  `api sync` senza file tracciati cambiati, svelte-check 0/0, `roi-fifo-utils` 845 (con i test di MF), `portfolio-engine`
+  41, `lots-analysis-pure` 163, `ai-export` (mirato) 291, `api portfolio` 51 (DB seminato prima), Vitest 92/92 (renderer e
+  sorgente del PAC). Porta libera. In attesa dello slot 2 per `all-backend` (dopo W). Nota del coordinatore: due rossi
+  External su Crédit Agricole, se compaiono, sono già curati in dev (`0c3275057`).
+- ✅ **Slot 1, `all-backend --workers 2` su `a7b70ea6a`** (19:57–20:31, log `files/j/j24/slot2_*` e un log per unità in
+  `slot2_units/`): **6/7**, 18 882 verdi + 7 saltati nel passaggio parallelo; DB, Services, Utils, Schema, API ed E2E
+  verdi. **External**: 2 rossi, `test_brim_providers.py::TestCreditAgricoleCanonicalCharacterization::
+  test_csv_freezes_entire_output[securities]` e `::test_xlsx_matches_entire_literal_csv_output[securities]`, i rossi
+  noti di W (forma D6 di C-97a) già curati in dev (`0c3275057`), fuori dal perimetro di J-24. Porta 6185 libera.
+  **J-24 pronto per l'ingresso.**
