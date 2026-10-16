@@ -30,12 +30,12 @@
 </script>
 
 <!-- Provider Assignment (collapsible) -->
-<div class="border border-gray-200 dark:border-slate-700 rounded-lg">
+<div class="border border-lf-subtle rounded-lg">
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         data-testid="asset-modal-provider-header"
         data-expanded={expanded}
-        class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {noProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
+        class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary bg-lf-panel transition-colors select-none {noProvider ? '' : 'hover:bg-lf-neutral cursor-pointer'}"
         role="button"
         tabindex="0"
         onclick={() => {
@@ -56,20 +56,20 @@
                     <ChevronRight size={16} />
                 {/if}
             {:else}
-                <Minus size={16} class="text-gray-400" />
+                <Minus size={16} class="text-lf-muted" />
             {/if}
             <span>{$t('assets.provider.assignment')}</span>
             {#if testStatus === 'passed'}
-                <span class="text-green-500 text-xs ml-1">✅</span>
+                <span class="text-lf-success text-xs ml-1">✅</span>
             {:else if testStatus === 'failed'}
-                <span class="text-red-500 text-xs ml-1">❌</span>
+                <span class="text-lf-danger text-xs ml-1">❌</span>
             {:else if testStatus === 'testing'}
-                <Loader2 size={12} class="animate-spin text-gray-400 ml-1" />
+                <Loader2 size={12} class="animate-spin text-lf-muted ml-1" />
             {/if}
         </div>
         <!-- No Provider checkbox in header -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+        <div class="flex items-center gap-1.5 text-xs text-lf-muted cursor-pointer" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
             <input
                 type="checkbox"
                 id="no-provider-checkbox"
@@ -82,14 +82,14 @@
                     }
                     onreconcile();
                 }}
-                class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50"
+                class="rounded border-lf-input text-lf-link focus:ring-lf-focus/50"
             />
             <label for="no-provider-checkbox">{$t('assets.provider.noProvider')}</label>
         </div>
     </div>
 
     {#if expanded && !noProvider}
-        <div class="px-4 py-3 border-t border-gray-200 dark:border-slate-700">
+        <div class="px-4 py-3 border-t border-lf-subtle">
             <ProviderAssignmentSection bind:providerCode bind:identifier bind:identifierType bind:providerParams {providerUrl} {probeState} bind:noProvider onchange={onreconcile} disabled={saving} />
         </div>
     {/if}

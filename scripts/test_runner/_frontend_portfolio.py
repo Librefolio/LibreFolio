@@ -25,6 +25,30 @@ def front_portfolio_dashboard_cache(verbose: bool = False, ui: bool = False, hea
     return _run_playwright("portfolio/dashboard-cache.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_price_refresh(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Updating prices…» E2E (workstream Z, lots Z5 and Z-13): the notice while a stubbed catch-up runs, then the open page asking for its report again."""
+    print_section("Frontend Portfolio Price Refresh Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/price-refresh-reload.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_allocation_negative_cash(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the negative-cash allocation E2E tests (Y10, decision 49)."""
+    print_section("Frontend Portfolio Negative Cash Allocation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/allocation-negative-cash.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_default_currency(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the starting-currency E2E tests: pages open in the user's Default Currency, not the instance's."""
     print_section("Frontend Portfolio Default Currency Tests")
@@ -140,7 +164,7 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
     """Run Portfolio store unit tests (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Portfolio store Vitest unit tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/stores/portfolio/lotsAnalysisStore.test.ts", "src/lib/stores/portfolio/dashboardViewStore.test.ts"],
+        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/features/brokers/lots/lotsAnalysisStore.test.ts", "src/lib/features/dashboard/dashboardViewStore.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )
@@ -216,7 +240,7 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
     """Run allocation chart colour-hierarchy unit tests (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Allocation colour hierarchy Vitest unit tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/utils/__tests__/colors.test.ts", "src/lib/components/charts/__tests__/allocationHierarchy.test.ts", "src/lib/components/charts/__tests__/allocationRings.test.ts", "src/lib/components/charts/AllocationPieChart.test.ts", "src/__tests__/palettes.test.ts", "src/lib/components/dashboard/AllocationHistoryChart.test.ts"],
+        ["npx", "vitest", "run", "src/lib/utils/__tests__/colors.test.ts", "src/lib/components/charts/__tests__/allocationHierarchy.test.ts", "src/lib/components/charts/__tests__/allocationRings.test.ts", "src/lib/components/charts/AllocationPieChart.test.ts", "src/__tests__/palettes.test.ts", "src/lib/features/dashboard/AllocationHistoryChart.test.ts", "src/lib/features/dashboard/AllocationHistoryChart.negativeCash.test.ts", "src/lib/features/dashboard/AllocationPanel.negativeCash.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )
@@ -225,6 +249,36 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
         return True
 
     print_error(f"Allocation colour hierarchy Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
+def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run chart tooltip escaping and chart flag-font unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Chart safety Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts",
+            "src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts",
+            "src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts",
+            "src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts",
+            "src/lib/utils/core/escapeHtml.single.test.ts",
+            "src/lib/components/charts/chartFlagFont.test.ts",
+            "src/lib/components/charts/chartFont.load.test.ts",
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Chart safety Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Chart safety Vitest unit tests - FAILED (exit code: {result.returncode})")
     if not verbose:
         print(result.stdout.decode() if result.stdout else "")
         print(result.stderr.decode() if result.stderr else "")
@@ -439,6 +493,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard-cache", front_portfolio_dashboard_cache, name="Dashboard Page Cache", desc="Return to the Dashboard reuses cached data, shows it while refreshing, owned-broker scope, restored filters, Refresh", tests="portfolio/dashboard-cache.spec.ts")
+    add_test(
+        cat,
+        "price-refresh",
+        front_portfolio_price_refresh,
+        name="Price Refresh E2E",
+        desc="Lots Z5 and Z-13, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated",
+        tests="portfolio/price-refresh-reload.spec.ts",
+    )
+    add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
     add_test(cat, "default-currency", front_portfolio_default_currency, name="Default Currency Tests", desc="Dashboard, broker list and detail, the assets risk panel and the FX AI Export start in the user's Default Currency, the instance's only as a fallback; a remembered dashboard pick still wins", tests="portfolio/default-currency.spec.ts")
     add_test(
@@ -457,7 +520,16 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "risk-frame-component", front_portfolio_risk_frame_component, test_names=False, name="Risk Result Frame Component Tests", desc="The legacy result frame Asset Detail mounts once per analytic, rendered in jsdom: each warning is worded through its own i18n key formatted with the names, counts, dimension and covered share it carries — never the raw ICU source a code-named key printed when it was called without values, never the generic sentence when the backend sent a reason key such as assets_excluded_missing_price — a warning without a key, or with a key this build does not ship, shows the backend sentence instead of a raw key, the generic sentence is kept only for a warning with neither, and across every risk.warnings sentence with arguments (read off en.json at test time, values built from each sentence's own ICU arguments) a warning is worded through its key once its values arrive and shows the backend sentence when they do not, never a brace or a key; the error branch still words its code through risk.errors.<code> with the state sentence as fallback. Expected sentences are resolved from the shipped catalogue through the same formatter instead of pinned", tests="src/lib/features/risk/RiskResultFrame.test.ts")
     add_test(cat, "risk-levels-unit", front_portfolio_risk_levels_unit, test_names=False, name="Risk Levels Unit Tests", desc="Four-level pure logic: L1 scale of harm (CVaR leads, omission never zero-fill, required-recovery asymmetry), L1 tail readings (underwater curve pre-scaled to percent because the chart converts nothing, VaR cut located by half-open inequality and kept when it is exactly zero, worst-realization null honoured as a refusal rather than zero-filled), L2 weight-vs-contribution divergence ordering with negative contributions, L3 figure collection plus the perimeter choice (current composition preferred, historical fallback, perimeter read from the payload even when it contradicts the wave) and the risk/return points (portfolio sized as the whole, assets by un-renormalized weight, cash never plotted), L4 simulation modes with the seed each one carries, L4 drift uncertainty applied to the median and the band it is compared against, L4 simulation provenance read from the payload instead of asserted in a translation string, L4 scenario presets and tornado ordering by signed damage, level provenance collapsed by agreement so a disagreement about the window splits instead of being represented by one analytic, and catalogue values degraded to the backend token rather than to a printed i18n key; backend warnings worded through their own i18n key and params (the catalogue sentence when it formats, the backend sentence otherwise — never the key, never raw ICU braces from a missing value, checked for every risk.warnings sentence with arguments read off en.json at test time, with plausible values and without them; a list the backend did not join reads like one it did, any other non-scalar value is left out rather than printed) and reasons deduplicated by the worded sentence, while the one-argument call keeps its verbatim output byte for byte; the one partial notice above L1–L3 (decision of 24/09): one entry per instance with the first one kept, so historical_kpi read by L1 and L3 is counted once and its warning once, only partial results named (per instance, the two VaR horizons told apart by their labels), warnings deduplicated by sentence with their arity, level health reduced to what did not come back at all, and analytic names keyed by the camelCase rule for every name the catalogue ships; and a share of the portfolio worded by its size, so a small one is never printed as zero: from 1% up the caller's own decimals, below it one decimal, below 0.1% two, «< 0.01%» (or «> -0.01%») where two would still read zero, joined by a no-break space, and only a true zero as zero; and the shared L3 table's pure rules: a figure column as wide as its title as DataTable draws it (upper-case, letter-spaced, with its padding and sort icon, rounded up) and no wider, one id per row and per dot (the portfolio and a benchmark nobody holds added as ref-portfolio and ref-<id>, a held benchmark keeping its holding's ids, a dot without a row selecting nothing), the portfolio then the benchmark opening the table with every other row in the page's order, and the notes under the chart in reading order, each only where it applies and never describing a line that is not drawn", tests="src/lib/features/risk/levels/levelHelpers.test.ts, src/lib/features/risk/levels/levelMetadata.test.ts, src/lib/features/risk/levels/l1/l1Helpers.test.ts, src/lib/features/risk/levels/l3Helpers.test.ts, src/lib/features/risk/levels/simulationProvenance.test.ts, src/lib/features/risk/levels/l4/simulationModes.test.ts, src/lib/features/risk/levels/l4/driftUncertainty.test.ts, src/lib/features/risk/levels/l4/scenarioHelpers.test.ts, src/lib/features/risk/levels/partialNotice.test.ts, src/lib/features/risk/levels/shareFormat.test.ts, src/lib/features/risk/riskReturnLevel.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
-    add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="Category colours of the allocation charts (DV, GR1–GR4): each type family and sector keeps its key's colour whatever its rank, in both themes, read through categoryColor; subtypes are OKLab shades of their family (familyShade: ranks 1–3 toward the near pole, 4–6 toward the far one); subtype grouping and ordering with the K2 resolver; two-ring type donut, rings aligned by construction and the fast path refreshing both series; the mounted pie (jsdom, ECharts recorded) draws type and sector slices in their key's colour, sector emoji from the sector store and never from the data, rebuilt whole on the chart-colour signal (C4), no option.color; the mounted history chart draws one area per family in its key's colour with no shade, sectors by key, countries by sequence with Unknown/Other grey and shade rounds past the fourteenth; the palette guard (distinct #rrggbb, slots = keys) over both category tables; hexToHsl/hslToHex round trip on the category colours", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts, src/lib/components/charts/__tests__/allocationRings.test.ts, src/lib/components/charts/AllocationPieChart.test.ts, src/__tests__/palettes.test.ts, src/lib/components/dashboard/AllocationHistoryChart.test.ts")
+    add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="Category colours of the allocation charts (DV, GR1–GR4): each type family and sector keeps its key's colour whatever its rank, in both themes, read through categoryColor; subtypes are OKLab shades of their family (familyShade: ranks 1–3 toward the near pole, 4–6 toward the far one); subtype grouping and ordering with the K2 resolver; two-ring type donut, rings aligned by construction and the fast path refreshing both series; the mounted pie (jsdom, ECharts recorded) draws type and sector slices in their key's colour, sector emoji from the sector store and never from the data, rebuilt whole on the chart-colour signal (C4), no option.color; the mounted history chart draws one area per family in its key's colour with no shade, sectors by key, countries by sequence with Unknown/Other grey and shade rounds past the fourteenth; the palette guard (distinct #rrggbb, slots = keys) over both category tables; hexToHsl/hslToHex round trip on the category colours; negative cash (Y10, decision 49): the history axis reaches the top of the positive stack and the bottom of the cash, every series stacks samesign, the tooltip keeps the negative Liquidity row out of «Remaining», the panel hands the pie only positive shares without emoji and shows a masked «Negative cash» note", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts, src/lib/components/charts/__tests__/allocationRings.test.ts, src/lib/components/charts/AllocationPieChart.test.ts, src/__tests__/palettes.test.ts, src/lib/features/dashboard/AllocationHistoryChart.test.ts, src/lib/features/dashboard/AllocationHistoryChart.negativeCash.test.ts, src/lib/features/dashboard/AllocationPanel.negativeCash.test.ts")
+    add_test(
+        cat,
+        "chart-safety-unit",
+        front_portfolio_chart_safety_unit,
+        test_names=False,
+        name="Chart Safety Unit Tests",
+        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption; the flag face is requested before the first paint, and a chart that painted before it arrived paints again once it is in",
+        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts, src/lib/components/charts/chartFont.load.test.ts",
+    )
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
     add_test(
         cat,

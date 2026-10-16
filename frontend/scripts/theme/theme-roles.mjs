@@ -67,7 +67,7 @@ export const LAB_PREFIXES = ['lib/dev/designer-lab/', 'routes/designer-lab/'];
  * @type {ReadonlyArray<{file: string, value: string | RegExp, reason: string}>}
  */
 export const LITERAL_EXCEPTIONS = [
-    {file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts', value: /^hsla?\(.*\$\{/, reason: "lotColor: an hsl() generated from the lot's id (R)"},
+    {file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts', value: /^hsla?\(.*\$\{/, reason: "lotColor: an hsl() generated from the lot's id (R)"},
     {file: 'lib/utils/colors.ts', value: /^hsla?\(.*\$\{/, reason: 'hsl() and hsla() generators with a computed hue (R)'},
     {file: 'lib/components/charts/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
     {file: 'lib/components/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
@@ -211,14 +211,60 @@ export function blankScriptComments(/** @type {string} */ code) {
 
 const SCRIPT_RE = /(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi;
 const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi;
+/** A whole script or style block, kept as one part when the markup around it is split. */
+const SCRIPT_OR_STYLE_RE = /(<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>)/gi;
 
-/** A source without its comments, each part of a Svelte file by its own syntax. */
+/** A source without its comments, each part of a Svelte file by its own syntax: the markup's `{…}` expressions are script. */
 export function codeOf(/** @type {string} */ rel, /** @type {string} */ text) {
     if (!rel.endsWith('.svelte')) return blankScriptComments(text);
     return text
         .replace(/<!--[\s\S]*?-->/g, spaces)
         .replace(SCRIPT_RE, (_m, open, body, close) => open + blankScriptComments(body) + close)
-        .replace(STYLE_RE, (_m, open, body, close) => open + blankCssComments(body) + close);
+        .replace(STYLE_RE, (_m, open, body, close) => open + blankCssComments(body) + close)
+        .split(SCRIPT_OR_STYLE_RE)
+        .map((part, index) => (index % 2 === 1 ? part : blankExpressionComments(part)))
+        .join('');
+}
+
+/**
+ * Markup with the comments of its `{…}` expressions blanked. A line or block comment inside an attribute value or a text
+ * expression is script: left in, an apostrophe or a backtick in it opened a string that swallowed the markup after it
+ * (AF, lot 8: G3 on an `onfitperiod={…}` attribute that holds no class, and the swallowed elements never checked).
+ */
+function blankExpressionComments(/** @type {string} */ markup) {
+    let out = '';
+    let i = 0;
+    while (i < markup.length) {
+        const open = markup.indexOf('{', i);
+        if (open === -1) {
+            out += markup.slice(i);
+            break;
+        }
+        const end = expressionEnd(markup, open);
+        out += markup.slice(i, open + 1) + blankScriptComments(markup.slice(open + 1, end));
+        i = end;
+    }
+    return out;
+}
+
+/** The index of the `}` closing the markup expression opened at `start`, its strings and comments skipped. */
+function expressionEnd(/** @type {string} */ text, /** @type {number} */ start) {
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+        const c = text[i];
+        if (c === '/' && text[i + 1] === '/') {
+            const end = text.indexOf('\n', i);
+            if (end === -1) return text.length;
+            i = end;
+        } else if (c === '/' && text[i + 1] === '*') {
+            const end = text.indexOf('*/', i + 2);
+            if (end === -1) return text.length;
+            i = end + 1;
+        } else if (c === "'" || c === '"' || c === '`') i = endOfString(text, i);
+        else if (c === '{') depth += 1;
+        else if (c === '}' && --depth === 0) return i;
+    }
+    return text.length;
 }
 
 /** The markup of a Svelte file: the bodies of its scripts and styles blanked. */

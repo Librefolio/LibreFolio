@@ -19,8 +19,8 @@ An embedded background daemon that automatically keeps market data (asset prices
 ## Location
 
 ```
-backend/app/services/scheduler/scheduler.py        # Main daemon loop
-backend/app/services/scheduler/
+backend/app/services/platform/scheduler/scheduler.py  # Main daemon loop
+backend/app/services/platform/scheduler/
   ├── leader.py                          # Leader election (psutil + file lock)
   ├── state.py                           # State persistence (JSON, atomic write)
   └── jobs.py                            # Job implementations

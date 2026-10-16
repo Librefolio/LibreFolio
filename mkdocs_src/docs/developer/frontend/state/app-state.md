@@ -205,15 +205,34 @@ which the interceptor turns into the login as usual.
 
 - On mount it reads `GET /system/block` (`fetchBlock`, a prop that tests replace). When `blocked` is
   false, the block was lifted meanwhile: it clears the flag and reloads the window. When the request
-  fails, the page stays, without the date.
+  fails, the page stays, without the date, the subscription link and the backup card, and does not
+  ask again while it is mounted: a reload brings them back.
 - Its text depends on the role: `instance.block.adminDescription` for `is_superuser`,
   `instance.block.userDescription` for the other users, under the title `instance.block.title`.
 - `instance.block.deletionDate` shows `deletion_date`, written in the interface locale (`uiLocale()`).
   The ISO day is read at midnight UTC and formatted in UTC, so no time zone moves it.
-- Its only button, labelled by `auth.logout`, calls the layout's `logout()`. There is no button to
-  delete one's own account yet, though `DELETE /auth/users/me` stays allowed.
+- An administrator (`is_superuser`) also gets the **Manage subscription** link
+  (`instance.block.manageSubscription`) when `billing_url` is an `http(s)` address, checked again
+  here; it opens in a new tab, `rel="noopener noreferrer"`.
+- The block message is one `<section role="alert">`, which also holds the logout button: labelled by
+  `auth.logout`, it calls the layout's `logout()`. There is no button to delete one's own account
+  yet, though `DELETE /auth/users/me` stays allowed.
+- **The backup card** (decision 12). When the answer's `backup_available` is `true`, and only then, a
+  second `<section>` under the alert, named by its `<h2>` (`aria-labelledby`, text
+  `instance.block.backupTitle`), holds `BackupDownloadCard` (`lib/features/backup/`), the same card as
+  **Settings › Backup**: start a backup of the whole instance, follow it, download the archive, delete
+  it. The server decides who gets it (the administrators, today: see
+  [Instance Block](../../architecture/security.md#instance-block)); the page never guesses it from the
+  role, so a `false`, a missing field, a pending or a failed request mean no card, for an
+  administrator too. The section stays outside the `role="alert"` one, so a screen reader announces
+  the block, not the card and its progress. The card's four routes already answer on a blocked
+  instance.
+- The page mounts its own `ToastContainer`: the `(app)` layout mounts one only with the app shell,
+  which this page replaces, and the card reports its errors and a backup with warnings by toast.
 - Colours are colour roles only. The test ids are `instance-blocked`, `instance-blocked-description`,
-  `instance-blocked-deletion-date` and `instance-blocked-logout`.
+  `instance-blocked-deletion-date`, `instance-blocked-billing`, `instance-blocked-logout` and
+  `instance-blocked-backup`; inside the last one, the card keeps its own (`backup-download-card` and
+  the others).
 
 ```ts
 import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
@@ -221,6 +240,10 @@ import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/inst
 if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlock.markBlocked();
 instanceBlock.blocked; // true: the (app) layout shows InstanceBlockedPage
 ```
+
+Tests: `./dev.py test front-utility component-unit` runs `InstanceBlockedPage.test.ts`, which mounts
+`BackupDownloadCardStub` (`frontend/src/__tests__/harness/`) in place of the card: it checks where the
+card goes and when, while `lib/features/backup/BackupDownloadCard.test.ts` covers what the card does.
 
 ## 🙈 Privacy masking {: #privacy-masking }
 
@@ -344,7 +367,7 @@ the name must be an export pinned by unit tests that would break if its masking 
 What the gate cannot see:
 
 1. **Money without a currency token** — axis ticks and labels, such as the value axis of the lot
-   comparison chart (`formatAxisAmount` in `lib/components/brokers/lots/lotComparisonChartHelpers.ts`).
+   comparison chart (`formatAxisAmount` in `lib/features/brokers/lots/lotComparisonChartHelpers.ts`).
    Only their own tests protect them.
 2. **A `public` marking.** `{sensitivity: 'public'}` sits on a `SAFE_CALL` line and is never a hit,
    and a `public` entry is not re-examined. Only the tests of that site protect the decision — for
@@ -377,12 +400,12 @@ fresh, can see this. The remedy:
 - render the amount through a runes child — `lib/components/ui/display/CurrencyAmount.svelte`
   renders one D8 amount — or migrate the parent to runes when it is small;
 - cover the site with a component test that toggles privacy **in place, in both directions**,
-  including a mount with privacy already on: `lib/components/brokers/BrokerCard.test.ts`, and
+  including a mount with privacy already on: `lib/features/brokers/BrokerCard.test.ts`, and
   `lib/components/ui/display/CurrencyAmount.test.ts`, which mounts the child under
   `__tests__/harness/CurrencyAmountLegacyHost.svelte`. That host is legacy by construction
   (`export let`) and also renders the same call inline, as a control that must stay frozen.
 
-Today the legacy parents that render money are `lib/components/brokers/BrokerCard.svelte` and
+Today the legacy parents that render money are `lib/features/brokers/BrokerCard.svelte` and
 `routes/(app)/brokers/[id]/+page.svelte`; both render it through `CurrencyAmount`.
 
 ### 📈 ECharts formatters {: #privacy-echarts }
@@ -394,9 +417,9 @@ its text until it is shown again. The render `$effect` must read the flag itself
 `void isPrivacyEnabled();`, beside its other `void` dependencies — so that a toggle re-runs it and
 the option is rebuilt with every formatter called again:
 
-- `lib/components/brokers/lots/LotComparisonChart.svelte` — axis formatters; each render replaces
+- `lib/features/brokers/lots/LotComparisonChart.svelte` — axis formatters; each render replaces
   `xAxis`, `yAxis` and `series` (`replaceMerge`);
-- `lib/components/brokers/lots/LotGanttChart.svelte` — the lot quantity on each bar is built in
+- `lib/features/brokers/lots/LotGanttChart.svelte` — the lot quantity on each bar is built in
   `renderItem`.
 
 The interface locale follows the same pattern: both effects also read `void uiLocale();`, so a language
