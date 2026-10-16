@@ -3611,6 +3611,30 @@ il FE5c, quindi un commit separato.
    - `HelpMenu` la adotta più tardi, in un lotto a parte; il coordinatore avvisa H.
 2. **«Continua senza fonte»**: è una scelta di UX visibile, quindi va nella lista del mattino per il developer, con la
    mia proposta. Se il CP13 parte prima della risposta, la costruisco così, marcata «Decisione notturna, da rivedere».
+
+**Preferenze di H per `LIBREFOLIO_SUPPORT_URL`** (H ne è il proprietario; coordinatore, 07:11):
+- **Accessore**: `backend/app/config/platform.py`, `support_url() -> str | None`, con le regole di `billing_url()`:
+  - vuota o fatta di spazi → `None`;
+  - solo `http(s)://`;
+  - via la barra finale;
+  - `ValueError` per tutto il resto.
+- **La validazione**: non si copia `_url()` di `config/accounts.py`, che è di A.
+  - Diventa un helper pubblico in `config/__init__.py`, chiamato dai due accessori di A. Serve l'ok di A, che il
+    coordinatore chiede all'avvio del CP13.
+  - Se A dice di no, un import da `accounts`, mai una copia.
+- **`GET /system/instance`**:
+  - il campo di primo livello `support_url: str | None` in `InstanceConfigResponse` (default `null`; il frontend ricade
+    sulle issue di GitHub);
+  - una funzione di servizio che cattura il `ValueError`, lo registra una volta e restituisce `None`, come
+    `billing_link()`;
+  - facoltativo: il `ConfigCheck` `platform.support_url` (avviso), in coda a `CONFIG_CHECKS` in `config_audit.py`, che
+    tocca anche A7.
+- **`.env.example`**: una riga commentata in «Instance Profile», dopo `LIBREFOLIO_CSP_REPORT_ONLY`.
+- **Doc**:
+  - una riga in `admin/hosting_providers`;
+  - una riga in «Main Options» di `admin/configuration.en.md`;
+  - `support_url()` nell'elenco degli accessori di `platform.py` in `developer/architecture/settings.md`.
+- **Prove**: `services config-package`, `config-env-example`, `api system`.
 - **Il secondo giro di test** (test-author, 06:05, scritti e non lanciati), 130 test:
   - `assetDetailFxPair.test.ts` 24, con ogni caso confrontato con una copia alla lettera delle righe di prima;
   - `assetDetailFxRequirements.test.ts` 78: ordine, slug canonici, ogni stato, salti dei pari, eventi con forme vere
@@ -3690,3 +3714,25 @@ FE5c-4 committed: `4c03a0e7b` + journal `3f220dbc5`.
 >   - `front check` → 0/0;
 >   - `core-unit` → 178 file, 6367/6367;
 >   - `git diff --check` pulito.
+
+FE5c-5 committed: `ca0cf62b8` + journal `636c1559b`.
+
+#### FE5c-6 · le coppie richieste e gli avvisi del banner ✅ (2026-10-16, 07:11–07:17)
+
+> **Note implementazione**:
+> - `splice.py 6 --apply`: al posto dei due `$derived.by` (≈195 righe) entrano due oggetti di getter
+>   (`fxRequirementsState` e `assetDetailIssuesState`) e
+>   `requiredFxPairs = $derived(buildRequiredFxPairs(fxRequirementsState))`, più lo stesso per `assetDetailIssues`.
+> - I getter leggono lo stato negli stessi punti del corpo di prima. `$t` sta dentro il getter `eventsLabel` e dentro
+>   `assetFallbackLabel`, così la dipendenza dal catalogo resta.
+> - La pagina passa da 3247 a 3117 righe. Esce l'import di `getComparisonEventFxDependency`.
+> - Registrato `assetDetailFxRequirements.test.ts` in `core-unit`.
+> - Aggiornata la frase di `requiredFxPairs` in `developer/frontend/components/charts.md`.
+> - **Prove**:
+>   - `front check` → 0 errori, 0 avvisi: nessun avviso di Svelte sullo stato letto nel posto sbagliato, e
+>     `AssetDetail` soddisfa l'ingresso del modulo;
+>   - `core-unit` → **179 file, 6445/6445**, cioè +78 test, quelli del modulo, compreso il contratto di pigrizia.
+>   - Il wrapper ha aspettato che il carico scendesse da 82.
+>   - `git diff --check` pulito.
+> - **La reattività vera della pagina la provano solo le E2E**: `asset-detail.spec.ts` (≈2769–3301) fa apparire e
+>   sparire `data-quality-issue-FX_PAIR_NO_DATA`. Sono nello slot finale.
