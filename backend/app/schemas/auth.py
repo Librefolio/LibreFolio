@@ -29,7 +29,7 @@ class AuthRegisterRequest(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=50, description="Username")
     email: EmailStr = Field(..., description="Email address")
-    password: str = Field(..., min_length=8, description="Password (min 8 chars)")
+    password: str = Field(..., min_length=1, description="Password: the password rules apply (GET /system/instance, accounts.password_rules)")
     invite_token: Optional[str] = Field(None, min_length=1, max_length=200, description="Token of an invitation link: required when registration is by invitation, optional otherwise; it sets the role of the account")
 
 
@@ -44,14 +44,14 @@ class PasswordResetRequest(StrictModel):
     """``POST /auth/password-reset``: spend a password-reset link."""
 
     token: str = Field(..., min_length=1, max_length=200, description="The token of the password-reset link")
-    new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
+    new_password: str = Field(..., min_length=1, description="New password: the password rules apply (GET /system/instance, accounts.password_rules)")
 
 
 class ChangePasswordRequest(BaseModel):
     """Change password request (for authenticated users)."""
 
     current_password: str = Field(..., min_length=1, description="Current password")
-    new_password: str = Field(..., min_length=8, description="New password (min 8 chars)")
+    new_password: str = Field(..., min_length=1, description="New password: the password rules apply (GET /system/instance, accounts.password_rules)")
 
 
 class UpdateProfileRequest(BaseModel):
@@ -108,6 +108,7 @@ class AuthRegisterResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Registration successful"
+    verification_required: bool = Field(default=False, description="The account waits for its email verification: a link is on its way, and signing in works once it is clicked")
 
 
 class TokenInspectResponse(StrictModel):
@@ -133,12 +134,20 @@ class AddressProbeResult(StrictModel):
     match: bool
 
 
+class PasswordRuleRead(StrictModel):
+    """One password rule as the app checks it while the user types (decision 37); ``value`` only for ``min_length``."""
+
+    code: str = Field(..., description="min_length, uppercase, lowercase, digit or special; an app that does not know a code lets the server decide")
+    value: Optional[int] = Field(None, description="The rule's value, when it has one: the minimum length")
+
+
 class AccountsInstanceConfig(StrictModel):
     """The accounts part of ``GET /system/instance``: public, the same for whoever asks."""
 
     registration_mode: Literal["open", "invite", "disabled"] = Field(..., description="Who may create an account: open (anyone), invite (an invitation link), disabled (nobody)")
     registration_locked: bool = Field(..., description="LIBREFOLIO_REGISTRATION pins the mode: the global setting cannot change it")
     first_account_open: bool = Field(False, description="No account yet: the next registration creates the first account, an administrator, whatever the mode")
+    password_rules: list[PasswordRuleRead] = Field(default_factory=list, description="The rules every new password must meet, in order (decision 37)")
 
 
 class ChangePasswordResponse(BaseModel):

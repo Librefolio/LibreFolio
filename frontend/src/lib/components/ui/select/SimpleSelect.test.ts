@@ -12,8 +12,10 @@
  * dropdown body have never been executed by anything. Those are the subject.
  *
  * The highlighted option is tracked through `aria-activedescendant`, which is
- * both the accessibility contract and the only non-cosmetic expression of the
- * highlight — the alternative would be asserting on a Tailwind class.
+ * the accessibility contract — the alternative would be asserting on a Tailwind
+ * class. The option also publishes the highlight itself, as `data-highlighted`,
+ * because the component's stylesheet reads it (TC-15): the last block pins that
+ * the attribute follows the highlight, read as data like SearchSelect's.
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
@@ -60,29 +62,87 @@ function expectHighlighted(trigger: HTMLElement, value: string) {
     expect(trigger).toHaveAttribute('aria-activedescendant', option(value).id);
 }
 
+/** The value an option element stands for, read back from the test id `mount` gives it. */
+function optionValue(element: HTMLElement): string {
+    return (element.getAttribute('data-testid') ?? '').replace(/^fruit-opt-/, '');
+}
+
+/**
+ * What the open list publishes on each of its options: `data-highlighted` as rendered, keyed by value.
+ * Read off every `role="option"` the list draws rather than off the fixture, so an option that lost
+ * the attribute reads `null` instead of being skipped.
+ */
+function publishedHighlights(): Record<string, string | null> {
+    const rendered = within(screen.getByTestId('fruit-dropdown')).getAllByRole('option');
+    return Object.fromEntries(rendered.map((element) => [optionValue(element), element.getAttribute('data-highlighted')]));
+}
+
+/**
+ * Asserts the highlight is on `value` and that the list publishes it there and nowhere else: `"true"`
+ * on that option, `"false"` on every other `FRUITS` option, disabled ones included. Where the highlight
+ * is comes from `aria-activedescendant`, as everywhere in this file; the attribute is what the
+ * stylesheet reads, so the two must agree.
+ */
+function expectPublishedHighlight(trigger: HTMLElement, value: string) {
+    expectHighlighted(trigger, value);
+    const expected = Object.fromEntries(FRUITS.map((fruit) => [fruit.value, fruit.value === value ? 'true' : 'false']));
+    expect(publishedHighlights(), `data-highlighted is not "true" on ${value} and "false" on every other option`).toEqual(expected);
+}
+
 /** The k5a contract (D376): one more class for the trigger box, typed here so this file compiles before the prop exists. */
 type TriggerClassProps = Partial<ComponentProps<typeof SimpleSelect>> & {triggerClass?: string};
 
 /**
- * Today's trigger, token by token, as `SimpleSelect.svelte` writes it at the k5a baseline: what
- * every existing caller renders. Grouped the way the template composes it.
+ * Today's trigger, token by token, as `SimpleSelect.svelte` writes it on the colour roles of
+ * `$lib/theme/tokens.css`: what every existing caller renders. A role utility follows the theme
+ * through its variable, so no token has a `dark:` half. Grouped the way the template composes it:
+ * the size, then a surface that follows availability alone, then a border that follows the list —
+ * the focus ring while it is open; while it is closed, the idle border, or the subtle one when the
+ * select is disabled or loading.
  */
 const TRIGGER = {
     base: ['w-full', 'flex', 'items-center', 'justify-between', 'border', 'rounded-lg', 'transition-all', 'text-left'],
     regular: ['px-3', 'py-2', 'text-sm'],
     compact: ['px-1.5', 'py-0.5', 'text-xs'],
-    enabled: ['bg-white', 'dark:bg-slate-700', 'text-gray-900', 'dark:text-gray-100', 'border-gray-300', 'dark:border-slate-600', 'hover:border-gray-400', 'dark:hover:border-slate-500'],
-    unavailable: ['bg-gray-100', 'dark:bg-slate-800', 'text-gray-500', 'dark:text-gray-400', 'cursor-not-allowed', 'border-gray-200', 'dark:border-slate-700'],
-    open: ['ring-2', 'ring-libre-green', 'border-libre-green'],
+    enabledSurface: ['bg-lf-field', 'text-lf-primary'],
+    unavailableSurface: ['bg-lf-panel', 'text-lf-muted', 'cursor-not-allowed'],
+    idleBorder: ['border-lf-input', 'hover:border-lf-input-hover'],
+    unavailableBorder: ['border-lf-subtle'],
+    open: ['ring-2', 'ring-lf-focus', 'border-lf-focus'],
 };
 
-/** The trigger in each state its classes depend on: size, availability, and whether the list is open. */
-const TRIGGER_STATES: {state: string; props: TriggerClassProps; open: boolean; classes: string[]}[] = [
-    {state: 'closed', props: {}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabled]},
-    {state: 'compact', props: {compact: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.compact, ...TRIGGER.enabled]},
-    {state: 'disabled', props: {disabled: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailable]},
-    {state: 'open', props: {}, open: true, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabled, ...TRIGGER.open]},
+/**
+ * The borders of a closed trigger, which an open one must not carry beside its focus border.
+ *
+ * Tailwind 4 emits two utilities that set the same property under the same variants in the
+ * alphabetical order of their names, so on an element carrying both the later name wins; a
+ * `hover:` utility comes after every base one. On the palette the open trigger was right by luck —
+ * `border-gray-300` sorts before `border-libre-green` — but on the roles `border-lf-focus` sorts
+ * before `border-lf-input` and `border-lf-subtle`: an open trigger keeping its closed border would
+ * draw that one. So the template puts the closed and the open border in the two branches of one
+ * ternary, and every open state below pins it.
+ */
+const CLOSED_BORDERS = [...TRIGGER.idleBorder, ...TRIGGER.unavailableBorder];
+
+/**
+ * The trigger in each state its classes depend on: size, availability, and whether the list is open.
+ * `whileOpen` is a change the parent makes once the list is open. Nothing closes the list when the
+ * select turns unavailable under it (the parent refreshing the list is one such change, see
+ * "unavailable states"), so the trigger is then open and unavailable at once: the surface follows
+ * availability, the border still follows the list.
+ */
+const TRIGGER_STATES: {state: string; props: TriggerClassProps; open: boolean; whileOpen?: TriggerClassProps; classes: string[]}[] = [
+    {state: 'closed', props: {}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabledSurface, ...TRIGGER.idleBorder]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.compact, ...TRIGGER.enabledSurface, ...TRIGGER.idleBorder]},
+    {state: 'disabled', props: {disabled: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailableSurface, ...TRIGGER.unavailableBorder]},
+    {state: 'loading', props: {loading: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailableSurface, ...TRIGGER.unavailableBorder]},
+    {state: 'open', props: {}, open: true, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabledSurface, ...TRIGGER.open]},
+    {state: 'open, then loading', props: {}, open: true, whileOpen: {loading: true}, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailableSurface, ...TRIGGER.open]},
+    {state: 'open, then disabled', props: {}, open: true, whileOpen: {disabled: true}, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailableSurface, ...TRIGGER.open]},
 ];
+
+/** Every state in which the list is open, whatever the select's availability: where `CLOSED_BORDERS` must be absent. */
+const OPEN_TRIGGER_STATES = TRIGGER_STATES.filter(({open}) => open);
 
 /** An element's classes as a set, sorted: the order of tokens in `class` changes nothing on screen. */
 function classesOf(element: Element): string[] {
@@ -94,12 +154,19 @@ function classMap(root: Element): string[][] {
     return [root, ...root.querySelectorAll('*')].map(classesOf);
 }
 
-/** Mount in one state; the trigger, the whole render's classes, and where the trigger sits in them. */
-async function mountInState(props: TriggerClassProps, open: boolean) {
+/**
+ * Mount in one state; the trigger, the whole render's classes, and where the trigger sits in them.
+ * `whileOpen` reaches the component the way a parent's update does, through `rerender`.
+ */
+async function mountInState(props: TriggerClassProps, open: boolean, whileOpen?: TriggerClassProps) {
     const utils = mount(props);
     if (open) {
         await fireEvent.click(utils.trigger);
         expect(utils.trigger, 'the list did not open: the state under test was never reached').toHaveAttribute('aria-expanded', 'true');
+    }
+    if (whileOpen) {
+        await utils.rerender(whileOpen);
+        expect(utils.trigger, 'the list closed under the parent’s change: the state under test was never reached').toHaveAttribute('aria-expanded', 'true');
     }
     const elements = [utils.container, ...utils.container.querySelectorAll('*')];
     return {...utils, classes: classMap(utils.container), triggerIndex: elements.indexOf(utils.trigger)};
@@ -441,36 +508,133 @@ describe('SimpleSelect', () => {
  * takes a class from its caller — `triggerClass`, appended to the trigger and to nothing else.
  * The prop is additive: every existing caller passes nothing and must keep exactly the trigger it
  * renders today, so the default path is pinned token by token (`TRIGGER`, transcribed from the
- * template at the k5a baseline), in each state the classes depend on. A default that adds,
+ * template on the colour roles), in each state the classes depend on. A default that adds,
  * drops or swaps a single token fails here.
+ *
+ * The roles brought one rule of their own, pinned here as well: an open trigger draws the focus
+ * border instead of its closed one, never beside it (`CLOSED_BORDERS` says why).
  *
  * Here, and only here, this file reads classes: the class *is* the contract. Elements are still
  * found by testid and by their place in the render.
  */
 describe('SimpleSelect — the caller’s trigger class (k5a)', () => {
-    it.each(TRIGGER_STATES)('renders exactly today’s trigger without it: $state', async ({props, open, classes}) => {
+    it.each(TRIGGER_STATES)('renders exactly today’s trigger without it: $state', async ({props, open, whileOpen, classes}) => {
         await setupI18n();
-        const {trigger, container} = await mountInState(props, open);
+        const {trigger, container} = await mountInState(props, open, whileOpen);
 
         expect(classesOf(trigger), 'the trigger every existing caller renders has changed').toEqual([...classes].sort());
-        // The container around it is today's as well: `relative`, and the caller's `class`, which is empty here.
-        expect(classesOf(screen.getByTestId('fruit')), 'the container of the trigger has changed').toEqual(['relative']);
+        // The container around it is today's as well: `relative`, the text role a migrated component sets on its root, and the caller's `class`, which is empty here.
+        expect(classesOf(screen.getByTestId('fruit')), 'the container of the trigger has changed').toEqual(['relative', 'text-lf-primary']);
         expect(container.querySelectorAll('[data-testid="fruit-button"]')).toHaveLength(1);
     });
 
-    it.each(TRIGGER_STATES)('appends triggerClass to the trigger, and to nothing else: $state', async ({props, open, classes}) => {
+    it.each(TRIGGER_STATES)('appends triggerClass to the trigger, and to nothing else: $state', async ({props, open, whileOpen, classes}) => {
         await setupI18n();
-        const today = await mountInState(props, open);
+        const today = await mountInState(props, open, whileOpen);
         const baseline = today.classes;
         today.unmount();
 
         const withClass: TriggerClassProps = {...props, triggerClass: 'h-8'};
-        const {trigger, classes: rendered, triggerIndex} = await mountInState(withClass, open);
+        const {trigger, classes: rendered, triggerIndex} = await mountInState(withClass, open, whileOpen);
 
         expect(classesOf(trigger), 'triggerClass did not reach the trigger, or replaced classes it should have joined').toEqual([...classes, 'h-8'].sort());
         // Nowhere else: the same render, element by element, with the one token on the trigger.
         expect(rendered, 'the render does not have the same elements with the class as without it').toHaveLength(baseline.length);
         const changed = rendered.flatMap((tokens, index) => (tokens.join(' ') === baseline[index].join(' ') ? [] : [index]));
         expect(changed, 'triggerClass changed an element other than the trigger').toEqual([triggerIndex]);
+    });
+
+    it.each(OPEN_TRIGGER_STATES)('draws the focus border instead of the closed one, never beside it: $state', async ({props, open, whileOpen}) => {
+        await setupI18n();
+        const {trigger} = await mountInState(props, open, whileOpen);
+        const tokens = classesOf(trigger);
+
+        // Presence first: on a trigger that lost its border colour altogether, the absence below would hold as well.
+        expect(tokens, 'the open trigger does not draw the focus border').toContain('border-lf-focus');
+        expect(
+            tokens.filter((token) => CLOSED_BORDERS.includes(token)),
+            'the open trigger keeps a closed border beside the focus one, and Tailwind emits it later: that is the border drawn',
+        ).toEqual([]);
+    });
+});
+
+/**
+ * TC-15: the highlight, published on the option as `data-highlighted`.
+ *
+ * On the selection tint, `bg-lf-selected`, the muted text role falls under 4.5:1, so the component's
+ * stylesheet turns a muted caption inside the highlighted option secondary — its own markup's and a
+ * caller's `item` snippet's alike. The rule selects `[data-highlighted='true']`: it holds only while
+ * every option carries the attribute and the attribute follows the highlight. Should either stop,
+ * the rule stops matching without a sound.
+ *
+ * jsdom does not apply component styles reliably, so no colour is read here: the attribute is the
+ * contract. Each check reads every option of the open list (`expectPublishedHighlight`), so the
+ * option the highlight left is held to `"false"` as firmly as the one it reached is held to `"true"`.
+ */
+describe('SimpleSelect — the highlight published on the option as data-highlighted (TC-15)', () => {
+    it.each([
+        // `acai` is first in the list but disabled: with nothing selected, the list opens on the first option it can land on.
+        {opening: 'with nothing selected', value: '', highlighted: 'apple'},
+        // A selection the keyboard could land on is where the list opens.
+        {opening: 'on the selection', value: 'elderberry', highlighted: 'elderberry'},
+    ])('publishes the opening highlight as "true" on one option and "false" on all the others: $opening', async ({value, highlighted}) => {
+        await setupI18n();
+        const {trigger} = mount({value});
+
+        await fireEvent.click(trigger);
+
+        expectPublishedHighlight(trigger, highlighted);
+    });
+
+    it('moves "true" with the arrow keys and sets the option it left back to "false"', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+        expectPublishedHighlight(trigger, 'apple');
+
+        // `banana` and `date` are disabled: the presses step over them, and they stay "false" throughout.
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+        expectPublishedHighlight(trigger, 'cherry');
+
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+        expectPublishedHighlight(trigger, 'elderberry');
+
+        await fireEvent.keyDown(trigger, {key: 'ArrowUp'});
+        expectPublishedHighlight(trigger, 'cherry');
+    });
+
+    it('moves "true" to the option under the pointer and sets the option it left back to "false"', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+        expectPublishedHighlight(trigger, 'apple');
+
+        await fireEvent.mouseEnter(option('elderberry'));
+        expectPublishedHighlight(trigger, 'elderberry');
+
+        await fireEvent.mouseEnter(option('cherry'));
+        expectPublishedHighlight(trigger, 'cherry');
+    });
+
+    it('never publishes "true" on a disabled option under the pointer', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+
+        // Presence first: the pointer does move the highlight, so what holds it below is the guard, not a dead handler.
+        await fireEvent.mouseEnter(option('cherry'));
+        expectPublishedHighlight(trigger, 'cherry');
+
+        // Every disabled option, both ends of the list included.
+        for (const {value} of FRUITS.filter((fruit) => fruit.disabled)) {
+            // The event must reach the disabled option, or its staying "false" would prove nothing.
+            const reached = vi.fn();
+            option(value).addEventListener('mouseenter', reached);
+
+            await fireEvent.mouseEnter(option(value));
+
+            expect(reached, `the pointer never reached ${value}: nothing was refused`).toHaveBeenCalledOnce();
+            expectPublishedHighlight(trigger, 'cherry');
+        }
     });
 });

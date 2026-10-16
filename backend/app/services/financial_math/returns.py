@@ -1,6 +1,9 @@
 """
 Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
+Also: rebasing to a period's start, net holding return, G/L ratio, realized gain, price return,
+and the gain that recovers a drawdown (``required_recovery_return``).
+
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
 Cash flow sign convention (standard finance):
@@ -11,7 +14,7 @@ Cash flow sign convention (standard finance):
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -207,6 +210,48 @@ def gain_loss_ratio(gain: Decimal | None, base: Decimal | None, *, positive_base
     if positive_base and base < 0:
         return None
     return gain / base
+
+
+def realized_gain(proceeds: Decimal | None, cost: Decimal | None) -> Decimal | None:
+    """The gain or loss a disposal realizes: ``proceeds - cost``, both already in one currency.
+
+    Decision 26: each leg is converted at its own date — the proceeds at the sale's rate, the cost at the
+    purchase's — so a foreign holding's FX move between the two belongs to the realized result. None when
+    either leg is unknown (no rate): the result is then unknown too, never computed from native amounts. The
+    Dashboard's sales and the lots' closures both go through it; each keeps its own rule for summing them.
+    """
+    if proceeds is None or cost is None:
+        return None
+    return proceeds - cost
+
+
+def price_return(start: Decimal | None, end: Decimal | None) -> Decimal | None:
+    """The simple return from one price to a later one: ``end / start - 1``, unrounded.
+
+    None when a price is missing or the starting price is 0: never a division by zero. Callers that
+    show a percentage multiply by 100 themselves.
+    """
+    if start is None or end is None or start == 0:
+        return None
+    return end / start - 1
+
+
+def required_recovery_return(drawdown: float) -> float | None:
+    """The gain that brings a value back to its peak after a peak-relative drawdown: ``-d / (1 + d)``.
+
+    ``drawdown`` is a ratio at or below zero (``-0.2`` = 20 % below the peak), so a fall of 20 % needs a
+    gain of 25 %. The form ``-d / (1 + d)`` keeps small values precise, where ``1 / (1 + d) - 1`` loses
+    digits. 0 when nothing is lost (never a negative zero); None for a total loss (``d <= -1``), which no
+    finite gain recovers. A positive or non-finite drawdown is a caller's error: ValueError.
+    """
+    value = float(drawdown)
+    if not math.isfinite(value) or value > 0:
+        raise ValueError("drawdown must be a finite ratio at or below zero")
+    if value <= -1.0:
+        return None
+    if value == 0:
+        return 0.0
+    return -value / (1.0 + value)
 
 
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:
@@ -434,6 +479,41 @@ def _rate_decimal(rate: float) -> Decimal:
     return value.copy_abs() if value.is_zero() else value
 
 
+# The one starting guess of the MWRR solve, for the single rate and for every point of a series: the root nearest it
+# is the one returned, so the same flows always give the same rate (a series point equals the single solve ending there).
+_MWRR_GUESS = 0.1
+
+
+def _flows_by_date(cash_flows: Iterable[CashFlowInput]) -> dict[date, Decimal]:
+    """The external flows summed per date, in Decimal, in first-seen order."""
+    by_date: dict[date, Decimal] = {}
+    for cf in cash_flows:
+        by_date[cf.date] = by_date.get(cf.date, Decimal("0")) + cf.amount
+    return by_date
+
+
+def _mwrr_point(flows_by_date: Mapping[date, Decimal], initial_nav: Decimal, final_nav: Decimal, start_date: date, end_date: date) -> MWRRPoint:
+    """The one MWRR solve, shared by :func:`calculate_mwrr` and every point of :func:`calculate_mwrr_series`.
+
+    Flows, in years from the start:
+      t=0:   -initial_nav  (the investor "buys" the portfolio at the start; a flow of the start date is inside it)
+      t=...: the flows strictly between start and end, summed per date (deposit < 0, withdrawal > 0)
+      t=T:   +final_nav plus the flows of the end date (the investor "sells" the portfolio at the end)
+    """
+    total_days = (end_date - start_date).days
+    if total_days <= 0:
+        return MWRRPoint(date=end_date, mwrr=None)
+    year_flows = [(0.0, -float(initial_nav)), (total_days / 365.0, float(final_nav + flows_by_date.get(end_date, Decimal("0"))))]
+    year_flows += [((flow_date - start_date).days / 365.0, float(amount)) for flow_date, amount in flows_by_date.items() if 0 < (flow_date - start_date).days < total_days]
+    rate = _solve_xirr(year_flows, _MWRR_GUESS)
+    if rate is None:
+        return MWRRPoint(date=end_date, mwrr=None)
+    try:
+        return MWRRPoint(date=end_date, mwrr=_rate_decimal(rate))
+    except InvalidOperation:
+        return MWRRPoint(date=end_date, mwrr=None)
+
+
 def calculate_mwrr(
     cash_flows: list[CashFlowInput],
     initial_nav: Decimal,
@@ -441,134 +521,76 @@ def calculate_mwrr(
     start_date: date,
     end_date: date,
 ) -> MWRRPoint:
-    """Money-Weighted Rate of Return / XIRR.
+    """Money-Weighted Rate of Return / XIRR between ``start_date`` and ``end_date``.
 
-    Solves: NPV = Σ(CF_i / (1+r)^(d_i/365)) = 0 for r with :func:`_solve_xirr`, which returns only a
-    verified root (None when there is none).
-
-    Flow construction:
-      t=0:  -initial_nav  (investor "buys" the portfolio at start)
-      t=...: intermediate cash flows (sign as-is: deposit<0, withdrawal>0)
-      t=T:  +final_nav    (investor "sells" the portfolio at end)
+    Solves NPV = Σ(CF_i / (1+r)^(d_i/365)) = 0 for r with :func:`_solve_xirr`, which returns only a verified root
+    (``mwrr`` None when there is none); the flows are built by :func:`_mwrr_point`.
 
     Note: scipy is CPU-bound (no I/O) — no asyncio.to_thread needed here.
     Callers doing bulk series should wrap in asyncio.to_thread().
-
-    Returns:
-        MWRRPoint(date=end_date, mwrr=result) or MWRRPoint(mwrr=None) on failure.
     """
-    # Build cash flows as (days_from_start, amount_float) list
-    total_days = (end_date - start_date).days
-    if total_days <= 0:
-        return MWRRPoint(date=end_date, mwrr=None)
-
-    flows: list[tuple[float, float]] = []
-    final_day_cf = sum(float(cf.amount) for cf in cash_flows if (cf.date - start_date).days == total_days)
-    flows.append((0.0, -float(initial_nav)))
-    flows.append((float(total_days), float(final_nav) + final_day_cf))
-    for cf in cash_flows:
-        days = (cf.date - start_date).days
-        if 0 < days < total_days:
-            flows.append((float(days), float(cf.amount)))
-
-    rate = _solve_xirr([(days / 365.0, amount) for days, amount in flows], 0.1)
-    if rate is None:
-        return MWRRPoint(date=end_date, mwrr=None)
-    try:
-        mwrr = _rate_decimal(rate)
-    except InvalidOperation:
-        return MWRRPoint(date=end_date, mwrr=None)
-    return MWRRPoint(date=end_date, mwrr=mwrr)
+    return _mwrr_point(_flows_by_date(cash_flows), initial_nav, final_nav, start_date, end_date)
 
 
-def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-start solver retry/guard chain
-    nav_snapshots: list[NAVSnapshot],
-    cash_flows: list[CashFlowInput],
-    *,
-    use_warm_start: bool = True,
-) -> list[MWRRPoint]:
-    """Cumulative MWRR series with optional warm-start optimization.
+def calculate_mwrr_series(nav_snapshots: list[NAVSnapshot], cash_flows: list[CashFlowInput]) -> list[MWRRPoint]:
+    """Cumulative MWRR at every snapshot after the first, from the first snapshot (its date and NAV).
 
-    Solves XIRR for each snapshot using the previous solution as x0 (initial guess).
-    This makes Newton-Raphson converge in ~1-2 iterations per point instead of ~20.
-
-    Warm-start guard: if the solver produces an extreme annualized rate (|rate| > 2),
-    the warm-start resets to 0.1 for the next iteration to prevent contamination.
-
-    When use_warm_start=False (cold-start mode), every point starts from x0=0.1.
-    Slower but guaranteed no contamination from prior extreme values.
+    Every point is the single solve ending on its snapshot, with the same starting guess: point ``i`` equals
+    :func:`calculate_mwrr` on the same flows from the first snapshot to snapshot ``i``.
 
     Note: CPU-bound — callers should wrap in asyncio.to_thread() for long series.
-
-    Returns:
-        List of MWRRPoint, one per snapshot (excluding the first).
     """
     if len(nav_snapshots) < 2:
         return []
+    sorted_navs = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
+    flows_by_date = _flows_by_date(cash_flows)
+    start = sorted_navs[0]
+    return [_mwrr_point(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date) for snapshot in sorted_navs[1:]]
 
-    sorted_navs = sorted(nav_snapshots, key=lambda s: s.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cf in cash_flows:
-        cf_by_date[cf.date] = cf_by_date.get(cf.date, Decimal("0")) + cf.amount
 
-    start_date = sorted_navs[0].date
-    initial_nav = sorted_navs[0].nav
+def period_mwrr(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], end_date: date, end_nav: Decimal) -> MWRRPoint:
+    """The MWRR of a period as the Dashboard shows it: from the first snapshot to ``end_date``.
 
-    _DEFAULT_GUESS = 0.1
-    _WARM_START_CAP = 2.0  # |rate| above this resets warm-start
+    A rate exists only for a period with snapshots and flows, a positive value at the end, and capital in it: the net
+    invested must be positive. It is the capital the solve itself sees — the first snapshot's value (what the investor
+    "buys" at the start, a deposit of that day included) plus the flows after it up to ``end_date`` — so a period that
+    opens before the portfolio's first day, with its deposit inside the opening value, still has its capital.
+    Otherwise ``mwrr`` is None — the card shows «—», and so does :func:`period_mwrr_series` on that day.
+    """
+    snapshots = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
+    if not snapshots or not cash_flows or end_nav <= 0 or _net_invested(snapshots[0], cash_flows, end_date) <= 0:
+        return MWRRPoint(date=end_date, mwrr=None)
+    return calculate_mwrr(list(cash_flows), snapshots[0].nav, end_nav, snapshots[0].date, end_date)
 
-    result: list[MWRRPoint] = []
-    prev_guess: float = _DEFAULT_GUESS
 
-    for i in range(1, len(sorted_navs)):
-        snap = sorted_navs[i]
-        total_days = (snap.date - start_date).days
-        if total_days <= 0:
-            result.append(MWRRPoint(date=snap.date, mwrr=None))
-            continue
+def _net_invested(start: NAVSnapshot, cash_flows: Iterable[CashFlowInput], end_date: date) -> Decimal:
+    """The capital an MWRR solve from ``start`` to ``end_date`` sees: the opening value plus the flows after it."""
+    return start.nav - sum((cf.amount for cf in cash_flows if start.date < cf.date <= end_date), Decimal("0"))
 
-        final_day_cf = float(cf_by_date.get(snap.date, Decimal("0")))
-        flows: list[tuple[float, float]] = [
-            (0.0, -float(initial_nav)),
-            (float(total_days), float(snap.nav) + final_day_cf),
-        ]
-        for cf_date, cf_amt in cf_by_date.items():
-            days = (cf_date - start_date).days
-            if 0 < days < total_days:
-                flows.append((float(days), float(cf_amt)))
-        year_flows = [(days / 365.0, amount) for days, amount in flows]
 
-        try:
-            x0 = prev_guess if use_warm_start else _DEFAULT_GUESS
-            rate = _solve_xirr(year_flows, x0)
-            if rate is None:
-                result.append(MWRRPoint(date=snap.date, mwrr=None))
-                continue
+def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput]) -> list[MWRRPoint]:
+    """The Dashboard's MWRR line: at every snapshot after the first, :func:`period_mwrr` of the period ending there.
 
-            if use_warm_start:
-                # Guard: only propagate warm-start if rate is moderate. The cap
-                # scales with the window length: over a few days even a ±200%
-                # annualized rate is a legitimate reading (a ±3% move compounds
-                # there), so a flat cap contaminates the chain from one loud
-                # early point. Beyond ~a month the cap tightens to ±100%.
-                cap = _WARM_START_CAP if total_days > 31 else max(_WARM_START_CAP, min(10.0, 365.0 / max(total_days, 1)))
-                if abs(rate) <= cap:
-                    prev_guess = rate
-                else:
-                    # Extreme rate — try again from default guess to find moderate root
-                    rate2 = _solve_xirr(year_flows, _DEFAULT_GUESS)
-                    if rate2 is not None and abs(rate2) < abs(rate):
-                        rate = rate2
-                        if abs(rate) <= cap:
-                            prev_guess = rate
-                        else:
-                            prev_guess = _DEFAULT_GUESS
-                    else:
-                        prev_guess = _DEFAULT_GUESS
-
-            mwrr = _rate_decimal(rate)
-            result.append(MWRRPoint(date=snap.date, mwrr=mwrr))
-        except (RuntimeError, ValueError, InvalidOperation):
-            result.append(MWRRPoint(date=snap.date, mwrr=None))
-
-    return result
+    A point is None where the card of that period would be: a value ≤ 0, or no net invested capital up to that day
+    (see :func:`period_mwrr`). The last point is the card of the whole period.
+    """
+    snapshots = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
+    if len(snapshots) < 2 or not cash_flows:
+        return []
+    flows_by_date = _flows_by_date(cash_flows)
+    dated_flows = sorted(flows_by_date.items())
+    start = snapshots[0]
+    points: list[MWRRPoint] = []
+    net_invested = start.nav
+    next_flow = 0
+    while next_flow < len(dated_flows) and dated_flows[next_flow][0] <= start.date:
+        next_flow += 1
+    for snapshot in snapshots[1:]:
+        while next_flow < len(dated_flows) and dated_flows[next_flow][0] <= snapshot.date:
+            net_invested -= dated_flows[next_flow][1]
+            next_flow += 1
+        if snapshot.nav <= 0 or net_invested <= 0:
+            points.append(MWRRPoint(date=snapshot.date, mwrr=None))
+        else:
+            points.append(_mwrr_point(flows_by_date, start.nav, snapshot.nav, start.date, snapshot.date))
+    return points

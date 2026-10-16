@@ -11,6 +11,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
@@ -518,7 +519,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             // Expose the instance for gallery/E2E tooling (deterministic tooltip control
             // without simulating a pixel-perfect hover on a scatter marker).
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
@@ -805,14 +806,14 @@
 
         const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
             const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${escapeHtml(marker.type)}` : `${dot}${escapeHtml(marker.type)}`;
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
-                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.currencyFlag ?? '')} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
                 html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
                 if (isConverted) {
-                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.originalCurrencyFlag ?? '')} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
                     html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
@@ -1010,7 +1011,7 @@
                                     overlayLabel = ghostParts.name;
                                     if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
                                 } else if (sigInfo.currency) {
-                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${escapeHtml(sigInfo.currencyFlag || '')} ${escapeHtml(sigInfo.currency)})</span>`;
                                 }
                                 labelHtml = signalLabelToHtml({...sigInfo, label: overlayLabel}, undefined, {inline: true});
                                 if (sigInfo.isGhost) isGhostRow = true;
@@ -1019,10 +1020,10 @@
                                 let mainLabel: string;
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(displayCurrencyFlag ?? '')} ${escapeHtml(displayCurrencyProp ?? '')}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(mainCurrencyFlagProp || '')} ${escapeHtml(mainCurrencyProp)})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
@@ -1113,31 +1114,23 @@
     <div class="relative">
         <div class="absolute top-2 left-12 z-10 flex flex-wrap items-center gap-1.5 pr-24">
             {#if !disableCandlestick}
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
-                    <button
-                        class="p-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="chart-type-line"
-                        title="Line chart"
-                        onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button
-                    >
-                    <button
-                        class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        data-testid="chart-type-candlestick"
-                        title="Candlestick chart"
-                        onclick={() => handleChartTypeChange('candlestick')}><ChartCandlestick size={14} /></button
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
+                    <button class="p-1.5 transition-colors {chartType === 'line' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}" data-testid="chart-type-line" title="Line chart" onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button>
+                    <button class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}" data-testid="chart-type-candlestick" title="Candlestick chart" onclick={() => handleChartTypeChange('candlestick')}
+                        ><ChartCandlestick size={14} /></button
                     >
                 </div>
             {/if}
             {#if hideToolbar && !hideViewModeToggle}
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
                     <button
-                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         data-testid="chart-view-absolute"
                         aria-pressed={viewMode === 'absolute'}
                         onclick={() => handleViewModeChange('absolute')}>Abs</button
                     >
                     <button
-                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         data-testid="chart-view-percentage"
                         aria-pressed={viewMode === 'percentage'}
                         onclick={() => handleViewModeChange('percentage')}>%</button

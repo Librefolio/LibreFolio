@@ -2778,3 +2778,1821 @@ runner, verificato):
    > - Previsione dei conflitti contro `dev_release2` (`59ce8ba20`): nessun percorso in comune.
 
 ### Checkpoint CP11a — pronto, FROZEN (2026-10-16, 00:45)
+
+Committato dal coordinatore: `f7508ff84` (codice, 28 file) e `d592b5ef3` (journal).
+
+### Dodicesimo aggiornamento di base: `dev_release2` (`59ce8ba20`) nel ramo X ✅ (2026-10-16) — merge `91928edc5`, pulito
+
+Nessun file fuso da solo. Le prove d'ingresso del CP11a da solo, sulla revisione combinata, una alla volta con
+`nice -n 10` e il carico ≤ 70 (`/tmp/libreFolio_cp11a_entry_checks.sh`, log in `/tmp/libreFolio_cp11a_entry/`), tutte
+verdi:
+- `api sync`, senza file tracciati cambiati; `front check` 0/0;
+- `front-utility core-unit` 5661, cresciuto con la base;
+- `gate-i18n-catalog` 176, `gate-i18n-usage` 195, `gate-plugin-i18n-ownership` 64;
+- `test db --force populate`, poi `api plugin-settings` 13.
+
+Porta 6183 libera.
+
+### CP11b — frontend: scheda, modulo, «Configura», ricerca ⏳ (via del coordinatore 2026-10-16, 00:42, dopo le prove del CP11a)
+
+Colori: passo prima io. `ProviderAssignmentSection` e `AssetSearchAutocomplete` sono nell'ondata W4 dei colori, che
+stanotte non arriva; `settingsTabs.ts` non è in nessun lotto dei colori. Nel markup nuovo, solo ruoli (skill
+`theme-roles`). Il CHANGELOG si scrive con il CP11b, che rende visibile la funzione.
+
+**⏸️ Pausa delle prove 00:55–01:40** (coordinatore: la galleria dei colori ha avuto 6 rossi per il carico, e la mia
+`vite build` delle 00:52, dentro `api plugin-settings`, era fra le cause). Nessun processo mio era in esecuzione; nella
+pausa scrivo solo il codice e non lancio niente, nemmeno `dev.py i18n add`.
+
+1. ✅ (2026-10-16) Il codice, scritto senza lanciare niente.
+   > **Note implementazione** (nuova cartella `frontend/src/lib/features/plugin-settings/`):
+   > - `pluginSettingsApi.ts`:
+   >   - tipi ristretti dalle risposte generate (`fieldOf`, `entryOf`);
+   >   - `fetchPluginSettings`, `fetchPluginEntry`;
+   >   - `savePluginSettings`, che non lancia mai e dà `saved` / `refused` (422 con `detail.results`) /
+   >     `conflict` (409) / `keyUnavailable` (503) / `failed`.
+   > - `pluginSettingsForm.ts`, puro:
+   >   - lo stato del modulo: testi digitati, scelte, valori da cancellare; da lì `draftOf` deriva le modifiche,
+   >     così un campo riportato al valore in vigore non ha modifica e un campo mostra sempre ciò che si è digitato;
+   >   - i controlli prima del server: lunghezze in code point, come `len()`; numeri, interi, limiti, opzioni;
+   >   - `writeItems`; i rifiuti per campo;
+   >   - i testi con ripiego inglese (`translateOr`);
+   >   - le classi, letterali interi e solo ruoli.
+   > - `PluginSettingsForm.svelte`, un plugin:
+   >   - un controllo per tipo;
+   >   - il segreto a sola scrittura («impostato il …», «Sostituisci», «Cancella», il testo dimenticato dopo il
+   >     salvataggio, `autocomplete="new-password"`);
+   >   - in sola lettura, con il motivo: bloccato dal server (la variabile solo per l'admin) o riservato all'admin
+   >     (D-X15);
+   >   - «Usa il predefinito» per un valore salvato;
+   >   - errori locali e rifiuti del server per campo;
+   >   - salvataggio tutto o niente, poi rilettura del plugin; `data-busy` e `aria-busy`.
+   > - `PluginSettingsTab.svelte`: la scheda (gruppi Prezzi e Cambi, stato vuoto, errore di caricamento).
+   > - `PluginSettingsModal.svelte`: «Configura», su `ModalBase`, filtrato sul plugin.
+   > - Altrove:
+   >   - `settingsTabs.ts`: una riga e un import (`plugins`, `Puzzle`, ordine 25);
+   >   - `ProviderAssignmentSection.svelte`: badge «Da configurare» e pulsante «Configura» nella riga 1, più la modale;
+   >   - `AssetSearchAutocomplete.svelte`: la riga «<fornitore> va configurato» con «Configura», dallo stream
+   >     (`error_code`) e dal ripiego REST (`providers_not_configured`); la legenda della 👑; una ricerca nuova
+   >     dopo un salvataggio.
+   > - i18n:
+   >   - il sottosistema nuovo `frontend/src/lib/i18n/pluginSettings/` (`prefixes.txt`);
+   >   - 47 chiavi `pluginSettings.*` e 2 `assets.search.*`, pronte in `/tmp/libreFolio_cp11b_i18n_add.py` (`set_key`
+   >     come `i18n add`, in un processo solo), da lanciare alla ripresa.
+   > - Nel markup nuovo e aggiunto, solo ruoli: nessuna classe di palette e nessun `dark:`.
+
+**Decisioni notturne, da rivedere** (seguono N1–N8)
+- **N9.** Nel pannello del fornitore in sola lettura, «Configura» non compare; il badge «Da configurare» sì.
+- **N10.** `NOT_CONFIGURED` resta un fallimento vero della sonda (rosso), non un avviso: la configurazione è davvero
+  incompleta, e «Configura» è lì accanto.
+- **N11.** La modale «Configura» sta al livello 80, sopra la modale dell'asset (50) e le sue richieste (70): il pannello
+  non conosce il livello del genitore.
+- **N12.** Niente cache a livello di modulo dello stato dei plugin: una GET a ogni scelta di fornitore. Una cache
+  sopravvivrebbe al logout e mostrerebbe a un altro utente le preferenze personali di chi c'era prima.
+- **N13.** Un salvataggio riuscito non dà toast, solo l'evento `pluginSettings.saved`: l'esito si vede nel campo. Rifiuti
+  ed errori danno sempre il toast.
+- **N14.** La scheda non ha ancora il link alla documentazione: arriva con la pagina utente, nel CP11c, per non lasciare
+  un link senza pagina.
+
+**Alla ripresa, in ordine**:
+- le chiavi i18n, poi `i18n check`;
+- `front check`;
+- i Vitest con test-author: il modulo puro, l'API, i tre componenti, `settingsTabs.test.ts` (la riga di oggi),
+  autocomplete e pannello;
+- `front-utility core-unit`, con i gate dei colori.
+2. ✅ (2026-10-16, dopo la ripresa delle 01:33) Le chiavi, i controlli statici e i Vitest scritti da test-author.
+   > **Note implementazione**:
+   > - `/tmp/libreFolio_cp11b_i18n_add.py`: 49 chiavi in un processo solo (47 nel sottosistema `pluginSettings`, 2 in
+   >   `assets`). `i18n check` severo verde: 4714 chiavi, 22 sottosistemi.
+   > - `front check` 0/0.
+   > - Prettier sui file toccati: `ProviderAssignmentSection` a HEAD era pulito, e `--write` ha cambiato solo il mio
+   >   blocco aggiunto.
+   > - Gate dei colori standalone (`theme-roles.mjs --check`): pulito.
+   > - test-author ha scritto, senza lanciare niente fino al via:
+   >   - 5 file nuovi: `pluginSettingsForm.test.ts`, `pluginSettingsApi.test.ts`,
+   >     `PluginSettingsForm.component.test.ts` (su macOS un nome che differisce solo per le maiuscole è lo stesso
+   >     file), `PluginSettingsTab.test.ts`, `PluginSettingsModal.test.ts`;
+   >   - 4 file aggiornati: `ProviderAssignmentSection.test.ts`, `AssetSearchAutocomplete.test.ts`,
+   >     `settingsTabs.test.ts` (la riga di oggi), `page.tabs.test.ts` (il mock della scheda, senza il quale
+   >     l'import falliva);
+   >   - le registrazioni in `_frontend_utility.py` (2 in `core-unit`, 3 in `component-unit`).
+   >
+   > **⚠️ Fuori pista**: tre difetti trovati da test-author, corretti nel prodotto:
+   > - `fieldOf` accettava come `problem` un array di un elemento: ora vuole una stringa;
+   > - dopo un salvataggio in «Configura» dal pannello, la modale si ricaricava, perché leggeva `pluginCode`
+   >   attraverso l'oggetto sostituito: ora le passo due stringhe `$derived`;
+   > - una chiave di campo `constructor`, valida per il backend, trovava `Object.prototype` con `in` e `[]`: ora ogni
+   >   ricerca per chiave passa da `own()` (`Object.hasOwn`), nel modulo puro e nel componente.
+3. ✅ (2026-10-16) Prove.
+   > **Note implementazione**:
+   > - I Vitest di test-author, quattro lanci separati con il carico fra 40 e 57: 235, 48, 43 e 113, cioè 439 prove
+   >   verdi al primo colpo e senza traffico non previsto. Coprono:
+   >   - il modulo puro e l'API;
+   >   - modulo, scheda e modale;
+   >   - `settingsTabs` e `page.tabs`;
+   >   - pannello, ricerca e il ciclo di vita della sonda di `AssetModal`, il cui finto client ora risponde «nessuna
+   >     impostazione» alla lettura nuova invece di non averla.
+   > - Le prove di chiusura, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11b_checks.sh`, log in
+   >   `/tmp/libreFolio_cp11b_checks/`): `front check` 0/0; `front-utility core-unit` 5898 (170 file, con i gate dei
+   >   colori); `front-utility component-unit` 3828 (145 file); `check-orphans` pulito; porta 6183 libera;
+   >   `git diff --check` pulito.
+   > - Previsione dei conflitti contro `dev_release2` (`db384eaf5`), due superfici in comune:
+   >   - `assets/*.json`: il bersaglio toglie le due chiavi morte `events.delete*` intorno alla riga 379, le mie stanno
+   >     alla 327;
+   >   - `_frontend_utility.py`: righe aggiunte in punti diversi, separate da righe invariate.
+   >
+   >   Fusione pulita probabile. Le registrazioni vanno tenute tutte: sono solo aggiunte.
+   > - Non lanciati: E2E, galleria, mkdocs (CP11c); `vite build` e `front build`, vietati stanotte dal coordinatore.
+
+### Checkpoint CP11b — pronto, FROZEN (2026-10-16, 02:30)
+
+Committato dal coordinatore: `649783e3f` (codice, 28 file) e `9bc442ca9` (journal).
+
+### Tredicesimo aggiornamento di base: `dev_release2` (`db384eaf5`) nel ramo X ✅ (2026-10-16) — merge `7b903ccef`
+
+- **Fusioni automatiche**, verificate sulla revisione combinata:
+  - `assets/*.json`: le mie 2 chiavi presenti e le 2 di W tolte;
+  - `_frontend_utility.py`: le 5 registrazioni mie e le 7 del bersaglio, tutte presenti.
+- **Prove leggere d'ingresso**, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11b_entry_checks.sh`), tutte
+  verdi: `api sync` senza file tracciati cambiati; `i18n check` severo (4748 chiavi); `front check` 0/0;
+  `core-unit` 6144; `component-unit` 3900.
+- **E2E prima dell'ingresso**, su richiesta del coordinatore (cambia la barra delle schede di ogni pagina delle
+  Impostazioni, e i pannelli degli asset). Slot pesante 1, una spec alla volta (`/tmp/libreFolio_cp11b_e2e.sh`, log in
+  `/tmp/libreFolio_cp11b_e2e/`).
+  - `front-asset asset-modal` 17 verdi, ricostruzione del frontend compresa (la prima corsa la fa quando le
+    sorgenti cambiano).
+  - `front-utility settings` 50, `admin-users` 10, `scheduler` 17, `email-tab` 5, `backup` 5: tutti verdi, nessuna
+    prova instabile. In tutto 104, dalle 02:39 alle 03:00. Porta 6183 libera.
+  - Le altre spec che passano dalle Impostazioni non dipendono dall'elenco delle schede: nessun ciclo sulle schede, e
+    i filtri di testo di `select-components.spec.ts` non prendono «Plugins».
+- `providerProbe.ts` (riga 111, Q10 dei colori): il CP11b non lo tocca, verificato.
+
+### CP11b in `dev_release2` ✅ (2026-10-16) — treno 84, merge `0241a87e8`, con le due righe ✨ nel CHANGELOG
+
+### CP11c — E2E, documentazione, sicurezza, galleria ⏳ (via del coordinatore 2026-10-16, 03:01)
+
+Ordine dato dal coordinatore:
+1. E2E nuovi, documentazione, la riga di nav in `mkdocs.yml` (dichiarata) e il link nella scheda;
+2. revisione di sicurezza CP10–CP11;
+3. galleria. `gallery.spec.ts` è sorvegliato dai colori: l'elenco degli scatti va prima al coordinatore, che lo
+   concorda con G; la run filtrata si fa in uno slot suo, prima delle 05:15 (dalle 05:30 alle 06:45 la macchina è
+   ferma).
+
+La base si aggiorna al checkpoint. Da non toccare: `e2e/fx/fx-list.spec.ts` ed `e2e/assets/asset-data-editor.spec.ts`
+(W1-c dei colori) e `components/assets/providerProbe.ts` (Q10 dei colori).
+
+1. ⏳ Avvio, alle 03:05.
+   > - Galleria: proposto al coordinatore uno scatto solo, `settings/plugins` (e2e_test_user, tutte le lingue e i
+   >   temi, desktop e mobile, regola C4 sul desktop). Facoltativo, se G lo vuole: la modale «Configura» sopra
+   >   la modale dell'asset.
+   > - In parallelo, su file diversi:
+   >   - test-author: la spec nuova `e2e/settings/plugin-settings.spec.ts` con l'azione `front-utility plugin-settings`;
+   >   - docs-writer: la pagina utente nuova, più le pagine per admin e per sviluppatori lasciate indietro dal CP11a;
+   >   - security-review, in sola lettura.
+   > - Mio: la riga di nav `- Plugin Settings: user/settings/plugins.md` in `mkdocs.yml`, e il `DocsLink` della
+   >   scheda verso `user/settings/plugins/` (N14 chiusa).
+2. ⏳ (2026-10-16, 03:20–03:35) La revisione di sicurezza CP10–CP11 (security-review, in sola lettura).
+   > **Esito**: nessuna vulnerabilità sfruttabile su questo ramo, perché nessun plugin di produzione dichiara un
+   > segreto. Verificati e sani: crittografia e AAD, schemi di lettura, 422 e log, autorizzazioni (gestito
+   > compreso), percorsi dei valori personali, cache della ricerca, componenti nuovi (nessun `{@html}`, segreti mai
+   > nei `notify`, nella console o negli URL), stato fra utenti, CSRF, SQL, alias delle variabili, cancellazione utente.
+   > Rilievi:
+   > - **MEDIUM, latente (9/10)**: il mascheramento sostituiva una forma alla volta, prima la più lunga. Un utente che
+   >   sceglie un segreto personale lungo, parzialmente sovrapposto a un segreto di sistema che l'errore del fornitore
+   >   mostra (contesto noto + un carattere), lasciava in chiaro il resto del segreto di sistema.
+   >   - La correzione proposta, unire gli intervalli, da sola **non basta**: verificato in processo, la forma del
+   >     testo mascherato (`'***'` contro `…apikey=***`) dice ancora se l'ipotesi è giusta. Un carattere alla volta
+   >     resta un oracolo.
+   >   - **Correzione fatta** (N15):
+   >     - `mask_text` trova tutte le occorrenze nel testo originale e unisce quelle sovrapposte o contigue;
+   >     - modalità `whole`: quando la chiamata porta un segreto personale (`BoundSettings.carries_user_secrets`), il
+   >       confine degli asset nasconde intero ogni testo che mostra un segreto, e tiene tipo e `error_code`;
+   >     - i log restano mascherati con precisione; le chiamate con soli segreti di sistema restano come prima.
+   >   - Prova in processo: due ipotesi danno uscite identiche (`***`, `FETCH_ERROR`).
+   > - **LOW (9/10), percorso già esistente**: `buildProbeTooltipHtml` (`providerProbe.ts:109,138`) restituisce il
+   >   testo dell'errore senza escaparlo, reso con `{@html}`; DOMPurify ferma gli script ma non immagini, form e stili.
+   >   La correzione, `escapeHtml(result.detail)` nei due rami più la prova, tocca un file di Q10 dei colori.
+   >   **APERTO**: per decisione del coordinatore (04:25) si fa dopo l'aggiornamento della base al checkpoint del CP11c,
+   >   che porta Q10 (entrato in `dev_release2` come `503dce683`). Prima non si può aggiornare: i miei file aperti
+   >   (`configuration.en.md`, `hosting_providers.en.md`, `_frontend_utility.py`) toccano gli stessi file.
+   > - **LOW, latente**:
+   >   - la sonda calcola `provider_url` fuori dal confine; ora `core.public_asset_url` lo trattiene (None, e un
+   >     avviso nel log) se mostra un segreto;
+   >   - per gli autori di plugin, la regola nelle guide (affidata a docs-writer): mai un segreto in `get_asset_url`,
+   >     in `cooldown_scope`, o in una richiesta con l'host preso da identificatore o parametri.
+   > - **Informativo, profilo gestito**: `NOT_CONFIGURED` nomina il campo nascosto quando la variabile dell'hoster non è
+   >   valida. È un identificatore pubblico, nessun valore. Accettato, nessuna modifica.
+   > - **Non di sicurezza**: l'input del segreto leggeva `form.texts[...]` senza `own()`. Corretto.
+   > - Le prove di regressione le scrive un test-author a parte, e partono dopo l'E2E in corso: ogni unità `services`
+   >   ricrea il DB della corsia.
+
+**Decisione notturna, da rivedere**
+- **N15.** Una chiamata asset che porta un segreto personale nasconde intero ogni testo d'errore che mostra un segreto,
+  invece di mascherarlo in loco: meno dettaglio per chi ha scelto il segreto, nessun oracolo sul segreto di sistema.
+  I log restano mascherati con precisione per l'admin.
+3. ⏳ (2026-10-16, 03:26–03:50) La spec E2E nuova (test-author).
+   > **Note implementazione**:
+   > - `frontend/e2e/settings/plugin-settings.spec.ts`, 5 prove, registrata come `front-utility plugin-settings`:
+   >   - la scheda, in sola lettura, per un membro e per un admin;
+   >   - «Configura» su mockprov per un membro (numero e segreto personale) e per un admin (segreto dell'istanza);
+   >   - la ricerca con la riga «da configurare» e la legenda della 👑, con lo stream SSE simulato.
+   > - mockprov non si sceglie nella modale dell'asset (il pannello lo filtra di proposito): le prove 2 e 3 creano un
+   >   asset loro via API, con mockprov e un identificativo che il mock rifiuta, ne aprono la modifica e cliccano
+   >   `provider-configure`.
+   > - La pulizia, sempre, via API: dopo la prima corsa, nel DB della corsia zero righe di mockprov e zero asset
+   >   rimasti.
+   >
+   > **⚠️ Fuori pista**:
+   > - **Difetto del prodotto, corretto**: la modale «Configura» non aveva un'area che scorresse. Con i 7 campi di
+   >   mockprov, a 1280×720 «Salva» e «Chiudi» finivano sotto il bordo: `allowOverflow` toglieva il limite di 90vh, e la
+   >   pagina è bloccata. Prima corsa: 3 prove verdi e 2 rosse per timeout.
+   >   - Ora titolo e «Chiudi» restano fermi e il corpo scorre in mezzo (`min-h-0 flex-1 overflow-y-auto`), dentro la
+   >     colonna di `ModalBase`.
+   >   - Le select aprono l'elenco con `position:fixed`, quindi il corpo che scorre non le taglia.
+   >   - Con i plugin di produzione (un campo ciascuno) non si vedeva.
+   > - **Seconda corsa, ambiente**: il backend di prova non ha risposto in 300 s. `server --test` ricostruisce il sito
+   >   della documentazione se una pagina è più nuova, e docs-writer stava salvando pagine. Le E2E e la galleria vanno
+   >   lanciate dopo `mkdocs build`, a documentazione ferma.
+4. ✅ (2026-10-16, 03:05–04:00) La documentazione (docs-writer), più le mie righe.
+   > **Note implementazione**:
+   > - Pagina nuova `user/settings/plugins.en.md`, con l'immagine `settings/plugins` (lo scatto arriva con la
+   >   galleria).
+   > - 21 pagine aggiornate:
+   >   - utente: indice delle impostazioni, justETF e Borsa Italiana con la preferenza;
+   >   - admin: `configuration` e `hosting_providers`;
+   >   - galleria desktop e mobile;
+   >   - sviluppatori: `plugin_settings`, guide asset e FX, `registry_pattern`, `frontend/i18n`, `test-walkthrough`
+   >     utils e front-utility, `assets/architecture`, `search_link_finder`, `api/overview`, componenti e toolbar delle
+   >     impostazioni.
+   > - Le due regole della revisione di sicurezza sono nelle guide. Nessuna pagina timbrata: ogni modifica aggiunge
+   >   contenuto, quindi resta debito di traduzione.
+   > - Mie:
+   >   - la nav, rinominata `- Plugins: user/settings/plugins.md`, con `nav_translations` IT/FR/ES. «Plugin Settings»
+   >     era anche il titolo della pagina per sviluppatori, e una traduzione le avrebbe rinominate tutte e due;
+   >   - il passo 8 di `.github/instructions/backend-providers-asset.instructions.md`: le impostazioni e le regole per
+   >     gli autori.
+   > - `mkdocs build` severo verde (94 s), `check-links` 97 link (il `DocsLink` nuovo compreso).
+   >
+   > **⚠️ Fuori pista**:
+   > - Il primo `mkdocs build` severo è fallito con 5 avvisi: la pagina nuova, senza traduzioni, si costruisce anche in
+   >   IT/FR/ES, e i suoi link puntavano ad ancore che esistono solo in inglese (`admin/configuration#plugin-*`,
+   >   `#startup-checks`, `justetf#search-currency`). Ora i link vanno alle pagine, senza ancora.
+   > - docs-writer ha trovato:
+   >   - Nessuna colonna salva l'URL dell'asset: ho corretto le docstring, l'URL è solo «mostrato».
+   >   - Un campo personale obbligatorio lascerebbe per sempre `NOT_CONFIGURED` le chiamate fatte per nessuno
+   >     (prezzi, job), mentre la scheda direbbe «configurato». Ora la dichiarazione lo rifiuta: N16.
+   >   - Il `CHANGELOG.md` riga 40, la voce del CP10, dice ancora «la schermata arriva dopo». Lo segnalo al
+   >     coordinatore.
+
+**Decisione notturna, da rivedere**
+- **N16.** Un campo personale non può essere `required` (`validate_declaration`): le chiamate fatte per nessuno non lo
+  ricevono mai. Nessun plugin lo dichiarava.
+5. ✅ (2026-10-16, 04:00–04:05) Le prove di regressione della sicurezza (un test-author a parte), in 4 file esistenti,
+   senza file nuovi. Lanciate dopo la documentazione e prima dell'E2E, una alla volta con il carico fra 38 e 39:
+   > - `services secret-masking` 68: 20 nuove (l'attacco della sovrapposizione chiuso; con `whole` le due ipotesi
+   >   danno la stessa uscita; intervalli sovrapposti o contigui; `mask_exception` e `masked_description` con `whole`).
+   > - `services plugin-settings-runtime` 120: 24 nuove:
+   >   - `carries_user_secrets`;
+   >   - `call_provider` con mockprov e un segreto personale: stesso errore, stesso codice, testi `***` per le due
+   >     ipotesi; senza segreto personale il mascheramento resta preciso;
+   >   - `public_asset_url`, e la sonda che trattiene un URL con un segreto (di sistema o personale).
+   > - `services plugin-settings-contract` 194: 4 nuove (un campo personale obbligatorio rifiutato, anche alla
+   >   registrazione).
+   > - Vitest `PluginSettingsForm.component.test.ts` 34: PSF-25, un segreto con chiave `constructor`.
+   > - Lint e formato puliti; nessun difetto del prodotto; porta 6183 libera.
+6. ✅ (2026-10-16, 04:05–04:22) E2E nuove dopo la correzione della modale, e controlli leggeri.
+   > - `front-utility plugin-settings`: due corse 5/5 (04:05, con la ricostruzione del frontend, e 04:10), più una con
+   >   `--workers 4`, 5/5 in 21,6 s (04:22).
+   > - Le due prove di «Configura» passano da 60 s di timeout a 4–5,5 s. I controlli della correzione: il modulo di
+   >   mockprov supera il corpo della modale, «Chiudi» resta tutto nella finestra, e «Salva» si raggiunge scorrendo il
+   >   corpo a ognuno dei 4 salvataggi.
+   > - Dopo ogni corsa, nel DB della corsia: zero righe di mockprov, zero impostazioni personali, zero asset di prova.
+   > - Controlli leggeri (`/tmp/libreFolio_cp11c_checks.sh`): `front check` 0/0, `core-unit` 6144, `component-unit` 3901,
+   >   `check-orphans` pulito, `i18n check` severo. Porta 6183 libera.
+   > - tsc sulla configurazione e2e: 2 errori che c'erano già (`onboarding-tour.spec.ts:863` e il percorso
+   >   `$lib/api/generated` in `src/lib/types/files.ts`), non miei. Le mie due spec sono pulite.
+7. ✅ (2026-10-16, 04:25–04:30) La galleria.
+   > - G ha dato l'ok allo scatto `settings/plugins` (senza la modale), alle sue condizioni:
+   >   - dopo `waitForSettled`, nessun `plugin-settings-load-error` né `plugin-settings-empty`, e almeno una
+   >     `plugin-settings-family`;
+   >   - nessun `plugin-setting-secret-state` con `data-state` `set` o `env`;
+   >   - sul desktop la regola degli schermi alti, come `email`, e oltre ~2500 px la prima famiglia; sul mobile il
+   >     primo schermo;
+   >   - solo `data-testid`, niente attese a tempo né maschere.
+   > - Il messaggio originale di G (arrivato dopo il riassunto del coordinatore, che accettava anche `TEST_ADMIN`)
+   >   chiedeva la vista di un membro: uso `TEST_USER`, aggiunto all'import di `test-users` (unico tocco permesso oltre
+   >   al test). È la vista che la pagina del manuale utente descrive. `data-busy` della scheda vale `true` dal primo
+   >   render (`loading = $state(true)`), quindi `waitForSettled` aspetta davvero.
+   > - Test scritto in `gallery.spec.ts`, dopo `email`: +36 righe e 1 riga d'import. Prettier pulito.
+   > - Run filtrata nello slot del coordinatore, verso le 04:50, da finire entro le 05:15:
+   >   `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r13-x … mkdocs gallery --test-port 6183 --filter "plugins - all
+   >   languages and themes" --workers 2`. La ricarica del DB della galleria non riceve `--data-dir`, quindi passa per
+   >   la variabile.
+   > - `providerProbe.ts`: per decisione del coordinatore, le due righe di escape arrivano dopo l'aggiornamento della
+   >   base al checkpoint del CP11c, che porta Q10.
+   > - Slot pesante 2 dal coordinatore. Run filtrata, `--filter "plugins - all languages and themes"`: solo quel test,
+   >   verificato con `--list`. 2 prove passate (desktop e mobile) in 1,4 minuti, dalle 04:27:40 alle 04:29:49.
+   > - 16 immagini (4 lingue × 2 temi × 2 viewport), ignorate da git per regola (`.gitignore:79`).
+   > - Desktop: 📐 blocco di 656 px, schermo 1280×745 in tutte le lingue, ben sotto i 2500.
+   > - Guardato a occhio lo scatto desktop in inglese, tema scuro: ruoli corretti, la barra del membro, le due schede
+   >   «Configurato».
+   > - Slot liberato e porta 6183 libera alle 04:30.
+
+### Checkpoint CP11c — pronto, FROZEN (2026-10-16, 04:35)
+
+Previsione dei conflitti contro `dev_release2` (`3edfc4b9a`): sette file in comune, e un solo punto vicino.
+- `admin/hosting_providers.en.md:44`:
+  - io riscrivo la riga della tabella sui campi bloccati dall'ambiente;
+  - il bersaglio aggiunge subito sotto la riga nuova del limite di caricamento del ripristino (B);
+  - risoluzione: la mia riga 44, poi la loro riga nuova; il resto come nel bersaglio.
+- Gli altri sei (`gallery.spec.ts`, `admin/configuration.en.md`, `api/overview.md`,
+  `frontend/components/features/settings.md`, `frontend/i18n.md`, `_frontend_utility.py`) hanno pezzi a più di 3 righe
+  di distanza.
+
+Resta aperto, da fare subito dopo l'aggiornamento della base: l'escape in `providerProbe.ts` (righe 109 e 138), con la
+sua prova.
+
+Committato dal coordinatore: `c8d23c544` (fix, 39 file) e `3d122d28a` (journal).
+
+### Quattordicesimo aggiornamento di base: `dev_release2` (`3edfc4b9a`, con Q10 dei colori) nel ramo X ✅ (2026-10-16) — merge `024a6a067`
+
+- Un conflitto, previsto, in `admin/hosting_providers.en.md`. Risolto tenendo la mia riga dei campi bloccati
+  dall'ambiente e subito sotto la riga nuova del limite di caricamento del ripristino; il «four things» del bersaglio
+  torna. In stage solo quel file; il commit del merge l'ha fatto il coordinatore.
+- Fusioni automatiche controllate: `gallery.spec.ts` (lo scatto e `TEST_USER`), `_frontend_utility.py`,
+  `frontend/i18n.md`, `admin/configuration.en.md`, `api/overview.md`, `features/settings.md`.
+
+### Sicurezza, il punto aperto: l'escape del tooltip della sonda ✅ (2026-10-16, 04:45) — commit a parte
+
+- `providerProbe.ts::buildProbeTooltipHtml`: `escapeHtml(result.detail ?? 'Error')` per un fallimento, e
+  `escapeHtml(result.detail ?? '—')` nel ramo di ripiego. Le tabelle non cambiano, e nemmeno la riga 111 di Q10 (il
+  bordo). La prova (`providerProbe.test.ts`) la sistema test-author.
+- La prova (test-author): `providerProbe.test.ts` 38/38. Il caso del fallimento ora vuole il testo escapato; 8 casi
+  nuovi (markup ostile su fallimento e ripiego, testo semplice invariato, le tabelle intatte). Il revisore lo chiude:
+  le celle delle tabelle non possono portare testo del fornitore.
+- Prove d'ingresso su `024a6a067` più l'escape, una alla volta con `nice` e il carico ≤ 70
+  (`/tmp/libreFolio_cp11c_entry_checks.sh`, log in `/tmp/libreFolio_cp11c_entry/`):
+  - `front check` 0/0, dopo `api sync`;
+  - `core-unit` 6154;
+  - services `secret-masking` 68, `plugin-settings-runtime` 120, `plugin-settings-contract` 194;
+  - `mkdocs build` severo (74 s), `check-links` 97, `i18n check` severo (4750 chiavi). Porta 6183 libera.
+- Niente E2E: lo slot 2 era di A fino alle 05:25. Le E2E `plugin-settings` verdi erano sulla base precedente; si
+  possono rifare dopo le 06:45.
+
+> **⚠️ Fuori pista**: il primo `front check` dava 1 errore in `LoginCard.svelte:112`: `first_account_open`, il flag
+> di A6d entrato con la base. Il client generato (ignorato da git) era ancora quello di prima dell'aggiornamento:
+> `api sync`, nessun file tracciato cambiato, poi `front check` 0/0. Dopo ogni aggiornamento di base che cambia l'API,
+> `api sync` va prima di `front check`.
+
+### CP11c ed escape in `dev_release2` ✅ (2026-10-16) — treno 91
+
+- Commit sul mio ramo: `17a8b396f` (fix) e `a10af747d` (journal).
+- Merge in `dev_release2`: `2f1d77a23`. Il mio ramo è stato portato avanti alla punta, HEAD `6c03c38b8` (verificato).
+- CHANGELOG: nessuna riga 🔒, perché la funzione non è ancora uscita. La riga «Settings › Plugins» ora dice che il
+  segreto non si vede «nemmeno nel messaggio d'errore di una fonte né nell'indirizzo della pagina di un asset».
+
+### X-R12 — gli eventi del fornitore datati oggi ✅ (via del coordinatore 2026-10-16, 04:50; pronto alle 05:10)
+
+Ordine dato dal coordinatore: X-R12, poi FE5c più X-R13 (sblocca Z7c-1; da controllare con la regola dei colori
+«niente elementi misti»), poi CP13. Un commit per lotto. Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova,
+nemmeno leggera, solo scrittura.
+
+1. ✅ (04:50–04:53) La correzione, in `services/assets/refresh.py::_fetch_refresh_item`.
+   > **Note implementazione**:
+   > - Quando l'intervallo arriva a oggi, la chiamata della storia finisce **oggi** (`call_end`), non più ieri. È così
+   >   solo quando la storia è già chiesta (`start == "min" or start < today`): le stesse chiamate di prima, cambia solo
+   >   la fine.
+   > - I prezzi della storia dopo `history_end` (ieri) restano fuori dalla cache e da `prices_data`: il prezzo di oggi
+   >   resta il valore corrente.
+   > - Gli eventi fino a oggi restano.
+   > - Con un buco nella cache e `end >= today`, la chiamata va fino a oggi; la copertura si conta ancora fino a ieri.
+   > - Un intervallo passato non cambia, e `start == today` non chiama la storia.
+   > - `end_date` è inclusivo in tutti i plugin che danno la storia: Yahoo aggiunge un giorno da sé; justETF, Borsa,
+   >   scheduled_investment e mockprov filtrano con `<=`; css_scraper non ha storia.
+   > - Prova in processo (`/tmp/libreFolio_xr12_smoke.py`), tutto come atteso:
+   >   - la chiamata finisce oggi;
+   >   - il prezzo di oggi è quello corrente (11), non quello della storia (10);
+   >   - il dividendo di oggi resta;
+   >   - la cache non ha oggi.
+   > - Le suite esistenti del percorso sono verdi: `services asset-source-refresh` 12, `utils provider-core-cache` 29,
+   >   `services rate-limit-results` 23, `services scheduler-jobs` 43.
+   >
+   > **⚠️ Fuori pista**: la prima delle quattro suite è partita con il carico a 74,4, sopra 70. Il ciclo stampava il
+   > carico ma non aspettava. Le altre tre sono partite sotto 70. D'ora in poi il controllo del carico resta un passo
+   > che blocca.
+2. ✅ (05:08) I test di regressione: test-author, sei test `test_fetch_*` in
+   `test_services/test_asset_source_refresh.py`.
+   > **Note implementazione**:
+   > - **Il fornitore finto** gira in processo, registra ogni chiamata e restituisce un evento solo se l'intervallo
+   >   chiesto ne contiene la data, come uno vero.
+   > - **La data** è fissata con la fixture `xr12_today` (non autouse), che sostituisce `refresh.date_type`, l'unico
+   >   orologio di `_fetch_refresh_item`, e svuota le due cache del core prima e dopo ogni test.
+   >   - Non è autouse perché `_prepare_refresh_items` usa `date_type` in un `isinstance`.
+   > - **La chiave di cache** è ricostruita dalle stesse parti di `refresh.py`: se cambia, i test falliscono, non passano
+   >   in silenzio.
+   > - **I sei casi**:
+   >   1. intervallo fino a oggi;
+   >   2. cache fino a ieri, cioè colpo pieno senza chiamata;
+   >   3. buco nella cache: chiamata dal giorno mancante fino a oggi;
+   >   4. intervallo passato: la chiamata finisce a `end`, senza valore corrente;
+   >   5. `start == today`: nessuna chiamata della storia;
+   >   6. punti futuri del fornitore scartati.
+   > - **Prove** (ognuna dopo il controllo del carico, con `nice`):
+   >   - `services asset-source-refresh` → **18 passed**, i 12 di prima più i 6 nuovi (05:08, carico 54;
+   >     `/tmp/libreFolio_xr12_test_1.log`);
+   >   - **rosso sul codice vecchio**: con il `refresh.py` di HEAD rimesso per una sola run e poi ripristinato (`cmp`
+   >     uguale), **3 failed, 15 passed**, esattamente 1, 3 e 6, i casi previsti. Cadono per la ragione giusta: la chiamata
+   >     della storia finisce ieri (3/17) invece che oggi (3/18), e nel buco finisce al giorno mancante. 2, 4 e 5 tengono
+   >     i casi invariati (`/tmp/libreFolio_x_fe5c/xr12_red_proof.log`);
+   >   - `ruff check` e `black --check` sui due file: puliti.
+
+**Decisione notturna, da rivedere**
+- **N17.** La correzione è generica, nel refresh, senza toccare i plugin. Il costo noto è su justETF: con `end_date`
+  uguale a oggi, la sua storia aggiunge la quotazione corrente (`add_current`, solo per l'EUR), cioè una richiesta in
+  più per ETF per ora di cache del grafico, per un punto che il core poi scarta. Gli eventi di justETF vengono da righe
+  passate del grafico, quindi non ci guadagna niente.
+  - Alternativa, da decidere di giorno: la storia di justETF smette di aggiungere la quotazione corrente, perché il
+    core non usa mai un prezzo di storia datato oggi.
+
+### FE5c — il taglio della pagina dell'asset, più X-R13: analisi ⏳ (2026-10-16, 04:58)
+
+Inventario in sola lettura (agente explore): `routes/(app)/assets/[id]/+page.svelte`, 3603 righe, lo script va dalla 1
+alla 2698.
+- **Lo stato**: ~80 `$state` in un unico centro (148–371), letti e scritti da quasi tutte le regioni.
+- **Helper puri, spostabili così come sono**:
+  - `isRecord`, `parseBackendSignalResults`, `priceConversionErrorFromItem`;
+  - le tre funzioni del calendario (1191–1291), `comparisonAssetIds`, `mergeChartPointsIncremental` (2542),
+    `emptyCalendarReturnView`.
+  - Due chiedono attenzione: `calendarDataFingerprint` legge un `$derived`, `translateCalendarProblem` usa `$t`.
+- **Il markup**:
+  - poco costosi: intestazione (2707–2765), metadati e classificazione (3445–3560), scheda del rischio (3562–3583),
+    modali (3585–3603);
+  - intrecciati: la barra degli strumenti (2775–2888) e l'area del grafico (2943–3292), che ha i controlli del
+    calendario duplicati a 2973 e 3211.
+- **Colori**: zero classi `-lf-`, quindi zero elementi misti. Baseline 312 (`themeRoles.baseline.tsv:259`).
+- **X-R13**:
+  - alla riga 3496, `emoji: getSectorEmoji(name)` non lo legge nessuno: `AllocationEntry` ha solo
+    `name`/`value`/`amount`, e il grafico ricava l'emoji da sé alla riga 210;
+  - va tolto, con l'import della riga 33.
+- **Prove**:
+  - `comparisonSignalPages.test.ts:67` legge il sorgente della pagina come testo (`catalogueError(...)`, l'helper,
+    nessuna chiave con `_i18n:`): `catalogueError` e le sue chiamate restano nella pagina;
+  - una dozzina di spec E2E e la galleria selezionano i `data-testid` della pagina;
+  - nessun `vi.mock` sui moduli della pagina (D-P4 libera);
+  - l'àncora `guideAnchor('asset.detail.header')` resta.
+- **Punti caldi per i conflitti**: il polling dal vivo di Z (`74d028ec6`, ≈1486–1606), la scheda e gli import del
+  rischio di Y4b (`51aff4a12`), la barra degli strumenti dei colori.
+- **Taglio proposto**, dai pezzi meno cari:
+  1. X-R13;
+  2. gli helper puri in `.ts`, con le loro unità;
+  3. il pannello dei metadati;
+  4. la scheda del rischio e le modali;
+  5. l'intestazione;
+  6. `requiredFxPairs` e `assetDetailIssues` come funzioni pure;
+  7. i pannelli dei segnali e delle misure;
+  8. i controlli del calendario in un componente solo;
+  9. la barra degli strumenti, e il caricamento più il polling in uno stato `.svelte.ts`.
+- **Regole del taglio**: le classi si spostano con i loro elementi interi; le classi nuove solo sui ruoli; il taglio va
+  dichiarato con `theme-roles.mjs --split` nello stesso commit.
+- **Chiesto al coordinatore** che cosa serve a Z7c-1, che decide se il pezzo 9 va anticipato. Nella pausa dalle 05:30
+  alle 06:45 scrivo i pezzi 1–5; le prove partono dopo.
+
+**Risposta del coordinatore (04:59)**:
+- l'ordine resta 1→9, con il pezzo 9 per ultimo;
+- Z7c-1 non chiede il taglio: chiede solo che `pollLivePriceOnce` restituisca l'esito `{ok, notBefore}`, poche righe che Z
+  scrive nella pagina e che entrano **prima** del pezzo 9. Al pezzo 9 le sposto nello stato `.svelte.ts` così come
+  sono;
+- le righe ≈1486–1606 non si toccano fino al pezzo 9: allora il coordinatore aggiorna la base con le righe di Z;
+- un commit per pezzo, e `--split` nel commit di ogni pezzo che sposta classi;
+- J (CP-10a) aggiunge casi a `e2e/assets/asset-detail.spec.ts`, solo per `data-testid`: se un `data-testid` deve
+  cambiare, va detto al coordinatore prima del commit.
+
+#### FE5c-1 · X-R13 ✅ (2026-10-16, 05:06)
+
+> **Note implementazione**: due righe tolte da `routes/(app)/assets/[id]/+page.svelte`:
+> - `emoji: getSectorEmoji(name)` nel `map` dei settori passato ad `AllocationPieChart` (`AllocationEntry` ha solo
+>   `name`/`value`/`amount`, e il grafico legge l'emoji dal negozio dei settori);
+> - l'import ormai inutile (riga 33).
+>
+> Nessun'altra lettura di `getSectorEmoji` nella pagina (grep).
+> - Prova: `dev.py front check` → `svelte-check found 0 errors and 0 warnings` (05:06, carico 62).
+> - La pagina passa da 3603 a 3602 righe; da qui i numeri di riga dell'inventario scalano di 1 dopo la 33.
+
+> **⚠️ Fuori pista**:
+> - il primo `front check` (05:03) è uscito con 4 errori, tutti in `ui/input/PasswordStrength.svelte`
+>   (`password_rules`, di A6c). La causa era il client generato vecchio (04:46, zero `password_rules`): il ramo è
+>   avanzato fino a `6c03c38b8` e quindi `api sync` serviva ancora.
+> - L'ho lanciato **senza attendere il carico**: alla partenza la media di 1 minuto era 81, sopra la soglia di 70.
+>   Errore mio, senza danni (`api sync` è leggero ed è finito in pochi secondi).
+> - Da qui ogni prova passa da `/tmp/libreFolio_x_fe5c_check.sh`, che aspetta il carico ≤ 70 prima di partire.
+
+**Commit dei primi due lotti (~05:11)**:
+- `1439491ca` X-R12, `9b58867eb` X-R13, `62726a83f` journal;
+- HEAD `62726a83f`;
+- ingresso in `dev_release2` dopo il blocco dei colori (~06:45).
+
+**Come entrano i pezzi del FE5c**: tutti toccano `+page.svelte`, quindi un pezzo si consegna solo dopo il commit del
+precedente. Nella pausa i pezzi 3–5 nascono come **file nuovi**; li innesto nella pagina uno alla volta dopo le
+06:45, e ogni innesto ha la sua prova e il suo handoff.
+
+#### FE5c-2 · gli helper puri in moduli `.ts` ✅ (2026-10-16, scritto 05:15–05:30, provato 06:46–06:48)
+
+> **Note implementazione**:
+> - `lib/charts/chartPageSignals.ts` (nuovo, **N18**): `parseBackendSignalResults`, `signalDataContextFingerprint` e
+>   `comparisonAssetIds(configs, excludeAssetId?)`.
+>   - La pagina dei cambi ne ha copie identiche (`fx/[pair]/+page.svelte:525,548,564`; il suo
+>     `comparisonAssetIds` non esclude nessun asset). Le adotta col FE4, che resta mio.
+>   - Casa neutra accanto a `loadComparisonData.ts`, che si dichiara già «condiviso dalle due pagine di dettaglio».
+> - `lib/components/assets/detail/assetDetailPriceQuery.ts` (nuovo): quello che la pagina legge dalla query dei prezzi.
+>   - `parseAssetPriceQueryWithSignalIsolation(data)`: è il corpo di `queryAssetPricesBulkWithSignalIsolation`; nella
+>     pagina resta solo la chiamata axios, in tre righe;
+>   - `priceConversionErrorFromItem`, `calendarComparisonProblemsFromResponse`,
+>     `calendarComparisonFxFailuresFromResponse` e `preserveFactualCalendarPeersForCurrentUnavailable`.
+> - `lib/components/assets/detail/assetDetailChartPoints.ts` (nuovo): `mergeChartPointsIncremental`.
+>   - Le chiamate della pagina restano uguali, compresa quella del polling di Z (riga ~2072 di prima), che non tocco.
+> - `lib/components/charts/priceChartHelpers.ts`: `emptyCalendarReturnView` era privato e diventa esportato, con lo
+>   stato `idle` di default. La pagina ne aveva una copia identica, che sparisce.
+> - **Corpi spostati alla lettera**, verificato con `diff`. Le uniche differenze:
+>   - i commenti di documentazione;
+>   - `export`;
+>   - un `responseItemFor` privato al posto di due `find` uguali;
+>   - `views` come `ReadonlyMap`;
+>   - `allAssets` e `displayCurrency` della pagina, che diventano l'argomento `context` (`{assets, displayCurrency}`),
+>     valutato nello stesso momento di prima: all'arrivo della risposta.
+> - **Nella pagina**:
+>   - `comparisonAssetIds(configs)` resta come involucro di una riga, legato a `data.assetId`, così le sue sei chiamate
+>     non cambiano;
+>   - dagli import escono `schemas`, `backendSignalSchemas` e `COMPARISON_ASSET_RUNTIME_PARAM_KEYS`.
+> - La pagina passa da 3602 a **3407 righe**. Nessun blocco del diff cade nel polling di Z (righe 1486–1606 di prima).
+> - Nessuna classe spostata, quindi niente `--split`.
+> - **Test**: un test-author in background scrive i Vitest dei tre moduli e dell'export, e li registra in `core-unit`.
+>   Non lancia niente fino al mio via, dopo le 06:45.
+> - **Da provare dopo le 06:45**:
+>   - `front check`;
+>   - i Vitest nuovi;
+>   - `comparisonSignalPages.test.ts`, che legge il sorgente della pagina;
+>   - `core-unit` e `component-unit`.
+
+> - **I test del pezzo 2** (test-author, 05:36, scritti e non lanciati), registrati in `core-unit`:
+>   - 31 in `chartPageSignals.test.ts`;
+>   - 76 in `assetDetailPriceQuery.test.ts`;
+>   - 7 in `assetDetailChartPoints.test.ts`;
+>   - +9 in `priceChartHelpers.test.ts`.
+>   - Usano gli schemi veri, senza mock; i problemi sono asseriti per `code` e `status`.
+> - **⚠️ Fuori pista**, dal suo rapporto: nessun test in node caricava i **valori** del barile `$lib/charts/signals`.
+>   - I due moduli nuovi ora importano direttamente da `signals/backendTypes`, `/ChartSignal`, `/resultMapper` e
+>     `/signalProblem`, come già fa `priceChartHelpers.ts`.
+>   - `$lib/api` invece si carica già in node in vari test (`stressBuckets`, `eligibility`, …).
+> - **Comportamenti fissati dai test, non cambiati**:
+>   - `priceConversionErrorFromItem` legge solo il primo errore;
+>   - l'avviso di valute miste conta come errore di conversione;
+>   - un ramo morto: `Array.isArray(result.error)` dopo `safeParse`.
+> - **Trovato fuori dal codice spostato**: la riga 1665 di `loadChartData`. Va nel backlog come **X-R16**; non lo
+>   correggo nel taglio.
+> - **Secondo giro di test-author** (05:45, solo scrittura):
+>   - unità di `assetDetailFxPair.ts` e di `assetDetailFxRequirements.ts`, compreso il **contratto di pigrizia** dei
+>     getter: quali chiavi si leggono in quali casi;
+>   - test di componente piccoli per `AssetChartModeToggle`, `AssetCalendarWindowControls`, `AssetDetailSignalsPanel` e
+>     `AssetDetailMeasuresSection`;
+>   - niente test di componente per intestazione e metadati: grafici, mappe e navigazione li coprono le E2E.
+
+> - **Prove** (06:46–06:48, ognuna dopo il controllo del carico, con `nice`; la macchina era libera, carico 8–21):
+>   - Prettier sui file del pezzo: ha riformattato solo `assetDetailPriceQuery.ts`, la firma su più righe;
+>   - `front check` → **0 errori, 0 avvisi**, compresi i moduli e i test dei pezzi 4 e 6, già nell'albero;
+>   - Vitest dei 6 file puri (pezzi 2, 4 e 6) → **373/373**;
+>   - `front-utility core-unit` → **177 file, 6343/6343**, compresi i cancelli dei colori e
+>     `comparisonSignalPages.test.ts`;
+>   - `git diff --check` pulito.
+> - Niente `api sync`, niente `--split`, niente E2E (le E2E della pagina arrivano alla fine, nello slot pesante).
+> - Testo aggiornato in `developer/frontend/components/charts.md`. Il `mkdocs build` gira prima dello slot E2E.
+> - **⚠️ Fuori pista**: il primo Vitest è uscito con 127, perché il wrapper fa `cd` nella radice e il percorso di
+>   `vitest` era relativo a `frontend/`. Rilanciato con `bash -c 'cd frontend && …'`. Nessun effetto.
+
+**Decisione notturna, da rivedere**
+- **N18.** Gli helper che la pagina dell'asset ha in comune con quella dei cambi vanno in un modulo neutro nuovo,
+  `lib/charts/chartPageSignals.ts`, non sotto `components/assets/`, così il FE4 li adotta senza import fra feature.
+  - Il resto va in `lib/components/assets/detail/`, una sottocartella che il rename del FE5a si porta dietro.
+  - `isRecord` resta privato, come nei sei moduli che ne hanno già una copia: nessuna utilità condivisa nuova in
+    questo lotto.
+
+#### FE5c-3/4/5 · i pezzi nuovi, scritti nella pausa ⏳ (2026-10-16, 05:20–05:30; innesti dopo le 06:45)
+
+I componenti sono generati da script (`/tmp/libreFolio_x_fe5c_piece3.py`, `…piece5.py`), copiando alla lettera il blocco
+della pagina e togliendo solo l'indentazione. La pagina **non** è ancora toccata per questi pezzi: resta al pezzo 2.
+
+- **FE5c-3** `lib/components/assets/detail/AssetDetailMetadataPanel.svelte`, dal blocco «Metadata & Classification»
+  (righe 3253–3365 della pagina al pezzo 2).
+  - Uniche differenze: `showMetadata` diventa `open` (`$bindable`), e l'azione di modifica diventa `onedit`.
+  - Tolto `disabled={!assetInfo}`: dentro `{#if assetInfo}` valeva sempre falso, e senza l'attributo il DOM è uguale. Le
+    classi `disabled:` restano com'erano.
+  - **Innesto**:
+    - al posto del blocco: `<AssetDetailMetadataPanel bind:open={showMetadata} {shortDescription} {providerExternalUrl}
+      {classificationLoaded} {sectorDistribution} {geographicDistribution} {identifiersList} {providerAssignment}
+      {providerIconUrl} {assignmentProviderName} onedit={() => { editDataForModal = buildEditData(); editModalOpen = true;
+      }} />`;
+    - `showMetadata` resta nella pagina, così sopravvive al cambio di scheda e di asset come oggi;
+    - dalla pagina escono gli import che restano inutili: `GeographyMap`, `AllocationPieChart` e forse `Info`,
+      `ChevronDown`, `currentLanguage`, `uiLocale` (da verificare uno per uno);
+    - `--split` della pagina verso la pagina e il pannello.
+- **FE5c-4** `lib/components/assets/detail/assetDetailFxPair.ts` (**N19**):
+  - `fxPairCreateDefaults(slug, assetCurrency, displayCurrency)`: i tre `{@const}` della modale delle coppie;
+  - `displayCurrencyAfterFxPairCreated(pair, assetCurrency)`: la scelta della valuta in `handleFxPairCreated`.
+  - **Innesto**: un `{@const}` al posto di tre, e due righe in `handleFxPairCreated`. Il `readonlyBase={!fxPairCreateSlug}`
+    resta nella pagina. Test con test-author.
+- **FE5c-5** `lib/components/assets/detail/AssetDetailHeader.svelte`, dal blocco dell'intestazione (righe 2514–2569).
+  - `use:guideAnchor={'asset.detail.header'}` resta sulla radice del componente.
+  - Uniche differenze:
+    - `transactionsHref` in ingresso al posto di `buildTransactionsFiltersUrl(...)`: è una funzione pura di una rotta, e
+      un componente di `$lib` non importa dalle rotte;
+    - `{assetId}` per `AssetBrowseNav`.
+  - **Innesto**: `<AssetDetailHeader assetId={data.assetId} {assetInfo} {loading} {currencyFlag} {providerIconUrl}
+    {assetProviderName} {userUrl} {providerExternalUrl} transactionsHref={assetInfo ?
+    buildTransactionsFiltersUrl({asset_id: assetInfo.id}) : ''} {liveUpdatesState} />`; dalla pagina escono gli import
+    rimasti inutili (`ArrowLeft`, `ExternalLink`, `AssetIcon`, `AssetBrowseNav`, `LiveUpdatesStatus`, …, da verificare);
+    poi `--split`.
+- **Colori**: le classi si spostano intere, senza cambiarle. Nessun `-lf-` in questi blocchi, quindi nessun elemento misto.
+  Le stringhe inglesi già scritte a mano («Provider», «✏️ Manual») si spostano così come sono; restano da tradurre.
+
+**Decisione notturna, da rivedere**
+- **N19.** Il pezzo 4 era «scheda del rischio e modali».
+  - La scheda del rischio resta nella pagina: è un solo `<AssetRiskScenariosView>` con 11 proprietà, e un componente
+    che le inoltra soltanto non toglie logica.
+  - Le modali restano nella pagina, ognuna in una riga. Esce invece la loro logica, in `assetDetailFxPair.ts`: i lati
+    proposti dalla modale delle coppie e la valuta mostrata dopo la creazione, con le sue unità.
+- **FE5c-6** `lib/components/assets/detail/assetDetailFxRequirements.ts`: `buildRequiredFxPairs(input)` e
+  `buildAssetDetailIssues(input)`, dai due `$derived.by` della pagina (`requiredFxPairs`, 125 righe; `assetDetailIssues`,
+  70). Il tipo `RequiredFxPairInfo` si sposta con loro.
+  - **La trappola della reattività**: il `$derived` di oggi legge lo stato **in modo pigro**.
+    - Per esempio, `chartData.length` solo quando la coppia principale non ha ancora una data convertita;
+      `calendarSnapshotIsCurrent` solo nella vista del calendario; `$t(...)` del nome di ripiego solo per un pari che
+      non si trova.
+    - Un oggetto letterale leggerebbe tutto subito: più dipendenze, e la lista delle coppie, il banner compreso, si
+      ricalcolerebbe a ogni punto del polling.
+    - Per questo la pagina passerà un oggetto di **getter**, e il modulo lo legge nello stesso ordine e alle stesse
+      condizioni del corpo di prima. Dipendenze identiche.
+  - **Differenze dal corpo di prima**:
+    - `assetInfo` è letto una volta in una variabile locale, nello stesso punto;
+    - la variabile del ciclo degli eventi si chiama `peer`, per non coprire la nuova locale;
+    - tolto `const parts = pair.slug.split('-')`, mai usato;
+    - `any[]` diventa `readonly unknown[]`;
+    - le due chiamate a `$t` passano per `eventsLabel` e `assetFallbackLabel(assetId)`, lette negli stessi punti.
+  - **Innesto**:
+    - `const fxRequirementsState: RequiredFxPairsInput = {get displayCurrency() {…}, get asset() {return assetInfo},
+      get pageAssetId() {return data.assetId}, get configuredFxSlugs() {return allConfiguredFxSlugs}, …, get
+      hasChartData() {return chartData.length > 0}, get eventsLabel() {return $t('events.fxBannerContext') ?? 'for
+      dividend/cash events'}, assetFallbackLabel: (id) => $t('chartSettings.signals.assetFallback', {values: {id:
+      String(id)}})}`;
+    - poi `let requiredFxPairs = $derived(buildRequiredFxPairs(fxRequirementsState))`, e lo stesso per
+      `assetDetailIssues`;
+    - restano nella pagina `fxConversionMissing`, `fxPairSlug` e `mainFxPairUrl`.
+  - **Da notare per il FE4**: `toSlug` è una copia di `createPairSlug` di `fxStoreRegistry.ts`, che però rende
+    maiuscolo. Si sposta così com'è; l'unificazione si decide col FE4.
+- **FE5c-8** (anticipato rispetto al 7, perché più semplice e senza `bind:this`). Il «doppione» dei controlli del
+  calendario è il selettore prezzi/rendimento, disegnato in due rami: quello con i dati (o col calendario) e quello
+  vuoto, che è sempre in modalità prezzi.
+  - `AssetChartModeToggle.svelte` (generato da `/tmp/libreFolio_x_fe5c_piece8.py`, dal primo ramo):
+    - una sola copia per i due rami;
+    - il tipo `AssetChartPrimaryMode` esportato dallo `<script module>`, così la pagina lo importa e toglie l'alias
+      locale.
+    - Nel ramo vuoto il bottone del calendario guadagna `disabled:opacity-40 disabled:cursor-not-allowed`, inerti
+      perché non è mai disabilitato. `aria-pressed` viene disegnato `"true"`/`"false"` come prima.
+  - `AssetCalendarWindowControls.svelte`: i preset, la durata personalizzata e il link alla doc. Ha tre `$bindable`
+    (`customAmount`, `customUnit`, `customEditing`), che restano stato della pagina perché `setPrimaryMode` e
+    `setCalendarPreset` chiudono l'editor. Il `$derived` delle opzioni di durata ci entra, perché lo usa solo lui.
+  - **Innesto**:
+    - ramo 1: `<AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />`, e sotto `{#if primaryMode ===
+      'calendar-return'}<AssetCalendarWindowControls selection={calendarWindowSelection}
+      bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit}
+      bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} />{/if}`;
+    - ramo 2: lo stesso toggle;
+    - escono gli import inutili (`ChartLine` resta per le schede, `Percent`, `CompactDurationBadge`, `DocsLink`, e da
+      `calendarReturnWindow` quello che non serve più);
+    - poi `--split`.
+- **FE5c-7** (**N20**): i due pannelli diventano **cornici con uno snippet `children`**, generate da
+  `/tmp/libreFolio_x_fe5c_piece7.py`.
+  - Il contenuto resta nella pagina: `ChartSignalsSection` con le sue 20 proprietà, e i due `MeasurePanel` con i loro
+    `bind:this`, che la pagina usa per `addPoint`, `clearMeasures` e `stopMeasureMode`.
+  - `AssetDetailSignalsPanel.svelte`: il riquadro, il toggle (`asset-detail-signals-toggle`, che
+    `openSignalConfiguration` cerca per testid), l'intestazione e il chevron. `open` è `$bindable`, e lo stato
+    `showSignals` resta nella pagina, che lo usa anche in `savedPanelStates` e in `openSignalConfiguration`.
+    `{@render children()}` sta dentro `{#if open}`, quindi la sezione si monta e si smonta come prima.
+  - `AssetDetailMeasuresSection.svelte`: il riquadro (`data-mode`) e l'intestazione, con il distintivo «attivo»,
+    «Aggiungi misura» e il chevron.
+    - Ingressi: `mode`, `open`, `measureModeActive`, `canAddMeasure`, `ontoggle`, `onaddmeasure`.
+    - La pagina li calcola come prima: `activeMeasuresOpen()`, `activeMeasureMode()` e
+      `activeChartData.filter((point) => !point.missing).length >= 2`, valutati nel suo template, quindi con le stesse
+      dipendenze.
+    - I due pannelli delle misure sono lo snippet.
+  - **Innesto**:
+    - `<AssetDetailSignalsPanel bind:open={showSignals}><ChartSignalsSection … /></AssetDetailSignalsPanel>`;
+    - `<AssetDetailMeasuresSection mode={primaryMode} open={activeMeasuresOpen()} measureModeActive={activeMeasureMode()}
+      canAddMeasure={…} ontoggle={() => setActiveMeasuresOpen(!activeMeasuresOpen())} onaddmeasure={() => {
+      setActiveMeasuresOpen(true); activeMeasurePanel()?.addMeasureFromChartData(); }}>…i due pannelli…</AssetDetailMeasuresSection>`;
+    - escono gli import inutili (`TrendingUp`, `Ruler`, …);
+    - poi `--split`.
+
+**Decisione notturna, da rivedere**
+- **N20.** I pannelli dei segnali e delle misure diventano cornici con lo snippet, non componenti che inoltrano tutte
+  le proprietà del contenuto.
+  - L'inoltro avrebbe spostato una ventina di proprietà senza togliere logica.
+  - Avrebbe portato il `bind:this` dei pannelli delle misure dentro un componente intermedio.
+  - Con lo snippet il contenuto resta tipizzato dove vivono i suoi dati, e la cornice (le classi, il toggle e il
+    chevron) esce dalla pagina.
+- **Gli innesti, scritti in uno script** (`/tmp/libreFolio_x_fe5c_splice.py <pezzo> [--apply]`, uno per pezzo).
+  - Sostituisce il blocco con la chiamata, aggiunge l'import, e toglie solo gli import che nessuna riga fuori dagli
+    import usa più, compresi i nomi dentro gli import su più righe.
+  - **Prova a secco** su una copia in `/tmp` (05:28): la catena 3→8 si applica tutta sulla pagina al pezzo 2, da
+    3408 a **2996 righe**.
+  - Gli import tolti sono solo quelli rimasti inutili. `Ruler`, `ChartLine` e `currentLanguage` restano, perché la
+    pagina li usa ancora.
+- **`--split` per pezzo**, dentro `frontend/src`. Serve solo ai pezzi che spostano classi: 3, 5, 7 e 8. I pezzi 2, 4 e 6
+  sono TypeScript puro.
+  - Pezzo 3: `node frontend/scripts/theme/theme-roles.mjs --split 'routes/(app)/assets/[id]/+page.svelte:routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte'`.
+  - Gli altri allo stesso modo, con i loro file.
+
+### K-16 e O-9 — un lotto piccolo, scritto nella pausa ✅ (2026-10-16, scritto 05:30–05:40, provato 06:49–06:53)
+
+Sono le due voci backend del dominio che il piano mette «in un treno qualunque» (§9, punto 8). Nessun file in comune con
+il FE5c, quindi un commit separato.
+
+- **K-16** (D-X7): in `borsa_italiana/plugin.py`, `"etc/etn"` passa da `AssetType.ETF` a `AssetType.ETF_COMMODITY`, con
+  una riga di commento.
+  - Borsa Italiana usa la stessa etichetta per ETC ed ETN, e D-X7 le mappa tutte e due su `ETF_COMMODITY`.
+  - **È un'approssimazione**: un ETN su un indice o su una valuta diventa `ETF_COMMODITY` anche lui, perché
+    l'etichetta non li distingue. Il commento nel codice lo dice.
+  - Test: un'asserzione in `test_borsa_italiana_errors.py::test_map_asset_type` (azione `services provider-errors`).
+- **O-9**: i parametri di justETF e del CSS scraper si vedevano col nome della chiave (`current_css_selector`), perché
+  i due `params_schema` non avevano `label`, e le descrizioni erano solo in inglese.
+  - Nei due `params_schema` c'è ora un `label` inglese, come in Borsa Italiana: è il ripiego quando manca la
+    traduzione.
+  - Frammenti `assets.providerParams.<codice>.{label,description}.<chiave>` in 4 lingue: aggiunti al `justetf/i18n/`
+    esistente (che aveva solo `pluginSettings`), e un `css_scraper/i18n/` nuovo.
+  - Nessuna modifica al frontend: `ProviderAssignmentSection.paramText` legge già quelle chiavi.
+  - I `placeholder` restano non tradotti: sono valori d'esempio.
+- **Test** (test-author, 05:50, scritti e non lanciati):
+  - K-16: due asserzioni in `test_map_asset_type` (`"ETC/ETN"` e `" etc/etn "` danno `ETF_COMMODITY`), con `"ETF"`
+    che resta `ETF`.
+  - O-9: tre test in `test_provider_contracts.py::TestAssetProviderContract`, un file già registrato (`services
+    provider-contracts`):
+    - **le traduzioni dei parametri coprono esattamente il modulo**, per ogni provider asset che ne ha, in tutte le
+      lingue del catalogo: niente chiavi mancanti né vecchie, testi non vuoti;
+    - **un controllo positivo**, perché il test di sopra non passi senza controllare niente;
+    - **ogni campo del modulo ha un `label` inglese**, per Borsa, CSS scraper e justETF.
+- **Effetto di K-16 sugli asset esistenti**:
+  - `_map_asset_type` serve anche alla ricerca e a `fetch_asset_metadata`, quindi un ETC già salvato come `ETF`
+    diventa `ETF_COMMODITY` al primo «Aggiorna metadati».
+  - Lo fa **solo su richiesta dell'utente**: `refresh_assets_from_provider` è chiamato solo da
+    `api/v1/assets/providers.py:387`, mai dallo scheduler. Il risultato mostra il vecchio e il nuovo valore.
+- **Trovato da test-author, corretto nel lotto** (stesso tema di O-9): la descrizione di `codice_fondo` di Borsa
+  Italiana nel backend aveva guadagnato «when the fund is not on the XMIL market API», e le 4 traduzioni no. In
+  interfaccia vinceva la traduzione, quindi si leggeva il testo vecchio. Ora le 4 lingue sono allineate.
+- **Prove** (06:49–06:53, ognuna dopo il controllo del carico, con `nice`, a carico 40–52):
+  - `services provider-errors` → **182 passed**;
+  - `services provider-contracts` → **442 passed, 4 skipped**: i tre provider senza traduzioni e un salto vecchio di
+    mockprov;
+  - `services borsa-italiana-search` → verde;
+  - `utils gate-plugin-i18n-ownership` e `gate-plugin-layout` → verdi;
+  - `i18n check` → strict, 4762 chiavi, 73 frammenti di plugin;
+  - ruff e black sui 5 file Python → puliti, anche dopo la correzione del commento.
+- **⚠️ Fuori pista**: il commento di K-16 diceva «quasi sempre su una materia prima», un'affermazione non verificata.
+  L'ho corretto in «approssimazione per un ETN su un indice o una valuta» prima dell'handoff.
+- K-16 e O-9 sono chiuse nel backlog 38 (`38_postReleaseBacklog/README.md`), come A ha fatto con K-17.
+
+### CP13 — F21, C-90 e C-66: analisi preliminare (2026-10-16, 05:40, sola lettura; da mandare al coordinatore con l'ultimo pezzo del FE5c)
+
+**F21 nella specifica** («Feature SaaS Readiness», righe 127–130):
+- ogni provider ha `priority` e `tier`;
+- la ricerca mostra prima i `premium` (badge «Premium»), poi le azioni «Non lo trovi? Segnalacelo» e «Prezzo manuale /
+  import», e in fondo una sezione chiusa «Fonti non premium (community)»;
+- alla prima apertura della sezione compare un avviso («fonte di terzi, configurata da te, nessuna garanzia»), e la
+  scelta vale solo per quell'asset: nessuna cache condivisa;
+- la specifica ha un terzo livello `advanced`. Il perimetro approvato ne ha due, e resto su due (§3).
+
+**Disegno** (approvato in §4.6, D-X3 e D-X8):
+- **Backend**:
+  - nella base dei provider asset, `tier: ClassVar` (`premium` | `community`, default `community`) e
+    `search_priority: ClassVar[int]`;
+  - livello e priorità effettivi letti a ogni chiamata, con la sovrascrittura `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` /
+    `…_ORDER` (non impostate = come dichiarato);
+  - `FAProviderInfo` espone `tier` e `priority`, poi `api sync`;
+  - la ricerca non in streaming ordina per gruppo e priorità **solo se almeno un premium è permesso**: altrimenti
+    l'ordine resta quello di oggi.
+- **Frontend** (`AssetSearchAutocomplete`): con almeno un premium attivo:
+  - la sezione Premium col badge;
+  - le due azioni;
+  - la sezione community chiusa, con l'avviso alla prima apertura e la scelta per quell'asset soltanto.
+  - Senza premium, niente cambia (D-X3). Oggi nessun provider è premium, quindi il self-hosted resta identico.
+- **Prove**:
+  - pytest in processo per la sovrascrittura (`monkeypatch` dell'ambiente);
+  - Vitest dei gruppi;
+  - E2E con le risposte dei provider instradate, per avere un premium senza toccare l'ambiente del server;
+  - uno scatto in galleria, da concordare con G.
+- **C-90**: in `ProviderAssignmentSection`, accanto all'esito di «Testa configurazione», la nota «prova sugli ultimi
+  giorni: alla creazione LibreFolio scarica tutto lo storico». Una chiave i18n in `assets`.
+- **C-66**: l'avviso nel dialogo di sync quando l'intervallo copre dati già presenti. Parte dal file finale di T
+  (`SyncModalBase`, `PageSyncModal`, ~07:30).
+
+**Domande per il coordinatore**, con le mie proposte:
+1. **L'indirizzo di «Segnalacelo»**. Proposta: `LIBREFOLIO_SUPPORT_URL`, costruita come `LIBREFOLIO_BILLING_URL` (A,
+   `config/accounts.py`, helper `_url`) e pubblicata in `GET /system/instance`. Non impostata, il link va alle issue
+   di GitHub, che `HelpMenu` e `FixFlaggedStep` già usano.
+   - Il nome e il proprietario li decide il coordinatore: potrebbe interessare anche `HelpMenu`, che non è mio.
+2. **«Prezzo manuale / import» dentro la modale di creazione**. Proposta: un'azione «Continua senza fonte», che chiude
+   la ricerca e lascia l'asset senza provider (la modale lo sa già fare), con una riga «i prezzi si aggiungono a mano
+   o da un file». Niente salto all'import wizard da dentro la modale.
+
+**Peso**: backend piccolo; frontend medio (ricerca, i18n, Vitest, E2E, galleria). C-66 dopo il lotto di T.
+
+**Risposte del coordinatore (16/10, 07:07)**:
+1. **`LIBREFOLIO_SUPPORT_URL`**:
+   - è di **H** (configurazione d'istanza, `GET /system/instance`, pagina dei provider di hosting), ma la **scrivo io**
+     nel CP13, sul modello di `LIBREFOLIO_BILLING_URL`;
+   - va in un modulo `config/` della piattaforma, non in `accounts.py`, con la riga in `.env.example` e nella doc dei
+     provider di hosting;
+   - `HelpMenu` la adotta più tardi, in un lotto a parte; il coordinatore avvisa H.
+2. **«Continua senza fonte»**: è una scelta di UX visibile, quindi va nella lista del mattino per il developer, con la
+   mia proposta. Se il CP13 parte prima della risposta, la costruisco così, marcata «Decisione notturna, da rivedere».
+
+**Preferenze di H per `LIBREFOLIO_SUPPORT_URL`** (H ne è il proprietario; coordinatore, 07:11):
+- **Accessore**: `backend/app/config/platform.py`, `support_url() -> str | None`, con le regole di `billing_url()`:
+  - vuota o fatta di spazi → `None`;
+  - solo `http(s)://`;
+  - via la barra finale;
+  - `ValueError` per tutto il resto.
+- **La validazione**: non si copia `_url()` di `config/accounts.py`, che è di A.
+  - Diventa un helper pubblico in `config/__init__.py`, chiamato dai due accessori di A. Serve l'ok di A, che il
+    coordinatore chiede all'avvio del CP13.
+  - Se A dice di no, un import da `accounts`, mai una copia.
+- **`GET /system/instance`**:
+  - il campo di primo livello `support_url: str | None` in `InstanceConfigResponse` (default `null`; il frontend ricade
+    sulle issue di GitHub);
+  - una funzione di servizio che cattura il `ValueError`, lo registra una volta e restituisce `None`, come
+    `billing_link()`;
+  - facoltativo: il `ConfigCheck` `platform.support_url` (avviso), in coda a `CONFIG_CHECKS` in `config_audit.py`, che
+    tocca anche A7.
+- **`.env.example`**: una riga commentata in «Instance Profile», dopo `LIBREFOLIO_CSP_REPORT_ONLY`.
+- **Doc**:
+  - una riga in `admin/hosting_providers`;
+  - una riga in «Main Options» di `admin/configuration.en.md`;
+  - `support_url()` nell'elenco degli accessori di `platform.py` in `developer/architecture/settings.md`.
+- **Prove**: `services config-package`, `config-env-example`, `api system`.
+- **Il secondo giro di test** (test-author, 06:05, scritti e non lanciati), 130 test:
+  - `assetDetailFxPair.test.ts` 24, con ogni caso confrontato con una copia alla lettera delle righe di prima;
+  - `assetDetailFxRequirements.test.ts` 78: ordine, slug canonici, ogni stato, salti dei pari, eventi con forme vere
+    di `FAAssetEventPointOut`, e il contratto di pigrizia (quali chiavi si leggono, ognuna col suo caso contrario);
+  - componenti: `AssetChartModeToggle` 5, `AssetCalendarWindowControls` 10, `AssetDetailSignalsPanel` 4 (con
+    l'imbracatura `src/__tests__/harness/AssetDetailSignalsPanelHarness.svelte`, che lega `open` come la pagina, nel
+    commit del pezzo 7), `AssetDetailMeasuresSection` 9.
+  - Rilettura del codice spostato: nessun difetto. Solo rami innocui ereditati dalla pagina, per esempio l'`if
+    (input.displayCurrency)` attorno agli eventi, sempre vero.
+- **In attesa fuori dall'albero** (06:08, `/tmp/libreFolio_x_fe5c_hold/`), con il loro percorso:
+  - i componenti dei pezzi 3, 5, 7 e 8;
+  - i loro 4 test di componente;
+  - l'imbracatura.
+- **Un commit per pezzo, con le sue registrazioni.**
+  - **Il cancello dei colori** (`core-unit`) legge l'albero di lavoro: un `.svelte` nuovo e non tracciato, con classi di
+    tavolozza, lo fa fallire. Per questo i componenti dei pezzi 3, 5, 7 e 8, con i loro test, aspettano in
+    `/tmp/libreFolio_x_fe5c_hold/` e rientrano solo al loro innesto, nello stesso commit del `--split`.
+  - I moduli `.ts` puri dei pezzi 4 e 6 restano al loro posto: non hanno classi, e `front check` li controlla subito.
+  - **Le righe del runner**: test-author non registra il secondo giro; ogni riga entra col suo pezzo.
+
+**Commit dei lotti del mattino**:
+- FE5c-2: `a400a7cd1` + journal `ae25f0070`;
+- K-16/O-9: `c21f050bc` + journal `a6b9faf81`, già in `dev_release2` con `bfc0db8aa` (treno 96), con la riga del
+  CHANGELOG;
+- X-R12/X-R13 in `dev_release2` con `92a0d4daf` (treno 94).
+
+#### FE5c-3 · il pannello dei metadati ✅ (2026-10-16, 06:53–06:59)
+
+> **Note implementazione**:
+> - `AssetDetailMetadataPanel.svelte` è rientrato da `/tmp/libreFolio_x_fe5c_hold/` e innestato con
+>   `/tmp/libreFolio_x_fe5c_splice.py 3 --apply`. La pagina passa da 3407 a 3308 righe.
+> - Dagli import della pagina escono `Info`, `AllocationPieChart`, `GeographyMap` e `uiLocale`, che nessun'altra riga
+>   usava; `ChevronDown` e `currentLanguage` restano, perché servono altrove.
+> - Prettier ha cambiato solo il pannello: il bottone «Modifica», senza più `disabled`, sta su una riga. La pagina era
+>   già formattata.
+> - **`--split`**: la pagina scende da 312 a 258 classi di tavolozza, e il pannello ne prende 54. La somma resta 312:
+>   nessuna classe persa né aggiunta, nessun elemento misto.
+> - **Prove** (con `nice`, dopo il controllo del carico):
+>   - `front check` → 0 errori, 0 avvisi (06:57, carico 64);
+>   - `front-utility core-unit` → 177 file, 6343/6343, cancelli dei colori compresi (06:59);
+>   - `git diff --check` pulito; porta 6183 libera.
+> - Le E2E del pannello (`asset-detail.spec.ts:327`, `onboarding-guides`, la galleria) girano alla fine, nello slot
+>   pesante.
+
+FE5c-3 committed: `7c27785ae` + journal `89ef3e1e9`.
+
+#### FE5c-4 · la logica della modale delle coppie ✅ (2026-10-16, 07:00–07:07)
+
+> **Note implementazione**:
+> - `/tmp/libreFolio_x_fe5c_splice.py 4 --apply`: tre `{@const}` diventano uno solo,
+>   `fxCreateDefaults = fxPairCreateDefaults(…)`, e in `handleFxPairCreated` la scelta della valuta passa da
+>   `displayCurrencyAfterFxPairCreated` (`!== null`, che copre anche il caso di un lato vuoto). `readonlyBase` resta
+>   nella pagina.
+> - Registrato `assetDetailFxPair.test.ts` in `core-unit`.
+> - Prettier: nessuna modifica.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - `core-unit` → **178 file, 6367/6367**, cioè +1 file e +24 test, quelli del modulo.
+>   - Il wrapper ha aspettato che il carico scendesse da 113 a 55 prima di partire.
+>   - `git diff --check` pulito.
+
+FE5c-4 committed: `4c03a0e7b` + journal `3f220dbc5`.
+
+#### FE5c-5 · l'intestazione ✅ (2026-10-16, 07:07–07:11)
+
+> **Note implementazione**:
+> - `AssetDetailHeader.svelte` è rientrato da `/tmp/libreFolio_x_fe5c_hold/` e innestato con `splice.py 5 --apply`. La
+>   pagina passa da 3308 a 3247 righe.
+> - Prettier ha messo la chiamata su una riga sola, perché ci sta nei 300 caratteri.
+> - **Dagli import della pagina escono** `goBack`, `ArrowLeft`, `ExternalLink`, `AssetIcon`, `AssetBrowseNav`,
+>   `getAssetTypeIconUrl`, `LiveUpdatesStatus`, `overflowScrollTextClass` e `scrollOnOverflow`.
+> - **Restano nella pagina** `buildTransactionsFiltersUrl`, che calcola `transactionsHref`, e il tipo
+>   `ActivePollingState`, che tipizza `liveUpdatesState`.
+> - `use:guideAnchor={'asset.detail.header'}` resta sulla radice del componente.
+> - **`--split`**: la pagina scende da 258 a 230, e l'intestazione ne prende 28. La somma resta 258.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - `core-unit` → 178 file, 6367/6367;
+>   - `git diff --check` pulito.
+
+FE5c-5 committed: `ca0cf62b8` + journal `636c1559b`.
+
+#### FE5c-6 · le coppie richieste e gli avvisi del banner ✅ (2026-10-16, 07:11–07:17)
+
+> **Note implementazione**:
+> - `splice.py 6 --apply`: al posto dei due `$derived.by` (≈195 righe) entrano due oggetti di getter
+>   (`fxRequirementsState` e `assetDetailIssuesState`) e
+>   `requiredFxPairs = $derived(buildRequiredFxPairs(fxRequirementsState))`, più lo stesso per `assetDetailIssues`.
+> - I getter leggono lo stato negli stessi punti del corpo di prima. `$t` sta dentro il getter `eventsLabel` e dentro
+>   `assetFallbackLabel`, così la dipendenza dal catalogo resta.
+> - La pagina passa da 3247 a 3117 righe. Esce l'import di `getComparisonEventFxDependency`.
+> - Registrato `assetDetailFxRequirements.test.ts` in `core-unit`.
+> - Aggiornata la frase di `requiredFxPairs` in `developer/frontend/components/charts.md`.
+> - **Prove**:
+>   - `front check` → 0 errori, 0 avvisi: nessun avviso di Svelte sullo stato letto nel posto sbagliato, e
+>     `AssetDetail` soddisfa l'ingresso del modulo;
+>   - `core-unit` → **179 file, 6445/6445**, cioè +78 test, quelli del modulo, compreso il contratto di pigrizia.
+>   - Il wrapper ha aspettato che il carico scendesse da 82.
+>   - `git diff --check` pulito.
+> - **La reattività vera della pagina la provano solo le E2E**: `asset-detail.spec.ts` (≈2769–3301) fa apparire e
+>   sparire `data-quality-issue-FX_PAIR_NO_DATA`. Sono nello slot finale.
+
+FE5c-6 committed: `260dbc321` + journal `d1bd1a508`.
+
+**I due difetti della doc segnalati dal docs-writer di B** (07:18) **sono già corretti** in `dev_release2` dal CP11c
+(`c8d23c544`, treno 91): «eight tabs; everyone has the first five…» e «two ask for one… justETF and Borsa Italiana».
+Il docs-writer leggeva una base precedente. Restano indietro le **traduzioni**: `user/settings/index.{it,fr,es}` dice
+ancora «quattro schede», e `admin/configuration.{it,fr,es}` non ha la sezione dei plugin. È un debito di traduzione
+vero, che va ad Aphra su richiesta del developer; nessun commit della doc.
+
+#### FE5c-7 · le cornici dei segnali e delle misure ✅ (2026-10-16, 07:19–07:25)
+
+> **Note implementazione**:
+> - Rientrati da `/tmp/libreFolio_x_fe5c_hold/`:
+>   - `AssetDetailSignalsPanel.svelte` e `AssetDetailMeasuresSection.svelte`;
+>   - i loro due test di componente;
+>   - l'imbracatura `src/__tests__/harness/AssetDetailSignalsPanelHarness.svelte`.
+> - `splice.py 7 --apply`: `ChartSignalsSection` e i due `MeasurePanel`, con i loro `bind:this`, restano nella
+>   pagina come snippet `children` (N20). La pagina passa da 3117 a 3070 righe.
+> - Registrati i due test in `component-unit`, dopo `AssetBrowseNav.test.ts`.
+> - Prettier: nessuna modifica.
+> - **`--split`**: la pagina scende da 230 a 198, le cornici ne prendono 13 e 19. La somma resta 230. L'imbracatura
+>   sta sotto `__tests__`, che il cancello non misura.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - Vitest dei due test di componente → **13/13**;
+>   - `core-unit` → 179 file, 6445/6445;
+>   - `git diff --check` pulito.
+>   - Il `component-unit` intero gira dopo il pezzo 8, con le registrazioni di tutti e due i pezzi.
+
+FE5c-7 committed: `086a50005` + journal `f4cd61273`.
+
+#### FE5c-8 · il selettore della modalità e la finestra del calendario ✅ (2026-10-16, 07:26–07:36)
+
+> **Note implementazione**:
+> - Rientrati da `/tmp/libreFolio_x_fe5c_hold/`: `AssetChartModeToggle.svelte` e `AssetCalendarWindowControls.svelte`,
+>   con i loro test. La cartella d'attesa ora è vuota.
+> - `splice.py 8 --apply`:
+>   - il selettore prende il posto delle **due** copie, quella con i dati e quella vuota;
+>   - la finestra prende il posto del suo blocco;
+>   - `calendarDurationOptions` esce dalla pagina e va nel componente;
+>   - l'alias locale `AssetChartPrimaryMode` diventa l'export dello `<script module>` del selettore;
+>   - escono `Percent`, `CompactDurationBadge`, `DocsLink` e `CALENDAR_RETURN_UNIT_LABEL_KEYS`.
+>   - Prettier ha messo su una riga la chiamata della finestra. La pagina passa da 3070 a **2969 righe**.
+> - Registrati i due test in `component-unit`.
+> - **`--split`**: la pagina scende da 198 a 155, il selettore ne prende 20 e la finestra 11, per un totale di 186: 12 in
+>   meno di prima, perché sono le classi della seconda copia del selettore, che non c'è più.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - Vitest dei due test → **15/15**;
+>   - `core-unit` → 179 file, 6445/6445;
+>   - **`component-unit` intero** → **154 file, 4007/4007**, con i 4 test di componente del FE5c;
+>   - `check-orphans` → tutti i test raggiungibili (469 in `frontend/src`);
+>   - `git diff --check` pulito; porta 6183 libera.
+>
+> **Il taglio, finora**: la pagina è passata da 3603 a 2969 righe in otto pezzi, sette commit e la chiusura di X-R13.
+> - **Restano**:
+>   - il pezzo 9, cioè la barra degli strumenti, il caricamento e il polling in uno stato `.svelte.ts`, dopo le righe
+>     di Z nella base;
+>   - l'aggiornamento della base, che porta anche le classi di DV in `components/charts/`;
+>   - lo slot E2E: `asset-detail`, `asset-data-editor`, `asset-event-delete`, `onboarding-guides`, e gli scatti della
+>     galleria della pagina.
+
+FE5c-8 committed: `103149654` + journal `95b0be788`. Backlog X-R17–X-R20 `c13cc2d1a`; base aggiornata con `dev_release2`
+`7f58a6292`, HEAD `fa97791f6`.
+
+**Verifica della base `fa97791f6`** (07:41–07:47):
+- `api sync`; `front check` → 0/0;
+- `core-unit` → rosso in `fxRoutesStore.test.ts`, che non è mio né del merge (2 su 6458);
+- **triage**: con il carico a ~100 il primo caso ha superato i 5 s di Vitest, perché ogni caso fa un `import()` a
+  freddo del grafo dello store, e il secondo caso ha ereditato la chiamata rimasta in sospeso. Da solo il file passa
+  in 2,1 s;
+- **verdetto: assunzione (il tempo)**, non «instabile». Aperta **X-R21**, la cura dopo il backend del CP13.
+- `core-unit` va rilanciato a carico basso prima delle E2E del FE5c.
+
+### CP13 — backend ⏳ (via del coordinatore 16/10, 07:37; il frontend aspetta P20)
+
+Ordine: (1) `env_url` spostato, (2) `LIBREFOLIO_SUPPORT_URL`, (3) F21. Commit separati dal FE5c e fra loro.
+
+1. ✅ (07:44–07:52) **`env_url(name)`** in `backend/app/config/__init__.py`, accanto a `env_secret`, con l'ok di A e di H.
+   > **Note implementazione**:
+   > - È il `_url()` di `config/accounts.py`, con le stesse regole: vuota o fatta di spazi → `None`; il valore,
+   >   ripulito dagli spazi, deve cominciare con `http://` o `https://`; via una barra finale; altrimenti `ValueError`
+   >   col nome della variabile.
+   > - Gestisce gli spazi da sé, perché `_blank_to_none` resta ad A per gli altri accessori.
+   > - In `accounts.py` sparisce `_url`, e `public_url()` e `billing_url()` chiamano `env_url`. Nient'altro toccato, come
+   >   chiesto da A (A7a lavora lì).
+   > - Doc: la docstring del pacchetto e `developer/architecture/settings.md`, con `env_url()` nella base e un punto
+   >   sulla regola degli indirizzi.
+   > - **Prove**:
+   >   - `services registration` → **147 passed**: i test di A sugli accessori coprono spazi, barra finale, solo http(s)
+   >     e il log del valore non valido;
+   >   - `services config-package` → **694 passed**;
+   >   - ruff e black puliti; `git diff --check` pulito.
+   >   - I test diretti di `env_url` arrivano col passo 2, nello stesso file di quelli di `support_url`.
+
+CP13-1 committed: `9c1161ff2` + journal `3a81f5238`. **Avviso del coordinatore**: A7a (prima di me nel treno) aggiunge in
+`config/accounts.py` degli import e il blocco F02 dopo `billing_url()`. Al prossimo aggiornamento della base c'è un piccolo
+conflitto, negli import e accanto a `billing_url()`: si tengono tutti e due, cioè i miei `env_url` nei due accessori e tutto
+il blocco di A.
+
+2. ✅ (07:53–08:25) **`LIBREFOLIO_SUPPORT_URL`**, con le preferenze di H.
+   > **Note implementazione**:
+   > - `config/platform.py::support_url()` → `env_url("LIBREFOLIO_SUPPORT_URL")`.
+   > - `services/platform/instance_links.py` (nuovo, di H): `support_link()` cattura il `ValueError`, lo registra una
+   >   sola volta (`functools.cache`, come `billing_link()`) e restituisce `None`.
+   > - `InstanceConfigResponse.support_url: str | None = None`, riempito in `GET /system/instance`.
+   > - `.env.example`: la riga in «Instance Profile», dopo `LIBREFOLIO_CSP_REPORT_ONLY`.
+   > - **Doc**:
+   >   - la riga in «Main Options» di `admin/configuration.en.md`, dopo `LIBREFOLIO_CSP_REPORT_ONLY`;
+   >   - un punto in «For Each Instance» di `admin/hosting_providers.en.md`;
+   >   - in `developer/architecture/settings.md`: la variabile fra le chiavi fuori da `Settings`, `support_url()`
+   >     fra gli accessori di `platform.py`, e il ripiego per un valore non valido.
+   > - **Non fatto**: il `ConfigCheck` facoltativo. Chiederebbe chiavi `instance.checks.*` nel sottosistema di H e una
+   >   riga in `config_audit.py`, che sta toccando anche A7a. Il valore non valido resta comunque registrato una volta.
+   > - **Prove finora**:
+   >   - `api sync` (il campo è facoltativo nel client);
+   >   - `front check` → 0/0;
+   >   - `services config-env-example` → 38/38;
+   >   - ruff e black puliti.
+   > - **I test** (test-author, in `test_config_package.py` e `test_system_api.py`):
+   >   - `env_url` diretto, 13 casi validi e 8 non validi;
+   >   - `support_url()`;
+   >   - `support_link()`: nessun log se è valido; un solo errore con `problem` e `consequence` anche se viene letto due
+   >     volte;
+   >   - `GET /system/instance`: dal vivo, `support_url` è `null`; in processo, con l'indirizzo dà il valore senza la
+   >     barra, e con `ftp://` risponde 200 con `null`, mai un 500.
+   > - **⚠️ Fuori pista**: il campo nuovo ha rotto tre test che controllavano le chiavi esatte del corpo. Due sono in
+   >   `test_system_api.py`, di H; il terzo è INSTANCE-002 in `test_registration_api.py`, di A. Test-author li ha
+   >   aggiornati; quello di A è una riga, segnalata al coordinatore.
+   > - Aggiornata la docstring di `services/platform/__init__.py`, con `instance_links`.
+   > - **Prove** (con `nice`, dopo il controllo del carico):
+   >   - `services config-package` → **728**;
+   >   - `api system` → **120**: la partenza del server della corsia ha ricostruito il frontend e la doc, rimasti
+   >     indietro, e per questo ha impiegato 8 minuti;
+   >   - `api registration` → **96**: l'unico avviso è una deprecazione di Starlette, vecchia;
+   >   - `services config-env-example` → 38;
+   >   - ruff e black puliti;
+   >   - `mkdocs build` stretto ok, `check-links` 97 validi;
+   >   - `git diff --check` pulito; porta 6183 libera.
+   > - **Proposta per A e H**, non fatta: `env_url` controlla solo l'inizio del valore. `https://` da solo diventa
+   >   `"https:/"` e viene pubblicato come link, e uno spazio interno passa. Le stesse regole di prima per
+   >   `PUBLIC_URL` e `BILLING_URL`: chiedere un host sarebbe più severo, quindi va deciso da loro.
+3. ⏳ **F21 backend** (disegno §4.6, D-X3, D-X8), da scrivere dopo l'handoff del CP13-2:
+   - **Le dichiarazioni**: in `AssetSourceProvider`, `tier: ClassVar[FAProviderTier] = COMMUNITY` e
+     `search_priority: ClassVar[int] = 100` (più basso = prima). Nessun provider di oggi è premium: il primo sarà quello a
+     pagamento del F06.
+   - **La sovrascrittura** in `config/plugins.py` (sezione di X):
+     - `asset_providers_premium()` legge `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`: se è impostata, sono premium
+       esattamente i codici elencati;
+     - `asset_providers_order()` legge `LIBREFOLIO_ASSET_PROVIDERS_ORDER`: i codici elencati vengono prima, in
+       quell'ordine, e gli altri dopo, per priorità dichiarata;
+     - liste separate da virgole, senza maiuscole; vuota o fatta di spazi conta come non impostata.
+   - **Il punto unico**: `services/assets/provider_policy.py` (nuovo), con il livello e la priorità effettivi e
+     l'ordine di ricerca. È il posto dove arriveranno anche gli elenchi dei fornitori permessi del F05.
+   - **`FAProviderInfo`** espone `tier` e `priority` effettivi.
+   - **La ricerca non in streaming** ordina i provider prima del fan-out, per (gruppo premium se ce n'è almeno uno,
+     priorità, posizione di oggi). Con tutto ai valori di default l'ordine resta identico a oggi (D-X3). Lo streaming
+     resta per arrivo, e raggruppa il frontend con `tier`.
+   - **Test**: unità pure in processo, con `monkeypatch` dell'ambiente; la lista dei provider dal vivo (`community`,
+     100); l'ordine della ricerca con provider finti.
+   - **Doc**:
+     - `.env.example`, nella sezione «Plugins»;
+     - `admin/configuration.en.md`;
+     - `asset_plugin_guide.md` (le due dichiarazioni);
+     - `search_link_finder.md` (l'ordine);
+     - `settings.md` (gli accessori di `plugins.py`).
+
+CP13-2 committed: `25d4c75c7` + journal `efd7b0174`.
+
+2b. ✅ (08:27–08:36) **N48, `env_url` vuole un host** (decisione del coordinatore, «da rivedere»; avvisa A e H).
+   > **Note implementazione**:
+   > - **Rosso prima**: test-author ha aggiunto 7 casi non validi a `test_config_package.py`:
+   >   - `https://` e `http://` da soli;
+   >   - host vuoto (`https:///path`);
+   >   - porta senza host;
+   >   - spazio nell'host;
+   >   - spazio o tab nel percorso.
+   >   - Sul codice di prima: **7 failed, 733 passed**, esattamente quelli.
+   > - Anche 4 controlli validi: IPv4 con porta, IPv6, query, maiuscole conservate.
+   > - **La cura in `env_url`**:
+   >   - lo spazio si controlla sul valore grezzo, perché `urlsplit` toglie tab e a capo prima di analizzare;
+   >   - si chiede `urlsplit(value).hostname`, e non `netloc`, che per `https://:443` vale `:443`;
+   >   - un `ValueError` di `urlsplit`, come una parentesi IPv6 non chiusa, diventa lo stesso errore che nomina la
+   >     variabile;
+   >   - il valore restituito resta quello scritto, maiuscole comprese.
+   > - Messaggio: «expected an http:// or https:// address with a host name». I test di A non leggono il testo.
+   > - Doc: il punto su `env_url` in `developer/architecture/settings.md`. Tolta dalla docstring del test la nota «Red
+   >   until N48».
+   > - **Prove**:
+   >   - `services config-package` → **740 passed**;
+   >   - `services registration` → 147;
+   >   - `services email-links` → 74;
+   >   - ruff e black puliti; `git diff --check` pulito.
+
+N48 committed: `7d80a1098` + journal `c6d29c969`.
+
+**STOP del developer** (08:46–10:32): tutto fermo, nessun controllo in corso; il test-author di F21 non aveva ancora
+toccato file. Durante lo STOP:
+- **risposto ad A** su `env_url` senza lanciare niente: vuota o fatta di spazi conta come non impostata (stessa regola di
+  `_blank_to_none`); `registration` 147, `config-package` 740 ed `email-links` 74 erano già verdi sul codice di N48;
+- **ricevuta da H, via coordinatore, X-R22** (ordine per reinserire un segreto illeggibile), aperta nel backlog alla
+  ripresa.
+
+**Ripresa (10:32)**:
+- il developer non capisce il senso di «Prezzo manuale / import» (P20), perché gli asset manuali si creano già: **quella
+  azione non si costruisce** finché non risponde. Il resto di F21 va avanti;
+- T è entrato in `SyncModalBase`, `PageSyncModal`, `SyncResultRow`, nell'AI Export e nel data editor: le mie
+  prenotazioni sono sciolte (C-66 parte dal file finale);
+- il test-author di prima non esisteva più dopo la pausa: ne ho lanciato uno nuovo con lo stesso incarico.
+
+3. ⏳ **F21 backend** (08:27–08:46, poi dalle 10:32).
+   > **Note implementazione**:
+   > - `schemas/provider.py`: `FAProviderTier` (`premium` | `community`), `DEFAULT_SEARCH_PRIORITY = 100`, e in
+   >   `FAProviderInfo` i campi `tier` e `priority` (`ge=0`), con default che lasciano il contratto di oggi.
+   > - `services/assets/base.py`: `tier: ClassVar` e `search_priority: ClassVar` sulla base dei provider, controllati
+   >   alla definizione della classe (`_validate_search_declarations`, chiamato da `__init_subclass__`). Una stringa
+   >   valida diventa l'enum; un valore sbagliato ferma l'import con un `TypeError` che nomina la classe.
+   > - `config/plugins.py` (mio): `asset_providers_premium()` e `asset_providers_order()`, liste di codici separate da
+   >   virgole, ripulite, minuscole, senza doppioni; vuota, fatta di spazi o di sole virgole conta come non impostata.
+   > - `services/assets/provider_policy.py` (nuovo): il punto unico. `provider_tier`, `provider_priority` e
+   >   `search_order`; le variabili si leggono a ogni chiamata; un codice sconosciuto si ignora e si registra una volta.
+   > - `search.py`: la ricerca non in streaming ordina i provider prima del fan-out. Lo streaming resta per arrivo.
+   > - `GET /assets/provider`: `tier` e `priority` effettivi.
+   > - **Verifica in processo**: con tutto ai default l'ordine dei 6 provider registrati è identico a oggi, tutti
+   >   `community` a 100 (D-X3).
+   > - **Doc**:
+   >   - `.env.example`, nella sezione «Plugins»;
+   >   - `admin/configuration.en.md`, una sezione «The Order of the Price Providers in the Search» prima della ricerca
+   >     web, con i codici dei provider distribuiti (verificati sul codice, perché nessuna pagina li mostra);
+   >   - `asset_plugin_guide.md`, le due righe nella tabella e la sezione «Search Order»;
+   >   - `developer/architecture/settings.md`, le due variabili e i due accessori di `plugins.py`.
+   > - **Prove finora**:
+   >   - `api sync`; `front check` → 0/0, dopo la correzione qui sotto;
+   >   - `config-env-example` → 38; `config-package` → 740;
+   >   - ruff e black puliti.
+   >
+   > **⚠️ Fuori pista**: il primo `front check` è uscito con un errore **nel client generato**,
+   > `tier: FAProviderTier.describe(` «not callable».
+   > - **La causa**: il generatore mette la docstring di più righe di un enum in un template literal JavaScript, senza
+   >   proteggere i backtick. I doppi backtick di stile RST della docstring (``AssetSourceProvider.tier``) chiudevano il
+   >   literal.
+   > - **La cura**: niente backtick nella docstring di `FAProviderTier`, con una riga che spiega perché.
+   > - Le descrizioni di una riga (`Field(description=…)`) vanno fra apici e non hanno il problema: riguarda solo le
+   >   docstring di più righe dei modelli e degli enum usati come tipo di un campo. `front check` lo vede, quindi il
+   >   cancello esistente basta; è una lezione per il wiki.
+
+> **⚠️ Fuori pista (10:34)**: la macchina è stata riavviata durante lo STOP (`uptime` 31 minuti) e `/tmp` è stato
+> svuotato:
+> - è sparita la cartella dati della corsia, `/tmp/librefolio-r13-x`: il runner la ricrea al primo test backend;
+> - sono spariti i log delle prove precedenti, già trascritti in questo piano;
+> - sono spariti lo script dei controlli e quelli degli innesti del FE5c, che non servono più (pezzi 3–8 entrati).
+>   Il wrapper `/tmp/libreFolio_x_fe5c_check.sh` è stato ricreato uguale.
+>
+> **`core-unit` rilanciato a carico basso (10:34, carico 19)**, come chiesto prima delle E2E del FE5c: **180 file,
+> 6458/6458**, `fxRoutesStore.test.ts` compreso. Conferma il triage di X-R21: il rosso delle 07:45 era il tempo sotto
+> carico, non un difetto.
+
+**Decisione sul pezzo 9 (coordinatore, 10:45)**: **9a + 9b**.
+- 9a: le azioni della barra (`actions` di `PageToolbar`) in `AssetDetailToolbarActions.svelte`;
+- 9b: il polling (con le righe di Z spostate così come sono) e la testa dal vivo del grafico in
+  `assetDetailLive.svelte.ts`;
+- `loadChartData` e il caricamento dei confronti restano nella pagina: **X-R23** nel backlog, dopo la 1.3.
+
+**Handoff intermedio del CP13-3 (10:48)**, chiesto dal coordinatore per aggiornare la base con Z7c-1 (`69c95454b`):
+- consegnati il codice, la doc e il journal, con le prove leggere verdi;
+- i test di F21 (test-author) e la riparazione di X-R21 (test-author) **non sono ancora scritti**: i due test-author sono
+  fermi («HOLD») fino a dopo il merge, perché i file che toccheranno possono cambiare. Arrivano in commit separati.
+
+Merge of `dev_release2` `69c95454b` (Z7c-1) committed: `950b94667`. Conflicts resolved by me: `themeRoles.baseline.tsv`
+(`--resolve`, colour `--check` clean) and `charts.md` (my sentence on `parseAssetPriceQueryWithSignalIsolation()`, dev's
+paragraph on the rolling return in the catalog; dropped the stale `catalog_visible = False`). Combined revision:
+`api sync`, `front check` 0/0, `core-unit` 184 files 6630/6630.
+
+**Nuove regole del coordinatore (10:55)**:
+- **Aree dei colori**: sette workstream lavorano sulle classi. Prima di scrivere in un `.svelte` delle loro aree va
+  chiesto al coordinatore; `assets/detail/**` e `assets/[id]` restano miei fino all'ingresso del FE5c.
+- **`/tmp` si svuota al riavvio**: patch, script e log che servono di nuovo vanno nella cartella di sessione. Il
+  wrapper dei controlli ora è `files/checks/check.sh`, con i log in `files/checks/logs/`.
+
+#### X-R21 · la riparazione di `fxRoutesStore.test.ts` ✅ scritta e provata (11:02; commit dopo quelli di F21)
+
+> **Note implementazione** (test-author):
+> - un solo meccanismo di mock: via `vi.hoisted` e il `vi.mock` in cima; un `vi.fn()` nuovo per caso, installato con
+>   `vi.doMock('$lib/api', …)`, così una lettura rimasta in sospeso chiama il mock del suo caso e non viene contata nel
+>   successivo;
+> - il grafo dello store si scalda una volta in `beforeAll` (60 s, come `GapFixStep` e `ParseDetailModal`):
+>   `resetModules` butta i moduli valutati ma tiene il codice trasformato;
+> - `afterEach` aspetta `vi.dynamicImportSettled()`, prima volta nel repo: un caso finisce solo quando i suoi import
+>   sono finiti.
+> - **Prova**: il file da solo → **5/5**; il primo caso passa da 437 ms a **57 ms**.
+> - Il percorso della cascata sotto carico non si può osservare a carico basso: è argomentato dal sorgente di Vitest.
+> - **⚠️ Fuori pista**: il test-author ha lanciato una volta `vitest --version` (nessun test). Innocuo, annotato.
+
+#### FE5c-9a · le azioni della barra ✅ scritto e controllato (10:53–11:00; commit dopo F21 e X-R21)
+
+> **Note implementazione**:
+> - `lib/components/assets/detail/AssetDetailToolbarActions.svelte`, generato da `files/checks/fe5c_piece9a.py` (cartella
+>   di sessione): il contenuto dello snippet `actions` di `PageToolbar` copiato alla lettera, con le proprietà al posto
+>   dello stato della pagina. Contiene AI export, Modifica, Sincronizza (barrata con il motivo quando è bloccata) e
+>   Aggiorna.
+> - Lo snippet resta nella pagina come una sola chiamata.
+> - I callback senza argomenti (`onedit`, `onrefresh`) si chiamano da una closure, così non ricevono l'evento.
+>   `onsync={handleSync}` riceve l'evento come prima.
+> - L'`onerror` dell'AI export è rimasto quello di prima, dentro il componente (`toasts` + `getAiExportErrorMessage`).
+> - Dalla pagina escono gli import inutili: `RotateCw`, `Tooltip`, `AiExportMenu` e `getAiExportErrorMessage`.
+> - La pagina passa da 2972 a 2937 righe.
+> - **`--split`**: la pagina scende da 155 a 123, il componente ne prende 32. La somma resta 155.
+> - **Prove**: `front check` → 0/0; Prettier → nessuna modifica.
+
+#### FE5c-9b · la parte dal vivo ⏳ (modulo scritto alle 11:05; l'innesto aspetta il commit del 9a)
+
+> **Note implementazione**:
+> - `lib/components/assets/detail/assetDetailLive.svelte.ts`, generato da `files/checks/fe5c_piece9b_module.py` dai
+>   blocchi della pagina, con sostituzioni esplicite, ognuna contata.
+>   - La classe `AssetDetailLive` ha lo stato dal vivo (`currentPrice`, `conversionFailed`, `updatesState`,
+>     `direction`, `flashToken`; privati il valore precedente e il timer del lampeggio).
+>   - Il suo costruttore registra l'`$effect` del polling.
+>   - `#pollLivePriceOnce` sono le righe di Z7c-1, così come sono, e con loro `#applyLiveSummary` e
+>     `#applyLiveChartHead`, con la spiegazione I-bis #24.
+>   - Legge la pagina da `AssetDetailLiveInput`, getter più il setter di `chartData` e `loadChartData`: le stesse
+>     letture di prima.
+> - L'innesto (`files/checks/fe5c_piece9b_splice.py`, prova a secco 2937 → 2757):
+>   - l'istanza si crea **nel punto del vecchio `$effect`**, così il polling resta nell'ordine degli effetti della
+>     pagina;
+>   - `lastPrice` legge `live.currentPrice`; `reloadPage()` chiama `live.resetPrice()`;
+>   - il template legge `live.updatesState`, `live.conversionFailed`, `live.direction` e `live.flashToken`;
+>   - escono gli import del polling.
+
+**P20 deciso dal developer (11:12, via coordinatore)**:
+- **«Prezzo manuale / import» non si fa**: dalla creazione si salva l'asset senza fonte, e l'utente aggiunge i prezzi.
+- **«Segnalacelo» resta**, e deve mandare una email con tutti i dati: cosa ha cercato, quali provider ha interrogato,
+  valuta ed exchange se c'erano. Il supporto risponde spiegando come usare altri provider.
+
+**Mia proposta** (11:15, in attesa dell'ok; serve anche quello di H per la variabile):
+- **Il canale**: niente invio dal server.
+  - Se il supporto è un indirizzo email: `mailto:` con oggetto e corpo precompilati.
+  - Se è una pagina http(s): si apre la pagina e il rapporto va negli appunti.
+  - Se non è impostato: una issue di GitHub precompilata, pubblica, che l'utente rivede prima di inviarla.
+- **I dati**:
+  - il testo cercato;
+  - i provider interrogati con il loro esito, solo i codici;
+  - valuta, tipo e identificativo del modulo, se c'erano;
+  - versione, profilo e lingua.
+  - **Mai**: utente, email, indirizzo dell'istanza, dati del portafoglio.
+- **La configurazione**: una sola variabile. `LIBREFOLIO_SUPPORT_URL` accetta anche `mailto:<indirizzo>`, con una variante
+  della regola; `env_url` resta solo http(s) per `PUBLIC_URL` e `BILLING_URL`.
+
+**P20 approvato (coordinatore, 11:20)**:
+- la segnalazione parte dal client dell'utente: `mailto:`, oppure la pagina con il rapporto negli appunti, oppure la
+  issue di GitHub se non c'è niente di impostato;
+- i dati proposti, senza dati personali;
+- dopo ogni ricerca.
+- `LIBREFOLIO_SUPPORT_URL` con `mailto:` aspetta l'ok di H; intanto il frontend presuppone la variabile unica.
+
+**Il frontend dopo i lotti di AF** (decisione del developer: prima la migrazione dei colori, poi le funzioni nuove). AF
+passa per primo sui file dei miei lotti futuri:
+- lotto 1: `FxSyncModal`, per C-66;
+- lotto 4: `AssetModal`, per O-20;
+- lotto 5: `AssetSearchAutocomplete` e `ProviderAssignmentSection`, per F21 e C-90;
+- lotto 6: `AssetDataEditorSection`, per O-8;
+- lotto 8: `assets/+page.svelte`, per O-20.
+
+Il frontend del CP13 e O-8, O-20 e C-66 partono quando il coordinatore lo dice. Restano ora: i test di F21, la correzione
+dell'ordine con i duplicati, X-R21 e il pezzo 9; la pagina di dettaglio resta mia. I colori spostano su `data-lifecycle`
+due miei test (`AssetTable.test.ts`, `e2e/assets/asset-list.spec.ts`), che non avevo aperti.
+
+3b. ✅ (11:17–11:44) **Correzione di F21: la ricerca tiene i provider ripetuti** (trovata dal test-author).
+   > **Note implementazione**:
+   > - **Il difetto**: `search()` costruiva un dizionario codice → posizione e ordinava per codice. Con un codice ripetuto
+   >   (`providers=a,b,a`) e nessuna sovrascrittura la ricerca diventava `[b, a, a]` invece di `[a, b, a]`, contro D-X3.
+   >   `search_order` era giusto; il difetto era solo in `search.py`.
+   > - **La cura**: `provider_policy.search_rank(code)`, cioè (0 premium | 1 community, priorità effettiva).
+   >   `search_order` diventa `sorted(codes, key=search_rank)`, e `search.py` fa `valid_providers.sort(key=…search_rank)`.
+   >   Un ordinamento stabile tiene i pari, i ripetuti compresi, nell'ordine dato.
+   > - **Rosso prima**: `services provider-policy` sul codice di prima → **3 failed, 45 passed**, esattamente i 3
+   >   previsti. Due cadono per `AttributeError` su `search_rank`; il terzo è la ricerca da capo a fondo con un provider
+   >   ripetuto, che dava `standin_beta` prima di `standin_alpha`.
+   > - Dopo la cura: **48/48**.
+
+3c. ✅ **I test di F21** (test-author; 48 casi, 30 funzioni, nessun DB né server):
+   > - `backend/test_scripts/test_services/test_provider_policy.py` (nuovo), registrato come `services provider-policy`,
+   >   `isolation="pure"`, accanto a `provider-contracts`;
+   > - una riga in `test_assets_crud.py::test_list_asset_providers`: ogni provider dal vivo è `community` a 100.
+   > - **Coprono**:
+   >   - gli accessori;
+   >   - il livello e la priorità, dichiarati e sovrascritti, con un codice sconosciuto registrato una volta;
+   >   - una variabile PREMIUM che elenca solo codici sconosciuti non rende premium nessuno;
+   >   - `search_order` e `search_rank`, con il premium prima di ORDER e i ripetuti;
+   >   - il controllo delle dichiarazioni (`"gold"`, `None`, `-1`, `True`, `"1"`, `1.0`);
+   >   - la ricerca da capo a fondo, con solo `core.configured_provider` sostituito.
+   > - **Due scostamenti del test-author, accettati**: `provider_policy.search_rank` letto dentro il test invece di un
+   >   `getattr` (la regola B009 di ruff riscrive `getattr` con una stringa fissa), e `dict.fromkeys` (C420).
+   > - **Prove**:
+   >   - `services provider-policy` 48;
+   >   - `api assets-crud` **35**, con l'asserzione dal vivo;
+   >   - **le suite che chiamano la ricerca, verdi**: `services asset-source` 61, `rate-limit-results` 23,
+   >     `plugin-settings-runtime` 120, `web-link-finder` 29;
+   >   - ruff e black puliti sui 5 file.
+   > - **Trovati in lettura, non corretti** (precedenti a F21): `mockprov` nella ricerca senza `providers` e una docstring
+   >   vecchia, ora **X-R24**.
+
+**Prove del lotto (F21 correzione e test, X-R21, 9a)**, 11:36–11:54, ognuna con `nice` dopo il controllo del carico. Il
+carico è salito più volte a ~150 per gli slot pesanti delle altre corsie, e il wrapper ha aspettato.
+- le suite della ricerca, come detto in 3c;
+- `front check` → **0/0**, compresi il 9a e il modulo del 9b, non ancora innestato;
+- `front-utility core-unit` → **184 file, 6630/6630**, con X-R21 e i cancelli dei colori del `--split` del 9a;
+- `check-orphans` → tutti raggiungibili (488 test frontend, 356 backend, 134 E2E);
+- Prettier pulito; `git diff --check` pulito; porta 6183 libera.
+
+**Arrivati nel frattempo**:
+- **Icone in Impostazioni › Plugin** (richiesta del developer, proposta approvata dal coordinatore alle 11:52), un lotto
+  suo **dopo il 9b**:
+  - `icon_url` in `PluginSettingsPluginRead`, letto dall'istanza del plugin con una tabella per famiglia (`asset` →
+    `get_icon`, `fx` → `icon`);
+  - `FAMILY_ICONS` (`ChartColumn`, `Coins`) accanto a `FAMILY_TITLE_KEYS`;
+  - il ripiego `Puzzle` se l'icona manca o non si carica;
+  - tre `data-testid`;
+  - test di servizio e di componente.
+  - Cambia lo scatto `settings/plugins` della galleria: il coordinatore avvisa i colori e G.
+- **Skill `design-system`** (D-T29, `6e569084a`): da ora il markup nuovo la segue dall'inizio, solo ruoli `-lf-`.
+  Arriva col prossimo aggiornamento della base; prima del lotto delle icone la leggo dal checkout principale, in sola
+  lettura, come indicato dal coordinatore.
+- **X-R25** (da J): il test della ricerca justETF in `all-backend` va in timeout; aperta nel backlog.
+
+Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874` (X-R21), `fedad56cb` (9a), `039ccc9d5`
+(journal).
+
+#### FE5c-9b · la parte dal vivo, innestata ✅ (12:02–12:45)
+
+> **Note implementazione**:
+> - `files/checks/fe5c_piece9b_splice.py --apply`: la pagina passa da **2937 a 2757 righe**. Prettier: nessuna modifica.
+> - L'istanza `live = new AssetDetailLive({…getter…})` sta nel punto del vecchio `$effect` del polling, quindi
+>   l'effetto resta nello stesso ordine fra gli effetti della pagina.
+> - Il `$derived` `lastPrice` legge `live.currentPrice` in modo pigro, solo dopo l'inizializzazione: nessun problema
+>   d'ordine.
+> - Escono dalla pagina gli import del polling (`livePriceService`, `activePolling`, `cadence`).
+> - **Prove**:
+>   - `front check` → **0/0**: l'oggetto di getter soddisfa `AssetDetailLiveInput`;
+>   - cancelli dei colori `--check` puliti, nessuna classe spostata, quindi niente `--split`.
+> - **Test**: un test-author scrive `assetDetailLive.svelte.test.ts`, con il polling e le API sostituiti, lo stato
+>   fermo, la conversione, le risposte vecchie, la testa del grafico e `resetPrice()`.
+> - Le E2E che coprono il dal vivo, `asset-live-pause.spec.ts` e `asset-detail.spec.ts`, vanno nello slot del FE5c.
+
+#### Icone in Impostazioni › Plugin ⏳ (backend scritto alle 12:07; il frontend dopo l'handoff del 9b, perché serve `api sync`)
+
+> **Note implementazione**:
+> - `PluginSettingsPluginRead.icon_url` (descrizione su una riga, senza backtick: va nel client generato);
+> - `FAMILY_ICON_ATTRIBUTES = {"asset": "get_icon", "fx": "icon"}` accanto a `FAMILY_REGISTRIES`;
+> - `_plugin_identity()` sostituisce `_plugin_name()`: nome e icona dalla stessa istanza; un'icona illeggibile o vuota
+>   diventa `None`.
+> - **Prova in processo**: `borsa_italiana` e `justetf` hanno la loro icona, `mockprov` (solo test) nessuna.
+> - Un test-author scrive i test backend.
+
+**FE5c-9b, chiusura (12:45)**:
+> - **Il test unitario** `assetDetailLive.svelte.test.ts` (test-author), 63 casi:
+>   - jsdom, con gli helper `$test/runes.svelte`;
+>   - il polling e le API sostituiti, i servizi puri veri;
+>   - l'effetto legge esattamente i 5 ingressi;
+>   - lo stato fermo, la conversione, le risposte vecchie, la pausa del 429, la testa del grafico e `resetPrice()`.
+>   - È registrato in `core-unit`, come gli altri test di store a rune senza componente.
+> - Aggiornata la doc `developer/frontend/components/features/live-ticker.md` al modulo: stesso comportamento, nomi
+>   nuovi.
+> - **Prove**:
+>   - il file da solo → **63/63** al primo giro;
+>   - `core-unit` → **185 file, 6693/6693**;
+>   - `mkdocs build` stretto ok;
+>   - `front check` 0/0 e cancelli dei colori puliti (12:05).
+> - **Trovati dal test unitario** (codice di prima, spostato così com'è, non toccato nel taglio); il coordinatore ha
+>   approvato la correzione in un commit a parte, subito dopo il 9b, con i rossi prima (12:37):
+>   1. su un grafico convertito, ogni poll ricarica tutto il grafico, perché la guardia confronta il `close` convertito
+>      con il prezzo nativo: una 🐛 nel CHANGELOG;
+>   2. il lampeggio può restare acceso quando l'effetto riparte, perché la pulizia non rimette `direction` a
+>      `'neutral'`; con il movimento ridotto il prezzo resta colorato;
+>   3. un commento di `app.css` (ridotto movimento) che cita `+page.svelte`. `app.css` è dei colori: aspetto il loro ok.
+> - **⚠️ Fuori pista**: il controllo di `api plugin-settings` del lotto icone (12:28) è rimasto in attesa del carico, a
+>   ~160. L'ho fermato prima che partisse, senza server né porta da pulire, per dare la precedenza alle prove del 9b. Lo
+>   rilancio con il lotto icone.
+
+### Quindicesimo aggiornamento di base: `dev_release2` (`0f3b9e3db`, lotti di H, W-B30, colori) nel ramo X ✅ (2026-10-16) — merge `42d25081d`
+
+> - **Conflitto**: solo `backend/app/config/__init__.py`, sugli import (`cast` di H, `urlsplit` mio). Tenuti tutti e
+>   due; messo in stage solo quel file.
+> - **Prove combinate**, carico sotto 50:
+>   - `api sync`; `front check` 0/0; `core-unit` 185 file, 6699/6699;
+>   - `config-package` 739, `config-env-example` 38, `profile-defaults` 52;
+>   - `plugin-settings-service` 96, `plugin-settings-runtime` 120, `api plugin-settings` 14.
+>   - `config-package` aveva 740 casi alle 08:34. Il file di test non è cambiato nel merge, quindi la differenza
+>     dovrebbe venire da una parametrizzazione derivata dal prodotto; 0 fallimenti. I log di confronto erano in `/tmp`
+>     e il riavvio li ha cancellati.
+> - **⚠️ Fuori pista (ambiente)**: il primo giro di `api plugin-settings` è finito 14/14 rossi, tutti sulla stessa
+>   precondizione: «db populate non è girato su questa corsia».
+>   - Causa: il riavvio delle 10:03 ha cancellato `/tmp/librefolio-r13-x`, e le unità `services` ricreano il DB vuoto.
+>   - Rimedio: `test db --force populate` sulla mia data dir (7096 record); al secondo giro 14/14.
+>   - Regola: dopo un giro di unità `services`, `populate` prima delle unità API.
+
+### Sedicesimo aggiornamento di base: `dev_release2` (`1248b7908`, AF A+B+C dei colori e IM) nel ramo X ✅ (2026-10-16) — merge `668d27837`
+
+> - **Conflitto**: solo `frontend/src/themeRoles.baseline.tsv`, fra le righe `--split` del 9a e i numeri di AF.
+>   - Risolto **solo con lo strumento**: `node frontend/scripts/theme/theme-roles.mjs --resolve`, a tre vie dagli
+>     stadi dell'indice. Nessun marcatore rimasto, `--check` pulito.
+>   - Il risultato tiene i numeri più stretti di AF, le mie righe `detail/**`, la pagina a 123 e le cinque righe
+>     `~split`.
+>   - In stage **solo** quel file; il commit del merge è del coordinatore.
+> - **Prove leggere sulla revisione combinata**, tutte verdi:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` 185 file, 6699/6699 (13:28, con i cancelli dei colori).
+> - **⏸️ PAUSA del developer (13:29)**: lo slot E2E 1 non è partito. Il copione è pronto in
+>   `files/checks/fe5c_e2e_slot.sh` della cartella di sessione:
+>   - `mkdocs build`;
+>   - poi, uno alla volta, `front-asset` `asset-detail`, `live-pause`, `asset-mobile-layout`, `asset-data-editor`,
+>     `asset-event-delete`;
+>   - infine `front-utility onboarding-guides`, sulla porta 6183.
+> - **Fuori dal merge, non in stage**: il backend del lotto icone, 4 file:
+>   - `schemas/plugin_settings.py`, `services/plugin_settings/service.py`;
+>   - i due file di test, `test_services/…` e `test_api/…`.
+> - **Prossimo passo, al via**:
+>   1. il coordinatore crea il commit del merge;
+>   2. lo slot E2E del FE5c sulla revisione con AF;
+>   3. le correzioni dal vivo 1 e 2, con i rossi prima;
+>   4. il frontend del lotto icone.
+> - **Ripresa (14:14)**:
+>   - il coordinatore ha creato il commit del merge, `668d27837` (genitori `42d25081d` + `1248b7908`);
+>   - lo slot E2E 1 è mio dalle 14:15, con cut-off alle 15:00;
+>   - controllato prima di partire: HEAD giusto e sporchi solo i 4 file del lotto icone e questo piano.
+> - **Ricevuti nella pausa**, da mettere nei lotti giusti (dettagli nella cartella di sessione):
+>   - **la decisione di H su `LIBREFOLIO_SUPPORT_URL` con `mailto:`**, per il lotto CP13 che legge la variabile:
+>     - una sola variabile, `mailto:` più un indirizzo, controllato con `EmailStr` senza DNS;
+>     - rifiutati `?`, `#`, `%`, `,`, `;`, spazi, a capo e `mailto:` vuoto;
+>     - `env_url` resta solo http(s);
+>     - un valore illeggibile vale «non impostato»;
+>     - il frontend ricontrolla lo schema, mai `javascript:`.
+>     - Verificato in sola lettura che `EmailStr` da solo **accetta** `#`, `%` e `?` nella parte locale (ATEXT di
+>       `email-validator`), toglie gli spazi ai bordi e accetta la forma `Nome<a@b.c>`. Quindi serve un controllo
+>       esplicito dei caratteri prima di `EmailStr`.
+>   - **Una regola dei colori** (T `a317392d4`): un campo nativo con classi `-lf-` nomina anche `text-lf-primary` e
+>     `placeholder:text-lf-placeholder`. `INPUT_CLASS` delle impostazioni dei plugin la rispetta già.
+>   - **L'ok dei colori al commento di `app.css`**, solo quella riga, nel commit delle correzioni dal vivo.
+>   - **Le note di Z per lo stesso commit**:
+>     - in `live-ticker.md`, i paragrafi «Price flash» e «Chart head»;
+>     - i due difetti sono nella v1.2.1, quindi due righe 🐛 nel CHANGELOG;
+>     - i test del lampeggio in `asset-detail.spec.ts` sono miei.
+> - **⚠️ Fuori pista (metodo)**: lo slot gira sull'albero di lavoro, e il runner ricostruisce il frontend se un file
+>   qualsiasi di `frontend/src` (test compresi) o `CHANGELOG*.md` è più nuovo della build (`cli_base.py`,
+>   `check_frontend_needs_build`).
+>   - Durante lo slot quindi non tocco né il frontend, né la documentazione, né il CHANGELOG: preparo le correzioni
+>     nella cartella di sessione.
+>   - Così ogni spec gira sulla stessa build di `668d27837`, e non se ne ricostruisce una a metà slot.
+
+#### FE5c · lo slot E2E 1 ✅ (2026-10-16, 14:15–14:39, cut-off 15:00)
+
+> - **Revisione**: `668d27837`, più il backend del lotto icone non in stage, che aggiunge un campo alle impostazioni
+>   dei plugin e non tocca queste pagine.
+> - **Esito, uno spec alla volta**, con `files/checks/fe5c_e2e_slot.sh`, porta 6183, data dir della corsia:
+>
+>   | Spec | Esito | Durata |
+>   |---|---|---|
+>   | `front-asset asset-detail` | 34/34 | 5,1 min |
+>   | `front-asset live-pause` | 8/8 | 34 s |
+>   | `front-asset asset-mobile-layout` | 21/21 | 58 s |
+>   | `front-asset asset-data-editor` | 26/26 | 2,0 min |
+>   | `front-asset asset-event-delete` | 4/4 | 17 s |
+>   | `front-utility onboarding-guides` | 24/24 | 4,0 min |
+>
+>   In tutto **117/117**, 0 ritentativi. La build del frontend è stata rifatta una sola volta, al primo spec, dopo il
+>   merge. Alla fine la porta 6183 era libera.
+> - **⚠️ Fuori pista (base)**: il `mkdocs build` stretto prima dello slot è fallito su un'àncora di dev.
+>   - Il link è `developer/backend/transactions/wac.md:592` → `split_promote.md#transfer-giving-leg`, arrivato con
+>     `54880598b`: il cherry-pick W-B30 di un link a un'àncora che arriva solo con 47.
+>   - Segnalato al coordinatore, che l'ha corretto su dev in `ed500643f`; mi arriva al prossimo aggiornamento di base.
+>   - Effetto sullo slot: nessuno. `auto_build_mkdocs()` non controlla l'esito, e il sito interrotto aveva solo en e
+>     it; nessuno spec ha chiesto una pagina in fr o es.
+> - **Galleria (G, slot 1 dopo di me)**: ho proposto la coppia base **`1248b7908`** (dev con AF, senza FE5c) → testa
+>   **`668d27837`**.
+>   - Fra le due, `frontend/src` differisce solo per il FE5c (29 file).
+>   - `039ccc9d5`, proposta come base, ha già i pezzi 2–9a e non ha AF: 78 file diversi.
+>   - Aspetto la conferma del coordinatore.
+
+#### Correzioni dal vivo 1 e 2, più il commento di `app.css` ✅ scritte e provate (2026-10-16, 14:40–14:57)
+
+> - **Rossi prima** (test-author, solo `assetDetailLive.svelte.test.ts`): **4 rossi**, ciascuno sulla sua asserzione,
+>   e 66 verdi.
+>   1. Grafico convertito, prezzo nativo fermo: punto `{close: 92, original_close: 100}`, quotazione 100. Ricaricava:
+>      `loadChartData` chiamato una volta.
+>   2. Grafico convertito, prezzo nativo sceso proprio al `close` convertito (quotazione 92). Non ricaricava, e il
+>      punto restava vecchio: è la seconda faccia del difetto 1, trovata dal test-author.
+>   3. e 4. Il lampeggio, quando l'effetto riparte (cambio di valuta, oppure cambio d'asset diretto), restava `'up'`.
+>   - **Guardie verdi**:
+>     - un punto senza `original_close`, o con `null` (nessun cambio quel giorno);
+>     - un prezzo nativo salito a 101: un'invalidazione, poi un `loadChartData(true)`.
+>   - **Docblock del file**: tolto «Not pinned here, on purpose…»; il contratto ora è scritto nei punti «The summary»
+>     e «The chart head».
+> - **Correzioni** in `assetDetailLive.svelte.ts`:
+>   1. La guardia confronta `Number(original_close ?? close)`. Il backend mette `original_close` solo quando converte
+>      (`price_query.py` ~474–522), quindi il grafico non convertito resta identico.
+>   2. La pulizia dell'effetto mette anche `direction = 'neutral'`. L'effetto non legge `direction`, quindi non
+>      riparte per questo.
+>   - Aggiornato anche il commento di testa del blocco.
+> - **`app.css`**: solo la riga del commento, con l'ok dei colori: `+page.svelte` → `assetDetailLive.svelte.ts`.
+> - **`live-ticker.md`**, con le note di Z:
+>   - «Price flash»: la pulizia spegne anche il lampeggio;
+>   - «Chart head»: il confronto avviene sul close nativo, e il grafico si ricarica solo se è cambiato;
+>   - la riga del test unitario nella tabella «How it is tested», che mancava dal 9b.
+> - **CHANGELOG**, `[Unreleased]` › 🐛 Fixed: due righe, il grafico convertito che si ricaricava ogni 30 s e il
+>   lampeggio che restava acceso. Entrambi i difetti erano già nella v1.2.1.
+> - **Prove**:
+>   - il file da solo → **70/70**;
+>   - `front check` → 0/0;
+>   - `core-unit` → **185 file, 6706/6706** (+7);
+>   - prettier e `git diff --check` puliti;
+>   - `mkdocs build` stretto: c'è solo l'avviso noto di dev, corretto in `ed500643f` ma non ancora nella mia base, e
+>     nessun avviso viene dalle mie modifiche.
+> - **E2E non rifatti dopo le correzioni**: lo slot era già finito. Nessun E2E passa dai rami cambiati:
+>   - i 4 test di «Live price direction flash» non fanno ripartire l'effetto a metà lampeggio;
+>   - gli altri `/current` di `asset-detail.spec.ts` (righe 85 e 2330) rispondono senza prezzo.
+> - **Note del test-author che non ho preso**:
+>   - X-R26 va nel backlog: con un cambio d'asset diretto il primo tick si confronta col prezzo dell'asset di prima.
+>     La pagina non ci arriva.
+>   - Un commento esistente («The converted chart reloads on every landing poll», nel caso della conversione
+>     arrivata tardi) resta vero per quel caso, il cui grafico non ha il punto di oggi.
+> - **Committate** dal coordinatore: `2a038b362` (fix) e `cecaa144b` (diario).
+
+#### Icone in Impostazioni › Plugin — frontend ✅ (2026-10-16, 15:03–16:23)
+
+> - **Partenza**: HEAD `cecaa144b`, con il backend del lotto (4 file) ancora sporco dalle 12:07.
+> - **Frontend**, con le sole classi di ruolo (skill design-system):
+>   - `pluginSettingsApi.ts`: `PluginSettingsEntry.icon_url: string | null`, obbligatorio come ogni campo;
+>     `entryOf` lo legge con `textOrNull`.
+>   - `pluginSettingsForm.ts`: `FAMILY_ICONS` accanto a `FAMILY_TITLE_KEYS`, con `asset` → `ChartColumn` e `fx` →
+>     `Coins`, le icone della home della documentazione. Una famiglia nuova aggiunge una riga.
+>   - `PluginSettingsTab.svelte`: il titolo `<h3>` di ogni famiglia comincia con la sua icona, `aria-hidden`,
+>     `data-testid="plugin-settings-family-icon"`, senza classi di colore: eredita il ruolo del titolo.
+>   - `PluginSettingsForm.svelte`: il titolo `<h4>` comincia con
+>     `<img alt="" referrerpolicy="no-referrer" data-testid="plugin-settings-plugin-icon">`; senza icona, o quando
+>     l'immagine non si carica, con `Puzzle` (`text-lf-muted`, `aria-hidden`,
+>     `data-testid="plugin-settings-plugin-icon-fallback"`).
+>     - Un'immagine fallita registra il suo indirizzo (`failedIconUrl`): il ripiego resta finché il plugin non
+>       pubblica un'altra icona.
+>     - Con `alt=""` il nome accessibile del titolo, e quindi quello della sezione (`aria-labelledby`), resta il nome
+>       del plugin.
+> - **Documentazione**:
+>   - user `settings/plugins.en.md`: le icone delle famiglie e quella del plugin, con il pezzo di puzzle quando manca;
+>   - developer `patterns/plugin_settings.md`: `icon_url` nella tabella dell'API (con la sua fonte, la property
+>     `get_icon` dei prezzi e `icon` dei cambi), nella mappa dei sorgenti, nell'interfaccia (`FAMILY_ICONS`, il
+>     ripiego) e nei test del backend.
+> - **CHANGELOG**: una frase in coda alla riga ✨ «Settings › Plugins» di `[Unreleased]`. La scheda è nuova in
+>   questa versione, quindi nessuna riga a parte.
+> - **Test**: il test-author lavora sui 5 file di test della cartella: fabbriche con `icon_url: null`, `entryOf`,
+>   `FAMILY_ICONS`, l'icona per famiglia, l'icona del plugin, il ripiego, l'errore di caricamento.
+>   - **Esito**: i 5 file passano da 284 a **304 casi**, tutti verdi; prettier pulito. Prima delle fabbriche
+>     aggiornate, 11 casi rossi (i `toStrictEqual` di `entryOf` senza `icon_url`).
+>     - `pluginSettingsApi`: da 119 a 128 casi. Ci sono anche un elenco come icona, che diventa `null`, e un'icona che
+>       attraversa lo schema generato: un client generato vecchio toglierebbe le icone senza dire niente.
+>     - `pluginSettingsForm`: da 116 a 118 casi, con `FAMILY_ICONS` controllata per identità e famiglia per famiglia.
+>     - `PluginSettingsTab`: da 6 a 10 casi (PST-07…09). PST-08 e PST-09 confrontano il disegno dell'SVG: non usano né
+>       classi né colori, solo il markup.
+>     - `PluginSettingsForm.component`: da 34 a 39 casi (PSF-26…30). Fra questi PSF-29: dopo un errore, la stessa URL
+>       tiene il ripiego, e una URL nuova riporta l'immagine.
+>     - `PluginSettingsModal`: 9 casi, nessuno nuovo; cambiano solo le fabbriche.
+>   - **Dal test-author, preso**: con `icon_url` `undefined` (fuori da `entryOf`), `showIcon` disegnava un `<img>`
+>     vuoto, che non scatta mai `error`. Ora `showIcon` è `!!entry.icon_url && …`, che copre anche la stringa vuota.
+> - **Prove fin qui**:
+>   - la cartella, 304/304;
+>   - `front check` 0/0. È partito alle 15:35:50 a carico 45 ed è finito alle 15:39:40, quando il carico era 166.
+> - **⏸️ STOP del coordinatore (15:45)**: il carico alto faceva cadere il controllo della galleria di G sul FE5c. Ho
+>   fermato il copione mentre aspettava di far partire `core-unit`, che quindi non è mai partito.
+>   - **Regola nuova**: controlli leggeri solo con carico ≤ **50**, misurato subito prima di partire. Il cancello di
+>     `files/checks/check.sh` ora parte da 50.
+>   - Restano da fare, al via: `core-unit`, `component-unit` e `mkdocs build`.
+> - **Ripresa (16:03)**, sempre con il cancello a 50; prove tutte verdi:
+>   - `core-unit` → **185 file, 6717/6717** (+11);
+>   - `component-unit` → **158 file, 4078/4078**, compresi `ProviderAssignmentSection`, `AssetSearchAutocomplete` e
+>     `AssetModal.providerLifecycle`, che leggono le voci attraverso `entryOf`;
+>   - `mkdocs build` stretto: c'è solo l'avviso noto di dev (`wac.md`), corretto in `ed500643f`, che arriva col
+>     prossimo merge. Nessun avviso viene dalle due pagine.
+>   - ruff, black, prettier e `git diff --check` puliti.
+> - **Backend del lotto**: le prove delle 13:1x restano valide (`plugin-settings-service` 96, `plugin-settings-runtime`
+>   120, `api plugin-settings` 14), perché il merge 16 non ha toccato `backend/`.
+> - **Galleria**: lo scatto `settings/plugins` cambia, con le icone. Il coordinatore lo dice a colori e a G.
+> - **Committato**: `aaff7df04` (feat, 16 percorsi) e `5579d1a19` (diario).
+
+### Diciassettesimo aggiornamento di base: `dev_release2` (`17a531b45`) nel ramo X — merge aperto, combinato verde (2026-10-16, 16:27–16:48)
+
+> - **Perché adesso**: G ha dato il verdetto sulla galleria del FE5c, immagini identiche entro il rumore e 0 classi
+>   miste. Il FE5c può entrare, insieme a F21, CP13 e alle icone, per avanzamento rapido dopo questo merge. AF dei
+>   colori aspetta il FE5c in dev per il suo lotto 9.
+> - **Conflitti** (HEAD `5579d1a19`, MERGE_HEAD `17a531b45`, base comune `1248b7908`):
+>   - `CHANGELOG.md`: due aggiunte in fondo alla stessa lista 🐛 Fixed. Tenute entrambe: prima quella di dev (W-B36b,
+>     le modifiche ai trasferimenti), poi le mie due righe del dal vivo.
+>   - `themeRoles.baseline.tsv`: solo `theme-roles.mjs --resolve`; `--check` pulito.
+>   - In stage solo quei due file.
+> - **Fusi da soli e controllati a occhio**, tutti toccati da entrambe le parti:
+>   - `config/__init__.py`: P17 `LIBREFOLIO_CLIENT_IP_HEADER`, indipendente da `env_url`;
+>   - `.env.example`, `configuration.en.md` e `hosting_providers.en.md`: una riga ciascuno per
+>     `LIBREFOLIO_SUPPORT_URL` e per `LIBREFOLIO_CLIENT_IP_HEADER`;
+>   - `app.css`: il blocco di IM e il mio commento, lontani;
+>   - `live-ticker.md`: le aggiunte di Z, cioè «Updating prices…» e tre righe nella tabella dei test; i miei
+>     paragrafi e la mia riga sono intatti, e la tabella è integra;
+>   - i due file del runner si leggono senza errori; il backlog ha la sezione X intatta (X-R26…28) e nessun
+>     marcatore.
+> - **Prove sulla revisione combinata**, col cancello a ≤ 50:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` **186 file, 6783/6783**;
+>   - `component-unit` **158 file, 4079/4079**;
+>   - `mkdocs build` stretto **verde, senza avvisi**: l'avviso di `wac.md` non c'è più su questa base;
+>   - `config-package` 741, `config-env-example` 38;
+>   - cancello dei colori pulito.
+
+#### X-R27 e X-R28 — le chiavi delle cache degli asset ✅ scritti e provati (aperti il 16/10 alle 15:03, chiusi alle 18:13)
+
+> - **X-R27**, dai colori: `currency_change.py` legge i campi del fornitore da `Asset`, dove non ci sono. Così
+>   l'invalidazione delle cache, dopo un cambio di valuta, non avviene mai: l'`AttributeError` è preso e registrato.
+> - **X-R28**, trovato misurando X-R27: `price_query.py:764` mette in cache il prezzo corrente senza l'hash dei
+>   parametri, mentre `refresh.py` e le invalidazioni lo usano.
+> - **Cura proposta**: una funzione unica della chiave in `services/assets/core.py`, usata nei quattro punti, con un
+>   rosso per ciascun difetto prima della correzione. Le righe sono nel backlog, sezione X.
+> - **Via del coordinatore (16:51)**, dopo l'ingresso del ramo in dev (`a44951cf5`). HEAD `89d276d1e`.
+>   - Test-author lanciato per i rossi (16:53), in `utils provider-core-cache` o nei file vicini, col cancello a 50.
+>   - Misurando ho trovato una terza divergenza: `refresh.py` tiene `identifier` così com'è (può essere `None`),
+>     mentre `provider_management.py` lo scrive `identifier or ""`. La funzione unica sistema anche questa.
+>   - Verificato prima di disegnare la cura:
+>     - le due vie mettono nella cache del prezzo corrente lo stesso oggetto, il `FACurrentValue` del fornitore, quindi
+>       condividere la chiave è sicuro e utile;
+>     - c'è un'assegnazione per asset (`uq_asset_provider_asset_id`).
+> - **⏸️ HOLD del coordinatore (17:22–~17:45)**: c'è la galleria completa dei colori, con carico 130–170.
+>   - Niente prove nuove, solo scrittura e lettura. Ho detto al test-author di non lanciare altri giri.
+>   - La cura è pronta in bozza, nella cartella di sessione (`files/xr27-xr28-fix-draft.md`), e si applica solo dopo
+>     i rossi.
+>   - La documentazione è già aggiornata:
+>     - `backend/assets/architecture.md`: la riga di `core.py`, e il punto su `_asset_current_cache`, che
+>       descriveva la divergenza come voluta;
+>     - `plugin_settings.md`: le cancellazioni passano da `drop_asset_cache_entries()`.
+> - **X-R28 è più grave** (17:35): tutti gli investimenti programmati condividono la stessa voce, perché hanno
+>   l'identificativo `NULL`. `/current` salva anche i risultati presi dalla cache come prezzo di oggi, e lo scheduler
+>   passa dalla stessa via. Sul backlog il peso è salito a «medio».
+>   - **Decisione del developer**: correzione del codice più una riga 🐛 nel CHANGELOG, senza riparazione. La
+>     sincronizzazione notturna riscrive gli ultimi 14 giorni.
+>   - **Chiave**: il developer temeva una collisione fra due piani con parametri identici. Ho verificato che non
+>     c'è:
+>     - il plugin riceve solo `identifier`, il tipo, `provider_params` e le impostazioni;
+>     - la liquidazione e gli eventi del piano stanno nei parametri.
+>     - **Approvato** (17:40): la chiave è esattamente l'insieme degli ingressi della chiamata, costruita da un solo
+>       `asset_cache_key()` nei quattro punti, senza `asset_id`.
+>   - Riga 🐛 scritta nel CHANGELOG: chi è colpito, che cosa ha visto, e che le chiusure si correggono entro 2
+>     settimane.
+> - **Test-author**: 17 casi nuovi in `test_provider_core_cache.py`, 13 rossi attesi e 4 guardie, non ancora fatti
+>   girare (hold). Il conteggio atteso del file è 33 verdi e 13 rossi.
+> - **Rossi (17:52–17:55)**, un solo giro di `utils provider-core-cache`, a carico 20: **33 verdi e 13 rossi**, ogni
+>   rosso sulla sua asserzione principale.
+>   - X-R27:
+>     - dopo la pulizia, le chiamate al fornitore restano (1, 1) invece di (2, 2);
+>     - l'avviso «cache invalidation skipped» compare, con e senza assegnazione.
+>   - X-R28:
+>     - il secondo asset riceve 11 invece di 22;
+>     - la sua chiusura di oggi è salvata a 11;
+>     - le cancellazioni non raggiungono la voce del prezzo corrente;
+>     - il refresh e il prezzo corrente chiedono due volte.
+> - **Correzione**, quella approvata:
+>   - `core.asset_cache_key()`: la chiave è l'insieme degli ingressi della chiamata, cioè codice, identificativo (con
+>     `None` come ""), tipo, hash dei parametri e impostazioni;
+>   - `core.drop_asset_cache_entries()`;
+>   - usate in `refresh.py`, `price_query.py`, `provider_management.py` e `currency_change.py`.
+>   - `currency_change.py` legge l'assegnazione prima del commit, come valori semplici, e toglie `json` e
+>     `Optional`.
+>   - Presa una nota del test-author: i due log della stessa funzione ora usano i campi di structlog invece di
+>     `extra={…}`, che li annidava.
+> - **Prove**, col cancello a 50:
+>   - `utils provider-core-cache` **46/46**;
+>   - `services asset-source` 61, `rate-limit-results` 23, `current-price-bootstrap` 8, `plugin-settings-runtime`
+>     120;
+>   - `db populate`, poi `api asset-currency-change` 4 e `api market-data-wipe` 5;
+>   - ruff, black e `git diff --check` puliti.
+>   - La documentazione si è costruita senza avvisi, nei prerequisiti del server.
+> - **⚠️ Fuori pista (carico)**: la prima unità API ha avviato il server della corsia, e i suoi prerequisiti hanno
+>   rifatto il frontend (svelte-check e build di debug) e la documentazione.
+>   - Le build erano vecchie dopo il merge 17 e le mie pagine. Sono 5 minuti pesanti, partiti a carico 46.
+>   - Regola per la prossima volta: prima di un'unità API su build vecchie, chiedere uno slot.
+
+### O-20 e C-66 — la sync alla creazione, e l'avviso nel dialogo di sync ⏳ (2026-10-16, dalle 18:14)
+
+> - **Partenza**:
+>   - X-R27 e X-R28 sono in dev (`ccfabfd6d`), HEAD `f485c123a`;
+>   - dev ha 38 commit in più, ma nessuno sui file di questi lotti.
+>   - Ordine dato dal coordinatore: O-20 e C-66 insieme, poi F21/C-90, poi O-8.
+> - **O-20, analisi**: creando un asset con un fornitore dalla pagina Asset partono due sync.
+>   - La prima è quella di `AssetModal` (~1245): tutta la storia (`start: 'resume'`), in background, senza riscontro.
+>   - La seconda è quella della pagina (`oncreated` → `handleSyncAsset`, ~1855): con l'intervallo della pagina, la
+>     rotella, il toast dei conteggi e il ricaricamento.
+>   - La modale salta i fornitori parametrici, e assegnarne uno non crea prezzi. Per un investimento programmato
+>     creato dalla pagina Asset oggi la sync della pagina è quindi l'unica.
+> - **O-20, decisione (coordinatore, 18:2x)**: la modale tiene **una sola** sync e la annuncia con
+>   `onsynced(assetId, result)`, come fa `FxPairAddModal`. La pagina non sincronizza più.
+>   - Dettaglio mio, comunicato: la sync della modale copre anche i parametrici (`resume`, cioè tutto il piano). Il
+>     modulo delle transazioni e il wizard ne guadagnano.
+>   - `oncreated` riceve un `{syncing}` facoltativo, così la rotella non resta accesa se una sync non parte.
+>   - Il toast è estratto in `reportSyncResult()`; il tipo `AssetCreateSyncResult` sta in `syncHelpers.ts`.
+>   - La cura è pronta come innesto, nella cartella di sessione (`files/checks/o20_splice.py`, 9 sostituzioni, tutte
+>     verificate a vuoto). Si applica solo dopo il rosso.
+> - **Rosso di O-20**: un E2E che conta le `POST /assets/prices/sync` dopo una creazione dalla pagina Asset, con la
+>   rotta finta. Oggi sono 2, ne serve 1. Lo scrive il test-author, che non lo fa girare: gira nello slot 1 delle
+>   18:45 (cut-off 19:15).
+>   - Sequenza nello slot:
+>     1. il rosso sull'albero pulito: `frontend/src` non è cambiato dalla build delle 18:07, quindi nessuna nuova
+>        build;
+>     2. l'innesto;
+>     3. una build;
+>     4. i verdi: lo spec di O-20 e gli spec degli asset che creano asset.
+> - **C-66, decisione (coordinatore)**:
+>   - **(A)** adesso: il conteggio dei punti salvati nell'intervallo viene dai dati che la pagina mostra già, senza i
+>     riempiti all'indietro. `SyncModalBase` aggiunge una riga sotto la barra dell'intervallo.
+>   - (B) è X-R29, un endpoint che conta le righe manuali.
+>   - (C) è X-R30, una domanda al developer: la sync deve tenere i prezzi manuali?
+>   - Verificato: oggi la sync sovrascrive anche i `MANUAL`. I cambi saltano le coppie solo `MANUAL`.
+> - **C-66 non entra nello slot delle 18:45**: i conteggi vengono dai dati di tre pagine, e prima vengono i rossi di
+>   Vitest. È circa un'ora di lavoro, e l'E2E va nello slot successivo.
+>   - Non tocco `frontend/src` prima del rosso di O-20.
+> - **Approvato (18:29)**: O-20 con l'effetto collaterale, cioè che un investimento programmato creato dal modulo
+>   delle transazioni o dal wizard ha subito la sua storia. È un miglioramento: va nel piano e nella riga del
+>   CHANGELOG.
+> - **Risposta del developer a (C)**: vince il fornitore, i prezzi manuali non si tengono. L'avviso (A) basta, e il
+>   testo dice «modifiche manuali comprese». X-R30 è chiusa.
+> - AF è entrato in `assets/[id]` e in `components/assets/detail/` (punta `c179a5144`). `AssetModal.svelte` e la
+>   pagina lista non sono toccati.
+> - **La riga del CHANGELOG** si scrive subito dopo il rosso: `CHANGELOG*.md` fa scadere la build, e il rosso deve
+>   girare senza ricostruirla.
+> - **Slot 1 (18:37–18:49)**, anticipato perché H aveva finito:
+>   - **Rosso di O-20** sull'albero pulito, senza ricostruire: `front-asset asset-modal O-20` dà 1/1 rosso, «Received
+>     length: 2». Sono le due sync, quella della modale (`resume`) e quella della pagina (l'intervallo della pagina).
+>     Il test è `asset-modal.spec.ts`, «NR — One price sync per asset creation (O-20)».
+>   - Poi l'innesto (`o20_splice.py`, 3 file) e la riga 🐛 nel CHANGELOG, aggiunta dopo il rosso.
+>   - **Verdi**, con una sola build e svelte-check 0/0:
+>     - O-20 1/1;
+>     - `asset-modal` 18/18, compreso Bug K, che legge la sync della modale;
+>     - `asset-list` 28/28;
+>     - `tx-import-resolution` 15/15: il wizard crea gli asset con la stessa modale.
+>   - Alla fine la porta 6183 era libera; lo slot è stato restituito alle 18:49.
+> - **Prove leggere**: `core-unit` 186 file, 6783/6783; `component-unit` 8 rossi in `AssetModal.test.ts`.
+>   - **Verdetto: assunzione**. I casi fissavano `oncreated` chiamata con esattamente `[assetId]`, e il secondo
+>     argomento `{syncing}` è voluto.
+>   - Il test-author li aggiorna al contratto nuovo e aggiunge i casi di `onsynced`: risultato, `null` sul rifiuto,
+>     nessuna chiamata senza sync, e il parametrico che ora sincronizza.
+> - **C-66, analisi**: ogni punto delle pagine porta `backward_fill_info.days_back`. Un punto con `days_back` = 0, o
+>   senza l'informazione, è una riga salvata; gli altri sono riempiti all'indietro. È questo il criterio dei
+>   conteggi.
+>   - Le modifiche a `syncHelpers.ts` (`SyncSection`) aspettano il commit di O-20, che tocca lo stesso file.
+> - **`AssetModal.test.ts` riallineato** (test-author): da 32 casi, di cui 8 rossi, a **37/37**.
+>   - Gli 8 aspettano `oncreated(id, {syncing})`. Nel percorso dell'assegnazione fallita resta `oncreated(id)`, senza
+>     dettaglio, ed è fissato così.
+>   - 5 casi nuovi in «the one price sync of a creation (O-20)»:
+>     - `onsynced(id, results[0])` solo dopo la risposta;
+>     - `null` se la richiesta fallisce;
+>     - nessuna sync senza fornitore, né quando l'assegnazione fallisce;
+>     - il parametrico ora sincronizza da `resume` con `{syncing: true}`.
+> - **Dal test-author, preso**: `.then(onsynced).catch(…onsynced(null))` riferiva la sync una seconda volta, con
+>   `null`, se il gestore del chiamante lanciava. Ora è `.then(ok, ko)`: `ko` vale solo per il rifiuto della
+>   richiesta. Il file resta 37/37.
+> - **Dal test-author, non preso**:
+>   - la data `end` in UTC vicino alla mezzanotte, che c'era già prima;
+>   - `results` vuoto che diventa `null`, come un errore. Va bene: per il chiamante significa «nessun risultato».

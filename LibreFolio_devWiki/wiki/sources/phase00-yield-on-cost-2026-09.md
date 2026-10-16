@@ -46,5 +46,5 @@ I-08 — the YOC theory page exists only in English.
 | README | `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/README.md` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md` |
 | Calculation | `backend/app/services/financial_math/yield_on_cost.py` |
-| Cell | `frontend/src/lib/components/dashboard/YieldOnCostCell.svelte` |
+| Cell | `frontend/src/lib/features/dashboard/YieldOnCostCell.svelte` |
 | Theory page | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.en.md` |

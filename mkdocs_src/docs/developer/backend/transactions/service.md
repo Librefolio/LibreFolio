@@ -59,11 +59,11 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()` | Parse create, update, split, and promote rows independently |
+| 1 | `parse_inputs()`, then `check_decimal_limits()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount or manual cost basis over its column's limit (C-97, see [Decimal limits](#decimal-limits)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
-| 5 | `apply_updates()` | Apply and validate merged update state |
+| 5 | `apply_updates()` | Apply and validate merged update state. An explicit `cost_basis_override: null` removes the row's cost basis where its type and side take one, unless the update is in Auto; step 11 then refuses the update where one is required (decision P5, see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 | 6 | `validate_updated_pairs()` | Re-check shared description/tags on updated linked pairs |
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
@@ -115,15 +115,45 @@ frontend, each time they run, so they follow any change to it:
 | 5 | `asset_mode`: `required` | A missing asset (`assetRequired`); `optional` (rule 6) checks nothing, and `forbidden` is left to a create's rules 3, 3b and 4 (an update or a promote cannot set an asset) |
 | 7, 8 | `cash_mode`: `required`, `forbidden` | Missing cash (`cashRequired`); a cash movement (`cashForbidden`) |
 | 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
-| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`) |
+| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`); a zero cash amount where `cash_sign` is `nonzero` (`cashNonzero`; see below for when) |
 | 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 
-Until the developer's pending decision P6 (2026-10-16), rules 5–11 leave unchecked four
-points where the table is stricter: a `TRANSFER`'s cash, `FX_CONVERSION`'s zero quantity,
-`TRANSFER`'s non-zero quantity, and the non-zero cash of `FX_CONVERSION` and
-`CASH_TRANSFER` (`_P6_CASH_FORBIDDEN_UNCHECKED`, `_P6_QUANTITY_SIGN_UNCHECKED`; rule 11
-does not read `nonzero`). Only a create refuses them, with its rules 2, 3 and 3b; an
-update or a promote does not.
+Decision P6 (the developer's, 2026-10-16) sets when four of these refusals hold: a
+`TRANSFER`'s cash (`cashForbidden`), `FX_CONVERSION`'s non-zero quantity (`qtyZero`),
+`TRANSFER`'s zero quantity (`qtyNonzero`), and the zero cash of `FX_CONVERSION` and
+`CASH_TRANSFER` (`cashNonzero`). In an update, each holds only when its field changes:
+the cash for the first and the last, the quantity for the middle two.
+`changed_rule_fields()` compares the row by value with `stored_rule_values`, the row as
+stored before the batch, so a row stored outside the table stays editable: its notes,
+tags or date, or the field re-sent as stored. A promote changes the type, which counts as
+a changed cash and quantity, so it checks all four. A create (`changed_fields=None`)
+keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
+an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
+
+### 🔢 Decimal limits {: #decimal-limits }
+
+`check_decimal_limits()` (`transaction_batch_stages.py`; C-97, issue #43) reads every
+parsed create and update. A `quantity` keeps 10 decimal places, a `cash.amount` 6 and a
+manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
+columns; any of them at most 15 significant digits: `decimal_limit_issue()`
+(`backend/app/db/precision.py`) takes the scale from the model and does not count
+trailing zeros. A value over a limit
+is refused, never rounded: one issue per field, with code `decimalPlacesExceeded` or
+`significantDigitsExceeded` (both in `TXValidationCode`, listed by
+`GET /transactions/types` → `validation_codes`), params `{"max": N}` and `field`
+(`quantity`, `cash.amount` or `cost_basis_override`). The frontend puts the field label
+in front (`resolveValidationMessage.ts`): *Quantity: At most 10 decimal places*.
+
+The issue keeps the batch from being committed, but the row stays in it: the later
+stages still apply it, so a linked pair is not broken by it, and the batch's other
+issues are reported with it (the inline WAC is skipped, as for any non-balance issue).
+The check runs when a batch is confirmed (`/transactions/validate`,
+`/transactions/commit`), not when a broker import builds its rows (decision D2): the
+import hands its rows to the bulk workspace, which shows the refusal with the batch's
+other issues. A figure a plugin computes instead of reading it, such as a per-unit cost
+from a total, is rounded by the plugin and never reaches this refusal (decision D6, see
+[Decimal places](../../architecture/patterns/brim_plugin_guide.md#decimal-places)). The
+column types are in [Decimal Columns](../../architecture/database/index.md#decimal-columns).
 
 ---
 
@@ -205,8 +235,9 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
 `_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
-brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and allows an
-intra-broker `FX_CONVERSION`. A `TRANSFER` pair must also move one asset
+brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and one broker for
+both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`).
+A `TRANSFER` pair must also move one asset
 (`pairAssetMismatch`, params `assetA`/`assetB`) by exactly opposite quantities,
 compared as `Decimal` (`pairQuantityMismatch`, params `qtyA`/`qtyB`): what leaves one
 broker arrives at the other, and no unit is created or lost. The first rule that
@@ -366,8 +397,21 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
   `NativeCash.balances()`, sums them by currency without any rate (see
   [The Native-Cash Function](wac.md#compute-native-cash)). A currency whose
   movements cancel out keeps its line, at zero.
-- **Holdings** stay a SQL sum of `quantity` per asset, with the same date cut:
-  the layer has no home for a broker's quantities at a date.
+- **Holdings** come from the layer too: `financial_math.ledger_totals.position_quantities()`
+  sums the `quantity` of the broker's rows per asset, with the same date cut (see
+  [Ledger Control Totals](../financial_math.md#ledger-totals)). It skips a row of
+  quantity 0, so an asset whose rows all have quantity 0 has no line: the broker
+  summary reads a missing line as zero.
+
+Both sums run in Python, exactly, over the rows the query returns; the query keeps
+only the filters. `get_balances_at_end_of()` sums the same way, through
+`_get_balances_before_date()` — the starting balances of the
+[end-of-day replay](balance_validation.md), and LibreFolio's side of the BRIM gap-fix,
+without its excluded ids — and so does the asset list's set of held assets
+(`AssetCRUDService.list_assets()`, then `> QUANTITY_DUST_THRESHOLD`). Never an SQL
+`SUM` (C-97): SQLite stores these columns as doubles, and `SUM` adds the doubles, not
+the decimals — `0.1 + 0.2 − 0.3` gives `2.8e-17`, not 0 — an error the read at 6
+decimals used to hide. Summed in Python, a zero balance is exactly zero.
 
 The holdings' cost no longer comes from this service: the broker summary computes
 it with the shared average cost, on the same `as_of` (see
@@ -390,7 +434,7 @@ flowchart LR
     Resolver --> Portfolio["portfolio_service / financial_math/portfolio/<br/>portfolio marks"]
 ```
 
-So the transaction layer can affect marks only by storing transaction facts (BUY/SELL amounts, priced ADJUSTMENT cost basis). It never reads current prices and never performs estimated-at-cost valuation.
+So the transaction layer can affect marks only by storing transaction facts: the amounts and quantities of `BUY` and `SELL` rows. An `ADJUSTMENT`'s cost basis is a cost, never a mark — it reaches valuation only as the book cost of a holding the resolver cannot mark at all (see [Price Resolver — No observation: valued at cost](price_resolver.md#valued-at-cost)). The layer never reads current prices and never performs estimated-at-cost valuation.
 
 ---
 

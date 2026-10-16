@@ -2687,3 +2687,947 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
   (444 front, 338 backend); `mkdocs build` stretto verde (101 s); `check-links` verde (96 link).
 - **Nessuna riga di CHANGELOG**: il valore per l'utente arriva con B2 (la prova del ripristino), che la scrive lui.
 - **All'integrazione**: avviso B che firma e forma JSON sono quelle concordate e che `to_json()` dà un dict.
+
+#### Checkpoint CP-15 ✅ (2026-10-16) — committato dal coordinatore (`5254faa17`, journal `a33376e37`)
+
+- **Aggiornamento di base 8** — merge di `dev_release2` `68fd5c301`, HEAD `63e0374a3`, pulito. CP-16 era già entrato
+  (base comune `442fbfe02`).
+- **Ingresso** (16/10 01:40, `nice -n 10`, carico 38–41): `services financial-math` 392, `check-orphans` ✓. B lo
+  avvisa il coordinatore, con la firma e `to_json()` che dà un dict. J-18 resta nel backlog.
+- **J-19** nel backlog (richiesta del coordinatore, 01:39): `worker_crashed` del PAC sotto carico, «da capire: OOM o
+  timeout del worker», con la lettura del codice: memoria misurata → `memory_limit`, tempo → `execution_timeout`, quindi
+  `worker_crashed` è un'uscita del figlio senza nessuno dei due.
+- **Prossimo lotto**: CP-6 (B11 e il segno di prezzo dei giorni «dirty», decisione 28), annunciato al coordinatore
+  prima di cominciare.
+- **Regola** (coordinatore, nel via di CP-15 arrivato in ritardo alle 01:41): mentre gira una run pesante non si scrive
+  nel worktree, nemmeno i rossi, perché pytest li raccoglierebbe. Rispettata: stub e test di CP-15 sono nati dopo la
+  fine di `all-backend` (00:38); durante la run ho scritto solo il piano.
+- **J-20** nel backlog (coordinatore, 01:42, da Y10 e decisione 49): la descrizione di `AllocationItem.value`
+  (`schemas/portfolio.py:79`, «Percentage share (0-100)») non regge con la liquidità negativa. Va in CP-6, con
+  `api sync`.
+- ✅ **CP-16 in `dev_release2`** (treno 70, merge `240675ad1`), con la riga 🐛 nel CHANGELOG; i colori avvisati di
+  `LotCustodyModal.svelte` dal coordinatore.
+- ✅ **CP-15 in `dev_release2`** (treno 74, merge `fd41a0996`). J-19 resta nel backlog (lotto piccolo quando c'è posto).
+
+#### CP-6 — B11 e il segno di prezzo (via del coordinatore, 16/10 01:42)
+
+- **Via**: «CP-6: via, rossi prima, con i valori che cambiano dichiarati prima, poi `all-backend` su uno slot che ti do
+  io». Dentro anche J-20 (descrizione di `AllocationItem.value`, poi `api sync`). Base: HEAD `63e0374a3`.
+- **Letto sul codice di `63e0374a3`**: i giorni «dirty» (`daily_state.py:342-379`) contano i cambi della sola cassa
+  (`NativeCash.rate_change_days`) e, per i prezzi, solo una chiusura di mercato diversa dalla precedente. Il giorno
+  legge i cambi a giorno esatto da `fx_rate_map` per il valore dei titoli (`_market_value_for`, `:1036`), la parte
+  cambio del non realizzato (`_add_unrealized_part`, `:900`) e la cassa in transito (`_convert`, `:918`, da
+  `_compute_in_transit`). La mappa ha una voce al giorno per le valute dei prezzi e degli asset, e per la cassa in
+  transito nei suoi giorni (`engine.py:455-555`). Le posizioni finali (`position_states_end`) si valutano a `date_to`
+  da capo: scheda del broker e sintesi sono giuste, sbagliano le linee e le serie giornaliere.
+- **Decisioni notturne, da rivedere** (tecniche):
+  1. **Giorni di quotazione**: diventa «dirty» **ogni** giorno con una quotazione di mercato nel frame, non solo
+     quando la chiusura cambia. Comprende il caso del piano (da trade a mercato con la stessa chiusura) ed è più
+     semplice. Prende anche la quotazione uguale che azzera l'età del prezzo e la candela del giorno; costa poco, perché
+     una chiusura cambia quasi ogni giorno di borsa.
+  2. **Una casa sola**: `native_cash.change_days(read, currencies, days)`, pubblica e pura, al posto di `_change_days`.
+     Dà i giorni del calendario in cui la lettura del chiamante dà a una valuta un cambio diverso dal giorno prima: un
+     cambio che compare o sparisce conta, e conta il primo. La cassa la chiama con l'ultimo cambio noto sul calendario
+     dei suoi punti (stesso risultato di oggi); il motore con il cambio del giorno esatto da `fx_rate_map`, sul frame
+     per le valute dei prezzi e degli asset, e sui giorni di ogni transito per la sua cassa.
+- **Valori che cambiano (dichiarati prima)**:
+  - gli stati giornalieri nei giorni in cui si muove solo il cambio di un titolo, o della cassa in transito, fino al
+    giorno «dirty» seguente: valore di mercato, NAV, linee dei broker, parti cambio e titolo del non realizzato, valori
+    in transito;
+  - i giorni con una quotazione di mercato uguale alla precedente: segno e sorgente del prezzo (mercato e non trade),
+    insieme «implied», età del prezzo, candela del giorno;
+  - ciò che deriva dalle serie: TWRR, MWRR, drawdown, grafici storici, fatti di portafoglio dell'AI Export;
+  - golden `eur_only_golden.json`: cambia W1 (cambi EUR/IDR nei giorni 4, 18 e 22 senza transazioni né prezzi);
+    W2 dovrebbe restare identica, con la riserva dei giorni di quotazione uguale: il diff JSON lo dirà, e lo dichiaro;
+  - invariati: titoli nella sola valuta del report senza quotazioni uguali, sintesi e posizioni finali a `date_to`.
+- ✅ **J-20** (16/10 01:47): `AllocationItem.value` ora dice «Percentage share of the total, rounded to 0.01: amount /
+  sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can
+  exceed 100.» (la formula di `derived_views._alloc`). `dev.py api sync` verde: la descrizione è nel client generato,
+  nessun file tracciato cambiato oltre allo schema; impronta dei contratti dei Tool invariata. Ruff e black puliti.
+- **Rossi di CP-6**: test-author al lavoro su `test_portfolio_engine/test_fx_only_days.py` (R1–R7, guardie, test di
+  `change_days`). **Bozza del codice** pronta in `/tmp/libreFolio_j/cp6/apply.py` (sostituzioni esatte, ancore
+  verificate una per una), da applicare dopo i rossi: `change_days` in `native_cash`, `NativeCash` che la usa,
+  `_valuation_rate_change_days` e i giorni di quotazione nel motore.
+- **✅ Rossi** (test-author, 01:50–02:08): `test_portfolio_engine/test_fx_only_days.py`. 11 rossi su un valore
+  (R1, R2, R3b, R4, R5, R6, R7, R7b più guardie verdi), 7 sul `change_days` assente; R3 verde già oggi. Letture del
+  test-author, accettate:
+  - un acquisto pagato in USD fa tenere USD alla cassa, e allora ogni cambio USD è già un giorno «dirty»: i rossi
+    comprano in EUR;
+  - la cassa in transito era già coperta dai movimenti della coppia; il rosso vero è R3b, cambi che compaiono dentro il
+    transito;
+  - R5 usa cambi con decimali esatti;
+  - **R7 restava rosso con la mia bozza**: un prezzo portato avanti diventa vecchio solo per età, e né i giorni di
+    cambio né quelli di quotazione lo prendono.
+- **Decisione notturna, da rivedere (3)**: diventa «dirty» anche il primo giorno in cui un prezzo portato avanti è
+  vecchio: osservazione (quotazione o transazione con quantità) + `STALE_PRICE_THRESHOLD_DAYS` + 1, nel frame. Un
+  giorno in più per osservazione, anche quando una più nuova lo rende superfluo: il valore non cambia, cambia l'età.
+- **✅ Codice** (02:09, la bozza più la regola 3): `native_cash.change_days`, `NativeCash` che la usa sul calendario dei
+  suoi punti, `DailyStateBuilder._valuation_rate_change_days` (lettura `_read_rate` a giorno esatto, calendario
+  `_calendar`), ogni giorno di quotazione e il primo giorno vecchio. 19/19, `services financial-math` 392 (parità della
+  cassa compresa).
+- **Golden** (02:13): rosso solo lui (724 passed e 1 failed); rigenerato con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`.
+  Confronto JSON vecchio/nuovo: **406 differenze, tutte in W1; W2 identica**.
+  - Stati giornalieri dei giorni 4, 18–19 e 22–25 (indici 3, 17–18, 21–24): i cambi EUR/IDR dei giorni 4, 18 e 22, più i
+    giorni che li ricopiavano. Cambiano valore di mercato, NAV, linea del broker A, P&L, candela, ripartizioni, non
+    realizzato e le sue parti (IDR: la parte cambio del giorno 4 passa da 1E-25 a −3,409).
+  - Ciò che ne deriva: storia, storia delle allocazioni, candele, P&L per broker, «altri effetti» dei contributi.
+  - **La sintesi a fine W1** (giorno 25, che ricopiava il 21): NAV 13 458,95 → 13 454,10; valore di mercato
+    1 901,78 → 1 896,92; P&L −241,05 → −245,90; non realizzato 170,05 → 165,19; TWRR −1,7619 % → −1,7973 %; MWRR
+    cumulato −1,7468 % → −1,7820 % (annuo −23,51 % → −23,93 %); ROI semplice −1,7595 % → −1,7949 %; allocazioni.
+    `period_other_result` si muove solo alla 27ª cifra decimale (rumore dei Decimal).
+- **⚠️ Fuori pista**: nei «valori che cambiano» avevo scritto «invariati: … sintesi e posizioni finali a `date_to`».
+  Sbagliato per la sintesi: le posizioni finali si valutano da capo, ma NAV, P&L e rendimenti della sintesi leggono
+  l'ultimo stato giornaliero. Il piano di partenza lo diceva giusto («la sintesi a `date_to`, quando quel giorno muove
+  solo un cambio»). Corretto qui; il golden lo mostra.
+- **Cancelli leggeri** (02:16–): ruff e black puliti sui 4 file; `services roi-fifo-utils` 725 (golden nuovo);
+  `services portfolio-engine` 40; AI Export (portafoglio, broker, asset) 348; poi `api portfolio`, `check-orphans`.
+- ✅ **Cancelli leggeri**, fine (02:20–02:29): `api portfolio` 51, `check-orphans` ✓ (339 backend).
+- ✅ **devWiki** (skill `wiki-file`, 02:35): `problems/dirty-days-ignore-fx-only-moves` passa a «resolved», con le tre
+  regole nuove, `change_days`, la lezione dei test (comprare nella valuta del report, sennò la gamba di cassa nasconde il
+  difetto) e i file sorgente; riga dell'indice e voce del log. `check_source_paths.py`: nessun percorso mancante nella
+  pagina (i 5 segnalati sono di altre pagine, già alla base). Grafo non aggiornato: graphify non c'è in questo worktree.
+- **Doc dev** (docs-writer, in corso): i motivi dei giorni «dirty» nella pagina del motore, `change_days` in `wac.md`.
+- **CHANGELOG proposto** (🐛 Fixed): «Portfolio: on a day when only an exchange rate moves, foreign securities and cash
+  in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the
+  previous close; before, the daily lines and the summary on such a day kept the previous day's value.»
+- ✅ **Doc dev** (docs-writer, 02:35–02:50): `financial_math.md` nuova sottosezione «📅 The Days the Engine Recomputes»
+  (`#recomputed-days`: il ciclo del frame, tutti i motivi dei giorni «dirty», `change_days` e le due letture, i test,
+  la nota «Before release 1.3»); `transactions/wac.md` (riga `rate_change_days()`, frase su `change_days`, una riga per
+  `_valuation_rate_change_days()` tra i chiamanti della cassa). `mkdocs build` stretto verde (carico 38,7, dopo
+  un'attesa da 84), `check-links` verde (96). Nessun debito di traduzione (pagine solo EN).
+- ✅ **devWiki, tre pagine rimaste indietro** (trovate dal docs-writer, sistemate da me): `concepts/pre-frame-frame-separation`
+  («still skipped»), `decisions/native-cash-daily-revaluation` («stays open»), `entities/native-cash` (`change_days`
+  nell'API). Voce nel log; percorsi invariati (5 mancanti, di altre pagine).
+- **Stato**: worktree completo per CP-6; chiesto lo slot pesante per `all-backend`.
+- ✅ **`all-backend --workers 2`** (slot 1, 16/10 03:01 → 03:33, `nice -n 10`, carico all'avvio 35): 7/7 categorie
+  verdi; passate parallele 16 431 passed, 4 skipped, 0 failed, più la consolidata verde. Porta 6185 libera. Handoff
+  FROZEN mandato.
+
+#### Checkpoint CP-6 ✅ (2026-10-16) — committato dal coordinatore (`58c10197c`, journal `bfc02a7ec`)
+
+- **Aggiornamento di base 9** — merge di `dev_release2` `503dce683`, HEAD `079e23b9c`, pulito. Fusi da soli indice e
+  log della devWiki, backlog e `wac.md`: riletti, le mie voci intatte, nessun marcatore di conflitto. Il nuovo paragrafo
+  di W-B31 in `wac.md` (regola 12: `cost_basis_mode` rifiutato su una riga in uscita) non tocca le mie righe ed è
+  coerente con CP-16: una rettifica in uscita col costo arriva solo dalle conversioni di W, non dall'API.
+- **Ingresso** (16/10 03:35–03:50, `nice -n 10`, carico 29–59): golden 1/1, `services financial-math` 392,
+  `test_portfolio_service` 98, `api portfolio` 51, `mkdocs build` stretto verde, `check-links` 96. B11 nella sezione I la
+  chiude il coordinatore.
+- ✅ **Integrato** in `dev_release2` (treno 87, merge `628e3e49e`), con la riga 🐛 nel CHANGELOG; B11 chiusa dal
+  coordinatore nella sezione I (messaggio arrivato alle 06:19).
+
+#### CP-10a — un solo Rolling Return (via del coordinatore, 16/10 03:35: «mandami le due righe e parti»)
+
+- Due righe mandate (03:37). Base: HEAD `079e23b9c`. Verificato in sola lettura: `signal_plugins/rolling_return/` e
+  `calendar_rolling_return/` ci sono ancora, `rolling_compounded_return_values` è a `risk/signal_helpers.py:175`; il
+  registro per famiglia di X è in `services/signals/registry.py`.
+- **Letto sul codice (sola lettura, 03:50–04:05)**:
+  - `RISK_ROLLING_RETURN`: `window` 1–500 osservazioni, uscita `rolling_return`, asse `risk_return`, helper composto
+    (`rolling_compounded_return_values`, `risk/signal_helpers.py:175`). Il plugin a calendario: `window_days` (`strict`,
+    `gt=0`, 30 di base), uscita e asse `calendar_return`, `catalog_visible = False`; chiavi `signals.riskRollingReturn.*`
+    condivise fra i due.
+  - La pagina asset usa già il plugin a calendario come vista principale (`priceChartHelpers.ts:40`,
+    `CALENDAR_RETURN_SIGNAL_CODE`), con finestre personalizzate senza massimo (`calendarReturnWindow.ts`).
+  - Il catalogo è `SignalPluginRegistry` (`services/signals/registry.py:49`, i soli `catalog_visible`). L'AI Export
+    usa indicatori curati per codice (`CuratedSignalSpec`), nessuno dei due rolling return: nessun cambio, nessuna sonda.
+  - I codici dei segnali non sono un enum dell'API: niente contratto da cambiare.
+  - Le configurazioni salvate tengono `signalType` = codice in minuscolo con i trattini (`catalogMapper.ts:7`), quindi
+    `risk-rolling-return`; lo store è alla versione 2 (`STORAGE_VERSION`).
+  - Il rendimento fra due prezzi: `end / start − 1` in Decimal, in `series_preparation.py:357` e nel plugin a calendario
+    (`:238`, ×100). In `returns.py` non c'è una funzione uguale (`gain_loss_ratio` è `gain / base`: arrotondamento
+    diverso).
+  - Sei file di test fissano il plugin vecchio o il suo helper (registro, matrice dei plugin, rischio, oracolo, segnali
+    dell'asset, cataloghi dell'API).
+- **Decisioni notturne, da rivedere**:
+  1. **Nessun limite superiore su `window_days`**, contro il «limite superiore per il selettore» del disegno. La vista
+     principale ammette finestre personalizzate senza massimo (anche 30 anni su un indice lungo): un `le` le rifiuterebbe
+     con un 422. Il plugin regge già finestre lunghissime (`_reference_target_date` contro `date.min`). Per il selettore,
+     un minimo esplicito: `ge=1` al posto di `gt=0` (stessa validazione sugli interi, ma lo schema porta `minimum: 1`).
+  2. **La funzione della casa**: `returns.price_return(start, end) -> Decimal | None` = `end / start − 1`, None se
+     manca un prezzo o l'iniziale è zero; la chiamano `series_preparation` e il plugin a calendario.
+  3. **La prova di parità** (plugin a calendario a D giorni contro il vecchio helper su D osservazioni, su una serie
+     giornaliera senza buchi): uno script usa e getta che lancio prima del taglio, con le prove nel piano. Non un test
+     da tenere: dopo il taglio l'helper non c'è più.
+  4. **La migrazione v2→v3**: una funzione pura esportata dallo store (file non mio, righe dichiarate nell'handoff),
+     chiamata dalla lettura del `localStorage`.
+- ✅ **Prova di parità prima del taglio** (16/10 04:10, `/tmp/libreFolio_j/cp10a/parity.py`, carico 28): 200 serie
+  giornaliere senza buchi (40–800 prezzi a 6 decimali, passi gaussiani al 2 %, seme 29), finestre 1, 2, 5, 30, 90, 365 e
+  una a caso: `rolling_compounded_return_values` su D osservazioni ×100 contro `(P_t / P_{t−D} − 1) × 100` in Decimal.
+  **444 695 punti, scarto massimo 5,7e-14 punti percentuali** (relativo 7,6e-11, sui valori vicini a zero): il vecchio
+  helper non porta via nulla che il plugin a calendario non dia. Log: `/tmp/libreFolio_j/cp10a/parity.log`.
+- **Rossi**: test-author al lavoro (catalogo, `price_return`, i sei file che fissano il plugin vecchio, la migrazione
+  v2→v3 in Vitest).
+- **Bozza del codice backend** (`/tmp/libreFolio_j/cp10a/apply_backend.py`, prova a secco passata: ogni ancora una volta):
+  `returns.price_return`; `series_preparation` la chiama tramite `_price_return_value`, che solleva se un prezzo non è
+  positivo (lo schema lo vieta: `target_close` `gt=0`, `schemas/risk.py:350`, quindi non succede); il plugin a calendario
+  la chiama nel ramo dei prezzi positivi, diventa visibile, `ge=1`, tooltip `signals.tooltips.calendarWindow`; Volatilità,
+  Sharpe e Beta passano da `x-suffix: "days"` a `"observations"` (J-13); esce la cartella `rolling_return/` con
+  l'helper `rolling_compounded_return_values`.
+- **i18n** (`dev.py i18n where`): `signals.tooltips.calendarWindow` e `signals.units.observations` vanno nel
+  sottosistema `charts`, accanto a `riskWindow` e alle unità. Se, uscito il plugin vecchio, il cancello di proprietà dei
+  plugin chiede le chiavi `signals.riskRollingReturn.*` nel frammento del plugin a calendario, le sposto con
+  `dev.py i18n move`, e cambio la riga 14 di `backend-signals.instructions.md` e la skill `devpy-i18n`, che le dicono
+  condivise.
+- **Nessun `implementation_version` da alzare**: la regola è «quando i valori cambiano», e i valori restano gli stessi
+  (stessa formula). Cambiano solo visibilità, minimo dello schema, tooltip e unità, che il catalogo legge dalle classi a
+  ogni richiesta.
+- ✅ **Rossi scritti** (test-author, 16/10): modificati `test_signal_catalogs.py`, `test_asset_signals.py`,
+  `test_returns_rebase_and_ratios.py` (`TestPriceReturn`, 13 casi), `test_risk_metrics_oracle.py`,
+  `test_risk_signal_plugins.py`, `test_signal_plugin_matrix.py`, `test_signal_registry.py`, `chartSettingsStore.test.ts`
+  (versione 2 → 3); nuovo `chartSettingsStore.migration.test.ts` (funzione pura `migratePersistedChartSettings`,
+  idratazione, scrittura di ritorno), registrato in core-unit (`_frontend_utility.py`).
+- ✅ **Codice backend applicato** (`apply_backend.py`): come la bozza qui sopra, tranne la chiave del tooltip (decisione 5).
+- ✅ **i18n** (`dev.py i18n`): il ramo `signals.riskRollingReturn.*` (4 chiavi) passa nel frammento del plugin a
+  calendario, come chiedeva il cancello di proprietà una volta uscito il plugin vecchio; nuova
+  `signals.riskRollingReturn.windowTooltip` (4 lingue) nello stesso frammento; nuova `signals.units.observations`
+  (4 lingue) in `charts`; la descrizione dice «giorni di calendario». `i18n check` stretto verde: 4 752 chiavi,
+  73 frammenti di plugin.
+- ✅ **Testi**: `backend-signals.instructions.md:14`, skill `devpy-i18n:64` e pagina dev `developer/frontend/i18n.md:114`
+  (solo EN, niente da timbrare): l'esempio di chiave condivisa diventa `signals.tooltips.riskWindow` (la dichiarano
+  Volatilità, Sharpe e Beta) al posto di `signals.riskRollingReturn.*`, che ora è di un plugin solo.
+- ✅ **Migrazione dello store** (`chartSettingsStore.svelte.ts`, file non mio): `STORAGE_VERSION` 2 → 3,
+  `PersistedChartSettings.version: typeof STORAGE_VERSION`, funzione pura esportata `migratePersistedChartSettings`
+  (v1/v2 → v3; in `globalSettings` e in ogni voce di `pairOverrides`: `signalType`, `window` → `window_days`,
+  `componentStyles.rolling_return` → `calendar_return`, solo se presenti), chiamata da `parsePersistedSettings`, che ora
+  accetta la sola versione 3. La scrittura di ritorno c'era già (`loadFromStorage`).
+- **Decisioni notturne, da rivedere** (seguito):
+  5. **Chiave del tooltip**: `signals.riskRollingReturn.windowTooltip`, nello spazio e nel frammento del plugin, al posto
+     di `signals.tooltips.calendarWindow` in `charts` scritta sopra. La usa un solo plugin, e lo spazio
+     `signals.riskRollingReturn.*` ora è suo: il frammento è la sua casa. Il cancello avrebbe accettato anche `charts`
+     (R2/R4 guardano solo le chiavi dentro lo spazio di un plugin).
+  6. **Scala dell'asse salvata**: la migrazione sposta anche `axisScales.secondary['independent:risk_return']` su
+     `'independent:calendar_return'`, se quest'ultima manca; altrimenti tiene quella del calendario e lascia cadere la
+     vecchia. Fuori dai rossi; un caso in più chiesto al test-author.
+- ✅ **Rossi → verdi** (16/10 04:36–04:47, `nice -n 10`, carico 24–53, `/tmp/libreFolio_j/cp10a/green.sh`):
+  `TestPriceReturn` 13, `signal-registry` 66, `risk-all -k test_risk_signal_plugins` 45, `risk-oracle` 214,
+  `asset-signals` 30, `api signal-catalogs` 5, `gate-plugin-i18n-ownership` 64, `gate-i18n-catalog` 176,
+  `gate-i18n-usage` 195, Vitest dei due file dello store 49/49. **Rosso**: `signal-plugin-matrix` 4 su 91.
+- **⚠️ Fuori pista**: la tabella `EXPECTED_PARAM_UNITS` di `test_signal_plugin_matrix.py` (decisione del 30/09, «i
+  periodi degli indicatori contano sedute; il rendimento a calendario e le finestre di rischio tengono i giorni») fissa
+  ancora il contratto di prima: `days` sulle finestre di Volatilità, Sharpe e Beta (J-13 le porta a `observations`,
+  deciso dal coordinatore il 15/10) e `signals.tooltips.riskWindow` sul plugin a calendario. Il codice è giusto, la
+  tabella va riallineata: al test-author, insieme alla spec E2E della pagina asset (`asset-detail.spec.ts:285` cerca
+  ancora l'opzione `signal-tree-option-risk-rolling-return`) e al Vitest dell'overlay previsto sopra (mancava: il
+  renderer generico scarta i punti senza numero, `backendRenderer.ts:215`, quindi un punto vuoto non diventa uno zero;
+  il test lo fissa). Due Vitest nominano ancora il codice tolto come esempio generico (`catalogMapper.test.ts:93`,
+  `priceChartHelpers.test.ts:489`): passano, ma vanno su un codice che esiste.
+- ✅ **Store dei grafici, proprietà** (coordinatore, 16/10 ~05:05): `chartSettingsStore.svelte.ts` è una superficie
+  condivisa con **J scrittore** per CP-10a, sulle righe dichiarate (`STORAGE_VERSION` e tipo della versione; il blocco
+  della migrazione prima di `parsePersistedSettings`; una riga dentro). Nessun import cambiato: nessuno scontro con lo
+  spostamento `lib/charts` → `features/signals` di Y4a. Ammessi come aggiunte i due test di `lib/charts/signals`,
+  `priceChartHelpers.test.ts` e la spec E2E della pagina asset (X la taglia, ma i `data-testid` restano).
+- **Fermo dei colori** (05:20–06:45 circa): dalle 05:25 solo scrittura; test-author e docs-writer avvisati.
+- ✅ **Prove leggere** (16/10 05:04–05:07, `nice -n 10`, carico 52–60, `/tmp/libreFolio_j/cp10a/light.sh`):
+  `services financial-math` 405 (392 + 13 di `TestPriceReturn`), `services roi-fifo-utils` 725, `api sync` verde e
+  nessun file tracciato cambiato, `check-orphans` verde (346 file del backend raggiungibili), `signal-plugin-matrix`
+  91/91 con la tabella delle unità riallineata dal test-author (`observations` sulle finestre di rischio,
+  `signals.riskRollingReturn.windowTooltip` sul plugin a calendario).
+- **Riserva** (coordinatore, 16/10 ~05:10): T (colori) ha un lotto di sole classi su
+  `features/ai-export/AiExportMenu.svelte` e `AiExportOptionsPanel.svelte`, slot verso le 07:30: non toccarli finché
+  non è entrato. CP-10a non li tocca; CP-12 lavora su `snapshotDataRenderer.ts`.
+- ✅ **devWiki** (skill `wiki-file`, 05:09): `features/F-088` diceva che `RISK_ROLLING_RETURN` «resta, invariato»; ora
+  registra la decisione 29, la prova di parità, la migrazione v3 dello store, le chiavi del plugin e la casa
+  `price_return` (righe nuove nella tabella dei file). Voce nel log. `check_source_paths`: 5 mancanti, come prima.
+- ✅ **Store**: la variabile destrutturata `window` (ombreggiava il globale del browser) diventa `observations`.
+  Prettier pulito; Vitest dei due file dello store 54/54 (05:09, carico 38), con i casi della scala dell'asse.
+- ✅ **Test-author, secondo giro** (16/10, finito 05:12; nessuna prova lanciata da lui, per il fermo):
+  - `test_signal_plugin_matrix.py`: la tabella delle unità segue J-13 e la decisione 29 (costante `RISK_WINDOW`), commento
+    e docstring con le tre regole (sedute / osservazioni / giorni di calendario); premessa del test delle traduzioni con
+    `signals.units.observations` e `signals.riskRollingReturn.windowTooltip`. Rinominato
+    `test_period_params_declare_sessions_or_days_and_their_tooltip` → `test_period_params_declare_their_unit_and_tooltip`
+    (nessun altro riferimento al vecchio nome).
+  - `chartSettingsStore.migration.test.ts`: cinque casi della scala dell'asse (solo la vecchia, tutte e due, dentro
+    `pairOverrides`, ingresso intatto, idratazione con riscrittura in v3).
+  - `backendRenderer.test.ts`: il risultato a calendario passa dal mapper; i punti `null` non si disegnano (uno `0` vero
+    sì), asse `calendar_return` indipendente (`secondaryAxisSettingsKey` → `independent:calendar_return`), avviso
+    `undefined_metric_window` nell'esito, stato `partial`.
+  - `catalogMapper.test.ts:93`, `priceChartHelpers.test.ts:489`: codice d'esempio → `RISK_ROLLING_VOLATILITY`.
+  - E2E `asset-detail.spec.ts`: nel test della Beta l'opzione a calendario visibile e quella tolta a zero; un test nuovo
+    sceglie il Rolling Return dal gruppo Rischio e verifica la richiesta (un solo overlay, `window_days` 30, istanza
+    diversa da `asset-calendar-return`), la risposta, lo stato `ok`/`partial` e nessun problema di gravità `error`. Il
+    gruppo si legge con un XPath sul `role="group"` fratello del pulsante del gruppo (`ui/select/TreeSelect.svelte:433,451`,
+    componente generico che Y non sposta): accettato.
+  - Trovato fuori lista: `connectNulls` → J-21 nel backlog; `outcome.warnings` del renderer tiene il messaggio inglese e
+    non il codice, ma la pagina asset non lo legge (il distintivo viene da `getSignalProblem`, che legge il codice):
+    nessuna voce.
+- ✅ **Docs-writer** (16/10, finito 05:13; niente build né stamp): 4 pagine dev solo EN (`registry_pattern.md`,
+  `signal_plugin_guide.md`, `risk/architecture.md` «quattro» plugin, `frontend/components/charts.md` con l'overlay e la
+  migrazione v3) e 4 pagine EN con traduzioni (`returns`, `indicators/index`, `risk-metrics/volatility`,
+  `user/assets/detail/signals`). Esce l'ancora `#rolling-return-sessions` (nessun riferimento nel codice); il link di
+  `signals.en.md` va a `#rolling-return-calendar`. Corretta anche una frase falsa sulla Beta: conta ogni giorno in cui
+  **uno dei due** asset è quotato, l'altro all'ultimo prezzo. Verificato sul codice: il calendario è l'unione dei giorni
+  con una quotazione fresca intersecata con i giorni in cui ogni asset ha un valore, anche portato
+  (`series_preparation.py:291-298`, decisione del 30/09). Debito di traduzione → J-22 (con l'avviso «`returns` e
+  `signals` nello stesso giro»); incoerenze già presenti → J-23.
+- ✅ **Mappe della casa** (regola 5, segnalate dal docs-writer): `price_return` nella docstring di
+  `financial_math/__init__.py`, nella tabella di `financial-math.instructions.md`, nella mappa di `backend.instructions.md`
+  e nell'albero di `developer/backend/financial_math.md`. Ruff e black puliti.
+- **Decisione notturna, da rivedere**:
+  7. **Testo dell'uscita**: `signals.riskRollingReturn.outputDescription` diceva «Compounded holding-period return»,
+     scritto per il plugin tolto, che componeva i rendimenti. Giusto nella sostanza, ma gergo per chi non è esperto:
+     diventa «Change of the price against the earlier price, in percentage points.» (IT «Variazione del prezzo
+     rispetto al prezzo precedente, in punti percentuali.», FR e ES uguali nel senso), con `dev.py i18n update` nel
+     frammento del plugin. `i18n check` stretto verde, 4 752 chiavi. Nessun test fissa il testo.
+- ✅ **Prove leggere, secondo giro** (16/10 05:12–05:18, `nice -n 10`, carico 23–54): Vitest dei tre file del renderer,
+  del mapper e degli aiuti del grafico 175/175; `signal-plugin-matrix` 91/91 dopo la rinomina; ruff e black sulla
+  matrice; `front check` 0 errori e 0 avvisi; `front-utility core-unit` 174 file, 6 160 test.
+- ✅ **Backlog**: J-13 chiusa (✅, commit al checkpoint); nuove J-21 (`connectNulls`, per Y o J d'accordo con Y), J-22
+  (debito di traduzione), J-23 (due incoerenze già presenti nelle pagine dell'analisi tecnica). C-71 sta nella sezione C:
+  la chiude il coordinatore dall'handoff.
+- **Rinviato dopo il fermo** (via del coordinatore, verso le 06:45): `mkdocs build` stretto (90–100 s, non stava prima
+  delle 05:20), `check-links`, `translate-validate`; poi gli slot pesanti: E2E della pagina asset con `--workers 2` e
+  `all-backend --workers 2`.
+
+#### Checkpoint intermedio CP-10a ✅ (2026-10-16) — committato dal coordinatore (`af919560c`, journal `dff209a86`)
+
+- Chiesto dal coordinatore durante il fermo dei colori (05:19): lista FROZEN di 51 percorsi, codice (47) separato dal
+  giornale (4). HEAD `dff209a86` verificato (genitori `af919560c` ← `079e23b9c`), worktree pulito.
+- **Non è un ingresso**: dopo il fermo restano `mkdocs build`, `check-links`, `translate-validate`, la E2E della pagina
+  asset con `--workers 2` e `all-backend`, poi l'handoff finale con la riga del CHANGELOG. C-71 la chiude il coordinatore
+  all'ingresso.
+
+#### CP-7 — decisione 26: ogni gamba del lotto nella sua valuta e alla sua data (analisi, 16/10 05:20, sola lettura)
+
+- Via del coordinatore (05:19) per la sola analisi, scritta solo nel piano; niente codice né rossi fino al via.
+- **Stato reale** (letto su `dff209a86`, 05:20–05:30, nessun file toccato):
+  1. **Motore** (`fifo/engine.py:633-666`, `_close_position_piece`): `realized_pnl = q × (prezzo di chiusura − costo del
+     frammento)` e `proceeds = q × prezzo di chiusura`, numeri nudi. Il prezzo di chiusura è nella valuta della riga che
+     chiude (SELL e BUY: `amount / quantity` in `tx.currency`, `:222-224`; rettifiche: `cost_basis_override` nella sua
+     valuta), il costo del frammento in quella del lotto (`FifoLot.currency`, che un trasferimento non cambia).
+     `LotClosure` (`fifo/models.py:172-183`) non porta la valuta della chiusura. Ripiego di CP-16
+     (`_handover_unit_price`, `:413-425`): col costo in un'altra valuta il pezzo esce al suo costo FIFO.
+  2. **Conversione dei lotti**: `lots/histories.py` converte proventi e realizzato con la valuta **del lotto** alla data
+     di chiusura in quattro punti (`known_realized_pnl` :163-171, `known_cumulative_proceeds` :174-184,
+     `_closure_proceeds_prefix` :447-464, lo storico di performance :104 con `lot.currency or asset_currency`); le righe
+     di chiusura dello storico eventi idem, prezzo di chiusura compreso (`lots_analysis_service.py:1040-1042`). La gamba
+     del costo è già giusta: valuta del lotto alla data d'apertura (`_lot_value_basis` :386-401, sintesi :730).
+  3. **Fabbisogno dei cambi** (`lots/conversions.py`): `lot.currency` alla data di chiusura, in tre raccolte (:90-91,
+     :102-104, :176-180).
+  4. **Sintesi** (`lots_analysis_service.py:729-756`): `market_pnl = pnl − realized`; con 1 e 2 un lotto estero chiuso
+     ha «di mercato» ≠ 0 (esempio D-J1).
+  5. **T-B6**: `reference_price_source` passa senza condizione (`:814`); la regola giusta è in `histories.py:303` (None
+     se il rendimento relativo manca). Vocabolario: `exact | fallback | unavailable` (`schemas/portfolio.py:736`).
+  6. **V1**: `PriceHistoryLookup` (`lots/prices.py:26-50`: ultima chiusura salvata, senza scambi né staleness, flag
+     exact/fallback) decide il modo stimato (`:128`), il riferimento che il motore dà ai lotti aperti da una rettifica
+     (`:132-138`) e `opening_reference_price` (sintesi `:732`, storico `histories.py:267`). I prezzi di mercato vengono
+     già dalla casa (`build_asset_price_series`, `:299`). Un lotto aperto da un BUY ha come riferimento il proprio
+     prezzo; solo quelli aperti da una rettifica usano il mercato.
+  7. **AI Export**: `asset_core.py:561-562` e `payloads/portfolio_broker.py:773-776` leggono la sintesi già convertita:
+     builder invariati. Regola delle versioni («never for new values through an unchanged builder»): **nessun aumento**;
+     una sonda mirata come prova. La riga 4 dell'inventario del punto 26 si corregge così.
+  8. **Dashboard** (riferimento): `RealizedSale` (`portfolio/daily_state.py:870-886`) converte i proventi alla data
+     della vendita, il costo è quello storico del pool WAC; `proceeds − cost` sta due volte nel servizio
+     (`portfolio_service.py:660`, `:1574`), dopo `_period_realized_sales` (`:276-282`), che lascia fuori le vendite con
+     proventi o costo ignoti (la qualità dei dati le segnala). Nessun difetto lì.
+  9. **J-14**: la G/L % delle posizioni è già nella casa (`gain_loss_ratio`, CP-4: `portfolio_service.py:717`, `:831`,
+     `:913`). Resta la copia di W, `brokers/summary.py:136-141` (`gain / costo × 100`, senza guardia di segno):
+     `gain_loss_ratio(..., positive_base=False)` dà lo stesso valore. La condizione del coordinatore (N1 di W in
+     `dev_release2`) è soddisfatta.
+- **Proposta: due lotti.**
+  - **CP-7a** (decisione 26, approvata): T-B5 secondo D-J1 B, la fine del ripiego di CP-16, T-B6, J-14 (la sottrazione
+    nella casa e la copia di W, col diff a W).
+  - **CP-7b** (V1) **dopo J-17**. La casa prende come osservazione TRADE ogni rettifica con un costo
+    (`price_marks.py:307-309`), che è proprio la domanda di J-17. Letto dalla casa, il riferimento di un lotto aperto da
+    una rettifica diventa la media degli scambi del giorno (rettifica compresa) o l'ultima osservazione, scambio o
+    quotazione; oggi è l'ultima chiusura di mercato. Fatto prima di J-17, quei valori cambierebbero due volte.
+- **Disegno di CP-7a** (decisioni notturne, da rivedere):
+  1. **Il motore resta senza cambi.** `LotClosure.close_currency` = la valuta del prezzo di chiusura (SELL e BUY: quella
+     della riga; rettifica in entrata che chiude uno short: quella del costo; rettifica in uscita: `cost_basis_currency`
+     o quella del lotto). Il realizzato nativo della chiusura, e i nativi del lotto lungo (realizzato e proventi
+     cumulati), diventano `None` quando le valute differiscono: il motore non sa sottrarle. Nell'app nessuno legge i
+     nativi di `FifoLot` di un lotto lungo; quelli della chiusura li leggono solo le conversioni, che passano alle gambe.
+  2. **Un solo punto di conversione di una chiusura**, nella casa (`financial_math/lots/conversions.py`): proventi e
+     prezzo di chiusura dalla valuta della chiusura alla data di chiusura; costo dalla valuta del lotto alla data
+     d'apertura; realizzato = proventi − costo (lungo), o proventi d'apertura − costo di chiusura (corto); ignoto se
+     manca un cambio, mai calcolato dal nativo. Lo usano i quattro lettori di `histories.py`, le righe di chiusura e le
+     tre raccolte dei cambi.
+  3. **In comune con la Dashboard** («fattorizzare e ottenere il meglio dalle 2»): la regola delle date dei cambi è la
+     stessa, e il pool WAC la applica già all'acquisto. In comune va la sottrazione con la sua politica sull'ignoto,
+     `realized_gain(proceeds, cost)` in `returns.py` (None se una gamba manca), usata da `portfolio_service.py:660`,
+     `:1574` e dalla conversione dei lotti. Resta diversa, di proposito, la somma: la Dashboard somma le vendite note e
+     segnala le altre; un lotto con una chiusura ignota ha il realizzato ignoto (classe (c) del 43, col perché scritto
+     nella casa).
+  4. **Ripiego di CP-16 tolto**: la rettifica in uscita col costo esce sempre al costo della riga, nella sua valuta.
+- **Valori che cambiano** (dichiarati prima):
+  - lotti in una sola valuta estera, chiusi in tutto o in parte: cambia il realizzato, di
+    `costo chiuso × (cambio alla chiusura − cambio all'apertura)`; «di mercato» compensa e il totale non cambia; un lotto
+    chiuso ha «di mercato» 0. Vale per sintesi, righe di chiusura e AI Export (lotti dell'asset e del broker);
+  - lotti chiusi in un'altra valuta (trasferiti fra broker di valute diverse): cambiano proventi, realizzato e totale,
+    oggi sbagliati;
+  - rettifiche in uscita col costo in un'altra valuta (ripiego di CP-16): proventi = costo della riga al cambio della
+    data; realizzato = proventi − costo del lotto al cambio dell'apertura (oggi 0);
+  - T-B6: `reference_price_source` diventa null quando il riferimento convertito manca (API e AI Export);
+  - nessun cambio sulla Dashboard (`realized_gain` dà lo stesso numero) né sulla pagina del broker (la G/L % di W).
+- **Rossi** (test-author, prima della cura): R1 lotto USD chiuso (esempio D-J1: realizzato −1 €, di mercato 0, proventi
+  99 €); R2 chiusura parziale (realizzato a gambe, «di mercato» = il non realizzato della parte aperta, identità del
+  totale); R3 valute miste dopo un trasferimento (proventi 99 €, realizzato −1 €, `close_currency` «USD», realizzato
+  nativo None, prezzo della riga convertito dall'USD); R4 rettifica in uscita col costo in un'altra valuta (fine del
+  ripiego); R5 lotto corto; R6 cambio mancante alla chiusura → ignoto, coppia nella qualità dei dati, mai il nativo; R7
+  parità con la Dashboard (un lotto solo, venduto tutto: stesso realizzato); R8 T-B6; R9 la G/L % di `brokers/summary.py`
+  uguale con `gain_loss_ratio`, base negativa compresa; `realized_gain` coi casi limite.
+- **Superfici**: `fifo/models.py`, `fifo/engine.py`, `lots/conversions.py`, `lots/histories.py`,
+  `lots_analysis_service.py`, `returns.py`, `portfolio_service.py` (2 righe); **di W** `brokers/summary.py` (1 riga, diff
+  da approvare). Test: i sei file che leggono i nativi (~35 letture) più i rossi. Doc EN: dev `lots_analysis_service.md`
+  (conversioni :143-144; il «Known limit» :163-170 si toglie), `fifo_lot_engine.md:259` (la regola della consegna),
+  `financial_math.md` (mappa); teoria `fifo-lot-analysis.en.md` (la regola dei cambi, con debito di traduzione);
+  `financial-math.instructions.md`. devWiki: nessuna pagina su T-B5; una «problems» nuova, già risolta, e i rimandi in
+  F-054 e F-056 se parlano del realizzato.
+- **AI Export**: nessuna versione; sonda mirata (skill delle sonde) su un DB della corsia con un lotto USD chiuso: righe
+  dei lotti di asset e broker col realizzato nuovo e il non realizzato 0.
+- **Cancelli**: `services roi-fifo-utils`, `services lots-analysis-pure`, `services financial-math`, `services broker`,
+  `api portfolio`, `api brokers`, `test_portfolio_service`; `all-backend` su slot; `mkdocs build` e `check-links`.
+- **Conflitti**: W (`brokers/summary.py`, una riga); X, Y e colori nessuno (il frontend dei lotti non cambia: cambiano
+  solo i numeri).
+- **CHANGELOG** (🐛 Fixed): «Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the
+  proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other
+  than the one it was bought in shows the right proceeds.»
+- **Peso**: CP-7a medio; CP-7b basso-medio.
+- **Via del coordinatore** (16/10 ~05:31): **CP-7a**, rossi e codice durante il fermo, solo scrittura. Divisione
+  approvata: CP-7b (V1) dopo J-17, che è del developer (lista P2). `brokers/summary.py:141` lo scrivo io in CP-7a; W lo
+  avvisa il coordinatore. AI Export senza aumento: ok, con la sonda mirata dopo le 06:45. Le 4 scelte tecniche vanno
+  nella lista del developer.
+- **Procedura per le prove di CP-10a dopo le 06:45** (coordinatore): le prove di CP-10a girano su CP-10a da solo
+  (`dff209a86`). Prima salvo CP-7a come patch fuori dal repo e lo tolgo con `git apply -R` (solo i miei cambi), poi
+  prove e slot di CP-10a, poi riapplico. Scelta mia: **due patch**, i test e il codice, così dopo CP-10a posso mostrare i
+  rossi rossi (solo la patch dei test) prima di riapplicare la cura. I file nuovi non tracciati li salvo a parte.
+- **Rossi** (test-author, in corso dalle ~05:36, senza lanciare nulla): R1–R9 nei file di test del motore, di CP-16, dei
+  lotti puri, della casa (`realized_gain`), più la parità con la Dashboard e il perno della G/L % del broker.
+- ✅ **Codice scritto** (16/10 05:36–05:40, solo scrittura, nessuna prova; da provare dopo CP-10a):
+  - `fifo/models.py`: `LotClosure` con docstring e `close_currency: str | None = None` (ultimo campo, i costruttori
+    esistenti restano validi); `realized_pnl: Decimal | None`; in `FifoLot` `realized_pnl` e `cumulative_proceeds`
+    `Decimal | None`.
+  - `fifo/engine.py`: SELL e BUY passano la valuta della riga; la rettifica in entrata che chiude uno short la valuta
+    del suo prezzo (`price_currency`, la stessa del lotto che apre: una riga sola invece di due); la rettifica in uscita
+    chiude al prezzo dell'evento (il costo, o 0) con `close_currency_of` → `_handover_currency` (al posto di
+    `_handover_unit_price`: **fine del ripiego di CP-16**); `_consume_broker_fragments` perde `close_unit_price_of`;
+    `_close_position_piece` confronta le valute (None = valuta del report) e lascia `None` il realizzato nativo di una
+    chiusura in un'altra valuta, e i nativi del lotto lungo da lì in poi.
+  - `lots/conversions.py`: `ConvertedClosure`, `convert_closure`, `need_closure_rates`; le tre raccolte dei cambi la
+    usano.
+  - `lots/histories.py`: `known_realized_pnl`, `known_cumulative_proceeds`, `_closure_proceeds_prefix` e il flusso
+    della SELL nello storico di performance passano da `convert_closure`.
+  - `lots_analysis_service.py`: `_build_closure_rows` da `convert_closure`; T-B6 alla riga della sorgente del
+    riferimento.
+  - `returns.py`: `realized_gain`; `portfolio_service.py:660`, `:1574` la usano (stesso numero: le vendite ignote le
+    toglie già `_period_realized_sales`).
+  - `brokers/summary.py:141` (W): `gain_loss_ratio(..., positive_base=False)`, stesso valore.
+  - Mappe (regola 5): docstring di `financial_math/__init__.py`, `financial-math.instructions.md` (righe di `returns.py`
+    e `lots/`), `backend.instructions.md`, albero di `developer/backend/financial_math.md`.
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  5. **Valuta assente**: una riga senza valuta conta nella valuta del report, come la legge il resolver dei lotti. Lo
+     storico di performance usava la valuta dell'asset per un lotto senza valuta; ora usa la valuta della SELL, che
+     c'è sempre (`cash` porta insieme codice e importo, `schemas/transactions/transactions.py:210`).
+- **Docs** (docs-writer, in corso, senza build né stamp): dev `lots_analysis_service.md` e `fifo_lot_engine.md`, teoria
+  `fifo-lot-analysis.en.md` (con debito di traduzione), più ogni altra frase della regola vecchia.
+- ✅ **Docs** (docs-writer, finito 05:53; niente build né stamp): dev `transactions/lots_analysis_service.md` (sezione
+  nuova `#closure-conversion`; via il «Known limit» e il paragrafo del ripiego; T-B6), dev
+  `transactions/fifo_lot_engine.md` (`close_currency`, nativi `None`, sezione `#closure-currency`, consegna al costo
+  riscritta su `_handover_currency`); teoria `fifo-engine/fifo-lot-analysis.en.md` (sezione `#lots-in-another-currency`
+  con l'esempio D-J1), e, trovate col grep, `fifo-engine/index.en.md` e
+  `instruments/transaction-types/adjustment.en.md` (la nota del ripiego diceva il contrario). Debito di traduzione: le
+  tre pagine di teoria.
+- **Trovati dal docs-writer** (verificati sul codice):
+  1. **Lotti corti: il P&L ignora i riacquisti** (`lots_analysis_service.py` sintesi, `histories.py`
+     `_value_snapshot_on_date`, `_lot_snapshot_on_date`): `P&L = proventi d'apertura − valore aperto`, senza togliere
+     quanto sono costati i BUY che chiudono. Vendi 10 @ 100, ricompri 5 @ 90, prezzo 90: P&L 550 invece di 100; chiuso
+     del tutto: «di mercato» = il costo dei riacquisti invece di 0. Già prima di D-J1. → **dentro CP-7a** (decisione 6).
+  2. Il costo d'una rettifica in uscita senza valuta: i lotti usano quella del lotto, lo storico di performance quella
+     dell'asset. Dall'API il costo arriva come `Currency` (codice e importo insieme,
+     `schemas/transactions/transactions.py:226`; `auto_cost.py:147-148` scrive i due insieme): non succede. Nessuna voce.
+  3. **Consegna al costo d'un titolo estero: lotti ≠ Dashboard** → J-24 (decisione del developer).
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  6. **Lotti corti, curati in CP-7a**: stesse funzioni e stessa conversione del lotto (il costo del riacquisto è il
+     `cost` di `ConvertedClosure`). Il P&L d'un corto = proventi d'apertura − riacquisti fino a quel giorno − valore
+     aperto: `known_buyback_cost` in `histories.py` per la sintesi; nella serie dei valori i riacquisti hanno la loro
+     somma progressiva (`buybacks_by_day`, `_closure_prefix` generico al posto di `_closure_proceeds_prefix`), e la
+     serie si ferma il giorno prima d'un riacquisto senza cambio, come i proventi d'un lungo. Rosso R10 al test-author.
+     **Valori che cambiano**: solo i lotti corti con riacquisti (broker con lo short attivo): P&L, valore totale e «di
+     mercato» nella sintesi e nelle serie di valore e rendimento; un corto chiuso ha «di mercato» 0.
+- ✅ **Rossi scritti** (test-author, finito ~06:05; nessun file nuovo, niente da registrare nel runner):
+  - `test_fifo_lot_engine.py` — `TestCloseCurrency` (valuta della SELL; lotto EUR venduto in USD dopo un trasferimento:
+    realizzato nativo None; nativi del lotto None dopo una chiusura mista; BUY e rettifica in entrata che chiudono uno
+    short); i builder prendono `currency` (default «EUR», i test esistenti non cambiano).
+  - `test_fifo_adjustment_out_with_cost.py` — regola 3 e `TestCurrencyOfTheHandover` riscritte (fine del ripiego).
+  - `test_lots_analysis_pure.py` — `TestConvertClosure` (R1, R2, R3, short, R6), `TestTheLotsRealizedPnlAndProceeds`,
+    `TestTheLotSummaryOfASoldLot`, `TestTheClosureRowsOfTheLotHistory`, `TestTheRatesAClosureNeeds`,
+    `TestTheCashFlowOfASale`, R8 (T-B6) in `TestBuildLotSummaries`, R10 `TestShortLotsSubtractTheirBuyBacks`; sei test
+    esistenti con chiusure USD a mano ora dichiarano `close_currency="USD"`, due test dei corti allineati a R10.
+  - `test_returns_rebase_and_ratios.py` — `TestRealizedGain` (10 casi).
+  - `test_lots_analysis_service.py` — R7 parità con la Dashboard (cambi 1,25 e 1,28 USD per euro, esatti: oggi 78,125
+    contro 59,375); `test_buy_sell_summary_converts_to_target_currency` realizzato 156 → 196.
+  - `test_broker_service.py` — BR-U-094, perno R9 (verde prima e dopo: 20,00; costo 0 → None; costo negativo −1300,00).
+  - Prima della cura i test che usano funzioni nuove falliscono con AttributeError (modulo letto al momento del test,
+    come in `test_returns_rebase_and_ratios.py`), così i file si raccolgono.
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  7. **Rendimento dei corti**: lo storico dei rendimenti leggeva `(valore totale + entrate) / costo − 1` anche per un
+     corto, il cui valore totale è il P&L: un corto in pareggio dava −100 % (`test_short_lot_return_history_computes_total_return`
+     lo fissava a −1). Ora un corto si legge sul nozionale venduto, come la sintesi (`total_pnl / opening_value`): in
+     pareggio 0. Il ramo dei lunghi resta identico (nessun Decimal esatto si sposta). **Valori che cambiano**: lo storico
+     dei rendimenti dei lotti corti (rendimento totale e netto), oggi spostato di −100 punti.
+  - Fabbisogno di cambi dello storico di performance: `need_closure_rates` chiede anche il cambio d'apertura, che
+    `convert_closure` legge; non registrato non si caricherebbe e risulterebbe mancante. Tenuto.
+- ✅ **Rendimento dei corti nei test** (test-author, ~06:20): `test_short_lot_return_history_computes_total_return`
+  fissa i tre giorni (0, 50/600, 100/600, a 12 decimali: `(600 + 100) / 600 − 1` e `100 / 600` differiscono
+  all'ultima cifra di 28; prima −1, −0,92, −0,83); il test puro del corto chiuso usa un doppio coerente (nozionale 1500,
+  tutto ricomprato a 12): 0,2 esatto (prima 0: il riacquisto mai tolto).
+
+#### CP-3 — U5a: contributi e variazione a 1 giorno dai prezzi del motore (analisi, 16/10 06:20, sola lettura)
+
+- Via del coordinatore (~06:19) per la sola analisi, nel piano. Base `dff209a86`; CP-7a in backup
+  (`/tmp/libreFolio_j/cp7a/backup-0620/`, i tre `git apply --check -R` verdi).
+- **Stato reale** (`portfolio_service.py`):
+  1. **B8, contributi** (`get_positions_contribution`, :1467): il motore gira da t=0 (`date_from=None`, :1500-1507),
+     quindi `position_states_start` è al primo giorno, non all'inizio del periodo; solo `position_states_end` (a
+     `date_to`) coincide col confine. Per ogni posizione i contributi rifanno per conto loro:
+     - la quantità ai confini, sommando `quantity × quota` delle righe (:1590-1600);
+     - il prezzo ai confini con `_get_price_at_date` (:489, l'ultima chiusura salvata: niente segni di scambio, niente
+       staleness, niente ripresa attraverso gli split dei segni di scambio), a :1617 e :1634;
+     - la conversione una a una con `_convert_to_base` (:507, una chiamata al DB per importo), all'inizio alla data del
+       periodo ma alla fine **alla data dell'osservazione** (`price_date_e`, :1641): un prezzo vecchio porta il cambio
+       vecchio, mentre il motore converte al giorno della valutazione.
+     La regola della casa c'è già: `DailyStateBuilder._market_value_for(asset, qty, dt)` (`portfolio/daily_state.py`), il
+     «single valuation brain» (segno di mercato o di scambio, staleness, split dei segni di scambio, cambio al giorno
+     `dt`), usato da `_build_position_state` per le istantanee.
+  2. **TRANSFER nei contributi**: la quota di costo passa al broker che riceve, e l'unrealized si sposta al costo: il
+     broker che manda perde tutto l'unrealized d'inizio periodo, quello che riceve parte dal costo storico e prende anche
+     il guadagno maturato prima del trasferimento. Il totale torna, la ripartizione per broker no.
+  3. **V2/P2, variazione a 1 giorno** (:721-747): oggi il segno del motore (`ps.valuation_effective_unit_price`, al
+     cambio di oggi), ieri `_get_price_at_date(d − 1)` (chiusura grezza, convertita alla data dell'osservazione). Un
+     prezzo di ieri vecchio di settimane porta il cambio di allora; un titolo senza quotazioni ma con scambi non ha
+     variazione; uno split di oggi legge −50 % (la quantità di oggi per il prezzo di ieri).
+  4. **R4** (:1658-1700): % del P&L di periodo su `|valore d'inizio|`, annualizzato su una base di ripiego (`cb_end`
+     se l'inizio è 0) e su una finestra (lotto aperto più vecchio, chiusi: capitale impiegato e tempo di volo): regole
+     che la casa non ha (classe (b) del 43). Nessun valore cambia spostandole; cambiano solo con B8 (il valore d'inizio).
+  5. **B19** (:1766): `set(unalloc_income) | set(unalloc_fees)` perde l'ordine d'accesso fissato a :1530-1531.
+  6. **B12**: contraddetta di nuovo, i tre chiamanti di `_get_transactions` passano `date_to` (:647, :1314, :1546); con
+     la cura di B8 la ripresa delle quantità dei contributi sparisce del tutto. Da chiudere nella sezione I.
+  7. Lettori: solo l'API del portafoglio (`schemas/portfolio.py`) e la Dashboard; **l'AI Export non li legge**.
+- **Disegno proposto** (scelte tecniche, da fissare coi rossi):
+  1. **Istantanee del motore ai confini**: `PortfolioCalculationEngine.calculate(..., period_start=)` aggiunge
+     `position_states_at_period_start`, costruite con `_build_position_state` alla fine del giorno `date_from` (stessa
+     quota, stesso costo del pool). `get_report` passa l'inizio del suo periodo al motore condiviso. I contributi leggono
+     quantità, valore e costo ai due confini dalle istantanee: via `_get_price_at_date`, `_convert_to_base` e la ripresa
+     delle quantità (anche il rischio di B12).
+  2. **Variazione a 1 giorno**: due valutazioni del motore della stessa posizione, a `d` e a `d − 1`, ognuna al suo
+     cambio; lo split del giorno `d` ripreso come fa il motore. Il dettaglio (istantanea a `d − 1` con la quantità di ieri
+     più la ripresa dello split, oppure la quantità di oggi al segno di ieri riportato in unità d'oggi) si fissa col rosso
+     dello split.
+  3. **TRANSFER**: ogni broker il P&L del suo tratto. Il trasferimento vale il valore di mercato del giorno: chi manda
+     chiude lì, chi riceve parte da lì; il totale non cambia. **Questa è di comportamento** (la colonna per broker):
+     se il coordinatore la vede di prodotto, va nella lista del developer; senza, B8 si fa senza questo punto.
+  4. **R4 nella casa**: le regole del rendimento di periodo d'una posizione (base, ripiego, finestra, chiusi) in
+     `financial_math/` con i loro test, poi la migrazione; nessun valore cambia.
+  5. **B19**: unione in ordine d'accesso (`dict.fromkeys`); cambia l'ordine delle righe, non le cifre.
+- **Valori che cambiano** (da dichiarare col rosso): contributi della Dashboard e del report per i titoli senza
+  quotazione a un confine (ora il segno di scambio, prima il valore mancava), con un prezzo di fine vecchio (ora il cambio
+  del giorno), con uno split dopo l'ultimo segno di scambio; la ripartizione per broker dei trasferimenti nel periodo (se
+  approvata); la variazione a 1 giorno nei giorni di split, coi prezzi di ieri vecchi e per i titoli con soli scambi.
+- **Rossi** (test-author): titolo senza quotazioni con scambi (valori ai confini); prezzo di fine vecchio in USD (cambio
+  del giorno); split nel periodo; trasferimento a metà periodo (totale e, se approvato, per broker); variazione a 1
+  giorno con split oggi, con prezzo di ieri vecchio, con soli scambi; R4 nella casa (base, ripiego, finestra, chiusi);
+  B19 ordine.
+- **Superfici**: `portfolio_service.py`, `financial_math/portfolio/{engine,daily_state,models}.py`,
+  `financial_math/returns.py` (o un modulo dei contributi); test del portafoglio. Nessun file d'altri.
+- **Cancelli**: `services financial-math`, `test_portfolio_service`, `api portfolio`, `services roi-fifo-utils` (golden
+  compreso: le istantanee in più non devono cambiare gli stati giornalieri), `all-backend` su slot.
+- **Peso**: medio (B8 e V2/P2 il grosso); il TRANSFER aspetta l'ok sul comportamento.
+- **Coordinatore** (06:23): il punto TRANSFER dei contributi cambia cifre per broker che l'utente vede → **al developer**
+  (lista, P22), con la proposta. CP-3 parte dopo CP-10a e CP-7a; se ci arrivo prima della risposta, B8 senza quel punto.
+
+#### CP-10a — prove dopo il fermo, su CP-10a da solo (via del coordinatore 06:48)
+
+- ✅ **CP-7a tolto** (06:48, `/tmp/libreFolio_j/cp7a/stash_out.sh`): le due patch rigenerate hanno lo stesso sha256 del
+  backup delle 06:20 (test `a355bb4ac046fd54`, codice `3d8ee217f95ba361`); `git apply -R` pulito; restano modificati solo
+  piano e backlog. HEAD `dff209a86`.
+- ✅ **Doc** (06:48–06:51, `nice -n 10`, carico 35–53, `/tmp/libreFolio_j/cp10a/docs.sh`): `mkdocs build` stretto verde
+  (112,5 s; i 3 068 URL relativi degli asset si risolvono); `check-links` verde; `translate-validate` esce 1 con 516
+  errori in tutto il sito, quasi tutti di pagine d'altri; le quattro pagine di CP-10a portano proprio il debito dichiarato
+  (J-22): `signals` IT/FR/ES puntano ancora a `#rolling-return-sessions` (ancora presente nelle `returns` IT/FR/ES, quindi
+  i link reggono), `indicators/index` (i tre link nuovi; un quarto, `data-quality.md#alignment-…`, è vecchio),
+  `returns` (titoli ed emoji spostati), `volatility` (formule in linea 18 contro 16).
+- **Slot 2** (dopo W, ~07:10, da confermare): prima `front build --debug` (la build del 04:43 viene dal server di test
+  di `api signal-catalogs` e ha già la migrazione dello store, ma non la rinomina delle 05:09 né il testo delle 05:14),
+  poi `--workers 2 front-asset asset-detail` (attesi 34 test: se il numero sale, `--workers` ha allargato la corsa alla
+  categoria), poi `--workers 2 all-backend`.
+- ✅ **Slot 2** (16/10 07:07–07:58, `nice -n 10`, `/tmp/libreFolio_j/cp10a/slot2.sh`, su CP-10a da solo):
+  - `front build --debug` verde (07:07–07:11; svelte-check 0 errori e 0 avvisi);
+  - `--workers 2 front-asset asset-detail`: **34/34** in 3,4 min. Il conteggio è quello della spec, quindi `--workers`
+    con un'azione non allarga la corsa alla categoria; il test nuovo dell'overlay del Rolling Return compreso;
+  - `--workers 2 all-backend` (07:16–07:58, carico all'avvio 68): 7/7 categorie verdi; passate parallele **17 204
+    passed, 4 skipped**, 0 failed, più la consolidata verde. Il «❌ Provider metadata test failed» nel log è l'uscita
+    rumorosa di `test_provider_metadata[MANUAL]`, che passa (già prima).
+  - Porta 6185 libera. Slot liberato.
+- ✅ **Handoff finale di CP-10a** mandato (07:59), testo del CHANGELOG compreso.
+- **Aggiornamento di base 10** (coordinatore, ~08:00): giornale committato `2fb7b44af`; merge di `dev_release2`
+  `d7a74e5de` senza conflitti → **HEAD `30fe04581`**. I 6 file di test di CP-7a, già rimessi, restano sporchi e intatti.
+- ✅ **Prove mirate di CP-10a sulla revisione fusa** (08:02–08:16, `nice -n 10`, carico 32–48, senza CP-7a: i test
+  tolti di nuovo con `git apply -R`, `/tmp/libreFolio_j/cp10a/merged.sh`): `api sync` senza file tracciati cambiati;
+  `front check` 0 e 0; Vitest di store, renderer, mapper e aiuti 229/229; `core-unit` 176 file, 6 247 test;
+  `signal-plugin-matrix` 91, `financial-math` 405, `asset-signals` 30, `risk-all -k test_risk_signal_plugins` 45;
+  `api signal-catalogs` 5. Porta 6185 libera. CP-10a pronto a entrare.
+
+#### CP-7a — rossi rossi, poi la cura (16/10 08:00–)
+
+- ✅ **Rossi sul codice vecchio** (07:59–08:02, solo la patch dei test, `/tmp/libreFolio_j/cp7a/reds.sh red`):
+  `financial-math -k TestRealizedGain` 10 failed (AttributeError: `realized_gain` non c'è); `roi-fifo-utils` **17
+  failed**, 719 passed (`TestCloseCurrency` 9, `TestCurrencyOfTheHandover` 5, R7 parità, il realizzato 156 → 196, il
+  rendimento del corto); `lots-analysis-pure` **39 failed**, 123 passed (le classi nuove e i test esistenti allineati
+  al contratto); `broker -k …any_non_zero_cost` 3 passed (il perno, verde prima e dopo). In tutto **66 rossi**, ognuno
+  per la ragione dichiarata; il resto dei file verde.
+- ✅ **Cura rimessa** (08:16): patch dei test e del codice riapplicate sulla base nuova (`git apply --check` verde, stessi
+  sha256 del backup); 23 file.
+- ✅ **Verdi e cancelli** (08:19–08:29, `nice -n 10`, carico 29–49, `/tmp/libreFolio_j/cp7a/greens.sh`):
+  `services financial-math` 415; `services roi-fifo-utils` **736** (motore FIFO, CP-16, servizio dei lotti, servizio del
+  portafoglio, golden); `services lots-analysis-pure` **162**; `services broker` 73; `api portfolio` 51; `api brokers` 34;
+  `check-orphans` verde (nessun file nuovo); `mkdocs build` stretto verde (66,9 s); `check-links` verde. Porta libera.
+- **⚠️ Fuori pista**: ruff (I001) e black chiedevano di andare a capo nell'import di `histories` in
+  `lots_analysis_service.py`: con `known_buyback_cost` la riga passava i 300 caratteri. `black` sul file, poi ruff e
+  black puliti su 15 file; `lots-analysis-pure` di nuovo 162.
+- ✅ **AI Export** (08:33): nessun builder toccato, quindi nessuna versione. `services ai-export -k "components_asset or
+  portfolio_broker_financial or portfolio_broker_integration"` **302 passed**: le righe dei lotti di asset e broker si
+  costruiscono coi valori nuovi.
+- **Sonda reale non eseguibile nella corsia**: `ai_export_real_prompt_probe.py` lavora sugli utenti reali del developer
+  (`--user {alfy,marco}`) e sulle loro credenziali dall'ambiente; la corsia non ha né l'uno né l'altro, e le regole
+  vietano i dati di produzione. → J-26 nel backlog: la sonda mirata la fa il developer (un lotto USD chiuso in un Asset
+  e nel suo Broker: realizzato nuovo, non realizzato 0).
+- **Debito di traduzione di CP-7a** (`translate-validate`, 08:31): `fifo-engine/fifo-lot-analysis` (sezione nuova
+  `#lots-in-another-currency`, titoli spostati), `fifo-engine/index` (due link: `#lots-in-another-currency` e
+  `adjustment.md#outgoing-adjustments`), `instruments/transaction-types/adjustment` (la nota rovesciata) → J-25.
+- **Handoff FROZEN di CP-7a** mandato (16/10 08:37) su `30fe04581`: 25 file (23 di codice, test e doc, 2 di giornale).
+  Poi il coordinatore committa e aggiorna la base con `dev_release2` (`d5c3c3ae3`); `all-backend --workers 2` nello slot 2
+  alle 08:45, sulla HEAD nuova. J-26 (la sonda reale) nella lista del developer.
+- ✅ **Commit e base** (coordinatore, 08:36; SHA corretti dal coordinatore): codice `abcfef29c`, giornale `7e5ac5f75`;
+  merge di `dev_release2` `d5c3c3ae3` senza conflitti → **HEAD `16e039282`**, worktree pulito.
+- **⚠️ Fuori pista**:
+  - il primo `all-backend` sulla HEAD nuova (08:36) è stato interrotto alle 08:46 (exit 130), poi il fermo chiesto dal
+    developer; nulla di mio in corso alla ripresa, porta libera;
+  - il riavvio della macchina delle 10:03 ha svuotato `/tmp`: persi script, log e patch di riserva di CP-7a (già
+    committato) e la cartella della corsia, che il runner ricrea. **Regola nuova del coordinatore**: patch, lavoro
+    parcheggiato, script e log da riusare vanno nella cartella di sessione
+    (`~/.copilot/session-state/4c677a01-…/files/j/`); in `/tmp` resta solo `--data-dir`;
+  - **regola nuova dei colori**: prima di scrivere un `.svelte` delle aree IW, TR, AF, BK, IM, DV o T, avvisare il
+    coordinatore (backend, test fuori da quelle cartelle e doc no).
+- ✅ **Ingresso di CP-7a** (ripresa 10:32, slot 2, `nice -n 10`, `files/j/scripts/slot2b.sh`, log in `files/j/cp7a/`):
+  - `all-backend --workers 2` (10:37–11:12, carico all'avvio 34): 6/7 categorie verdi; passate parallele **17 898
+    passed, 7 skipped**; **un rosso**: `e2e search-to-prices::test_complete_e2e_flow_justetf`, `httpx.ReadTimeout` al
+    passo 1 (la ricerca fra i provider), prima di qualunque codice dei lotti;
+  - triage (skill `test-triage`): il test aspetta 30 s (`TIMEOUT = 30.0`), lo stesso tetto che il server dà a ogni
+    provider (`services/assets/search.py:252`, `timeout=30.0`), quindi un provider esterno lento in quel momento lo fa
+    cadere anche se il prodotto si comporta come scritto. Rilanciato solo (11:14, carico 47): **3/3 in 18 s**.
+    **Verdetto: assumption** (budget del test uguale al limite del prodotto), area dei provider, non di J né di CP-7a:
+    al coordinatore, con la proposta (budget della ricerca oltre il limite del server, o un provider solo);
+  - `front check` (11:12): 0 errori, 0 avvisi. Porta 6185 libera, worktree pulito.
+- **Y su `LotCustodyModal.svelte`** (Y12a, 10:3x): il «Valore d'apertura» legge `original_cost` dal backend invece di
+  `quantità × prezzo d'apertura`; nessuno scontro col mio lavoro, stesso numero (invariante del motore, stessa
+  conversione), avvisato che CP-7a cambia le righe di chiusura della cronologia: Y fissa solo la cella.
+#### J-24 — analisi sulla regola del developer (P21, 16/10 ~10:45, sola lettura)
+
+Regola (P21, alla lettera): «convertire nella valuta di destinazione al cambio del giorno della transazione, e fare ogni
+calcolo nella valuta di destinazione, come nel fix appena prima della 1.2» (#32: ogni acquisto al cambio della sua data,
+le vendite misurate contro quel costo).
+1. **Lotti: la seguono già** (da CP-7a): la rettifica in uscita col costo consegna `q × costo della riga` al cambio del
+   giorno della rettifica (`convert_closure`, gamba di chiusura); il costo dei lotti al cambio di ogni acquisto; il
+   realizzato è la differenza, nella valuta di destinazione.
+2. **Dashboard: se ne discosta.** Toglie le unità e registra la distribuzione di capitale al costo storico del pool nella
+   valuta di destinazione (`portfolio/daily_state.py`, `cumulative_ecf -= sell_cb_target`): l'importo della riga non è
+   mai convertito al cambio del suo giorno, e nessun realizzato (`_realized_sale` solo per le SELL). Gli ingressi
+   invece la seguono già (il pool converte ogni acquisizione, rettifiche col costo comprese, alla sua data).
+3. **Cosa cambia allineandola**: la distribuzione vale `q × costo della riga × cambio del giorno`; la differenza col costo
+   storico tolto dal pool diventa realizzato, come una vendita il cui incasso è il valore ceduto. Cambiano realizzato,
+   base di capitale, P&L totale, flussi di TWRR e MWRR del giorno e la vista Periodo; il NAV no. Lo scarto è
+   `q × costo × (cambio della rettifica − cambio storico)`, e chiude J-24 (lotti = Dashboard).
+4. **Per chi**: chi sposta fuori con un costo (trasferimento a un broker non seguito, donazione, successione) titoli in
+   una valuta diversa da quella del report. Raro; nessun effetto in una sola valuta, se il costo della riga è il WAC
+   (il modo «auto» di W lo scrive così).
+5. **Lotto proposto**: in J (motore del portafoglio, `financial_math/portfolio/`), rossi prima, valori dichiarati;
+   la proposta (A) di J-24 (lotti al costo storico) cade: la regola del developer va nell'altro verso.
+- **Decisione** (coordinatore, 10:4x, sulla regola del developer): **allineare la Dashboard**, lotto proprio dopo
+  CP-7a, rossi prima, valori dichiarati; la proposta (A) di J-24 cade.
+
+#### J-17 — una rettifica non è mai un'osservazione di prezzo (P2 del developer; analisi, 16/10 ~10:50, sola lettura)
+
+- **Decisioni del developer** (via coordinatore): P2 «le rettifiche sono transazioni; portano un WAC, che può voler dire
+  molte cose e non è il prezzo dell'asset in quel momento; i prezzi si deducono solo da un acquisto» → via il ramo
+  `ADJUSTMENT` di `price_marks.py:307-309`, in entrata e in uscita (BUY e SELL restano; per la SELL decide il developer).
+  Caso senza prezzo (10:44): **opzione A**, una posizione senza alcuna osservazione vale il suo costo storico, come stima
+  dichiarata («valutato al costo, nessun prezzo»), come fanno i lotti; non è un prezzo.
+- **Stato reale** (`16e039282`): la serie dei segni (`build_asset_price_series`) prende ogni rettifica col costo come
+  osservazione TRADE nella valuta del costo; la usano il motore del portafoglio (`portfolio/engine.py:380`) e i lotti
+  (`lots_analysis_service.py:312`); `lots/conversions.py:179` registra il cambio della valuta del costo per quei segni.
+  Il motore ha già un ripiego al costo, ma solo per i titoli in viaggio (`daily_state.py:1144-1148`: MISSING e costo
+  noto → valore al costo).
+- **Disegno** (scelte tecniche, da rivedere):
+  1. `price_marks`: via il ramo; via il fabbisogno di cambio di `conversions.py:179` (restano quelli del costo, :222).
+  2. **Valore al costo**: nuova `ValuationSource.ESTIMATED_AT_COST` (nome dei lotti). Quando il segno è MISSING e il costo
+     della posizione nel pool è completo, il valore è il costo storico nella valuta del report (cambi d'acquisto, la
+     regola P21), senza prezzo effettivo (`effective_unit_price`/`currency` vuoti: «nessun prezzo»), non realizzato 0.
+     Un solo metodo usato dai cinque punti di valutazione: giorno (:603), istantanea (:825), viaggio (:1139, che già lo
+     fa), coppie interne (:1221) e capitale del trasferimento orfano (:1244), così un trasferimento d'un titolo senza
+     prezzo non crea un guadagno finto. Costo ignoto → resta MISSING come oggi.
+  3. **Qualità dei dati**: un problema nuovo `VALUED_AT_COST` (avviso, chiave `dataQuality.valuedAtCost`, 4 lingue; il
+     banner è generico, nessun `.svelte`), con la stessa grazia di TRANSACTION_IMPLIED (decisione 30) e la stessa regola
+     per gli asset manuali: senza provider il costo è il loro valore voluto e il banner tace
+     (`portfolio_service.py:990-1001`); con un provider l'avviso chiede una sincronizzazione.
+  4. **PAC**: il peso al costo; `source.ts`/`copies.ts` accettano il codice; `DistributionDialog.svelte` gli dà
+     l'etichetta (`tools.pacAllocator.planner.distribution.valuedAtCost`): **file dell'area DV, da annunciare**.
+  5. **AI Export**: `asset.provenance` v1 → v2 (LAST_TRADE_PRICE senza «priced ADJUSTMENT»; semantica nuova
+     ESTIMATED_AT_COST); `asset.positions_by_broker` v1 → v2 (il codice nuovo); FX: senza prezzo effettivo la
+     posizione si lega per valuta di negoziazione, senza importo nativo (comportamento già scritto). Sonda col developer.
+- **Valori che cambiano** (dichiarati prima):
+  - i giorni in cui una rettifica col costo era l'osservazione più recente (il suo giorno e i seguenti fino alla
+    quotazione o allo scambio dopo): ora vale la quotazione o lo scambio precedente; NAV, valore, non realizzato, P&L,
+    candele, ripartizioni; nei lotti i prezzi di mercato di quei giorni;
+  - gli asset prezzati solo da rettifiche: LAST_TRADE_PRICE → ESTIMATED_AT_COST, valore piatto al costo storico (prima
+    il costo della rettifica al cambio d'ogni giorno), non realizzato 0, prezzo vuoto; dal banner «prezzo di
+    transazione» al nuovo «valutato al costo»; nei lotti `value_source` MARKET_PRICE → ESTIMATED_AT_COST;
+  - lotti aperti da una rettifica su un asset quotato più tardi: niente punto di valore prima della prima quotazione
+    (prima: al costo della rettifica);
+  - AI Export: le versioni sopra.
+- **Rossi** (test-author): segni (rettifica in/out nessuna osservazione; BUY/SELL sì); asset solo da rettifica →
+  ESTIMATED_AT_COST, NAV e P&L neutri su un movimento di cambio; rettifica poi quotazioni; quotazione il venerdì,
+  rettifica il sabato → la domenica vale la quotazione; trasferimento orfano col costo d'un titolo senza prezzo →
+  capitale al costo; qualità dei dati; holdings API; lotti; PAC; AI Export. Il perno di oggi
+  `test_price_resolver.py:203` si riscrive alla regola nuova.
+- **Superfici**: `financial_math/{price_marks,lots/conversions}.py`, `portfolio/{daily_state,models,data_quality}.py`,
+  `portfolio_service.py`, `schemas/portfolio.py` (2 letterali, `IssueCode`) e `api sync`, `pac_allocator/source/`,
+  AI Export (`asset_core`, `asset_payloads`), frontend PAC (`source.ts`, `copies.ts`, `DistributionDialog.svelte`: DV),
+  i18n (`dataQuality`, `pacAllocator`). Doc EN: `price_resolver.md`, teoria `price-resolution`, `nav`, `index`,
+  `deposited-capital` del motore, `data-quality-banner.md`, `transactions/service.md`, `assets/architecture.md`,
+  `lots_analysis_service.md` (debito di traduzione sulle pagine di teoria).
+- **Peso**: medio-alto. Ordine proposto: J-17, poi J-24 (stesso file `daily_state.py`), poi CP-7b (V1, sopra J-17).
+- ✅ **Disegno approvato** (coordinatore, 10:51): `ESTIMATED_AT_COST`, avviso `VALUED_AT_COST` silenzioso senza
+  provider, AI Export v2 per i due componenti (sonda reale col developer). Ordine J-17 → J-24 → CP-7b. **SELL**: resta
+  finché il developer non risponde. **`DistributionDialog.svelte:166`**: via dei colori (10:53), riservato a J fino
+  all'ingresso di J-17. Il golden non cambia (il suo scenario non ha rettifiche).
+- ✅ **CP-7a integrato** in `dev_release2` (treno 107, merge `4f9e94420`), con le due righe nel CHANGELOG; T-B5 e T-B6
+  chiuse dal coordinatore. Il rosso di `search-to-prices` va a X.
+- **P22 deciso dal developer** (CP-3, il TRANSFER nei contributi): «giusto così, ogni broker risponde del suo tratto»,
+  anche quando dopo il trasferimento arriva una perdita. CP-3 lo comprende quando tocca a lui.
+
+#### J-17 — codice (16/10, dalle 11:20; i rossi li scrive il test-author in parallelo, senza lanciare nulla)
+- ✅ **Codice scritto** (11:20–11:30; i rossi del test-author in parallelo, senza prove):
+  - `price_marks.py`: solo BUY e SELL fanno un'osservazione TRADE; docstring e commenti senza «priced ADJUSTMENT»;
+    `lots/conversions.py`: via il cambio della valuta del costo per i segni (resta quello delle conversioni del costo).
+  - `portfolio/models.py`: `ValuationSource.ESTIMATED_AT_COST`.
+  - `portfolio/daily_state.py`: `_value_held_position` (segno, o al costo storico se MISSING e il costo del pool è
+    completo; `_valued_at_cost`, `_book_cost_value`), usato dal giorno e dall'istantanea; `_add_unrealized_part(…,
+    at_cost=)` non aggiunge nulla per una posizione al costo (senza, una posizione estera avrebbe due parti finte,
+    prezzo e cambio, opposte); `_transfer_leg_capital(…, step)` e `_internal_pair_value` (estratto da
+    `_internal_transfer_flows` per la complessità) contano al costo che il pool sposta, se il titolo non ha prezzo;
+    `_movement_cost_step`.
+  - Qualità dei dati: `IssueCode.VALUED_AT_COST`, il blocco nel report, la lista in `portfolio_service.py` (grazia dal
+    primo giorno di posizione, solo asset con provider).
+  - Schemi: il codice nuovo nei due letterali di `schemas/portfolio.py`, con la descrizione della gerarchia.
+  - PAC: `source.ts` tiene il codice; `DistributionDialog.svelte` il ramo (via dei colori), chiave
+    `tools.pacAllocator.planner.distribution.valuedAtCost`.
+  - AI Export: `asset.provenance` v2 (testo di LAST_TRADE_PRICE, semantica nuova), `asset.positions_by_broker` v2
+    (l'enum), `portfolio.provenance` e `broker.provenance` v3 (la gerarchia nel testo); segnaposto del catalogo e
+    `COMPACT_COMPONENT_VERSIONS` mossi insieme. **⚠️ Fuori pista evitato**: un componente assente dalla mappa si rende
+    compatto solo alla v1 (`DEFAULT_COMPACT_VERSIONS`), quindi senza le due voci nuove `asset.provenance` e
+    `asset.positions_by_broker` sarebbero finiti nel ripiego YAML.
+  - i18n (`dev.py i18n add`): `dataQuality.valuedAtCost` e la chiave del PAC, 4 lingue; `i18n check` stretto, 4 776.
+  - Ruff, black e Prettier puliti (ruff ha trovato un `received` rimasto dopo l'estrazione: corretto). `api sync`
+    senza file tracciati cambiati; il client generato ha `VALUED_AT_COST`.
+  - **⚠️ Fuori pista**: `api sync` lanciato senza guardare il carico, che era 145; finito bene. Da qui il controllo
+    del carico torna prima d'ogni lancio.
+- **Coordinatore** (11:37–11:42):
+  - **P26 (J-26) deciso dal developer**: la sonda reale dell'AI Export gira su una copia dei suoi dati demo (utente
+    `alfy`, procedura della skill `real-data-copy`, copia mia in `/tmp`, porta 6195, password solo nella variabile
+    della sonda), lotto proprio dopo J-17 e CP-13a, su slot. I dati sono solo in EUR, senza cambi: le gambe in valuta di
+    CP-7a si dichiarano **non verificabili sui dati reali** (coperte da R1–R7 e dalla parità con la Dashboard); la sonda
+    prova le versioni di J-17 rese compatte, la sorgente nuova nei prompt e nient'altro di cambiato.
+  - **Nuova sessione MF**: i 16 lotti dell'audit della matematica finanziaria (A–P, da P21) entrano nella 1.3. MF non
+    tocca i miei file aperti finché i miei lotti non sono entrati. I due difetti di Y a `portfolio_service.py:852/856`
+    (pesi con NAV ≤ 0 o totale 0) passano a MF (lotto C dell'audit): non stanno in J-17, il cui diff in quel file non
+    tocca i pesi. Per MF: da J-17 una posizione al costo ha `current_value` = costo e conta in tutti e due i pesi.
+  - Coda: J-17 → CP-13a → J-24 → CP-7b → J-26.
+- **P2, ultima parola del developer** (11:45): «sì, la vendita resta una fonte di prezzo»; la rettifica no. Lettura
+  confermata al coordinatore: giorno per giorno, senza guardare avanti (prima della prima quotazione, acquisto o
+  vendita, al costo; dalla prima osservazione vince il prezzo, anche vecchio, `stale` come oggi); solo con il costo
+  noto (altrimenti MISSING come oggi); «costo storico» = il costo medio del pool nella valuta del report ai cambi
+  d'acquisto (Dashboard), il costo del singolo lotto (lotti).
+- **⚠️ Fuori pista** (11:50): test-author e docs-writer **falliti per un timeout di rete verso l'API del modello**
+  (ETIMEDOUT, 5 tentativi), dopo aver scritto parte del lavoro senza riferire: 11 file di test (tutti compilano), un
+  Vitest nuovo (`planner/source.test.ts`), 7 pagine. Rilanciati (11:58) sullo stesso brief, a partire dal diff lasciato,
+  con le decisioni nuove (SELL resta fonte di prezzo; regola giorno per giorno).
+- **Coordinatore, messaggi in ritardo** (11:55–11:57): i difetti di Y a `:852/856` e P19 riproposti con un ordine
+  vecchio; ricordato che i primi sono passati a MF (11:42) e che P19 è già CP-13a, subito dopo J-17 (11:40). Skill nuova
+  `design-system` (D-T29): ruoli `-lf-` per il markup nuovo; in J-17 il mio solo markup è un ramo senza classi.
+- **Ripartizione con MF** (12:10, proposta di MF accettata, in attesa del developer): passano a MF CP-3 (U5a, sulla mia
+  analisi delle 06:20, con P22), CP-5 (U2, U6, T-B4), U3/U7 di CP-11 (+O4), la matematica di CP-12 (U9, T-B8), CP-13
+  meno CP-13a (U8 lato backend), i residui R6–R10 di T-U4. Restano a J: J-17, CP-13a, J-24, CP-7b, J-26, J-10…J-12,
+  CP-8 (dopo l'ondata 2 di MF), CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9, B15. Vincoli dati a MF:
+  `daily_state.py` aperto fino a J-24 (I1 non sposta `_cumulative_split_ratio` nell'ondata 1); `lots_analysis_service.py`
+  riaperto da CP-7b; `returns.py` toccato da CP-13a (una funzione dopo `price_return`); versioni dell'AI Export già
+  salite con J-17 (`asset.provenance`, `asset.positions_by_broker` → 2; `portfolio.provenance`, `broker.provenance` → 3),
+  `catalog.py` e renderer dopo l'ingresso di J-17, poi MF tocca solo le voci di `COMPACT_COMPONENT_VERSIONS` dei suoi
+  componenti; `remaining_to_peak_ratio` nullabile (CP-13a) e componenti del drawdown dell'AI Export (MF-D); via per G1
+  e M sulla sorgente del PAC dopo J-17; D prima di CP-9 va bene. Dopo la conferma: voci spostate «→ MF» nel backlog.
+- ✅ **Rapporti degli specialisti rilanciati** (12:30–12:35): docs-writer 18 pagine EN (7 riviste, 11 nuove); test-author
+  rossi completati in 13 file + `planner/source.test.ts`. Tutti e due hanno trovato, leggendo il codice, gli stessi
+  difetti; corretti da me:
+  - **⚠️ Fuori pista: la grazia di VALUED_AT_COST non si applicava mai.** Partiva da `first_position_dates`, che conta
+    solo BUY e SELL (`_HOLDING_TYPES`): un asset al costo non ne ha, quindi era elencato subito, contro la regola e il
+    testo «da oltre 2 settimane». Ora parte dalla prima acquisizione dell'asset (minimo per asset di
+    `first_lot_txn_dates`: anche ADJUSTMENT e TRANSFER); lo stesso giorno va nel `first_position_date` della voce.
+    Allineati i tre passi di `data-quality-banner.md`.
+  - **⚠️ Fuori pista: il flusso fra broker d'un titolo al costo seguiva il pool del mittente.** Con il costo del
+    mittente ignoto il flusso era 0 e la linea del ricevente saltava di +100 all'arrivo (caso 05); con un pool di costo
+    in parte ignoto svuotato dal trasferimento il flag `report_complete` torna vero e spostava la sola parte nota. Ora,
+    col principio del lotto 41 («quello che l'arrivo porta nel NAV del ricevente, valutato come lo valuta il NAV»):
+    `_internal_pair_value` sposta il costo che l'arrivo aggiunge al pool del **ricevente** (riportato alla quota del
+    mittente). Caso 05: A (−100, 100), B (100, 0) all'arrivo, aggregato invariato; l'artefatto del costo ignoto resta ad
+    A, che l'ha (P22).
+  - **⚠️ Fuori pista (mio, corretto in giornata)**: avevo aggiunto una condizione di completezza (gamba orfana al costo
+    solo con il pool completo prima e dopo; flusso nullo con il pool del ricevente incompleto). Sbagliata: il pool conta un
+    costo ignoto o non convertibile come zero e tiene i conti coerenti, e le rettifiche in natura muovono il capitale di
+    `step.cost_report_change` comunque; con la condizione, una rettifica con costo in entrata (+50) seguita da un
+    trasferimento orfano di tutto lasciava −50 per sempre a posizione chiusa. Regola finale, per un titolo senza alcun
+    prezzo: il capitale segue il costo di carico del pool, come per le rettifiche — la gamba orfana sposta sempre
+    `step.cost_report_change` (la parte nota; un costo ignoto sposta 0), il flusso interno è il costo che l'arrivo aggiunge
+    al pool del ricevente, comunque sia completo; lo scarto resta al broker il cui costo è ignoto (P22). Seguiti di
+    correzione mandati ai due specialisti.
+  - **⚠️ Fuori pista: l'AI Export dava un `unit_price` a una posizione al costo** (`current_value / quantity` = costo
+    unitario), contro «nessun prezzo». Ora `None` per `ESTIMATED_AT_COST` in `asset.positions_by_broker` (già v2) e in
+    `portfolio.positions`/`broker.positions` (`map_position_row`, **v1 → v2**: segnaposto del catalogo e
+    `COMPACT_COMPONENT_VERSIONS` nello stesso cambio); i testi di provenienza (asset v2, portafoglio e broker v3) lo
+    dicono. È la direzione di V7 (U9, ora di MF): il resto di V7 resta a MF.
+  - Commento superato in `lots_analysis_service.py` (~:301, «priced ADJUSTMENT carryover») corretto.
+  - `planner/source.test.ts` registrato in `core-unit` (`_frontend_utility.py`, righe del PAC); `runs.sh` prende anche i
+    Vitest non tracciati e il file dei cataloghi dell'AI Export.
+  - Ruff, black e Prettier puliti sui file cambiati (carico 72).
+  - Seguiti mandati ai due specialisti (stessa sessione): caso 05 col ricevente, rosso della gamba che svuota un pool di
+    costo ignoto, `unit_price` nei tre componenti e versioni, renderer; pagine del flusso al costo, condizione della
+    sezione «Estimated-at-Cost» dei lotti, `unit_price`.
+  - Valori che cambiano in più (da dichiarare): posizione con rettifiche con e senza costo e nessun prezzo → MISSING
+    (prima: valutata alla rettifica), quindi P&L negativo del costo della parte con costo, con NAV incompleto e avviso
+    MISSING_PRICE (semantica di MISSING di sempre).
+  - Non corretti, segnalati: `index.en.md` §9 (il pre-frame legge i prezzi per le gambe orfane) va a MF, il cui lotto J1
+    toglie il pre-frame; l'avviso dei lotti `CURRENT_PRICE_ASSUMED_AT_COST` scatta senza quotazioni anche quando gli
+    scambi prezzano l'asset → **J-28** nel backlog.
+- ✅ **Specialisti chiusi** (13:00): test-author (rossi in 13 file + `planner/source.test.ts`, riallineati alla regola
+  finale: casi 05/05d/05e/05f, gamba orfana che svuota o riduce un pool di costo in parte ignoto, `unit_price` e
+  versioni, renderer) e docs-writer (pagine EN allineate alla regola finale; debito di traduzione 13 pagine). Ruff, black,
+  Prettier e `py_compile` puliti su tutti i test cambiati (carico 46).
+- **Rossi sul codice vecchio** (`code_out.sh` + `runs.sh red`, 13:07–13:16; log `files/j/j17/red_run.log` e
+  `red_*.log` nella cartella di sessione): `roi-fifo-utils` 38 rossi / 743 verdi, `portfolio-engine` 5 / 35,
+  `portfolio-allocation-source` 1 / 89, `lots-analysis-pure` 1 / 162, `ai-export` (filtro J-17) 14 / 411, `risk-dq`
+  31 verdi (guardie). Ogni rosso è un test di J-17 o un test esistente aggiornato; da rileggere uno per uno il motivo nei
+  log (in particolare `TestPositionUnitPrice::test_no_provider_assignment_yields_provenance_without_provider`, atteso dal
+  conteggio delle semantiche 3 → 4). **Non eseguiti**: `api portfolio` e Vitest (in attesa del carico, 134).
+- ⏸️ **PAUSA del developer** (13:2x, via coordinatore): fermato lo script nell'attesa del carico (nessun test in corso),
+  codice rimesso con `code_in.sh` («worktree back to the saved state»), porta 6185 libera. Stato: HEAD `16e039282`,
+  62 voci sporche (61 modificate + `source.test.ts`), nessun merge aperto, nessuno specialista attivo. **FROZEN.**
+  Ripresa: rossi di `api portfolio` e Vitest (codice fuori), poi `runs.sh green` col codice dentro, `front check`,
+  `core-unit`, mkdocs (build stretta, check-links, translate-validate), richiesta dello slot `all-backend`, handoff
+  FROZEN di J-17 (bozza in `files/j/j17/handoff_draft.md`); poi CP-13a (brief in `files/j/cp13a/`).
+- ▶️ **Ripresa** (14:14, via del coordinatore). Prove di J-17, tutte nella corsia 6185 (log in `files/j/j17/`):
+  - **rossi restanti sul codice vecchio** (`code_out.sh` + `ONLY="api-portfolio vitest" runs.sh red2` +
+    `code_in.sh`): `api portfolio` 51 verdi (solo guardie), Vitest 7 rossi su 92 (renderer: provenienza v3, asset v2,
+    posizioni v2; PAC: `ESTIMATED_AT_COST` → `null`). Codice rimesso, «worktree back to the saved state».
+  - ✅ **verdi** (`runs.sh green`, 14:21–14:32): `roi-fifo-utils` 781 (= 38 + 743), `portfolio-engine` 40 (= 5 + 35),
+    `portfolio-allocation-source` 90 (= 1 + 89), `lots-analysis-pure` 163 (= 1 + 162), `ai-export` (filtro J-17) 425
+    (= 14 + 411), `risk-dq` 31, `api portfolio` 51, Vitest 92/92. Porta libera.
+  - ✅ **statici** (`checks.sh`, 14:33–14:40): `front-utility core-unit` 179 file / 6 267 test verdi (con
+    `planner/source.test.ts` registrato), `check-orphans` pulito, `front check` (svelte-check) 0 errori / 0 avvisi,
+    `mkdocs build` stretto verde, `mkdocs check-links` verde. `translate-validate` rosso (747 errori nel sito): 18 da
+    J-17 (12 per il link nuovo a `index.md#3-position-state` su quattro pagine, 3 per un blocco di formula nuovo in
+    `price-resolution`, 3 per un link nuovo a `#estimated-at-cost` in `fifo-lot-analysis`), il resto precedente → **J-29**
+    nel backlog (debito di traduzione, 13 pagine).
+  - Backlog: segnate «→ MF» le voci passate a MF (nota in testa alla sezione J; J-1 e J-14), J-14 riga di W chiusa da
+    CP-7a; J-28 e J-29 aggiunte.
+  - Prossimo: slot `all-backend` (chiesto al coordinatore, probabile slot 2 dopo Y, ~15:40), poi handoff FROZEN di J-17.
+  - devWiki (in attesa dello slot): nuova `wiki/decisions/adjustment-is-never-a-price.md` (decisione P2, regola al
+    costo, le due trappole trovate in revisione), riga d'indice, voce di log, note datate in
+    `entities/portfolio-engine.md` e `problems/stale-price-banner-never-emitted.md`; `check_source_paths.py`: nessun
+    percorso mancante nella pagina nuova (i 5 mancanti del sito sono vecchi, output generati). Grafo non aggiornato
+    (graphify assente nel worktree).
+- ✅ **J-17 committato** dal coordinatore: `638213507` (67 percorsi); **base aggiornata**: merge `54c5f8f95` (genitori
+  `638213507` + `26dda1a26`), pulito. Prove leggere sulla revisione combinata (carico < 50, log
+  `files/j/j17/merged_*.log`, 15:12–15:53): `api sync` senza file tracciati cambiati, svelte-check 0/0,
+  `roi-fifo-utils` 781, `portfolio-engine` 40, `portfolio-allocation-source` 90, `lots-analysis-pure` 163, `ai-export`
+  (filtro J-17) 425, `risk-dq` 31, `api portfolio` 51, Vitest 92/92 (renderer e sorgente del PAC). Porta libera.
+  In attesa dello slot 2 per `all-backend`.
+- **Slot 2, `all-backend --workers 2` su `54c5f8f95`** (16:14–17:00, log `files/j/j17/slot2_*` e un log per unità in
+  `slot2_units/`): **6/7** categorie verdi, 17 024 verdi + 6 saltati nel passaggio parallelo; External, DB, Services,
+  Utils, Schema ed E2E verdi. **API: 2 rossi** su 1 260 (worker 0): `test_brim_api.py::TestParseEndpoint::
+  test_parse_file_success` e `::test_parse_returns_asset_mappings`, tutti e due `httpx.ReadTimeout` su
+  `POST /brokers/import/files/{id}/parse`.
+  - **Triage** (skill `test-triage`): non è la forma della risposta (timeout del client, nessun valore); è il tempo. Il
+    log del server (`/tmp/librefolio-r13-j/logs/librefolio.log`): il primo parse dopo l'avvio fa partire il pool dei
+    processi del BRIM (`BRIM parse pool started`, forkserver) e nello slot è finito in **48,8 s** (14:37:58 → 14:38:47
+    UTC) contro i 30 s del test (`TIMEOUT = 30`); i parse seguenti, a pool caldo, ~1 s. Rilancio dei soli
+    `TestParseEndpoint` (17:03, carico 142): 1 rosso su 5, di nuovo il primo parse, **31,2 s** di avvio a freddo, gli
+    altri 0,2–0,3 s. Percorso BRIM non toccato da J-17; gli stessi test erano verdi in `all-backend` di CP-7a (carico
+    più basso). **Verdetto: lentezza** (avvio a freddo del pool sotto un host sovraccarico, carico 100–158), voce
+    propria → **J-30** nel backlog, da smistare dal coordinatore. Porta 6185 libera.
+
+#### CP-13a — P19: il guadagno che recupera un drawdown, campo del backend (16/10, dalle 17:10)
+
+Via del coordinatore (17:06), dopo l'ingresso di J-17 in dev (merge `94321d7db`); base `9545826db`. Contratto concordato
+con Y (11:35) e approvato (11:40): `levelHelpers.ts:356-360` (`requiredRecovery(L) = 1/(1−L) − 1`, frontend) diventa
+un campo del backend calcolato nella casa; Y lo legge in Y12b.
+- **Casa**: `financial_math/returns.py::required_recovery_return(drawdown)` → `−d/(1+d)` (la forma precisa per i valori
+  piccoli), `0.0` senza zero negativo, `None` per una perdita totale (`d ≤ −1`), `ValueError` per `d > 0` o non finito.
+- **Serie** (`risk/metrics.py::drawdown_episodes`): `remaining_to_peak_ratio` (dal drawdown corrente) e il nuovo
+  `maximum_drawdown_trough_to_peak_ratio` (dal massimo, episodio aperto o recuperato; `0.0` senza drawdown) dalla casa;
+  oggi `:392` divide per zero con un sottostante esattamente −1 (raggiungibile in virgola mobile: due rendimenti di
+  −0,9999999999).
+- **Schemi** (`RiskDrawdownOutput`, `RiskAssetSetDrawdownItem`): `remaining_to_peak_ratio` obbligatorio ma nullabile;
+  `maximum_drawdown_trough_to_peak_ratio` facoltativo, `ge=0`, positivo vietato con `NO_DRAWDOWN`.
+- **Plugin**: `drawdown_summary` 1.1.0 → 1.2.0, `asset_set_drawdown` 1.0.0 → 1.1.0 (campo in più, valori invariati).
+- AI Export dei drawdown invariato (lo eredita MF-D); nessun ripiego dal KPI; frontend a Y.
+- Passi: rossi (test-author, brief `files/j/cp13a/test_author_prompt.md`) → codice → rossi provati sul codice vecchio →
+  verdi → mappe della casa e doc EN → `api sync` → handoff.
+- ✅ **Codice** (17:15–17:30; rossi del test-author e doc del docs-writer in parallelo, senza lanciare nulla):
+  `returns.required_recovery_return` (dopo `price_return`); `risk/metrics.py` importa la casa, `DrawdownEpisodeReport`
+  con `maximum_drawdown_trough_to_peak_ratio` e `remaining_to_peak_ratio: float | None` (via la formula locale di
+  `:392`); `schemas/risk.py` (i due modelli: campo nuovo con descrizione, `remaining_to_peak_ratio` nullabile ma
+  obbligatorio, positivo vietato con `NO_DRAWDOWN`); plugin `drawdown_summary` 1.2.0 e `asset_set_drawdown` 1.1.0;
+  mappe della casa (`financial_math/__init__.py`, docstring di `returns.py`, `financial-math.instructions.md`,
+  `backend.instructions.md`, riga dell'albero in `developer/backend/financial_math.md`). Ruff e black puliti.
+  **⚠️ Fuori pista**: una sostituzione nel docstring di `DrawdownEpisodeReport` aveva tolto la riga
+  `current_drawdown: float`; rimessa e verificata subito.
+  - Script della prova in `files/j/cp13a/` (`code_out.sh`, `code_in.sh`, `runs.sh`: `financial-math`, `risk-all -k
+    "drawdown or recovery or trough"`, `schemas risk`, `api risk`, `ai-export -k drawdown_context` come guardia).
+- ✅ **Rossi scritti** (test-author, 17:19–17:30): file nuovo `test_financial_math/test_required_recovery_return.py`
+  (17 casi), estesi `test_risk_metrics.py`, `test_risk_schemas.py` (prima prova di `RiskAssetSetDrawdownItem`),
+  `test_risk_analytics.py`, `test_risk_asset_set.py`; nessuna registrazione nel runner. `test_risk_api.py` invariato
+  (la corsa sul DB non esegue `drawdown_summary`).
+- ✅ **Doc EN** (docs-writer): `max-drawdown.en.md`, `current-drawdown.en.md` (debito di traduzione: frasi nuove sul
+  calcolo del massimo), `developer/backend/risk/architecture.md` (sezione nuova «The Drawdown Episode», ancora
+  `#drawdown-episode`), `developer/backend/financial_math.md`.
+- **⚠️ Fuori pista (deciso da me, dentro il lotto)**: il docs-writer ha notato che `architecture.md` «Adding a Risk
+  Analytic», punto 4, chiede «`None` più un avviso» per un valore indefinito. Una perdita totale ora dà due rapporti
+  nulli senza spiegazione, e nell'AI Export il componente dei drawdown cade (il suo payload vuole
+  `remaining_to_peak_ratio` non nullo su `ok`): caso irraggiungibile dai prezzi salvati, ma prima era un `failed`
+  onesto. Aggiunto l'avviso `total_loss_no_recovery` (`risk.warnings.total_loss_no_recovery`, 4 lingue con
+  `dev.py i18n add`, `degrades_result=False`, `details.asset_ids` nell'insieme d'asset) nei due plugin; seguiti ai
+  due specialisti (rossi dell'avviso; doc). La mappatura nell'AI Export resta a MF-D (glielo segnalo).
+- In attesa del via del coordinatore (~17:45, galleria dei colori in corso) per i rossi sul codice vecchio.
+- ✅ **Avviso finito** (17:30–17:39): chiave per l'insieme d'asset separata, `risk.warnings.total_loss_no_recovery_assets`
+  con `{count}` e `{names}` (li riempie il servizio da `details.asset_ids`, come gli `assets_excluded_*`), stesso
+  codice; `message` inglese allineato alla frase del catalogo; commenti di versione dei due plugin con l'avviso;
+  `architecture.md` allineata. Rossi dell'avviso scritti dal test-author (chiave, `degrades_result=False`, nessun
+  avviso con rapporti `0.0`, un solo avviso per due perdite totali). `py_compile`, ruff e black puliti su 5 file di
+  test (carico 80). Da passare a Y: `risk-lab.md:285-287` e il commento di `levelHelpers.ts:137-141` («l'unico avviso
+  con `degrades_result` falso»); a MF-D: la perdita totale nei componenti dei drawdown dell'AI Export.
+- ✅ **Prove di CP-13a** (via del coordinatore 17:52; corsia 6185, carico < 50; log in `files/j/cp13a/`):
+  - **rossi sul codice vecchio** (`code_out.sh` + `runs.sh red` + `code_in.sh`, 17:53–18:02): `financial-math` errore di
+    raccolta (l'import nuovo, i 17 casi del file nuovo), `risk-all -k "drawdown or recovery or trough or warnings_i18n"`
+    22 rossi / 35 verdi, `schemas risk` 17 / 71; guardie `ai-export -k drawdown_context` 19 verdi. Codice rimesso,
+    «worktree back to the saved state».
+  - **⚠️ Fuori pista (ambiente)**: `api risk` 4 rossi sia sul codice vecchio sia sul nuovo, «Test database is not
+    populated: user 'e2e_test_user' is missing». Causa: `services financial-math` e `services risk-all` cancellano il DB
+    della corsia e lo ricreano vuoto dalle migrazioni prima dei loro test, quindi `api risk` lanciato da solo dopo di
+    loro non trova i fixture (in `all-backend` il runner semina prima delle API). Verdetto `test-triage`: ambiente,
+    ordine del mio script. Cura: `db populate --force` sulla mia corsia subito prima di `api risk` (passo aggiunto in
+    `runs.sh`).
+  - **⚠️ Fuori pista (test)**: `test_a_small_drawdown_keeps_every_digit_of_its_gain` rosso anche sul codice nuovo, nel suo
+    controllo interno: `pytest.approx(…, rel=1e-12)` tiene la tolleranza assoluta di default 1e-12, grande quanto il
+    valore. Riparato dal test-author con `abs=0` nelle due asserzioni (le altre 32 `approx` controllate: nessuna nasconde
+    una differenza).
+  - ✅ **verdi**: `financial-math` 430, `risk` (filtro) 57, `schemas risk` 88, `api risk` 15 (con i fixture),
+    `ai-export -k drawdown_context` 19.
+  - ✅ **statici** (18:19–18:23): `api sync` senza file tracciati cambiati, `i18n check` stretto verde, `core-unit` 181 file
+    / 6 478 test, `check-orphans` pulito, svelte-check 0/0 (`remaining_to_peak_ratio` ora `number | null` nel client),
+    `mkdocs build` stretto e `check-links` verdi; `translate-validate` 3 errori nuovi da CP-13a → **J-31**.

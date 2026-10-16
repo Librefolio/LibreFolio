@@ -46,15 +46,18 @@ test.describe('FX CSV Import', () => {
     }
 
     // ========================================================================
-    // Helper: Assert no errors in the CSV editor status bar
+    // Helper: Assert no line of the CSV editor is marked invalid
     // ========================================================================
-    async function assertNoErrors(modal: import('@playwright/test').Locator) {
-        // The error indicator "✗" should NOT be visible
-        const errorIndicator = modal.locator('.text-red-500:has-text("✗")');
-        await expect(errorIndicator).not.toBeVisible();
-        // Also check the status bar doesn't show error count
-        const errorBadge = modal.locator('.text-red-500:has-text("error")');
-        await expect(errorBadge).not.toBeVisible();
+    /**
+     * Every invalid mark carries data-state="invalid" — a row's ✗ in the gutter and the status-bar
+     * error badge — so one wordless count covers both. With `validRows` the gutter must first show
+     * exactly that many ✓ (data-state="valid"): proof it has drawn the current text, before its
+     * silence is read. That the invalid selector is alive at all is proven by the test
+     * 'an invalid data row is marked ✗ and the others ✓'.
+     */
+    async function assertNoErrors(modal: import('@playwright/test').Locator, validRows?: number) {
+        if (validRows !== undefined) await expect(modal.locator('[data-state="valid"]')).toHaveCount(validRows);
+        await expect(modal.locator('[data-state="invalid"]')).toHaveCount(0);
     }
 
     // ========================================================================
@@ -175,8 +178,8 @@ test.describe('FX CSV Import', () => {
         const importBtn = modal.locator('button', {hasText: 'Import (2)'});
         await expect(importBtn).toBeVisible();
 
-        // No errors
-        await assertNoErrors(modal);
+        // No errors: both data lines ✓, nothing marked invalid
+        await assertNoErrors(modal, 2);
     });
 
     // ========================================================================
@@ -222,6 +225,28 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
+    // Test 9b: An invalid data row is marked, the valid one is not
+    // ========================================================================
+    test('an invalid data row is marked ✗ and the others ✓', async ({page}) => {
+        const modal = await openImportModal(page);
+
+        // The page's own header, one valid line and one whose rate does not parse.
+        const csv = 'date;EUR>USD\n2020-01-15;1.0823\n2020-01-16;not-a-rate';
+        const textarea = modal.locator('textarea');
+        await textarea.fill(csv);
+        await expect(textarea).toHaveValue(csv);
+
+        // The gutter marks each data line ✓ (data-state="valid") or ✗ (data-state="invalid"), the
+        // header neither: glyphs and states, no words.
+        await expect(modal.locator('[data-state="valid"]', {hasText: '✓'})).toHaveCount(1);
+        const rowMark = modal.locator('[data-state="invalid"]', {hasText: '✗'});
+        await expect(rowMark).toHaveCount(1);
+        await expect(rowMark).toBeVisible();
+        // The status-bar error badge is the one invalid mark without a ✗.
+        await expect(modal.locator('[data-state="invalid"]', {hasNotText: '✗'})).toBeVisible();
+    });
+
+    // ========================================================================
     // Test 10: Foreign pair header is rejected
     // ========================================================================
     test('rejects CSV header currencies that do not match page pair', async ({page}) => {
@@ -230,7 +255,12 @@ test.describe('FX CSV Import', () => {
         const textarea = modal.locator('textarea');
         await textarea.fill('date;GBP>JPY\n2020-01-15;188.45');
 
-        await expect(modal.getByTestId('fx-import-header-mismatch-error')).toHaveText("Header currencies don't match");
+        // The refusal is shown, in whatever language the UI speaks: a message is there and every
+        // placeholder of it is filled, no `{` left unresolved. Its words are the catalogue's.
+        const mismatch = modal.getByTestId('fx-import-header-mismatch-error');
+        await expect(mismatch).toBeVisible();
+        await expect(mismatch).toHaveText(/\S/);
+        await expect(mismatch).not.toContainText('{');
         await expect(modal.locator('button', {hasText: 'Import (1)'})).not.toBeVisible();
     });
 
@@ -286,7 +316,7 @@ test.describe('FX CSV Import', () => {
         const modal = await openImportModal(page);
 
         // Initial: info banner should mention EUR and USD
-        const infoBanner = modal.locator('[class*="bg-blue"]');
+        const infoBanner = modal.getByTestId('info-banner-info');
         if ((await infoBanner.count()) > 0) {
             const bannerText = await infoBanner.first().textContent();
             expect(bannerText).toContain('EUR');
@@ -367,7 +397,7 @@ test.describe('FX CSV Import', () => {
         const importBtn = modal.locator('button', {hasText: 'Import (2)'});
         await expect(importBtn).toBeVisible();
 
-        await assertNoErrors(modal);
+        await assertNoErrors(modal, 2);
     });
 
     // ========================================================================
@@ -447,7 +477,7 @@ test.describe('FX CSV Import', () => {
 
         // 2 valid rows
         await expect(modal.locator('button', {hasText: 'Import (2)'})).toBeVisible();
-        await assertNoErrors(modal);
+        await assertNoErrors(modal, 2);
 
         // Step 2: Change header to > syntax (keep same data)
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823\n2020-01-16;1.0845');
@@ -458,7 +488,7 @@ test.describe('FX CSV Import', () => {
 
         // Still 2 valid rows
         await expect(modal.locator('button', {hasText: 'Import (2)'})).toBeVisible();
-        await assertNoErrors(modal);
+        await assertNoErrors(modal, 2);
     });
 
     // ========================================================================

@@ -283,6 +283,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="BUY",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=self._tx_by_id[event.transaction_id].currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder > Decimal("0"):
@@ -307,6 +308,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="SELL",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=self._tx_by_id[event.transaction_id].currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -333,6 +335,9 @@ class FifoLotEngine:
 
     def _apply_adjustment_in(self, event: FifoEvent) -> None:
         broker_id = _require_id(event.broker_id)
+        tx = self._tx_by_id[event.transaction_id]
+        # The row's price is its cost basis, in that cost's currency (J-9), or 0 in its own currency.
+        price_currency = (tx.cost_basis_currency or tx.currency) if tx.cost_basis_override is not None else tx.currency
         closed = self._consume_broker_fragments(
             broker_id=broker_id,
             direction="SHORT",
@@ -341,12 +346,12 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="BUY",
             close_unit_price=_require_decimal(event.unit_price),
+            close_currency=price_currency,
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
             return
         resolution = self._resolve_reference_price(self.asset_id, event.date)
-        tx = self._tx_by_id[event.transaction_id]
         self._open_lot(
             transaction_id=event.transaction_id,
             broker_id=broker_id,
@@ -356,7 +361,7 @@ class FifoLotEngine:
             unit_price=_require_decimal(event.unit_price),
             # A lot priced by its cost_basis_override is in the currency of that cost, not in the row's
             # (an ADJUSTMENT moves no cash, so its own currency is often empty).
-            currency=(tx.cost_basis_currency or tx.currency) if tx.cost_basis_override is not None else tx.currency,
+            currency=price_currency,
             reference_resolution=resolution,
         )
         if resolution.source == "fallback":
@@ -387,8 +392,8 @@ class FifoLotEngine:
             event_date=event.date,
             transaction_id=event.transaction_id,
             close_reason="ADJUSTMENT_OUT",
-            close_unit_price=Decimal("0"),
-            close_unit_price_of=None if tx.cost_basis_override is None else (lambda fragment: self._handover_unit_price(tx, fragment)),
+            close_unit_price=_require_decimal(event.unit_price),
+            close_currency_of=lambda fragment: self._handover_currency(tx, fragment),
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -410,19 +415,19 @@ class FifoLotEngine:
             params={"missing_quantity": remainder},
         )
 
-    def _handover_unit_price(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> Decimal:
-        """The price at which an ADJUSTMENT-out carrying a cost basis hands ``fragment`` over.
+    def _handover_currency(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> str | None:
+        """The currency in which an ADJUSTMENT-out hands ``fragment`` over.
 
-        The row's per-unit cost — the average cost the units leave with, not the fragment's own FIFO cost — so
-        the lots realize what the average cost does: units from a cheaper lot realize the difference. It applies
-        when the cost is in the lot's currency; a lot without a currency counts in the report currency, as the
-        lots analysis converts it, and a cost without a currency in the lot's. In another currency the fragment
-        leaves at its own FIFO cost, realizing nothing, until a closure carries its own currency.
+        With a cost basis, every fragment leaves at the row's per-unit cost — the average cost the units leave
+        with, not the fragment's own FIFO cost — so the lots realize what the average cost does. That cost is in
+        ``cost_basis_currency``, or in the lot's when it has none. Without a cost the units leave at 0, in the
+        lot's currency. Another currency than the lot's leaves the native realized P&L unknown; the lots analysis
+        converts each leg at its own date (decision 26).
         """
-        lot_currency = self._lots[fragment.lot_id].currency or self.target_currency
-        if (tx.cost_basis_currency or lot_currency) != lot_currency:
-            return fragment.unit_price
-        return _require_decimal(tx.cost_basis_override)
+        lot_currency = self._lots[fragment.lot_id].currency
+        if tx.cost_basis_override is None:
+            return lot_currency
+        return tx.cost_basis_currency or lot_currency
 
     def _apply_transfer_depart(self, event: FifoEvent) -> None:
         pair_id = _require_id(event.pair_id)
@@ -602,11 +607,13 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
-        close_unit_price_of: Callable[[FragmentInterval], Decimal] | None = None,
+        close_currency: str | None = None,
+        close_currency_of: Callable[[FragmentInterval], str | None] | None = None,
     ) -> Decimal:
         """Close up to ``quantity`` of the broker's open fragments, oldest lot first; the quantity closed.
 
-        Each fragment closes at ``close_unit_price``, or at the price ``close_unit_price_of`` gives it.
+        Each fragment closes at ``close_unit_price``, in ``close_currency`` or in the one ``close_currency_of``
+        gives it.
         """
         consumed = Decimal("0")
         remaining = quantity
@@ -620,7 +627,8 @@ class FifoLotEngine:
                 event_date=event_date,
                 transaction_id=transaction_id,
                 close_reason=close_reason,
-                close_unit_price=close_unit_price if close_unit_price_of is None else close_unit_price_of(fragment),
+                close_unit_price=close_unit_price,
+                close_currency=close_currency if close_currency_of is None else close_currency_of(fragment),
             )
             consumed += matched
             remaining -= matched
@@ -635,19 +643,24 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
+        close_currency: str | None,
     ) -> None:
         lot = self._lots[fragment.lot_id]
+        # None counts as the report currency, as the lots analysis reads it.
+        same_currency = (close_currency or self.target_currency) == (lot.currency or self.target_currency)
+        realized_pnl: Decimal | None
         if lot.direction == "LONG":
-            realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price)
+            realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price) if same_currency else None
             # A sale's cash, or the value an ADJUSTMENT-out hands over at cost (0 when it carries no cost).
             proceeds = matched_quantity * close_unit_price if close_reason in ("SELL", "ADJUSTMENT_OUT") else Decimal("0")
         else:
-            realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price)
+            realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price) if same_currency else None
             proceeds = Decimal("0")
         lot.realized_quantity += matched_quantity
         lot.open_quantity -= matched_quantity
-        lot.realized_pnl += realized_pnl
-        lot.cumulative_proceeds += proceeds
+        lot.realized_pnl = None if lot.realized_pnl is None or realized_pnl is None else lot.realized_pnl + realized_pnl
+        if lot.direction == "LONG":
+            lot.cumulative_proceeds = None if lot.cumulative_proceeds is None or not same_currency else lot.cumulative_proceeds + proceeds
         self._closures.append(
             LotClosure(
                 lot_id=lot.lot_id,
@@ -660,6 +673,7 @@ class FifoLotEngine:
                 close_unit_price=close_unit_price,
                 realized_pnl=realized_pnl,
                 proceeds=proceeds,
+                close_currency=close_currency,
             )
         )
         remainder = fragment.quantity - matched_quantity
@@ -840,7 +854,8 @@ class FifoLotEngine:
 
         Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
         (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
-        function of holdings, but the two remain distinct audit groups by economic_type. A pool is
+        function of holdings, but the two remain distinct audit groups by economic_type. A pool sums the
+        signed amounts, as the Dashboard does: a negative correction lowers the income. It is
         allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
         recorded entirely as orphan income (returned to the caller for the asset-level total).
         """
@@ -860,8 +875,8 @@ class FifoLotEngine:
                 if quantity > Decimal("0"):
                     eligible.append((lot_id, quantity))
             eligible.sort(key=lambda item: item[0])
-            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
-            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
+            target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
             source_ids = tuple(sorted(event.transaction_id for event in pool_events))
             if not eligible:
                 orphan_total += target_pool

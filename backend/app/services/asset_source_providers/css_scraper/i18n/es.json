@@ -1,0 +1,22 @@
+{
+  "assets": {
+    "providerParams": {
+      "css_scraper": {
+        "label": {
+          "current_css_selector": "Selector CSS del precio",
+          "currency": "Divisa",
+          "decimal_format": "Formato numérico",
+          "timeout": "Tiempo de espera (segundos)",
+          "user_agent": "User-Agent"
+        },
+        "description": {
+          "current_css_selector": "Selector CSS del elemento que contiene el precio en la página web",
+          "currency": "Código de la divisa (ISO 4217, p. ej. EUR, USD)",
+          "decimal_format": "Formato numérico: 'us' = 1,234.56 / 'eu' = 1.234,56",
+          "timeout": "Tiempo de espera de la petición HTTP, en segundos",
+          "user_agent": "Cabecera User-Agent personalizada"
+        }
+      }
+    }
+  }
+}

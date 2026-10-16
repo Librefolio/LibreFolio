@@ -58,7 +58,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
 import {get, readable, writable, type Writable} from 'svelte/store';
 import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
-import {fireEvent, render, screen, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
 
@@ -933,8 +933,8 @@ describe('GlobalSettingsTab — saving everything at once', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — the three picker rows', () => {
-    /** The row a given key lives in, found through the label the dictionary gives it. */
-    const pickerRow = (label: string) => screen.getByText(label).closest('div.bg-gray-50') as HTMLElement;
+    /** The row a given key lives in: found through the label the tab gives it, then up to the `global-setting-{key}` wrapper every setting row publishes. */
+    const pickerRow = (label: string) => screen.getByText(label).closest('[data-testid^="global-setting-"]') as HTMLElement;
 
     it('gives the language row its own save and undo', async () => {
         await mountUnlocked([setting('default_language', 'en')]);
@@ -1410,6 +1410,109 @@ describe('GlobalSettingsTab — the scheduler rows', () => {
         // comes through untranslated, which is enough to pin that the row renders
         // it rather than crashing on a missing value.
         expect(screen.getByTestId('scheduler-config-row')).toHaveTextContent('settings.global.scheduler.status.configSummary');
+    });
+});
+
+// =========================================================================
+/**
+ * Lot Z7c-2 — a pending retry of the price job, on the status row.
+ *
+ * Lot Z7b gave each job of the scheduler's state a `retry_at` (the items a provider's pause deferred are retried then)
+ * and a `next_attempt_at` (after a run that raised, no run before it). The status row publishes ONE element for the
+ * price job's pending retry, `scheduler-status-retry`: `data-kind="failure"` while `next_attempt_at` is in the future —
+ * it wins over `retry_at` —, otherwise `data-kind="deferred"` while `retry_at` is in the future, and none when both are
+ * null or past. The history job's retries do not show there.
+ *
+ * "The future" is the browser's clock: `Date` is fixed at NOW with `vi.setSystemTime` — the timers stay real, so
+ * `waitFor` still polls — and put back after each case. The element's text is a parametrised message
+ * (`settings.global.scheduler.status.retryAt` or `nextAttemptAt`, with `{time}`) and is never read: its presence and its
+ * `data-kind` are the contract. An absence is asserted only after a control mount has shown the element for a pending
+ * failure in this very setup, and after a barrier proving the state has landed: the last run's label, which a row with
+ * nothing pending shows as before.
+ */
+describe('GlobalSettingsTab — the price job’s pending retry on the status row (Z7c-2)', () => {
+    const ITEMS = [setting('session_ttl_hours', '24', 'int')];
+    const NOW = '2026-06-08T10:00:00Z';
+    const SOON = '2026-06-08T10:02:00+00:00';
+    const LATER = '2026-06-08T10:30:00+00:00';
+    const EARLIER = '2026-06-08T09:58:00+00:00';
+    const LONG_AGO = '2026-06-08T08:00:00+00:00';
+    const LAST_RUN = 'settings.global.scheduler.status.lastRun';
+
+    type Pending = {next_attempt_at: string | null; retry_at: string | null};
+    const NOTHING: Pending = {next_attempt_at: null, retry_at: null};
+
+    /** A job's state as the route answers it with lot Z7b's fields: it ran at 09:50, and `pending` says what waits. */
+    const jobState = ({next_attempt_at, retry_at}: Pending) => ({
+        last_run_at: '2026-06-08T09:50:00+00:00',
+        last_duration_s: 2.5,
+        last_status: next_attempt_at ? 'error' : retry_at ? 'partial' : 'ok',
+        last_items_ok: 3,
+        last_items_err: 0,
+        last_items_deferred: retry_at ? 2 : 0,
+        retry_at,
+        consecutive_failures: next_attempt_at ? 1 : 0,
+        next_attempt_at,
+    });
+
+    const statusRow = () => screen.getByTestId('scheduler-status-row');
+
+    /** Mounts the tab on a scheduler state where `price` waits on the price job and `history` on the history job. */
+    async function mountState(price: Pending, history: Pending = NOTHING): Promise<void> {
+        axiosGet.mockResolvedValue({data: {server_tz: 'UTC', server_now_utc: '10:00', scheduler_timezone: 'UTC', current_price: jobState(price), history_sync: jobState(history)}} as never);
+        await mount(ITEMS);
+    }
+
+    /** The one retry element of the status row, once the state has landed. */
+    async function shownRetry(): Promise<HTMLElement> {
+        return waitFor(() => {
+            const found = within(statusRow()).getAllByTestId('scheduler-status-retry');
+            expect(found, 'one retry element in the status row').toHaveLength(1);
+            return found[0];
+        });
+    }
+
+    beforeEach(() => {
+        vi.setSystemTime(new Date(NOW));
+    });
+
+    afterEach(() => {
+        // The real Date back, even after a case that failed half-way.
+        vi.useRealTimers();
+    });
+
+    const pending: [string, 'failure' | 'deferred', Pending][] = [
+        ['a run that raised waits for its next attempt', 'failure', {next_attempt_at: SOON, retry_at: null}],
+        ['deferred items wait for the provider’s pause', 'deferred', {next_attempt_at: null, retry_at: SOON}],
+        ['both wait, the deferred retry first: the failure wins', 'failure', {next_attempt_at: LATER, retry_at: SOON}],
+        ['both wait, the next attempt first: the failure wins', 'failure', {next_attempt_at: SOON, retry_at: LATER}],
+        ['the failure’s wait is over, the deferred retry’s is not', 'deferred', {next_attempt_at: EARLIER, retry_at: SOON}],
+    ];
+
+    it.each(pending)('%s → data-kind="%s"', async (_case, kind, price) => {
+        await mountState(price);
+
+        expect(await shownRetry()).toHaveAttribute('data-kind', kind);
+        expect(screen.getAllByTestId('scheduler-status-retry'), 'nowhere else on the tab').toHaveLength(1);
+    });
+
+    const nothingPending: [string, Pending, Pending][] = [
+        ['nothing waits', NOTHING, NOTHING],
+        ['both are past', {next_attempt_at: EARLIER, retry_at: LONG_AGO}, NOTHING],
+        ['only a past next attempt', {next_attempt_at: EARLIER, retry_at: null}, NOTHING],
+        ['only a past deferred retry', {next_attempt_at: null, retry_at: EARLIER}, NOTHING],
+        ['only the history job waits', NOTHING, {next_attempt_at: SOON, retry_at: SOON}],
+    ];
+
+    it.each(nothingPending)('%s → no retry element', async (_case, price, history) => {
+        await mountState({next_attempt_at: SOON, retry_at: null});
+        expect(await shownRetry(), 'control: in this setup a pending failure shows the element').toHaveAttribute('data-kind', 'failure');
+        cleanup();
+
+        await mountState(price, history);
+
+        await waitFor(() => expect(statusRow(), 'premise: the scheduler state has landed').toHaveTextContent(LAST_RUN));
+        expect(screen.queryAllByTestId('scheduler-status-retry')).toHaveLength(0);
     });
 });
 

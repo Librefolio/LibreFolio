@@ -192,6 +192,27 @@ mandatory for every new plugin:
 - **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
 
+### 🔢 Decimal places {: #decimal-places }
+
+Every figure a plugin emits must fit its `transactions` column (C-97; the types are in
+[Decimal Columns](../database/index.md#decimal-columns)): a `quantity` keeps 10 decimal
+places, a cash amount 6, a per-unit `cost_basis_override` 12 — the scale of the prices —
+and any of them at most 15 significant digits.
+
+- **Read from the file: never rounded.** A figure the report states goes in as written,
+  under the verbatim rule above. Over a limit, neither the plugin nor the import rounds
+  it: the batch refuses its row when the user saves it (`decimalPlacesExceeded` or
+  `significantDigitsExceeded`, with the maximum; decision D2, see
+  [Decimal limits](../../backend/transactions/service.md#decimal-limits)).
+- **Computed by the plugin: rounded, explicitly.** A figure the plugin derives can have
+  any number of decimals: a per-unit cost as a total divided by the quantity (`1000 / 3`),
+  a bond price divided by 100. Round it to its column where it is computed, with the one
+  helper `round_computed_value(value, model, column_name)` (`backend/app/db/precision.py`):
+  `ROUND_HALF_EVEN` to the scale of the model's column, then to 15 significant digits on a
+  `RealDecimal` column (decision D6). `broker_intesa/plugin.py` calls it on the patrimonio
+  seed's per-unit cost, `broker_credit_agricole/plugin.py` on the per-unit cost of a bond
+  received by succession, its price divided by 100.
+
 ---
 
 ## 📋 ABC Methods
@@ -651,10 +672,11 @@ transaction breaks these rules, so flip source signs as needed:
     factor of `quantity`.
 
     If your source only reports a **total** (e.g. Intesa's *"Controvalore di carico
-    fiscale €"*), divide it by the quantity first:
+    fiscale €"*), divide it by the quantity first, and round the quotient to the column
+    (see [Decimal places](#decimal-places)):
 
     ```python
-    unit_cost = (total_cost / qty).quantize(Decimal("0.000001"))
+    unit_cost = round_computed_value(total_cost / qty, Transaction, "cost_basis_override")
     cost_basis_override = Currency(code="EUR", amount=unit_cost)
     ```
 
@@ -747,9 +769,9 @@ skips its conversion legs with a warning, and the Generic CSV refuses the paired
 - exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
 - the **same type** on both legs (`pairTypeMismatch`);
 - **two distinct brokers** for a `TRANSFER` or a `CASH_TRANSFER` (`pairSameBroker`); an
-  `FX_CONVERSION` may stay on one. Every row a plugin emits carries the one target `broker_id`
-  that `parse()` receives, so a transfer pair saved as the plugin emitted it is refused at this
-  check;
+  `FX_CONVERSION` must stay on **one** (`pairBrokerMismatch`). Every row a plugin emits carries
+  the one target `broker_id` that `parse()` receives, so a transfer pair saved as the plugin
+  emitted it is refused at this check, while an `FX_CONVERSION` pair saved the same way passes it;
 - for a `TRANSFER`, **one asset** on both legs (`pairAssetMismatch`) and **exactly opposite
   quantities** (`pairQuantityMismatch`, compared as `Decimal`, with no tolerance): what leaves
   one broker arrives at the other, so both legs carry the same quantity, rounded alike, with

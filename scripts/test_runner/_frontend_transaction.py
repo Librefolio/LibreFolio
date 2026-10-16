@@ -26,6 +26,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/brim/pluginKind.test.ts",
            "src/lib/components/transactions/modals/ImportBrokerMismatchModal.test.ts",
            "src/lib/components/transactions/modals/PromoteAllModal.test.ts",
+           "src/lib/components/transactions/modals/PromoteMergeModal.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
            "src/lib/components/transactions/import/ReportSetCard.test.ts",
@@ -609,6 +610,19 @@ def front_tx_selection_after_bulk(verbose: bool = False, ui: bool = False, heade
     return _run_playwright("transactions/tx-selection-after-bulk.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_split_refusal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the refused Split pair / Promote pair E2E tests (W-B39)."""
+    print_section("Frontend TX Split Refusal Tests")
+    if not _ensure_frontend_build():
+        return False
+    # The split test's pair is a TRANSFER of the seeded ETH-USD asset (fixtures/owned-pair.ts).
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-split-refusal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     if _common.nothing_left_to_run("front-transaction"):
@@ -766,6 +780,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Selection After Bulk Tests",
         desc="Step 12a: after an executed edit, clone, delete, add, link or unlink the toolbar and the table checkboxes are empty and one click selects one row; after a cancelled editor, link or unlink both are unchanged",
         tests="transactions/tx-selection-after-bulk.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-split-refusal",
+        front_tx_split_refusal,
+        name="TX Split Refusal Tests",
+        desc="W-B39, each test on a disposable account with brokers of its own, the page's commit answered through page.route by a refusal the generated client's response schema accepts: S1 a linked TRANSFER pair split from its row menu and refused with wacFxUnavailable on the split → an error toast naming the pair (USD, no {placeholder}), the confirmation still open and usable, the pair still linked after Cancel; P1 a WITHDRAWAL and a DEPOSIT linked from the selection toolbar's plain confirm and refused with accessDenied on the receiving broker → an error toast naming that broker, the confirmation still open, both rows still standalone after Cancel",
+        tests="transactions/tx-split-refusal.spec.ts",
     )
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload + importReportSets + gapFixModel + GapFixStep (jsdom)", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")

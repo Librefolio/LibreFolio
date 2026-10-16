@@ -5,19 +5,28 @@ tests bring their own server. ``FakeSmtpServer`` speaks the part of SMTP that ``
 and can be told to refuse at each step, so that every error code of ``backend.app.services.email.smtp`` has a server
 that provokes it:
 
-- the greeting ``220``; ``EHLO`` answers on several lines and advertises ``AUTH PLAIN LOGIN`` and, only when the server
-  holds an ``ssl.SSLContext``, ``STARTTLS``; ``HELO``, ``RSET``, ``NOOP`` and ``QUIT``; ``502`` to anything else;
+- the greeting ``220``; ``EHLO`` answers on several lines and advertises ``AUTH PLAIN LOGIN``, then ``8BITMIME`` and
+  ``SMTPUTF8`` unless ``smtputf8=False``, and, only when the server holds an ``ssl.SSLContext``, ``STARTTLS``; ``HELO``,
+  ``RSET``, ``NOOP`` and ``QUIT``; ``502`` to anything else;
 - ``AUTH PLAIN`` (initial response, or after a ``334``) and ``AUTH LOGIN`` (with or without the initial response): every
   attempt lands in ``auth_attempts`` as ``(user, password)``; with ``credentials`` a mismatch is ``535`` and ``MAIL``
   before a successful ``AUTH`` is ``530``;
 - ``MAIL FROM``, ``RCPT TO`` and ``DATA`` (dot-unstuffing, end at ``<CRLF>.<CRLF>``): an accepted message lands in
-  ``messages`` with its envelope, its raw bytes and the ``EmailMessage`` parsed from them
-  (``BytesParser(policy=email.policy.default)``);
+  ``messages`` with its envelope — ``mail_options`` holding the parameters that followed the address on ``MAIL``, in the
+  order received, whatever they are: none is refused —, its raw bytes and the ``EmailMessage`` parsed from them
+  (``BytesParser(policy=email.policy.default)``, which reads every byte beyond ASCII as a surrogate escape: an
+  internationalized address is read in ``rcpt_tos`` or in ``data``, not in ``message``);
 - ``refuse_sender`` answers ``550`` to ``MAIL``; ``refuse_recipients`` ``550`` to ``RCPT`` for the addresses it holds,
   quoting the refused address as received, the way real servers do (Postfix:
   ``550 5.1.1 <alice@example.com>: Recipient address rejected: …``), so that the server's words carry the recipient's
   address as theirs do; ``refuse_data`` ``554`` once the data is in (the message is then not recorded); ``quit_code`` is
   the reply to ``QUIT`` (``221`` by default); ``greet=False`` accepts connections and never says a word;
+- ``smtputf8`` (on by default): ``8BITMIME`` and ``SMTPUTF8`` (RFC 6531) in the ``EHLO`` answer, as Postfix advertises
+  them, for the internationalized addresses: towards a server that does not advertise ``SMTPUTF8``, ``smtplib`` refuses
+  an address beyond ASCII on its own side, before ``MAIL`` (``SMTPNotSupportedError``); towards one that does, it sends
+  ``SMTPUTF8 BODY=8BITMIME`` on ``MAIL`` and the headers in UTF-8. It asks for the extension for such an address only,
+  so an all-ASCII message goes out the same with the option or without — only the ``EHLO`` answer differs;
+  ``smtputf8=False`` is the server without the extension;
 - ``tls_context``: ``STARTTLS`` upgrades the session, which then starts over: ``EHLO`` again, nobody authenticated.
 
 Use it as a context manager::
@@ -98,6 +107,9 @@ class ReceivedMessage:
     """A message the fake accepted: its envelope, its raw bytes as received (dot-unstuffed) and their parsing."""
 
     mail_from: str
+    #: The parameters that followed the address on ``MAIL``, in the order received: ``("SMTPUTF8", "BODY=8BITMIME")``
+    #: for a message ``smtplib`` sent with the extension, ``()`` for an all-ASCII envelope.
+    mail_options: tuple[str, ...]
     rcpt_tos: list[str]
     data: bytes
     message: EmailMessage
@@ -168,6 +180,7 @@ class FakeSmtpServer:
         quit_code: int = 221,
         greet: bool = True,
         tls_context: ssl.SSLContext | None = None,
+        smtputf8: bool = True,
     ) -> None:
         self.credentials = credentials
         self.refuse_sender = refuse_sender
@@ -176,6 +189,7 @@ class FakeSmtpServer:
         self.quit_code = quit_code
         self.greet = greet
         self.tls_context = tls_context
+        self.smtputf8 = smtputf8
         self.host = "127.0.0.1"
         self.port = 0
         self.messages: list[ReceivedMessage] = []
@@ -311,15 +325,16 @@ def _decode_base64(text: str) -> str | None:
         return None
 
 
-def _reverse_path(argument: str, keyword: str) -> str | None:
-    """The address of ``FROM:<address> [parameters]`` or ``TO:<address>``: ``None`` when the keyword or the address is missing."""
+def _reverse_path(argument: str, keyword: str) -> tuple[str, tuple[str, ...]] | None:
+    """The address of ``FROM:<address> [parameters]`` or ``TO:<address> [parameters]`` and the parameters after it, in the order received: ``None`` when the keyword or the address is missing."""
     if argument[: len(keyword)].upper() != keyword:
         return None
     rest = argument[len(keyword) :].strip()
     if rest.startswith("<"):
         end = rest.find(">")
-        return None if end < 0 else rest[1:end]
-    return rest.split()[0] if rest else None
+        return None if end < 0 else (rest[1:end], tuple(rest[end + 1 :].split()))
+    words = rest.split()
+    return (words[0], tuple(words[1:])) if words else None
 
 
 class _Session:
@@ -333,6 +348,7 @@ class _Session:
         self.greeted = False
         self.user: str | None = None
         self.mail_from: str | None = None
+        self.mail_options: tuple[str, ...] = ()
         self.rcpt_tos: list[str] = []
         self.commands: dict[str, Callable[[str], object]] = {
             "EHLO": self.ehlo,
@@ -391,6 +407,7 @@ class _Session:
 
     def reset_transaction(self) -> None:
         self.mail_from = None
+        self.mail_options = ()
         self.rcpt_tos = []
 
     def ehlo(self, argument: str) -> None:
@@ -400,6 +417,8 @@ class _Session:
         self.greeted = True
         self.reset_transaction()
         lines = [HOSTNAME, "AUTH PLAIN LOGIN"]
+        if self.server.smtputf8:
+            lines += ["8BITMIME", "SMTPUTF8"]
         if self.server.tls_context is not None and not self.tls:
             lines.append("STARTTLS")
         for line in lines[:-1]:
@@ -497,8 +516,8 @@ class _Session:
         if not self.greeted:
             self.reply("503 5.5.1 Send EHLO first")
             return
-        address = _reverse_path(argument, "FROM:")
-        if address is None:
+        path = _reverse_path(argument, "FROM:")
+        if path is None:
             self.reply("501 5.5.4 Syntax: MAIL FROM:<address>")
             return
         if self.server.credentials is not None and self.user is None:
@@ -510,14 +529,14 @@ class _Session:
         if self.server.refuse_sender:
             self.reply("550 5.7.1 Sender refused by the fake server")
             return
-        self.mail_from = address
+        self.mail_from, self.mail_options = path
         self.reply("250 2.1.0 Sender OK")
 
     def rcpt(self, argument: str) -> None:
         if self.mail_from is None:
             self.reply("503 5.5.1 Need MAIL before RCPT")
             return
-        address = _reverse_path(argument, "TO:")
+        address, _ = _reverse_path(argument, "TO:") or ("", ())
         if not address:
             self.reply("501 5.5.4 Syntax: RCPT TO:<address>")
             return
@@ -547,6 +566,7 @@ class _Session:
             return None
         received = ReceivedMessage(
             mail_from=self.mail_from,
+            mail_options=self.mail_options,
             rcpt_tos=list(self.rcpt_tos),
             data=data,
             message=BytesParser(policy=policy.default).parsebytes(data),
