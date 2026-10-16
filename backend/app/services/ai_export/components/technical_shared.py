@@ -119,6 +119,7 @@ from backend.app.services.ai_export.temporal.policy import (
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.financial_math.returns import price_return
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.signal_service import SignalExecutionPlan, SignalService
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -815,8 +816,9 @@ def build_price_buckets(points: Sequence[ContinuousMultiOutputPoint], plan: Buck
     for statistic in statistics:
         simple_return = None
         return_start_date = None
-        if statistic.last is not None and previous_close is not None and previous_close.value != 0:
-            simple_return = float(statistic.last.value / previous_close.value - Decimal(1))
+        bucket_return = price_return(previous_close.value, statistic.last.value) if statistic.last is not None and previous_close is not None else None
+        if bucket_return is not None:
+            simple_return = float(bucket_return)
             return_start_date = previous_close.observed_date
 
         buckets.append(

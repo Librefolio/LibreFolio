@@ -163,6 +163,15 @@ Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**.
 * **Cumulative MWRR** (Primary personal timing indicator).
 * **Annualized MWRR** (Shown as a secondary/comparative metric to understand the compound yearly rate).
 
+### 🚫 When No MWRR Is Shown
+
+The KPI cards and the MWRR line of the chart follow the same rule on every day of the period. A day has an MWRR only when:
+
+* the portfolio's value on that day is above zero, and
+* the period still holds **net invested capital** on that day: the value it opened with, plus the deposits, minus the withdrawals made up to that day (the capital flows described above), is above zero.
+
+Otherwise there is no rate: the card shows `—`, and the line has a gap. After net withdrawals, the gap starts on the day they take the net invested capital to zero or below, and lasts until new deposits bring it back above zero. The cards always show the line's last point, so a card without MWRR goes with a line that ends in a gap. A day also has no MWRR when no rate solves the cash-flow equation: LibreFolio never shows a rate that does not solve it.
+
 !!! tip "Analyzing the Performance Difference"
 
     To interpret the difference between Cumulative MWRR and Cumulative TWRR, refer to the [Timing Effect](timing-effect.md) page.

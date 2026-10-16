@@ -44,7 +44,13 @@ converter.
 7. **`cost_basis_override` is PER-UNIT.** If you freeze an inherited cost basis (WAC) on a
    `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
    unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
-   total countervalue, divide by quantity first. Set `cost_basis_currency` alongside it.
+   total countervalue, divide by quantity first, and round that quotient with
+   `round_computed_value(value, Transaction, "cost_basis_override")` (`backend/app/db/precision.py`):
+   a figure you compute is rounded explicitly, never one you read (C-97, decision D6). Set
+   `cost_basis_currency` alongside it.
+   Limits: a quantity keeps 10 decimal places, an amount 6, a price or per-unit cost 12,
+   any of them 15 significant digits. A number read from the report beyond them is imported
+   as read and refused at **Save All** with the maximum (decision D2): never round it.
 8. **Fake asset IDs.** Emit high positive placeholder asset IDs — start at
    `FAKE_ASSET_ID_BASE` (`2**31 - 1`, in `backend/app/schemas/brim.py`) and count down, one
    per ISIN/ticker — plus the extracted asset info, so the core can drive the

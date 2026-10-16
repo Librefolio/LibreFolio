@@ -128,7 +128,8 @@
       "missingFx": "Le taux de change nécessaire à un paiement est indisponible.",
       "missingWac": "Le prix de revient unitaire (PRU) n'est pas disponible.",
       "nonPositiveWac": "Le prix de revient unitaire (PRU) est nul ou négatif.",
-      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}."
+      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}.",
+      "negativeNetIncome": "Les corrections dépassent les revenus de la dernière année."
     },
     "yieldOnCostValue": "Rendement sur coût",
     "yieldOnCostPeriod": "Période",

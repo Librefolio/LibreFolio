@@ -359,7 +359,7 @@
                 bind:value={query}
                 aria-controls={treeId}
                 aria-activedescendant={activeEntry?.id}
-                class="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-lf-placeholder"
+                class="min-w-0 flex-1 border-none bg-transparent text-sm text-lf-primary outline-none placeholder:text-lf-placeholder"
                 placeholder={searchPlaceholder ?? $t('common.search')}
                 onclick={(event) => event.stopPropagation()}
                 oninput={() => defer(() => setActiveIndex(0))}
@@ -461,3 +461,13 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the active option,
+       and inside an option under the pointer, which takes the tint too (`hover:bg-lf-selected`), a muted caption, this
+       component's own or a caller's snippet's, turns secondary. */
+    [aria-selected='true'] :global(.text-lf-muted),
+    [aria-selected]:hover :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

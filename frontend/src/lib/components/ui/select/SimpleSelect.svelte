@@ -358,6 +358,7 @@
                             tabindex="-1"
                             aria-selected={value === option.value}
                             aria-disabled={option.disabled ?? false}
+                            data-highlighted={index === highlightedIndex}
                             data-testid={optionTestId?.(option)}
                             onclick={() => selectOption(option)}
                             onmousedown={(event) => event.preventDefault()}
@@ -389,3 +390,11 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the highlighted
+       option a muted caption, this component's own or a caller's snippet's, turns secondary. */
+    [data-highlighted='true'] :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

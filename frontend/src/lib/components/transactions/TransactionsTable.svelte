@@ -1035,19 +1035,19 @@
     :global {
         /* Whole-row tint: broker color recognition.
            ── TUNE THESE VALUES to adjust row saturation ──
-           Light: --broker-vivid-light (hsl hue, 60%, 80%) mixed with white.
-           Dark: --broker-vivid (hsl hue, 75%, 50%) mixed with near-black. */
+           Light: --broker-vivid-light (hsl hue, 60%, 80%), dark: --broker-vivid (hsl hue, 75%, 50%), each mixed
+           with the card surface (--lf-surface-card): the broker colours are categorical, the base is a role. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, var(--lf-surface-card));
         }
         .dark .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, #0f0f18);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, var(--lf-surface-card));
         }
         .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, var(--lf-surface-card));
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, #0f0f18);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-surface-card));
         }
         /* Type-icon column: clickable button (opens mkdocs doc page). */
         .tx-table-wrap .tx-type-icon-link {
@@ -1067,11 +1067,8 @@
                 background-color 0.12s ease;
         }
         .tx-table-wrap .tx-type-icon-link:hover {
-            background: rgb(0 0 0 / 0.05);
+            background: color-mix(in oklab, var(--lf-text-primary) 7%, transparent);
             transform: translateY(-1px);
-        }
-        .dark .tx-table-wrap .tx-type-icon-link:hover {
-            background: rgb(255 255 255 / 0.08);
         }
         .tx-table-wrap .tx-type-icon {
             width: 1.75rem;
@@ -1115,18 +1112,14 @@
             width: 0.625rem;
             height: 0.625rem;
             border-radius: 9999px;
-            background: rgb(139 92 246);
+            background: var(--lf-info);
             border: 0;
             cursor: pointer;
-            box-shadow: 0 0 0 2px rgb(139 92 246 / 0.18);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--lf-info) 20%, transparent);
             transition: transform 0.12s ease;
         }
         .tx-table-wrap .tx-event-dot:hover {
             transform: scale(1.25);
-        }
-        .dark .tx-table-wrap .tx-event-dot {
-            background: rgb(196 181 253);
-            box-shadow: 0 0 0 2px rgb(196 181 253 / 0.22);
         }
         /* Link chain icon: clickable button for linked pair navigation. */
         .tx-table-wrap .tx-link-icon {
@@ -1191,13 +1184,13 @@
         }
         @keyframes txPulse {
             0% {
-                box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
+                box-shadow: inset 0 0 0 0 transparent;
             }
             40% {
-                box-shadow: inset 0 0 0 9999px rgb(99 102 241 / 0.25);
+                box-shadow: inset 0 0 0 9999px color-mix(in oklab, var(--lf-checked) 20%, transparent);
             }
             100% {
-                box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
+                box-shadow: inset 0 0 0 0 transparent;
             }
         }
     }

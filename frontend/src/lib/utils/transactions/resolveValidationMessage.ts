@@ -54,6 +54,12 @@ const FIELD_ERROR_OVERRIDES: Record<string, string> = {
     'id:missing': 'transactions.errors.idRequired',
 };
 
+/**
+ * Codes about one field's value whose text names no field (C-97: a value over its column's limit, `params.max`):
+ * the translated field label goes in front, e.g. "Quantity: At most 10 decimal places".
+ */
+const FIELD_PREFIXED_CODES = new Set(['decimalPlacesExceeded', 'significantDigitsExceeded']);
+
 /** Minimal broker shape needed for resolution. */
 interface BrokerLike {
     id: number;
@@ -226,8 +232,8 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     const keys = code === 'wacFxUnavailable' && issue.operation === 'split' ? ['transactions.errors.wacFxUnavailableSplit', `transactions.errors.${code}`] : [`transactions.errors.${code}`];
     for (const key of keys) {
         const translated = t(key, {values: enriched});
-        // If our custom key exists, use it (already field-specific in wording)
-        if (translated !== key) return translated;
+        // If our custom key exists, use it (already field-specific in wording, or prefixed with the field below)
+        if (translated !== key) return FIELD_PREFIXED_CODES.has(code) && fieldLabel ? `${escapeHtml(fieldLabel)}: ${translated}` : translated;
     }
 
     // Try field-specific override (e.g. broker_id:greater_than → "Please select a broker")

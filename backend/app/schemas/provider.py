@@ -68,6 +68,32 @@ class FAProviderKind(StrEnum):
 
 
 # ============================================================================
+# FA PROVIDER TIER
+# ============================================================================
+
+
+#: The search priority of a provider that declares none: lower comes first (F21).
+DEFAULT_SEARCH_PRIORITY = 100
+
+
+class FAProviderTier(StrEnum):
+    """Where an asset pricing provider stands in the asset search (F21).
+
+    Values:
+    - 'premium': a source the instance vouches for, typically licensed data with a contract behind it. When at least
+      one premium provider is available, the search lists its results first.
+    - 'community': every other source: public web pages, unofficial APIs, a plugin added to the instance. The default.
+
+    The plugin declares it (AssetSourceProvider.tier); LIBREFOLIO_ASSET_PROVIDERS_PREMIUM overrides it
+    (services/assets/provider_policy.py). No backticks here: this text reaches the generated client inside a
+    JavaScript template literal.
+    """
+
+    PREMIUM = "premium"
+    COMMUNITY = "community"
+
+
+# ============================================================================
 # FA VOLUME KIND
 # ============================================================================
 
@@ -134,6 +160,15 @@ class FAProviderInfo(StrictModel):
         ),
     )
     supports_search: bool = Field(..., description="Whether provider supports asset search")
+    tier: FAProviderTier = Field(
+        FAProviderTier.COMMUNITY,
+        description="Where the provider stands in the asset search (F21): 'premium' results come first when at least one premium provider is available. The plugin's declaration, or LIBREFOLIO_ASSET_PROVIDERS_PREMIUM when it is set",
+    )
+    priority: int = Field(
+        DEFAULT_SEARCH_PRIORITY,
+        ge=0,
+        description="The provider's position in the asset search, lower first (F21). The plugin's search_priority; with LIBREFOLIO_ASSET_PROVIDERS_ORDER, the listed providers get 0, 1, 2… in that order, and the others follow, at the length of the list plus their declared priority",
+    )
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
     accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")
     provider_help_url: Optional[str] = Field(None, description="URL to provider documentation")

@@ -30,10 +30,9 @@ module ``backend/app/services/platform/client_address.py``. The contract:
     usable or absent header re-arms nothing; ``reset_client_address_cache()`` re-arms the warning.
 (e) The configured name is read once per process: after the first call, a change of the environment changes nothing
     until ``reset_client_address_cache()``, and the next call reads it. Every way: another name, set, unset.
-(f) ``client_rate_key(address)``, the key of an address for a per-client limit, today's rule of ``address_key`` in
-    ``backend/app/services/email/flows.py`` (workstream E switches to this one in its own lot): no key for ``None`` nor
-    ``""``; an IPv4 address as is; an IPv4-mapped one as its IPv4; any other IPv6 address by its /64, in canonical form,
-    a zone ignored; anything else as written. The values are pinned here: E's function is not imported.
+(f) ``client_rate_key(address)``, the key of an address for a per-client limit: no key for ``None`` nor ``""``; an
+    IPv4 address as is; an IPv4-mapped one as its IPv4; any other IPv6 address by its /64, in canonical form, a zone
+    ignored; anything else as written. The values are pinned here, one by one.
 (g) ``mask_client_address(address)``, the form an address may take in a log: nothing for ``None`` nor ``""``; an IPv4
     address by its /24; an IPv4-mapped one as its IPv4, so by its /24; any other IPv6 address by its /48; anything else
     as written.
@@ -768,7 +767,7 @@ def test_the_name_is_read_once_per_process_until_the_cache_is_reset(monkeypatch:
 # =============================================================================
 
 
-#: The address, and its key. Today's rule of address_key (backend/app/services/email/flows.py), pinned value by value.
+#: The address, and its key, pinned value by value.
 RATE_KEYS = [
     pytest.param(None, None, id="no-address"),
     pytest.param("", None, id="an-empty-address"),
