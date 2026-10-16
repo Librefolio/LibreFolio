@@ -1989,3 +1989,114 @@ scrivono qui quando partono.
 > in `features/risk/` e 49 modifiche. Restano fuori gli 8 rossi di Y9 e Y10 e il piano, che va nel commit del journal.
 > Non ci sono righe di CHANGELOG: è uno spostamento interno. Le E2E `risk` e `risk-lab` aspettano lo slot del
 > coordinatore, dopo H e A.
+
+### Y4b — commit e revisione combinata ⏳ (2026-10-16, 02:26–)
+
+> **Note implementazione**: il coordinatore ha salvato Y4b in `51aff4a12`, 152 file (103 rinomine e 49 modifiche), e il
+> journal in `26cdfb3ec`. Poi ha aggiornato la base: merge pulito di `dev_release2` (`57802d827`, con DV TD-1),
+> HEAD `9295febe9`, con `_frontend_utility.py` fuso da solo e `theme-roles --check` pulito.
+> - **Prove leggere sulla revisione combinata** (`/tmp/libreFolio_y4b_entry_light.sh`, una alla volta con `nice`, ognuna
+>   dopo il carico sotto 70), tutte verdi:
+>   - `api sync`, senza cambi tracciati;
+>   - `front check`: 0 errori, 0 avvisi;
+>   - i 7 test unitari del rischio: 26 file, 972 test;
+>   - `core-unit`: 171 file e 5900 test. Un file in più per l'ingresso di DV.
+> - **E2E nello slot pesante 2** (via del coordinatore, 02:27): `risk` e poi `risk-lab`, `--workers 2` e `nice`
+>   (`/tmp/libreFolio_y4b_e2e.sh`).
+> - **Le registrazioni dei rossi** di Y9 e Y10 si rimettono solo dopo le E2E (coordinatore), così la revisione che entra
+>   resta pulita.
+>   - La patch salvata non si applica più, perché Y4b ha cambiato le righe del rischio che fanno da contesto.
+>   - Le rimette `files/y9y10_runner_reapply.py`: prende i pezzi dalla copia salvata e li inserisce per ancora, con il
+>     percorso nuovo `features/risk/` del rosso di `CorrelationHeatmap`. A secco passa, e le ancore coincidono con il
+>     file di oggi.
+> - **Per il passo 2 di Y9**:
+>   - DV TD-1 toglie `PAC_EXPOSURE_BAR_COLORS` da `chartTheme.ts`, quindi `ExposureBars.svelte` non importa più
+>     `chartTheme`. `files/y9_k13_apply.py` aggiunge la riga d'import dopo quella di `echarts`, ed è già previsto;
+>   - a secco sulla base nuova: 18 chiamate in 17 file.
+>   - L'aggiunta a `chartTheme.ts` va in fondo al file, una zona che DV non tocca.
+> - **E2E** (slot 2, `9295febe9`): `front-portfolio risk` 38 su 38 (02:33–02:43, build compresa), `front-portfolio
+>   risk-lab` 44 su 44 (02:43–02:48). La 6189 è libera. Handoff d'ingresso al coordinatore alle 02:48.
+> - **Registrazioni dei rossi** rimesse dopo le E2E, come da ok del coordinatore: `files/y9y10_runner_reapply.py
+>   --apply`, +40 −2. `check-orphans` è pulito con gli 8 rossi registrati; ruff dà 28 avvisi come HEAD. Non sono
+>   committate.
+
+### Y9 — passo 1, rossi ✅ (2026-10-16, 00:58–02:50)
+
+> **Note implementazione**: `test-author` ha scritto sei file nuovi. Li ho lanciati uno alla volta con `nice` e il
+> reporter verboso, alle 02:48. Il risultato è identico alla previsione: **19 rossi e 30 verdi**.
+>
+> | File | Rossi | Verdi | Motivo dei rossi (asserzione) |
+> |---|---:|---:|---|
+> | `charts/AllocationPieChart.tooltipEscape` | 3 | 4 | il carico diventa un elemento: titolo da `data.caption`, riga del padre con uno e con due anelli |
+> | `charts/CandlestickChart.tooltipEscape` | 4 | 3 | intestazione: codice e bandiera, con e senza conversione |
+> | `charts/PriceChartFull.tooltipEscape` | 5 | 5 | bandiera della riga sovrapposta; codice e bandiera della riga principale, con e senza conversione |
+> | `features/risk/CorrelationHeatmap.tooltipEscape` | 1 | 2 | la copia locale lascia `'` e `"` |
+> | `utils/core/escapeHtml.single` | 1 | 5 | un solo escaper fuori elenco: `features/risk/CorrelationHeatmap.svelte:352` |
+> | `charts/chartFlagFont` | 5 | 11 | `CHART_FONT_FAMILY` e `CHART_INIT_THEME` assenti; 18 su 18 `echarts.init` senza il tema |
+>
+> Nessun rosso viene dall'import o dall'impianto di prova: i verdi comprendono i controlli positivi, cioè un tema in
+> linea che funziona anche dopo un `setOption(…, true)`, e gli scanner provati su sorgenti inventati.
+> - **Per il passo 2** (reperti di `test-author`, non ancora coperti da test):
+>   - le bandiere dei marcatori d'evento (`PriceChartFull.svelte:812`, `:815`) sono lo stesso vettore di K-15, e le
+>     metto nel passo 2;
+>   - `marker.type` grezzo (`:808`), le date di `formatDay` e i colori negli attributi `style` vengono da valori
+>     interni o dal backend, quindi il rischio è basso: li valuto nel passo 2;
+>   - le graffe nel rich text di ECharts della torta (`:361`, `:546`) sono testo su canvas, non HTML;
+>   - l'asse di `CorrelationHeatmap` fissa `fontFamily: 'sans-serif'` (`:131`, `:276`, `:478`), e lì il tema non
+>     arriva. È una decisione del passo 2.
+
+### Y4b — ingresso ✅ (2026-10-16, 02:52)
+
+> **Note implementazione**: il treno 81 l'ha portato in `dev_release2` con il merge `08efa5ac3`. FE2b è chiuso: il
+> rischio è in `lib/features/risk/`. Resta Y4a (FE2a, i segnali), dopo FE4 e FE5a di X. Y3 parte dopo l'ingresso del
+> lotto di T, verso le 03:20, al messaggio del coordinatore. Il passo 2 di Y9 l'ho proposto per subito, perché Y3 è
+> fermo, e aspetto il via.
+
+### Y9 — passo 2, prima parte ✅ (2026-10-16, 02:52–03:05; via del coordinatore alle 02:52, checkpoint prima di Y3)
+
+> **Condizioni del coordinatore**:
+> - un checkpoint di Y9 prima di applicare Y3, anche se il lotto non è finito;
+> - `document.fonts.load` prima del primo disegno, coperto da un test.
+>
+> **Note implementazione**:
+> - **K-13**: un modulo nuovo, `lib/components/charts/chartFont.ts`, con `CHART_FONT_FAMILY` («'LF Flags'» più il
+>   default di ECharts, che su Windows è 'Microsoft YaHei', letto come lo legge ECharts) e `CHART_INIT_THEME`.
+>   `files/y9_k13_apply.py --apply` ha portato il tema in 18 chiamate `echarts.init` di 17 file, ognuno con la sua riga
+>   d'import.
+> - **K-15**, con l'`escapeHtml` condiviso:
+>   - `AllocationPieChart`: il titolo e la riga del padre;
+>   - `CandlestickChart`: valuta e bandiera nell'intestazione, con e senza conversione;
+>   - `PriceChartFull`: la bandiera della riga sovrapposta, valuta e bandiera della riga principale, e nei marcatori
+>     d'evento le due bandiere e `marker.type`.
+> - **C-34**: `CorrelationHeatmap` usa l'`escapeHtml` condiviso al posto della copia a tre caratteri. Il font del suo asse
+>   (`AXIS_FONT_FAMILY`) diventa `CHART_FONT_FAMILY`, così il tema non viene scavalcato e la misura resta uguale al
+>   disegno.
+> - **Il test rosso di K-13** l'ho puntato a `chartFont` a mano (l'import, l'esempio sintetico, i messaggi) e poi
+>   formattato con Prettier. È una sostituzione meccanica di percorso, come quelle degli script di spostamento.
+>
+> **Prove**, una alla volta con `nice`:
+> - i 6 file di Y9, da soli: 49 verdi su 49 (prima 19 rossi e 30 verdi). `front-portfolio chart-safety-unit` dal
+>   runner: 6 file, 49 test;
+> - i test esistenti dei grafici toccati: 13 file, 359 test. I grafici dei lotti hanno solo test degli helper, e
+>   `GeographyMap` ed `ExposureMaps` non hanno test;
+> - `theme-roles --check` pulito; `front check` 0 errori e 0 avvisi;
+> - `core-unit`: 171 file e 5900 test, compresi i gate `htmlSink`, `htmlInterpolation` e `themeRoles`;
+> - `front-fx fx-unit`: 4 file e 138 test, compreso `flagFont.gate`;
+> - Prettier pulito; `git diff --check` pulito;
+> - `check-orphans` sullo stato del checkpoint, con i 2 rossi di Y10 messi da parte e rimessi: pulito.
+>
+> **Decisioni notturne, da rivedere**:
+> - **`chartFont.ts` e non `chartTheme.ts`**. `chartTheme.test.ts`, dei colori, visita ogni export di `chartTheme.ts`
+>   e vuole che ogni stringa sia un colore: una famiglia di font lì lo romperebbe. Un modulo a parte, accanto agli altri
+>   helper di ECharts, lascia intatti i file dei colori.
+> - **Escape anche dove i rossi non arrivavano**: le bandiere dei marcatori d'evento e `marker.type`. I test per
+>   questi arrivano nella seconda parte.
+> - **Il runner per il checkpoint** ha solo la registrazione di Y9 (`chart-safety-unit`). Le righe di Y10 sono in
+>   `files/_frontend_portfolio.y9y10.after-y4b.py` e tornano con il codice di Y10.
+>
+> **Resta per la seconda parte**:
+> 1. `document.fonts.load` prima del primo disegno, con il suo test (condizione 2), scritto da `test-author`;
+> 2. i test sull'escape dei marcatori, e il nome dell'alias `chartTheme` nel test di K-13;
+> 3. la documentazione con `docs-writer` (`developer/frontend/components/charts.md`, `styling.md`);
+> 4. con lo slot, le E2E dei grafici e una galleria filtrata sui grafici con bandiere;
+> 5. le righe CHANGELOG nell'handoff d'ingresso.
