@@ -22,6 +22,14 @@ stability  Classify every shot (stable / low / medium / unstable) from a NOISE d
         ... stability <work>/diffs/noise__r1__vs__r2
         Then pass it to later diffs: diff A B --out … --ignore-masks <noise>/masks --stability <noise>/stability.json
 
+sheet   Rank a diff's shots by VISIBLE change and write a contact sheet into the diff. At tolerance 0 a colour
+        migration «changes» nearly every image by a few levels; `sheet` counts the pixels whose largest channel change
+        exceeds 12 levels (and 4, and 32), with the diff's noise masks applied, and writes visible.json and
+        contact_sheet.<lang>.html: one row per shot, A and B side by side, light and dark, desktop and mobile, the most
+        visible change first, with the new, gone and resized images listed on top.
+        ... sheet <work>/diffs/A__vs__B [--lang it] [--a <snapshot A>] [--b <snapshot B>] [--recompute]
+        The measures cover every language and are kept in visible.json, so another --lang only rewrites the page.
+
 Snapshot layout (written by gallery_snapshot.sh):
     <snapshot>/png/<viewport>/<lang>/<theme>/<category>/<name>.png, <snapshot>/meta.json
 Snapshots captured on different days differ by construction (the test data follows date.today()).
@@ -33,6 +41,7 @@ import argparse
 import html
 import json
 import os
+import statistics
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -204,7 +213,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
         r["noise"] = stability.get(f"{r['category']}/{r['name']}", {}).get("class", "unknown") if stability else "n/a"
     status = Counter(r["status"] for r in results)
     meta_a, meta_b = load_meta(a_dir), load_meta(b_dir)
-    summary = {"A": meta_a, "B": meta_b, "tol": args.tol, "ignore_masks": str(ignore_dir) if ignore_dir else None, "counts": dict(status), "results": results}
+    summary = {"A": meta_a, "B": meta_b, "a_dir": str(a_dir), "b_dir": str(b_dir), "tol": args.tol, "ignore_masks": str(ignore_dir) if ignore_dir else None, "counts": dict(status), "results": results}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     changed = sorted((r for r in results if r["status"] == "changed"), key=lambda r: (NOISE_RANK.get(r["noise"], 0), -r["pct"]))
     (out / "report.md").write_text(diff_report_md(results, changed, meta_a, meta_b, args, ignore_dir, bool(stability)))
@@ -318,6 +327,151 @@ def cmd_stability(args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------------------- sheet
+# The thresholds `sheet` measures, in levels of the largest channel change, and the one it ranks by: a change of a few
+# levels is invisible on screen (colour-role rounding), one of over 12 starts to show, one of over 32 is plain.
+VISIBLE_THRESHOLDS = (4, 12, 32)
+SHEET_THRESHOLD = 12
+VIEWPORTS = ("desktop", "mobile")
+STRUCTURAL = ("size_changed", "missing_in_A", "missing_in_B")
+
+
+def visible_metrics(a: np.ndarray, b: np.ndarray, ignore: np.ndarray | None) -> dict:
+    """The share (%) of pixels whose largest channel change exceeds each threshold; for two heights, on the area both share, top-aligned."""
+    h, w = min(a.shape[0], b.shape[0]), min(a.shape[1], b.shape[1])
+    delta = np.abs(a[:h, :w] - b[:h, :w]).max(axis=2)
+    if ignore is not None and ignore.shape == delta.shape:
+        delta[ignore] = 0
+    metrics: dict = {f"vis{t}": round(100 * float((delta > t).sum()) / delta.size, 3) for t in VISIBLE_THRESHOLDS}
+    metrics["max_delta"] = int(delta.max())
+    return metrics
+
+
+def load_ignore_mask(ignore_dir: Path | None, rel: str) -> np.ndarray | None:
+    if ignore_dir is None or not (ignore_dir / rel).exists():
+        return None
+    with Image.open(ignore_dir / rel) as m:
+        return np.asarray(m.convert("L")) > 0
+
+
+def sheet_snapshots(diff: Path, summary: dict, args: argparse.Namespace) -> tuple[Path, Path]:
+    """The diff's two snapshots: as given, else as the diff recorded them, else <work>/snapshots/<label> (diffs written before the record)."""
+    snapshots = diff.parent.parent / "snapshots"
+    a = args.a or summary.get("a_dir") or str(snapshots / summary["A"].get("label", "?"))
+    b = args.b or summary.get("b_dir") or str(snapshots / summary["B"].get("label", "?"))
+    found = Path(a).resolve(), Path(b).resolve()
+    for snapshot in found:
+        if not (snapshot / "png").is_dir():
+            raise SystemExit(f"{snapshot} is not a snapshot (no png/): pass it with --a / --b")
+    return found
+
+
+def shot_table(per_image: dict[str, dict]) -> dict[str, dict]:
+    """Every shot's visible change over its variants (every language, theme and viewport): the median and the largest."""
+    shots: dict[str, list[dict]] = defaultdict(list)
+    for rel, rec in per_image.items():
+        p = parse_rel(rel)
+        shots[f"{p['category']}/{p['name']}"].append(rec)
+    per_shot = {}
+    for shot, recs in sorted(shots.items()):
+        vis = [rec[f"vis{SHEET_THRESHOLD}"] for rec in recs]
+        per_shot[shot] = {"noise": recs[0]["noise"], "variants": len(recs), "statuses": dict(Counter(rec["status"] for rec in recs)), "median": round(statistics.median(vis), 3), "max": max(vis)}
+    return per_shot
+
+
+def measure_images(summary: dict, a_dir: Path, b_dir: Path) -> dict[str, dict]:
+    """Every image's visible change, the diff's ignore masks applied: the slow part, a few minutes for a full gallery."""
+    ignore_dir = Path(summary["ignore_masks"]) if summary.get("ignore_masks") else None
+    per_image: dict[str, dict] = {}
+    for r in summary["results"]:
+        rel, status = r["rel"], r["status"]
+        rec = {"status": status, "noise": r.get("noise", "n/a"), "pct": r.get("pct", 0.0), "composite": r.get("composite")}
+        if status in ("changed", "size_changed"):
+            a, b = load_rgb(a_dir / "png" / rel), load_rgb(b_dir / "png" / rel)
+            rec.update(visible_metrics(a, b, load_ignore_mask(ignore_dir, rel)))
+            if status == "size_changed":
+                rec["size"] = f"{a.shape[1]}×{a.shape[0]} → {b.shape[1]}×{b.shape[0]}"
+        else:
+            rec.update({f"vis{t}": 0.0 for t in VISIBLE_THRESHOLDS})
+        per_image[rel] = rec
+    return per_image
+
+
+def visible_table(diff: Path, summary: dict, a_dir: Path, b_dir: Path, recompute: bool) -> dict:
+    """The images' visible change, measured once and kept in <diff>/visible.json while it matches the diff, and the shots' from them."""
+    cache = diff / "visible.json"
+    key = {"images": len(summary["results"]), "ignore_masks": summary.get("ignore_masks"), "thresholds": list(VISIBLE_THRESHOLDS)}
+    cached = json.loads(cache.read_text()) if cache.exists() and not recompute else {}
+    per_image = cached["per_image"] if cached and all(cached.get(k) == v for k, v in key.items()) else measure_images(summary, a_dir, b_dir)
+    data = {**key, "ranked_by": SHEET_THRESHOLD, "per_shot": shot_table(per_image), "per_image": per_image}
+    cache.write_text(json.dumps(data, indent=1))
+    return data
+
+
+def sheet_html(data: dict, summary: dict, a_dir: Path, b_dir: Path, diff: Path, lang: str) -> str:
+    per_shot, per_image, t = data["per_shot"], data["per_image"], SHEET_THRESHOLD
+    order = sorted(per_shot, key=lambda s: (-per_shot[s]["median"], s))
+    bands = Counter("≥ 10 %" if v["median"] >= 10 else "1–10 %" if v["median"] >= 1 else "0.1–1 %" if v["median"] >= 0.1 else "< 0.1 %" for v in per_shot.values())
+    structural = [s for s in order if set(per_shot[s]["statuses"]) & set(STRUCTURAL)]
+
+    def picture(p: Path, label: str) -> str:
+        img = f'<img loading="lazy" src="{rel_link(p, diff)}" alt="">' if p.exists() else '<div class="miss">—</div>'
+        return f"<figure>{img}<figcaption>{label}</figcaption></figure>"
+
+    rows = []
+    for shot in order:
+        info, cells = per_shot[shot], []
+        for vp in VIEWPORTS:
+            for theme in THEMES:
+                rel = f"{vp}/{lang}/{theme}/{shot}.png"
+                rec = per_image.get(rel)
+                if rec is None:
+                    cells.append(f'<td class="na">{vp} · {theme}: —</td>')
+                    continue
+                notes = {"missing_in_A": ["<b>new</b>"], "missing_in_B": ["<b>gone</b>"]}.get(rec["status"], [f"Δ&gt;{t}: {rec[f'vis{t}']:.1f} %", f"Δ&gt;32: {rec['vis32']:.1f} %"])
+                if rec.get("size"):
+                    notes.append(f"<b>size {html.escape(rec['size'])}</b>")
+                if rec.get("composite"):
+                    notes.append(f'<a href="{html.escape(rec["composite"])}">diff</a>')
+                cells.append(f'<td><div class="cap">{vp} · {theme} · {" · ".join(notes)}</div><div class="pair">{picture(a_dir / "png" / rel, "A")}{picture(b_dir / "png" / rel, "B")}</div></td>')
+        statuses = ", ".join(f"{k} {v}" for k, v in sorted(info["statuses"].items()))
+        meta = f"Δ&gt;{t} median {info['median']:.1f} % (max {info['max']:.1f} %)<br>noise: {html.escape(str(info['noise']))}<br>{html.escape(statuses)}"
+        rows.append(f'<tr><th id="{html.escape(shot)}"><div class="shot">{html.escape(shot)}</div><div class="meta">{meta}</div></th>{"".join(cells)}</tr>')
+    meta_a, meta_b = summary["A"], summary["B"]
+    who = " → ".join(f"{side} <code>{html.escape(str(m.get('label', '?')))}</code> ({html.escape(str(m.get('commit', '?'))[:9])})" for side, m in (("A", meta_a), ("B", meta_b)))
+    band_rows = "".join(f"<tr><td>{band}</td><td>{bands.get(band, 0)}</td></tr>" for band in ("≥ 10 %", "1–10 %", "0.1–1 %", "< 0.1 %"))
+    struct_items = "".join(f'<li><a href="#{html.escape(s)}">{html.escape(s)}</a>: {html.escape(", ".join(f"{k} {v}" for k, v in sorted(per_shot[s]["statuses"].items())))}</li>' for s in structural)
+    return f"""<!doctype html><meta charset="utf-8"><title>Contact sheet {html.escape(str(meta_a.get('label', 'A')))} → {html.escape(str(meta_b.get('label', 'B')))} ({lang})</title>
+<style>
+body{{font:13px system-ui,sans-serif;margin:12px;background:#f4f4f2}} table{{border-collapse:collapse}} th,td{{border-bottom:1px solid #ccc;vertical-align:top;padding:6px}}
+th{{text-align:left;width:180px;position:sticky;left:0;background:#f4f4f2}} .shot{{font-weight:600;word-break:break-all}} .meta{{font-weight:400;color:#555;margin-top:4px}}
+.pair{{display:flex;gap:4px}} figure{{margin:0}} figcaption{{color:#666;font-size:11px}} img{{width:260px;border:1px solid #bbb;display:block}}
+.cap{{color:#333;font-size:11px;margin-bottom:3px}} .na,.miss{{color:#999}} .bands td{{padding:2px 10px;border:none}}
+</style>
+<h1>Contact sheet: {who}, language {html.escape(lang)}</h1>
+<p>One row per shot, the most visible change first. «Δ&gt;{t}» is the share of pixels whose largest channel change exceeds {t} levels, with the diff's noise masks
+applied (ignore masks: {html.escape(str(summary.get('ignore_masks') or 'none'))}): under about 1 % a change is usually invisible (colour rounding). The ranking uses the
+median over every language, theme and viewport; the pictures show «{html.escape(lang)}». «diff» opens the composite A | B | changed pixels.</p>
+<table class="bands"><tr><th>Δ&gt;{t} median</th><th>shots</th></tr>{band_rows}</table>
+<h2>New, gone or resized ({len(structural)})</h2><ul>{struct_items or "<li>none</li>"}</ul>
+<table>{"".join(rows)}</table>
+"""
+
+
+def cmd_sheet(args: argparse.Namespace) -> int:
+    diff = Path(args.diff).resolve()
+    summary_file = diff / "summary.json"
+    if not summary_file.exists():
+        raise SystemExit(f"{diff} has no summary.json: run `diff` first")
+    summary = json.loads(summary_file.read_text())
+    a_dir, b_dir = sheet_snapshots(diff, summary, args)
+    data = visible_table(diff, summary, a_dir, b_dir, args.recompute)
+    out = diff / f"contact_sheet.{args.lang}.html"
+    out.write_text(sheet_html(data, summary, a_dir, b_dir, diff, args.lang))
+    print(f"{len(data['per_shot'])} shots, {len(data['per_image'])} images → {out}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -340,6 +494,13 @@ def main() -> int:
     b.add_argument("--langs", default="en")
     b.add_argument("--viewports", default="desktop,mobile")
     b.set_defaults(fn=cmd_browse)
+    c = sub.add_parser("sheet", help="rank a diff's shots by visible change and write a contact sheet")
+    c.add_argument("diff", help="output directory of `diff A B`")
+    c.add_argument("--lang", default="en", help="language of the shots shown (the ranking covers every language)")
+    c.add_argument("--a", help="snapshot A (default: the one the diff recorded, else <work>/snapshots/<A's label>)")
+    c.add_argument("--b", help="snapshot B (default: the one the diff recorded, else <work>/snapshots/<B's label>)")
+    c.add_argument("--recompute", action="store_true", help="measure again even when visible.json matches the diff")
+    c.set_defaults(fn=cmd_sheet)
     args = ap.parse_args()
     return args.fn(args)
 
