@@ -76,12 +76,13 @@ Tokens are signed with HS256 and one key per process, `_JWT_SECRET` in
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
-- Read each time a session cookie is issued — at login, and when a password change re-issues it — it sets both the
-  token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to the
-  cookies issued after it
+- Read each time a session cookie is issued — at login, and when a password or email change re-issues it — it sets
+  both the token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to
+  the cookies issued after it
 - After expiration, the user must log in again
-- There is no token refresh mechanism — a new login is required. The only cookie issued without a login is the one a
-  password change sends back to the device that made it ([Session Revocation](#session-revocation))
+- There is no token refresh mechanism — a new login is required. The only cookies issued without a login are the ones
+  a password change or an email change sends back to the device that made it
+  ([Session Revocation](#session-revocation))
 
 ### 🚪 Logout
 
@@ -99,20 +100,22 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Five changes call it:
+not commit: the caller commits it with the change that asks for it. Six changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
+| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change) | Every other session of the account, as for a password change: the same response sets a new cookie |
 | Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
 | Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
 Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
-password equal to it, on `change-password`; an unknown user; the last active administrator; *already an admin* or
-*not an admin*; a reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, and a
-`PATCH` whose values equal the current ones.
+password equal to it, on `change-password`; a missing or wrong current password, or an address or a username already
+taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
+reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
+equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -125,12 +128,12 @@ password equal to it, on `change-password`; an unknown user; the last active adm
   found*, *User account is disabled*), then refuses a token whose version differs from the account's, behind or
   ahead, with `401` *Session expired or invalid*: the answer to an invalid token, so nothing tells the holder why.
   While an account is deactivated, its cookies get *User account is disabled* first.
-- **The re-issued cookie.** Login and password change set the cookie through one helper, `_issue_session_cookie()`:
-  a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the setting cannot be read),
-  with the same name and attributes as the login cookie, so the browser replaces the old cookie instead of keeping
-  both.
+- **The re-issued cookie.** Login, password change and email change set the cookie through one helper,
+  `_issue_session_cookie()`: a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the
+  setting cannot be read), with the same name and attributes as the login cookie, so the browser replaces the old
+  cookie instead of keeping both.
 
-!!! note "A request in flight during a password change"
+!!! note "A request in flight during a password or email change"
 
     A request the same device sent with its old cookie, and that reaches the server after the change is committed,
     gets `401`. The frontend's 401 interceptor (`frontend/src/lib/api/zodios-client.ts`) sends it to the login page,
@@ -140,7 +143,51 @@ Tests: `./dev.py test services session-version` (`backend/test_scripts/test_serv
 token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
 (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
 second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
-`./dev.py test api registration`.
+`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change).
+
+### ✉️ Changing the Email {: #email-change }
+
+An account's email is a way into it: a password-reset link sent to that address lets whoever reads it choose the
+password. `PUT /api/v1/auth/profile` used to change the email on the session cookie alone, so with the self-service
+«forgot password» ([held](../backend/email.md#flow-forgot) until lot E4) a moment inside someone else's session — an
+XSS, a stolen cookie, a computer left unlocked — would become a permanent takeover: change the email, ask for a reset,
+choose the password (security review of lot E3, rated medium). Since lot A6e (release 1.3), an email change asks for
+the current password and ends the account's other sessions. No other route changes an account's email.
+
+- **What counts as an email change.** An `email` in the body that differs from the stored one, compared exactly, as
+  `user_service.update_profile()` compares it. A username-only change, or the stored email sent again, needs no
+  password, as before, and a `current_password` sent beside it is not checked.
+- **The body.** `UpdateProfileRequest` (`backend/app/schemas/auth.py`) has an optional `current_password` of at least
+  one character: an empty string is refused with `422`.
+- **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
+  anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. bcrypt runs in
+  a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
+- **The sessions.** `user_service.update_profile()` calls `end_sessions()` and sets `users.email_verified_at` back to
+  `NULL` (the new address is not verified, and no flow of release 1.3 verifies a changed one), in the commit of the
+  new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
+  the device that made the change carries on, and every other session gets `401` at its next request. A
+  username-only change ends no session, nor does a refused one.
+
+| Answer | `detail` | When |
+|--------|----------|------|
+| `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
+| `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address or the name belongs to another account. Nothing is written |
+| `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
+| `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
+
+Not covered yet: the notice to the previous address is lot E4's (workstream E), and the route counts no wrong
+passwords: limiting the guesses here is planned with the login attempt limit (lot A8).
+
+The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
+user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
+
+Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-016: the
+refusals, the taken address not revealed without the password, the sessions with two devices, the username-only and
+same-email guards), `./dev.py test services user-profile` (`backend/test_scripts/test_services/test_user_profile.py`,
+`TestUpdateProfileEmailVerification`: `email_verified_at`), and for the tab
+`./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
+(`frontend/e2e/settings.spec.ts`, its «A6e» block).
 
 ### 💻 Using curl
 
@@ -167,8 +214,8 @@ curl -b cookies.txt -X POST \
 ### 📄 Secrets from Files {: #secrets-from-files }
 
 Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
-`backend/app/config/__init__.py`:
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`
+today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -198,6 +245,16 @@ then logs `web_link_finder: <error>; disabling` and returns no engine, so that s
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
+Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
+`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
+startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`BackupConfigError` for a token with anything but visible ASCII characters, spaces included
+(`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
+(`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
+either into `503` with the code `backup_panel_unavailable`, on every panel route, and logs one error line
+per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
+`error` names the variable, and the path of a file, never the token
+([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -341,7 +398,7 @@ Tests: `./dev.py test services config-audit`. What the administrator sees and do
 
 ## 🛡️ Endpoint Protection
 
-All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI).
+All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
 
 ### 🌐 Public Endpoints (no auth required)
 
@@ -355,14 +412,32 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
-| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
+| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration), and [The First-Account Flag](#first-account-open) for the one fact about the users it tells |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
-| `/settings/global`, `/settings/global/{key}` | GET | The global settings, read-only (writes need an administrator): see [Settings System](settings.md) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
 
 On an instance blocked by its hosting provider, the public endpoints outside its short list answer
 `401`: see [Instance Block](#instance-block).
+
+### 🆕 The First-Account Flag {: #first-account-open }
+
+`GET /system/instance` tells anyone one fact about the users: `accounts.first_account_open`, true
+while the `users` table is empty, an inactive account counted (`first_account_open(session)` in
+`backend/app/services/accounts/registration_service.py`). The login page needs it: the first account
+of an empty instance can be created in any [registration mode](access_control.md#registration-modes)
+and becomes the administrator, so the page offers **Register here** while the flag is true, even on
+an instance that registers by invitation, the default of a new install. Publishing it is accepted
+(coordinator decision, 15/10/2026):
+
+- **It tells nothing a registration attempt would not.** An empty instance takes the first
+  `POST /auth/register` it gets, whatever the mode: anyone can learn that it is empty by trying.
+- **The window is short.** The flag turns false with the first registration, normally minutes after
+  the install; the administrator manual asks to register before exposing the instance
+  ([Global Settings](../../admin/settings.md), section «Who Can Sign Up»).
+- **A managed instance will not show it.** With lot A7 (F02, not delivered yet), the first account of
+  a managed instance will be the administrator created from the environment, so the flag will be
+  false from the start. Until then a managed instance starts empty, like any other.
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -400,7 +475,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -471,9 +546,12 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
+| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
+| `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
+| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -491,11 +569,12 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
-  `/system/info` and `/system/ready` answer as on any other instance.
+  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up
+  tells, and only to the holder of its token: `status: "blocked"`.
 - The public routes outside the list answer `401` only while the instance is blocked. From them, a
   caller without a session can tell that the instance is blocked, and nothing more: they return no
   data.
@@ -519,9 +598,11 @@ fills it in `block.py` with one call to its service.
 lost the password (see the table above): they read a link already sent or spend a reset link, and
 create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
 that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
-full backup for the administrator and the scheduled wake-up join the list, one line each, when their
-routes exist; any other addition goes through the
-developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
+full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
+delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
+instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
+of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). Any other
+addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
 documentation, so an addition, or a route the guard does not reach, shows in review.
@@ -530,7 +611,8 @@ documentation, so an addition, or a route the guard does not reach, shows in rev
 FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
 covered: the browser still loads the app, which turns the first `423` into the block page (see
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
-HTTP, so its jobs keep running.
+HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
+job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 
@@ -634,9 +716,10 @@ tokens:
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
   Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
-- **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
-  carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
-  About accounts, `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+- **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
+  `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
+  and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
+  locks it, and whether the instance has no account yet ([The First-Account Flag](#first-account-open)).
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser

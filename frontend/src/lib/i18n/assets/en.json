@@ -325,7 +325,9 @@
       "placeholder": "Search by name, ticker, ISIN...",
       "searching": "Searching...",
       "timeout": "Search timed out. Please try again.",
-      "rankHint": "Web search rank (metasearch over several engines) — the first result is the most likely match"
+      "rankHint": "Web search rank (metasearch over several engines) — the first result is the most likely match",
+      "notConfigured": "{provider} must be configured before it can search",
+      "crownLegend": "👑 the fund's own currency"
     },
     "comparison": {
       "title": "Provider Data Comparison",

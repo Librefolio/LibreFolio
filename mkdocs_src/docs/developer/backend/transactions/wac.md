@@ -545,6 +545,17 @@ serves: `TransactionService._requires_cost_basis()` calls `cost_basis_required()
 side, `[0]` otherwise — and its `cost_basis_mode` if not; `required_qty_pos` asks
 for an override when the quantity is positive.
 
+Rule 12 of `validate_transaction_business_rules()`
+(`backend/app/schemas/transactions/transactions.py`) reads the same table through
+`cost_basis_allowed()`: a row sent with a `cost_basis_mode` is refused
+(`costBasisModeIncompatible`) when the rule of its side — picked at call time by
+`_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
+`required_qty_pos` without a positive quantity. It is the test the frontend makes
+before sending a cost basis (`cbAllowed` in
+`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`), and with today's
+table it admits exactly the rows that need an override: a `TRANSFER` or
+`ADJUSTMENT` adding quantity.
+
 The batch rejects such a row without an override (`costBasisRequired`) when it is
 created or made the receiving side of a promoted pair (see
 [Promote boundary](#promote-boundary)), and when an update changes its type,
@@ -608,7 +619,8 @@ the pair: `resolve_create_links()` sets it for a pair created in the same batch,
 `apply_promotes()` for a pair formed by a promote, and a saved pair being updated
 brings it from the database (`TXUpdateItem` has no `link_uuid`). Since
 `cost_basis_mode` is accepted only on a `TRANSFER` or `ADJUSTMENT` adding quantity
-(`costBasisModeIncompatible` otherwise), a `TRANSFER` in Auto is always the
+(`costBasisModeIncompatible` otherwise; see
+[Persisted Cost Basis](#persisted-cost-basis)), a `TRANSFER` in Auto is always the
 receiving side.
 
 Reading the source pool as it was when the units left keeps their cost: a

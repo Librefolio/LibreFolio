@@ -107,6 +107,38 @@
         "unavailable": "L'e-mail ne peut pas partir pour le moment : réessayez plus tard, ou demandez à l'administrateur de cette instance.",
         "generic": "Le lien n'a pas pu être envoyé : réessayez."
       }
+    },
+    "sendLink": {
+      "button": "Envoyer par e-mail",
+      "sending": "Envoi…",
+      "toLabel": "Envoyer à",
+      "toPlaceholder": "nom@exemple.fr",
+      "resetTarget": "Le lien part vers l'adresse e-mail du compte.",
+      "publicUrlHint": "Le lien de l'e-mail commence par l'adresse définie dans LIBREFOLIO_PUBLIC_URL, qui peut différer de celle ci-dessus.",
+      "sent": "Envoyé à {to}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'e-mail est désactivé ou ne fonctionne pas sur cette instance.",
+        "EMAIL_LINKS_UNAVAILABLE": "Les e-mails ne peuvent pas contenir de lien : LIBREFOLIO_PUBLIC_URL n'est pas définie, ou ne peut pas commencer un lien.",
+        "EMAIL_LINK_INVALID": "Ce lien ne fonctionne plus : créez-en un nouveau.",
+        "EMAIL_ACCOUNT_INACTIVE": "Le compte n'est pas actif : activez-le avant de lui envoyer un lien de réinitialisation.",
+        "EMAIL_RECIPIENT_REQUIRED": "Indiquez l'adresse à laquelle envoyer l'invitation.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un lien de réinitialisation part seulement vers l'adresse de son compte.",
+        "EMAIL_RECIPIENT_INVALID": "Ce n'est pas une seule adresse e-mail valide.",
+        "EMAIL_RATE_LIMITED": "La limite horaire d'e-mails est atteinte : réessayez dans {minutes} min.",
+        "generic": "L'e-mail n'a pas pu être envoyé."
+      }
+    },
+    "forgot": {
+      "label": "Nom d'utilisateur ou adresse e-mail",
+      "submit": "M'envoyer un lien de réinitialisation",
+      "sending": "Envoi…",
+      "accepted": "Si un compte actif correspond, son propriétaire reçoit un e-mail avec un lien pour choisir un nouveau mot de passe. Vérifiez la boîte de réception et les spams : le lien fonctionne pendant 30 minutes.",
+      "errors": {
+        "FORGOT_PASSWORD_DISABLED": "La réinitialisation du mot de passe par e-mail n'est pas encore disponible sur cette instance : demandez à son administrateur.",
+        "unavailable": "Cette instance ne peut pas envoyer d'e-mails pour le moment : demandez à son administrateur.",
+        "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
+        "generic": "La demande n'a pas pu être envoyée : réessayez."
+      }
     }
   }
 }

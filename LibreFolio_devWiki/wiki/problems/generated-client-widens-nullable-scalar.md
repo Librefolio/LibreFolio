@@ -70,6 +70,6 @@ renderer untyped.
 |------|------|
 | Backend schema — the authority | `backend/app/schemas/risk.py` |
 | Emits the N x N matrix | `backend/app/services/risk_plugins/correlation/plugin.py` |
-| Narrows at the boundary | `frontend/src/lib/components/risk/correlationHelpers.ts` |
-| Consumer that previously trusted the wide type | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
+| Narrows at the boundary | `frontend/src/lib/features/risk/correlationHelpers.ts` |
+| Consumer that previously trusted the wide type | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
 | Existing post-generation fixup for a sibling problem | `frontend/scripts/fix-openapi-discriminators.mjs` |
