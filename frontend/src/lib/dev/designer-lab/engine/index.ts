@@ -1,25 +1,38 @@
 /**
- * Designer Lab — the engines behind a state: L1 variables, L2 stylesheets, L3 charts, colour-vision simulation.
+ * Designer Lab — the engines behind a state: L1 variables, L2 stylesheets, L3 charts, the chart categories, colour-vision
+ * simulation.
  *
  * Loaded by the client only when a saved state has an effect. `applyState(null)` (or a suspended state) undoes
  * everything; the module then stays loaded but idle.
  */
 
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {parseColor, colorKey} from '../color.js';
 import {changesForTheme, hasEffect} from '../store';
 import type {LabChange, LabState, LabStats} from '../types';
 import {applyElementRules} from './anchors';
+import {setCategoryChanges} from './categories';
 import {applyCharts, reapplyAll, type AnchoredChartRule, type ChartRule} from './charts';
 import {applyCvd} from './cvd';
-import {applyStylesheets, normalizeSelector, type LiteralRule, type SheetPlan} from './stylesheets';
+import {applyStylesheets, normalizeSelector, variableRewrites, type LiteralRule, type SheetPlan} from './stylesheets';
 import {isSafeSelector, resolveTarget} from './targets';
 import {applyVars} from './vars';
 
+export {categoryColor} from './categories';
+
 let state: LabState | null = null;
-let counts: LabStats = {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0};
+let counts: LabStats = {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0, categoryOverrides: 0};
 let hits = new Map<string, number>();
 let themeObserver: MutationObserver | null = null;
 let lastDark = false;
+/**
+ * What the charts read at their next draw: the variables of the state (a role through `chartRoles`), its categories,
+ * and the variables the stylesheet pass rewrote — a literal inside a role's definition changes the role too.
+ */
+function chartInputsOf(changes: LabChange[]): string {
+    return JSON.stringify([changes.filter((c) => c.layer === 'css-var' || c.layer === 'category').map((c) => [c.id, c.to]), variableRewrites()]);
+}
+let chartInputs = chartInputsOf([]);
 
 const isDark = () => document.documentElement.classList.contains('dark');
 
@@ -97,8 +110,23 @@ function watchTheme(active: boolean): void {
         applySheetsForTheme();
         // Charts that redraw on a theme switch map their new option through the wrapper; the others are patched here.
         counts.chartInstances = reapplyAll();
+        // A literal scoped to one theme rewrites a role's definition only in that theme: once the stylesheets are
+        // re-planned, the charts that read a role must read it again, whatever order the theme observers ran in.
+        signalChartInputs();
     });
     themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+}
+
+/**
+ * Contract C4: the charts that read a role (`chartRoles`) or a category (`categoryColor`) when they draw rebuild their
+ * option when what they read changed — a variable, a category or a role's definition applied, edited, suspended or
+ * reset. Called once the other engines are in place, so that the redraw meets them.
+ */
+function signalChartInputs(): void {
+    const inputs = chartInputsOf(state?.changes ?? []);
+    if (inputs === chartInputs) return;
+    chartInputs = inputs;
+    notifyChartColorsChange();
 }
 
 export async function applyState(next: LabState | null): Promise<void> {
@@ -106,6 +134,7 @@ export async function applyState(next: LabState | null): Promise<void> {
     const changes = state?.changes ?? [];
     hits = new Map();
     counts.varOverrides = applyVars(changes.filter((c) => c.layer === 'css-var'));
+    counts.categoryOverrides = setCategoryChanges(changes);
     counts.elementRules = applyElementRules(changes.filter((c) => c.layer === 'element'));
     applySheetsForTheme();
     const charts = await applyCharts({light: chartPlan(changes, false), dark: chartPlan(changes, true), anchoredLight: chartAnchors(changes, false), anchoredDark: chartAnchors(changes, true)});
@@ -114,6 +143,7 @@ export async function applyState(next: LabState | null): Promise<void> {
     for (const [id, n] of charts.hits) hits.set(id, n);
     applyCvd(state?.cvd ?? 'none');
     watchTheme(!!state);
+    signalChartInputs();
 }
 
 export function isActive(): boolean {
