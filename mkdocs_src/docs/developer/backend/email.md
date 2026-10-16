@@ -536,11 +536,12 @@ created, 30 minutes for a reset link.
 
     While the constant is true, `admit_forgotten_password()` raises `ForgottenPasswordHeldError` before anything else,
     and [the route](#api-password-reset) answers 409 `FORGOT_PASSWORD_DISABLED`: no limit counts, no work is queued.
-    The coordinator held the feature after the security review of lot E3. Today an account's email can be changed with
-    the session cookie alone; with reset by email open, a moment inside someone's session (a stolen cookie, an unlocked
-    machine) would be enough to put one's own address on the account, then reset its password from it: a lasting
-    takeover. The hold is lifted with lot E4, once changing an account's email asks for the current password
-    (workstream A's lot A6e). The links an administrator emails are not affected.
+    The coordinator held the feature after the security review of lot E3: an account's email could be changed with
+    the session cookie alone, and with reset by email open, a moment inside someone's session (a stolen cookie, an
+    unlocked machine) would be enough to put one's own address on the account, then reset its password from it: a
+    lasting takeover. Since workstream A's lot A6e, changing an account's email asks for the current password
+    ([Changing the Email](../architecture/security.md#email-change)); the hold is lifted with lot E4. The links an
+    administrator emails are not affected.
 
 Once open, [`POST /api/v1/email/password-reset`](#api-password-reset) answers before it looks for the account, so that
 nothing in the answer — its status, its body, its timing — tells which accounts exist:

@@ -144,6 +144,11 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   commit: each device gets `401` at its next request, and signs in again with the new password.
   A [password-reset link](#reset-links) does the same when it is spent. To keep the account out
   altogether, deactivate it.
+- **The account's own changes** end its other sessions as well: a password change
+  (`POST /api/v1/auth/change-password`) and an email change (`PUT /api/v1/auth/profile`, which asks
+  for the current password: see [Changing the Email](security.md#email-change)). The device that
+  made the change gets a new cookie and stays signed in; a username change ends no session. Every
+  change that ends sessions is in [Session Revocation](security.md#session-revocation).
 - **CLI password rules**: `create` and `reset` call `validate_password()` in
   `scripts/user_cli.py`: at least 8 characters, with an upper-case letter, a lower-case letter, a
   digit and a symbol from its `special_chars` set. The API schemas only ask for 8 characters.
