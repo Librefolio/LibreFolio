@@ -29,9 +29,6 @@ lib/components/assets/ProviderAssignmentSection.svelte	95
 lib/components/assets/ProviderComparisonModal.svelte	60
 lib/components/assets/ScheduledInvestmentEditor.svelte	107	rgb(209 213 219)	rgb(71 85 105)
 lib/components/charts/ChartAestheticsSection.svelte	16
-lib/components/charts/GeographyMap.svelte	4
-lib/components/charts/PriceChartFull.svelte	36
-lib/components/charts/ScatterChart.svelte	4
 lib/components/fx/FxCard.svelte	63
 lib/components/fx/FxDataEditorSection.svelte	15
 lib/components/fx/FxDataImportModal.svelte	20
@@ -161,14 +158,8 @@ lib/features/support/DonationPopupModal.svelte	28	#ffffff
 lib/features/support/SocialShareModal.svelte	57
 lib/features/support/SupportActions.svelte	11
 lib/features/support/supportLinks.ts	14
-lib/features/tools/ToolAboutPanel.svelte	58
-lib/features/tools/ToolDiagnosticsPanel.svelte	78
-lib/features/tools/ToolHost.svelte	56
-lib/features/tools/ToolsHub.svelte	84
-lib/features/tools/components/ToolExecutionMetrics.svelte	24
 lib/features/tools/pac-allocator/planner/result/AssetTable.svelte	1
 lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	16
-lib/features/tools/pac-allocator/planner/result/ExposureMaps.svelte	4
 lib/features/tools/pac-allocator/planner/result/ResultCell.svelte	1
 lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	3
 lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	2
