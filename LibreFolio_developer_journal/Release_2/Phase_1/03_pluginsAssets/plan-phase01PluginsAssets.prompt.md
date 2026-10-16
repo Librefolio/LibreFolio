@@ -3830,3 +3830,75 @@ Ordine: (1) `env_url` spostato, (2) `LIBREFOLIO_SUPPORT_URL`, (3) F21. Commit se
    >   - `services config-package` → **694 passed**;
    >   - ruff e black puliti; `git diff --check` pulito.
    >   - I test diretti di `env_url` arrivano col passo 2, nello stesso file di quelli di `support_url`.
+
+CP13-1 committed: `9c1161ff2` + journal `3a81f5238`. **Avviso del coordinatore**: A7a (prima di me nel treno) aggiunge in
+`config/accounts.py` degli import e il blocco F02 dopo `billing_url()`. Al prossimo aggiornamento della base c'è un piccolo
+conflitto, negli import e accanto a `billing_url()`: si tengono tutti e due, cioè i miei `env_url` nei due accessori e tutto
+il blocco di A.
+
+2. ✅ (07:53–08:25) **`LIBREFOLIO_SUPPORT_URL`**, con le preferenze di H.
+   > **Note implementazione**:
+   > - `config/platform.py::support_url()` → `env_url("LIBREFOLIO_SUPPORT_URL")`.
+   > - `services/platform/instance_links.py` (nuovo, di H): `support_link()` cattura il `ValueError`, lo registra una
+   >   sola volta (`functools.cache`, come `billing_link()`) e restituisce `None`.
+   > - `InstanceConfigResponse.support_url: str | None = None`, riempito in `GET /system/instance`.
+   > - `.env.example`: la riga in «Instance Profile», dopo `LIBREFOLIO_CSP_REPORT_ONLY`.
+   > - **Doc**:
+   >   - la riga in «Main Options» di `admin/configuration.en.md`, dopo `LIBREFOLIO_CSP_REPORT_ONLY`;
+   >   - un punto in «For Each Instance» di `admin/hosting_providers.en.md`;
+   >   - in `developer/architecture/settings.md`: la variabile fra le chiavi fuori da `Settings`, `support_url()`
+   >     fra gli accessori di `platform.py`, e il ripiego per un valore non valido.
+   > - **Non fatto**: il `ConfigCheck` facoltativo. Chiederebbe chiavi `instance.checks.*` nel sottosistema di H e una
+   >   riga in `config_audit.py`, che sta toccando anche A7a. Il valore non valido resta comunque registrato una volta.
+   > - **Prove finora**:
+   >   - `api sync` (il campo è facoltativo nel client);
+   >   - `front check` → 0/0;
+   >   - `services config-env-example` → 38/38;
+   >   - ruff e black puliti.
+   > - **I test** (test-author, in `test_config_package.py` e `test_system_api.py`):
+   >   - `env_url` diretto, 13 casi validi e 8 non validi;
+   >   - `support_url()`;
+   >   - `support_link()`: nessun log se è valido; un solo errore con `problem` e `consequence` anche se viene letto due
+   >     volte;
+   >   - `GET /system/instance`: dal vivo, `support_url` è `null`; in processo, con l'indirizzo dà il valore senza la
+   >     barra, e con `ftp://` risponde 200 con `null`, mai un 500.
+   > - **⚠️ Fuori pista**: il campo nuovo ha rotto tre test che controllavano le chiavi esatte del corpo. Due sono in
+   >   `test_system_api.py`, di H; il terzo è INSTANCE-002 in `test_registration_api.py`, di A. Test-author li ha
+   >   aggiornati; quello di A è una riga, segnalata al coordinatore.
+   > - Aggiornata la docstring di `services/platform/__init__.py`, con `instance_links`.
+   > - **Prove** (con `nice`, dopo il controllo del carico):
+   >   - `services config-package` → **728**;
+   >   - `api system` → **120**: la partenza del server della corsia ha ricostruito il frontend e la doc, rimasti
+   >     indietro, e per questo ha impiegato 8 minuti;
+   >   - `api registration` → **96**: l'unico avviso è una deprecazione di Starlette, vecchia;
+   >   - `services config-env-example` → 38;
+   >   - ruff e black puliti;
+   >   - `mkdocs build` stretto ok, `check-links` 97 validi;
+   >   - `git diff --check` pulito; porta 6183 libera.
+   > - **Proposta per A e H**, non fatta: `env_url` controlla solo l'inizio del valore. `https://` da solo diventa
+   >   `"https:/"` e viene pubblicato come link, e uno spazio interno passa. Le stesse regole di prima per
+   >   `PUBLIC_URL` e `BILLING_URL`: chiedere un host sarebbe più severo, quindi va deciso da loro.
+3. ⏳ **F21 backend** (disegno §4.6, D-X3, D-X8), da scrivere dopo l'handoff del CP13-2:
+   - **Le dichiarazioni**: in `AssetSourceProvider`, `tier: ClassVar[FAProviderTier] = COMMUNITY` e
+     `search_priority: ClassVar[int] = 100` (più basso = prima). Nessun provider di oggi è premium: il primo sarà quello a
+     pagamento del F06.
+   - **La sovrascrittura** in `config/plugins.py` (sezione di X):
+     - `asset_providers_premium()` legge `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`: se è impostata, sono premium
+       esattamente i codici elencati;
+     - `asset_providers_order()` legge `LIBREFOLIO_ASSET_PROVIDERS_ORDER`: i codici elencati vengono prima, in
+       quell'ordine, e gli altri dopo, per priorità dichiarata;
+     - liste separate da virgole, senza maiuscole; vuota o fatta di spazi conta come non impostata.
+   - **Il punto unico**: `services/assets/provider_policy.py` (nuovo), con il livello e la priorità effettivi e
+     l'ordine di ricerca. È il posto dove arriveranno anche gli elenchi dei fornitori permessi del F05.
+   - **`FAProviderInfo`** espone `tier` e `priority` effettivi.
+   - **La ricerca non in streaming** ordina i provider prima del fan-out, per (gruppo premium se ce n'è almeno uno,
+     priorità, posizione di oggi). Con tutto ai valori di default l'ordine resta identico a oggi (D-X3). Lo streaming
+     resta per arrivo, e raggruppa il frontend con `tier`.
+   - **Test**: unità pure in processo, con `monkeypatch` dell'ambiente; la lista dei provider dal vivo (`community`,
+     100); l'ordine della ricerca con provider finti.
+   - **Doc**:
+     - `.env.example`, nella sezione «Plugins»;
+     - `admin/configuration.en.md`;
+     - `asset_plugin_guide.md` (le due dichiarazioni);
+     - `search_link_finder.md` (l'ordine);
+     - `settings.md` (gli accessori di `plugins.py`).
