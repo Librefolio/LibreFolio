@@ -17,7 +17,7 @@ else `~/LibreFolio_visual_review`.
 | File | What it does |
 |---|---|
 | `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json` and the log |
-| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `browse` (HTML pages, light and dark side by side) |
+| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `browse` (HTML pages, light and dark side by side) |
 | `live_price_check.py` | Checks, in the lane's backend log, that no live-price request reached the backend while a snapshot was captured (exit 1: capture again) |
 | `build_designer_package.py` | Offline package for the designer: `APRI_QUI.html`, `desktop.html`, `mobile.html`, `note_designer.txt`, images, zip |
 | `build_review_notes.py` | The team's Markdown working notes: navigation per shot, role vocabulary, decisions |
@@ -104,9 +104,17 @@ pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/ref $W/
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/ref $W/snapshots/cand --out $W/diffs/ref__vs__cand \
     --ignore-masks $W/diffs/noise/masks --stability $W/diffs/noise/stability.json
 open $W/diffs/ref__vs__cand/index.html       # A | B | changed pixels in red; likely-real changes first
+pipenv run python -m scripts.visual_review.gallery_tool sheet $W/diffs/ref__vs__cand --lang it
+open $W/diffs/ref__vs__cand/contact_sheet.it.html   # one row per shot, the most VISIBLE change first
 ```
 For a filtered capture (`-- -f "Dashboard"`), add `--common-only` to the diff.
 A refactor that should not change the look must give `identical`, plus noise on the `unstable` shots.
+A change meant to be seen, like a colour migration, «changes» nearly every image at tolerance 0. Read it with `sheet`:
+- it ranks the shots by the share of pixels whose largest channel change exceeds 12 levels, the noise masks applied;
+- it lists on top the images that are new, gone or of another size;
+- the measures are kept in `visible.json`, so another `--lang` takes a second.
+
+Measuring a full gallery takes about 5 min.
 
 ### 3. Designer package
 ```bash
@@ -155,8 +163,9 @@ Three full runs of the same commit at 6 workers (`g-ref13-r1`/`r2`/`r3`). The an
 - **The reference for the candidates of 16/10 is `g-ref13-r3`**, with the masks and the stability of
   `g-ref13__r1__vs__r2`.
 - **After a colour migration, «changed» is not «visible».** At tolerance 0 nearly every image changes by a few levels.
-  For the night's candidate, G ranked the shots by the share of pixels that change by more than 12 levels, noise
-  masks applied: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html` and `visible.json`.
+  `gallery_tool sheet` ranks the shots by visible change. The night's candidate:
+  `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html` and `visible.json`. Of 182 shots, by median visible change:
+  91 at 10 % or more (dialogs and wizards), 53 at 1–10 %, 20 at 0.1–1 %, 18 under 0.1 %.
 
 ## Known gallery behaviour (15/10/2026, commit `2338aaf79`)
 
