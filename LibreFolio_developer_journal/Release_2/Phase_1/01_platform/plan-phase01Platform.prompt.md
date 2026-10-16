@@ -3142,3 +3142,123 @@ ricostruire il frontend al server di prova.
 >   `docs-anchors-from-the-render`): ha usato il nome della sezione;
 > - il test-author ha visto che `ToastContainer` non ha regione live: nessun toast dell'app arriva ai lettori di schermo.
 >   È fuori perimetro: **H-18** nel backlog.
+
+### H-17 — un solo posto per i default del profilo: analisi (2026-10-16, mattina) — sola lettura
+
+Richiesta del coordinatore (06:00). La porta lui a B.
+
+**Oggi**: `backup_max_upload_mb()` (`config/backup.py`, di B) legge `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` da `os.environ` a
+ogni chiamata.
+
+- Vuoto o solo spazi equivale a non impostato: `0` in self-hosted, `MANAGED_MAX_UPLOAD_MB` (500) in managed.
+- Solo cifre ASCII, con spazi attorno ammessi; tutto il resto solleva `BackupConfigError`
+  (`BACKUP_MAX_UPLOAD_MB_INVALID`).
+- Chi la usa: solo `_upload_limit()` di `api/v1/backup/restore.py`. Un valore illeggibile scrive un errore nel log e
+  fa rispondere 503 `backup_upload_unavailable` al solo upload del ripristino: il resto dell'istanza va avanti.
+- Test (`api backup-restore`, sezione (e)): 10 casi sui valori validi e sui due profili, 8 valori illeggibili (segno
+  meno, decimale, lettere, cifra araba, apice, segno più, esponente, esadecimale), più un caso che fissa
+  costante e variabile.
+- Doc: la tabella di `#restore-upload-limit` in `admin/hosting_providers.en.md` («Not set, or empty»), la riga di
+  `admin/configuration.en.md` (tradotta) e il mio punto in `developer/architecture/settings.md`, che la cita come
+  esempio del secondo meccanismo.
+
+**Opzione 1 — farne un campo di `Settings`** e mettere 500 in `PROFILE_DEFAULTS["managed"]`. Sconsigliata:
+
+- vuoto e solo spazi diventerebbero un errore di validazione, cioè il server non parte. Per tenere «vuoto = non
+  impostato» servirebbe un passo `mode="before"` che tolga i valori vuoti dall'input, perché il campo resti fuori da
+  `model_fields_set`: un meccanismo in più;
+- un valore illeggibile fermerebbe l'avvio dell'istanza, invece di un 503 sul solo upload. B ha scelto apposta il
+  contrario, e l'ha documentato;
+- il parsing degli interi di pydantic non è la regola «solo cifre ASCII» di B: gli 8 casi illeggibili andrebbero
+  rifissati, e qualcuno potrebbe passare;
+- tocca `restore.py`, dove B3 aggiunge 118 righe, la sezione (e) dei test di B, due pagine di doc e il debito di
+  traduzione di `configuration`.
+
+**Opzione 2 — consigliata: una seconda tabella accanto a `PROFILE_DEFAULTS`**, per le variabili che un modulo di
+sezione legge dall'ambiente. Per esempio `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+{"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`, con `profile_default(name, fallback)` in `config/__init__.py`.
+
+- **Per B**: in `backup_max_upload_mb()`, `if not raw: return profile_default(MAX_UPLOAD_VARIABLE, 0)` e via
+  `MANAGED_MAX_UPLOAD_MB`. Oppure resta come alias del valore della tabella: decide B. Nella sezione (e) cambia solo il
+  caso che fissa la costante, che legge la tabella. Il comportamento è identico: vuoto = non impostato, 503 su un valore
+  illeggibile.
+- **Per H**: la tabella e `profile_default()`. In `test_profile_defaults.py` le stesse guardie della prima tabella:
+  una voce per profilo, ogni chiave una variabile letta sotto `backend/app/config/` e documentata in `.env.example`, il
+  valore un `int` diverso dal ripiego, un caso «self-hosted invariato» parametrizzato su ogni chiave. Poi il punto di
+  `settings.md`: un solo posto per i default del profilo, due tabelle.
+- **Doc admin**: nessun cambiamento e nessun debito di traduzione, perché il comportamento non cambia.
+- **Peso**: piccolo. Due righe nel file di B, una tabella, un helper e una decina di casi da me, un paragrafo di doc.
+
+**Quando**: B3 (`5f1543e81`, `2c2c8fc3e`) non tocca `config/backup.py`. Tocca però `restore.py` e
+`test_backup_restore.py`, che l'opzione 2 non tocca o tocca appena (il caso della costante). Quindi:
+
+- **dopo l'ingresso di B3** basta per l'opzione 2, se B5 non tocca `config/backup.py`; lo verifica il coordinatore sul
+  ramo di B;
+- non serve aspettare B5 per il meccanismo. Il mio lotto (tabella, helper, test, doc) si può fare prima, e le due righe
+  di B arrivano dopo, scritte da B o da me col suo OK.
+
+### H-17 — la seconda tabella dei default del profilo (2026-10-16, mattina) — in corso, solo scrittura
+
+**Via del coordinatore** (06:03): opzione 2 approvata, come lotto a parte. La mia parte: la tabella, `profile_default()`,
+le guardie in `test_profile_defaults.py`, `settings.md`. Le due righe di `backup_max_upload_mb()` le scrive B, dopo
+l'ingresso di B3.
+
+**Disegno** (cura in `/tmp/librefolio-r13-h-h17/apply_h17.py`, provata a secco su una copia):
+
+- in `config/__init__.py`, sotto `PROFILE_DEFAULTS`: `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+  {"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`;
+- `profile_default[T](name, fallback) -> T`, subito dopo `get_settings()`. Legge il profilo a ogni chiamata e
+  restituisce il valore della tabella, oppure il ripiego del codice. Il modulo di sezione la chiama solo con la variabile
+  non impostata, e tiene le sue regole per il vuoto e l'illeggibile;
+- la docstring del modulo nomina le due tabelle;
+- in attesa delle righe di B, il valore 500 vive in due posti, uguali: la tabella e `MANAGED_MAX_UPLOAD_MB`. La doc non
+  dice che `backup_max_upload_mb()` legge la tabella finché non lo fa.
+
+**In corso, solo scrittura**: il test-author scrive i rossi nella sezione nuova di `test_profile_defaults.py`; il
+docs-writer aggiorna il punto «Profile defaults» di `settings.md`. Al «blocco finito»: il giro dei rossi, la cura, ruff e
+black, il giro dei verdi.
+
+#### H-17 — passo 1, rossi e doc scritti (2026-10-16, mattina) — niente lanciato
+
+> **Note implementazione**:
+>
+> - test-author: una sezione nuova, (f), in `test_profile_defaults.py`, che passa da 37 a 52 test. Undici funzioni,
+>   15 test:
+>   - la tabella: una voce per profilo, `selfhosted` vuoto, `managed` uguale a `ENVIRONMENT_MANAGED_DEFAULTS` con i
+>     tipi esatti (`exactly()`: `same()` accetterebbe `500.0`), nessun campo di `Settings` fra le chiavi;
+>   - ogni chiave letta come costante stringa (AST) da un modulo di sezione, e documentata in `.env.example` con il
+>     parser di `test_env_example.py`;
+>   - `profile_default()`: il ripiego stesso (`is`) in self-hosted, il valore della tabella in managed, `MANAGED` e
+>     ` Managed `, il profilo letto a ogni chiamata.
+>
+>   Le barriere: «ENVIRONMENT_PROFILE_DEFAULTS is missing» (6 test) e «profile_default is missing» (9), cercati con
+>   `getattr` mentre il test gira, così i 37 casi esistenti restano uguali;
+> - docs-writer: in `settings.md` il punto «Profile defaults» rimanda al punto nuovo «Profile defaults of the section
+>   modules' variables» (la tabella, l'helper, le guardie, come si aggiunge una voce). Non dice che
+>   `backup_max_upload_mb()` legge la tabella;
+> - runner: la descrizione di `services profile-defaults` nomina H-17.
+>
+> **Dopo il «blocco finito»**: `services profile-defaults` sul codice di oggi (attesi 15 rossi, 37 verdi), poi
+> `apply_h17.py`, ruff e black, `profile-defaults` verde (52), `config-package` e `config-env-example`.
+
+#### Prove leggere delle note di X e della card, sulla revisione combinata ✅ (2026-10-16, mattina)
+
+> Dopo il «blocco finito» (06:48), HEAD `31089e96f`, una alla volta, `nice`, carico sotto 70 (06:48–07:08):
+>
+> - card: `prettier --check` pulito, cancello dei colori pulito. Il Vitest di `InstanceBlockedPage.test.ts` dà 14 rossi
+>   sul componente di prima (`af24a61bb`, rimesso al suo posto e verificato identico a HEAD) e 36 verdi sul nuovo;
+> - `front check`: al primo giro 4 errori, tutti in `PasswordStrength.svelte` di A (`password_rules` assente da
+>   `AccountsInstanceConfig`). Era il client generato vecchio dopo il merge della base: `api sync`, poi `front check`
+>   0/0;
+> - `i18n check` rigoroso, verde (4753 chiavi);
+> - note di X: `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44, `config-package` 695 (ora
+>   verde: dentro c'è la cura di Z del treno 93), `config-audit` 90;
+> - doc: `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate --file admin/configuration.en.md`:
+>   192 errori e 501 avvisi, il debito noto (174 e 474 a CP7b-2), più le righe nuove di questa notte e di altri;
+> - porta 6181 libera.
+
+#### H-17 — passo 2, rossi, cura e verdi ✅ (2026-10-16, mattina)
+
+> **Prove**: `services profile-defaults` sul codice di prima: 15 rossi (6 «ENVIRONMENT_PROFILE_DEFAULTS is missing», 9
+> «profile_default is missing»), 37 verdi. Poi `apply_h17.py`, ruff e black puliti, e i verdi: `profile-defaults` 52,
+> `config-package` 695, `config-env-example` 38. La doc di `settings.md` era già nel `mkdocs build` delle 06:59.
