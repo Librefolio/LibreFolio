@@ -2536,13 +2536,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
-  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10, commit `d3b04a867`. Con W2-a il
+  bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
   `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
   (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
   tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
   è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
   slot».
+- **TC-13 · Tre controlli deboli negli E2E dell'editor dei dati (spec di W)** — minimo; T, 16/10, lotto W1-f2. Fuori
+  dalle righe approvate, già presenti: in `asset-data-editor.spec.ts` il test 21 sta dentro un `if (await
+  staleToggle.isVisible(...))` che non aspetta, quindi il suo verde non prova il contatore; nessun controllo positivo
+  tocca il ✗ di `CsvEditor`; `fx-csv-import.spec.ts:56` dipende dalla parola inglese «error». Lotto W1-g, stesso file: il
+  test 14 («info banner reflects current direction», riga 289 e seguenti) tiene la guardia `if (count() > 0)`, che ora
+  non serve più (il banner c'è sempre) e può nascondere un'assenza, e non verifica l'ordine dei codici dopo lo scambio
+  (`toContainText(/EUR.*USD/)`, poi `/USD.*EUR/`, varrebbe in tutte e quattro le lingue). Da proporre a W. Dettagli:
+  piano di T, «W1-f1, W2-b, W2-d e W1-f2», passi 7 e 9.
+- **TC-14 · I test «in scuro» di `image-crop.spec.ts` non sanno se il tema è scuro** — minimo; T, 16/10, lotto W1-g. Il
+  `beforeEach` (riga 616) e F1 (riga 643) riconoscono lo scuro da `[class*="dark"]`, che prende qualsiasi elemento con
+  un'utility `dark:`: in chiaro il `beforeEach` può non cliccare il selettore del tema, e F1 passa comunque. La migrazione
+  ai ruoli toglie le classi `dark:` e rende il controllo via via giusto, ma la cura è leggere solo `html` con
+  `toHaveClass(/\bdark\b/)`. Da proporre al proprietario degli spec dei file. Dettagli: piano di T, «W1-f1, W2-b, W2-d e
+  W1-f2», passo 10.
 
 ---
 

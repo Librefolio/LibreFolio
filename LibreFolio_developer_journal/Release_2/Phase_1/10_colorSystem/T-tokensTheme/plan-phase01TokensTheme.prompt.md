@@ -583,7 +583,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
-| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 bozza su copie, patch pronta; dopo l'ingresso di DV (~07:20), slot verso le 07:30 |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 bozza su copie, patch pronta, ricontrollata su `72e66d1a6`; dopo l'ingresso di DV (~07:20), slot verso le 07:30 |
+| 18 | W1-f1 (modali di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 bozze su copie con i sotto-agenti; W1-f1 e W2-b nello slot delle 07:30, W2-d e W1-f2 nel successivo; la nota wiki scritta, entra nel prossimo checkpoint |
 
 ## Avanzamento
 
@@ -1923,3 +1924,170 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   neutro); `TransactionFormModal.test.ts` (la variante presente in tutti e due gli stati, nessun `border-lf-danger` di
 >   base, `aria-invalid="false"` a riposo; la tabella dei segni su `'success'`/`'danger'`); `transactions-modals.spec.ts`
 >   (l'helper risolve il colore atteso nella pagina: le espressioni coi ruoli).
+
+> ✅ **2 · Ricontrollo sul target nuovo** (05:05, solo git in lettura; la macchina è della galleria fino alle 06:45): base
+> `72e66d1a6` (ingresso di TC-12 e del journal, poi Z2b, i cherry-pick di W, A6c, X CP11c, H CP7b-2, Z config). Gli 11
+> file non sono cambiati dalle basi della bozza; i 4 di DV non sono cambiati nel target dalla sua base `20558ead5`; nessun
+> chiamante nuovo dei due campi, e nella versione di DV i chiamanti del pianificatore passano solo `{INPUT}` più classi di
+> layout; `aria-invalid={locallyInvalid}` copre anche `externalInvalid`. Se DV entra senza ritoccare i suoi 4 file, la
+> patch va liscia.
+
+### W1-f1, W2-b, W2-d e W1-f2 — 🔄 16/10/2026 (bozze su copie durante la galleria; D-T27)
+
+> **Avvio** (coordinatore, 05:0x). Proposti i quattro lotti successivi del piano, con file e proprietari; OK del
+> coordinatore e della 1.3 su tutti e quattro: W1-f1 (X; C-66 di X va dopo il lotto e lo usa come base), W2-b (H e Z),
+> W2-d (J), W1-f2 (W e Y, con le tre righe di spec che leggono il colore). Ordine: W1-f1 e W2-b nello slot delle 07:30,
+> col lotto input; W2-d e W1-f2 nello slot dopo. Fino alle 06:45 solo testo e copie: i sotto-agenti lavorano su
+> `files/<lotto>-draft/{base,work}` della sessione, senza lanciare comandi.
+
+> ✅ **1 · Analisi** (05:1x, in lettura):
+> - **W1-f1:** `SyncModalBase` (66) e `PageSyncModal` (2), tutti e due dentro `ModalBase`; nessun prop di classe (i
+>   chiamanti, rischio e pagine di asset e cambi, non c'entrano); nessun test legge le classi. La barra di avanzamento ambra
+>   e i filtri avviso/errore sono i casi da guardare.
+> - **W2-b:** `ChangelogModal` (89 più 8 letterali nel `<style>` del markdown) e `ServerUnreachable` (11). Le scelte del
+>   `<style>` sono quelle della nota di lotto (giro 2): link su `--lf-link`, citazione su `--lf-border-subtle` e
+>   `--lf-text-muted`, codice nel testo su `--lf-surface-panel`, `--lf-border-subtle`, `--lf-text-primary` (Q6), `mark` sui
+>   tre `--lf-mark-*` (Q7). Le avevo lasciate al «ruolo più vicino» nel primo prompt: corretto con un messaggio al
+>   sotto-agente. `ServerUnreachable` va su `bg-lf-page` (la pagina a sé, come login e offline). Se toglie l'ultimo uso di
+>   `bg-libre-beige` o di `focus:ring-libre-green`, le regole scure di `app.css` relative le tolgo io (file mio).
+> - **W2-d:** lette `frontend-ai-export.instructions.md` e `ai-development.instructions.md`: si cambiano solo classi di
+>   colore, mai prompt, catalogo, serializzazione o appunti (equivalenza UI/probe). Il viola va sui ruoli `ai` (Q11), il
+>   pieno su `bg-lf-ai text-lf-on-ai`. Gli E2E leggono solo un `white-space`.
+> - **W1-f2:** `DataEditor` 67, `CsvEditor` 72, `DataImportModal` 52, `ErasableNumberCell` 14. Gli spec che leggono il
+>   colore sono cinque righe, non tre: `asset-data-editor.spec.ts` 287 e 346 (`.text-red-500`, il ✗), 384
+>   (`span.text-amber-600, span.text-amber-400`, il contatore «stale» di `DataEditor:649`), `fx-csv-import.spec.ts` 53 e 56.
+>   Agganci nei componenti: `data-state="invalid"` sul ✗ e sul conteggio degli errori, `data-state="valid"` sul ✓
+>   (precedente: `DistributionEditor`), `data-testid="data-editor-stale-count"` sul contatore. Chiesto al coordinatore l'OK
+>   di W anche per la 346 e la 384.
+
+> ✅ **2 · La nota wiki** (richiesta del coordinatore; solo testo, senza graphify):
+> `LibreFolio_devWiki/wiki/problems/tailwind4-same-property-utilities-sorted-by-name.md`, la riga dell'indice (tabella
+> «Problems» e registro cronologico) e la voce del log. Nella skill `theme-roles` la regola 8, «One property, one
+> ternary». Verificati nel Tailwind installato (4.1.18) l'ordine di registrazione delle varianti (`invalid`, `hover`,
+> `focus`, `focus-visible`, `active`, `disabled`, `aria`, `data`, `supports`, `dark`) e il `dark` del progetto
+> (`:where(.dark, .dark *)`, nessuna specificità).
+> - **⚠️ Fuori pista:** nella prima stesura avevo scritto che `dark:` batte le altre varianti. È falso: `hover:` e
+>   `focus:` aggiungono una classe di specificità e il nostro `dark:` nessuna, quindi `dark:` perde con loro (da qui le
+>   coppie legacy `dark:hover:`). Corretto prima di consegnare. Resta da lanciare `check_source_paths.py` dopo le 06:45.
+
+> ✅ **3 · Bozza di W1-f1** (sotto-agente, 05:2x–05:3x; riletta da T): `SyncModalBase` 66 → 0, `PageSyncModal` 2 → 0, 24
+> righe cambiate, nessuna spostata; solo classi di colore.
+> - Testata, titolo, descrizione, divisori, date su `text-lf-*` e `border-lf-subtle`; il riquadro delle date su
+>   `bg-lf-panel`; il bottone di chiusura `hover:bg-lf-hover text-lf-muted hover:text-lf-secondary`; il campo del timeout
+>   sui ruoli del campo (`border-lf-input hover:border-lf-input-hover focus:border-lf-focus bg-lf-field text-lf-primary`);
+>   «Chiudi» `bg-lf-panel text-lf-secondary hover:bg-lf-neutral` (come gli altri 5 bottoni secondari già migrati);
+>   «Avvia» sui ruoli dell'azione; le icone Info `hover:text-lf-link`.
+> - I due prop `headerIconBg`/`headerIconColor` (l'analisi non li aveva visti: sono prop di classe) hanno solo i default,
+>   nessun chiamante li passa: `bg-lf-warning-soft` e `text-lf-warning`.
+> - Non toccati: i badge dei provider (`PROVIDER_COLORS` di `providerHelpers`, categoriali); `SyncResultRow` e
+>   `InfoBanner` disegnati dentro il modale sono di altri file.
+> - **Da rivedere:** la barra di avanzamento su `bg-lf-warning` (l'ambra qui è l'accento della sync, non un avviso; in
+>   chiaro passa da `#F59E0B` a `#AE4E00`); la pastiglia della testata sul tono d'avviso; il bottone «riprova i falliti»
+>   (`-soft` con testo `-on-soft`, l'hover su `-line`: non c'è un ruolo di hover per la tinta); il campo del timeout ha
+>   solo il bordo di fuoco, senza anello (aggiungerlo non sarebbe un cambio di colore).
+
+> ✅ **4 · Bozza di W2-b** (sotto-agente, 05:2x–05:4x; riletta da T): `ChangelogModal` 89 classi e 8 letterali → 0,
+> `ServerUnreachable` 11 → 0; le tre regole `:global(html.dark)` del `<style>` tolte.
+> - Il `<style>` segue la nota di lotto: link su `--lf-link`; citazione `--lf-border-subtle` e `--lf-text-muted`; `code`
+>   su `--lf-surface-panel` col bordo `--lf-border-subtle` e il testo `--lf-text-primary` (Q6); `.changelog-hit-mark` su
+>   `--lf-mark-bg`/`--lf-mark-text` col filo `box-shadow: inset 0 0 0 1px var(--lf-mark-line)` (Q7), che non sposta il
+>   testo.
+> - I titoli trovati dalla ricerca: `hitClass` riceve ora il colore a riposo (`idle`), così il colore del testo del titolo
+>   trovato (`text-lf-on-mark`, con `bg-lf-mark` e `inset-ring-lf-mark-line`) e quello a riposo (`text-lf-link` o
+>   `text-lf-secondary`) stanno nei due rami dello stesso ternario (regola 8). È l'unico cambio di logica, interno al file;
+>   il commento JSDoc l'ho riscritto io.
+> - Il contenitore interno su `bg-lf-card text-lf-primary`; il campo di ricerca sui ruoli del campo, col segnaposto e il
+>   bordo di fuoco; le pastiglie delle versioni come i preset di W1-c (`bg-lf-checked text-lf-on-checked` / `bg-lf-panel
+>   text-lf-secondary hover:bg-lf-neutral`); i risultati della ricerca sui ruoli `info`; `ServerUnreachable` su `bg-lf-page`
+>   coi ruoli dell'azione.
+> - In `app.css` nessuna regola perde l'ultimo uso (`bg-libre-beige` ne ha ancora 8, `focus:ring-libre-green` 31): lo
+>   conferma il gate dopo l'applicazione.
+> - **Da rivedere:** il filo del `mark` come ombra interna (nessun altro usa ancora i ruoli `mark`); l'hover dei risultati
+>   su `bg-lf-info-line`; la testata del capitolo al passaggio (`bg-lf-neutral`), dove il testo attenuato scende a 4,0:1
+>   (oggi 2,3:1); `bg-lf-page` contro `bg-lf-app` (oggi uguali).
+
+> ✅ **5 · Bozza di W2-d** (sotto-agente, 05:2x–05:3x; riletta da T): `AiExportMenu` 12 → 0, `AiExportOptionsPanel` 74 → 0,
+> 31 righe cambiate, nessuna spostata. Tolte le classi di colore, base e copia sono identiche byte per byte: prompt,
+> etichette, catalogo, serializzazione e appunti non sono toccati (equivalenza UI/probe).
+> - Il viola sui ruoli `ai` (Q11): icone `text-lf-ai`, il periodo personalizzato `border-lf-ai-line bg-lf-ai-soft`, i due
+>   bottoni pieni `bg-lf-ai text-lf-on-ai`; le opzioni dei tre gruppi segmentati `bg-lf-card text-lf-ai` (scelta) /
+>   `text-lf-secondary`, nei due rami dello stesso ternario; le piste `bg-lf-panel`.
+> - Il pannello a tendina `border-lf-raised bg-lf-card text-lf-primary` con l'ombra `shadow-lf-shadow` accanto a
+>   `shadow-xl` (N3, Q8); il bottone d'apertura `border-lf-subtle bg-lf-card text-lf-secondary hover:bg-lf-hover`, come
+>   gli altri inneschi delle barre (CheckMenu, ViewModeToggle); le pastiglie di gravità sugli stati (`-soft` con testo
+>   `-on-soft`); le note sui ruoli del campo, col segnaposto e l'hover.
+> - Aggiunto `text-lf-primary` sulla radice del form e del pannello portato nel `body` (regola 3).
+> - **Da rivedere:** l'opzione scelta in viola e non nel verde di `bg-lf-checked` (D-T16); i bottoni pieni senza hover
+>   (non c'era, e non c'è un ruolo `ai-hover`); in scuro il testo sul pieno è scuro su `#a78bfa` (`--lf-on-ai`
+>   provvisorio, 6,4:1); in scuro l'ombra del pannello resta quella della regola legacy `html.dark .shadow-xl` fino alla
+>   pulizia (B6); il bordo senza colore del bottone «compatto» (riga 302) segue il testo, com'era.
+
+> ✅ **6 · Bozza di W1-f2** (sotto-agente, 05:2x–05:4x; riletta da T): `DataEditor` 67, `CsvEditor` 72, `DataImportModal`
+> 52, `ErasableNumberCell` 14 → 0; 68 righe cambiate, nessuna spostata. OK di W anche per le righe 346 e 384 di
+> `asset-data-editor.spec.ts` (coordinatore, 05:4x).
+> - Gli agganci approvati, unici cambi non di colore: `data-state="invalid"` sul conteggio degli errori e sui due ✗ di
+>   `CsvEditor`, `data-state="valid"` sul ✓; `data-testid="data-editor-stale-count"` sul contatore di `DataEditor:649`.
+> - La nota di lotto: ✗ e ✓ su `text-lf-danger`/`text-lf-success`, le righe d'errore `bg-lf-danger-soft` (e le
+>   duplicate e l'intestazione su `-soft` di avviso e successo, nello stesso ternario). La radice sulla card
+>   (`bg-lf-card text-lf-primary … shadow-lf-shadow-card border border-lf-subtle`); i bottoni della barra
+>   `bg-lf-card border border-lf-subtle hover:bg-lf-hover text-lf-secondary`; il riquadro d'aiuto sui ruoli `info`; la
+>   zona di rilascio `{isDragOver ? 'border-lf-focus bg-lf-selected' : 'border-lf-input hover:border-lf-input-hover'}`;
+>   «Annulla» e «Importa» come gli altri secondari e primari.
+> - L'interruttore «stale» segue lo schema Q2 della skill: traccia `bg-lf-checked`/`bg-lf-switch-off`, pomello
+>   `bg-lf-switch-knob-on` o `bg-lf-switch-knob-off border border-lf-input`; il `bg-white` fisso del pomello è entrato
+>   nel ternario della traslazione (regola 8).
+> - **Da rivedere:** l'interruttore acceso ora è verde e non ambra (lo schema comune; l'alternativa è `bg-lf-warning`, per
+>   tenere il senso del ⚠); l'hover della pastiglia di selezione `hover:bg-lf-checked/20` (nessun ruolo per «scelto e
+>   sotto il puntatore»); l'hover della cancellazione multipla su `-line`; la cornice dell'editor CSV su
+>   `border-lf-subtle` e non sul bordo del campo (prima non aveva hover né fuoco); i tasti `<kbd>` su `bg-lf-card` (in
+>   scuro più scuri della barra, prima più chiari); il fuoco della cella cancellabile su `border-lf-focus`; il segnaposto
+>   «Not set» in chiaro più leggibile; nella barra, accanto ai due bottoni migrati, `ColumnVisibilityToggle` resta legacy
+>   fino al suo lotto.
+> - **Per il lotto di `InfoBanner`:** `fx-csv-import.spec.ts:289` trova il banner con `[class*="bg-blue"]`, protetto da
+>   `count() > 0`. Quando `InfoBanner` migra, quel selettore smette in silenzio di trovarlo: va portato su
+>   `getByTestId('info-banner-info')` nello stesso lotto.
+
+> ✅ **7 · Gli spec di W1-f2** (`test-author`, su copie; nessun comando lanciato): `asset-data-editor.spec.ts` 287 e 346 →
+> `[data-state="invalid"]`; 383–385 → `getByTestId('data-editor-stale-count')`, il commento senza il colore e senza
+> `.first()` (il testid è unico nell'interruttore: un doppione ora farebbe fallire); `fx-csv-import.spec.ts` 53 →
+> `[data-state="invalid"]:has-text("✗")`, 56 → `[data-state="invalid"]:has-text("error")`. Verificato sui componenti
+> della bozza che i selettori trovano gli elementi agganciati e niente altro (nessun altro `data-state="invalid"` nel
+> modale; il conteggio del piè di pagina dipende da quello della barra di stato, `DataImportModal:129–131`). La 289
+> (`bg-blue`, `InfoBanner`) non è toccata.
+> - **⚠️ Fuori pista — tre debolezze degli spec di W, già presenti, fuori dalle righe approvate** (backlog TC-13): il test
+>   21 è tutto dentro `if (await staleToggle.isVisible(...))`, che non aspetta, quindi un verde non prova l'aggancio del
+>   contatore; nessun controllo positivo tocca il ✗ (287 e 346 trovano per primo il conteggio); la 56 dipende dalla parola
+>   inglese «error» (con `[data-state="invalid"]` e `toHaveCount(0)` le due verifiche negative non dipenderebbero dal
+>   testo).
+
+> ✅ **8 · W1-g aperto** (coordinatore, 05:5x; OK della 1.3 per `InfoBanner`, `SyncResultRow` e
+> `fx-csv-import.spec.ts:289`; `SyncResultRow` entra nella riserva di X con `SyncModalBase` e `PageSyncModal`). Slot delle
+> 07:30: il lotto input, W1-f1, W1-g e W2-b, sotto i 70 minuti (W2-b passa al successivo se sfora); dopo, W2-d e W1-f2.
+> Analisi: `InfoBanner` (32) ha quattro varianti di stato e un `class` dei chiamanti dopo le sue classi; i 31 file che lo
+> usano gli passano solo classi di layout (`mb-4`, `mx-4 mt-4 shrink-0`), e i test lo trovano per testid
+> (`info-banner-<variante>`). `SyncResultRow` (22): il bottone «riprova» e il testo d'errore in ternari rosso/ambra;
+> l'icona di stato viene già da `STATUS_TONES`. Script dello slot aggiornato (`fx-csv-import`, `settings`; W2-b in fondo).
+
+> ✅ **9 · Lo spec di W1-g** (`test-author`, su copia; nessun comando lanciato): `fx-csv-import.spec.ts:289`
+> `modal.locator('[class*="bg-blue"]')` → `modal.getByTestId('info-banner-info')`. Il banner di direzione di
+> `FxDataImportModal:209` è sempre presente all'apertura ed è l'unico `info-banner-*` del modale; il vecchio selettore
+> prendeva anche il riquadro d'aiuto, e dopo la migrazione non avrebbe preso niente (test vuoto).
+> - **⚠️ Fuori pista:** il test 14 resta debole fuori dalla riga approvata (la guardia `count() > 0`, nessun controllo
+>   dell'ordine dopo lo scambio): aggiunto a TC-13, che W ha già ricevuto.
+
+> ✅ **10 · Bozza di W1-g** (sotto-agente, 05:5x–06:0x; riletta da T): `InfoBanner` 32 → 0, `SyncResultRow` 22 → 0; righe e
+> rientri invariati, solo classi di colore.
+> - `InfoBanner`: le quattro varianti su `bg-lf-X-soft border-lf-X-line text-lf-X-on-soft`, l'icona `text-lf-X` (X =
+>   warning, info, danger, success), come il banner di W2-a e `STATUS_TONES`; il `border` del contenitore ha sempre il suo
+>   ruolo.
+> - `SyncResultRow`: la riga `text-lf-secondary`; il bottone «riprova» nello stesso ternario
+>   (`hover:bg-lf-danger-soft text-lf-danger` / `hover:bg-lf-warning-soft text-lf-warning`); il testo d'errore
+>   `text-lf-warning`/`text-lf-danger`; i suggerimenti `text-lf-muted`; l'icona di stato resta su `STATUS_TONES`.
+> - Nessun test Vitest legge questi colori (i banner si trovano per testid); negli E2E solo la 289, già sistemata.
+> - **Da rivedere:** in scuro il testo dei banner era attenuato al 60 % di proposito (commit `7b4090d74`, 06/03), mentre
+>   `-on-soft` è pieno: i banner scuri «parlano» più forte; le icone in scuro passano dal 50 % al pieno; le tinte `-soft`
+>   e `-line` in scuro sono opache dove prima erano al 10 % e al 40 %; la riga di sync su `text-lf-secondary` (in scuro più
+>   spenta; `text-lf-primary` è l'alternativa); il contenuto dei chiamanti ancora legacy dentro i banner (i `<code>` di
+>   `PriceDataImportModal` ed `EventDataImportModal`, il link di `TxFormBanners`) fino ai loro lotti.
+> - **⚠️ Fuori pista:** `image-crop.spec.ts` (616, 643) riconosce lo scuro da `[class*="dark"]`, che prende qualsiasi
+>   utility `dark:`: i suoi test «in scuro» oggi non sanno se il tema è scuro. Fuori perimetro, backlog TC-14.
