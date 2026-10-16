@@ -8,7 +8,7 @@
  * Persisted in sessionStorage per user: a reload in the same tab finds it again, another account
  * never reads it, and a logout clears it. No sessionStorage (SSR) answers the defaults.
  *
- * @module stores/portfolio/dashboardViewStore
+ * @module features/dashboard/dashboardViewStore
  */
 
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';

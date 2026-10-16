@@ -43,22 +43,33 @@ frontend/
 │       │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
 │       │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
 │       ├── features/     # One folder per domain: its components, state and logic
-│       │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
-│       │   └── settings/ # Settings tabs (Profile, Preferences, Global, About)
+│       │   ├── ai-export/       # AI Export menu, options, snapshot client and prompt templates
+│       │   ├── auth/            # LoginCard, RegisterCard, ForgotPasswordCard
+│       │   ├── backup/          # Instance backup (admins): Backup tab, job and download card
+│       │   ├── changelog/       # Bundled CHANGELOG.md and its translations, split into chapters
+│       │   ├── dashboard/       # Dashboard panels and charts, view store and date-range controller
+│       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
+│       │   ├── instance/        # Instance config, notices and blocked-instance page
+│       │   ├── live-updates/    # Activity-aware polling of live prices and its "Updates paused" pill
+│       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides
+│       │   ├── plugin-settings/ # Plugins tab, Configure dialog and form for plugin-declared settings
+│       │   ├── risk/            # Risk panels, levels, stores and request logic
+│       │   ├── settings/        # Settings tabs (Profile, Preferences, Global, About)
+│       │   ├── support/         # Donation popup, social share and support links
+│       │   ├── tools/           # Tools hub, tool host and registry, PAC allocator tool
+│       │   └── update-check/    # New-release check and its modals (update available, ask an admin)
 │       ├── i18n/         # Internationalization (EN, IT, FR, ES)
 │       ├── stores/       # Store Client System (State Management)
 │       │   ├── app/          # auth, clientSession, settings, globalSettings, themeStore, language, privacyStore, toastStore, …
 │       │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
 │       │   ├── reference/    # brokerStore, assetStore, currencyStore, countryStore, sectorStore, fxRoutesStore
-│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore, dashboardViewStore
-│       │   ├── risk/         # riskStore, riskBenchmarkStore, riskPanelController
+│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore
 │       │   ├── transactions/ # txStore, transactionTypeStore
 │       │   ├── fx/           # fxCardInversionStore
 │       │   ├── files/        # imagePreviewCache
 │       │   ├── assetPriceStoreRegistry.ts     # Registry: price series per asset and currency
 │       │   ├── fxStoreRegistry.ts             # Registry: rate series per FX pair
 │       │   ├── dateRangeStore.svelte.ts       # Date range shared by the pages
-│       │   ├── dateRangeController.svelte.ts  # Per-page wiring of that date range
 │       │   ├── chartSettingsStore.svelte.ts   # Chart aesthetics and signal configs (localStorage)
 │       │   ├── currencyGraphStore.ts          # FX currency graph (session cache)
 │       │   └── signalCatalogStore.svelte.ts   # Signal catalog per domain (asset, FX)
