@@ -1643,7 +1643,7 @@ Note: No backend server required.
         "account-tokens",
         services_account_tokens,
         name="Account Tokens",
-        desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
+        desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs; the pages of token_path are the API client's LINK_PAGES (A7b)",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
         isolation="pure",

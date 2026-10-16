@@ -40,13 +40,25 @@ managed from the Profile tab.
     const reactivateReason = $derived<Reason | null>(full && !account.holds_place ? 'limit' : null);
     const demoteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_active && isOnlyActiveAdmin ? 'last-admin' : null);
     const deleteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser ? 'demote-first' : null);
-    const reasons = $derived([...new Set([account.is_active ? deactivateReason : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);
+    // The initial administrator waiting for its setup (F02) activates through its link only: no reactivation, no reason for one
+    const pendingSetup = $derived(account.pending_setup === true);
+    const reasons = $derived([...new Set([account.is_active ? deactivateReason : pendingSetup ? null : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);
 
     const ACTION_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-lf-input bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50';
     const DANGER_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2.5 py-1.5 text-xs font-medium text-lf-danger-on-soft disabled:cursor-not-allowed disabled:opacity-50';
 </script>
 
-<li class="py-3 text-lf-primary" data-active={String(account.is_active)} data-admin={String(account.is_superuser)} data-protected={String(account.protected)} data-self={String(isSelf)} data-testid="users-row" data-user-id={account.id} data-username={account.username}>
+<li
+    class="py-3 text-lf-primary"
+    data-active={String(account.is_active)}
+    data-admin={String(account.is_superuser)}
+    data-pending-setup={String(pendingSetup)}
+    data-protected={String(account.protected)}
+    data-self={String(isSelf)}
+    data-testid="users-row"
+    data-user-id={account.id}
+    data-username={account.username}
+>
     <button aria-controls="{uid}-panel" aria-expanded={expanded} class="flex w-full min-w-0 items-center gap-3 text-left" data-testid="users-row-toggle" onclick={() => (expanded = !expanded)} type="button">
         <ChevronRight class="h-4 w-4 shrink-0 text-lf-muted transition-transform {expanded ? 'rotate-90' : ''}" />
         <span class="min-w-0 flex-1">
@@ -58,7 +70,9 @@ managed from the Profile tab.
                 {#if account.is_superuser}
                     <span class="rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft">{$_('settings.usersTab.badges.admin')}</span>
                 {/if}
-                {#if !account.is_active}
+                {#if pendingSetup}
+                    <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-setup">{$_('settings.usersTab.badges.pendingSetup')}</span>
+                {:else if !account.is_active}
                     <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary">{$_('settings.usersTab.badges.inactive')}</span>
                 {/if}
                 {#if account.protected}
@@ -84,7 +98,7 @@ managed from the Profile tab.
                         <button class={ACTION_BUTTON} data-disabled-reason={deactivateReason ?? undefined} data-testid="users-action-deactivate" disabled={deactivateReason !== null} onclick={() => onAction('deactivate', account)} type="button">
                             <UserX class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.deactivate')}
                         </button>
-                    {:else}
+                    {:else if !pendingSetup}
                         <button class={ACTION_BUTTON} data-disabled-reason={reactivateReason ?? undefined} data-testid="users-action-reactivate" disabled={reactivateReason !== null} onclick={() => onAction('reactivate', account)} type="button">
                             <UserCheck class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.reactivate')}
                         </button>
@@ -111,6 +125,9 @@ managed from the Profile tab.
                         <Trash2 class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.delete')}
                     </button>
                 </div>
+                {#if pendingSetup}
+                    <p class="mt-2 text-xs text-lf-muted" data-testid="users-pending-setup-hint">{$_('settings.usersTab.pendingSetupHint')}</p>
+                {/if}
                 {#each reasons as reason (reason)}
                     <p class="mt-2 text-xs text-lf-muted">{$_(REASON_KEY[reason])}</p>
                 {/each}

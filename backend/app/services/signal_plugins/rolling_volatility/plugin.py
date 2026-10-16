@@ -24,14 +24,14 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.risk.signal_helpers import (
+from backend.app.services.signals.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.risk_adapters import (
     build_line_computation,
     observed_annualization_factor,
     prepared_primary_returns,
     rolling_annualized_volatility_values,
 )
-from backend.app.services.signal_plugins.base import SignalPlugin
-from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class RollingVolatilityParams(BaseModel):
