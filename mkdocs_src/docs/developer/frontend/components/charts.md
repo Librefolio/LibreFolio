@@ -251,8 +251,9 @@ The rolling return is a backend signal. `loadChartData()` sends one
 `{signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days}}`, with `target_currency` when
 the chart is converted, and each Asset comparison gets an item of its own — `include_price: false`,
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
-so every line uses one window and one currency. A page-local wrapper,
-`queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
+so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
+sends it, and `parseAssetPriceQueryWithSignalIsolation()`
+(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
 malformed result does not discard the response. The plugin is `catalog_visible = False`
 (see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
 selector offers it.

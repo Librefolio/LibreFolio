@@ -18,7 +18,7 @@
     import {debug, isDebugEnabled} from '$lib/debug';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import {axiosInstance, schemas, zodiosApi} from '$lib/api';
+    import {axiosInstance, zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
@@ -46,7 +46,6 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
-        backendSignalSchemas,
         buildBackendSignalRequestPlan,
         getSignalProblem,
         getSignalProblemSeverity,
@@ -78,7 +77,8 @@
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {comparisonAssetIds as comparisonPeerAssetIds, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
@@ -90,7 +90,9 @@
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
     import {
         CALENDAR_RETURN_PRESETS,
         CALENDAR_RETURN_UNIT_LABEL_KEYS,
@@ -422,10 +424,6 @@
         if (loading) return 'loading';
         return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
     });
-
-    function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle'): CalendarReturnView {
-        return {state, points: [], contextByDate: new Map(), problem: null};
-    }
 
     function translateCalendarProblem(key: string, values?: Record<string, string | number>): string {
         return values ? $t(key, {values}) : $t(key);
@@ -1132,160 +1130,11 @@
         }
     }
 
-    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
-        if (!Array.isArray(value)) return [];
-        return value.map((item) => backendSignalSchemas.result.parse(item));
-    }
-
     type AssetPriceBulkQueryBody = Parameters<typeof zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post>[0];
 
     async function queryAssetPricesBulkWithSignalIsolation(body: AssetPriceBulkQueryBody): Promise<{items: Record<string, unknown>[]}> {
         const response = await axiosInstance.post<unknown>('/api/v1/assets/prices/query', body);
-        if (!isRecord(response.data)) {
-            throw new Error('Invalid Asset price query response');
-        }
-        if (response.data.items === undefined) return {items: []};
-        if (!Array.isArray(response.data.items)) {
-            throw new Error('Invalid Asset price query items');
-        }
-
-        return {
-            items: response.data.items.map((rawItem, index) => {
-                if (!isRecord(rawItem)) {
-                    throw new Error(`Invalid Asset price query item at index ${index}`);
-                }
-                const rawSignals = rawItem.signals;
-                if (rawSignals !== undefined && !Array.isArray(rawSignals)) {
-                    throw new Error(`Invalid Asset signal collection at item index ${index}`);
-                }
-                const validSignals = (rawSignals ?? []).flatMap((signal) => {
-                    const parsed = backendSignalSchemas.result.safeParse(signal);
-                    return parsed.success ? [parsed.data] : [];
-                });
-                const parsedItem = schemas.FAPriceQueryResult.safeParse({
-                    ...rawItem,
-                    signals: validSignals,
-                });
-                if (!parsedItem.success) {
-                    throw new Error(`Invalid Asset price query item at index ${index}`);
-                }
-                return {
-                    ...parsedItem.data,
-                    signals: rawSignals ?? [],
-                };
-            }),
-        };
-    }
-
-    function isRecord(value: unknown): value is Record<string, unknown> {
-        return typeof value === 'object' && value !== null && !Array.isArray(value);
-    }
-
-    function priceConversionErrorFromItem(item: Record<string, unknown> | undefined): string | undefined {
-        const errors = item && Array.isArray(item.errors) ? item.errors.filter((error): error is string => typeof error === 'string') : [];
-        const firstError = errors[0];
-        return firstError && !/\bfor event on\b/i.test(firstError) && /\b(?:fx|conversion|currenc)/i.test(firstError) ? firstError : undefined;
-    }
-
-    function calendarComparisonProblemsFromResponse(responseItems: unknown[], configs: SignalConfig[], assetIds: number[], views: Map<number, CalendarReturnView>): Map<number, SignalProblem> {
-        const configByAssetId = new Map<number, SignalConfig>();
-        for (const config of configs) {
-            if (config.signalType !== 'asset-comparison') continue;
-            const assetId = Number(config.params.assetId);
-            if (Number.isSafeInteger(assetId) && assetId > 0) configByAssetId.set(assetId, config);
-        }
-        const problems = new Map<number, SignalProblem>();
-
-        for (const assetId of assetIds) {
-            const config = configByAssetId.get(assetId);
-            if (!config) continue;
-            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
-            const rawResults: unknown[] = item && Array.isArray(item.signals) ? item.signals : [];
-            const rawResult = rawResults.find((candidate) => isCalendarReturnSignalResult(candidate, CALENDAR_RETURN_INSTANCE_ID));
-            let instance: SignalInstanceResult;
-
-            if (!rawResult) {
-                instance = {
-                    config,
-                    source: 'backend',
-                    status: 'missing',
-                    result: null,
-                    error: `Calendar Return result for asset ${assetId} is missing`,
-                };
-            } else {
-                const parsed = backendSignalSchemas.result.safeParse(rawResult);
-                if (!parsed.success) {
-                    instance = {
-                        config,
-                        source: 'backend',
-                        status: 'missing',
-                        result: null,
-                        error: `Calendar Return result for asset ${assetId} is invalid`,
-                    };
-                } else {
-                    const result = parsed.data;
-                    const strictView = views.get(assetId);
-                    if (strictView?.state === 'error' && result.status !== 'failed') {
-                        instance = {
-                            config,
-                            source: 'backend',
-                            status: 'missing',
-                            result: null,
-                            error: `Calendar Return result for asset ${assetId} is invalid`,
-                        };
-                    } else {
-                        const resultError = Array.isArray(result.error) ? result.error.find((error) => error !== null)?.message : result.error?.message;
-                        instance = {
-                            config,
-                            source: 'backend',
-                            status: result.status,
-                            result,
-                            error: resultError ?? null,
-                        };
-                    }
-                }
-            }
-
-            let problem = getSignalProblem(instance);
-            const priceConversionError = priceConversionErrorFromItem(item);
-            const targetAsset = allAssets.find((asset) => asset.id === assetId);
-            if (problem?.code === 'missing_input_fields' && priceConversionError && targetAsset?.currency && displayCurrency && targetAsset.currency !== displayCurrency) {
-                problem = {
-                    ...problem,
-                    code: 'fx_conversion_unavailable',
-                    message: priceConversionError,
-                };
-            }
-            if (problem) problems.set(assetId, problem);
-        }
-        return problems;
-    }
-
-    function calendarComparisonFxFailuresFromResponse(responseItems: unknown[], assetIds: number[], previousFailures: ReadonlySet<number>): Set<number> {
-        const failedAssetIds = new Set<number>();
-        for (const assetId of assetIds) {
-            const item = responseItems.find((candidate): candidate is Record<string, unknown> => isRecord(candidate) && candidate.asset_id === assetId);
-            if (!item) {
-                if (previousFailures.has(assetId)) failedAssetIds.add(assetId);
-                continue;
-            }
-            if (priceConversionErrorFromItem(item)) failedAssetIds.add(assetId);
-        }
-        return failedAssetIds;
-    }
-
-    function preserveFactualCalendarPeersForCurrentUnavailable(previousViews: ReadonlyMap<number, CalendarReturnView>, nextViews: ReadonlyMap<number, CalendarReturnView>, responseItems: unknown[], assetIds: number[]): Map<number, CalendarReturnView> {
-        const merged = new Map(nextViews);
-        for (const assetId of assetIds) {
-            const itemPresent = responseItems.some((candidate) => isRecord(candidate) && candidate.asset_id === assetId);
-            const next = nextViews.get(assetId);
-            const previous = previousViews.get(assetId);
-            const previousHasFacts = previous && ['ready', 'partial'].includes(previous.state) && previous.points.some((point) => !point.missing);
-            if (itemPresent && next?.state === 'unavailable' && previousHasFacts) {
-                merged.set(assetId, previous);
-            }
-        }
-        return merged;
+        return parseAssetPriceQueryWithSignalIsolation(response.data);
     }
 
     function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
@@ -1333,33 +1182,9 @@
         );
     }
 
-    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
-
-    function signalDataContextFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(
-            configs
-                .map((config) => ({
-                    id: config.id,
-                    signalType: config.signalType,
-                    params: Object.fromEntries(
-                        Object.entries(config.params)
-                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
-                            .sort(([left], [right]) => left.localeCompare(right)),
-                    ),
-                }))
-                .sort((left, right) => left.id.localeCompare(right.id)),
-        );
-    }
-
+    /** The comparison peers of `configs`, without the asset this page shows. */
     function comparisonAssetIds(configs: SignalConfig[]): number[] {
-        return [
-            ...new Set(
-                configs
-                    .filter((config) => config.signalType === 'asset-comparison')
-                    .map((config) => Number(config.params.assetId))
-                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId),
-            ),
-        ].sort((left, right) => left - right);
+        return comparisonPeerAssetIds(configs, data.assetId);
     }
 
     function calendarComparisonFingerprint(configs: SignalConfig[]): string {
@@ -1826,7 +1651,7 @@
                     if (calendarComparisonsAreCurrent()) {
                         const nextComparisonViews = extractCalendarReturnViewsByAsset(responseItems, calendarComparisonAssetIds, CALENDAR_RETURN_INSTANCE_ID);
                         calendarComparisonViews = retainCurrentCalendarDiagnostics ? preserveFactualCalendarPeersForCurrentUnavailable(calendarComparisonViews, nextComparisonViews, responseItems, calendarComparisonAssetIds) : nextComparisonViews;
-                        calendarComparisonProblems = calendarComparisonProblemsFromResponse(responseItems, requestedSignalConfigs, calendarComparisonAssetIds, calendarComparisonViews);
+                        calendarComparisonProblems = calendarComparisonProblemsFromResponse(responseItems, requestedSignalConfigs, calendarComparisonAssetIds, calendarComparisonViews, {assets: allAssets, displayCurrency});
                         calendarComparisonFxFailures = calendarComparisonFxFailuresFromResponse(responseItems, calendarComparisonAssetIds, calendarComparisonFxFailures);
                         comparisonEvents = new Map(
                             calendarComparisonAssetIds.map((assetId) => {
@@ -2525,26 +2350,6 @@
             if (!current()) return;
         }
         overlayDataVersion++;
-    }
-
-    /**
-     * I-bis #24 helper — merge ``changed_points`` from a sync response into
-     * the current ``chartData`` array by date. New points are appended,
-     * existing points by date are shallow-merged (so OHLC fields update
-     * without losing enriched fields like ``original_close`` that may have
-     * been set by ``loadChartData``). Result is sorted by date ascending.
-     *
-     * NOTE: the merge only runs when the chart is showing the asset's native
-     * currency (no target_currency conversion), because the delta from the
-     * sync endpoint carries raw DB values without FX applied.
-     */
-    function mergeChartPointsIncremental<T extends {date: string}>(existing: T[], delta: T[]): T[] {
-        const byDate = new Map<string, T>(existing.map((p) => [p.date, p]));
-        for (const np of delta) {
-            const prev = byDate.get(np.date);
-            byDate.set(np.date, prev ? ({...prev, ...np} as T) : np);
-        }
-        return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     }
 
     function handleDetailAsset(assetId: number) {
