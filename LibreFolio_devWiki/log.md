@@ -1141,6 +1141,7 @@ Systematically read all 68 mkdocs developer pages and mapped them to 36 features
 - Log format: all entries well-formed
 - Thin pages: all under-25-line pages are planned/idea features (appropriate)
 - Concept pages (daily-point-policy, backend-only-calculations, fifo-runtime-decision): substantive and accurate
+
 ## [2026-04-24] file | I-bis #24 v4 — `/prices/current` has a persistence side-effect
 Filed lesson learned from final iteration of I-bis #24 (Auto-refresh mirato post-sync).
 Root cause: `AssetSourceManager.get_current_prices_bulk` upserts today's OHLC to
@@ -3618,3 +3619,10 @@ class props and `<style>` (`ModalBase`, `AssetCurrencyChangeModal`), and the pre
 `theme-roles` skill.
 Filed: [[problems/tailwind4-same-property-utilities-sorted-by-name]].
 Graph: not updated; no graphify run while the machine is reserved for the gallery (coordinator, 16/10).
+
+## [2026-10-16] update | F-088 becomes the one Rolling Return (decision 29)
+J CP-10a removed the observation-based `RISK_ROLLING_RETURN` and made the calendar plugin visible in the Signals panel;
+the page said the old signal «stays, unchanged». Now it records the removal, the parity proof, the store's version-3
+migration of saved overlays, the plugin-owned `signals.riskRollingReturn.*` keys and the `price_return` home.
+Updated: [[features/F-088]].
+Graph: not updated; graphify is not available in this worktree.

@@ -1668,8 +1668,8 @@ _INVALID_GLOBAL_VALUES = [
     # registration_mode, so it gets a single refused value, never an accepted one.
     pytest.param("registration_mode", "closed", id="registration_mode-unknown_choice"),
     # bool: true/false/1/0/yes/no/on/off in any case, nothing else. Every invalid
-    # spelling reads back as False; the variants go on require_email_verification,
-    # which nothing reads yet.
+    # spelling reads back as False; the variants go on require_email_verification:
+    # a refusal stores nothing, so the lane's registrations never see it on.
     pytest.param("require_email_verification", "", id="require_email_verification-empty"),
     pytest.param("require_email_verification", "2", id="require_email_verification-not_0_or_1"),
     pytest.param("require_email_verification", "y", id="require_email_verification-y_is_not_yes"),
@@ -1736,7 +1736,7 @@ class TestGlobalSettingsBulkValidation:
     422, `detail` a string naming each rejected key). A refused request saves
     nothing, valid items included; an accepted one is saved whole and listed.
 
-    Test IDs: GSET-VAL-001..GSET-VAL-010
+    Test IDs: GSET-VAL-001..GSET-VAL-011
     """
 
     @pytest.mark.parametrize(("key", "value"), _INVALID_GLOBAL_VALUES)
@@ -1847,7 +1847,9 @@ class TestGlobalSettingsBulkValidation:
     async def test_bool_spelling_is_stored_canonical(self, test_server, sent: str, canonical: str):
         """GSET-VAL-007: Every accepted bool spelling → 200, stored and returned as canonical "true"/"false"."""
         print_section(f"GSET-VAL-007: {sent!r} → stored {canonical!r}")
-        key = "require_email_verification"  # read nowhere yet: flipping it is harmless to the lane
+        # The lane's server runs with --no-scheduler: flipping it is harmless (GSET-SCH-001 does too). Never
+        # require_email_verification: it changes every registration of the lane, and turns on only with email.
+        key = "scheduler_enabled"
         start = "false" if canonical == "true" else "true"
 
         async with httpx.AsyncClient() as client:
@@ -1914,3 +1916,29 @@ class TestGlobalSettingsBulkValidation:
                 await _restore_global_values(client, originals)
 
         print_success(f"✓ {key}={sent!r} saved")
+
+    @pytest.mark.asyncio
+    async def test_email_verification_turned_on_without_email_is_refused(self, test_server):
+        """GSET-VAL-011: require_email_verification off → on while no email with a link can go out (a test lane has no
+        SMTP configuration) → 409 EMAIL_VERIFICATION_UNAVAILABLE naming the key; nothing saved, the other item included."""
+        print_section("GSET-VAL-011: require_email_verification on without email → 409, nothing saved")
+        key = "require_email_verification"
+        other = "session_ttl_hours"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key, other])
+            assert originals[key] == "false", f"A lane without email can never have {key} on: stored {originals[key]!r}"
+            changed = "25" if originals[other] != "25" else "26"
+            try:
+                resp = await _bulk_patch(client, [(other, changed), (key, "true")])
+                stored = await _read_global_values(client, [key, other])
+                assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text} — stored now {stored}"
+                detail = resp.json().get("detail")
+                assert isinstance(detail, dict), f"'detail' must be an object, got {detail!r}"
+                assert detail.get("error_code") == "EMAIL_VERIFICATION_UNAVAILABLE" and detail.get("key") == key, f"Unexpected detail: {detail!r}"
+                assert stored == originals, f"A refused request must save nothing: stored now {stored}, originals {originals}"
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success(f"✓ {key} stays off, {other} still {originals[other]!r}")
