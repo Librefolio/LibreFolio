@@ -34,7 +34,8 @@ Environment Variables (see .env):
     LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
-env_secret(). Every variable the code reads is listed in .env.example.
+env_secret(). Addresses (LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, ...) follow one rule: see env_url(). Every
+variable the code reads is listed in .env.example.
 """
 
 import os
@@ -153,6 +154,23 @@ def env_secret_origin(name: str) -> str | None:
     if file_name.strip():
         return f"{name}{SECRET_FILE_SUFFIX} ({_secret_file_path(file_name)})"
     return None
+
+
+def env_url(name: str) -> str | None:
+    """The http(s) address in the variable ``name``, from the process environment only, never from ``.env``.
+
+    - An empty or blank value counts as unset: ``None``.
+    - Otherwise the value, stripped, must start with ``http://`` or ``https://`` (in any case); one trailing slash is
+      removed, so a path can be appended to it.
+    - Any other value raises ``ValueError``, which names the variable and the value: the caller decides what an invalid
+      address costs, and logs it.
+    """
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    if not value.lower().startswith(("http://", "https://")):
+        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address")
+    return value[:-1] if value.endswith("/") else value
 
 
 def _secret_file_path(file_name: str) -> Path:

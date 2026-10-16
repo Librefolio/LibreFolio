@@ -74,11 +74,15 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
       `scripts/cli_base.py`), like the rest of the instance's configuration: see
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
+    - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
+      an empty or blank value is `None`; otherwise the value, stripped, must start with `http://` or
+      `https://`, and one trailing slash is removed; anything else raises `ValueError`, which names the
+      variable. The accessor's caller decides what an invalid address costs, and logs it.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
-      `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
-      topic, owned by the workstream of that area. Six exist today: `platform.py` (H:
-      `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
+      `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
+      go into one section module per topic, owned by the workstream of that area. Six exist today:
+      `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
