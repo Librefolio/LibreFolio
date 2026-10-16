@@ -676,6 +676,7 @@ def api_session_revocation(verbose: bool = False, test_names: list[str] | None =
     print_section("Session Revocation API Tests")
     print_info("Testing POST /auth/change-password: session version +1, the device that changed it gets a new cookie")
     print_info("Tests: other devices and the old cookie refused, other accounts untouched, refusals end nothing")
+    print_info("A-27: a password change or a real address change kills the account's live reset links; capitals only and refusals keep them")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_session_revocation_api.py", test_names)
@@ -1003,7 +1004,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
     # The category's write-scoped holds: each test registers its own two users, reads only their rows and deletes them;
     # a password change ends the sessions of that account alone.
-    add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing")
+    add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing; A-27: a password or address change kills the live reset links (REVOKE-003…007)")
     # Write-scoped (the category default), no exclusive_because: a nonce is stateless, nothing is stored and no setting or
     # global row is written; the one write is the login counters of e2e_test_admin / e2e_test_user, which no unit asserts.
     # The instance key is switched in this process only (monkeypatch), never while the lane's server is asked.

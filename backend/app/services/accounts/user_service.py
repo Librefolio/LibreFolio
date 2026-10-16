@@ -282,6 +282,8 @@ async def reset_password(
     # bcrypt is slow on purpose: it runs off the event loop.
     user.hashed_password = await asyncio.to_thread(hash_password, new_password)
     end_sessions(user)
+    # The live password-reset links of the account die with the old password (A-27), in the same commit.
+    await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -500,10 +502,12 @@ async def update_profile(
         if existing:
             return None, "Email already registered"
         user.email = email
-        # A new address is not verified (E5), and every session opened with the old one ends (A6e): committed below,
+        # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live
+        # password-reset link (A-27: whoever holds the old mailbox cannot use one asked for before): committed below,
         # together with the address.
         user.email_verified_at = None
         end_sessions(user)
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     elif email is not None:
         # The same address written in another case: the stored form follows, nothing else changes.
         user.email = email

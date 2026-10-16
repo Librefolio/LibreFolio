@@ -345,9 +345,11 @@ async def change_password(
     if request.current_password == request.new_password:
         raise HTTPException(status_code=400, detail="New password must be different from current password")
 
-    # Update password, and end every session of the account: this one gets a new cookie below.
+    # Update password, and end every session of the account: this one gets a new cookie below. The live password-reset
+    # links of the account die with the old password (A-27), in the same commit.
     current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
     user_service.end_sessions(current_user)
+    await token_service.revoke_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     session.add(current_user)
     await session.commit()
     _issue_session_cookie(response, http_request, current_user, await _session_ttl_hours(session))
