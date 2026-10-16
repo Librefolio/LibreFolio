@@ -528,10 +528,11 @@ debito di traduzione di F-5 (di M).
   `:1789` e `:1806`, converte i prezzi uno a uno (`:1795`, `:1813`) e su un TRANSFER sposta l'unrealized al costo. Va
   in T-U5 con V2/P2 e R4 di T e con le quantità di B12: insieme 1½–2 g. Dettagli: idem, §14 e §17.6.
 - **B10 · `periodBasePnl` dichiarato e mai usato** — minimo; I, 10/10. `GrowthChart.svelte:594-600`.
-- **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
+- ✅ **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
   si contano solo per le valute tenute in cassa (`native_cash.py:271-279`; motore `:808` e `:922-923`). La cura cambia
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
+  - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
 - **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
@@ -1944,11 +1945,38 @@ plugin.
   - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
-- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10. ✅ 16/10: validato su `e44383f13`, con i commit `4cc601e57` e `88ef51358`; la correzione di svelte-check è nel commit del checkpoint finale.
   - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
   - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
 
+  - **In corso (15/10, notte; T e DV entrati in `a0915bef9`):**
+    - i ruoli di T-8/T-8b sono tutti modificabili: 92 ruoli root e 88 alias, tutti col loro ruolo;
+    - prefissi delle classi allineati a `PREFIXES` (D-a), con 2 chip delle ombre;
+    - C4 emesso dall'engine, anche per le definizioni dei ruoli riscritte da L2;
+    - livello `category` per chiave, scritto; `verify-export` trova le righe di categoria per chiave e tema;
+    - `CHART_PATH_RE` accetta già `features/{dashboard,risk,brokers/lots}` (Y3, Y4b, Y5).
+
+    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15).
+    Validazione pesante su `e44383f13`, 16/10 03:26–03:50:
+    - unitari 712, gate 186, svelte-check 0 errori dopo una correzione di una riga mia;
+    - parità identica, MkDocs strict 0/0, `check-links` 96;
+    - E2E `live` 12, `all` 17 più 624 unitari, `e2e` a 4 worker 17, `check-orphans` verde;
+    - build di release con 0 tracce del Lab.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
+
+- **L-17 · Il selettore di elementi nomina la categoria di una fetta** — basso; L, 15/10 (L-16, punto 5, nel backlog su decisione del coordinatore).
+  - Oggi il selettore riporta i colori di un grafico, ma non la categoria (`type:ETF`) di una fetta: un colore può appartenere a due categorie, per esempio ETF e Tecnologia.
+  - Servirebbe che il grafico dichiarasse la chiave della fetta puntata, nell'opzione o con un attributo dati; da concordare con DV.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab».
+
+- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16).
+  - `CHART_PATH_RE` (`scan-colors.mjs`) accetta i due percorsi finché gli spostamenti della 1.3 non sono finiti. Y4b è già entrato e `components/risk` non esiste più.
+  - Dopo Y3 (`features/dashboard/`) e Y5 (`features/brokers/lots/`):
+    - togliere i rami `components/(dashboard|risk|brokers/lots)` della regex, le righe sintetiche corrispondenti di `scanColors.test.ts` e la parentesi sui due percorsi in `designer-lab.md`;
+    - aggiornare la costante `GROWTH` di `pickView.test.ts` e l'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2508,11 +2536,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- **TC-12 · Dopo l'ingresso di Y5: la voce orfana del coachmark nel gate** — minimo; T, 16/10. Con W2-a il bagliore del
-  coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione `ARBITRARY_ALLOWED` di
-  `frontend/scripts/theme/theme-roles.mjs` (riga 84). La si toglie quando Y5 è entrato (Y cambia la riga 70 dello stesso
-  file), insieme ai commenti di `src/themeRoles.gate.test.ts` (righe ~218 e ~547) che descrivono ancora il vecchio
-  bagliore `rgba`. Dettagli: piano di T, «W1-c, W1-e e W2-a», passo 3.
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
+  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+  `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
+  (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
+  tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
+  è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
+  slot».
 
 ---
 
@@ -2763,6 +2793,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-17 · I default del profilo gestito passano da due meccanismi** — basso; H (CP7b-2), 16/10.
+  - `PROFILE_DEFAULTS` (`config/__init__.py`) copre solo i campi di `Settings`, con un test di guardia sulla tabella.
+  - Il limite di upload del ripristino di B decide il suo default da sé: `MANAGED_MAX_UPLOAD_MB` (500) in
+    `config/backup.py`, perché `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
+  - Cura proposta: una sola tabella, o un accessore `profile_default(name, fallback)` che anche i moduli di sezione
+    usano, così la guardia copre ogni default del profilo. Da concordare con B.
+
+  Dettagli: piano H, §14 «CP7b-2», passo 2.
 
 ## A · Account e accessi (fase 01)
 
@@ -3639,6 +3677,27 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
   ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
   scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
+- **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
+  segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
+  calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
+  del risultato. Carico fra 80 e 96, macchina molto in swap. Rifatto con il carico a 40–61: 8 su 8 verdi. Il runtime dei
+  Tools non è cambiato da `g-final3`. Dettagli: checkpoint di G-13 dei colori.
+  - **Dal codice** (J, sola lettura): un superamento misurato della memoria dà `memory_limit`
+    (`tools/process_tree.py`, `observe_memory_limit`), un tempo scaduto dà `execution_timeout`
+    (`tools/executor.py`, `_read_exact`, `_wait_result`). `worker_crashed` vuol dire che il figlio è uscito o ha chiuso il
+    tubo senza nessuno dei due: ucciso da fuori, un limite colpito dentro il figlio, o un errore all'avvio sotto swap.
+  - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
+    segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
+    Tools: lotto piccolo, d'accordo col proprietario del runtime.
+- ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
+  chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
+  `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
+  quote positive superano 100 e la riga della liquidità va sotto zero. Cura: descrivere la quota sul totale netto, che
+  può superare 100 o scendere sotto zero quando la liquidità è negativa; poi `api sync`. Nessun valore cambia. Lotto: J,
+  dentro CP-6.
+  ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
+  0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
+  senza file tracciati cambiati. Commit: il checkpoint di CP-6.
 
 ## Z · Sospensione e risveglio (fase 01)
 

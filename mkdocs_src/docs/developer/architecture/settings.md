@@ -16,6 +16,38 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - `get_settings()` builds a fresh, validated instance on every call. `main.py` calls it at
       import, so a mistyped or out-of-range value stops the startup. It also computes
       `DATABASE_URL` and applies the `LIBREFOLIO_LOG_LEVEL` override.
+    - **Profile defaults** (`PROFILE_DEFAULTS` in `__init__.py`, decisions D5 and F27): for each
+      profile `LIBREFOLIO_PROFILE` accepts, the values it gives the `Settings` fields that the
+      environment and `.env` leave unset. `selfhosted` lists none: a self-hosted install keeps every
+      code default. `managed` sets `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and
+      `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` to `60.0` and turns on `LIBREFOLIO_FRAME_PROTECTION` and
+      `LIBREFOLIO_CSP_REPORT_ONLY`, two `bool` fields off in the code
+      ([Frame Protection and the Report-Only Policy](security.md#managed-headers)).
+      `Settings._apply_profile_defaults`, a `model_validator(mode="after")`, gives the active
+      profile's value (`LIBREFOLIO_PROFILE` already normalised by its field validator) to every listed
+      field that is not in `model_fields_set`. pydantic-settings passes every value a source found, so
+      a value the operator set wins even when it equals the code default:
+      `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` or `LIBREFOLIO_FRAME_PROTECTION=false` stay on a
+      managed instance. The value is written with `object.__setattr__`, not by assignment: an
+      assignment would add the field to `model_fields_set`, and later code could no longer tell an
+      operator's value from the profile's. Either way the value is not validated (`Settings` has no
+      `validate_assignment`), so `./dev.py test services profile-defaults`
+      (`backend/test_scripts/test_services/test_profile_defaults.py`) checks the table strictly: one
+      entry per profile `LIBREFOLIO_PROFILE` accepts; every key a `Settings` field with a code default;
+      every value valid for its field in strict mode and, for `managed`, different from the code
+      default; a set value kept; and, parametrised over every field any profile lists, the code
+      default kept by a self-hosted install. The table reaches `Settings` fields only: a variable that
+      a section module reads from `os.environ` decides its managed default itself, from
+      `get_settings().LIBREFOLIO_PROFILE`, as `backup_max_upload_mb()` in `config/backup.py` does
+      (`MANAGED_MAX_UPLOAD_MB`, 500, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is unset or blank). To
+      give the managed profile a new default, a workstream adds one entry to
+      `PROFILE_DEFAULTS["managed"]`: a `Settings` field with a code default, and a value of the field's
+      own type, written as its code default is (`60.0`, `True`; never `"60"`, nor `1` for a flag), that
+      differs from the code default. It adds the same entry to `MANAGED_DEFAULTS` in the test file, the
+      decided table that `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed
+      value given to a field nobody set, the guards on the table, the self-hosted code defaults) then
+      cover the new field. Admin view:
+      [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
       otherwise `backend/data/prod`.
@@ -65,7 +97,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       uvicorn's share of it, `shutdown_drain_seconds()` and `uvicorn_drain_env()`; see
       *Stopping the Server* in [Configuration](../../admin/configuration.md); the token of the
       scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
-      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)) and `backup.py` (B:
+      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync); the idle suspension,
+      `idle_suspend_mode()` and `idle_suspend_minutes()`; see
+      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)) and `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
       backups, also as `_FILE`). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or

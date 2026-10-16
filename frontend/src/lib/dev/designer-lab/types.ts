@@ -31,6 +31,23 @@ export interface CatalogLiteral {
     property?: string | null;
     via?: 'tw-arbitrary' | 'style-attr' | 'markup';
     chart?: boolean;
+    /** A line of the chart category tables (`lib/theme/chartCategories.ts`): the category it colours (`type:ETF`). */
+    category?: string;
+}
+
+/**
+ * A chart category with a fixed colour (contract C1–C2 with DV): an asset type, a sector, or one of the two buckets
+ * `categoryColor` adds to both (`Liquidity`, `Unknown`). The Lab edits it by key, never by value.
+ */
+export interface CatalogCategory {
+    /** `type:ETF`, `sector:Health Care`, `bucket:Liquidity`: the target of a `category` change. */
+    target: string;
+    kind: 'type' | 'sector' | 'bucket';
+    /** As the table writes it (`ETF`, `Health Care`, `Liquidity`). */
+    key: string;
+    /** The literal (`ColorCatalog.literals` id) each theme's value is written in, null when the table has none. */
+    light: number | null;
+    dark: number | null;
 }
 
 export interface CatalogVarDef {
@@ -94,6 +111,8 @@ export interface ColorCatalog {
     palette: CatalogPaletteEntry[];
     literals: CatalogLiteral[];
     by_value: Record<string, number[]>;
+    /** The chart categories, in the order of their tables (absent from a catalogue built before them). */
+    categories?: CatalogCategory[];
     /**
      * Static test ids → `[fileIndex, line, via]`: `attr` a `data-testid="x"`, `prop` a prop a component renders as its
      * `data-testid` (`testid="x"`, `optionTestId={…}`), `script` a property or variable of a script (`testId: 'x'`).
@@ -124,9 +143,11 @@ export type Scope = 'light' | 'dark' | 'both';
  * - `chart-color`: a colour in an ECharts option, matched by value;
  * - `proposal`: no live preview (inline styles, generated colours, `offline.html`, manifest): exported only;
  * - `element`: a specialisation — one property of the element picked in the app, in every instance of its component
- *   (`target` is the selector), or one colour of the picked chart (`property: 'chart'`); the shared source is untouched.
+ *   (`target` is the selector), or one colour of the picked chart (`property: 'chart'`); the shared source is untouched;
+ * - `category`: the fixed colour of a chart category (`type:ETF`, `sector:Health Care`, `bucket:Liquidity`), by key:
+ *   the charts read it through `categoryColor` of `lib/theme/chartCategories.ts` (contract C1–C4 with DV).
  */
-export type ChangeLayer = 'css-var' | 'css-literal' | 'chart-color' | 'proposal' | 'element';
+export type ChangeLayer = 'css-var' | 'css-literal' | 'chart-color' | 'proposal' | 'element' | 'category';
 
 /** What sets a colour of a picked element, as the Lab classifies the proved declaration. */
 export type SourceKind = 'var' | 'tailwind-class' | 'rule-literal' | 'inline' | 'attribute' | 'current-color' | 'chart' | 'unknown';
@@ -310,6 +331,11 @@ export interface LabHook {
     chartColors: (selector: string) => Promise<string[]>;
     /** How many stylesheet declarations, chart instances, variables and specialisations the engines changed. */
     stats: () => LabStats;
+    /**
+     * Contract C3 with DV: the colour a `category` change gives a chart category in a theme, asked by `categoryColor`
+     * of `lib/theme/chartCategories.ts` — `#rrggbb`, or `rgba()` when translucent; undefined when no change applies.
+     */
+    categoryColor: (kind: 'type' | 'sector', key: string, dark: boolean) => string | undefined;
 }
 
 export interface LabStats {
@@ -317,4 +343,6 @@ export interface LabStats {
     chartInstances: number;
     varOverrides: number;
     elementRules: number;
+    /** `category` changes the engine answers `categoryColor` with. */
+    categoryOverrides: number;
 }
