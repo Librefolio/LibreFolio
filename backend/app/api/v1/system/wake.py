@@ -31,6 +31,7 @@ from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigEr
 from backend.app.logging_config import get_logger
 from backend.app.schemas.sleep_wake import WakeSyncJob, WakeSyncResponse
 from backend.app.services.platform.scheduler.scheduler import RunReport, run_due_jobs
+from backend.app.services.platform.sleep_wake import idle_monitor
 
 logger = get_logger(__name__)
 
@@ -77,7 +78,20 @@ def _utc_now() -> datetime:
 
 
 def _response(report: RunReport) -> WakeSyncResponse:
-    jobs = [WakeSyncJob(name=job.name, status=job.status, started_at=job.started_at, duration_s=job.duration_s, items_ok=job.items_ok, items_err=job.items_err, error=job.error) for job in report.jobs]
+    jobs = [
+        WakeSyncJob(
+            name=job.name,
+            status=job.status,
+            started_at=job.started_at,
+            duration_s=job.duration_s,
+            items_ok=job.items_ok,
+            items_err=job.items_err,
+            error=job.error,
+            items_deferred=job.items_deferred,
+            retry_at=job.retry_at,
+        )
+        for job in report.jobs
+    ]
     return WakeSyncResponse(status=report.status, started_at=report.started_at, finished_at=report.finished_at, jobs=jobs)
 
 
@@ -90,6 +104,8 @@ async def _wake_run() -> WakeSyncResponse:
         logger.exception("Wake-up run failed")
         result = WakeSyncResponse(status="error", started_at=started_at, finished_at=_utc_now(), error=type(exc).__name__)
     logger.info("Wake-up run finished", status=result.status, jobs=[job.name for job in result.jobs if job.status != "not_due"])
+    # With nobody around, the machine goes back to sleep at once (Z2b): the check comes when this request has ended.
+    idle_monitor.request_idle_check(idle_monitor.WAKE_CHECK_DELAY_SECONDS)
     return result
 
 

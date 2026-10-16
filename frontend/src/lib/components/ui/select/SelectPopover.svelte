@@ -110,11 +110,11 @@
     {@render trigger({open, toggle})}
     {#if open}
         {#if placement}
-            <div bind:this={panel} class="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 {panelClass}" style={fixedStyle} data-testid={testId}>
+            <div bind:this={panel} class="flex flex-col overflow-hidden rounded-lg border border-lf-raised bg-lf-card text-lf-primary shadow-lg shadow-lf-shadow {panelClass}" style={fixedStyle} data-testid={testId}>
                 {@render children({close})}
             </div>
         {:else}
-            <div bind:this={panel} class="absolute top-full z-40 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 {alignEnd ? 'right-0' : 'left-0'} {panelClass}" data-testid={testId}>
+            <div bind:this={panel} class="absolute top-full z-40 mt-1 rounded-lg border border-lf-raised bg-lf-card text-lf-primary shadow-lg shadow-lf-shadow {alignEnd ? 'right-0' : 'left-0'} {panelClass}" data-testid={testId}>
                 {@render children({close})}
             </div>
         {/if}

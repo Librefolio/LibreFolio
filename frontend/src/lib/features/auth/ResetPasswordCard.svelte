@@ -50,7 +50,8 @@
                 oninvalid();
                 return;
             }
-            error = $_(response?.status === 422 ? 'auth.validation.passwordTooWeak' : 'auth.resetPassword.failed');
+            const weak = response?.status === 422 || (response?.status === 400 && response.data?.detail?.error_code === 'PASSWORD_TOO_WEAK');
+            error = $_(weak ? 'auth.validation.passwordTooWeak' : 'auth.resetPassword.failed');
         } finally {
             loading = false;
         }

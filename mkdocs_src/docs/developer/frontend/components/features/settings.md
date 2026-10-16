@@ -232,7 +232,17 @@ Manages user profile information:
   other refusal shows the server's `detail` when it is a sentence (*Email already registered*),
   `settings.updateFailed` for any other `detail` (another code, a `422` list), and puts the field
   back to the stored value. The banner clears after 5 seconds
-- **Password change**: Opens `PasswordChangeModal`
+- **Password change**: opens `PasswordChangeModal` (`features/settings/PasswordChangeModal.svelte`):
+  the current password, the new one with `PasswordStrength` under it, and the confirmation. The
+  modal binds `PasswordStrength`'s `valid` (`bind:valid={passwordMeetsRules}`) and keeps no copy of
+  the [password rules](../../../architecture/security.md#password-rules): `password-change-submit`
+  stays disabled until the three fields are filled, the rules hold and the confirmation matches.
+  A refusal whose `detail` is `{error_code: "PASSWORD_TOO_WEAK", …}` shows
+  `auth.validation.passwordTooWeak`; the plain-string `detail`s of a wrong current password
+  (*incorrect*) and of a new password equal to it (*different*) show
+  `settings.currentPasswordIncorrect` and `settings.passwordMustBeDifferent`; anything else, the
+  message `trySave` extracts, `settings.passwordChangeFailed` when it finds none. An object `detail`
+  is never lower-cased as a string: before A6c that threw
 - **Delete account**: `delete-account-button` opens the
   [`AccountDeletionDialog`](#accountdeletiondialog) in `self` mode, with
   `testIdPrefix="profile-delete"`; once the account is deleted, the tab calls `auth.logout()` and
@@ -242,7 +252,9 @@ Manages user profile information:
 Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`),
 and the «A6e» block of `frontend/e2e/settings.spec.ts` (`./dev.py test front-utility settings`) on the
 lane's real backend, with a throwaway account and a second browser context signed in before the change,
-and signed out by it.
+and signed out by it. The password change: `PasswordChangeModal.test.ts`, in the same
+`component-unit` action (what enables Save, what reaches the server, the refusals with
+`PASSWORD_TOO_WEAK` among them, the rules taken from `PasswordStrength`).
 
 ### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
 

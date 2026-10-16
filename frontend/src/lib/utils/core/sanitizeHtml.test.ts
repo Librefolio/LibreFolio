@@ -7,8 +7,9 @@
  *   - remove what runs: event-handler attributes, `<script>`, `javascript:` URLs;
  *   - keep what the app itself puts into those messages: spans with classes (the emoji flags), icons
  *     as `<img src alt class>` and as inline lucide `<svg>`, `<br>`, `<strong>`/`<b>`, `<code>`, inline
- *     `style`, KaTeX's span markup, and the app's own links with their `data-testid` — a sanitiser
- *     that strips those breaks the UI (and the toast specs that click those links) while looking safe.
+ *     `style` (a colour role read with `var()` included), KaTeX's span markup, and the app's own links
+ *     with their `data-testid` — a sanitiser that strips those breaks the UI (and the toast specs that
+ *     click those links) while looking safe.
  *
  * Assertions read the parsed result, never the serialised string: attribute order and quoting are
  * the sanitiser's business, what reaches the DOM is ours.
@@ -113,6 +114,20 @@ describe('sanitizeHtml — keeps what the app puts in its own messages', () => {
         expect(link?.getAttribute('href')).toBe('/assets/42');
         expect(link?.getAttribute('data-testid')).toBe('toast-asset-link');
         expect(link?.textContent).toBe('Owned asset');
+    });
+
+    it("keeps the colour roles of the inverted tooltip: var() inside color-mix() in an inline style, and a role utility's class", () => {
+        // The probe tooltip draws its header border in the tooltip text at 20% (`buildProbeTooltipHtml`, providerProbe.ts), and the FX
+        // warnings carry a role utility (FxProviderSelect, fxConversionHelper): Tooltip.svelte renders both through this sanitiser (Q10).
+        const border = 'color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent)';
+        const root = rendered(`<table style="font-size:12px;border-collapse:collapse;"><tr><th style="text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid ${border};">📅 Date</th></tr></table><br/><br/><span class="text-lf-warning-on-inverse">⚠️ Delayed</span>`);
+        const th = root.querySelector('table th');
+        expect(th, 'the <th> survives inside its table').not.toBeNull();
+        expect(th?.textContent).toBe('📅 Date');
+        expect(th?.getAttribute('style')).toContain(border);
+        const warning = root.querySelector('span');
+        expect(warning?.getAttribute('class')).toBe('text-lf-warning-on-inverse');
+        expect(warning?.textContent).toBe('⚠️ Delayed');
     });
 
     it('leaves plain text alone, and keeps escaped text escaped', () => {
