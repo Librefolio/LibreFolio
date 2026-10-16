@@ -1456,9 +1456,14 @@ test.describe('FX Detail Page', () => {
         expect(fixture.stats.mainPriceRequests.length).toBe(initialMainPriceRequests + 1);
         expect(fixture.stats.comparisonRequests.length).toBe(initialComparisonRequests + 1);
 
+        // Y11: Refresh is disabled while the page's big requests are in flight, and a
+        // disabled button takes no focus: wait until it can be pressed. A sync's own
+        // reload is not one of them (P3), so the A1 sync still held does not keep it.
+        const assetRefreshButton = page.getByTestId('asset-detail-refresh-btn');
+        await expect(assetRefreshButton).toBeEnabled({timeout: 10_000});
         fixture.conversionFailures.add(gbpPeer.slug);
         const restoreComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
-        await activateByKeyboard(page.getByTestId('asset-detail-refresh-btn'));
+        await activateByKeyboard(assetRefreshButton);
         const restoreComparisonResponse = await restoreComparisonResponsePromise;
         expect(restoreComparisonResponse.status()).toBe(200);
         expect(await restoreComparisonResponse.finished()).toBeNull();
