@@ -2639,3 +2639,51 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
 - **⚠️ Fuori pista**: il primo lancio (23:57:24) è uscito in 4 s con exit 2, perché avevo messo `--workers 2` dopo la
   categoria (`dev.py test … all-backend --workers 2`): l'opzione va prima, con `--test-port` e `--data-dir`. Nessun
   test partito, nessun dato toccato; rilanciato subito.
+- **Per il prossimo aggiornamento di base** (coordinatore, 16/10 00:39): T+DV è in `dev_release2` (`a0915bef9`). Ha
+  toccato `pac-allocator/planner/categoryLabels.svelte.ts` (DV-6) e rigenerato `eur_only_golden.json` sopra CP-4d, con
+  diff vuoto. Dopo il merge serve `dev.py api sync` (`SectorListResponse`), poi le prove d'ingresso.
+
+#### CP-15 — rossi e codice (via del coordinatore, 16/10 00:39)
+
+- **Via** (00:39): «CP-15: via adesso, rossi prima». CP-16 entra in `dev_release2` dopo la conferma dei colori su G-13.
+- **Decisione notturna, da rivedere**: per avere rossi su un valore e non un errore d'import, prima dei test ho scritto
+  `financial_math/ledger_totals.py` come **stub** con l'API concordata (risultati vuoti); il codice vero lo sostituisce
+  dopo i rossi. La bozza è pronta in `/tmp/libreFolio_j/cp15/ledger_totals_impl.py`; ne ho provato a parte, con il solo
+  `decimal`, il testo canonico (niente esponente né «-0») e l'eccezione su una somma inesatta.
+- **Rossi** (test-author, in corso): `test_financial_math/test_ledger_totals.py`, 11 gruppi: cassa, quantità,
+  `as_of`, indipendenza dal tipo, sensibilità, JSON canonico, andata e ritorno con le versioni, esattezza, parità col
+  fold del costo medio e con `native_balances`, un SQLite su file con blocchi da 2 e `get_settings` che solleva, la
+  guardia sul sorgente.
+- **Doc fuori da MkDocs, già scritta**: la tabella e la regola 1 di `financial-math.instructions.md`, la mappa di
+  `backend.instructions.md` (una riga aggiunta, superficie condivisa), la docstring di `financial_math/__init__.py`. La
+  pagina dev `financial_math.md` la fa il docs-writer dopo il verde.
+- **⛔ Pausa delle prove** (coordinatore, 00:55, fino al suo via, verso l'01:40): niente prove né build di nessun tipo,
+  perché la galleria dei colori ha avuto rossi per il carico. Il test-author è stato fermato subito: scrive soltanto.
+- **Rossi scritti, non ancora lanciati** (test-author, 00:39–01:20, fermato dalla pausa): `test_ledger_totals.py`, 26
+  funzioni, 62 casi; previsti 57 rossi sui valori dello stub e 5 guardie verdi (L0 e L11). Registro di prova di 23 righe:
+  cassa 278,5 EUR e 545,5 USD sul broker 1, 107 EUR e 510 USD sul broker 2; quantità 1 e 4 dell'asset 10, 0,000001
+  dell'asset 11 (la polvere); la linea in GBP e l'asset 12 si annullano e restano fuori.
+- **Letture del test-author, accettate**: precisione locale sotto le 81 cifre (con la mia, 60, 1E+70 + 1E-10 solleva);
+  `from_json` rifiuta un importo che non è testo (numero JSON, null) e una versione testuale; la guardia legge import e
+  attributi, salta le docstring; un iteratore a passata singola deve bastare; data e id di una riga non contano.
+- **⚠️ Fuori pista**: (a) una sonda del test-author ha lasciato una cartella `cp15probe*` nella temp di sistema: tolta da
+  me. (b) **J-18** nel backlog: su SQLite `Numeric(18, 6)` si salva come float (`123456789012.123456` torna
+  `…459`); i totali sommano i valori salvati, quindi B confronta lo stesso dato; impatto pratico nullo sotto ~1e10.
+- **Bozza aggiornata**: `compute_control_totals` si ferma dopo un blocco corto (una query vuota in meno).
+- **Doc della pagina dev** (`financial_math.md`): docs-writer al lavoro sulla bozza, senza build fino al via.
+- **Pagina dev** (docs-writer, 01:20–01:35, senza build): albero, nuova sezione «🧾 Ledger Control Totals»
+  (`#ledger-totals`: API, punto di lettura, forma JSON, testo canonico, proprietà, test), regola 1, tabella dei test,
+  tabella delle pagine. **⚠️ Fuori pista**: la riga `services financial-math` della pagina non citava i test di
+  CP-4a/4c/4d (una mia svista di allora): completata. Lo stesso nel runner condiviso, nelle sole righe della mia
+  unità (`scripts/test_runner/_backend_services.py`: descrizione, commento d'isolamento — ora con gli SQLite privati
+  sotto `tmp_path` — e le righe informative).
+- **✅ Rossi** (01:33, ripresa delle prove leggere, carico 11): sullo stub 57 failed, 5 passed (L0 e L11). I 57 sono 29
+  `AssertionError` e 28 «DID NOT RAISE»: nessun errore d'import o di tipo.
+- **✅ Codice** (01:34): la bozza al posto dello stub, `compute_control_totals` con l'arresto dopo un blocco corto.
+  `test_ledger_totals` 62/62.
+- **✅ Cancelli** (01:34–01:38, uno alla volta, `nice -n 10`, carico 40–66): ruff pulito; black pulito sui miei file
+  (`_backend_services.py` aveva già alla base un'eccedenza di riga a `:648`, di un altro lotto: lasciata; la mia riga
+  nuova accorciata); `services financial-math` 392 (guardia dello strato e test di CP-4 compresi); `check-orphans` ✓
+  (444 front, 338 backend); `mkdocs build` stretto verde (101 s); `check-links` verde (96 link).
+- **Nessuna riga di CHANGELOG**: il valore per l'utente arriva con B2 (la prova del ripristino), che la scrive lui.
+- **All'integrazione**: avviso B che firma e forma JSON sono quelle concordate e che `to_json()` dà un dict.

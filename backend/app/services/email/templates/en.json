@@ -39,5 +39,10 @@
     "subject": "LibreFolio test email",
     "intro": "This is a test email sent from $instance.",
     "outro": "If you are reading it, LibreFolio can send emails."
+  },
+  "email_changed": {
+    "subject": "The email address of your LibreFolio account changed",
+    "intro": "The email address of your account on $instance was changed to $address. This message goes to the address it had before.",
+    "advice": "If you made this change, there is nothing to do. If you did not, someone may be using your account: change your password at once if you can still sign in, and tell the administrator of $instance."
   }
 }

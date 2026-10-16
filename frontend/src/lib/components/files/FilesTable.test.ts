@@ -5,6 +5,18 @@
  * Synthetic text files deliberately have no preview images: the uploader image
  * can be addressed through its identified row/column without a made-up cell hook.
  * Parent URL serialization and list/grid composition belong to a page-level E2E.
+ *
+ * Scope contract (decision 36, last block): a static file is common or personal.
+ * The static table shows it in the `scope` column as a badge — read through the
+ * variant the DataTable publishes (`data-badge-variant`: info for common, default
+ * for personal), never its words — filterable by scope. A row offers the opposite
+ * scope to whoever may manage the file (`can_delete !== false`): `share` on a
+ * personal file, `makePersonal` on a common one, each handing the file and the
+ * scope it asks for to `onScopeChange`; asking for a confirmation is the page's
+ * job, not the table's. `delete` follows the same gate, static and BRIM alike; a
+ * row without `can_delete` keeps both, as rows did before the field. Row actions
+ * are reached as a user reaches them: the row's kebab (`row-actions-<id>`) opens
+ * the menu, whose entries are `context-menu-action-<action id>`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -500,5 +512,185 @@ describe('FilesTable absent and stale uploader identities', () => {
         expect(uploaderCell(table, 'atlas2')).toHaveTextContent('Review Current');
         expect(uploaderCell(table, 'atlas2')).not.toHaveTextContent('Review Stale');
         expect(boundary.notify).not.toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Scope (decision 36): the scope column, the share / makePersonal actions, and
+// delete behind the same can_delete gate.
+// ---------------------------------------------------------------------------
+
+type Scope = UploadedFile['scope'];
+
+/** A static text file of the scope tests; `canDelete` undefined leaves the field out, as on a row that predates it. */
+function scopedFile(id: string, scope: Scope, canDelete: boolean | undefined, uploader: number = USER_IDS.zephyr): UploadedFile {
+    const file: UploadedFile = {
+        id,
+        original_name: `scope-${id}.txt`,
+        mime_type: 'text/plain',
+        size_bytes: 128,
+        uploaded_at: UPLOADED_AT,
+        uploaded_by_user_id: uploader,
+        scope,
+        url: `/review/files/${id}`,
+    };
+    return canDelete === undefined ? file : {...file, can_delete: canDelete};
+}
+
+/** Every static case of the block, all on the table's single page. */
+function scopedFiles(): UploadedFile[] {
+    return [scopedFile('own-personal', 'personal', true), scopedFile('own-common', 'common', true), scopedFile('foreign-common', 'common', false, USER_IDS.atlas10), scopedFile('legacy-common', 'common', undefined, USER_IDS.atlas10), scopedFile('legacy-personal', 'personal', undefined)];
+}
+
+function brimFile(id: string): BrimFile {
+    return {file_id: id, filename: `scope-${id}.csv`, size_bytes: 128, uploaded_at: UPLOADED_AT, status: 'uploaded', uploaded_by_user_id: USER_IDS.zephyr, target_broker_id: null};
+}
+
+function mountScoped(type: TableType, files: FileData[]) {
+    const onScopeChange = vi.fn();
+    const onDelete = vi.fn();
+    const onFiltersChange = vi.fn();
+    render(FilesTable, {type, files, onDelete, onScopeChange, onFiltersChange});
+    return {onScopeChange, onDelete, onFiltersChange};
+}
+
+function rowOf(table: HTMLElement, id: string): HTMLTableRowElement {
+    const row = table.querySelector<HTMLTableRowElement>(`tbody tr[data-row-id="${id}"]`);
+    if (!row) throw new Error(`Owned row ${id} not on the single fixture page: ${ids(table).join(', ')}`);
+    return row;
+}
+
+/** The badge of a row's scope cell: the cell by its column id, the badge by the variant the DataTable publishes on it. */
+function scopeBadge(table: HTMLElement, id: string): HTMLElement {
+    const cell = rowOf(table, id).querySelector<HTMLElement>('td[data-column-id="scope"]');
+    if (!cell) throw new Error(`Row ${id} has no scope cell`);
+    const badge = cell.querySelector<HTMLElement>('[data-badge-variant]');
+    if (!badge) throw new Error(`The scope cell of ${id} is not a badge`);
+    return badge;
+}
+
+/** jsdom has no layout: the kebab gets a rect inside the viewport, or its menu closes as soon as it opens. */
+function withLayout(element: HTMLElement): HTMLElement {
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({x: 100, y: 100, top: 100, left: 100, right: 124, bottom: 124, width: 24, height: 24, toJSON: () => ({})} as DOMRect);
+    return element;
+}
+
+/** Open a row's action menu from its kebab, as a user does. */
+async function openRowMenu(table: HTMLElement, id: string): Promise<HTMLElement> {
+    await fireEvent.click(withLayout(within(rowOf(table, id)).getByTestId(`row-actions-${id}`)));
+    return screen.findByTestId('context-menu');
+}
+
+async function closeRowMenu(): Promise<void> {
+    await fireEvent.keyDown(window, {key: 'Escape'});
+    await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+}
+
+/**
+ * The actions an open row menu offers, by the id in their testid, sorted. The whole set, so an absence always stands
+ * beside what the same menu does offer — `download` is on every row.
+ */
+function menuActions(menu: HTMLElement): string[] {
+    return [...menu.querySelectorAll<HTMLElement>('[data-testid^="context-menu-action-"]')].map((item) => (item.dataset.testid ?? '').replace(/^context-menu-action-/, '')).sort();
+}
+
+describe('FilesTable static scope (decision 36)', () => {
+    it('shows each file’s scope as a badge: info for common, default for personal', async () => {
+        mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        expect(within(table).getByTestId('dt-header-scope')).toBeInTheDocument();
+        expect(scopeBadge(table, 'own-common')).toHaveAttribute('data-badge-variant', 'info');
+        expect(scopeBadge(table, 'foreign-common')).toHaveAttribute('data-badge-variant', 'info');
+        expect(scopeBadge(table, 'legacy-common')).toHaveAttribute('data-badge-variant', 'info');
+        expect(scopeBadge(table, 'own-personal')).toHaveAttribute('data-badge-variant', 'default');
+        expect(scopeBadge(table, 'legacy-personal')).toHaveAttribute('data-badge-variant', 'default');
+    });
+
+    it('filters the files by scope, and reports the filter under the scope key', async () => {
+        const {onFiltersChange} = mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        const everything = ids(table);
+        expect(new Set(everything)).toEqual(new Set(scopedFiles().map((file) => file.id)));
+
+        await fireEvent.click(within(table).getByTestId('col-filter-trigger-scope'));
+        const popover = await within(table).findByTestId('column-filter');
+        expect(popover).toHaveAttribute('data-filter-type', 'enum');
+        const controls = within(popover);
+        expect(controls.getByTestId('filter-enum-option-common')).toHaveAttribute('data-checked', 'false');
+        await fireEvent.click(controls.getByTestId('filter-enum-option-personal'));
+        await waitFor(() => expect(new Set(ids(table))).toEqual(new Set(['own-personal', 'legacy-personal'])));
+        expect(controls.getByTestId('filter-enum-option-personal')).toHaveAttribute('data-checked', 'true');
+        expect(onFiltersChange).toHaveBeenLastCalledWith({scope: {type: 'enum', selected: ['personal']}});
+
+        await fireEvent.click(controls.getByTestId('column-filter-reset'));
+        await waitFor(() => expect(ids(table)).toEqual(everything));
+        expect(onFiltersChange).toHaveBeenLastCalledWith({});
+    });
+
+    it('share, on a personal file the user may manage, hands the file and common to onScopeChange at once', async () => {
+        const {onScopeChange, onDelete} = mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        const menu = await openRowMenu(table, 'own-personal');
+        expect(menuActions(menu)).toEqual(['copyLink', 'delete', 'download', 'share']);
+
+        await fireEvent.click(within(menu).getByTestId('context-menu-action-share'));
+        // At once: whether to ask first is the page's decision, not the table's.
+        expect(onScopeChange).toHaveBeenCalledTimes(1);
+        const [file, scope] = onScopeChange.mock.calls[0];
+        expect(file).toMatchObject({id: 'own-personal', scope: 'personal'});
+        expect(scope).toBe('common');
+        expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('makePersonal, on a common file the user may manage, hands the file and personal to onScopeChange at once', async () => {
+        const {onScopeChange, onDelete} = mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        const menu = await openRowMenu(table, 'own-common');
+        expect(menuActions(menu)).toEqual(['copyLink', 'delete', 'download', 'makePersonal']);
+
+        await fireEvent.click(within(menu).getByTestId('context-menu-action-makePersonal'));
+        expect(onScopeChange).toHaveBeenCalledTimes(1);
+        const [file, scope] = onScopeChange.mock.calls[0];
+        expect(file).toMatchObject({id: 'own-common', scope: 'common'});
+        expect(scope).toBe('personal');
+        expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('offers neither delete nor a scope action on a file the user may not manage (can_delete false)', async () => {
+        mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        const menu = await openRowMenu(table, 'foreign-common');
+        expect(menuActions(menu)).toEqual(['copyLink', 'download']);
+    });
+
+    it('keeps delete and the scope action on rows without can_delete, as before the field', async () => {
+        mountScoped('static', scopedFiles());
+        const table = await settled('static');
+        expect(menuActions(await openRowMenu(table, 'legacy-common'))).toEqual(['copyLink', 'delete', 'download', 'makePersonal']);
+        await closeRowMenu();
+        expect(menuActions(await openRowMenu(table, 'legacy-personal'))).toEqual(['copyLink', 'delete', 'download', 'share']);
+    });
+});
+
+describe('FilesTable BRIM: no scope, delete behind the same gate (decision 36)', () => {
+    it('has no scope column and no scope action; delete stays on a row without can_delete (control: today’s menu)', async () => {
+        mountScoped('brim', [brimFile('brim-plain')]);
+        const table = await settled('brim');
+        // The BRIM columns are drawn: the absence below is of a column, not of a table.
+        expect(within(table).getByTestId('dt-header-status')).toBeInTheDocument();
+        expect(within(table).queryByTestId('dt-header-scope')).toBeNull();
+        expect(rowOf(table, 'brim-plain').querySelector('td[data-column-id="scope"]')).toBeNull();
+        expect(menuActions(await openRowMenu(table, 'brim-plain'))).toEqual(['delete', 'download']);
+    });
+
+    it('hides delete on a BRIM row whose can_delete is false, as on a static one', async () => {
+        // BRIMFileInfo carries no can_delete today: the gate reads the row whatever the table's type, so a BRIM row that
+        // does carry it is honoured.
+        const locked: BrimFile = Object.assign(brimFile('brim-locked'), {can_delete: false});
+        mountScoped('brim', [brimFile('brim-plain'), locked]);
+        const table = await settled('brim');
+        expect(menuActions(await openRowMenu(table, 'brim-plain'))).toEqual(['delete', 'download']);
+        await closeRowMenu();
+        expect(menuActions(await openRowMenu(table, 'brim-locked'))).toEqual(['download']);
     });
 });

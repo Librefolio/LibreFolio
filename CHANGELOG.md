@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
 - Test configuration shows until when a provider is paused after too many requests. API: live prices, asset refresh and FX sync results carry `error_code="RATE_LIMITED"` and `retry_after`.
+- **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
+- **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 
 ### 🔄 Changed
 
@@ -64,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
 - API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
 - **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
+- **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
+- A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
+- On the Files page, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 
 #### 🎨 A new colour palette
 
@@ -128,6 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The allocation pie and its history show the same sector emoji.**
 - **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
 - **Lots: an adjustment that takes units away while carrying a cost now hands them over at that cost**, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed. Units from a lot bought at another price realize the difference from that average cost: 10 units bought at 10 and handed over at an average cost of 15 realize +50. In a lot's history these rows show the value handed over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost from its own currency.
+- **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
+- **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
+- The image picker no longer reloads its list over and over when it has nothing to show.
 
 #### 🔒 Security
 

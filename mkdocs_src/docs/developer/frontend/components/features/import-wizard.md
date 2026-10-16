@@ -738,6 +738,10 @@ The plugin catalogue is read once (the cache shared with `ImportPluginSelect`), 
 preview is requested once per list of members, with `setRequest`, so the server leaves out the same
 originals as the memory; a failed request only leaves the `incomplete` badge out.
 
+The table's other columns and actions, among them the `can_delete` gate on **Delete** (both types)
+and the **Visibility** column of `type === 'static'`, are in
+[FilesTable](../core-ui/file-upload.md#filestable).
+
 ---
 
 ## 🧬 Duplicate detection

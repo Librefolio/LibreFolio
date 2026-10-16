@@ -9,8 +9,8 @@ A calculation here owns its whole problem. It takes the plain data of the proble
 FX service for conversions, the base currency from the settings service, the shared
 data-quality thresholds, the cache — instead of receiving values prepared by its caller.
 Where a calculation needs its own data from the database, it reads it at named points:
-the portfolio engine, with the configured FX pairs its data-quality report names, and the
-Yield on Cost loaders.
+the portfolio engine, with the configured FX pairs its data-quality report names, the
+Yield on Cost loaders and the ledger totals.
 
 Engines, services and API handlers call this layer; it does not depend on them. It never
 imports orchestration services (``portfolio_service``, ``broker_service``,
@@ -26,6 +26,9 @@ Modules:
   conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
   their value in the report currency on any day, and the period flows by type and position.
+* ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or
+  cost: cash per broker and currency and quantity per broker and asset, which a backup
+  writes and a restore checks.
 * ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
   conversion between cumulative and annualized returns, a period's start (rebasing), the
   net return of a holding and a gain or loss as a fraction of its base.
