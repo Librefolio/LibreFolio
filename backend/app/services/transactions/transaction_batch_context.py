@@ -64,6 +64,8 @@ class TransactionBatchContext:
     earliest_date_by_broker: dict[int, date] = field(default_factory=dict)
     link_uuid_map: dict[str, list[tuple[int, Transaction]]] = field(default_factory=lambda: defaultdict(list))
     consumed_link_uuids: set[str] = field(default_factory=set)
+    # The giving legs of the TRANSFER pairs this batch splits, by split index: priced in the WAC stage (decision 47).
+    handover_rows: list[tuple[int, Transaction]] = field(default_factory=list)
     wac_results: list[WACPreviewResultItem] | None = None
 
     @classmethod

@@ -146,9 +146,14 @@ async def apply_splits(
             continue
 
         from_type, to_type = split_types
+        pair_type = transaction_a.type
         transaction_from, transaction_to = pair_sides(transaction_a, transaction_b)
         make_standalone(transaction_from, from_type)
         make_standalone(transaction_to, to_type)
+        if pair_type == TransactionType.TRANSFER:
+            # Decision 47: the giving leg becomes an ADJUSTMENT-out at its own broker's Auto cost, computed with the
+            # batch's other costs once every row of it is in place (compute_wac_and_fx_issues).
+            context.handover_rows.append((original_index, transaction_from))
 
         for transaction in (transaction_from, transaction_to):
             previous = context.earliest_date_by_broker.get(transaction.broker_id)

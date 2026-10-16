@@ -34,31 +34,48 @@ async def compute_wac_and_fx_issues(
             context.parsed_updates,
             context.link_uuid_map,
         )
+        # Decision 47: the giving leg of a split TRANSFER pair leaves at its own broker's Auto cost, unless an update of
+        # the same batch gives it one. Without it (a missing conversion) the split is refused like an Auto row, rather
+        # than leave an ADJUSTMENT-out without a cost.
+        explicit = {item.id for _, item in context.parsed_updates if item.cost_basis_override is not None}
+        for split_index, row in context.handover_rows:
+            if row.id in explicit:
+                continue  # an update of the same batch gave this leg its cost: it stays
+            handover = await service._handover_cost(row)
+            if handover.wac:
+                service._write_auto_cost(row, handover)
+            elif handover.wac_missing_pairs:
+                context.issues.append(_wac_fx_unavailable("split", split_index, row.id, handover.wac_missing_pairs))
 
     if context.wac_results:
         for wac_result in context.wac_results:
             if wac_result.wac is None and wac_result.wac_missing_pairs:
-                pair_strings = [missing_pair.pair for missing_pair in wac_result.wac_missing_pairs]
-                context.issues.append(
-                    TXValidationIssue(
-                        operation=wac_result.operation or "create",
-                        index=(wac_result.index if wac_result.index is not None else 0),
-                        ref_id=None,
-                        error=f"WAC calculation failed: missing FX pairs {', '.join(pair_strings)}",
-                        code=TXValidationCode.WAC_FX_UNAVAILABLE.value,
-                        params={
-                            "pairs": pair_strings,
-                            "pair_details": [
-                                {
-                                    "pair": missing_pair.pair,
-                                    "dates": [missing_date.isoformat() for missing_date in missing_pair.dates],
-                                }
-                                for missing_pair in wac_result.wac_missing_pairs
-                            ],
-                        },
-                        field="cost_basis_override",
-                    )
-                )
+                operation = wac_result.operation or "create"
+                index = wac_result.index if wac_result.index is not None else 0
+                context.issues.append(_wac_fx_unavailable(operation, index, None, wac_result.wac_missing_pairs))
+
+
+def _wac_fx_unavailable(operation: Any, index: int, ref_id: int | None, missing_pairs: list) -> TXValidationIssue:
+    """The issue of an Auto cost that needs a missing conversion: ``WAC_FX_UNAVAILABLE`` on ``cost_basis_override``."""
+    pair_strings = [missing_pair.pair for missing_pair in missing_pairs]
+    return TXValidationIssue(
+        operation=operation,
+        index=index,
+        ref_id=ref_id,
+        error=f"WAC calculation failed: missing FX pairs {', '.join(pair_strings)}",
+        code=TXValidationCode.WAC_FX_UNAVAILABLE.value,
+        params={
+            "pairs": pair_strings,
+            "pair_details": [
+                {
+                    "pair": missing_pair.pair,
+                    "dates": [missing_date.isoformat() for missing_date in missing_pair.dates],
+                }
+                for missing_pair in missing_pairs
+            ],
+        },
+        field="cost_basis_override",
+    )
 
 
 async def validate_cost_basis(
