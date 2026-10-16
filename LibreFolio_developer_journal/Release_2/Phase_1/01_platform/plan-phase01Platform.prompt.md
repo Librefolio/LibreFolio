@@ -3262,3 +3262,96 @@ black, il giro dei verdi.
 > **Prove**: `services profile-defaults` sul codice di prima: 15 rossi (6 «ENVIRONMENT_PROFILE_DEFAULTS is missing», 9
 > «profile_default is missing»), 37 verdi. Poi `apply_h17.py`, ruff e black puliti, e i verdi: `profile-defaults` 52,
 > `config-package` 695, `config-env-example` 38. La doc di `settings.md` era già nel `mkdocs build` delle 06:59.
+
+### TS1 — i test speculari: numeri aggiornati e proposta (2026-10-16, mattina) — sola lettura
+
+Voce 7 di H nel piano generale, decisione aperta n. 13: si decide a riordino del backend finito, con i numeri in mano.
+Richiesta del coordinatore (07:10): l'analisi del prossimo elemento, in sola lettura.
+
+**Numeri di oggi** (HEAD `7caa98c20`; tra parentesi quelli di §13, del 14/10):
+
+- 358 file di test (266): `test_api` 70 (58), `test_services` 200 (141), `test_utilities` 47 (34), `test_db` 16 (10),
+  `test_schemas` 12 (11), `test_external` 7, `test_e2e` 2;
+- il runner codifica 327 percorsi di test distinti (236);
+- l'app ha 322 moduli di servizio in 22 pacchetti, più qualche modulo sciolto in `services/`;
+- uno specchio esiste già, solo per la finanza: `test_services/test_financial/` (27 file, più `test_portfolio_engine/`
+  con 15) e `test_services/test_financial_math/` (7).
+
+**Cosa costerebbe lo specchio** (`test_services/<pacchetto>/` come `backend/app/services/<pacchetto>/`):
+
+- circa 150 spostamenti da `test_services/`, e la stessa cosa per `test_api/` (70) se lo specchio si estende alle rotte;
+- riscrivere le voci del runner, fino a 327 stringhe (una superficie condivisa), più la doc dei test,
+  `backend-testing.instructions.md`, la skill `testing-backend` e le istruzioni del `test-author`;
+- un conflitto per ogni sessione aperta. Oggi A7, B3/B5, X CP13 e FE5c, E5b, Z, W, J e Y aggiungono o cambiano test
+  in queste cartelle: uno spostamento in mezzo ai loro lotti vuol dire file ricreati al posto vecchio e voci del runner
+  da rifare a ogni treno;
+- nessun guadagno di comportamento: il runner elenca i percorsi uno per uno, pytest non cambia nulla. Si guadagna solo
+  nel trovare un test accanto al suo modulo.
+
+**Proposta**:
+
+- **nella 1.3, no**. Restano la struttura piatta e la regola `test_<modulo>.py`. Niente sottocartelle nuove: le due
+  della finanza restano dove sono, senza estendere lo schema, così non ci sono due posti in cui cercare;
+- **dopo il tag 1.3.0**, se il developer vuole la vicinanza: un lotto solo, scritto da uno script, in una finestra senza
+  sessioni parallele, con le regole P2. Prima la rinomina (`git mv` più le voci del runner riscritte dallo script), poi
+  il resto; grep dei vecchi percorsi a zero, `all-backend`. Stima: una sessione di poche ore;
+- **decisione del developer** (n. 13). Il mio default è il no nella 1.3.
+
+> **Esito**: il coordinatore porta TS1 al developer come **P23**, con la mia proposta.
+
+### Lotto «b-doc-notes»: B-4 e B-5 (2026-10-16, mattina) — in corso
+
+Via del coordinatore (07:13): due lotti di sola scrittura in commit separati. Questo e poi H-1, H-4, H-6, H-9; prove
+leggere come al solito. Le due voci erano di B (piano 07, §13 B6a) e il coordinatore le ha passate ad H il 15/10.
+
+> **Note implementazione**:
+>
+> - io: il commento in testa a `docker-compose.yml` mette `backup` fra i comandi che funzionano nell'immagine, con
+>   l'esempio `./dev.py docker exec backup create`. Nessun test ne fissa il testo. Il file è di B dopo CP7a, ma la voce
+>   l'ha assegnata il coordinatore;
+> - io: l'ancora `{: #what-to-back-up }` sul titolo «✅ What to Back Up» di `admin/filesystem` nelle 4 lingue
+>   (`en`, `it`, `fr`, `es`). I titoli tradotti avevano slug diversi;
+> - in corso, docs-writer, solo inglese:
+>   - `docker_advanced.en.md#docker-exec`: `backup`, più un rimando a `backup create` nella sezione del backup manuale;
+>   - `admin/index.en.md`: la riga della CLI;
+>   - `filesystem.en.md`: il rimando alla CLI, la nota su `backups/`, `backups/` nell'albero;
+>   - `cli_tools.en.md`: il link verso `filesystem.md#what-to-back-up`.
+
+> - docs-writer, fatto: le quattro pagine inglesi come sopra, più l'avviso sui permessi di `filesystem.en.md`, che ora
+>   nomina anche `backups/` e `.restore/`. `ensure_private_dir` li crea `0700`, gli archivi sono `0600`: con Docker e
+>   un altro utente sull'host, copiare o cancellare un archivio dà `Permission denied`, e si usa `sudo cp -a` o
+>   `sudo rm`. Ogni fatto è verificato sul codice.
+>
+> **Prove leggere** (07:28–07:31): `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate`:
+> `filesystem` 27 errori, `docker_advanced` 42, `index` 15, debito già esistente compreso. Annotato in H-5, con l'ordine
+> di traduzione: insieme a B-7 o dopo.
+
+### Lotto H-1, H-4, H-6, H-9 (2026-10-16, mattina) — in corso
+
+> **Note implementazione**:
+>
+> - **H-1** ✅ (io): corrette 12 pagine vive della devWiki, con i percorsi di oggi:
+>   - `services/platform/scheduler/`;
+>   - `services/files/static_uploads.py`;
+>   - `config/__init__.py`;
+>   - `api/v1/system/connection.py` per l'indirizzo di F-102;
+>   - `api/v1/system/info.py` per i tre campi di `docker-system-info-missing-deps`;
+>   - la riga «(planned) … (not yet created)» di `domains/scheduler.md`, ora vera;
+>   - l'albero di `entities/market-data-scheduler.md`.
+>
+>   Restano come sono, perché raccontano lo stato di allora: le pagine `sources/` (`phase00-brim-danske-bank`,
+>   `r2-parallel-features-pwa-borsa-fx`), `features/F-078.md:34` e `decisions/port-6040-scheme.md:34` («were
+>   updated»).
+>
+>   `check_source_paths.py`: nessun percorso nuovo che manchi. I 5 segnalati sono cartelle generate (coverage, output
+>   delle sonde) assenti in un worktree nuovo, ed esistevano già prima;
+> - **H-4** (cura in `/tmp/librefolio-r13-h-hsmall/apply_h4_h9.py`, provata a secco, ruff e black puliti). In Python
+>   3.13 `Path.exists()` ignora solo ENOENT, ENOTDIR, EBADF ed ELOOP (`pathlib/_abc.py`), quindi un EACCES esce. Con
+>   `sqlite/` senza attraversamento, `rglob` lo salta in silenzio e poi `nearest_existing(sqlite/app.db)` solleva. La
+>   cura: un `OSError` diventa `ValueError("Cannot verify test data path: <relativo> (<strerror>)")` nel ciclo dei
+>   percorsi gestiti, e `ValueError("Cannot verify the test data directory: …")` nel controllo degli indicatori
+>   degli antenati. Resta fail-closed;
+> - **H-9** (stessa patch): `handler.close()` su ogni gestore tolto. `pytest.ini` non ha un `log_file`, quindi chiudere
+>   anche i gestori di pytest non perde niente: un `FileHandler` chiuso in modo `w` non si riapre, e uno `StreamHandler`
+>   non chiude il suo stream;
+> - **H-6**: in corso, test-author, insieme ai rossi di H-4 e H-9.
