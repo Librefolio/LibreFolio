@@ -1292,7 +1292,7 @@
                                         oninput={(e) => handleEventFieldChange(idx, 'notes', e.currentTarget.value)}
                                         disabled={disabled || readonly}
                                         class="w-full px-1 py-0.5 text-xs border border-lf-input hover:border-lf-input-hover rounded
-                                               bg-lf-field text-lf-primary
+                                               bg-lf-field text-lf-primary placeholder:text-lf-placeholder
                                                disabled:opacity-50"
                                     />
                                 </td>
