@@ -4796,7 +4796,8 @@ da Y il 15/10.
   famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
   corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
 - **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
-  di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
+  di Y, 15/10 (Y2). ✅ 16/10: ora il commento dice che il tooltip sta sull'etichetta dell'intestazione e che l'icona
+  compare solo con `headerTooltipUrl`; svelte-check 0/0. Nel checkpoint di Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
   il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
 - ✅ **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
@@ -4920,7 +4921,10 @@ da Y il 15/10.
     - `riskAnalysisHelpers.ts`.
   - La tabella con i valori di oggi è nel piano di Y, «Y12b».
 - **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
-  decisione del coordinatore delle 21:20).
+  decisione del coordinatore delle 21:20). ◐ 16/10: correzione nel checkpoint di Y-21. Ci sono le scadenze vere
+  (`L4_OFFER_DEADLINE_MS`, 10 s) sui quattro `poll` di D377. In più, dopo la corsa delle 23:25 (36/38, due rossi del
+  benchmark di L3 con la stessa causa), un budget di 90 s per tutto il blocco «functional integration» (opzione A del
+  coordinatore). Si chiude con la nuova corsa di `front-portfolio risk` sulla revisione combinata.
   - In `risk-analysis.spec.ts:2812`, alla riga 2828, `expect.poll(offered)` usa il limite predefinito di 3 s.
   - Il 16/10 alle 21:17, con il carico fra 72 e 83, il predicato (`evaluateAll`) non è nemmeno tornato: subito dopo
     l'apertura del replay storico il thread principale è rimasto occupato per più di 3 s. Alla fine il DOM era giusto.
