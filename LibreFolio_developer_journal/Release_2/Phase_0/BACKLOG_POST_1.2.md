@@ -2331,6 +2331,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - **Candidata della notte `g-cand16a`** (`72e66d1a6`): verde, 2904 PNG.
     - Diff contro r3: 2720 immagini cambiate, quasi tutte per la migrazione ai ruoli di colore.
     - Foglio per il developer, ordinato per cambio visibile: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`.
+      Dal 16/10 il comando è nel toolkit, su richiesta del coordinatore: `gallery_tool sheet <diff> --lang it`.
 
   Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md) e
   [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-16.md).

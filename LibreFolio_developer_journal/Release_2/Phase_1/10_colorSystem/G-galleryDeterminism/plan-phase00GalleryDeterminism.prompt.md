@@ -929,3 +929,16 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
     - Evidenze: [analisi G-13](evidence/analysis-g13-2026-10-16.md), [stabilità](evidence/stability-2026-10-16.md).
     - README del toolkit: la regola della data UTC, le durate, il comportamento al 16/10.
     - Nuova G-17 (nome dell'account usa e getta).
+  - **Foglio di confronto nel toolkit ✅, 16/10**, su richiesta del coordinatore (07:28): `gallery_tool sheet`.
+    > **Note implementazione**: il `contact_sheet.py` della notte diventa il sottocomando `sheet` di
+    > `scripts/visual_review/gallery_tool.py`.
+    > - Misura per immagine i pixel con cambio massimo di canale >4, >12 e >32 livelli, maschere del rumore applicate.
+    > - Ordina gli scatti per mediana >12; in cima le immagini nuove, sparite o ridimensionate.
+    > - Scrive `contact_sheet.<lang>.html` e `visible.json`, che riusa finché corrisponde alla diff.
+    > - `diff` registra in `summary.json` le cartelle dei due snapshot, che `sheet` legge.
+    >
+    > Prove: ruff e black puliti. Sulla diff della notte, valori identici allo script di sessione e fasce 91/53/20/18.
+    > Su `g-new3__a__vs__b`: il ripiego sull'etichetta, `--recompute` e la cache. Nessuna run.
+
+    > **⚠️ Fuori pista**: la mediana di `stability` è quella alta, e sbilancia gli scatti con viewport diversi.
+    > `sheet` usa `statistics.median`: solo così le fasce tornano uguali a quelle della notte.
