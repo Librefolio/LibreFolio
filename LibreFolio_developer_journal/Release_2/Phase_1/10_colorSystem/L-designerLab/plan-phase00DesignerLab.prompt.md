@@ -1654,7 +1654,65 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
   - `roleColors.ts`: TD-1 aggiunge `--lf-text-secondary` a `ChartRole`. La lista dei nomi nell'E2E C4 va aggiornata dopo il merge; non si rompe niente, ha solo un candidato in meno;
   - Y3, Y4b e Y5 non sono nel target: niente costanti né esempio da aggiornare a questo merge.
 
-**⏳ Passo 6 — dopo il merge di base con TD-1 (DV esporta `lookupKey`):**
+**✅ Passo 6 — dopo il merge di base con TD-1 (16/10, 02:13–02:28).**
+> **Merge di base del coordinatore (16/10, 02:13):**
+> - checkpoint `4cc601e57`, «feat(designer-lab): category layer and C4 signal», con i 27 path;
+> - merge `0b229ef95`, con padri `4cc601e57` e `57802d827`;
+> - il backlog si è fuso da solo; worktree pulito, `--check` pulito.
+>
+> **Verifica (02:14):** HEAD e padri come annunciati, 0 righe di stato.
+> - `lookupKey` è esportato (`chartCategories.ts:204`) e `--lf-text-secondary` è in `ChartRole` (`roleColors.ts:30`).
+> - Y3, Y4b e Y5 non sono entrati: il punto 7 non serve a questo merge.
+>
+> **Fatto (02:15):** in `engine/categories.ts` la copia è sparita: `import {lookupKey} from '$lib/theme/chartCategories'` e `export const categoryKey = lookupKey`.
+> - Il gate degli import del Lab regola solo chi importa il Lab, non cosa il Lab importa.
+> - `chartCategories.ts` non importa niente del Lab.
+>
+> **⚠️ Fuori pista — anche TD-1b è nella base** (`ada4742b7`, «PAC bars by category, live broker colours (TD-1, TD-1b)»):
+> - `GROWTH_BROKER_PALETTE` non esiste più: `growthBrokerColor()` (`chartPalettes.ts:32`) legge `categoryColor('type', CATEGORY_SEQUENCE[i mod 8], dark)` a ogni costruzione delle serie (`growthChartSeries.ts:115`), e `GrowthChart.svelte:954` ascolta C4;
+> - anche `ExposureBars.svelte`, il risultato del PAC, legge `chartRoles` e ascolta C4.
+>
+> Quindi nella doc cadono due limiti: la copia della regola delle chiavi e le linee dei broker della Growth.
+>
+> **Agenti nuovi (gli id di ieri sono scaduti), avviati in parallelo su file distinti:**
+> - `docs-writer` (`a1c3218b`): tolti i due limiti; «Reach» con le linee dei broker; la lista di chi legge `chartRoles` con le barre del PAC; la frase sulle chiavi con `lookupKey` di DV; il seam `categoryKey`;
+> - `test-author` (`1f5e2bd4`):
+>   - un test che fissa `categoryKey === lookupKey`; quello di parità resta;
+>   - `--lf-text-secondary` in `CHART_ROLES` dell'E2E, solo in scrittura;
+>   - il verdetto sui due E2E dopo TD-1b.
+>
+> **Punto 5, `api sync`:** il target cambia 15 file di `backend/app/api|schemas`, quindi nella fase `pre` dello slot si usa `API_SYNC=1`. Il client è generato e ignorato, e non serve alle prove leggere.
+>
+> **Esito degli agenti (02:2x):**
+> - **`test-author`:** Vitest a **712/712** su 21 file.
+>   - La base dopo il merge era 711, non 708: `chartCategories.test.ts` di DV ha netto +3 test. Il +1 è il test d'identità, `expect(categoryKey).toBe(lookupKey)`, alla riga 48; l'intestazione è aggiornata e i test di parità restano.
+>   - E2E: `'--lf-text-secondary'` in `CHART_ROLES` (riga 147), nell'ordine di `ChartRole`.
+>   - Prettier pulito; tsc temporaneo sugli E2E con 0 errori.
+>   - Verdetti:
+>     - il test delle categorie regge, perché legge solo le torte di `allocation-panel`, e la Growth sta fuori dal pannello;
+>     - il test C4 regge: il contatore conta i segnali, non gli ascoltatori. `notifyChartColorsChange` ha un solo chiamante, quindi 1/2/3 restano. B resta `--lf-surface-card`, il primo che qualifica; A non è mai stato `--lf-text-secondary`.
+> - **`docs-writer`** (+14/−15 righe):
+>   - la frase delle chiavi con `lookupKey` (378–380);
+>   - le barre del PAC tra chi legge `chartRoles` (401–404, ora cinque);
+>   - «Reach» con le linee dei broker (406–412);
+>   - Known Limits senza i due limiti (1100–1113);
+>   - il seam «`categoryKey` (DV's `lookupKey`, re-exported)» (1547–1549).
+>
+>   Le ancore sono tutte risolte. Ha segnalato che la lista dei lettori di `categoryColor` in C1 (344–346) è incompleta: mancano le barre del PAC (`exposureBarColours.ts:39–44`, verificato) e le linee dei broker. Gliel'ho chiesto.
+>   - **Secondo giro (02:2x):** C1 (344–351) elenca chi chiama `categoryColor` direttamente e chi prende un colore in prestito.
+>     - Diretti: la torta, la storia, le barre del PAC con `actualColours()`.
+>     - In prestito, con `sequenceColor`: la semi-ciambella e i paesi della storia. Con `growthBrokerColor()`: le linee dei broker e le righe del loro tooltip.
+>     - La semi-ciambella e le righe del tooltip le ha aggiunte lui, verificate nel codice.
+>     - «Reach» (411–419): tutti e cinque i grafici che leggono una categoria si ridisegnano su C4.
+>     - Nessun numero di riga sulla pagina; nessun'altra menzione di «copy», `GROWTH_BROKER_PALETTE` o TD-1b.
+>
+> **Prove leggere sull'albero finale (02:28):**
+> - Vitest del Lab più `chartCategories.test.ts`: 21 file, **712/712**;
+> - Prettier pulito sulle 4 cartelle del Lab; `git diff --check` pulito;
+> - porta 6152 libera.
+>
+> Delta: 5 file, cioè `engine/categories.ts`, `categories.test.ts`, `designer-lab-live.spec.ts`, `designer-lab.md` e questo piano, più la riga L-16 del backlog. Piccolo checkpoint mandato al coordinatore: **FROZEN**.
+
 1. verificare la nuova HEAD e i suoi padri;
 2. in `engine/categories.ts`, sostituire la copia con `export const categoryKey = lookupKey` (import da `$lib/theme/chartCategories`), tenendo il test di parità;
 3. eseguire il Vitest del Lab;
@@ -1665,7 +1723,7 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
    - con `test-author`, le costanti di estetica: `pickView.test.ts:23` `GROWTH`, che diventa `lib/features/dashboard/GrowthChart.svelte`, e la riga `scanColors.test.ts:339`;
    - con `docs-writer`, l'esempio JSON `designer-lab.md:1215`, che diventa `lib/features/brokers/…`.
 
-**⏳ Passo 7 — slot pesante (dopo le 01:15, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`.
+**⏳ Passo 7 — slot pesante (dopo T, verso le 03:20, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`, `pre` con `API_SYNC=1`.
 1. `pre`: unitari, svelte-check, gate, `theme-roles`, Prettier, ruff e black sulla riga Python, scanner e parità (attesi 1375 `custom` e 619 `lf`), MkDocs strict e `check-links`.
 2. `live`: iterazione E2E con `test-author`.
 3. `post`: `all` a 1 worker, `e2e` a 4, `check-orphans`.
