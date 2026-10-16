@@ -1427,7 +1427,7 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 
 > **Note implementazione:** i ruoli con mix trasparente nel catalogo fuso sono `--lf-selected` e `--lf-surface-overlay`; le ombre di T arriveranno con T-8. Il test E2E del mix li trova a runtime, senza nominarli.
 
-## ⏳ L-16 — Giro 3 nel Lab: ruoli di T-8/T-8b e livello `category` (15/10/2026, notte)
+## ✅ L-16 — Giro 3 nel Lab: ruoli di T-8/T-8b e livello `category` (15–16/10/2026, notte; validato il 16/10 alle 03:50 su `e44383f13`)
 
 **Entrata nel target:** il cursore dell'opacità è in `dev_release2` con `c96a62268` (merge di `f37f805fc`).
 **Base:** `a0915bef9` (T e DV entrati), raggiunta con un fast-forward del coordinatore; albero pulito, porta libera. Nessun file del Lab è cambiato dopo il mio ingresso.
@@ -1723,10 +1723,67 @@ Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
    - con `test-author`, le costanti di estetica: `pickView.test.ts:23` `GROWTH`, che diventa `lib/features/dashboard/GrowthChart.svelte`, e la riga `scanColors.test.ts:339`;
    - con `docs-writer`, l'esempio JSON `designer-lab.md:1215`, che diventa `lib/features/brokers/…`.
 
-**⏳ Passo 7 — slot pesante (dopo T, verso le 03:20, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`, `pre` con `API_SYNC=1`.
+**✅ Passo 7 — slot pesante (16/10, 03:26–03:50, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`, `pre` con `API_SYNC=1`.
+> **Base merge del coordinatore (03:24):**
+> - `e44383f13`, con padri `88ef51358` e il target `8850ad002`;
+> - entrati: Y4b (il rischio in `features/risk/`, a radice piatta), H CP-U2, A6d/e, X CP11b, Z7b, B2;
+> - nessun cambio sui miei path; Y3 e Y5 non ancora entrati.
+>
+> **Verifica (03:25):** HEAD e padri come annunciati, 0 righe di stato, porta libera.
+> - `lib/risk`, `stores/risk` e `components/risk` non esistono più.
+> - L'unico file di `features/risk` con colori, senza «chart» nel nome e senza `echarts`, è `levels/L1HowMuchItHurts.svelte`. Prima stava in `components/risk/levels/`: senza la riga `features/risk` del 23:5x avrebbe cambiato livello, e con la riga resta un file di grafico.
+>
+> **Via del coordinatore (03:25):** «Via allo slot pesante, adesso: valida `e44383f13`».
+>
+> **✅ `pre` (03:26–03:31):**
+>
+> | Prova | Esito |
+> |---|---|
+> | `api sync` | exit 0, 0 righe di stato |
+> | unitari | 21 file, **712/712** |
+> | gate | 10 file, **186/186** |
+> | `theme-roles --check` | pulito |
+> | Prettier, ruff, black | puliti |
+> | scanner | 3815 ms |
+> | parità | **identica**: tw 10270, custom 1500, arbitrary 12, hex 1353, fn 245, var_uses 1374/877 distinte, var_defs 1073, files 1229 |
+> | categorie | 27 (11/14/2), 54 letterali |
+> | MkDocs strict | 0 warning, 0 errori |
+> | `check-links` | 96 link validi |
+>
+> Porta libera, HEAD invariata.
+>
+> **⚠️ Fuori pista — svelte-check rosso, 1 errore, difetto mio di L-16:**
+> - `scan-colors.mjs:775`, `Property 'line' does not exist on type 'object'`: `FileScan.literals` è tipato `object[]` in JSDoc, e la mia riga del passo 2 leggeva `lit.line` senza cast. Al checkpoint `4cc601e57` svelte-check non era stato eseguito.
+> - **Correzione di una riga:** `categoryAt?.get(/** @type {{line: number}} */ (lit).line)`, lo stesso schema di cast già usato nel file.
+> - **Dopo (03:33):**
+>   - svelte-check: **0 errori, 0 warning**;
+>   - `scanColors.test.ts` 66/66;
+>   - Prettier pulito;
+>   - **hash del catalogo identico** prima e dopo (`sha256:0dbd72c4decc…`), quindi nessun cambio d'uscita;
+>   - `git diff --check` pulito.
+>
+> **✅ `live` (03:33–03:39):** exit 0, **12 passed** (44 s) al primo giro; il resto del tempo è la build di debug.
+> - Tra i 12 ci sono i due test nuovi: «category: one asset type changes in the charts of another tab, by key» (6,1 s) e «C4: an L1 edit, a literal inside a role's definition and a reset each reach the other tab as one chart-colours signal» (4,2 s).
+> - L'avviso SSL nel download di mathjax viene dalla build di MkDocs, che ha tenuto la copia in cache: non c'entra con i test.
+>
+> **✅ `post` (03:39–03:48):**
+> - `front-designer-lab all` ai worker di default, cioè 1: exit 0, **17 E2E** (2,8 min) e **624 unitari**, 5 azioni ✓.
+>   - 624 = 712 − 88: gli 88 test di `chartCategories.test.ts` (contati con `vitest list`) sono del file di DV, che il runner del Lab non elenca. Il mio comando lo aggiunge.
+> - `e2e` a 4 worker: exit 0, **17 passed** (1,0 min).
+> - `check-orphans`: verde, 130 E2E e 458 file di unitari raggiungibili da `all`.
+>
+> **✅ `release` (03:48–03:50):** `npm run build` exit 0. In `build/` zero file con il marcatore `lf-designer-lab`, il catalogo, l'indice dei test id, `parseTransparentMix`, `categoryOverrides` o `__lfDesignerLab`. Il ramo C3 di DV è sparito con il minificatore.
+> - Nel worktree resta la build di release (`.build-debug` assente); il runner rifà quella di debug al prossimo E2E.
+> - Porta 6152 libera dopo ogni fase (`lsof` exit 1); HEAD `e44383f13` invariata dall'inizio alla fine.
+>
+> **Backlog:** L-16 ✅ validato; nuova voce **L-18**, togliere i vecchi percorsi `components/` di `CHART_PATH_RE` dopo Y3 e Y5. Y4b è già entrato.
+
+Le quattro fasi previste:
 1. `pre`: unitari, svelte-check, gate, `theme-roles`, Prettier, ruff e black sulla riga Python, scanner e parità (attesi 1375 `custom` e 619 `lf`), MkDocs strict e `check-links`.
 2. `live`: iterazione E2E con `test-author`.
 3. `post`: `all` a 1 worker, `e2e` a 4, `check-orphans`.
 4. `release`: marcatore, catalogo e indice a 0, nessuna traccia di `categoryOverrides` né di `__lfDesignerLab`.
 
-**⏳ Passo 8 — checkpoint:** ✅ nel piano, backlog L-16, handoff FROZEN con le righe «dove guardarlo».
+> **Nota sui numeri attesi:** `custom` è salito a 1500, non 1375, perché il target ha aggiunto classi (T, Y4b e gli altri); la parità resta identica.
+
+**✅ Passo 8 — checkpoint (16/10, 03:5x):** handoff al coordinatore, FROZEN, con le righe «dove guardarlo». Delta: `scan-colors.mjs` (la correzione di una riga), questo piano, la sezione L del backlog.

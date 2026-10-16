@@ -1944,7 +1944,7 @@ plugin.
   - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
-- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10. ✅ 16/10: validato su `e44383f13`, con i commit `4cc601e57` e `88ef51358`; la correzione di svelte-check è nel commit del checkpoint finale.
   - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
   - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
 
@@ -1955,7 +1955,12 @@ plugin.
     - livello `category` per chiave, scritto; `verify-export` trova le righe di categoria per chiave e tema;
     - `CHART_PATH_RE` accetta già `features/{dashboard,risk,brokers/lots}` (Y3, Y4b, Y5).
 
-    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15). Resta la validazione pesante dopo T.
+    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15).
+    Validazione pesante su `e44383f13`, 16/10 03:26–03:50:
+    - unitari 712, gate 186, svelte-check 0 errori dopo una correzione di una riga mia;
+    - parità identica, MkDocs strict 0/0, `check-links` 96;
+    - E2E `live` 12, `all` 17 più 624 unitari, `e2e` a 4 worker 17, `check-orphans` verde;
+    - build di release con 0 tracce del Lab.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
 
 - **L-17 · Il selettore di elementi nomina la categoria di una fetta** — basso; L, 15/10 (L-16, punto 5, nel backlog su decisione del coordinatore).
@@ -1963,6 +1968,14 @@ plugin.
   - Servirebbe che il grafico dichiarasse la chiave della fetta puntata, nell'opzione o con un attributo dati; da concordare con DV.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab».
+
+- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16).
+  - `CHART_PATH_RE` (`scan-colors.mjs`) accetta i due percorsi finché gli spostamenti della 1.3 non sono finiti. Y4b è già entrato e `components/risk` non esiste più.
+  - Dopo Y3 (`features/dashboard/`) e Y5 (`features/brokers/lots/`):
+    - togliere i rami `components/(dashboard|risk|brokers/lots)` della regex, le righe sintetiche corrispondenti di `scanColors.test.ts` e la parentesi sui due percorsi in `designer-lab.md`;
+    - aggiornare la costante `GROWTH` di `pickView.test.ts` e l'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
