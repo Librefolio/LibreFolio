@@ -161,56 +161,44 @@
 </script>
 
 <ModalBase {open} onRequestClose={handleClose} maxWidth="2xl" testId="support-social-share-modal" zIndex={60} trapFocus={true} restoreFocus={true} labelledBy={titleId}>
-    <div class="flex min-h-0 flex-1 flex-col bg-libre-beige dark:bg-slate-800">
-        <div class="flex items-start justify-between gap-4 border-b border-black/5 px-6 py-5 dark:border-white/10 shrink-0">
+    <div class="flex min-h-0 flex-1 flex-col bg-lf-card">
+        <div class="flex items-start justify-between gap-4 border-b border-lf-subtle px-6 py-5 shrink-0">
             <div class="flex min-w-0 flex-1 items-start gap-3">
                 <div class={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${shareConfig.brandClass}`} data-testid="support-social-share-badge">
                     <SocialIcon {platform} size={24} />
                 </div>
                 <div class="min-w-0 flex-1 space-y-1 break-words">
-                    <h2 class="text-lg font-semibold text-libre-dark dark:text-slate-100" id={titleId} data-testid="support-social-share-title">
+                    <h2 class="text-lg font-semibold text-lf-primary" id={titleId} data-testid="support-social-share-title">
                         {$_('support.shareOn')}
                         {shareConfig.label}
                     </h2>
-                    <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-300" data-testid="support-social-share-hint">
+                    <p class="text-sm leading-relaxed text-lf-secondary" data-testid="support-social-share-hint">
                         {shareHint}
                     </p>
                 </div>
             </div>
 
-            <button
-                type="button"
-                class="shrink-0 rounded-lg p-2 text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-100"
-                onclick={handleClose}
-                data-testid="support-social-share-close-icon"
-                aria-label={$_('common.close')}
-            >
+            <button type="button" class="shrink-0 rounded-lg p-2 text-lf-muted transition-colors hover:bg-lf-hover hover:text-lf-secondary" onclick={handleClose} data-testid="support-social-share-close-icon" aria-label={$_('common.close')}>
                 <X size={18} />
             </button>
         </div>
 
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             {#if copyError}
-                <div
-                    class="rounded-lg border px-4 py-3 text-sm {copyErrorKind === 'navigation'
-                        ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
-                        : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200'}"
-                    role="alert"
-                    data-testid="support-social-share-error"
-                >
+                <div class="rounded-lg border px-4 py-3 text-sm {copyErrorKind === 'navigation' ? 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft' : 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft'}" role="alert" data-testid="support-social-share-error">
                     {copyError}
                 </div>
             {/if}
 
             {#if shareTitle}
                 <div class="space-y-2">
-                    <label class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" for="support-social-share-post-title" data-testid="support-social-share-title-label">
+                    <label class="text-xs font-semibold uppercase tracking-[0.2em] text-lf-muted" for="support-social-share-post-title" data-testid="support-social-share-title-label">
                         {$_('support.share.titleLabel')}
                     </label>
                     <input
                         id="support-social-share-post-title"
                         data-testid="support-social-share-post-title"
-                        class="w-full rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-100"
+                        class="w-full rounded-lg border border-lf-input bg-lf-field/90 px-4 py-3 text-sm text-lf-primary hover:border-lf-input-hover"
                         value={shareTitle}
                         readonly
                         onfocus={selectAll}
@@ -220,12 +208,12 @@
             {/if}
 
             <div class="space-y-2">
-                <label class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400" for={`support-social-share-message-${platform}`}>
+                <label class="text-xs font-semibold uppercase tracking-[0.2em] text-lf-muted" for={`support-social-share-message-${platform}`}>
                     {$_('support.shareMessageLabel')}
                 </label>
                 <textarea
                     id={`support-social-share-message-${platform}`}
-                    class="min-h-32 w-full rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm outline-none transition focus:border-libre-green focus:ring-2 focus:ring-libre-green/20 dark:border-slate-600 dark:bg-slate-900/70 dark:text-slate-100"
+                    class="min-h-32 w-full rounded-lg border border-lf-input bg-lf-field/90 px-4 py-3 text-sm leading-relaxed text-lf-primary hover:border-lf-input-hover shadow-sm outline-none transition focus:border-lf-focus focus:ring-2 focus:ring-lf-focus/20"
                     readonly
                     rows="7"
                     spellcheck="false"
@@ -238,11 +226,11 @@
             </div>
         </div>
 
-        <div class="border-t border-black/5 px-6 py-4 dark:border-white/10 shrink-0">
+        <div class="border-t border-lf-subtle px-6 py-4 shrink-0">
             <div class="grid grid-cols-2 gap-2" data-testid="support-social-share-actions">
                 <button
                     type="button"
-                    class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/20 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-800"
+                    class="flex w-full items-center justify-center gap-2 rounded-lg border border-lf-subtle bg-lf-card/80 px-4 py-2.5 text-sm font-medium text-lf-secondary transition-colors hover:bg-lf-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/20 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     onclick={handleClose}
                     data-testid="support-social-share-close"
                 >

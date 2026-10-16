@@ -48,39 +48,39 @@
 </script>
 
 {#if provenance}
-    <div class="mt-3 space-y-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-slate-800/60" data-testid="risk-l4-provenance">
+    <div class="mt-3 space-y-2 rounded-lg bg-lf-panel px-3 py-2" data-testid="risk-l4-provenance">
         <div>
-            <p class="text-xs font-medium text-gray-700 dark:text-gray-200">{$t(`${NS}.title`)}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{$t(`${NS}.hint`)}</p>
+            <p class="text-xs font-medium text-lf-secondary">{$t(`${NS}.title`)}</p>
+            <p class="text-xs text-lf-muted">{$t(`${NS}.hint`)}</p>
         </div>
 
         {#if provenance.entries.length > 0}
             <dl class="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
                 {#each provenance.entries as entry (entry.key)}
                     <div class="flex justify-between gap-2" data-testid="risk-l4-provenance-{entry.key}">
-                        <dt class="text-gray-500 dark:text-gray-400">{$t(`${NS}.labels.${entry.key}`)}</dt>
-                        <dd class="text-right font-medium text-gray-700 dark:text-gray-200">{entryText(entry)}</dd>
+                        <dt class="text-lf-muted">{$t(`${NS}.labels.${entry.key}`)}</dt>
+                        <dd class="text-right font-medium text-lf-secondary">{entryText(entry)}</dd>
                     </div>
                 {/each}
             </dl>
         {/if}
 
         {#if provenance.inclusions.length > 0}
-            <p class="text-xs text-gray-600 dark:text-gray-300" data-testid="risk-l4-provenance-includes">
+            <p class="text-xs text-lf-secondary" data-testid="risk-l4-provenance-includes">
                 {$t(`${NS}.includes`)}: {effectList(provenance.inclusions)}
             </p>
         {/if}
 
         {#if provenance.exclusions.length > 0}
-            <p class="text-xs text-gray-600 dark:text-gray-300" data-testid="risk-l4-provenance-excludes">
+            <p class="text-xs text-lf-secondary" data-testid="risk-l4-provenance-excludes">
                 {$t(`${NS}.excludes`)}: {effectList(provenance.exclusions)}
             </p>
         {/if}
 
         {#if provenance.truncation}
-            <div class="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20" data-testid="risk-l4-provenance-truncation">
-                <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                <p class="text-xs text-amber-800 dark:text-amber-200">
+            <div class="flex items-start gap-2 rounded-lg bg-lf-warning-soft px-3 py-2" data-testid="risk-l4-provenance-truncation">
+                <AlertTriangle size={14} class="mt-0.5 shrink-0 text-lf-warning" />
+                <p class="text-xs text-lf-warning-on-soft">
                     {$t(`${NS}.truncation`, {values: {declared: provenance.truncation.declaredDays, applied: provenance.truncation.appliedDays}})}
                 </p>
             </div>

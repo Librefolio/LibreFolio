@@ -44,7 +44,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
@@ -56,7 +56,7 @@
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
     import AssetEventPicker from '../events/AssetEventPicker.svelte';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';
@@ -1381,8 +1381,8 @@
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
+        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
                 {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
@@ -1412,11 +1412,11 @@
             </h2>
             <div class="flex items-center gap-1">
                 {#if isReadonly && onSwitchToEdit && canEdit}
-                    <button class="p-2 text-gray-400 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
+                    <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-hover rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
                         <Pencil size={18} />
                     </button>
                 {/if}
-                <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={requestClose} data-testid="tx-form-close" aria-label="Close">
+                <button class="p-2 text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors" onclick={requestClose} data-testid="tx-form-close" aria-label="Close">
                     <X size={20} />
                 </button>
             </div>
@@ -1562,7 +1562,7 @@
 
             <!-- Read-only footer (edit/view) -->
             {#if (mode === 'edit' || mode === 'view') && mainRow}
-                <div class="text-[10px] text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-slate-800 pt-3" data-testid="tx-form-readonly-footer">
+                <div class="text-[10px] text-lf-muted border-t border-lf-subtle pt-3" data-testid="tx-form-readonly-footer">
                     ID #{mainRow.id}
                     {#if partnerRow}+ #{partnerRow.id}{/if}
                     {#if mainRow.created_at}· {$t('common.created')} {mainRow.created_at}{/if}
@@ -1574,12 +1574,12 @@
         <!-- ============================================================= -->
         <!-- Footer -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
+        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-lf-subtle shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-lf-secondary hover:bg-lf-hover disabled:opacity-40 disabled:cursor-not-allowed"
                         disabled={!isFormComplete}
                         onclick={validateNow}
                         data-testid="tx-form-validate-now"
@@ -1589,26 +1589,22 @@
                     </button>
                 {/if}
                 {#if scheduler.state.isValidating || scheduler.state.isPending}
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
+                    <span class="text-[11px] text-lf-muted">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid}
-                    <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">
+                    <span class="text-lf-success text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">
                         <Check size={14} />
                         {$t('transactions.validate.ok')}
                     </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button
-                    type="button"
-                    class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5"
-                    onclick={requestClose}
-                    data-testid="tx-form-cancel"
-                    title={isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</span></button
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary bg-lf-panel hover:bg-lf-neutral inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-form-cancel" title={isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}
+                    ><X size={15} /> <span class="hidden sm:inline">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</span></button
                 >
                 {#if !isReadonly}
                     <button
                         type="button"
-                        class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                        class="px-4 py-2 text-sm rounded-lg text-lf-on-action bg-lf-action hover:bg-lf-action-hover disabled:opacity-50 inline-flex items-center gap-1.5"
                         disabled={committing || loadingPartner || hasLocalErrors || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"

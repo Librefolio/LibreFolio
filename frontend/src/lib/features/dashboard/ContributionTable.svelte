@@ -1,0 +1,471 @@
+<!--
+  ContributionTable file name kept for compatibility, but component now renders unified
+  period-based Performance table for dashboard "Your Positions".
+
+  Stage 3 integration contract:
+  - `positions` must contain full backend dataset for selected period (open + closed together).
+  - Parent must NOT pre-filter by `is_fully_sold`; native Status column filter handles view split.
+  - Table stays period-based only (no holdings snapshot semantics mixed in).
+-->
+<script lang="ts">
+    import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
+    import {ExternalLink, Layers} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
+    import {getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
+
+    type NumericLike = string | (string | null)[] | null;
+    type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
+
+    interface HoldingSnapshot {
+        asset_id: number;
+        broker_id?: number | (number | null)[] | null;
+        gain_loss_change_1d?: NumericLike;
+        gain_loss_change_1d_percent?: NumericLike;
+    }
+
+    interface Position {
+        asset_id: number;
+        asset_name: string;
+        asset_ticker?: string | (string | null)[] | null;
+        asset_type: string;
+        broker_id: number;
+        broker_name: string;
+        period_unrealized_delta?: NumericLike;
+        period_realized_gain_loss?: NumericLike;
+        period_income?: NumericLike;
+        period_fees_taxes?: NumericLike;
+        period_pnl?: NumericLike;
+        period_pnl_percent?: NumericLike;
+        annualized_return?: NumericLike;
+        start_value?: NumericLike;
+        end_value?: NumericLike;
+        is_fully_sold?: boolean;
+        oldest_open_lot_date?: NumericLike;
+    }
+
+    interface Props {
+        /** Full mixed dataset from backend. Do not pre-filter open/closed in parent. */
+        positions: Position[];
+        holdings?: HoldingSnapshot[];
+        displayCurrency?: string;
+        brokers?: ReadonlyArray<BrokerLike>;
+        onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
+    }
+
+    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null}: Props = $props();
+
+    let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
+    // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
+    // can't attach to them directly — scan the wrapper for overflow-marquee candidates instead,
+    // re-attaching automatically whenever rows are re-rendered (sort/filter/data refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
+    });
+
+    export function getTableRef() {
+        return tableRef;
+    }
+
+    function statusFromSoldFlag(isFullySold: boolean): PositionStatus {
+        return isFullySold ? 'closed_by_period_end' : 'open_at_period_end';
+    }
+
+    function label(key: string, fallback: string): string {
+        const translated = $_(key) || fallback;
+        return translated === key ? fallback : translated;
+    }
+
+    function statusLabel(status: PositionStatus): string {
+        return status === 'closed_by_period_end' ? label('dashboard.closedByPeriodEnd', 'Closed by period end') : label('dashboard.openAtPeriodEnd', 'Open at period end');
+    }
+
+    interface DisplayRow {
+        key: string;
+        assetName: string;
+        assetType: string;
+        brokerId: number;
+        brokerName: string;
+        broker: BrokerLike | null;
+        pnl: number | null;
+        annualizedReturn: number | null;
+        unrealizedDelta: number | null;
+        realizedSales: number | null;
+        income: number | null;
+        costs: number | null;
+        startValue: number | null;
+        endValue: number | null;
+        gainLossChange1d: number | null;
+        gainLossChange1dPercent: number | null;
+        status: PositionStatus;
+        statusLabel: string;
+        isFullySold: boolean;
+        assetId: number;
+        oldestOpenLotDate: string | null;
+    }
+
+    let displayRows = $derived.by<DisplayRow[]>(() => {
+        const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
+        const holdingsByKey = new Map(
+            holdings.map((holding) => [
+                makePositionKey(holding.asset_id, safeNumber(holding.broker_id)),
+                {
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
+                },
+            ]),
+        );
+        return positions
+            .map((p) => {
+                const isFullySold = p.is_fully_sold ?? false;
+                const status = statusFromSoldFlag(isFullySold);
+                const holdingMatch = holdingsByKey.get(makePositionKey(p.asset_id, p.broker_id)) ?? null;
+                return {
+                    key: `pos-${p.broker_id}-${p.asset_id}`,
+                    assetName: p.asset_name,
+                    assetType: p.asset_type,
+                    brokerId: p.broker_id,
+                    brokerName: p.broker_name,
+                    broker: brokerMap.get(p.broker_id) ?? null,
+                    pnl: safeDecimal(p.period_pnl),
+                    annualizedReturn: safeDecimal(p.annualized_return),
+                    unrealizedDelta: safeDecimal(p.period_unrealized_delta),
+                    realizedSales: safeDecimal(p.period_realized_gain_loss),
+                    income: safeDecimal(p.period_income),
+                    costs: safeDecimal(p.period_fees_taxes),
+                    startValue: safeDecimal(p.start_value),
+                    endValue: safeDecimal(p.end_value),
+                    gainLossChange1d: holdingMatch?.gainLossChange1d ?? null,
+                    gainLossChange1dPercent: holdingMatch?.gainLossChange1dPercent ?? null,
+                    status,
+                    statusLabel: statusLabel(status),
+                    isFullySold,
+                    assetId: p.asset_id,
+                    oldestOpenLotDate: safeString(p.oldest_open_lot_date),
+                };
+            })
+            .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
+    });
+
+    function signedAmountCell(value: number | null) {
+        if (value == null) return '—';
+        const classes = value > 0 ? SIGN_TEXT.portfolio.gain : value < 0 ? SIGN_TEXT.portfolio.loss : SIGN_TEXT.portfolio.zero;
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
+        };
+    }
+
+    function amountCell(value: number | null) {
+        if (value == null) return '—';
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency))}</span>`,
+        };
+    }
+
+    function percentChangeCell(value: number | null) {
+        if (value == null) return '—';
+        const classes = value >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss;
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium tabular-nums ${classes}">${formatPercent(value, {scale: 100})}</span>`,
+        };
+    }
+
+    function statusCell(row: DisplayRow) {
+        const classes = row.isFullySold ? 'bg-lf-panel text-lf-secondary' : 'bg-lf-success-soft text-lf-success-on-soft';
+        return {
+            type: 'html' as const,
+            html: `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${classes}">${escapeHtml(row.statusLabel)}</span>`,
+        };
+    }
+
+    function assetIconSrc(r: DisplayRow): string | null {
+        if (!r.assetId) return null;
+        const info = getAssetInfo(r.assetId);
+        return info?.icon_url || getAssetTypeIconUrl(r.assetType) || null;
+    }
+
+    function getRowClass(row: DisplayRow): string {
+        return `${row.isFullySold ? 'italic' : ''} ${row.assetId === analyzedAssetId ? 'row-analyzed' : ''}`.trim();
+    }
+
+    /** Desktop double-click / mobile long-press → asset detail page. The plain `goto()`
+     *  push (not `enter`) keeps the shared dateRangeStore state as-is (only 'enter'
+     *  navigations re-seed it from URL params) and lets the asset detail page's existing
+     *  `goBack('/assets')` correctly pop back to the dashboard via navigationStore's stack. */
+    function goToAssetDetail(row: DisplayRow) {
+        if (row.assetId == null) return;
+        void goto(`/assets/${row.assetId}`);
+    }
+
+    const rowActions: RowAction<DisplayRow>[] = [
+        {
+            id: 'view-asset',
+            icon: ExternalLink,
+            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
+            onClick: (row) => goToAssetDetail(row),
+        },
+        {
+            id: 'analyze-lots',
+            icon: Layers,
+            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
+            onClick: (row) => {
+                if (row.assetId == null) return;
+                onAnalyze?.(row.assetId);
+            },
+        },
+    ];
+
+    let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
+        const openStatusLabel = label('dashboard.openAtPeriodEnd', 'Open at period end');
+        const closedStatusLabel = label('dashboard.closedByPeriodEnd', 'Closed by period end');
+
+        return [
+            {
+                id: 'asset',
+                header: () => label('common.asset', 'Asset'),
+                type: 'text',
+                width: 250,
+                minWidth: 220,
+                sortable: true,
+                filterable: false,
+                getValue: (row) => row.assetName,
+                cell: (row) => {
+                    const iconSrc = assetIconSrc(row);
+                    const nameHtml = escapeHtml(row.assetName);
+                    const iconHtml = iconSrc
+                        ? `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
+                        : `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-[10px] text-lf-link font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
+                    return {
+                        type: 'html',
+                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-lf-secondary" title="${nameHtml}">${nameHtml}</span></div>`,
+                    };
+                },
+            },
+            {
+                id: 'pnl-change-1d',
+                header: () => label('dashboard.pnlChange1d', 'Δ P&L vs yesterday'),
+                headerTooltip: () => label('dashboard.pnlChange1dTooltip', "Change in unrealized P&L vs yesterday, holding today's quantity constant."),
+                type: 'number',
+                width: 190,
+                minWidth: 170,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
+            },
+            {
+                id: 'pnl-change-1d-percent',
+                header: () => label('dashboard.pnlChange1dPercent', 'Δ P&L %'),
+                headerTooltip: () => label('dashboard.pnlChange1dPercentTooltip', "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L."),
+                type: 'number',
+                width: 120,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+            },
+            {
+                id: 'pnl',
+                header: () => label('dashboard.periodPnl', 'Period P&L'),
+                headerTooltip: () => label('dashboard.periodPnlTooltip', 'Profit and loss generated during selected period.'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.pnl ?? 0,
+                cell: (row) => signedAmountCell(row.pnl),
+            },
+            {
+                id: 'annualized-return',
+                header: () => label('dashboard.annualizedReturn', 'Annualized'),
+                headerTooltip: () => label('dashboard.annualizedReturnPeriodTooltip', 'Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations.'),
+                type: 'number',
+                width: 130,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
+                id: 'unrealized-delta',
+                header: () => label('dashboard.unrealizedDelta', 'Unrealized Δ'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.unrealizedDelta ?? 0,
+                cell: (row) => signedAmountCell(row.unrealizedDelta),
+            },
+            {
+                id: 'realized-sales',
+                header: () => label('dashboard.realizedSales', 'Realized Sales'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.realizedSales ?? 0,
+                cell: (row) => signedAmountCell(row.realizedSales),
+            },
+            {
+                id: 'income',
+                header: () => label('dashboard.income', 'Income'),
+                type: 'number',
+                width: 160,
+                minWidth: 145,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.income ?? 0,
+                cell: (row) => signedAmountCell(row.income),
+            },
+            {
+                id: 'costs',
+                header: () => label('dashboard.costs', 'Costs'),
+                type: 'number',
+                width: 160,
+                minWidth: 145,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.costs ?? 0,
+                cell: (row) => signedAmountCell(row.costs),
+            },
+            {
+                id: 'broker',
+                header: () => label('transactions.table.broker', 'Broker'),
+                type: 'text',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                getValue: (row) => row.brokerName,
+                cell: (row) => {
+                    const broker = row.broker;
+                    return {
+                        type: 'custom',
+                        component: BrokerBadge,
+                        props: {
+                            broker: broker ?? {id: row.brokerId, name: row.brokerName},
+                            size: 16,
+                            showName: true,
+                            tooltip: row.brokerName,
+                        },
+                    };
+                },
+            },
+            {
+                id: 'start-value',
+                header: () => label('dashboard.startValue', 'Start Value'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.startValue ?? 0,
+                cell: (row) => amountCell(row.startValue),
+            },
+            {
+                id: 'end-value',
+                header: () => label('dashboard.endValue', 'End Value'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.endValue ?? 0,
+                cell: (row) => amountCell(row.endValue),
+            },
+            {
+                id: 'oldest-open-lot',
+                header: () => label('dashboard.oldestOpenLotDate', 'Oldest open lot'),
+                headerTooltip: () => label('dashboard.oldestOpenLotDateTooltip', 'Opening date of the oldest FIFO lot still open for this position.'),
+                type: 'date',
+                width: 150,
+                minWidth: 130,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
+            {
+                id: 'status',
+                header: () => label('dashboard.status', 'Status'),
+                type: 'enum',
+                width: 190,
+                minWidth: 180,
+                sortable: true,
+                filterable: true,
+                urlKey: 'status',
+                hiddenByDefault: true,
+                enumOptions: [
+                    {value: 'open_at_period_end', label: openStatusLabel},
+                    {value: 'closed_by_period_end', label: closedStatusLabel},
+                ],
+                getValue: (row) => row.status,
+                cell: (row) => statusCell(row),
+            },
+        ];
+    });
+</script>
+
+<div data-testid="contribution-table" bind:this={tableWrapperEl}>
+    <DataTable
+        bind:this={tableRef}
+        data={displayRows}
+        {columns}
+        getRowId={(row) => row.key}
+        storageKey="dashboard-performance-v2"
+        enableSelection={false}
+        selectionMode="none"
+        enableActions={true}
+        enablePagination={true}
+        defaultPageSize={25}
+        enableColumnVisibility={true}
+        enableColumnFilters={true}
+        enableSorting={true}
+        enableColumnResize={true}
+        enableContextMenu={true}
+        tableLayout="fixed"
+        {rowActions}
+        {getRowClass}
+        emptyMessage={label('dashboard.noPeriodPnl', 'No period P&L data')}
+    />
+</div>

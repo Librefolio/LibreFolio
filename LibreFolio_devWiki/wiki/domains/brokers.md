@@ -99,5 +99,5 @@ Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see
 | BRIM plugins | `backend/app/services/brim_providers/` |
 | File upload API | `backend/app/api/v1/uploads.py` |
 | DB models (Broker, BrokerUserAccess) | `backend/app/db/models.py` |
-| Broker sharing/discovery UI (v2) | `frontend/src/lib/components/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |
+| Broker sharing/discovery UI (v2) | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |
 | Broker v2 redesign plans (archived) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` |

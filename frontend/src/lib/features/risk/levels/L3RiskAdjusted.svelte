@@ -99,9 +99,9 @@
 
 <div class="space-y-4" data-testid="risk-l3" data-perimeter={wave.perimeter ?? ''}>
     {#if loading && rows.length === 0}
-        <div class="h-40 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-l3-loading"></div>
+        <div class="h-40 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-l3-loading"></div>
     {:else if rows.length === 0}
-        <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-l3-empty">{$t('risk.states.unavailable')}</p>
+        <p class="text-sm text-lf-muted" data-testid="risk-l3-empty">{$t('risk.states.unavailable')}</p>
     {:else}
         <!-- The table, the chart and their notes are the shared level's (`RiskReturnLevel`, with
              the lab's L3°). This page declares the weight, the ratios and — with a benchmark —
