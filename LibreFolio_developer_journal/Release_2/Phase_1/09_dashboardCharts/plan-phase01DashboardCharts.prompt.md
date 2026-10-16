@@ -2100,3 +2100,56 @@ scrivono qui quando partono.
 > 3. la documentazione con `docs-writer` (`developer/frontend/components/charts.md`, `styling.md`);
 > 4. con lo slot, le E2E dei grafici e una galleria filtrata sui grafici con bandiere;
 > 5. le righe CHANGELOG nell'handoff d'ingresso.
+
+### Y9 — passo 2, seconda parte ⏳ (2026-10-16, dalle 03:08; prima parte salvata in `dae8b4442` e `7e3c88e5e`)
+
+> **Note implementazione**:
+> - **Il carico del font** (condizione 2 del coordinatore).
+>   - Il problema: un canvas disegna il testo una volta sola, con le facce già caricate, e il browser scarica una faccia
+>     `unicode-range` solo per il testo della pagina che ne ha bisogno. Il testo del canvas non conta, e
+>     `document.fonts.ready` aspetta solo le facce già richieste.
+>   - In `chartFont.ts`, `chartFontReady()` fa una sola richiesta, in cache:
+>     `document.fonts.load("16px 'LF Flags'", '🇺🇸')`. Non rifiuta mai, e senza `document.fonts` (nei test e su un
+>     server) si risolve subito. C'è anche `chartFontLoaded()` (`document.fonts.check`).
+>   - La richiesta parte quando il modulo viene caricato. Ogni grafico lo importa prima di poter disegnare, quindi la
+>     richiesta precede sempre il primo disegno.
+>   - La rete di sicurezza è in `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), che 16 grafici su 17
+>     chiamano dopo il primo `setOption`: se la faccia non c'è ancora, un solo `resize()` quando arriva. Il diciassettesimo
+>     è `LotGanttChart`, che non disegna bandiere.
+> - **Test**, affidati a `test-author`:
+>   - `chartFont.load.test.ts`, nuovo: la richiesta all'import, la cache, che non rifiuti mai, `check`, l'ordine «load
+>     prima del primo `setOption`» su un grafico vero montato, e il ridisegno una volta sola;
+>   - i marcatori d'evento in `PriceChartFull.tooltipEscape.test.ts`;
+>   - il nome dell'alias in `chartFlagFont.test.ts`.
+>   Il file nuovo è registrato in `chart-safety-unit`.
+> - **Documentazione**, affidata a `docs-writer`: `developer/frontend/components/charts.md` (font, carico ed escape, con
+>   le guardie) e la sezione 'LF Flags' di `styling.md`.
+>
+> **Decisione notturna, da rivedere**: «prima del primo disegno» qui vuol dire che la richiesta del font parte prima, ed
+> è garantito. Che il caricamento sia finito prima del disegno non è garantito: in quel caso raro il grafico si
+> ridisegna una volta, appena la faccia arriva. Aspettare il font prima del primo `setOption` voleva dire cambiare il
+> flusso d'avvio di 17 componenti diversi, e rendere asincroni i test dei grafici. Sul Mac della galleria non si vede
+> differenza.
+>
+> **Checkpoint Y9-2** (03:32, chiesto dal coordinatore per aggiornare la base prima di Y3; il lotto di T è entrato in
+> `503dce683`):
+> - **Entrano**:
+>   - `chartFont.ts`, con il carico del font, ed `echartsTooltipHelpers.ts`, con il ridisegno;
+>   - la documentazione di `docs-writer`: `charts.md` («Chart Text and Tooltips», con le sezioni sul font, sull'HTML dei
+>     tooltip e sulle guardie), `styling.md` (il testo dei grafici nella sezione 'LF Flags') e `security.md` (la terza
+>     guardia di «Output Escaping»). `docs-writer` ha anche corretto: «two letters» vale dove manca il glifo, Windows
+>     compreso, non su ogni Linux; e `TransactionBulkModal` importa già `escapeHtml`, ha solo una copia in linea;
+>   - il piano.
+> - **Restano fuori**, perché `test-author` li sta scrivendo:
+>   - `chartFont.load.test.ts`, nuovo;
+>   - i test dei marcatori in `PriceChartFull.tooltipEscape.test.ts`;
+>   - l'alias in `chartFlagFont.test.ts`;
+>   - la loro registrazione in `_frontend_portfolio.py`;
+>   - i 2 rossi di Y10.
+>   Nessuno di questi file è cambiato in `dev_release2`: lo è solo `security.md`, che entra.
+> - **Prove**:
+>   - i test dei grafici toccati, compreso `echartsTooltipHelpers.test.ts`: 14 file e 406 test;
+>   - svelte-check: 0 errori e 0 avvisi;
+>   - Prettier sui due file di codice;
+>   - `mkdocs build` stretto: 3068 URL relativi risolti. `check-links`: 96 link validi;
+>   - `git diff --check` pulito.
