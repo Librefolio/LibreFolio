@@ -240,8 +240,9 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   A card on a page: `shadow-lf-shadow-card`.
 - **A modal uses `src/lib/components/ui/modals/ModalBase.svelte`**: the backdrop `bg-lf-overlay`, the card, the 1 px
   raised border, the raised shadow. It frames every modal the same way; do not draw a second frame inside it.
-- **A modal that needs another border colour** (the red one of `AssetCurrencyChangeModal`) needs a variant of
-  `ModalBase`, not a colour in `contentClass`: a role sorting before `border-lf-raised` would lose (rule 4).
+- **A modal about a destructive or irreversible change** takes `tone="danger"` on `ModalBase`: a 2 px
+  `border-lf-danger-line` frame, in one ternary with the raised border, published as `data-tone`. Never a border colour
+  in `contentClass`: a role sorting before `border-lf-raised` would lose (rule 4).
 
 ### 10. State for tests, not colours
 

@@ -1,5 +1,5 @@
 /*
- * Dialogs and menus: confirm modal, context menu, broker mismatch modal.
+ * Dialogs and menus: context menu, broker mismatch modal.
  *
  * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
  * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
@@ -10,38 +10,6 @@
  * Divergences between similar components are kept on purpose: the designer decides (phase B, `--lf-*` roles).
  */
 :root {
-    /* ConfirmModal.svelte */
-    --lf-cmp-confirm-border: #e2e8f0;
-    --lf-cmp-confirm-border-dark: #334155;
-    --lf-cmp-confirm-title-text: #0f172a;
-    --lf-cmp-confirm-title-text-dark: #f1f5f9;
-    --lf-cmp-confirm-close-btn-text: #64748b;
-    --lf-cmp-confirm-hover-bg: #f1f5f9;
-    --lf-cmp-confirm-hover-bg-dark: #334155;
-    --lf-cmp-confirm-message-text: #475569;
-    --lf-cmp-confirm-message-text-dark: #94a3b8;
-    --lf-cmp-confirm-muted-text: #64748b;
-    --lf-cmp-confirm-muted-text-dark: #94a3b8;
-    --lf-cmp-confirm-result-item-text: #334155;
-    --lf-cmp-confirm-result-item-text-dark: #e2e8f0;
-    --lf-cmp-confirm-result-action-text: #2563eb;
-    --lf-cmp-confirm-result-action-text-dark: #60a5fa;
-    --lf-cmp-confirm-items-toggle-bg: #f8fafc;
-    --lf-cmp-confirm-items-toggle-bg-dark: #1e293b;
-    --lf-cmp-confirm-items-list-bg: #fff; /* white */
-    --lf-cmp-confirm-items-list-bg-dark: #0f172a;
-    --lf-cmp-confirm-btn-secondary-text: #475569;
-    --lf-cmp-confirm-btn-secondary-text-dark: #e2e8f0;
-    --lf-cmp-confirm-btn-secondary-hover-bg: #e2e8f0;
-    --lf-cmp-confirm-btn-secondary-hover-bg-dark: #475569;
-    --lf-cmp-confirm-btn-primary-bg: #1a4031;
-    --lf-cmp-confirm-on-fill-text: #fff; /* white */
-    --lf-cmp-confirm-btn-primary-hover-bg: #153428;
-    --lf-cmp-confirm-btn-danger-bg: #dc2626;
-    --lf-cmp-confirm-btn-danger-hover-bg: #b91c1c;
-    --lf-cmp-confirm-btn-warning-bg: #f59e0b;
-    --lf-cmp-confirm-btn-warning-hover-bg: #d97706;
-
     /* ContextMenu.svelte */
     --lf-cmp-context-menu-surface-bg: #fff; /* white */
     --lf-cmp-context-menu-surface-bg-dark: #1e293b;
