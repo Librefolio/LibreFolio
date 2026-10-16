@@ -164,6 +164,7 @@
         if (!row.held) return $t('tools.pacAllocator.planner.distribution.notHeld', {default: 'not held'});
         if (row.valuation === 'MARKET_PRICE') return $t('tools.pacAllocator.planner.distribution.marketPrice', {default: 'market price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
         if (row.valuation === 'LAST_TRADE_PRICE') return $t('tools.pacAllocator.planner.distribution.lastTrade', {default: 'last trade price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
+        if (row.valuation === 'ESTIMATED_AT_COST') return $t('tools.pacAllocator.planner.distribution.valuedAtCost', {default: 'valued at cost · no price'});
         return $t('tools.pacAllocator.planner.distribution.missing', {default: 'no price or rate: no weight'});
     }
 

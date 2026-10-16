@@ -1000,10 +1000,43 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
+        # VALUED_AT_COST: an open position with no price at all (no quote, no BUY or SELL), counted at its
+        # book cost (J-17). Same grace as TRANSACTION_IMPLIED, counted from the asset's first acquisition:
+        # it has no quote, and no BUY or SELL (an ADJUSTMENT or a TRANSFER opened it), so the BUY/SELL
+        # first position date would list it at once. Only for an asset with a provider: for a manual
+        # asset the cost is its intended value.
+        first_acquisition_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_lot_txn_dates.items():
+            if a_id not in first_acquisition_by_asset or d < first_acquisition_by_asset[a_id]:
+                first_acquisition_by_asset[a_id] = d
+        at_cost_ids = {ps.asset_id for ps in end_positions if ps.valuation_source == ValuationSource.ESTIMATED_AT_COST}
+        at_cost_reported = transaction_implied_assets_to_report(at_cost_ids, {}, first_acquisition_by_asset, last_state.date, TRANSACTION_IMPLIED_GRACE_DAYS) if last_state is not None else set()
+        valued_at_cost_assets: list[MissingPriceAsset] = []
+        for ps in end_positions:
+            if ps.asset_id not in at_cost_reported or ps.asset_id not in assets_with_provider:
+                continue
+            asset = assets_map.get(ps.asset_id)
+            if not asset:
+                continue
+            broker = brokers_map.get(ps.broker_id)
+            valued_at_cost_assets.append(
+                MissingPriceAsset(
+                    asset_id=ps.asset_id,
+                    symbol=asset.identifier_ticker,
+                    name=asset.display_name,
+                    broker_id=ps.broker_id,
+                    broker_name=broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}"),
+                    first_position_date=first_lot_txn_dates.get((ps.broker_id, ps.asset_id)),
+                    quantity=ps.quantity,
+                    open_cost_basis=ps.cost_basis if ps.cost_basis != 0 else None,
+                    currency=base_currency,
+                )
+            )
+
         # STALE_PRICE: an open position valued at a market price carried forward past the
         # threshold, for an asset with a provider — the case a price sync can fix. A manual
         # asset valued at its last trade price (crowdfunding, HOLD) is stale by design, and a
-        # provider asset with no quote at all is TRANSACTION_IMPLIED's case. One entry per asset.
+        # provider asset with no quote at all is TRANSACTION_IMPLIED's or VALUED_AT_COST's case. One entry per asset.
         stale_price_dates: dict[int, date_type] = {}
         for ps in end_positions:
             if not ps.valuation_stale or ps.valuation_source != ValuationSource.MARKET_PRICE:
@@ -1023,6 +1056,7 @@ class PortfolioService:
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+            valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
