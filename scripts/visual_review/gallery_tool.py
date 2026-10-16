@@ -30,8 +30,17 @@ sheet   Rank a diff's shots by VISIBLE change and write a contact sheet into the
         ... sheet <work>/diffs/A__vs__B [--lang it] [--a <snapshot A>] [--b <snapshot B>] [--recompute]
         The measures cover every language and are kept in visible.json, so another --lang only rewrites the page.
 
+mixed   The runtime twin of the colour gate G3: the elements whose class attribute, as rendered, mixes role utilities
+        (bg-lf-card) with legacy colour classes (text-gray-500). G3 reads the sources and cannot see a class composed at
+        runtime (a className prop, an imported constant); the gallery scans every shot of a snapshot with the gate's own
+        patterns (frontend/e2e/fixtures/galleryMixed.ts, on when gallery_snapshot.sh sets LF_GALLERY_MIXED_DIR).
+        ... mixed <work>/snapshots/A --collect          # merge the records into mixed_elements.json (the script does it)
+        ... mixed <work>/snapshots/A [--by dir|section] [--area lib/components/assets] [--on-screen] [--src frontend/src]
+        Prints the distinct mixed elements by area: by default the folder of the file that writes the element's test id,
+        a hint and not a proof (the class may come from the caller).
+
 Snapshot layout (written by gallery_snapshot.sh):
-    <snapshot>/png/<viewport>/<lang>/<theme>/<category>/<name>.png, <snapshot>/meta.json
+    <snapshot>/png/<viewport>/<lang>/<theme>/<category>/<name>.png, <snapshot>/meta.json, <snapshot>/mixed_elements.json
 Snapshots captured on different days differ by construction (the test data follows date.today()).
 """
 
@@ -41,10 +50,11 @@ import argparse
 import html
 import json
 import os
+import re
 import statistics
 import sys
 from collections import Counter, defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 from PIL import Image
@@ -472,6 +482,241 @@ def cmd_sheet(args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------------------- mixed: the runtime twin of G3
+MIXED_FILE = "mixed_elements.json"
+# The gallery writes one line per shot into <snapshot>/mixed/worker-<pid>.jsonl (frontend/e2e/fixtures/galleryMixed.ts).
+MIXED_PARTS = "mixed"
+MIXED_RULE = "G3 of frontend/scripts/theme/theme-roles.mjs (ROLE_CLASS_RE and LEGACY_CLASS_RE), on the class attribute as rendered"
+MIXED_CAVEAT = "The candidate files come from the element's test id, or from its nearest ancestor's: a hint, not a proof. " "The element may belong to a child component, and a class may come from the caller (className, contentClass…)."
+TOOLKIT_SRC = Path(__file__).resolve().parents[2] / "frontend" / "src"
+SOURCE_SUFFIXES = {".svelte", ".ts", ".js"}
+LAB_PREFIXES = ("lib/dev/designer-lab/", "routes/designer-lab/")
+NO_CANDIDATE = "(no candidate file)"
+WEAK_CANDIDATES = "(weak candidates: the test id found only as a string)"
+# A test-id key before the quoted id: `data-testid="x"`, `testid="x"`, `testId: 'x'`, `'data-testid': 'x'`, `={`x`}`.
+TESTID_KEY = r"(?i:test-?id)\w*[\"']?\s*[=:]\s*\{?\s*"
+
+
+def counted(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def collect_mixed(snapshot: Path, parts: Path) -> dict | None:
+    """Merge the gallery's per-worker records into one table, a record per shot; on a retry the latest record wins."""
+    latest: dict[str, dict] = {}
+    lines = unreadable = superseded = 0
+    for part in sorted(parts.glob("worker-*.jsonl")):
+        for line in part.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            lines += 1
+            try:
+                record = json.loads(line)
+            except ValueError:
+                unreadable += 1
+                continue
+            if not isinstance(record, dict) or not isinstance(record.get("shot"), str):
+                unreadable += 1
+                continue
+            shot = record["shot"]
+            if shot in latest:
+                superseded += 1
+                if str(record.get("t", "")) < str(latest[shot].get("t", "")):
+                    continue
+            latest[shot] = record
+    if not lines:
+        return None
+    records = [latest[shot] for shot in sorted(latest)]
+    scanned = [r for r in records if "error" not in r]
+    meta = load_meta(snapshot)
+    return {
+        "version": 1,
+        "rule": MIXED_RULE,
+        "snapshot": meta.get("label", snapshot.name),
+        "commit": meta.get("commit"),
+        "shots": len(records),
+        "errors": len(records) - len(scanned),
+        "unreadable_lines": unreadable,
+        "superseded": superseded,
+        "shots_with_mixed": sum(1 for r in scanned if r.get("mixed")),
+        "mixed_elements": sum(e.get("count", 1) for r in scanned for e in r.get("mixed", [])),
+        "records": records,
+    }
+
+
+def write_mixed(snapshot: Path, parts: Path, keep_parts: bool) -> int:
+    table = collect_mixed(snapshot, parts) if parts.is_dir() else None
+    if table is None:
+        print(f"no mixed-element records in {parts}: this checkout's gallery has no scan (before G-18), or no shot was captured")
+        if parts.is_dir() and not keep_parts and not any(parts.iterdir()):
+            parts.rmdir()
+        return 0
+    out = snapshot / MIXED_FILE
+    out.write_text(json.dumps(table, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    if not keep_parts:
+        for part in parts.glob("worker-*.jsonl"):
+            part.unlink()
+        if not any(parts.iterdir()):
+            parts.rmdir()
+    print(f"mixed elements: {table['mixed_elements']} in {table['shots_with_mixed']} of {counted(table['shots'], 'shot')}, {counted(table['errors'], 'scan error')} → {out}")
+    return 0
+
+
+def mixed_elements(table: dict) -> list[dict]:
+    """The distinct mixed elements of a snapshot, each with the shots, the variants and the sections it appears in."""
+    found: dict[tuple, dict] = {}
+    for record in table["records"]:
+        if "error" in record:
+            continue
+        shot = record["shot"]
+        parts = shot.split("/")
+        name, section = ("/".join(parts[3:]), parts[3]) if len(parts) == 5 else (shot, "?")
+        for entry in record.get("mixed", []):
+            legacy, role = entry.get("legacy", []), entry.get("role", [])
+            key = (entry.get("tag"), entry.get("testid"), entry.get("owner"), tuple(sorted(legacy)), tuple(sorted(role)))
+            element = found.setdefault(
+                key,
+                {"tag": key[0], "testid": key[1], "owner": key[2], "legacy": legacy, "role": role, "selectors": Counter(), "classes": Counter(), "shots": set(), "variants": set(), "sections": defaultdict(set), "on_screen": False},
+            )
+            element["selectors"][entry.get("selector", "?")] += 1
+            element["classes"][entry.get("classes", "")] += 1
+            element["shots"].add(name)
+            element["variants"].add(shot)
+            element["sections"][section].add(shot)
+            element["on_screen"] = element["on_screen"] or bool(entry.get("onScreen"))
+    return list(found.values())
+
+
+def source_texts(src: Path) -> dict[str, str]:
+    """The production sources under frontend/src, by their path under it, as the colour gate reads them
+    (`isProductionSource` in theme-roles.mjs): no tests, mocks, Designer Lab or generated files."""
+    out = {}
+    for path in sorted(src.rglob("*")):
+        rel = path.relative_to(src).as_posix()
+        name = path.name
+        if path.suffix not in SOURCE_SUFFIXES or name.endswith(".d.ts") or re.search(r"\.(test|spec)\.(ts|js)$", name) or not path.is_file():
+            continue
+        if {"__tests__", "__mocks__", "node_modules"} & set(rel.split("/")) or rel.startswith(LAB_PREFIXES):
+            continue
+        if name.startswith("generated") or "openapi" in name or "tool-contract-map" in name:
+            continue
+        out[rel] = path.read_text(encoding="utf-8", errors="replace")
+    return out
+
+
+def testid_candidates(testid: str, sources: dict[str, str]) -> tuple[list[str], str, bool]:
+    """The files that write the test id, the way they write it, and whether that is a test id rather than a mere string.
+
+    In order: written whole after a test-id key (`data-testid="x"`, `testid="x"`, `testId: 'x'`); composed from its
+    longest prefix after such a key (`data-testid="settings-tab-{id}"`, `` `tag-chip-${i}` ``); then the same two as any
+    string, a weak clue (a short id like `chart` is also a word of the code)."""
+    quote, composed = r"[\"'`]", r"(?:\{|\$\{|[\"'`]\s*\+)"
+    pieces = testid.split("-")
+    prefixes = ["-".join(pieces[:n]) + "-" for n in range(len(pieces) - 1, 0, -1)]
+
+    def files(pattern: str, needle: str) -> list[str]:
+        regex = re.compile(pattern)
+        return sorted((rel for rel, text in sources.items() if needle in text and regex.search(text)), key=lambda rel: (not rel.endswith(".svelte"), rel))
+
+    for key, strong in ((TESTID_KEY, True), ("", False)):
+        what = "a test id" if strong else "a string, not as a test id"
+        hits = files(key + quote + re.escape(testid) + quote, testid)
+        if hits:
+            return hits, f"{what}, whole", strong
+        for prefix in prefixes:
+            hits = files(key + quote + re.escape(prefix) + composed, prefix)
+            if hits:
+                return hits, f"{what}, composed from {prefix}", strong
+    return [], "", False
+
+
+def attach_candidates(elements: list[dict], sources: dict[str, str]) -> None:
+    found: dict[str, tuple[list[str], str, bool]] = {}
+    for e in elements:
+        clue = e["testid"] or e["owner"]
+        if clue and clue not in found:
+            found[clue] = testid_candidates(clue, sources)
+        e["candidates"], how, e["strong"] = found[clue] if clue else ([], "", False)
+        e["clue"] = f"{'own' if e['testid'] else 'ancestor'} test id {clue}: {how}" if e["candidates"] else ""
+
+
+def print_mixed_header(snapshot: Path, table: dict, elements: list[dict], args: argparse.Namespace, src: Path) -> None:
+    scanned = [r for r in table["records"] if "error" not in r]
+    commit = (table.get("commit") or "?")[:9]
+    print(f"Mixed elements (runtime G3), snapshot {table.get('snapshot', snapshot.name)} at {commit}: {counted(table['shots'], 'shot')} scanned, {counted(table['errors'], 'scan error')}.")
+    if (snapshot / "png").is_dir():
+        pngs = set(list_pngs(snapshot))
+        missing = sorted(pngs - {r["shot"] + ".png" for r in table["records"]})
+        listed = f" ({', '.join(missing[:5])}{' …' if len(missing) > 5 else ''})" if missing else ""
+        print(f"  PNGs in the snapshot: {len(pngs)}, without a record: {len(missing)}{listed}.")
+    if scanned:
+        med = {k: int(statistics.median(r.get(k, 0) for r in scanned)) for k in ("elements", "role", "legacy")}
+        print(f"  Per shot, median: {med['elements']} elements with classes, {med['role']} with a role class, {med['legacy']} with a legacy class.")
+    print(f"  Mixed: {counted(table.get('mixed_elements', 0), 'element')} in {counted(table.get('shots_with_mixed', 0), 'shot')}; {len(elements)} distinct{' on screen' if args.on_screen else ''}.")
+    print(f"  Rule: {table.get('rule', MIXED_RULE)}.")
+    print(f"  ⚠️ {MIXED_CAVEAT}")
+    print(f"  Sources searched: {src}")
+
+
+def mixed_groups(elements: list[dict], by: str, area: str | None) -> list[tuple[str, list[tuple[dict, set]]]]:
+    """The elements by area — the folder of their first candidate file, or the gallery's section — the busiest first."""
+    groups: dict[str, list[tuple[dict, set]]] = defaultdict(list)
+    for e in elements:
+        if by == "section":
+            for section, variants in e["sections"].items():
+                groups[section].append((e, variants))
+        else:
+            home = str(PurePosixPath(e["candidates"][0]).parent) if e["strong"] else WEAK_CANDIDATES if e["candidates"] else NO_CANDIDATE
+            groups[home].append((e, e["variants"]))
+    rows = [(name, members) for name, members in groups.items() if not area or area in name]
+    return sorted(rows, key=lambda item: (item[0] in (WEAK_CANDIDATES, NO_CANDIDATE), item[0] == NO_CANDIDATE, -sum(len(v) for _, v in item[1]), item[0]))
+
+
+def print_mixed_element(e: dict, variants: set) -> None:
+    shots = sorted({"/".join(v.split("/")[3:]) for v in variants})
+    seen_in = f" — {', '.join(shots[:4])}{' …' if len(shots) > 4 else ''}" if len(shots) > 1 else ""
+    print(f"- `{e['selectors'].most_common(1)[0][0]}` <{e['tag']}>{', on screen' if e['on_screen'] else ', never on screen'}")
+    print(f"  legacy: {' '.join(e['legacy'])} · roles: {' '.join(e['role'])}")
+    print(f"  classes: {e['classes'].most_common(1)[0][0][:200]}")
+    print(f"  {counted(len(shots), 'shot')}, {counted(len(variants), 'variant')}; e.g. {min(variants)}{seen_in}")
+    if e["candidates"]:
+        more = f" (+{len(e['candidates']) - 3} more)" if len(e["candidates"]) > 3 else ""
+        print(f"  candidates ({e['clue']}): {', '.join(e['candidates'][:3])}{more}")
+    else:
+        print("  candidates: none (no test id on the element or its ancestors, or none written in the sources)")
+
+
+def print_mixed(snapshot: Path, table: dict, args: argparse.Namespace) -> None:
+    src = Path(args.src).resolve() if args.src else TOOLKIT_SRC
+    elements = mixed_elements(table)
+    if args.on_screen:
+        elements = [e for e in elements if e["on_screen"]]
+    attach_candidates(elements, source_texts(src))
+    print_mixed_header(snapshot, table, elements, args, src)
+    for area, rows in mixed_groups(elements, args.by, args.area):
+        print(f"\n## {area}: {counted(len(rows), 'element')}, {counted(sum(len(v) for _, v in rows), 'variant')}")
+        for e, variants in sorted(rows, key=lambda row: (-len(row[1]), row[0]["selectors"].most_common(1)[0][0])):
+            print_mixed_element(e, variants)
+    errors = [r for r in table["records"] if "error" in r]
+    if errors:
+        print(f"\nScan errors ({len(errors)}):")
+        for r in errors[:10]:
+            print(f"  {r['shot']}: {r['error']}")
+
+
+def cmd_mixed(args: argparse.Namespace) -> int:
+    snapshot = Path(args.snapshot).resolve()
+    if not snapshot.is_dir():
+        raise SystemExit(f"{snapshot} is not a snapshot directory")
+    if args.collect:
+        return write_mixed(snapshot, Path(args.parts).resolve() if args.parts else snapshot / MIXED_PARTS, args.keep_parts)
+    table_file = snapshot / MIXED_FILE
+    if not table_file.exists():
+        raise SystemExit(f"{snapshot} has no {MIXED_FILE}: capture it with gallery_snapshot.sh, or merge the records with --collect")
+    print_mixed(snapshot, json.loads(table_file.read_text(encoding="utf-8")), args)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -501,6 +746,16 @@ def main() -> int:
     c.add_argument("--b", help="snapshot B (default: the one the diff recorded, else <work>/snapshots/<B's label>)")
     c.add_argument("--recompute", action="store_true", help="measure again even when visible.json matches the diff")
     c.set_defaults(fn=cmd_sheet)
+    m = sub.add_parser("mixed", help="the runtime twin of the colour gate G3: mixed role/legacy elements of a snapshot, by area")
+    m.add_argument("snapshot", help="a snapshot of gallery_snapshot.sh (<work>/snapshots/<label>)")
+    m.add_argument("--collect", action="store_true", help="merge the gallery's records (<snapshot>/mixed/*.jsonl) into mixed_elements.json")
+    m.add_argument("--parts", help="with --collect: the folder of the records (default <snapshot>/mixed)")
+    m.add_argument("--keep-parts", action="store_true", help="with --collect: keep the records once merged")
+    m.add_argument("--by", choices=("dir", "section"), default="dir", help="group by the folder of the candidate file (default) or by the gallery's section")
+    m.add_argument("--area", help="only the areas whose name contains this text (lib/components/assets, settings…)")
+    m.add_argument("--on-screen", action="store_true", help="only the elements on screen in at least one shot")
+    m.add_argument("--src", help=f"the sources searched for test ids (default {TOOLKIT_SRC})")
+    m.set_defaults(fn=cmd_mixed)
     args = ap.parse_args()
     return args.fn(args)
 
