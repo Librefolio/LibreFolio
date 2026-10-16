@@ -242,7 +242,9 @@
       "pairAssetMismatch": "I due lati di un trasferimento devono essere lo stesso asset",
       "wacFxUnavailableSplit": "Le unità che escono sono valutate al loro costo medio, che richiede il cambio {pairs}: sincronizza i tassi FX, poi scollega di nuovo la coppia.",
       "pairBrokerMismatch": "I due lati di un cambio valuta devono essere sullo stesso broker",
-      "cashNonzero": "{type} richiede un importo diverso da zero"
+      "cashNonzero": "{type} richiede un importo diverso da zero",
+      "decimalPlacesExceeded": "Al massimo {max} decimali",
+      "significantDigitsExceeded": "Al massimo {max} cifre significative"
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
