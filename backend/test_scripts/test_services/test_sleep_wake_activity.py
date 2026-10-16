@@ -24,7 +24,9 @@ presence except the probes and ``wake-sync``. The contract pinned here:
     and overlap, and end in any order: ``in_flight`` counts every one still open.
 (f) Return listeners: one raising an ``Exception`` is logged — WARNING, "Return listener failed", ``listener=<name>`` —
     and the next ones and the body still run; each has its own threshold; a name registered again replaces its callback
-    and its threshold.
+    and its threshold. ``remove_return_listener(name)`` removes the listener of that name: it is never called again, the
+    others still are, and the name can be registered anew; a name never registered, or already removed, is no error and
+    returns None; an empty or blank name is a ``ValueError``, and nothing is removed.
 (g) ``idle_seconds(now=None)``: ``now`` — ``clock()`` when None — less the last user request's stamp, or ``started_at``
     before any; never below 0.0, even when the clock goes back.
 (h) ``busy(reason)``: a sync context manager, nestable, usable from any thread; ``reason`` is listed while at least one
@@ -63,7 +65,8 @@ so that a lock held around the listeners fails a test instead of hanging the run
 capture, or "nothing was logged" would prove nothing.
 
 Red until ``backend/app/services/platform/sleep_wake/activity.py`` exists: the module does not import. Then (n) stays
-red until ``MIDDLEWARE_STACK`` starts with the activity entry.
+red until ``MIDDLEWARE_STACK`` starts with the activity entry. The removal of (f), SWA-038…040, stays red until
+``Activity.remove_return_listener`` exists (lot Z3).
 """
 
 from __future__ import annotations
@@ -1245,3 +1248,79 @@ async def test_the_activity_middleware_is_the_outermost_entry_of_the_stack(monke
     assert observed.seen == [("handler", USER_ROUTE, 1, 1_300.0)]
     assert (activity.in_flight, activity.last_user_request_at) == (0, 1_300.0 + HANDLER_SECONDS)
     print_success("first in the stack and in user_middleware; counting on current_activity()")
+
+
+# =============================================================================
+# (f) REMOVING A RETURN LISTENER (lot Z3)
+# =============================================================================
+
+
+def test_a_removed_listener_is_never_called_again_and_the_others_still_are() -> None:
+    """SWA-038 — contract (f): "catch-up" — a listener that raises — and "other" are both called on a return. Once "catch-up" is removed — ``remove_return_listener`` returns None —, the next two returns call "other" alone and log nothing; registered anew, "catch-up" is called again."""
+    print_section("SWA-038: remove_return_listener")
+    activity, clock = _activity()
+    calls: list[tuple[str, float]] = []
+
+    def broken(silence: float) -> None:
+        calls.append(("catch-up", silence))
+        raise RuntimeError("provoked: this listener fails")
+
+    activity.register_return_listener("catch-up", 60.0, broken)
+    activity.register_return_listener("other", 0.0, lambda silence: calls.append(("other", silence)))
+    clock.now = 1_300.0
+    with _activity_log() as events:
+        _user_request(activity)
+    assert calls == [("catch-up", 300.0), ("other", 300.0)]
+    assert _logged(events, LISTENER_FAILED, "listener") == [("catch-up", "warning")]
+
+    assert activity.remove_return_listener("catch-up") is None
+    with _activity_log() as events:
+        clock.now = 1_600.0
+        _user_request(activity)
+        clock.now = 2_600.0
+        _user_request(activity)
+    assert calls[2:] == [("other", 300.0), ("other", 1_000.0)]
+    assert _logged(events, LISTENER_FAILED, "listener") == []
+
+    activity.register_return_listener("catch-up", 60.0, lambda silence: calls.append(("catch-up anew", silence)))
+    clock.now = 2_700.0
+    _user_request(activity)
+    assert sorted(calls[4:]) == [("catch-up anew", 100.0), ("other", 100.0)]
+    print_success("removed: never called again; the other one still called; registered anew: called")
+
+
+def test_removing_a_name_never_registered_or_already_removed_does_nothing() -> None:
+    """SWA-039 — contract (f): removing "never-registered" raises nothing, returns None, and leaves "catch-up" in place; "catch-up" removed twice, the second removal raises nothing either, and a return calls nothing."""
+    print_section("SWA-039: remove_return_listener of an unknown name")
+    activity, clock = _activity()
+    calls: list[float] = []
+    activity.register_return_listener("catch-up", 0.0, calls.append)
+
+    assert activity.remove_return_listener("never-registered") is None
+    clock.now = 1_300.0
+    _user_request(activity)
+    assert calls == [300.0]
+
+    activity.remove_return_listener("catch-up")
+    assert activity.remove_return_listener("catch-up") is None
+    clock.now = 1_600.0
+    _user_request(activity)
+    assert calls == [300.0]
+    print_success("no error; nothing else removed")
+
+
+@pytest.mark.parametrize("name", ["", " ", "\t\n "], ids=["empty", "a-space", "whitespace"])
+def test_a_blank_name_to_remove_is_refused_and_nothing_is_removed(name: str) -> None:
+    """SWA-040 — contract (f): an empty or blank name is a ``ValueError``; the listener registered is still called on the next return."""
+    print_section(f"SWA-040: remove_return_listener({name!r})")
+    activity, clock = _activity()
+    calls: list[float] = []
+    activity.register_return_listener("catch-up", 0.0, calls.append)
+
+    with pytest.raises(ValueError):
+        activity.remove_return_listener(name)
+
+    clock.now = 1_300.0
+    _user_request(activity)
+    assert calls == [300.0]
+    print_success("ValueError; nothing removed")
