@@ -428,7 +428,12 @@ encrypted it, and from the first start after the change the startup step `plugin
 an error that counts the stored system secrets the current key cannot read, if there are any
 ([Plugin Secrets Check](#plugin-secrets-check)). The administrator puts back `secrets/instance.key`
 from their copy of the data directory (the archive of the instance backup leaves the key out), or
-enters the secrets again.
+enters the secrets again. The order matters: saving a secret rewrites its row's `secret_ciphertext`
+and `key_id` under the current key (`_apply()` in `backend/app/services/plugin_settings/service.py`),
+so an old key brought back afterwards reads again the rows never entered again, but not the ones
+entered under the new key; the old key therefore goes back first (LibreFolio stopped, the copy in
+place of the generated file), before anyone enters a secret again, and the secrets are entered again
+only when no copy exists.
 
 Tests: `./dev.py test services config-secrets` (`env_secret()`) and
 `./dev.py test services config-instance-key`, whose section (g) pins `derive_key_from()` to three
