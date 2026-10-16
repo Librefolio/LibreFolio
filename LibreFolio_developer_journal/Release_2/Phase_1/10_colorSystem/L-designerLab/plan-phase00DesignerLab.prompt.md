@@ -1800,3 +1800,84 @@ Le quattro fasi previste:
 > | categorie | 27, con 54 letterali |
 >
 > I conteggi si spostano per il lotto di T (`custom` 1500 → 1931, `tw` 10270 → 9520). Porta libera, HEAD invariata. Niente E2E e niente build, come chiesto.
+
+> **Ingresso nel target (03:56):** `2c485d3d4`, merge di `d8a69ab62`; l'albero coincide. Verificato in sola lettura: worktree portato a `2c485d3d4`, pulito, porta libera.
+
+## ✅ L-18 — Togliere i vecchi percorsi `components/` dei grafici (16/10/2026, mattina; prove leggere verdi alle 08:46)
+
+**Richiesta del coordinatore (08:34):** «Y è entrato (`d5c3c3ae3`): Y3, Y5 e Y6 hanno spostato dashboard, broker e file. […] Piccolo lotto, adesso: L-18 più la doc.»
+1. In `CHART_PATH_RE` togliere `components/dashboard`, `components/risk` e `components/brokers/lots`; `components/charts` e `charts` restano. Test di `test-author`.
+2. In `designer-lab.md` la frase dei percorsi dice solo i nuovi. L'esempio JSON passa al percorso vero di `BrokerImportFilesModal.svelte`, da verificare.
+3. Facoltative: le costanti estetiche di `pickView.test.ts` e `scanColors.test.ts`.
+
+Prove leggere: unitari del Lab, `--check`, parità dello scanner, MkDocs strict e `check-links`. Niente E2E: il catalogo non cambia.
+
+**✅ Passo 1 — verifica e regex (08:35–08:40).**
+- **Base:** HEAD `d5c3c3ae3`, pulita, con L-16 (`2c485d3d4`) dentro; porta libera.
+- **Cartelle:** `components/dashboard`, `risk`, `brokers` e `files` non esistono più; `components/charts` ha 70 file. I percorsi veri sono `features/dashboard/GrowthChart.svelte`, `features/risk/CorrelationHeatmap.svelte` (radice piatta), `features/brokers/lots/LotsAnalysisPanel.svelte` e `features/brokers/BrokerImportFilesModal.svelte`.
+- **Regex** (`scan-colors.mjs:193`): ora è `\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$`, e il commento di transizione è tolto.
+  - `components\/charts` è assorbito da `charts`; resta perché la doc lo nomina, ed era così anche prima di L-16.
+- **Catalogo:** **hash identico** prima e dopo (`sha256:45af67d34891482b…`), stessi livelli: css-literal 1104, chart-color 369, script 105, markup 2, static 70.
+- **Prova sulla regex:**
+  - danno chart: `components/charts/`, un `charts/` qualunque, `features/{dashboard,risk,brokers/lots}/`, il risultato del PAC, i nomi con «chart»;
+  - non danno chart: `components/{dashboard,risk,brokers/lots}/`, `features/brokers/` fuori da `lots`, `utils/format.ts`.
+
+> **⚠️ Fuori pista — l'esempio JSON:** `BrokerImportFilesModal.svelte` è in `features/brokers/`, ma non contiene più `#374151`. Il lotto di T ha messo `border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark)`. Col solo percorso nuovo l'esempio resterebbe falso.
+> - Il catalogo registra oggi lo stesso valore e lo stesso tema in `src/lib/components/ui/feedback/LoadingSpinner.svelte:60:23`, selettore `:global(.dark) .spinner`, proprietà `border-color`. L'esempio passa lì, e id, target, from e to non cambiano.
+> - Altri esempi della pagina hanno righe scadute: `AssetCard.svelte:133` (ora `case 'up':`) e `DataTable.svelte:1607` (ora `}`), mentre `TransactionsTable.svelte:993` (`tx-table`) è giusto. Sono fuori perimetro: `docs-writer` li elenca, e vanno nel backlog.
+
+**✅ Passo 2 — test e doc (agenti in parallelo, 08:40–08:44):**
+- `test-author` (`e9283542`): in `scanColors.test.ts` via le righe di `components/{dashboard,risk}`, una riga per ogni alternativa della regex, il rischio al percorso piatto vero, e una riga negativa per una cartella di prima. In `pickView.test.ts`, `GROWTH` passa a `features/dashboard/GrowthChart.svelte`.
+- `docs-writer` (`9decc98d`): la frase dei percorsi (549–553), l'esempio JSON su `LoadingSpinner.svelte:60`, e l'elenco degli esempi scaduti, solo da riportare.
+> **`docs-writer`, fatto (08:4x), senza run:**
+> - righe 549–552: la frase elenca solo quello che la regex accetta oggi, senza gli spostamenti;
+> - righe 1218–1226: l'occorrenza è `LoadingSpinner.svelte:60:23`, `:global(.dark) .spinner`, `border-color`, riletta sul file (`col` a base 1 come nello scanner). Il resto della modifica non cambia, e nessun'altra frase dipendeva dall'esempio. Nessun percorso della pagina punta più a file che non esistono.
+> - **Esempi scaduti, riportati e non corretti:**
+>   - `AssetCard.svelte:133`, per `--color-emerald-600@light`: oggi c'è solo un `dark:border-emerald-600` alla riga 134, e le cifre di `impact` sono vecchie;
+>   - `DataTable.svelte:1607` con `#64748b`: il valore non c'è più nel file, e la regola `th` legge un ruolo di componente. Serve una cattura nuova, non un numero di riga;
+>   - `TransactionsTable.svelte:993` è giusto.
+>
+>   Vanno nel backlog come **L-19**.
+>
+> **`test-author`, fatto (08:42):** 21 file, **713/713**, Prettier pulito. Con la sola regex nuova erano 712, con 2 rossi: proprio le righe dei rami tolti.
+> - `scanColors.test.ts`, le righe positive di «recognises a chart by %s»:
+>   - tolte `components/dashboard/Kpi.svelte` e `components/risk/Heatmap.svelte`;
+>   - aggiunte `components/charts/GeographyMap.svelte` (un file vero) e `features/insights/charts/Trend.svelte`;
+>   - il rischio passa al percorso piatto vero, `features/risk/CorrelationHeatmap.svelte`.
+>
+>   Ogni nome di file è senza «chart», quindi combacia un solo ramo. Togliere un'alternativa fa fallire una riga sola; l'eccezione è `components\/charts`, assorbito da `charts`.
+> - Negativo: una riga per `components/dashboard/Kpi.svelte` (`script`, `chart: false`), con un commento perché nessuno la tolga solo perché la cartella non esiste più.
+> - `pickView.test.ts:23`: `GROWTH` è ora `src/lib/features/dashboard/GrowthChart.svelte`. Cambia solo l'etichetta: il catalogo è sintetico e scrive `chart: true`.
+> - Lasciati come sono, su consiglio dell'agente, `catalogView.test.ts` ed `exportFormat.test.ts`: usano `components/charts/GrowthChart.svelte`, che è ancora una cartella di grafici.
+> - Nota innocua: anche `src/lib/i18n/charts/` combacia con `charts`, ma contiene solo `.json`/`.txt`, che lo scanner non legge.
+
+**✅ Passo 3 — prove leggere (08:44:41–08:46:51, sotto `nice -n 10`, script `/tmp/libreFolio_L18_light.sh`).** Nessun E2E e nessuna build dell'app.
+
+| Prova | Esito |
+|---|---|
+| `git diff --check` | 0 righe |
+| unitari del Lab + `chartCategories.test.ts` | 21 file, **713/713** |
+| Prettier sulle 4 cartelle del Lab | pulito |
+| scanner | 2886 ms |
+| **hash del catalogo**, prima e dopo la regex | **identico**, `sha256:45af67d34891482b…`; livelli css-literal 1104, chart-color 369, script 105, markup 2, static 70 |
+| parità scanner/Python | **identica**: tw 8042, custom 2777, arbitrary 12, hex 1343, fn 237, var_uses 1408 (872 distinte), var_defs 1097, files 1253 |
+| MkDocs strict | 0 warning, 0 errori |
+| `check-links` | **97** link validi |
+
+Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
+
+> **⚠️ Fuori pista — STOP del developer, subito dopo le prove (08:4x):** «il developer chiede di fermare tutti i sotto-agenti. Smetti subito L-18». Le prove erano già finite verdi. Ho fermato tutto e lasciato il worktree com'era, con 6 file non committati; nessun processo, i due sotto-agenti inattivi. Poi FROZEN.
+>
+> **Ripresa (10:21):** «Riprendi L-18, adesso. Il developer ha riavviato la macchina, quindi `/tmp` è vuota. Scrivi nel piano la nota delle prove leggere che avevi già fatto […] e chiudi L-18 nel backlog.»
+> - **Verifica (10:22):**
+>   - HEAD `d5c3c3ae3` e gli stessi 6 file;
+>   - `mtime` di tutti prima dell'inizio delle prove (08:38–08:44:34 contro 08:44:41), quindi le prove valgono per questo albero;
+>   - `git diff --check` pulito, porta libera, nessun processo nella corsia.
+> - **Previsione verso il target `eb4040cd1`, che porta il quarto lotto di T:**
+>   - HEAD è un suo antenato;
+>   - il target non tocca nessuno dei miei 6 file né il resto del Lab;
+>   - `LoadingSpinner.svelte:60` ha ancora `border-color: #374151;`, quindi l'esempio JSON resta vero;
+>   - `components/{dashboard,risk,brokers}` sono ancora vuote.
+> - I log di `/tmp` non ci sono più; i verdetti sono qui sopra. Lo script di parità resta salvato nei file della sessione.
+
+**✅ Passo 4 — checkpoint (16/10, 10:2x):** L-18 ✅ nel backlog, L-19 per gli esempi scaduti, handoff FROZEN.
