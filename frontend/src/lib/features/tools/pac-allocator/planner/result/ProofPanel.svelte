@@ -188,8 +188,8 @@
     </div>
 
     {#if objectives}
-        <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-planner-objectives">
-            <p class="font-medium text-gray-900 dark:text-gray-100">{$t(`${KEY}.exactObjectives`, {default: 'Exact objective values (backend, Decimal)'})}</p>
+        <div class="space-y-2 border-t border-lf-subtle pt-3" data-testid="pac-planner-objectives">
+            <p class="font-medium text-lf-primary">{$t(`${KEY}.exactObjectives`, {default: 'Exact objective values (backend, Decimal)'})}</p>
             <!-- R11.10: one card per objective, in cascade order, with the «?» of Strategy. -->
             <ol class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {#each objectives.stages as stage (stage.objective_code)}
@@ -197,13 +197,13 @@
                     <li class="{TILE} flex items-start gap-3" data-testid="pac-planner-objective" data-objective={stage.objective_code}>
                         <span class="{ICON_BUBBLE} text-xs font-semibold" aria-hidden="true">{stage.ordinal}</span>
                         <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-0.5 font-medium text-gray-900 dark:text-gray-100">
+                            <div class="flex flex-wrap items-center gap-0.5 font-medium text-lf-primary">
                                 <span>{objectiveName(stage.objective_code)}</span>
                                 {#if tip.help}
                                     <HelpTip label={objectiveName(stage.objective_code)} help={tip.help} math={tip.math} spoken={tip.spoken} testid="pac-planner-objective-help" />
                                 {/if}
                             </div>
-                            <p class="mt-1 break-words text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-objective-value">
+                            <p class="mt-1 break-words text-lg font-semibold tabular-nums text-lf-primary" data-testid="pac-planner-objective-value">
                                 {formatObjectiveValue(stage.value, stage.unit, digits)}
                             </p>
                         </div>
@@ -219,9 +219,9 @@
         </div>
     {/if}
 
-    <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-planner-solver">
+    <div class="space-y-2 border-t border-lf-subtle pt-3" data-testid="pac-planner-solver">
         <div class="flex flex-wrap items-center gap-2">
-            <p class="font-medium text-gray-900 dark:text-gray-100">
+            <p class="font-medium text-lf-primary">
                 {[$t(`${KEY}.solverStages`, {default: 'Solver stages'}), $t(`${KEY}.reportedFloating`, {default: 'reported in floating point'}), ...engines, ...(scopes.length === 1 ? [scopeText(scopes[0])] : [])].join(' · ')}
             </p>
             <TableColumns table={stagesTable} testid="pac-planner-solver-stages-columns" />
@@ -231,7 +231,7 @@
         </div>
     </div>
 
-    <div class="space-y-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+    <div class="space-y-3 border-t border-lf-subtle pt-3">
         <ToolExecutionMetrics item={metrics} {batch} />
         <!-- R10.9: local to the PAC; the shared box belongs to the platform. -->
         <BackendTimingBar {metrics} />
