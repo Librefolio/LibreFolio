@@ -12,7 +12,6 @@
     import {AlertTriangle, CheckCircle2, MessageSquareText, XCircle} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
-    import '$lib/theme/components/dialogs.css';
 
     /** A broker as the modal shows it: the icon fields follow BrokerIcon's chain. */
     export interface BrokerMismatchBroker {
@@ -87,7 +86,7 @@
 
 <ModalBase maxWidth="max-w-lg" onRequestClose={requestClose} {open} {zIndex} testId="import-broker-mismatch-modal">
     <div class="modal-header">
-        <AlertTriangle class="text-amber-500 shrink-0" size={22} />
+        <AlertTriangle class="text-lf-warning shrink-0" size={22} />
         <h2 class="modal-title">{$t('importWizard.brokerMismatch.title')}</h2>
         {#if total > 1}
             <span class="counter" data-testid="import-broker-mismatch-counter">{$t('importWizard.brokerMismatch.counter', {values: {current, total}})}</span>
@@ -174,33 +173,21 @@
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--lf-cmp-broker-mismatch-border);
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: var(--lf-cmp-broker-mismatch-border-dark);
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .modal-title {
         flex: 1;
         font-size: 1.125rem;
         font-weight: 600;
-        color: var(--lf-cmp-broker-mismatch-strong-text);
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: var(--lf-cmp-broker-mismatch-strong-text-dark);
     }
 
     .counter {
         font-size: 0.75rem;
-        color: var(--lf-cmp-broker-mismatch-muted-text);
+        color: var(--lf-text-muted);
         white-space: nowrap;
-    }
-
-    :global(.dark) .counter {
-        color: var(--lf-cmp-broker-mismatch-muted-text-dark);
     }
 
     .modal-body {
@@ -212,25 +199,17 @@
     }
 
     .message {
-        color: var(--lf-cmp-broker-mismatch-message-text);
+        color: var(--lf-text-secondary);
         line-height: 1.6;
         margin: 0;
         overflow-wrap: anywhere;
     }
 
-    :global(.dark) .message {
-        color: var(--lf-cmp-broker-mismatch-message-text-dark);
-    }
-
     .reason {
-        border-left: 3px solid var(--lf-cmp-broker-mismatch-reason-border);
-        background: var(--lf-cmp-broker-mismatch-reason-bg);
+        border-left: 3px solid var(--lf-warning);
+        background: var(--lf-warning-soft);
         border-radius: 6px;
         padding: 0.625rem 0.875rem;
-    }
-
-    :global(.dark) .reason {
-        background: var(--lf-cmp-broker-mismatch-reason-bg-dark);
     }
 
     .reason-label {
@@ -239,23 +218,15 @@
         gap: 0.375rem;
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--lf-cmp-broker-mismatch-reason-label-text);
+        color: var(--lf-warning-on-soft);
         margin-bottom: 0.25rem;
-    }
-
-    :global(.dark) .reason-label {
-        color: var(--lf-cmp-broker-mismatch-reason-label-text-dark);
     }
 
     .reason-text {
         margin: 0;
         font-size: 0.875rem;
-        color: var(--lf-cmp-broker-mismatch-reason-body-text);
+        color: var(--lf-text-primary);
         line-height: 1.5;
-    }
-
-    :global(.dark) .reason-text {
-        color: var(--lf-cmp-broker-mismatch-reason-body-text-dark);
     }
 
     .section {
@@ -269,11 +240,7 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--lf-cmp-broker-mismatch-muted-text);
-    }
-
-    :global(.dark) .section-label {
-        color: var(--lf-cmp-broker-mismatch-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .targets {
@@ -287,24 +254,14 @@
         align-items: center;
         gap: 0.75rem;
         padding: 0.625rem 0.75rem;
-        border: 1px solid var(--lf-cmp-broker-mismatch-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 8px;
-        background: var(--lf-cmp-broker-mismatch-party-bg);
-    }
-
-    :global(.dark) .party {
-        border-color: var(--lf-cmp-broker-mismatch-border-dark);
-        background: var(--lf-cmp-broker-mismatch-party-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     .party.from {
-        border-color: var(--lf-cmp-broker-mismatch-party-from-border);
-        background: var(--lf-cmp-broker-mismatch-party-from-bg);
-    }
-
-    :global(.dark) .party.from {
-        border-color: var(--lf-cmp-broker-mismatch-party-from-border-dark);
-        background: var(--lf-cmp-broker-mismatch-party-from-bg-dark);
+        border-color: var(--lf-danger-line);
+        background: var(--lf-danger-soft);
     }
 
     label.target {
@@ -312,15 +269,9 @@
     }
 
     .target.selected {
-        border-color: var(--lf-cmp-broker-mismatch-target-selected-border);
-        background: var(--lf-cmp-broker-mismatch-target-selected-bg);
-        box-shadow: 0 0 0 1px var(--lf-cmp-broker-mismatch-target-selected-shadow);
-    }
-
-    :global(.dark) .target.selected {
-        border-color: var(--lf-cmp-broker-mismatch-target-selected-border-dark);
-        background: var(--lf-cmp-broker-mismatch-target-selected-bg-dark);
-        box-shadow: 0 0 0 1px var(--lf-cmp-broker-mismatch-target-selected-shadow-dark);
+        border-color: var(--lf-checked);
+        background: var(--lf-selected);
+        box-shadow: 0 0 0 1px var(--lf-checked);
     }
 
     .party-text {
@@ -332,12 +283,8 @@
 
     .party-name {
         font-weight: 600;
-        color: var(--lf-cmp-broker-mismatch-strong-text);
+        color: var(--lf-text-primary);
         overflow-wrap: anywhere;
-    }
-
-    :global(.dark) .party-name {
-        color: var(--lf-cmp-broker-mismatch-strong-text-dark);
     }
 
     .plugin-chip {
@@ -353,23 +300,13 @@
     }
 
     .plugin-chip.refuses {
-        background: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-bg);
-        color: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-text);
-    }
-
-    :global(.dark) .plugin-chip.refuses {
-        background: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-bg-dark);
-        color: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-text-dark);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger-on-soft);
     }
 
     .plugin-chip.reads {
-        background: var(--lf-cmp-broker-mismatch-plugin-chip-reads-bg);
-        color: var(--lf-cmp-broker-mismatch-plugin-chip-reads-text);
-    }
-
-    :global(.dark) .plugin-chip.reads {
-        background: var(--lf-cmp-broker-mismatch-plugin-chip-reads-bg-dark);
-        color: var(--lf-cmp-broker-mismatch-plugin-chip-reads-text-dark);
+        background: var(--lf-success-soft);
+        color: var(--lf-success-on-soft);
     }
 
     .plugin-name {
@@ -391,11 +328,7 @@
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid var(--lf-cmp-broker-mismatch-border);
-    }
-
-    :global(.dark) .modal-footer {
-        border-top-color: var(--lf-cmp-broker-mismatch-border-dark);
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .spacer {
@@ -422,44 +355,30 @@
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-broker-mismatch-btn-secondary-bg);
-        color: var(--lf-cmp-broker-mismatch-btn-secondary-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-secondary);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-cmp-broker-mismatch-btn-secondary-hover-bg);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-broker-mismatch-btn-secondary-bg-dark);
-        color: var(--lf-cmp-broker-mismatch-btn-secondary-text-dark);
+        background: var(--lf-surface-neutral);
     }
 
     .btn-primary {
-        background: var(--lf-cmp-broker-mismatch-btn-primary-bg);
-        color: var(--lf-cmp-broker-mismatch-btn-primary-text);
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: var(--lf-cmp-broker-mismatch-btn-primary-hover-bg);
+        background: var(--lf-action-hover);
     }
 
     .btn-danger-outline {
         background: transparent;
-        border-color: var(--lf-cmp-broker-mismatch-btn-danger-outline-border);
-        color: var(--lf-cmp-broker-mismatch-btn-danger-outline-text);
+        border-color: var(--lf-danger-line);
+        color: var(--lf-danger);
     }
 
     .btn-danger-outline:hover:not(:disabled) {
-        background: var(--lf-cmp-broker-mismatch-btn-danger-outline-hover-bg);
-    }
-
-    :global(.dark) .btn-danger-outline {
-        border-color: var(--lf-cmp-broker-mismatch-btn-danger-outline-border-dark);
-        color: var(--lf-cmp-broker-mismatch-btn-danger-outline-text-dark);
-    }
-
-    :global(.dark) .btn-danger-outline:hover:not(:disabled) {
-        background: var(--lf-cmp-broker-mismatch-btn-danger-outline-hover-bg-dark);
+        background: var(--lf-danger-soft);
     }
 </style>

@@ -146,7 +146,7 @@
     }
 </script>
 
-<section class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm" data-testid={testId} data-level={level} data-open={open}>
+<section class="bg-lf-card rounded-xl border border-lf-subtle shadow-sm" data-testid={testId} data-level={level} data-open={open}>
     {#if collapsible}
         <!-- The toggle and the manual's icon side by side, never nested: a link inside a
              `<button>` is invalid HTML, and a click on the icon must open the manual, not fold
@@ -154,7 +154,7 @@
         <div class="flex items-start gap-2 p-4">
             <button type="button" class="flex min-w-0 flex-1 items-start justify-between gap-3 text-left" onclick={toggle} data-testid="{testId}-toggle" aria-expanded={open}>
                 {@render header()}
-                <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
+                <ChevronDown size={18} class="shrink-0 text-lf-muted transition-transform {open ? 'rotate-180' : ''}" />
             </button>
             {#if actions}
                 {@render actions()}
@@ -178,7 +178,7 @@
                      the level below is empty. Same tone, border and icon as the notice above the
                      levels (`RiskPartialNotice`), so the two read as one family. The icon sits
                      outside the three blocks: their testids, counts and text are unchanged. -->
-                <div class="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300" data-testid="{testId}-alert">
+                <div class="mb-3 flex items-start gap-1.5 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="{testId}-alert">
                     <AlertTriangle size={14} class="mt-px shrink-0" />
                     <div class="min-w-0 flex-1 space-y-1">
                         {#if health.length > 0}
@@ -228,7 +228,7 @@
                      distinct sets of figures the level's analytics reported —
                      one is the ordinary case, two means they disagree about the
                      window, which is the case worth seeing. -->
-                <details class="mt-3 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-slate-700 dark:text-gray-400" data-testid="{testId}-metadata" data-rows={metadata.length}>
+                <details class="mt-3 border-t border-lf-subtle pt-2 text-xs text-lf-muted" data-testid="{testId}-metadata" data-rows={metadata.length}>
                     <summary class="flex cursor-pointer list-none items-center gap-1 font-medium">
                         <ChevronDown size={13} />
                         {$t('risk.metadata.title')}
@@ -236,25 +236,25 @@
                     {#each metadata as row (row.key)}
                         <div class="mt-2" data-testid="{testId}-metadata-row" data-codes={row.codes.join(' ')}>
                             {#if metadata.length > 1}
-                                <p class="mb-1 font-medium text-gray-600 dark:text-gray-300">{row.codes.map((code) => analyticName(code)).join(' · ')}</p>
+                                <p class="mb-1 font-medium text-lf-secondary">{row.codes.map((code) => analyticName(code)).join(' · ')}</p>
                             {/if}
                             <dl class="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
                                 {#if row.observations !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.observations')}</dt>
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200" data-testid="{testId}-metadata-observations">{row.observations}</dd>
+                                        <dd class="font-mono text-lf-secondary" data-testid="{testId}-metadata-observations">{row.observations}</dd>
                                     </div>
                                 {/if}
                                 {#if row.coverage !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.coverage')}</dt>
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{formatPercent(row.coverage, {scale: 100, signed: false, digits: 1})}</dd>
+                                        <dd class="font-mono text-lf-secondary">{formatPercent(row.coverage, {scale: 100, signed: false, digits: 1})}</dd>
                                     </div>
                                 {/if}
                                 {#if row.annualizationFactor !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.annualization')}</dt>
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{formatFixed(row.annualizationFactor, 2)}</dd>
+                                        <dd class="font-mono text-lf-secondary">{formatFixed(row.annualizationFactor, 2)}</dd>
                                     </div>
                                 {/if}
                                 {#if row.returnBasis !== null}
@@ -264,7 +264,7 @@
                                              same key with no fallback: a basis the catalogue has not
                                              seen prints `risk.returnBasis.<value>` there. Here it
                                              degrades to the backend token, which is information. -->
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200" data-testid="{testId}-metadata-basis" data-basis={row.returnBasis}>{translateOrRaw('risk.returnBasis', row.returnBasis, $t)}</dd>
+                                        <dd class="font-mono text-lf-secondary" data-testid="{testId}-metadata-basis" data-basis={row.returnBasis}>{translateOrRaw('risk.returnBasis', row.returnBasis, $t)}</dd>
                                     </div>
                                 {/if}
                             </dl>
@@ -280,7 +280,7 @@
     <div class="min-w-0">
         <!-- The title on the left, the manual's icon alone on the right edge of the card (the developer). -->
         <div class="flex items-start justify-between gap-2">
-            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
+            <h3 class="text-base font-semibold text-lf-primary" data-testid="{testId}-title">{title}</h3>
             {#if actions && !collapsible}
                 <!-- The actions and the manual's icon share the right edge; the wrapper exists
                      only when there are actions, so a level without them is unchanged. -->
@@ -299,7 +299,7 @@
         {#if lead}
             <!-- The sentence precedes the chart: the chart then demonstrates it,
                  instead of leaving the reader to infer the question from a shape. -->
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300" data-testid="{testId}-lead">{lead}</p>
+            <p class="mt-1 text-sm text-lf-secondary" data-testid="{testId}-lead">{lead}</p>
         {/if}
     </div>
 {/snippet}

@@ -160,9 +160,9 @@
 </script>
 
 <div
-    class="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
-       transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
-       focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
+    class="w-full text-left bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden cursor-pointer
+       transition-all duration-200 hover:shadow-lg hover:border-lf-focus/30 hover:bg-lf-hover
+       focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2"
     data-testid="fx-card-{slug}"
     onclick={handleCardClick}
     onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
@@ -175,14 +175,14 @@
             <div class="flex items-center gap-1.5">
                 <span class="inline-flex items-center gap-1.5" data-testid="fx-pair-label">
                     <span class="text-lg emoji-flag">{currencyFlag(displayBase)}</span>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">{displayBase}</span>
-                    <span class="text-gray-400 dark:text-gray-500 text-sm">→</span>
+                    <span class="font-semibold text-lf-primary">{displayBase}</span>
+                    <span class="text-lf-muted text-sm">→</span>
                     <span class="text-lg emoji-flag">{currencyFlag(displayQuote)}</span>
-                    <span class="font-semibold text-gray-800 dark:text-gray-100">{displayQuote}</span>
+                    <span class="font-semibold text-lf-primary">{displayQuote}</span>
                 </span>
 
                 <button
-                    class="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    class="p-1 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-secondary transition-colors"
                     data-testid="fx-swap-btn"
                     onclick={(e) => {
                         stop(e);
@@ -198,7 +198,7 @@
 
             <div class="flex items-center gap-1.5 shrink-0">
                 <button
-                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    class="p-1 rounded-md transition-colors {cardViewMode === 'percentage' ? 'bg-lf-selected text-lf-link' : 'text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary'}"
                     onclick={(e) => {
                         stop(e);
                         localViewModeOverride = cardViewMode === 'absolute' ? 'percentage' : 'absolute';
@@ -208,7 +208,7 @@
                     <Percent size={14} />
                 </button>
                 {#if manualOnly}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ Manual </span>
                 {/if}
             </div>
         </div>
@@ -218,7 +218,7 @@
     <div class="px-4 pb-2">
         {#if lastRate !== null}
             <div class="flex items-baseline gap-2">
-                <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
+                <span class="text-xl font-mono font-bold text-lf-primary">
                     {formatFixed(lastRate, 4)}
                 </span>
                 {#if deltaPercent !== null}
@@ -229,9 +229,9 @@
                 {/if}
             </div>
         {:else if loading}
-            <div class="text-lg text-gray-400 dark:text-gray-500">...</div>
+            <div class="text-lg text-lf-muted">...</div>
         {:else}
-            <div class="text-lg text-gray-400 dark:text-gray-500" data-fx-rate-state="missing" data-testid="fx-card-rate-missing">{$t('fx.rateNotAvailable')}</div>
+            <div class="text-lg text-lf-muted" data-fx-rate-state="missing" data-testid="fx-card-rate-missing">{$t('fx.rateNotAvailable')}</div>
         {/if}
     </div>
 
@@ -252,20 +252,20 @@
             />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
-                <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>
+                <div class="animate-pulse bg-lf-neutral rounded w-full h-12"></div>
             </div>
         {:else}
-            <div class="h-20 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+            <div class="h-20 flex items-center justify-center text-sm text-lf-muted">
                 {$t('common.noData')}
             </div>
         {/if}
     </div>
 
     <!-- Footer: left actions (settings, sync, refresh) | right actions (edit, delete) -->
-    <div class="px-4 py-2.5 flex items-center justify-between border-t border-gray-50 dark:border-slate-700/50">
+    <div class="px-4 py-2.5 flex items-center justify-between border-t border-lf-subtle">
         <div class="flex items-center gap-0.5">
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-secondary transition-colors"
                 onclick={(e) => {
                     stop(e);
                     onsettings?.({slug});
@@ -275,7 +275,7 @@
                 <Settings size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-amber-600'}"
+                class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-lf-muted/50 cursor-not-allowed' : 'hover:bg-lf-neutral text-lf-muted hover:text-lf-warning'}"
                 disabled={manualOnly}
                 onclick={(e) => {
                     stop(e);
@@ -286,7 +286,7 @@
                 <RotateCw class={loading ? 'animate-spin' : ''} size={15} />
             </button>
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-link transition-colors"
                 onclick={(e) => {
                     stop(e);
                     onrefresh?.({slug});
@@ -298,7 +298,7 @@
         </div>
         <div class="flex items-center gap-0.5">
             <button
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
+                class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-danger transition-colors"
                 onclick={(e) => {
                     stop(e);
                     ondelete?.({base, quote, slug});

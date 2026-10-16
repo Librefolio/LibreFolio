@@ -69,7 +69,7 @@
 <!-- Asset Details -->
 <div class="space-y-3" use:guideAnchor={'asset.identity'} data-testid="asset-tour-identity">
     <div class="flex items-center justify-between">
-        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <div class="text-xs font-semibold text-lf-muted uppercase tracking-wider">
             {$t('assets.modal.assetDetails')}
         </div>
         <!-- Ask Provider global button -->
@@ -79,8 +79,8 @@
             disabled={!hasProvider || askingProvider}
             data-testid="asset-modal-ask-provider"
             class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md
-                   bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600
-                   text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600
+                   bg-lf-card border border-lf-subtle
+                   text-lf-secondary hover:bg-lf-hover
                    disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title={!hasProvider ? $t('assets.identifiers.askProviderHint') : ''}
         >
@@ -113,7 +113,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <!-- Display Name -->
                 <div>
-                    <label for="asset-display-name" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <label for="asset-display-name" class="block text-xs font-medium text-lf-muted mb-1">
                         {$t('common.name')} *
                     </label>
                     <input
@@ -125,19 +125,19 @@
                         data-testid="asset-modal-display-name"
                         aria-invalid={!displayName.trim()}
                         aria-describedby={!displayName.trim() ? 'asset-name-required' : undefined}
-                        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               placeholder-gray-400 dark:placeholder-gray-500
-                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                        class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                               bg-lf-field text-lf-primary
+                               placeholder:text-lf-placeholder
+                               focus:outline-none focus:ring-2 focus:ring-lf-focus/50 focus:border-lf-focus"
                     />
                     {#if !displayName.trim()}
-                        <p id="asset-name-required" class="mt-1 text-xs text-amber-700 dark:text-amber-400" data-testid="asset-modal-name-required">
+                        <p id="asset-name-required" class="mt-1 text-xs text-lf-warning" data-testid="asset-modal-name-required">
                             {$t('assets.modal.nameRequired')}
                         </p>
                     {/if}
                     {#if duplicateAssetName}
                         <Tooltip text={$t('assets.modal.duplicateNameTooltip', {values: {name: duplicateAssetName}})} position="bottom" maxWidth="300px">
-                            <span data-testid="asset-modal-duplicate-warning" data-duplicate-name={duplicateAssetName} class="inline-flex items-center gap-1 mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            <span data-testid="asset-modal-duplicate-warning" data-duplicate-name={duplicateAssetName} class="inline-flex items-center gap-1 mt-1 text-xs text-lf-warning">
                                 ⚠️ {$t('assets.modal.duplicateNameWarning', {values: {name: duplicateAssetName}})}
                             </span>
                         </Tooltip>
@@ -146,7 +146,7 @@
 
                 <!-- Asset Type -->
                 <div>
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <span class="block text-xs font-medium text-lf-muted mb-1">
                         {$t('common.type')} *
                     </span>
                     <AssetTypeSelect bind:value={assetType} testId="asset-modal-type" onchange={() => onmanualedit('asset_type')} />
@@ -157,11 +157,11 @@
                 <!-- Quote Base Quantity -->
                 <div>
                     <div class="flex items-center gap-1 mb-1">
-                        <label for="asset-quote-base-quantity" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <label for="asset-quote-base-quantity" class="block text-xs font-medium text-lf-muted">
                             {$t('assets.modal.quoteBaseQuantity')} *
                         </label>
                         <Tooltip text={$t('assets.modal.quoteBaseTooltip')} position="bottom" maxWidth="280px">
-                            <Info size={14} class="text-gray-400 cursor-help" />
+                            <Info size={14} class="text-lf-muted cursor-help" />
                         </Tooltip>
                     </div>
                     <input
@@ -175,14 +175,14 @@
                         onblur={truncateQuoteBaseQuantity}
                         data-testid="asset-modal-quote-base-quantity"
                         class="w-full px-3 py-2 text-sm border rounded-lg
-                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                               focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-red-400 focus:ring-red-400/50 dark:border-red-500' : 'border-gray-200 dark:border-slate-600 focus:ring-libre-green/50 focus:border-libre-green'}"
+                               bg-lf-field text-lf-primary
+                               focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-lf-danger focus:ring-lf-danger/50' : 'border-lf-input hover:border-lf-input-hover focus:ring-lf-focus/50 focus:border-lf-focus'}"
                     />
                     {#if quoteBaseQuantityInvalid}
-                        <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
+                        <p class="mt-1 text-[11px] text-lf-danger" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
                     {/if}
                     {#if assetType === 'BOND'}
-                        <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">
+                        <p class="mt-1 flex items-start gap-1 text-[11px] text-lf-info" data-testid="asset-modal-bond-qbq-hint">
                             <Info size={12} class="mt-0.5 shrink-0" />
                             <span>{$t('assets.modal.bondQuoteBaseHint')}</span>
                         </p>
@@ -192,9 +192,9 @@
                 <!-- Currency -->
                 <div data-testid="asset-modal-currency-group">
                     <div class="flex items-center gap-1 mb-1">
-                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{$t('common.currency')} *</span>
+                        <span class="text-xs font-medium text-lf-muted">{$t('common.currency')} *</span>
                         <Tooltip text={$t('assets.modal.currencyHelp')} interactiveChild maxWidth="360px">
-                            <button type="button" class="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400" aria-label={$t('assets.modal.currencyHelpLabel')} data-testid="asset-modal-currency-help">
+                            <button type="button" class="text-lf-muted hover:text-lf-info" aria-label={$t('assets.modal.currencyHelpLabel')} data-testid="asset-modal-currency-help">
                                 <Info size={13} />
                             </button>
                         </Tooltip>
@@ -215,7 +215,7 @@
 
 <!-- User URL -->
 <div>
-    <label for="asset-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+    <label for="asset-user-url" class="block text-xs font-medium text-lf-muted mb-1">
         {$t('assets.provider.userUrl')}
     </label>
     <div class="flex gap-1.5">
@@ -224,13 +224,13 @@
             type="text"
             bind:value={providerUserUrl}
             placeholder="https://..."
-            class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                   bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                   placeholder-gray-400 dark:placeholder-gray-500
-                   focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+            class="flex-1 px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                   bg-lf-field text-lf-primary
+                   placeholder:text-lf-placeholder
+                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50 focus:border-lf-focus"
         />
         {#if providerUserUrl}
-            <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
+            <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-lf-muted hover:text-lf-link transition-colors">
                 <ExternalLink size={14} />
             </a>
         {/if}
@@ -239,7 +239,7 @@
 
 <!-- Description (short, always visible) -->
 <div>
-    <label for="asset-description" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+    <label for="asset-description" class="block text-xs font-medium text-lf-muted mb-1">
         {$t('common.description')}
     </label>
     <textarea
@@ -249,9 +249,9 @@
         oninput={ondescriptionedit}
         rows={2}
         placeholder={$t('assets.modal.descriptionPlaceholder')}
-        class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-               placeholder-gray-400 dark:placeholder-gray-500
-               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green resize-none"
+        class="w-full px-3 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+               bg-lf-field text-lf-primary
+               placeholder:text-lf-placeholder
+               focus:outline-none focus:ring-2 focus:ring-lf-focus/50 focus:border-lf-focus resize-none"
     ></textarea>
 </div>

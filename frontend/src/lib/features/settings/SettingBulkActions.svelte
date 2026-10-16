@@ -26,15 +26,15 @@
 
 {#if !isLocked}
     {#if hasChanges}
-        <button type="button" onclick={() => onsaveAll?.()} disabled={isSaving} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" data-testid="settings-save-all" title={$_('common.saveAll')}>
+        <button type="button" onclick={() => onsaveAll?.()} disabled={isSaving} class="p-2 rounded-lg transition-all bg-lf-action text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" data-testid="settings-save-all" title={$_('common.saveAll')}>
             <Save size={18} />
         </button>
-        <button type="button" onclick={() => onundoAll?.()} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" data-testid="settings-undo-all" title={$_('common.undoAll')}>
+        <button type="button" onclick={() => onundoAll?.()} class="p-2 rounded-lg transition-all bg-lf-panel text-lf-secondary hover:bg-lf-neutral" data-testid="settings-undo-all" title={$_('common.undoAll')}>
             <Undo size={18} />
         </button>
     {/if}
     {#if hasNonDefaults}
-        <button type="button" onclick={() => onresetAll?.()} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" data-testid="settings-reset-all" title={$_('common.resetAll')}>
+        <button type="button" onclick={() => onresetAll?.()} class="p-2 rounded-lg transition-all bg-lf-warning-soft text-lf-warning hover:bg-lf-warning-line" data-testid="settings-reset-all" title={$_('common.resetAll')}>
             <RotateCcw size={18} />
         </button>
     {/if}
