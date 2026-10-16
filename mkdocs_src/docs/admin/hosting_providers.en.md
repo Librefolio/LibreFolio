@@ -183,9 +183,8 @@ For a caller without a session, most of the API answers as on any other instance
   `/system/ready` do not reveal the block.
 
 A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the address
-probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`), the global
-settings (`GET /api/v1/settings/global`, also by key) and the AI Export catalogue
-(`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
+probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
+Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
 then cannot confirm a public address, and the check of your instance's address reports it as not
 verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
 more: they return no data.

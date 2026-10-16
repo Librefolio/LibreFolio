@@ -473,6 +473,10 @@ async def update_profile(
         if existing:
             return None, "Email already registered"
         user.email = email
+        # A new address is not verified (E5), and every session opened with the old one ends (A6e): committed below,
+        # together with the address.
+        user.email_verified_at = None
+        end_sessions(user)
 
     # Update timestamp
     user.updated_at = utcnow()

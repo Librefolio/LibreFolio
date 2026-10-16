@@ -295,23 +295,25 @@ async def skip_onboarding_step_endpoint(
 
 @router.get("/global", response_model=GlobalSettingsListResponse)
 async def list_global_settings(
+    _current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
 ) -> GlobalSettingsListResponse:
     """
     List all global settings.
 
-    Public read access - anyone can view global settings.
+    Any signed-in user may read them, administrators write them (decision 36). The login page needs none of them: it
+    reads the public ``GET /system/instance``.
     """
     settings = await get_all_global_settings(session)
     return GlobalSettingsListResponse(items=settings)
 
 
 @router.get("/global/{key}", response_model=GlobalSettingRead)
-async def get_global_setting_endpoint(key: str, session: AsyncSession = Depends(get_session_generator)) -> GlobalSettingRead:
+async def get_global_setting_endpoint(key: str, _current_user: Annotated[User, Depends(get_current_user)], session: AsyncSession = Depends(get_session_generator)) -> GlobalSettingRead:
     """
     Get a specific global setting by key.
 
-    Public read access.
+    Any signed-in user may read it (decision 36).
     """
     setting = await get_global_setting(key, session)
     if not setting:

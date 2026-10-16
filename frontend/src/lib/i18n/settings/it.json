@@ -30,6 +30,8 @@
     "passwordChanged": "Password modificata con successo",
     "passwordChangeFailed": "Errore nella modifica della password",
     "currentPasswordIncorrect": "La password attuale non è corretta",
+    "currentPasswordRequired": "Inserisci la password attuale per cambiare l'email",
+    "emailPasswordHint": "Per cambiare l'email inserisci la password attuale. Gli altri dispositivi verranno disconnessi.",
     "passwordsMustMatch": "Le password devono corrispondere",
     "passwordMustBeDifferent": "La nuova password deve essere diversa dalla precedente",
     "language": "Lingua",
