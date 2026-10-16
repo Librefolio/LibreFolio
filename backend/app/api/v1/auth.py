@@ -379,7 +379,8 @@ async def update_profile(
         _issue_session_cookie(response, http_request, updated_user, await _session_ttl_hours(session))
         logger.info("Email changed, other sessions ended", user_id=updated_user.id)
 
-    logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email=updated_user.email)
+    # Never the address in the log (workstream E's rule): whether it changed is enough.
+    logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email_changed=email_changes)
 
     return UpdateProfileResponse(user=AuthUserResponse.model_validate(updated_user), message="Profile updated successfully")
 
