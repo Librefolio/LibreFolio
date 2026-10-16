@@ -1346,3 +1346,26 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Finali sull'albero combinato** (00:39-00:41): `roi-fifo-utils` 988, `financial-math` 717, `api portfolio` 51;
   ruff/black puliti (15 `.py`; lo script passava il golden `.json` ai linter: corretto); `mkdocs build` strict 0;
   `git diff --check` pulito; porta libera.
+- **Coordinatore (00:49)**: CP-7b di J entrato (`48da9bf3c`): MF-E sbloccato (aggiornamento di base quando parto).
+  Y già risposto alle 22:00-22:11. **MF-D** dopo CP-9a (già in dev `c4eeaef14`: `risk/service.py` diviso in
+  `risk/{scope,replay,results,data_quality}.py`; R6 in `risk/results.py::portfolio_twrr_returns`): da concordare
+  direttamente con J quando parto. Ordine mio: commit P e A → aggiornamento di base → MF-E (sintesi del lotto, segno
+  dei corti, T-B8, V11) → J1/J2 → D-rest → campo dei periodi fissi con X.
+
+#### P e A committati; aggiornamento di base 4 (17/10, 00:49)
+- Coordinatore: `f191dfbf9` (P, da `P.patch`), `9a1d57bfa` (A + giornale); merge di dev `b58108665` (CP-7b, CP-9a,
+  decisione 47) pulito → HEAD **`f2bd62ba1`** verificata. CP-10b non ancora dentro.
+- **Validazione combinata** chiesta (decisione 47 — gambe di trasferimento orfane — accanto a P22): `financial-math`,
+  `roi-fifo-utils` (contiene l'orfano e i test di A), `api portfolio`, `ai-export` a pezzi (`files/a.sh combined`).
+- **W-B56 → MF-W56** (W e coordinatore, 00:49): d'accordo; arrotondo alla facciata `compute_wac_iterative` con
+  `round_computed_value(…, Transaction, "cost_basis_override")` (D6), non nella casa; copre anteprima, «congela» e costo
+  automatico. Dopo MF-E, rossi prima. Riga nel backlog. Anche **MF-A2** (doc dei chiusi e §5) nel backlog.
+- **W su MF-W56** (01:0x): il rosso «il costo automatico lo scrive arrotondato» non può rileggere dal DB (`RealDecimal`
+  rilegge già a 12 decimali / 15 cifre: 100/3 → `33.333333333333` comunque; W lo fissa in
+  `test_transaction_decimal_places.py`, `AUTO_COST_OF_HUNDRED_OVER_THREE`, che resta verde): leggere il valore prima
+  che sia salvato — `wac_results` del batch, `POST /portfolio/wac`, o l'attributo ORM prima della scadenza. W-B58 (W,
+  in corso) aggiunge un terzo limite a `decimal_limit_issue` e cambia il docstring di `round_computed_value`, non il
+  comportamento: nessuna sovrapposizione.
+- ✅ **Validazione combinata su `f2bd62ba1`** (00:51-01:06, `files/a.sh combined`): `financial-math` 774,
+  `roi-fifo-utils` 995 (con l'orfano della decisione 47 e i test di A), `api portfolio` 51, `ai-export` 341 + 647
+  (senza `structural_invariants`). Nessun rosso: decisione 47 e P22 convivono.
