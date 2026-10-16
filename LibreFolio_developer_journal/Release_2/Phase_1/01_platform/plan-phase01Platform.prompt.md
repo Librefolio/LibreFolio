@@ -2838,3 +2838,84 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > libera.
 
 #### Checkpoint CP7b-1 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: commit `04d82ca3a` (feat), `6561e3cce` (doc), `e785691ae` (diario); merge di `dev_release2`
+> `503dce683`, pulito, HEAD `dd89398dd` (dentro B2, Z7b, CP11a/b, A6d/e, E-5 e il lotto di T). Prove sulla revisione
+> combinata, una alla volta con `nice`, carico sotto 70: `services security-headers` 15, `services app-lifecycle` 42,
+> `api http-compression` 10, `api backup-restore` 114 (l'upload del ripristino passa dal middleware), `api system-wake`
+> 74 (la risposta in streaming del risveglio), `api system` 118, `mkdocs build --strict`, `check-links`. Entrato nel
+> treno 86 (merge `1f4c5aeca`) con le righe 🔒 (header) e 🐛 (cache) nel CHANGELOG.
+
+### CP7b-2 — i default del profilo e gli header del profilo gestito (2026-10-16, notte) — in corso
+
+Via del coordinatore alle 03:48 del 16/10. Il lotto più delicato: ogni campo ha il suo test «self-hosted invariato».
+
+#### Passo 1 — i rossi nel worktree ✅ (2026-10-16, notte)
+
+> **Note implementazione**: copiati da `/tmp/librefolio-r13-h-7b2/` `test_profile_defaults.py` (37 casi) e
+> `test_managed_headers.py` (169) in `backend/test_scripts/test_services/`; applicato `runner.diff` a
+> `scripts/test_runner/_backend_services.py` (selettori `services profile-defaults` e `services managed-headers`).
+> Sul codice di allora: `profile-defaults` 37 rossi (35 per la tabella che manca, 2 per i campi che mancano),
+> `managed-headers` 169 rossi (la barriera: i campi non esistono).
+
+#### Passo 2 — la cura ✅ (2026-10-16, notte)
+
+> **Note implementazione**:
+>
+> - `config/__init__.py`: `PROFILE_DEFAULTS` (`selfhosted` vuoto; `managed`: i due `RISK_*_IDLE_TIMEOUT_SECONDS` a
+>   60.0, `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY` a `True`), i due campi booleani nuovi, default
+>   `False`, e il validatore `after` `_apply_profile_defaults`. Questo scrive con `object.__setattr__` solo i campi
+>   assenti da `model_fields_set`. La docstring del modulo elenca le due variabili e i valori del profilo gestito.
+> - `platform/security_headers.py`: `FRAME_HEADERS` (`X-Frame-Options: SAMEORIGIN`, CSP applicata
+>   `frame-ancestors 'self'` e nient'altro) su ogni risposta, il 500 e le preflight comprese;
+>   `CSP_REPORT_ONLY_POLICY` come `Content-Security-Policy-Report-Only` solo sull'HTML della web app
+>   (`_is_web_app_page`: tipo `text/html`, fuori da `/mkdocs` e da `/api`, nudi o con la barra). Le impostazioni si
+>   leggono una volta, in `__init__`; nomi degli header confrontati interi.
+> - `.env.example`: due righe commentate nella sezione «Instance Profile» e «managed: 60» sui due timeout di inattività.
+> - Il motore del rischio legge i timeout solo da `Settings` (`risk/quant/workers.py`), quindi il valore del profilo
+>   arriva senza altro codice. Fuori da `config/__init__.py`, nessuno fa `model_copy` o legge `model_fields_set` di
+>   `Settings`.
+>
+> **Prove**, una alla volta, `nice -n 10`, carico sotto 70; i rossi passano al primo giro: `services profile-defaults`
+> 37, `services managed-headers` 169, `services security-headers` 15, `services config-env-example` 36, `config-misc`
+> 12, `config-package` 691, `config-secrets` 58, `config-instance-key` 98, `config-audit` 90, `services
+> app-lifecycle` 42, `utils nosniff-content-types` 30; `db populate --force`; `api system` 118, `api instance-block` 62,
+> `api http-compression` 10. Black e ruff puliti. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**: il default «managed» di B (`MANAGED_MAX_UPLOAD_MB`, 500, in `config/backup.py`) non passa da
+> `PROFILE_DEFAULTS`, che copre solo i campi di `Settings`: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
+> Oggi i meccanismi sono due, e la doc lo dice. Residuo leggero **H-17** nel backlog, da concordare con B.
+
+#### Passo 3 — doc e `all-backend` ✅ (2026-10-16, notte)
+
+> `all-backend` nello slot pesante, dalle 03:59, `--workers 2`. **⚠️ Fuori pista**: partito con `nice -n 10`; il
+> coordinatore ha chiesto poi `-n 19`, perché T ha E2E a un worker fino alle 05:05. Non l'ho riavviato: ho fatto
+> `renice -n 19` per PID su tutto l'albero del runner. Su macOS `-n` è un incremento, quindi i processi Python sono
+> scesi al minimo, 20, e i figli che nascono dopo lo ereditano. Doc con docs-writer, senza build mentre la suite gira.
+>
+> **Note implementazione** (doc, docs-writer, solo inglese):
+>
+> - `admin/hosting_providers.en.md`: il profilo cambia sette cose, con tre righe nuove nella tabella (inattività dei
+>   worker, protezione dei frame, CSP report-only) e tre punti. Un valore impostato vince sempre, anche se è uguale al
+>   default; un pannello che incornicia l'app vuole `LIBREFOLIO_FRAME_PROTECTION=false`; la CSP report-only non blocca
+>   nulla e non ha un indirizzo di report. Più una riga in «For Each Instance» e un collegamento alla doc developer.
+> - `admin/configuration.en.md`: la riga di `LIBREFOLIO_PROFILE`, due righe nuove (valori ammessi; un valore diverso
+>   ferma l'avvio, come per `LIBREFOLIO_BLOCKED`), il default di inattività «600 (60 in managed)».
+> - `developer/architecture/security.md`: sottosezione nuova `#managed-headers`, con una tabella degli interruttori e una
+>   delle direttive. Spiega dove va la CSP report-only e perché, la lettura una tantum, i nomi interi e i test.
+> - `developer/architecture/settings.md`: un punto su `PROFILE_DEFAULTS`: il meccanismo, `object.__setattr__`, la
+>   guardia sulla tabella, il limite ai campi di `Settings` con l'esempio di `config/backup.py`, come si aggiunge un
+>   default (anche in `MANAGED_DEFAULTS` del test).
+> - `developer/architecture/overview.md` (la voce `security_headers` della pila) e `developer/backend/risk/architecture.md`
+>   (il default di inattività).
+> - Codice: il commento della voce `security_headers` in `platform/middleware.py`, solo testo.
+>
+> Verificati sul codice: EmbedPDF (PDFium in WebAssembly) giustifica `'wasm-unsafe-eval'`; Zod 3.24 non usa `eval`;
+> `app.html` registra il service worker; `main.py` chiama `get_settings()` all'import.
+>
+> **Prove**: `all-backend` 7/7, **17 792 passed, 4 skipped, 0 failed** (03:59–04:36, `--workers 2`, nice 19–20);
+> `mkdocs build` strict, senza avvisi; `check-links` 96 validi. `translate-validate --file admin/configuration.en.md`:
+> 174 errori, ma il debito c'era già. Le tre traduzioni sono al 25–26% della sorgente; le due righe nuove e la cella
+> cambiata vi si aggiungono. Pagina non marcata. Porta 6181 libera.
+
+### Checkpoint CP7b-2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
