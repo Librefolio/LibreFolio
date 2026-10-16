@@ -3683,3 +3683,17 @@ still carry the idiom, not re-audited. `check_source_paths.py`: 5 missing (8 occ
 pre-existing; the five new rows exist.
 Updated: [[problems/utc-today-vs-user-calendar]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | Domain: EMAIL — E-9 done as night decision N62 (aliases folded, no stranger's text)
+Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator's night decision N62, to be reviewed
+by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`
+(`+tag` and Gmail's dots folded, never stored, logged or shown); reset, verification and change notice greet
+anonymously, the notice shows nothing of the new address, `masked_address()` is gone, admin setup and test keep the
+username. The page gains the N62 bullet with its why (the spam relay that would harm the cloud's Brevo key and
+`mail.librefolio.eu`); the notice bullet, the limits paragraph, the E4c sentence on the four limiter keys, the Aliases
+limit (resolved; E-12, catch-all and Fastmail, left), the developer decisions (the drained instance budget, N62), the
+backlog line and the `delivery.py` row follow. Sources: plan 08 «E-9.0» and «E-9.1», backlog E-9 and E-12; R13-SEC…3
+stay in the plan. `developer/backend/email.md` still shows the masked notice and E-9 open: the docs-writer's part.
+`check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
