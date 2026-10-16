@@ -117,11 +117,12 @@ No original row is deleted and no replacement row is created.
 
 Step 3 exists for a row linked to an asset event, such as an `ADJUSTMENT` linked to a
 `SPLIT`. A promote never clears `asset_event_id`, and the business rules accept that
-link only on `EVENT_COMPATIBLE_TYPES` (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`): every
-promote target has `event_compatible: false` in `TX_TYPE_METADATA`, so such a row is
-refused with `eventTypeIncompatible`. Without the check it would become a `TRANSFER`
-still linked to the split, and the average cost, which treats every row linked to a
-`SPLIT` event as a split whatever its type, would read it as one.
+link only on the types `TX_TYPE_METADATA` marks `event_compatible` (`DIVIDEND`,
+`INTEREST`, `ADJUSTMENT`; see [Per-type rules](service.md#per-type-rules)): every
+promote target has `event_compatible: false`, so such a row is refused with
+`eventTypeIncompatible`. Without the check it would become a `TRANSFER` still linked
+to the split, and the average cost, which treats every row linked to a `SPLIT` event
+as a split whatever its type, would read it as one.
 
 ### 🧭 Inferred target rules
 
