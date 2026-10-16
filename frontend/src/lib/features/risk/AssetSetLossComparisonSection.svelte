@@ -121,7 +121,7 @@
         return fraction === null ? null : -Math.abs(fraction);
     }
 
-    const LOSS_CLASS = 'tabular-nums text-red-600 dark:text-red-400';
+    const LOSS_CLASS = 'tabular-nums text-lf-loss';
 
     type LossColumn = 'badDay' | 'badMonth' | 'worstFall' | 'currentFall' | 'toPeak';
 
@@ -199,9 +199,7 @@
             // L1 keeps its acquired measures as sub-rows instead of promoting them to cards.
             cell: (row) => {
                 const lastedHtml =
-                    row.worstFall !== null && row.worstFallDays !== null
-                        ? `<span class="block text-[10px] font-normal text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>`
-                        : '';
+                    row.worstFall !== null && row.worstFallDays !== null ? `<span class="block text-[10px] font-normal text-lf-muted" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>` : '';
                 const text = row.worstFall === null ? '\u2014' : fall(row.worstFall);
                 return figureCell(cellHtml('worstFall', row.worstFall !== null, `${text}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`), row.worstFall !== null, blankExplanation);
             },
@@ -219,7 +217,7 @@
             minWidth: titleWidth('toPeak'),
             filterable: false,
             getValue: (row) => row.toPeak,
-            cell: (row) => figureCell(cellHtml('toPeak', row.toPeak !== null, row.toPeak === null ? '\u2014' : rise(row.toPeak), 'tabular-nums text-gray-600 dark:text-gray-300'), row.toPeak !== null, blankExplanation),
+            cell: (row) => figureCell(cellHtml('toPeak', row.toPeak !== null, row.toPeak === null ? '\u2014' : rise(row.toPeak), 'tabular-nums text-lf-secondary'), row.toPeak !== null, blankExplanation),
         },
     ]);
 
@@ -235,22 +233,22 @@
 </script>
 
 <div class="space-y-3" data-testid="risk-asset-set-l1">
-    <p class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.levels.l1.description')}</p>
+    <p class="text-xs text-lf-muted">{$t('risk.assetSet.levels.l1.description')}</p>
 
     {#if failed}
         <div class="py-4 text-center" data-testid="risk-asset-set-l1-error">
-            <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
-            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
+            <p class="text-sm text-lf-danger">{$t('risk.states.loadFailed')}</p>
+            <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
         </div>
     {:else if loading && !hasAnyFigure}
-        <div class="h-32 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-asset-set-l1-loading"></div>
+        <div class="h-32 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-asset-set-l1-loading"></div>
     {:else if discarded && !hasAnyFigure}
         <!-- The frame carries the sentence (`answer_discarded`); the body carries the cure. -->
         <div class="py-4 text-center" data-testid="risk-asset-set-l1-discarded">
-            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
+            <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => onretry?.()} data-testid="risk-asset-set-l1-retry">{$t('common.retry')}</button>
         </div>
     {:else if rows.length === 0}
-        <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
+        <p class="py-4 text-center text-sm text-lf-muted" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
     {:else}
         <div bind:this={tableWrapper} data-testid="risk-asset-set-l1-table" data-row-count={rows.length}>
             <DataTable bind:this={tableRef} data={rows} {columns} getRowId={(row) => String(row.assetId)} storageKey="risk-asset-set-l1" enableSelection={false} selectionMode="none" enableActions={false} enableColumnFilters={false} enablePagination={false} enableContextMenu={false} />
