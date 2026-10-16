@@ -2,7 +2,7 @@
 
 `backend/app/services/lots_analysis_service.py` is the orchestration layer behind `POST /portfolio/lots/analysis`.
 
-It runs `FifoLotEngine` once, then converts engine output into `LotsAnalysisResponse`: FX-normalized values, qbq-aware valuations from the unified price resolver, lot/event histories, WAC series, income allocation, and fallback valuation for assets without usable marks. Frontend consumer: `LotsAnalysisPanel.svelte`.
+It runs `FifoLotEngine` once, then converts engine output into `LotsAnalysisResponse`: FX-normalized values, qbq-aware valuations from the unified price resolver, lot/event histories, WAC series, income allocation, and valuation at cost on the days the asset has no price yet. Frontend consumer: `LotsAnalysisPanel.svelte`.
 
 ---
 
@@ -12,7 +12,7 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 
 | Module | What it holds |
 |--------|---------------|
-| `prices.py` | `PriceHistoryLookup` (the asset's `price_history` rows, resolved by date) and `opening_reference_price()` |
+| `prices.py` | What the lots read from the asset's `AssetPriceSeries`: `opening_reference_price()`, a lot's reference price at its opening (see [Reference Price](#reference-price)), and `last_day_without_observation()`, the last day valued at cost (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)) |
 | `conversions.py` | `FxRateResolver`; `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
 | `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
 | `histories.py` | The value, return, price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `trim_dates()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
@@ -117,14 +117,15 @@ async def get_lots_analysis(
 High-level flow:
 
 1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions.
-2. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` and run `run_fifo_lot_engine(...)`.
-3. Resolve selected lots.
-4. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
-5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `extract_income_outputs()` and `extract_cost_outputs()` (allocation itself happens inside the engine, not here).
-6. Build one qbq-aware resolver series with `build_asset_price_series()`; feed both valuation maps and price-history lines from it.
-7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 9.
-8. Emit only requested DTO sections.
-9. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
+2. Build one qbq-aware resolver series with `build_asset_price_series()`, from the `price_history` rows and the loaded transactions — before the engine, which reads it for reference prices (see [Unified Price Resolver](#unified-price-resolver)).
+3. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` over the series (see [Reference Price](#reference-price)) and run `run_fifo_lot_engine(...)`.
+4. Resolve selected lots, and the days valued at cost: `at_cost_until = last_day_without_observation(price_series, history_dates)` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
+5. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
+6. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `extract_income_outputs()` and `extract_cost_outputs()` (allocation itself happens inside the engine, not here).
+7. Convert the marks of the days the requested analyses read into the two valuation maps, `market_prices` and `estimated_market_prices`, both from the same series.
+8. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 10.
+9. Emit only requested DTO sections.
+10. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
 
 Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
 
@@ -140,6 +141,7 @@ Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the use
 Service converts:
 
 - lot opening cost and opening unit price
+- each selected lot's reference price, from its currency at the lot's opening date (see [Reference Price](#reference-price))
 - event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); for these rows `collect_fx_needs()` registers the lot's currency on every opening event
 - closures, through `convert_closure()` alone: each leg in its own currency at its own date — the lot's side at the lot's opening date, the closing side at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included (see [Closures: each leg at its own date](#closure-conversion))
 - Gantt fragment unit prices
@@ -149,10 +151,10 @@ Service converts:
 
 **No native fallback.** A figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
 
-- **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
-- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
+- **Daily valuation**: a mark whose rate is missing leaves that day unvalued — `market_prices[date]` is `None`, the day has no price-history point, and a still-open lot has no value or return point that day. Never at cost: only a `MISSING` day, with no observation on or before it (up to `at_cost_until`), values a lot at cost; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
+- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a lot's series stops the day before the first closure whose proceeds — for a SHORT, its buy-back cost — have no rate (`_closure_prefix(lot, closures, fx_resolver, leg)`, in `financial_math/lots/histories.py`, returns the running sum of that converted leg by close date and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
 - **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate — the sale's currency at its date — set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date.
-- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `cumulative_proceeds` (`known_cumulative_proceeds()`) when one closure's closing rate is missing — for a SHORT lot's proceeds, the opening-date rate — and `realized_pnl` (`known_realized_pnl()`) when one closure misses either of the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); `reference_unit_price` when the rate at the reference date is missing, and `reference_price_source` whenever `reference_unit_price` is `None` — a reference that could not be converted has no source, as in the return history. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
+- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `cumulative_proceeds` (`known_cumulative_proceeds()`) when one closure's closing rate is missing — for a SHORT lot's proceeds, the opening-date rate — and `realized_pnl` (`known_realized_pnl()`) when one closure misses either of the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); `reference_unit_price` when the rate of its currency at the opening date is missing, and `reference_price_source` whenever `reference_unit_price` is `None` — a reference that could not be converted has no source, as in the return history. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
 - **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
 - **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
 
@@ -181,7 +183,7 @@ The engine's native `LotClosure.realized_pnl` is never read: it is `None` whenev
 Every reader converts closures through `convert_closure()`:
 
 - **Lot summary**: `realized_pnl` (`known_realized_pnl()`) sums the closures' and is `None` as soon as one of them is; `cumulative_proceeds` (`known_cumulative_proceeds()`) sums a LONG lot's closure proceeds — a SHORT lot's are those of its opening sale, converted at the opening date;
-- **Value and return histories**: the proceeds prefix (`_closure_proceeds_prefix()`);
+- **Value and return histories**: the running sums of `_closure_prefix(lot, closures, fx_resolver, leg)` (`financial_math/lots/histories.py`) — a LONG lot's closure `proceeds`, a SHORT lot's `cost`;
 - **Performance history**: the SELL closures' proceeds, its inflows;
 - **Event history**: the closure rows (`_build_closure_rows()`) — `unit_price` and `close_unit_price` at the closing rate, `open_unit_price` at the opening rate, `proceeds` and `realized_pnl` as above.
 
@@ -212,7 +214,7 @@ When every weighting trade is in one currency, the pool is not split-degraded: t
 
 The native placeholder therefore never reaches the response.
 
-### ⚠️ qbq Scaling Gotcha
+### ⚠️ qbq Scaling Gotcha {: #qbq-scaling-gotcha }
 
 !!! warning "Two price scales coexist"
 
@@ -230,8 +232,9 @@ The native placeholder therefore never reaches the response.
       functions `build_value_history()`, `build_return_history()` and `build_performance_history()` call
       `compute_holding_value(..., quote_base_quantity)` so `open_value = (qty / qbq) * price`.
     - **Reference-price fallback path**: `opening_reference_price()` (`financial_math/lots/prices.py`)
-      multiplies fallback `lot.opening_unit_price * quote_base_quantity` when no market quote exists on
-      opening date.
+      multiplies `lot.opening_unit_price * quote_base_quantity` when the lot has no market reference:
+      opened by a `BUY` or a short-opening `SELL`, or by an `ADJUSTMENT_IN` with no observation on or
+      before its opening date (see [Reference Price](#reference-price)).
 
 Exact fallback scaling code:
 
@@ -240,11 +243,11 @@ scale = quote_base_quantity if quote_base_quantity > 0 else 1
 return lot.opening_unit_price * scale, lot.currency, lot.opening_date, "exact"
 ```
 
-That multiplication is **only** for fallback Scenario B. Real market quotes already arrive in per-qbq scale and must **not** be multiplied again.
+That multiplication is **only** for the lot's own price. Resolver marks — market quotes, and trade prices already lifted by `build_asset_price_series()` — arrive in per-qbq scale and must **not** be multiplied again.
 
 ---
 
-## 🧭 Unified Price Resolver
+## 🧭 Unified Price Resolver {: #unified-price-resolver }
 
 `LotsAnalysisService` uses `backend/app/services/financial_math/price_marks.py` as the single daily mark path —
 the resolver's full contract (tiers, staleness semantics, qbq scale, the "only valuation path"
@@ -260,6 +263,12 @@ price_series = build_asset_price_series(
 )
 mark = price_series.resolve(current_date)
 ```
+
+The series is built once, before the FIFO engine runs, from the `price_history` rows `_load_prices()` reads — the window and the last quote before it — and from the loaded transactions, those of the brokers in scope: each of their `BUY` and `SELL` rows with an amount is a trade observation. It decides three things:
+
+1. **The reference price** of a lot opened by an `ADJUSTMENT_IN`, which the engine reads while it replays (see [Reference Price](#reference-price)).
+2. **The days valued at cost**: those with no observation on or before them, up to `at_cost_until` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
+3. **The daily valuation**: the two maps below.
 
 Resolution tiers are owned by `AssetPriceSeries.resolve()`:
 
@@ -280,6 +289,26 @@ Both internal maps are built from this same resolver:
 The old duplicate map pattern (`_build_market_price_map` plus `_build_estimated_market_price_map`) is gone in shipped code. There is no separate market-only valuation path to document.
 
 `ResolvedMark.estimated` means **TRADE-origin**, including a trade mark carried forward. A real market quote carried forward is stale (`price_backward_fill`) but not estimated.
+
+### 🎯 Reference Price {: #reference-price }
+
+A lot's reference price is the denominator of its Open Return, `relative_return = market price / reference − 1`. The engine resolves one only when an `ADJUSTMENT_IN` opens a LONG lot (`_apply_adjustment_in()`): a lot opened by a `BUY` or a short-opening `SELL` has none and is compared with its own price — a trade is a price. The service hands the engine `reference_price_lookup(asset_id, opened_at)`, which reads `price_series.resolve(opened_at)`:
+
+| Mark on the opening day | What the engine stores | Engine issue |
+|-------------------------|------------------------|--------------|
+| `MARKET`: a quote of that day | `mark.unit_price`, `reference_price_source="exact"` | — |
+| `TRADE_AVG`: no quote, that day's `BUY` / `SELL` average | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
+| `CARRIED`: a quote or a trade mark of an earlier day | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
+| `MISSING`: no observation on or before that day | `reference_unit_price=None`, `"unavailable"` (the lookup returns `None`) | `REFERENCE_PRICE_UNAVAILABLE` |
+
+An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day.
+
+`opening_reference_price(lot, price_series, quote_base_quantity)` (`financial_math/lots/prices.py`) gives the lot summary, the return history and `collect_fx_needs()` the reference as `(price, currency, date, source)`:
+
+- a lot with a `reference_unit_price` keeps it, in the currency of the mark it came from (`price_series.resolve(lot.opening_date).currency`), dated `lot.opening_date`: the reference converts at the rate of the day it stands for, never at the date of an older observation it was carried from (developer decision P21: every amount at the rate of its day);
+- any other lot falls back to its own price, `lot.opening_unit_price × quote_base_quantity`, in the lot's currency at the opening date, with source `"exact"` (see [qbq Scaling Gotcha](#qbq-scaling-gotcha)). An `ADJUSTMENT_IN` without a cost basis opens its lot at a unit price of 0, so that lot has no `relative_return`.
+
+`collect_fx_needs()` registers that `(currency, opening date)` for each selected lot when `LOT_SUMMARY` or `RETURN_HISTORY` is requested. A reference whose rate is missing is `None`, and so is its `reference_price_source`, in the summary and in the return history, whose point then has no `relative_return`.
 
 ---
 
@@ -353,9 +382,31 @@ its own currency (see [Economic events and degraded pools](#degraded-economic-po
 
 ## 🧮 Estimated-at-Cost Fallback {: #estimated-at-cost-fallback }
 
-When the asset has no market quote on or before the end date (`price_lookup.latest() is None`: `_load_prices()` reads the window and the last quote before it), the service enters `estimated_mode` and, for an analysis that reads prices (`needs_market_series()`), emits a `CURRENT_PRICE_ASSUMED_AT_COST` warning (`dataQuality.currentPriceAssumedAtCostRange`, from the first transaction to the end date). Nothing else gates it: the warning is emitted even when `BUY` or `SELL` marks value every lot at a trade price, and its message ("open value estimated at cost") then describes days that are not valued at cost.
+A day with no observation on or before it — no `price_history` close (`_load_prices()` reads the window and the last quote before it) and no `BUY` or `SELL` with an amount among the loaded transactions — values an open LONG lot at its cost: the per-day rule of the Dashboard's `DailyStateBuilder._value_held_position()` (see [Price Resolver — No observation: valued at cost](price_resolver.md#valued-at-cost)). The resolver carries every observation forward, so such days only come before the asset's first one. The service finds them once, after the engine run:
 
-In `estimated_mode`, if the latest mark is `None` for an open LONG lot — the unified resolver returns `MISSING`, or the mark's rate is missing — the service values the remaining quantity at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
+```python
+history_dates = list(_date_range(computed_from, actual_to))
+at_cost_until = last_day_without_observation(price_series, history_dates)
+```
+
+`last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
+
+| Reader | What it does with `at_cost_until` |
+|--------|-----------------------------------|
+| `build_value_history()`, `build_return_history()` | Pass `at_cost = current_date <= at_cost_until` to `_lot_snapshot_on_date()` (see below) |
+| `_build_lot_summaries()` | `estimated_mode = at_cost_until == actual_to`: the summary reads the end date only, so it is at cost only when that day has no observation — when the asset has none at all |
+| Data quality | For an analysis that reads prices (`needs_market_series()`), one `CURRENT_PRICE_ASSUMED_AT_COST` warning (`dataQuality.currentPriceAssumedAtCostRange`) with `date_from = computed_from` and `date_to = at_cost_until`: exactly the days valued at cost. No warning when `at_cost_until` is `None` |
+| FX needs | When an analysis reads income (`needs_income_alloc`), every lot's currency at its opening date, the rate of the cost those days read |
+
+In the value and return histories, `_lot_snapshot_on_date()` (`financial_math/lots/histories.py`) values a day without a `market_price` this way:
+
+- a lot with no open quantity left is valued from its closures alone, on any day;
+- on an `at_cost` day, a still-open LONG lot is worth `open_quantity × original_cost / original_quantity`, its cost converted at the opening date — a lot whose cost has no rate has no point at all (see [FX Conversion](#fx-conversion));
+- after `at_cost_until`, a `market_price` of `None` can only be a mark whose rate is missing: a still-open lot has no point that day, never one at cost.
+
+The return history has no `relative_return` on an `at_cost` day. An asset first priced after a lot opened by an adjustment therefore shows that lot at cost — a flat value line, no market P&L — from its opening to the day before the first quote, `BUY` or `SELL`, then at the mark.
+
+In the summary, `estimated_mode` values the remaining quantity of a LONG lot at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
 
 ```python
 open_value = opening_value * lot.open_quantity / lot.original_quantity
@@ -363,19 +414,18 @@ value_source = "ESTIMATED_AT_COST"
 market_pnl = Decimal("0")
 ```
 
-Outside `estimated_mode`, a lot whose latest mark is `None` has no value and no `value_source`.
+Outside `estimated_mode` the end date always has a mark — every observation is on or before it — so a lot's latest mark is `None` only when its rate is missing: the lot then has no value and no `value_source`, as the `LotSummarySchema.value_source` description says.
 
 Implications:
 
-- `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only on the true missing-mark fallback branch
-- `open_value` still exists for crowdfunding / unquoted assets
+- `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only for an asset with no observation up to the end date — one held only through adjustments or transfers, with no quote
 - `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable, as long as the proceeds and realized P&L they read convert (see [FX Conversion](#fx-conversion))
-- `relative_return` stays `None` because no true market/reference comparison exists
-- data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`
+- `relative_return` stays `None`: there is no market price to compare with the reference
+- data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`, from the first transaction to the end date
 
-If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark — the lot summary's `value_source` is then `MARKET_PRICE`, the label of any mark — while the price-history point carries `estimated=True`. For history builders, the cost fallback lives in `_lot_snapshot_on_date()` (`financial_math/lots/histories.py`), shared by `build_value_history()` and `build_return_history()`: in `estimated_mode`, a day whose `market_price is None` values a still-open LONG lot at cost; outside `estimated_mode`, that day has no point.
+A TRADE-origin mark is a price: valuation uses it, the lot summary's `value_source` is then `MARKET_PRICE` — the label of any mark — and the price-history point carries `estimated=True`. Only a `BUY` or a `SELL` gives one: an `ADJUSTMENT` never does, with or without a cost basis (see [Price Resolver](price_resolver.md#the-daily-model)).
 
-Only a `BUY` or a `SELL` gives a TRADE-origin mark: an `ADJUSTMENT` never does, with or without a cost basis (see [Price Resolver](price_resolver.md#the-daily-model)). An asset held only through adjustments or transfers, with no quote up to the end date, therefore has no mark on any day: its open LONG lots are valued at cost in the summary (`value_source = "ESTIMATED_AT_COST"`: the open quantity's share of the original cost, converted at the opening date) and on every day of the value and return histories; it has no price-history point, and its performance history has no ROI or TWRR, since `build_performance_history()` reads a NAV only on a day with a mark. For an asset first quoted after a lot opened by an adjustment — not `estimated_mode` — that lot, while open, has no value or return point before the first quote, `BUY` or `SELL`.
+No at-cost day reaches `build_performance_history()`: it reads a NAV only on a day with a mark, so ROI and TWRR have no value on the days valued at cost, and none at all for an asset with no observation. The price history has no point on those days either.
 
 ---
 
@@ -446,8 +496,8 @@ Key builders — in the service:
 
 and in `financial_math/lots/`:
 
-- `build_value_history()` — continues closed lots to `date_to` via `lot_history_end_date(..., extend_closed=True)`, unless a rate is missing (see [FX Conversion](#fx-conversion))
-- `build_return_history()` — same continuity rule, plus `relative_return`
+- `build_value_history()` — continues closed lots to `date_to` via `lot_history_end_date(..., extend_closed=True)`, unless a rate is missing (see [FX Conversion](#fx-conversion)); values a still-open LONG lot at cost up to `at_cost_until` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback))
+- `build_return_history()` — same continuity and at-cost rules, plus `relative_return` against `opening_reference_price()` (see [Reference Price](#reference-price))
 - `build_price_history()` — truncates at closure date, no post-close points
 - `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
 - `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read only on a day with a mark: no at-cost fallback reaches it (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value. An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.

@@ -161,12 +161,12 @@ Components that display computed data should be **controlled** (props-in, callba
 
 | Role | Path |
 |------|------|
-| BulkModal (main file, ~2500 LOC) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| FormModal (WAC preview, dual-form) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| WacPreviewSection (controlled) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| PromoteMergeModal | `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` |
+| BulkModal (main file, ~2500 LOC) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| FormModal (WAC preview, dual-form) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| WacPreviewSection (controlled) | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
+| PromoteMergeModal | `frontend/src/lib/features/transactions/bulk/PromoteMergeModal.svelte` |
 | FX store registry (lookupFxRate) | `frontend/src/lib/stores/fxStoreRegistry.ts` |
-| TX types (PendingOp, DraftFields) | `frontend/src/lib/components/transactions/types.ts` |
+| TX types (PendingOp, DraftFields) | `frontend/src/lib/features/transactions/types.ts` |
 | TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions/transactions.py` |
 | TX service (compute_wac_iterative) | `backend/app/services/transactions/transaction_service.py` |
 | Financial utils (WAC math; financial_utils.py → wac_utils.py → the average-cost function, 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |

@@ -4445,3 +4445,91 @@ saltati; unità da sole 2 255 passati e 25 saltati (28 sessioni pytest); DB 20/2
 Le righe «❌» del log sono i messaggi attesi dei test negativi dei fornitori FX (`MOCKFX_FAIL`, valuta non supportata).
 Porta libera dopo; DB di test archiviato dal runner (`00_archive/test-db_20261016_215237.tar.xz`); log per unità in
 `files/logs/allb_47_units_2119/`. Pronta per l'ingresso (fusione del mio ramo in dev, 47 e journal).
+
+**La 47 entrata** (coordinatore, 21:5x): fusione `ea72346b7` (treno 142), CHANGELOG `bf2c22791`; il mio ramo portato avanti
+veloce a `bf2c22791`, pulito. Dal team dei colori: i 3 test del Designer Lab liberi (aggiornarli); i lotti T e AF di stasera
+non toccano le 12 righe della baseline; nessun ingresso durante il congelamento. **FE8b: via e congelamento annunciato.**
+
+### FE8b — la cartella delle transazioni in `features/`: lo spostamento ⏳ (2026-10-16)
+
+1. ✅ **Spostamento** (21:56, `files/scripts/fe8b_move.py --apply` su `bf2c22791`; prima il dry run sulla base nuova, identico:
+   tre commit di dev toccavano solo altre righe di `_frontend_utility.py` e altre rotte): 124 file in `features/transactions/`
+   (radice 24, `form/` 13, `bulk/` 18, `import/` 56, `events/` 8, `cells/` 3, `wac/` 2), i 2 barili tolti, `utils/brim/` con
+   `pluginText` e `pluginKind`; 191 file riscritti, 575 riferimenti (4 barili espansi, 6 `vi.mock`, 12 righe della baseline, 356
+   menzioni di percorso). Con `mv`, non `git mv`: lo staging è del coordinatore.
+   > **⚠️ Fuori pista — `import.meta.glob`**: lo strumento non leggeva i glob di Vite. Tre pattern relativi erano rimasti
+   > quelli della cartella vecchia: `GapFixStep.test.ts` (`../../../utils/transactions/gapFixModel.ts` → `./gapFixModel.ts`) e
+   > `ReportSetCard.test.ts` (`../../table/DataTable.svelte`, `../../ui/feedback/Tooltip.svelte` → `../../../components/…`),
+   > ognuno con la sua chiave di lettura: corretti a mano (4 righe). Trovati con il grep dei percorsi vecchi sui file nuovi (non
+   > tracciati, quindi fuori da `git grep`). Nessun altro glob, `new URL(…, import.meta.url)` o `readFileSync` nei file spostati;
+   > nessuno script che scandisce solo `lib/components`, `lib/utils` o `lib/stores` (`coverage_js.py` classifica già
+   > `src/lib/features/` come HIGH, come per i lotti di Y).
+2. ✅ **Controlli statici** (21:57–22:0x, carico 59–100): percorsi vecchi a zero in `frontend/`, `scripts/`, `backend/`,
+   `.github/`, `mkdocs_src/docs/`, devWiki, salvo le eccezioni dichiarate (le 3 righe `~split`, storia; 2 pagine della devWiki che
+   nominavano già file inesistenti; `frontend/design/REPORT.md`, rapporto datato); `git diff --check` pulito; `prettier --check`
+   sui 140 file toccati pulito; `theme-roles.mjs --check` «Colour gates: clean»; `check_source_paths.py` a 5 come prima (4 103
+   citati); `check-orphans` (504 unità e 138 spec registrati e raggiungibili); `black` pulito; `ruff`: i 4 PLC0415 di
+   `_frontend_transaction.py` ci sono già su HEAD, righe non toccate.
+3. ✅ **Prove del punto 1** (slot 1, 22:06–22:26, carico 55–102; `files/scripts/fe8b_point1.sh`):
+   - `front check` al primo giro **27 errori in 7 file, tutti in `features/backup/`** (`RestoreStatus`, `control_totals`, …),
+     che FE8b non tocca. > **⚠️ Fuori pista — ambiente**: il client generato (`src/lib/api/generated.ts` e `openapi.json`,
+     ignorati da git) era delle 21:47, cioè dell'avvio del server di `all-backend`, prima dell'avanzamento veloce che ha portato
+     l'API del ripristino di B (`1e2f6374a`). `dev.py api sync` (nessun file tracciato cambiato), poi di nuovo tutto il punto 1.
+     Lezione: dopo un aggiornamento di base che porta API, `api sync` prima di svelte-check.
+   - Secondo giro: `front check` **0 errori, 0 avvisi**; Vitest `front-transaction tx-unit` **907**, `front-utility core-unit`
+     **7 270** (con i gate dell'HTML e dei colori), `component-unit` **4 246**, `front-broker broker-unit` **60**, `front-asset
+     asset-unit` **881**; `front build` verde; `mkdocs build` strict (3 084 URL relativi risolti) e `check-links` verdi.
+   - `lint --dead-code --scope frontend`: exit 1 come sempre su questo albero (decine di reperti altrui: tipi di `lib/types`,
+     rischio, onboarding, dipendenze `@embedpdf` non elencate). Nella feature solo `txStoreGetFiltered` e `txStoreGetVersion`
+     (`txStore.svelte.ts`): **già inutilizzati su HEAD** al percorso vecchio, e nessun barile li esportava. **Nessun reperto
+     nuovo.**
+   - Dev è avanzato durante il congelamento (`bf2c22791` → `4e233fe5b`: Z-18, J CP-7b, E-4): l'unico file in comune è la rotta
+     della Dashboard (Z alle righe 109–650, FE8b alle righe d'import 78–79: nessun conflitto); nessun riferimento nuovo ai
+     percorsi vecchi, nessun file nuovo nelle cartelle congelate.
+   - **Commit pronto** (22:3x): 376 percorsi nel commit del codice (`files/fe8b/stage_code.txt`: 126 tolti, 124 nuovi, 126
+     modificati), il journal a parte (`files/fe8b/stage_journal.txt`); nessun file ignorato o generato fra loro; `git diff
+     --check` pulito; porta libera.
+4. ✅ **Prove del punto 2, gli E2E** (slot 1, 22:28–23:24, carico 44–150; dopo il commit del coordinatore: **`74e390c98`**,
+   252 file e le 124 rinomine riconosciute, più `bc8a58fba` del journal; `files/scripts/fe8b_point2.sh`):
+   - `db populate --force`; `front-transaction all --workers 4`: 343 + 32 passati (32 saltati del progetto mobile), **6
+     rossi, nessuno dello spostamento**:
+     - **3 sono un difetto di C-97a, mio, in dev dalle 18:29**: `tx-commit-all-types` «TRANSFER (asset) … dual brokers», `tx-wac-bulk`
+       WB4, `tx-wac-formmodal` FM6 — commit annullato con «Cost basis override: at most 12 decimal places». In `auto` e
+       `auto-detail` il Form rimanda la media dell'anteprima (100 / 3 per intero) e il backend ne legge solo la valuta
+       (`auto_cost.py`, `ccy_hint`) e ricalcola l'importo, ma `check_decimal_limits` lo controllava in ogni modo. Cura nel
+       checkpoint seguente («C-97a, il costo Auto»), approvata dal coordinatore, prima di C-97b.
+     - **3 sono attese sul backend sotto carico** (`tx-import-report-set` R1, step 2 non in 30 s dopo l'upload; R7, step 3
+       ancora «parsing» dopo 30 s; `tx-import-duplicate-precedence` E1, fermo sui duplicati 20 s, e il teardown oltre 120 s),
+       a carico 100–150. **Rigirati da soli** (23:21–23:24, carico 44–54, `files/scripts/fe8b_rerun.sh`): R1 e R7 **2 passati**
+       (31,9 s), E1 **1 passato** (15,1 s). Verdetto (skill `test-triage`): **lentezza**, non FE8b.
+   - `front-broker detail` **38**, `front-portfolio dashboard` **27**, `front-utility files` **29**, `front-asset
+     asset-data-editor` **26**, `front-utility onboarding-tour` **10**. Porta libera.
+   - **FE8b pronto per l'ingresso.** W-B56 (la media dell'anteprima senza arrotondamento, da decidere con MF) nel backlog.
+
+**FE8b entrato** (coordinatore, 23:2x): **`31335fe26`** in `dev_release2`; congelamento finito. Prossimi: C-97a, il costo Auto;
+poi C-97b e C-97c.
+
+### C-97a — il costo Auto non passa dal controllo dei decimali ✅ (2026-10-16)
+
+**Trovato dagli E2E di FE8b** (`tx-commit-all-types` «TRANSFER (asset) … dual brokers», `tx-wac-bulk` WB4, `tx-wac-formmodal`
+FM6): il commit di un trasferimento col costo su Auto è annullato con «Cost basis override: at most 12 decimal places». **Difetto
+mio (C-97a), in dev dalle 18:29.** In `cost_basis_mode` `auto` e `auto-detail` il Form rimanda la media dell'anteprima, che può
+essere periodica (100 / 3 per intero); il backend di quel valore legge solo la valuta (`ccy_hint`, `auto_cost.py`) e ricalcola
+l'importo (`_auto_cost` → `_write_auto_cost`), ma `check_decimal_limits` controllava l'importo in ogni modo. La docstring dello
+stadio e la pagina «Decimal limits» dicevano già «manual cost basis»: il codice non lo faceva. Approvato dal coordinatore come
+checkpoint a sé, subito dopo l'ingresso di FE8b, prima di C-97b.
+
+1. ✅ **Rossi** (test-author `abfb74f8`): `TestAnAutoCostBasisIsNotChecked` in `test_services/test_transaction_decimal_places.py`,
+   40 casi. Rossi 30: create (TRANSFER ricevuto e ADJUSTMENT +1) e update, `auto` e `auto-detail`, `/validate` e `/commit`, 100 / 3
+   per intero (26 decimali) e 1000000 / 3 come lo stampa un float (16 cifre significative), accettati; e l'esito: la riga tiene
+   il costo Auto calcolato (125 / 3 → `41.666666666667` EUR, scelto diverso da 100 / 3 per distinguerlo dall'importo mandato).
+   Guardie 10: lo stesso importo in `manual` resta rifiutato (D2). Visti (23:25, carico 54): **30 falliti, 10 passati**, per la
+   ragione giusta (un issue di decimali sulle righe Auto, commit non fatto).
+2. ✅ **Cura** (`files/scripts/c97a_auto_cost_fix.py --apply`): `_decimal_limit_values` (`transaction_batch_stages.py`) salta
+   `cost_basis_override` quando `cost_basis_mode` è `auto` o `auto-detail` (la tupla letterale, come nelle altre 4 occorrenze
+   del codice), con la ragione in docstring. Una frase nella pagina `developer/backend/transactions/service.md`, «Decimal
+   limits» (senza traduzioni). `black`/`ruff` puliti.
+3. ✅ **Verdi** (23:27, carico 49): `services transaction-decimal-places` **84** (i 40 nuovi e i 44 di prima),
+   `transaction-cost-basis-rule` **80**. **Simulazione del cherry-pick** su `dev_release2` (`778156983`), i 3 file: 0 conflitti,
+   lint pulito, `mkdocs build` strict e `check-links` exit 0. Da girare in uno slot, come conferma: `api transactions-validate` e
+   i 3 E2E che l'hanno trovato.

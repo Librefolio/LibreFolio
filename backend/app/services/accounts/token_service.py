@@ -34,7 +34,9 @@ DEFAULT_TTL: dict[AccountTokenPurpose, timedelta] = {
     AccountTokenPurpose.EMAIL_VERIFICATION: timedelta(hours=24),
 }
 
-# The page of the web interface that receives each kind of link.
+# The page of the web interface that receives each kind of link. The API client's `LINK_PAGES`
+# (`frontend/src/lib/api/zodios-client.ts`) lists the same pages: a 401 there never goes to the login, which would lose
+# the token. `test_account_tokens.py` checks that the two lists agree.
 _TOKEN_PATHS: dict[AccountTokenPurpose, str] = {
     AccountTokenPurpose.INVITE: "/invite",
     AccountTokenPurpose.PASSWORD_RESET: "/reset-password",

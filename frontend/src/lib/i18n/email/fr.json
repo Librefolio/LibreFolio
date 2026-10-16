@@ -90,6 +90,7 @@
         "consumed": "Ce lien a déjà été utilisé. Si votre compte est actif, connectez-vous.",
         "revoked": "Ce lien ne fonctionne plus : connectez-vous pour en demander un nouveau.",
         "unknown": "Ce lien n'est pas valide : rouvrez-le en entier depuis l'e-mail. S'il échoue encore, connectez-vous pour en demander un nouveau.",
+        "blocked": "Cette instance est bloquée par son hébergeur : le lien ne peut pas être vérifié pour le moment. Rouvrez-le une fois l'instance débloquée ; si le lien a expiré entre-temps, connectez-vous pour en obtenir un nouveau.",
         "missing": "Ce lien est incomplet : rouvrez-le depuis l'e-mail.",
         "error": "Le lien n'a pas pu être vérifié : réessayez."
       },

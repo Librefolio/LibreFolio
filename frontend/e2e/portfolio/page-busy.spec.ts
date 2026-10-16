@@ -22,9 +22,11 @@
  * gives every other answer back from the real backend with the header the case sets — or with none, a real one removed
  * too, so that a catch-up the lane really runs cannot reach the case. Every value the button's `data-busy` takes is
  * recorded in the page meanwhile, so «it never waited» means never, not «it was not waiting when the test looked»; the
- * period change that follows in the same page is the control that the button, and the recording, do move. A broker's
- * page publishes no `data-busy` on its root to say that the reload is back: there the landing is read from a count of
- * the reports, kept in the page.
+ * period change that follows in the same page is the control that the button, and the recording, do move. Neither page's
+ * root says that the reload is back: a broker's page publishes no `data-busy` on its root, and the Dashboard's keeps it
+ * `false` through the reload in background (Z-18: nobody asked for that load, and a screen reader must not announce
+ * «busy» for it), checked while the reload is held. On both the landing is read from a count of the reports, kept in the
+ * page.
  *
  * And what such a reload cascades into (N55, `pageBusy.join`). The reload's report drops what a panel loaded lazily —
  * the P&L candles of the growth chart, the contribution of the positions panel — and a panel left on that view (saved
@@ -636,6 +638,10 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
             expect(reports.length, 'precondition: the Dashboard asked its main report').toBeGreaterThan(0);
             const onScreen = reports[reports.length - 1];
             const busySeen = await recordBusy(page, 'sync-button');
+            // The root says nothing of the reload in background either (Z-18): the reports are counted in the page, and the
+            // count says when it is back.
+            const count = await countReports(page);
+            const held = (): number => holds.reduce((sum, gate) => sum + gate.pending(), 0);
 
             // 1. The catch-up ends having updated something. Held: a main report sent once the stub has said so — nothing
             //    else on the settled page asks one.
@@ -645,13 +651,16 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
             catchUp.status = catchUpOverWithUpdates();
             const sent = await heldRequest(reload, 'the reload in background after the catch-up');
             expect(sent.postDataJSON(), 'the held report is not the question on screen asked again').toEqual(onScreen.postDataJSON());
-            await expect(dashboard, 'the page does not say it is loading the held reload').toHaveAttribute('data-busy', 'true');
+            const inFlight = await count();
+            expect(inFlight.sent - inFlight.landed, 'the page does not count the held reload in flight (is a report still sent by XHR?): its landing could not be read').toBeGreaterThan(0);
             await expect(refresh, 'the Refresh button waits for the reload in background after a price catch-up (P3)').toHaveAttribute('data-busy', 'false');
             await expect(refresh, 'the Refresh button cannot be pressed during the reload in background after a price catch-up (P3)').toBeEnabled();
             expect(await busySeen(), 'the Refresh button waited at some moment since the catch-up ended (P3)').not.toContain('true');
+            // The reload is held in flight: a page that says busy for it says so now, and keeps saying it until the release.
+            await expect(dashboard, 'the page says it is busy for the reload in background after a price catch-up, a load nobody asked for: a screen reader announces «busy» for a price refresh (Z-18)').toHaveAttribute('data-busy', 'false');
 
             await reload.release();
-            await waitForSettled(dashboard, ROUND_TRIP_MS);
+            await landedAllBut(count, held, 'the reload in background');
             expect(await busySeen(), 'the Refresh button waited at some moment of the reload, from its send to its landing (P3)').not.toContain('true');
 
             // 2. The control, in the same page and under the same recording: a request the page waits for moves the
@@ -775,13 +784,15 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
             catchUp.status = catchUpOverWithUpdates();
             const sent = await heldRequest(reload, 'the reload in background after the catch-up');
             expect(sent.postDataJSON(), 'the held report is not the question on screen asked again').toEqual(onScreen.postDataJSON());
-            await expect(dashboard, 'the page does not say it is loading the held reload').toHaveAttribute('data-busy', 'true');
             await expectNeverWaited(refresh, busySeen, 'the reload in background after a price catch-up (P3)');
+            // The reload is held in flight: a page that says busy for it says so now, and keeps saying it until the release.
+            await expect(dashboard, 'the page says it is busy for the reload in background after a price catch-up, a load nobody asked for: a screen reader announces «busy» for a price refresh (Z-18)').toHaveAttribute('data-busy', 'false');
 
             await reload.release();
             const cascaded = await heldRequest(cascade, 'the candles the landed reload cascades into (the chart, still on candles, did not ask them again)');
             expect(cascaded.postDataJSON(), 'the held candles are not the candles on screen asked again').toEqual(candlesOnScreen.postDataJSON());
             await landedAllBut(count, held, 'the reload in background');
+            // A settle, not the landing (the count above is): the root keeps quiet through a reload in background (Z-18).
             await waitForSettled(dashboard, ROUND_TRIP_MS);
             await expectNeverWaited(refresh, busySeen, 'the candles the reload in background cascades into (N55: alone, with no token)');
 

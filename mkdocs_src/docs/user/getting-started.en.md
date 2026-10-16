@@ -35,7 +35,9 @@ Fill in your details:
     **[Global Settings](../admin/settings.md)** and every admin feature. On an instance whose
     administrator was created from the server's configuration, by a hosting provider for example,
     nobody registers first: that administrator receives a setup link, which opens the instance's
-    setup page, where they choose the password and are signed in.
+    setup page. There they type the password twice, following the rules shown under the field;
+    once they confirm, they are signed in, and the [Welcome setup](#welcome-setup) opens, as for any
+    new account.
 
 ### ✉️ If You Received an Invitation Link {: #invitation-link }
 

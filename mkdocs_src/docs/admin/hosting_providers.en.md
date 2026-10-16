@@ -119,9 +119,10 @@ your users sign in again after each restart. See
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
-- Optionally, your own support page, `LIBREFOLIO_SUPPORT_URL`: where the users of the instance ask for
-  help, such as an asset the search does not find. Without it, the help links go to LibreFolio's
-  issues on GitHub. See «Main Options» in [Environment Variables](configuration.md).
+- Optionally, your own support page or email address, `LIBREFOLIO_SUPPORT_URL` (`https://…` or
+  `mailto:…`): where the users of the instance ask for help, such as an asset the search does not
+  find. Without it, the help links go to LibreFolio's issues on GitHub. See «Main Options» in
+  [Environment Variables](configuration.md).
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
@@ -136,8 +137,9 @@ your users sign in again after each restart. See
 Give each new instance its administrator from the environment. At its first start, the instance
 creates the account for the address you name, not yet active, and a setup link that works once, for
 72 hours. The link opens the instance's setup page, where your customer chooses the password and is
-signed in. Nobody can register first and take the administrator's place, even on an instance that
-is reachable from the internet from its first minute.
+signed in ([What Your Customer Sees](#initial-admin-setup-page)). Nobody can register first and take
+the administrator's place, even on an instance that is reachable from the internet from its first
+minute.
 
 ### ⚙️ The Variables {: #initial-admin-variables }
 
@@ -185,11 +187,36 @@ is reachable from the internet from its first minute.
   waits too.
 - ⛔ While the instance is [blocked](#instance-block), the setup link does not work: the setup is
   refused until you unblock the instance, and the 72 hours keep running meanwhile. If the link
-  expires in the meantime, give a new one ([A New Link](#initial-admin-new-link)).
+  expires in the meantime, give a new one ([A New Link](#initial-admin-new-link)). The setup page
+  still opens its form, then refuses the setup and says why: see
+  [What Your Customer Sees](#initial-admin-setup-page).
 - 🔑 Without `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, the instance generates the token: it writes the
   link once in its log, and emails it to `LIBREFOLIO_ADMIN_EMAIL` when its [email](email.md) works
   and `LIBREFOLIO_PUBLIC_URL` is set. A token of your own lets your panel know the link before the
   instance starts, without reading its log.
+
+### 🖥️ What Your Customer Sees {: #initial-admin-setup-page }
+
+The setup page needs no account. When your customer opens the link:
+
+1. The page takes the token out of the address bar at once, so that it stays out of the browser's
+   history and bookmarks, then asks the instance whether the link still works.
+2. A link that works opens the form: it names the account, by its username, and asks for the
+   password twice. The password must meet the rules shown under the field, the instance's own: the
+   form sends nothing until it does and the two passwords match. A password manager that saves the
+   new password files it under that username.
+3. Once the form is sent, the account is active and your customer is signed in. The app opens with
+   the [Welcome setup](../user/getting-started.md#welcome-setup), as for any new account.
+
+When the setup cannot go through, the page says why:
+
+| The page shows | When | What to do |
+| --- | --- | --- |
+| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open | Give your customer a new link: [A New Link](#initial-admin-new-link) |
+| *The link could not be checked. Try again in a moment.*, with **Retry** | The instance did not answer the check | **Retry** once the instance answers |
+| *Password does not meet security requirements* | The password misses one of the instance's rules | Choose a password that meets the rules shown under the field |
+| That the setup is refused while the instance is blocked, and no button to send the form any more | The instance is [blocked](#instance-block): the form opens, and the setup is refused once it is sent | Unblock the instance: your customer then opens the link again, within its 72 hours |
+| That the setup failed | Any other problem | Send the form again |
 
 ### 🔁 A New Link {: #initial-admin-new-link }
 
@@ -343,7 +370,9 @@ For a caller without a session, most of the API answers as on any other instance
 A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the setup of
 the [initial administrator](#initial-admin) (`POST /api/v1/auth/setup`), the address probe
 (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
-Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
+Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The
+setup page and the invitation page then say that the instance is blocked, instead of sending their
+visitor to the sign-in page, which would lose the link. The address probe
 then cannot confirm a public address, and the check of your instance's address reports it as not
 verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
 more: they return no data.
@@ -518,4 +547,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
   The headers of the managed profile, directive by directive
 - 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
-  The startup step, the setup link and its route
+  The startup step, the setup link and its route; the setup page is in
+  **[Account Link Pages](../developer/frontend/components/features/auth.md#link-pages)**

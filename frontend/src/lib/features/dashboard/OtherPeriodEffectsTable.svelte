@@ -18,7 +18,6 @@
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
     import {SIGN_BADGE, SIGN_TEXT} from '$lib/theme/toneClasses';
-    import '$lib/theme/components/table.css';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
 
@@ -265,24 +264,12 @@
         background: transparent;
     }
 
-    :global(.dark) .other-period-effects-datatable :global(.table-wrapper) {
-        background: transparent;
-    }
-
     .other-period-effects-datatable :global(.datatable) {
         background: transparent;
     }
 
-    :global(.dark) .other-period-effects-datatable :global(.datatable) {
-        background: transparent;
-    }
-
     .other-period-effects-datatable :global(.datatable thead) {
-        background: var(--lf-cmp-period-effects-header-bg);
-    }
-
-    :global(.dark) .other-period-effects-datatable :global(.datatable thead) {
-        background: var(--lf-cmp-period-effects-header-bg-dark);
+        background: color-mix(in oklab, var(--lf-surface-card) 50%, transparent);
     }
 
     .other-period-effects-datatable :global(.datatable th) {
@@ -293,12 +280,7 @@
     .other-period-effects-datatable :global(.datatable td) {
         padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
-        border-bottom-color: var(--lf-cmp-period-effects-cell-border);
-        background: transparent;
-    }
-
-    :global(.dark) .other-period-effects-datatable :global(.datatable td) {
-        border-bottom-color: var(--lf-cmp-period-effects-cell-border-dark);
+        border-bottom-color: var(--lf-border-subtle);
         background: transparent;
     }
 
@@ -307,14 +289,6 @@
     }
 
     .other-period-effects-datatable :global(.datatable tbody tr:hover) {
-        background: transparent;
-    }
-
-    :global(.dark) .other-period-effects-datatable :global(.datatable tbody tr) {
-        background: transparent;
-    }
-
-    :global(.dark) .other-period-effects-datatable :global(.datatable tbody tr:hover) {
         background: transparent;
     }
 

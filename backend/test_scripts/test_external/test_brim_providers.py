@@ -1251,7 +1251,7 @@ class TestGenericCSVRefusesWithACode:
     - a header without ``date``, ``type`` or both: ``missing_columns``, ``{"columns": "date" | "type" | "date, type", "count": 1 | 1 | 2}``, the
       count an integer, for the plural of the translation.
 
-    The seven keys of lot K2a are checked in ``frontend/src/lib/utils/brim/defaultPluginCheck.test.ts``; DEGIRO's codes in
+    The seven keys of lot K2a are checked in ``frontend/src/lib/features/transactions/import/defaultPluginCheck.test.ts``; DEGIRO's codes in
     ``test_brim_degiro.py`` (A2). Every input is a sample or a synthetic case of category 4c, every code and context is written by hand, and
     each test first checks its premise against ``can_parse`` and ``cannot_parse_reason``. Red until the generic CSV gives its codes, but the guard.
     """

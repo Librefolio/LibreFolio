@@ -201,7 +201,8 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). The selects of `ui/select` do
   it for every option, a caller's snippet included, with one rule in their `<style>`:
   `[data-highlighted='true'] :global(.text-lf-muted) { color: var(--lf-text-secondary) }` (`TreeSelect`: its active and
-  hovered options). A new list that tints its rows does the same, and publishes the state it keys on. A selected chip
+  hovered options); so does `DataTable` for its selected, highlighted and analyzed rows, HtmlCell cells included. A new
+  list that tints its rows does the same, and publishes the state it keys on. A selected chip
   under the pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to
   3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
@@ -425,6 +426,12 @@ Until she answers, follow what is written here and do not decide them in a compo
 
    Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
    never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
+7. **The accent of an empty page.** The empty states of the asset and the FX lists draw an icon in a tinted circle: the
+   assets' now takes the app's accent (`bg-lf-selected`, `text-lf-link`), the FX's is still amber, a page colour no role
+   covers (`warning` would read as a warning). Under review: one accent per page, or the app's green for every empty
+   state.
+
+   Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
 
 **Values waiting for her confirmation** (backlog TC-8):
 - the seven minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
