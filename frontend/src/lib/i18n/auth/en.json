@@ -37,7 +37,7 @@
       "veryStrong": "Very Strong",
       "requirements": "Password requirements:",
       "rules": {
-        "minLength": "At least 8 characters",
+        "minLength": "At least {value} characters",
         "hasUppercase": "One uppercase letter",
         "hasLowercase": "One lowercase letter",
         "hasNumber": "One number",

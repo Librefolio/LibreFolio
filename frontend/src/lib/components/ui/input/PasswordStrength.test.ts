@@ -2,11 +2,13 @@
 /**
  * PasswordStrength — component test (Vitest + jsdom).
  *
- * The meter under the new-password field of the registration form: a strength
- * bar scored by zxcvbn, and a checklist of the five rules `RegisterCard` itself
- * enforces before it sends anything (length, upper case, lower case, a digit, a
- * special character). It is a primitive — a password in, markup out — so it is
- * pinned here, in milliseconds, rather than through the sign-up page.
+ * The meter under every new-password field — the registration form, the
+ * change-password dialog, a reset link: a strength bar scored by zxcvbn, and a
+ * checklist of the password rules (by default the five of before: length, upper
+ * case, lower case, a digit, a special character; since A6c, whatever the server
+ * lists — see the last part of this header). It is a primitive — a password in,
+ * markup out — so it is pinned here, in milliseconds, rather than through the
+ * sign-up page.
  *
  * What it publishes, and what this file holds it to (workstream T, step T-2):
  *   - nothing at all for an empty password: no bar and no checklist under a field
@@ -37,7 +39,10 @@
  *
  * On not asserting translated text. `$lib/i18n` is mocked with an identity
  * translator, as in `RegisterCard.test.ts`, so a label renders as its key; the
- * strength label is asserted by key, stable in EN/IT/FR/ES.
+ * strength label is asserted by key, stable in EN/IT/FR/ES. Since A6c the
+ * translator also prints the ICU values a message is given, after the key —
+ * `auth.passwordStrength.rules.minLength {"value":12}` — so the length the
+ * min-length label names is read without reading any language.
  *
  * What it cannot see: colours. The checklist's background and the bar's three
  * states are `e2e/layout/theme-roles.spec.ts`'s, in a real browser. And the
@@ -45,7 +50,7 @@
  * nothing else, so their count has no handle — the label is the level's
  * non-colour channel.
  *
- * The last describe pins the one functional addition of accounts lot A5b: a
+ * The describe on `valid` pins the one functional addition of accounts lot A5b: a
  * bindable `valid`, true exactly when every rule of the checklist holds. The
  * new password-reset card reads the app's rules through it (`bind:valid`)
  * instead of keeping a fifth copy of them (A-6). A legacy prop is bound from
@@ -54,16 +59,90 @@
  * bound value at the opposite of what it expects, so the assertion proves a
  * write by the component, not a value that was never touched.
  *
+ * Accounts lot A6c (decision 37) takes the rules out of the component. The
+ * backend writes them once, applies them to every new password the API
+ * receives, and exposes them in `GET /system/instance` as
+ * `accounts.password_rules`, a list of `{code, value?}`;
+ * `$lib/features/auth/passwordRules.ts` maps a code to the key the checklist has
+ * always used (`min_length` → `minLength`, `digit` → `hasNumber`, …) and checks
+ * it, with Unicode classes (`passwordRules.test.ts` pins both). What this file
+ * holds the meter to:
+ *   - its rules are `instanceConfig.config.accounts.password_rules` when the
+ *     configuration carries them, and the five of before
+ *     (`DEFAULT_PASSWORD_RULES`) until then — before the server answers, or
+ *     with a backend older than A6c;
+ *   - the checklist draws the rules this build knows, in the server's order,
+ *     each still `password-rule-<key>` with its `data-passed`: the keys do not
+ *     change, `e2e/layout/theme-roles.spec.ts` reads them;
+ *   - a code it does not know draws no row and never makes `valid` false: the
+ *     server checks it when the form is sent;
+ *   - the min-length label takes the rule's length as the ICU `{value}`;
+ *   - an answer that lands under a mounted meter changes the checklist, its
+ *     label and `valid` in place, without a remount. The component is legacy
+ *     (`$:`), and a `$:` statement does not track a runes field read through a
+ *     module singleton (devWiki `problems/legacy-layout-gate-missed-runes-state`):
+ *     the cases that change the answer after the mount are the ones that would
+ *     catch a meter reading the rules once.
+ *
+ * The configuration is a fake with the real store's shape, as in
+ * `LoginCard.test.ts`: enumerable getters over `$state` (`reactiveBox`), so a
+ * change made by a test reaches the component the way a landed answer does. It
+ * starts every test without `password_rules`, so every case above A6c runs on
+ * the defaults, exactly as it did before.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`,
  * action `component-unit`).
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
 import {readable} from 'svelte/store';
+import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {cleanup, render, screen, within} from '$test/component';
+
+// The instance configuration and the translator, hoisted: the factories below run while the component is being
+// imported, before anything declared further down exists.
+const mocks = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    /** What the store holds until the server answers (`DEFAULT_INSTANCE_CONFIG`), and what a backend older than A6c answers: no `password_rules`. */
+    const BEFORE_ANSWER = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}} as InstanceConfig;
+    type Values = Record<string, unknown>;
+    /**
+     * The identity translator, which also prints the ICU values a message is given: `$_('k')` renders `k`, and
+     * `$_('k', {values: {value: 12}})` renders `k {"value":12}`. svelte-i18n also takes `$_({id, values})`: both print alike.
+     */
+    const translate = (id: string | {id: string; values?: Values}, options?: {values?: Values}): string => {
+        const key = typeof id === 'string' ? id : id.id;
+        const values = typeof id === 'string' ? options?.values : id.values;
+        return values && Object.keys(values).length > 0 ? `${key} ${JSON.stringify(values)}` : key;
+    };
+    return {
+        BEFORE_ANSWER,
+        translate,
+        instance: reactiveBox<{config: InstanceConfig; loaded: boolean}>({config: BEFORE_ANSWER, loaded: false}),
+        instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
+    };
+});
 
 // The identity translator: components render i18n keys verbatim, so the tests
 // can name the label that was chosen without naming any one language.
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+vi.mock('$lib/i18n', () => ({_: readable(mocks.translate)}));
+// A fake with the real store's shape: enumerable getters over `$state`, so a template or a `$derived` reading
+// `instanceConfig.config` re-renders when a test changes it, as it would when the server answers.
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
+    DEFAULT_INSTANCE_CONFIG: mocks.BEFORE_ANSWER,
+    instanceConfig: {
+        get config() {
+            return mocks.instance.config;
+        },
+        get loaded() {
+            return mocks.instance.loaded;
+        },
+        get failed() {
+            return false;
+        },
+        load: mocks.instanceLoad,
+    },
+}));
 
 import PasswordStrength from './PasswordStrength.svelte';
 
@@ -79,6 +158,30 @@ const TWO_RULES = 'AB!';
 const WEAKEST = 'a';
 /** zxcvbn's score 4: about 10²⁴ guesses on the component's dictionaries. */
 const STRONGEST = 'vivid-otter-quartz-lantern-91';
+/** All five rules of before, in eleven characters: length, upper case, lower case, a digit, a special character. */
+const ALL_RULES = 'Str0ng!pass';
+/** ALL_RULES and one more digit: twelve characters. */
+const TWELVE = 'Str0ng!pass1';
+/** Ten characters, lower case and a digit: no capital, no symbol. */
+const TEN_WITH_A_DIGIT = 'abcdefghi1';
+/**
+ * Eight characters, none of them ASCII: `É` upper case, `çéüßà` lower case, `٣` (U+0663, Nd) a digit, `€` a symbol.
+ * The ASCII classes of before (`[A-Z]`, `[a-z]`, `\d`, a fixed list of symbols) found none of the four.
+ */
+const UNICODE_EIGHT = 'Éçéüßà٣€';
+
+/** One entry of `accounts.password_rules`, as the server sends it (A6c). */
+type RuleAnswer = {code: string; value?: number | null};
+/** The five rules of before, as a server of A6c sends them: the defaults, in their order. */
+const FIVE: RuleAnswer[] = [{code: 'min_length', value: 8}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}];
+/** The five, asking for `value` characters. */
+const withMinLength = (value: number): RuleAnswer[] => [{code: 'min_length', value}, ...FIVE.slice(1)];
+
+/** The server's answer lands: from now on the configuration carries these rules. */
+function answer(password_rules: RuleAnswer[]): void {
+    mocks.instance.config = {...mocks.BEFORE_ANSWER, accounts: {...mocks.BEFORE_ANSWER.accounts, password_rules}} as InstanceConfig;
+    mocks.instance.loaded = true;
+}
 
 /** Every rule the checklist draws. */
 function rulesDrawn(): HTMLElement[] {
@@ -107,6 +210,34 @@ function glyphOf(rule: HTMLElement): string {
 
 /** The expected `data-passed` of every rule, as the checklist prints it. */
 const states = (passed: Record<RuleKey, boolean>): Record<string, string> => Object.fromEntries(RULE_KEYS.map((key) => [key, String(passed[key])]));
+
+/**
+ * Mounts the meter with `valid` bound, as a parent's `bind:valid` binds a legacy prop: an accessor on the props
+ * object, whose setter the component calls when it writes the prop. `bound.value` is what the parent holds; it
+ * starts at `start`, the opposite of what the case expects.
+ */
+function mountBound(password: string, start: boolean) {
+    const bound = {value: start};
+    const props = {
+        password,
+        get valid(): boolean {
+            return bound.value;
+        },
+        set valid(next: boolean) {
+            bound.value = next;
+        },
+    };
+    const utils = render(PasswordStrength, {props});
+    return {...utils, bound};
+}
+
+beforeEach(() => {
+    // Every test starts before the server's answer: no password_rules in the configuration, so the defaults.
+    mocks.instance.config = mocks.BEFORE_ANSWER;
+    mocks.instance.loaded = false;
+    mocks.instanceLoad.mockReset();
+    mocks.instanceLoad.mockResolvedValue(undefined);
+});
 
 afterEach(cleanup);
 
@@ -177,29 +308,6 @@ describe('PasswordStrength — the strength', () => {
 });
 
 describe('PasswordStrength — valid, bindable: true exactly when every rule holds (A5b)', () => {
-    /** All five rules: length, upper case, lower case, a digit, a special character. */
-    const ALL_RULES = 'Str0ng!pass';
-
-    /**
-     * Mounts the meter with `valid` bound, as a parent's `bind:valid` binds a legacy prop: an accessor on the props
-     * object, whose setter the component calls when it writes the prop. `bound.value` is what the parent holds; it
-     * starts at `start`, the opposite of what the case expects.
-     */
-    function mountBound(password: string, start: boolean) {
-        const bound = {value: start};
-        const props = {
-            password,
-            get valid(): boolean {
-                return bound.value;
-            },
-            set valid(next: boolean) {
-                bound.value = next;
-            },
-        };
-        const utils = render(PasswordStrength, {props});
-        return {...utils, bound};
-    }
-
     it('is true once all five rules hold', () => {
         const {bound} = mountBound(ALL_RULES, false);
 
@@ -229,5 +337,131 @@ describe('PasswordStrength — valid, bindable: true exactly when every rule hol
 
         await rerender({password: TWO_RULES});
         expect(bound.value, 'two out of five').toBe(false);
+    });
+});
+
+describe("PasswordStrength — the rules are the server's, read from the instance configuration (A6c)", () => {
+    it('draws the five rules of before, in their order, while the configuration carries none: the defaults', () => {
+        // No password_rules (beforeEach): the store before the server answers, or the answer of a backend older than A6c.
+        render(PasswordStrength, {password: THREE_RULES});
+
+        expect(rulesDrawn().map(keyOf)).toEqual([...RULE_KEYS]);
+        expect(rulesPassed()).toEqual(states({minLength: true, hasUppercase: false, hasLowercase: true, hasNumber: true, hasSpecial: false}));
+    });
+
+    it("draws the rules the server sends, in the server's order", () => {
+        answer([{code: 'special'}, {code: 'digit'}, {code: 'lowercase'}, {code: 'uppercase'}, {code: 'min_length', value: 8}]);
+        render(PasswordStrength, {password: THREE_RULES});
+
+        expect(rulesDrawn().map(keyOf)).toEqual(['hasSpecial', 'hasNumber', 'hasLowercase', 'hasUppercase', 'minLength']);
+        // The same verdicts as with the defaults: only the order is the server's.
+        expect(rulesPassed()).toEqual(states({minLength: true, hasUppercase: false, hasLowercase: true, hasNumber: true, hasSpecial: false}));
+    });
+
+    it('draws only the rules the server sends, and valid asks only those', () => {
+        answer([{code: 'digit'}, {code: 'min_length', value: 10}]);
+        // Ten characters with a digit, no capital and no symbol: enough for these two rules, not for the five of before.
+        const {bound} = mountBound(TEN_WITH_A_DIGIT, false);
+
+        expect(rulesDrawn().map(keyOf)).toEqual(['hasNumber', 'minLength']);
+        expect(rulesPassed()).toEqual({hasNumber: 'true', minLength: 'true'});
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it.each([
+        ['eleven characters', ALL_RULES, false],
+        ['twelve characters', TWELVE, true],
+    ])('measures the length against the value the server sends, min_length 12: %s', (_label, password, met) => {
+        answer(withMinLength(12));
+        const {bound} = mountBound(password, !met);
+
+        expect(rulesPassed()).toEqual(states({minLength: met, hasUppercase: true, hasLowercase: true, hasNumber: true, hasSpecial: true}));
+        expect(bound.value, 'valid, written by the meter').toBe(met);
+    });
+
+    it('draws no row for a code it does not know, and never lets that code make valid false: the server checks it', () => {
+        answer([
+            {code: 'min_length', value: 4},
+            {code: 'not_in_this_build', value: 3},
+        ]);
+        const {bound} = mountBound('abcd', false);
+
+        expect(rulesDrawn().map(keyOf), 'the one rule this build knows').toEqual(['minLength']);
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it('keeps valid true beside codes it does not know, wherever they sit in the list', () => {
+        answer([{code: 'no_dictionary_word'}, ...FIVE, {code: 'not_in_this_build', value: 3}]);
+        const {bound} = mountBound(ALL_RULES, false);
+
+        expect(rulesDrawn().map(keyOf)).toEqual([...RULE_KEYS]);
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it('follows an answer that lands under a mounted meter — the checklist and valid, both ways, without a remount', async () => {
+        const {bound} = mountBound(ALL_RULES, false);
+        expect(screen.getByTestId('password-rule-minLength'), 'the defaults: eleven characters are enough').toHaveAttribute('data-passed', 'true');
+        expect(bound.value).toBe(true);
+
+        answer(withMinLength(12));
+        await tick();
+
+        expect(screen.getByTestId('password-rule-minLength'), 'the answer asks for twelve').toHaveAttribute('data-passed', 'false');
+        expect(bound.value).toBe(false);
+
+        answer(withMinLength(10));
+        await tick();
+
+        expect(screen.getByTestId('password-rule-minLength'), 'a later answer asks for ten').toHaveAttribute('data-passed', 'true');
+        expect(bound.value).toBe(true);
+    });
+
+    it('follows an answer that changes which rules there are, without a remount', async () => {
+        render(PasswordStrength, {password: THREE_RULES});
+        expect(rulesDrawn().map(keyOf), 'the defaults').toEqual([...RULE_KEYS]);
+
+        answer([{code: 'digit'}, {code: 'min_length', value: 8}]);
+        await tick();
+
+        expect(rulesDrawn().map(keyOf)).toEqual(['hasNumber', 'minLength']);
+    });
+
+    it('checks with the Unicode classes: É, çéüßà, ٣ and € meet upper case, lower case, digit and special', () => {
+        const {bound} = mountBound(UNICODE_EIGHT, false);
+
+        expect(rulesPassed()).toEqual(states({minLength: true, hasUppercase: true, hasLowercase: true, hasNumber: true, hasSpecial: true}));
+        expect(bound.value, 'valid, written by the meter').toBe(true);
+    });
+
+    it('does not count a space as a special character', () => {
+        // Lower case, upper case and a digit, and two spaces where a symbol would be.
+        render(PasswordStrength, {password: 'Pass word 12'});
+
+        expect(screen.getByTestId('password-rule-hasSpecial')).toHaveAttribute('data-passed', 'false');
+    });
+});
+
+describe('PasswordStrength — the min-length label names the length the rule asks for (A6c)', () => {
+    it('gives the label the length of the default rule, 8, as the ICU {value}', () => {
+        render(PasswordStrength, {password: WEAKEST});
+
+        expect(screen.getByTestId('password-rule-minLength')).toHaveTextContent('auth.passwordStrength.rules.minLength {"value":8}');
+    });
+
+    it("gives it the server's length once the answer lands, without a remount", async () => {
+        render(PasswordStrength, {password: WEAKEST});
+
+        answer(withMinLength(12));
+        await tick();
+
+        expect(screen.getByTestId('password-rule-minLength')).toHaveTextContent('auth.passwordStrength.rules.minLength {"value":12}');
+    });
+
+    it('labels every rule with its i18n key of always, auth.passwordStrength.rules.<key>', () => {
+        render(PasswordStrength, {password: WEAKEST});
+        const rules = rulesDrawn();
+        expect(rules.map(keyOf), 'premise: the five rows are drawn').toEqual([...RULE_KEYS]);
+
+        for (const rule of rules) expect(rule, keyOf(rule)).toHaveTextContent(`auth.passwordStrength.rules.${keyOf(rule)}`);
     });
 });

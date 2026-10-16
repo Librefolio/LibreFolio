@@ -31,16 +31,8 @@
     let success = '';
     let isSubmitting = false;
 
-    // Password rules for validation
-    const passwordRules = {
-        minLength: (pwd: string) => pwd.length >= 8,
-        hasUppercase: (pwd: string) => /[A-Z]/.test(pwd),
-        hasLowercase: (pwd: string) => /[a-z]/.test(pwd),
-        hasNumber: (pwd: string) => /\d/.test(pwd),
-        hasSpecial: (pwd: string) => /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~;']/.test(pwd),
-    };
-
-    $: passwordMeetsRules = Object.values(passwordRules).every((check) => check(newPassword));
+    // The rules are the app's own, read from PasswordStrength (`bind:valid`, decision 37): this modal keeps no copy of them.
+    let passwordMeetsRules = false;
     $: canSubmit = currentPassword && newPassword && confirmPassword && passwordMeetsRules && newPassword === confirmPassword;
 
     function reset() {
@@ -90,7 +82,12 @@
                 toast: false,
                 fallback: $_('settings.passwordChangeFailed'),
                 onError: (err: unknown) => {
-                    const detail = ((err as any)?.response?.data?.detail as string)?.toLowerCase() || '';
+                    const raw: unknown = (err as any)?.response?.data?.detail;
+                    if (raw && typeof raw === 'object' && (raw as {error_code?: unknown}).error_code === 'PASSWORD_TOO_WEAK') {
+                        error = $_('auth.validation.passwordTooWeak');
+                        return true;
+                    }
+                    const detail = typeof raw === 'string' ? raw.toLowerCase() : '';
                     if (detail.includes('incorrect')) {
                         error = $_('settings.currentPasswordIncorrect');
                         return true;
@@ -157,7 +154,7 @@
                     {$_('settings.newPassword')}
                 </label>
                 <PasswordInput autocomplete="new-password" bind:value={newPassword} disabled={isSubmitting || !!success} id="newPassword" name="new-password" placeholder={$_('settings.newPassword')} testId="password-new" />
-                <PasswordStrength password={newPassword} />
+                <PasswordStrength bind:valid={passwordMeetsRules} password={newPassword} />
             </div>
 
             <div class="space-y-2">

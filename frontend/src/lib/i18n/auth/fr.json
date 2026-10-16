@@ -37,7 +37,7 @@
       "veryStrong": "Très Fort",
       "requirements": "Exigences du mot de passe :",
       "rules": {
-        "minLength": "Au moins 8 caractères",
+        "minLength": "Au moins {value} caractères",
         "hasUppercase": "Une lettre majuscule",
         "hasLowercase": "Une lettre minuscule",
         "hasNumber": "Un chiffre",

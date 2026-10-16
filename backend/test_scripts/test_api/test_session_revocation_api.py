@@ -108,7 +108,7 @@ def _lane_engine() -> AsyncEngine:
 async def _register(prefix: str, registered: list[int]) -> _Account:
     """Register a regular user with a unique name; its id goes into ``registered`` the moment it exists, for the teardown."""
     username = f"{prefix}_{uuid.uuid4().hex[:12]}"
-    password = f"Initial-{uuid.uuid4().hex[:12]}"
+    password = f"Initial-{uuid.uuid4().hex[:12]}1"
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": password}, timeout=TIMEOUT)
     assert response.status_code == 201, f"Setup: registering {username} failed: {response.status_code} {response.text}"
@@ -293,7 +293,7 @@ class TestPasswordChangeEndsTheOtherSessions:
             signed_in, answer = await _signed_in_as(cookie.value, account)
             assert signed_in, f"Precondition: {label} must be signed in as {account.username}: GET /auth/me {answer}"
         before = await _session_versions(accounts)
-        new_password = f"Changed-{uuid.uuid4().hex[:12]}"
+        new_password = f"Changed-{uuid.uuid4().hex[:12]}1"
 
         response = await _change_password(device_a.value, owner.password, new_password)
 
@@ -319,7 +319,7 @@ class TestPasswordChangeEndsTheOtherSessions:
             assert signed_in, f"Precondition: {label} must be signed in as {owner.username}: GET /auth/me {answer}"
         before = await _session_versions(accounts)
         if refusal == "wrong-current-password":
-            current_password, new_password, reason = f"Wrong-{uuid.uuid4().hex[:12]}", f"Changed-{uuid.uuid4().hex[:12]}", "incorrect"
+            current_password, new_password, reason = f"Wrong-{uuid.uuid4().hex[:12]}", f"Changed-{uuid.uuid4().hex[:12]}1", "incorrect"
         else:
             current_password, new_password, reason = owner.password, owner.password, "different"
 

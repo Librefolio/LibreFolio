@@ -473,6 +473,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
+    print_section("Services: Password Policy")
+    print_info("Testing: backend/app/services/accounts/password_policy.py")
+    print_info("Tests: the five rules published in order, failed_rules in the policy's order, Unicode classes (Lu, Ll, Nd, symbols), length in code points")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_password_policy.py", test_names)
+    return run_command(cmd, "Password policy tests", verbose=verbose)
+
+
 def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
     """Test the SMTP configuration accessors of the optional e-mail: LIBREFOLIO_SMTP_* read at call time."""
     print_section("Services: E-mail Configuration")
@@ -1445,6 +1455,15 @@ Note: No backend server required.
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
         # private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "password-policy",
+        services_password_policy,
+        name="Password Policy",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        # PURE: a module of plain functions; no database, no server, no environment variable.
         isolation="pure",
     )
     add_test(
