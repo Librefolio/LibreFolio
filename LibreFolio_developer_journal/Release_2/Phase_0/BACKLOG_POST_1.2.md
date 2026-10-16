@@ -433,6 +433,43 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   comportamento. Cura: la corsia tiene solo le variabili del runner e scarta il resto della configurazione d'istanza
   venuta dal `.env`; un test usa `.env.example` come elenco. Assegnata a H dal coordinatore, prima del primo lotto di E;
   comprende A-9 (le quattro variabili di account di A5a). Dettagli: analisi di E; piano H.
+- **C-97 · Più cifre decimali per quantità e prezzi (crypto, issue #43)** — medio, **nella 1.3**; coordinatore,
+  16/10, dalla issue [#43](https://github.com/Librefolio/LibreFolio/issues/43) di un utente che segna BTC, ETH e PEPE.
+  Assegnata a W (transazioni), dopo W-B30 e W-B36b.
+  - **Oggi**: il form delle transazioni accetta 6 decimali (`maxFractionDigits={6}`, `TxFormSingleSection.svelte:176`
+    e `:224`, `TxFormPairSection.svelte:192`, da `75309672e` del 18/09). La 1.1 ne accettava di più.
+  - **Il modello**: `Numeric(18, 6)` per quantità, importi e costo manuale (`transactions`), per i prezzi
+    (`price_history`) e per i valori degli eventi (`asset_events`). Su SQLite la scala dichiarata non limita ciò che
+    si salva (la colonna tiene un `REAL`), ma SQLAlchemy **arrotonda a 6 decimali in lettura**: misurato il 16/10,
+    `0.12345678` salvato torna `0.123457`, e il valore intero resta nel file.
+  - **Le cifre che servono**:
+    - **quantità: 10 decimali**. BTC ne usa 8 (il satoshi). I broker dell'utente ne mostrano 6–8 secondo il token, e
+      qualche exchange arriva a 10. I 18 di ETH (wei) servono solo ai wallet on-chain, fuori dai broker;
+    - **prezzi: 12 decimali**. PEPE vale `0,0000034573 €` (10 decimali), e i token sotto `1e-8` ne vogliono 12 per
+      tenere almeno 4 cifre significative. I cambi hanno già `Numeric(24, 10)`;
+    - **importi in valuta: restano 6**.
+    - **Il limite vero è il `REAL` di SQLite**, circa 15 cifre significative. Con 10 decimali una quantità è esatta fino
+      a 99 999 unità; oltre, i token che si contano a milioni usano pochi decimali. Un salvataggio decimale esatto
+      (testo) è un lavoro più grande, da valutare dopo, insieme al lotto G della matematica (niente `SUM` in SQL).
+  - **Superfici**: il modello; la migrazione, da decidere nell'analisi (precedenti: le note di 002 e 004 sulle
+    dichiarazioni che SQLite ignora); il form singolo, quello della coppia e il Bulk; la visualizzazione delle quantità
+    (`txDisplayHelpers.ts:21` taglia a 6, più le tabelle di posizioni e lotti); i prezzi piccoli mostrati con abbastanza
+    cifre significative; l'import CSV e il BRIM non devono troncare.
+  - **Oltre il limite**: un valore con più cifre si rifiuta con un messaggio che dice il massimo, mai arrotondato in
+    silenzio.
+  - **Effetto per chi ha già i dati**: i valori salvati con più cifre (dalla 1.1, da un import o via API) tornano
+    visibili, perché sparisce solo l'arrotondamento in lettura. Quelli già risalvati a 6 restano a 6.
+  - **I `.svelte` del form sono nell'area TR dei colori**: cambia solo un attributo, ma serve il loro OK.
+  - Test: test-author, dal rosso della quantità a 8 e 10 decimali e del prezzo `0.0000034573`. Doc utente delle
+    transazioni. Una riga 🐛 nel CHANGELOG.
+- **C-98 · Fornitore di prezzi CoinGecko** — basso, da decidere; coordinatore, 16/10, suggerimento dell'utente della
+  issue #43 («CoinGecko lists 3× more crypto than Yahoo Finance»). CoinGecko ha un'API gratuita con chiave e limiti al
+  minuto: con le impostazioni dei plugin di CP11 (chiave per utente o per istanza) si integra come plugin di X. Non è
+  nella 1.3 finché il developer non lo chiede.
+- **C-99 · Manuale admin: nuova struttura, variabili d'ambiente divise per categoria** — medio, **nella 1.3**;
+  developer, 16/10. Un solo lotto di documentazione del coordinatore, quando i lotti cloud di H, A, B, E e Z sono entrati.
+  Struttura, regola provvisoria per i figli e requisiti (link vecchi funzionanti, controllo delle variabili,
+  `.env.example` diviso): piano generale della 1.3, §6, «Manuale admin: la struttura finale».
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -2426,6 +2463,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     una run interrotta che non l'ha cancellato.
 
   Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md), «La coppia del rumore».
+- **G-18 · Guardia G3 a runtime nella galleria** ✅ 16/10, `07fe58276` — medio; coordinatore, 16/10 (il developer: «vedi tu»).
+  - Il gate G3 vede gli elementi misti, con classi di ruolo e legacy insieme, solo se sono scritti così nel sorgente.
+    Non vede le classi composte a runtime: le prop di classe fra aree, le costanti, le concatenazioni.
+  - Ogni snapshot ora scandisce ogni scatto con le regex del gate (`galleryMixed.ts`, dopo la cattura, solo
+    segnalazione) e scrive `mixed_elements.json`.
+  - `gallery_tool mixed` li stampa per cartella del file candidato, o per sezione. Il testid è un indizio, non una
+    prova.
+  - Verificata nella run filtrata `g-mixed-probe` (Settings, 192 scatti): un record per PNG, 0 errori di scansione,
+    4 ms di mediana per scatto. **Misti oggi in Settings: 0.** Il conto su tutta la galleria arriverà da solo con il
+    prossimo snapshot completo.
+  - I 13 rossi della run sono di ambiente (carico 110–145 su 10 CPU) e cadono tutti prima della scansione.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «G-18 · Guardia G3 a runtime nella galleria (16/10)».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 

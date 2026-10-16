@@ -78,6 +78,7 @@
 import type {TestInfo} from '@playwright/test';
 import {expect, type Locator, type Page, type Request} from './playwright';
 import {fontsLoaded} from './galleryFiles';
+import {recordMixedElements} from './galleryMixed';
 import {ANY_TOAST, expectNoToast, waitForStillness} from './galleryReportSets';
 import {parkPointer, renderedFrames} from './galleryRiskLab';
 
@@ -1052,7 +1053,8 @@ export async function shotFingerprint(page: Page): Promise<string> {
  * Capture the settled page into `file`, the picture of the shot `shot` (`viewport/lang/theme/category/name`). It is not a
  * step of the test, and has a budget of its own ({@link CAPTURE_TIMEOUT_MS}): the browser's compositor, which the capture
  * waits for, can stall for seconds on a loaded machine. A capture slower than {@link CAPTURE_SLOW_MS} says so in the log
- * (⚠️), so a stall stays visible instead of hidden under the larger budget; a capture that fails names the shot.
+ * (⚠️), so a stall stays visible instead of hidden under the larger budget; a capture that fails names the shot. The page's
+ * mixed elements are recorded after the picture, so that the scan cannot change it ({@link recordMixedElements}).
  */
 export async function captureShot(page: Page, file: string, shot: string): Promise<void> {
     const started = Date.now();
@@ -1068,4 +1070,5 @@ export async function captureShot(page: Page, file: string, shot: string): Promi
     );
     const took = Date.now() - started;
     if (took > CAPTURE_SLOW_MS) console.log(`  ⚠️ ${shot}: the browser took ${(took / 1000).toFixed(1)} s to capture the shot`);
+    await recordMixedElements(page, shot);
 }
