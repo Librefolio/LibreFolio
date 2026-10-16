@@ -31,6 +31,9 @@ ClassificationType = Literal[
 class ValuationSource(StrEnum):
     MARKET_PRICE = "MARKET_PRICE"
     LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
+    # No price observation on or before the day, and the position's cost is known: it counts at its book
+    # cost in the report currency, as a declared estimate, not a price (developer's decision, J-17).
+    ESTIMATED_AT_COST = "ESTIMATED_AT_COST"
     MISSING = "MISSING"
 
 

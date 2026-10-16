@@ -3626,3 +3626,11 @@ the page said the old signal «stays, unchanged». Now it records the removal, t
 migration of saved overlays, the plugin-owned `signals.riskRollingReturn.*` keys and the `price_return` home.
 Updated: [[features/F-088]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] file | An ADJUSTMENT is never a price; no price at all → valued at cost (J-17)
+J-17 recorded the developer's decision P2 (option A, SELL stays a price source), the valued-at-cost rule and two review
+pitfalls: the grace counted from BUY/SELL dates never applied, and a completeness check on unpriced transfers left a
+permanent capital artifact. Two pages that stated the old rule got a dated note.
+Filed: [[decisions/adjustment-is-never-a-price]]. Updated: [[entities/portfolio-engine]],
+[[problems/stale-price-banner-never-emitted]].
+Graph: not updated; graphify is not available in this worktree.
