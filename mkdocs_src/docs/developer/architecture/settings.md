@@ -75,9 +75,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `scripts/cli_base.py`), like the rest of the instance's configuration: see
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
     - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
-      an empty or blank value is `None`; otherwise the value, stripped, must start with `http://` or
-      `https://`, and one trailing slash is removed; anything else raises `ValueError`, which names the
-      variable. The accessor's caller decides what an invalid address costs, and logs it.
+      an empty or blank value is `None`; otherwise the value, stripped, must be an `http://` or
+      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
+      no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
+      alone included, raises `ValueError`, which names the variable. The accessor's caller decides
+      what an invalid address costs, and logs it.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
