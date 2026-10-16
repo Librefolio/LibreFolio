@@ -84,7 +84,10 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
             else:
                 cash_flows.append(CashFlowInput(date=tx.date, amount=-buy_amount))
             continue
-        if tx_type == "ADJUSTMENT" and tx.quantity > 0 and _adjustment_native_cost(tx, asset_currency) is not None:
+        # An ADJUSTMENT with a cost moves that cost across the scope: money brought in by an ADJUSTMENT-in, money taken
+        # out by one that hands units over at cost (its signed cost is negative). An ADJUSTMENT-out without a cost basis
+        # is a quantity correction and never a flow.
+        if tx_type == "ADJUSTMENT" and (tx.quantity > 0 or tx.cost_basis_override not in (None, Decimal("0"))) and _adjustment_native_cost(tx, asset_currency) is not None:
             adjustment_cost = adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
             if adjustment_cost is None:
                 invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
@@ -524,7 +527,11 @@ def _known_prefix_on_date(values_by_date: dict[date_type, Decimal], unknown_from
 
 
 def _adjustment_native_cost(tx: Transaction, asset_currency: str) -> tuple[Decimal, str] | None:
-    """The money an ADJUSTMENT-in brought from outside, in its own currency; None for a quantity-only correction."""
+    """The money an ADJUSTMENT moves, in its own currency; None for a quantity-only correction.
+
+    With a cost basis, the quantity times the per-unit cost: negative for an ADJUSTMENT-out, which hands its units
+    over at that cost. Otherwise the absolute amount it carries.
+    """
     if tx.cost_basis_override not in (None, Decimal("0")):
         return tx.quantity * tx.cost_basis_override, tx.cost_basis_currency or asset_currency
     if tx.amount != Decimal("0"):

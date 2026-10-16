@@ -1,9 +1,10 @@
 """Schemas of the plugin settings API: ``GET /api/v1/settings/plugins`` and ``PATCH /api/v1/settings/plugins/bulk``.
 
-The catalogue lists, for each plugin that declares settings, its fields and their state for the caller: the value of
-a plain field, and for a secret only whether it is set and readable. **A secret never travels back**: no read schema
-has a field for its value. It is written in ``secret_value`` (``format: password``, write-only), which no response and
-no validation message ever repeats: the route also drops the ``input`` FastAPI would echo in a 422.
+The catalogue lists, for each plugin that declares settings, whether it is configured, and its fields with their state
+for the caller: the value of a plain field, and for a secret only whether it is set and readable. **A secret never
+travels back**: no read schema has a field for its value. It is written in ``secret_value`` (``format: password``,
+write-only), which no response and no validation message ever repeats: the route also drops the ``input`` FastAPI would
+echo in a 422.
 
 A write is all or nothing (the contract of the settings write path): every item is checked, each refusal gets its
 code, and when one item is refused nothing is written — the answer is a 422 whose ``detail.results`` lists every item.
@@ -116,6 +117,10 @@ class PluginSettingsPluginRead(StrictModel):
     family: PluginSettingFamily
     plugin_code: str
     plugin_name: str
+    configured: bool = Field(
+        ...,
+        description="Every required field has a usable value and no environment variable is invalid: otherwise the plugin answers its calls with NOT_CONFIGURED. Judged on every field, the ones not listed here too",
+    )
     fields: list[PluginSettingFieldRead]
 
 

@@ -9,7 +9,7 @@ import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
 import {withHexAlpha} from '$lib/theme/colorAlpha';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, GROWTH_CHART_COLORS, GROWTH_SERIES} from '$lib/theme/chartTheme';
-import {GROWTH_BROKER_PALETTE} from '$lib/theme/chartPalettes';
+import {growthBrokerColor} from '$lib/theme/chartPalettes';
 import type {AggregatedResolutionData, AggregationInputs, CandleSeriesPoint, PctSeriesKey, SeriesPoint} from './growthChartData';
 
 // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
@@ -110,13 +110,9 @@ export const INCOME_BAR_SHARE = (1 - INCOME_CATEGORY_GAP) / (INCOME_COLUMNS + (I
 // Color palettes
 const COLORS = GROWTH_SERIES;
 
-// Rotating palette for the P&L broker overlay (G1a) — distinct hues, cycled by index
-// so any broker count renders with a stable, distinguishable color per line.
-const BROKER_PALETTE: Array<{light: string; dark: string}> = GROWTH_BROKER_PALETTE;
-
+// The P&L broker overlay (G1a): one line per broker, coloured by its index and read at each draw (TD-1b).
 export function brokerColor(index: number, isDark: boolean): string {
-    const entry = BROKER_PALETTE[index % BROKER_PALETTE.length];
-    return isDark ? entry.dark : entry.light;
+    return growthBrokerColor(index, isDark);
 }
 
 /** ECharts candlestick data point for a `category` xAxis: a flat `[open, close,

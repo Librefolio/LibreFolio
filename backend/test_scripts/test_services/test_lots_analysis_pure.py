@@ -27,9 +27,10 @@ from decimal import Decimal
 import pytest
 
 import backend.app.services.financial_math.lots.conversions as conversions_module
+import backend.app.services.financial_math.lots.histories as histories_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType
+from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
@@ -40,6 +41,7 @@ from backend.app.services.financial_math.average_cost import (
     _fold_average_costs,
     _ResolvedConversion,
 )
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
@@ -51,6 +53,8 @@ from backend.app.services.financial_math.lots.histories import (
     build_price_history,
     build_return_history,
     build_value_history,
+    group_closures,
+    group_fragments,
     known_cumulative_proceeds,
     lot_history_end_date,
 )
@@ -1691,3 +1695,259 @@ class TestParseTransferPairId:
 
     def test_extracts_the_pair_id_from_a_transfer_fragment(self):
         assert _parse_transfer_pair_id("lot:1/transfer:42/leg:in") == 42
+
+
+# =========================================================================== #
+# CP-16 — decision 47 and J-9 in the lots builders
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. Decision 47: a negative ADJUSTMENT carrying cost_basis_override
+# hands its units over at that cost; in the lots performance history its value leaves as an external flow, the
+# mirror of an ADJUSTMENT-in with a cost. J-9: a lot opened by an ADJUSTMENT-in priced by its override is in
+# cost_basis_currency, so every builder that converts that lot — the summary, the lot history's opening row and the
+# FX needs of that history — converts from that currency, not from the row's (usually None, which the FX resolver
+# reads as already in the report currency). The engine side is pinned in
+# test_financial/test_fifo_adjustment_out_with_cost.py, the end-to-end example in
+# test_financial/test_adjustment_out_with_cost_numbers.py.
+#
+# Unlike the doubles above, these tests take their lots, fragments, closures and events from the real engine
+# (run_fifo_lot_engine, pure as well): what changed is precisely what the engine hands to the builders, so a
+# hand-built double would restate the expected engine output instead of testing it.
+# Each docstring keeps the values its test read before CP-16; GUARD marks a test whose values CP-16 left as they were.
+
+
+def _engine_run(*transactions: Transaction) -> FifoEngineResult:
+    """The engine as the service runs it on these in-memory rows: report currency EUR, broker 1 without shorting."""
+    return run_fifo_lot_engine(list(transactions), {1: False}, target_currency="EUR")
+
+
+class TestHandoverAtCostPerformanceHistory:
+    """Decision 47 in ``build_performance_history`` (lots/histories.py).
+
+    The decision's example: 10 bought at 20 EUR on 1 Oct 2018, 4 handed over on 3 Oct by an ADJUSTMENT −4 carrying
+    20 EUR a unit; X at 20, 20, 25, 25, 30 from 1 to 5 Oct. An ADJUSTMENT-in with a cost is an external flow of
+    −cost; the handover is its mirror, +4 × 20 = +80 on 3 Oct, converted from cost_basis_currency at the row's date.
+    Before CP-16 an ADJUSTMENT with a cost was a flow only when its quantity was positive: the 80 never left, and the
+    series read the 4 units as lost.
+    """
+
+    _DAYS = _days(date(2018, 10, 1), 5)
+    _PRICES = dict(zip(_days(date(2018, 10, 1), 5), (D("20"), D("20"), D("25"), D("25"), D("30")), strict=True))
+
+    def _history(self) -> list:
+        buy = _tx(1, tx_date=date(2018, 10, 1), quantity=D("10"), amount=D("-200"), currency="EUR")
+        handover = _tx(
+            2,
+            tx_type=TransactionType.ADJUSTMENT,
+            tx_date=date(2018, 10, 3),
+            quantity=D("-4"),
+            amount=D("0"),
+            currency=None,
+            cost_basis_override=D("20"),
+            cost_basis_currency="EUR",
+        )
+        result = _engine_run(buy, handover)
+        context = PerformanceSourceContext(
+            transactions=[buy, handover],
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={buy.id: buy, handover.id: handover},
+        )
+        return build_performance_history(
+            scope_broker_ids=[1],
+            history_dates=self._DAYS,
+            market_prices=self._PRICES,
+            asset_currency="EUR",
+            fx_resolver=_resolver("EUR"),
+            context=context,
+            quote_base_quantity=1,
+        )
+
+    def test_the_handover_is_an_external_flow_of_its_cost(self, monkeypatch):
+        """The flows the series is computed from, net by date: −200 (the BUY) on 1 Oct, +80 (the handover at cost) on 3 Oct.
+
+        Read where build_performance_history hands them on — calculate_simple_roi_series, as histories imports it — and
+        netted by date, so a flow counted twice (from the row and again from its closure) shows. Before CP-16: {1 Oct: −200}.
+        """
+        received: list[list] = []
+        original = histories_module.calculate_simple_roi_series
+
+        def spy(nav_snapshots, cash_flows):
+            received.append(list(cash_flows))
+            return original(nav_snapshots, cash_flows)
+
+        monkeypatch.setattr(histories_module, "calculate_simple_roi_series", spy)
+
+        self._history()
+
+        assert len(received) == 1, "precondition: the series is computed once, the BUY being a flow"
+        net_by_date: dict[date, Decimal] = {}
+        for flow in received[0]:
+            net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
+        assert net_by_date == {date(2018, 10, 1): D("-200"), date(2018, 10, 3): D("80")}
+
+    def test_roi_and_twrr_count_the_handover_as_money_taken_out(self):
+        """The visible effect, from returns.py's definitions, on NAVs of 200, 200, 150 (6 × 25), 150 and 180 (6 × 30).
+
+        ROI = (NAV − invested) / invested with invested = −Σ flows: 200 until 2 Oct, 120 from 3 Oct → 0, 0, 0.25, 0.25,
+        0.5. TWRR compounds (NAV + the day's flow − previous NAV) / previous NAV: 3 Oct (150 + 80 − 200) / 200 = 0.15,
+        5 Oct (180 − 150) / 150 = 0.2, so 1.15 × 1.2 − 1 = 0.38 — the 4 units leave at their cost, 20, on a day X is
+        quoted 25, the mirror of an ADJUSTMENT-in costed below the market. No TWRR on the first day.
+        Before CP-16, without the flow: ROI −0.25, −0.25, −0.1 and TWRR −0.25, −0.25, −0.1 from 3 Oct.
+        """
+        points = self._history()
+
+        assert [(point.date, point.roi, point.twrr) for point in points] == [
+            (date(2018, 10, 1), D("0"), None),
+            (date(2018, 10, 2), D("0"), D("0")),
+            (date(2018, 10, 3), D("0.25"), D("0.15")),
+            (date(2018, 10, 4), D("0.25"), D("0.15")),
+            (date(2018, 10, 5), D("0.5"), D("0.38")),
+        ]
+
+
+class TestHandoverAtCostPerformanceFxNeeds:
+    """Decision 47's flow needs its rate: ``collect_performance_fx_needs`` asks for the handover's cost currency."""
+
+    def _call(self, resolver, **overrides):
+        kwargs = {
+            "fx_resolver": resolver,
+            "analyses": [LotAnalysisType.PERFORMANCE_HISTORY],
+            "transactions": [],
+            "closures": [],
+            "lots_by_id": {},
+            "asset_currency": "EUR",
+        }
+        kwargs.update(overrides)
+        collect_performance_fx_needs(**kwargs)
+
+    def test_a_handover_with_a_cost_needs_its_cost_currency_on_its_date(self):
+        """An ADJUSTMENT −4 at 18 USD a unit, report EUR: the 72 USD that leave are converted on the row's date.
+
+        So ("USD", that date) is asked for, as for an ADJUSTMENT-in with a cost. Before CP-16 only a positive ADJUSTMENT
+        registered it: nothing was asked, and the flow would have found no rate.
+        """
+        resolver = _resolver("EUR")
+        handover = _tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
+
+        self._call(resolver, transactions=[handover])
+
+        assert resolver._needs == [("USD", date(2024, 1, 10))]
+
+    def test_a_handover_without_a_cost_needs_nothing(self):
+        """GUARD: an ADJUSTMENT −4 without an override moves no money, so no rate is asked — not even for an asset quoted in USD."""
+        resolver = _resolver("EUR")
+
+        self._call(resolver, asset_currency="USD", transactions=[_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("-4"), amount=D("0"), currency=None)])
+
+        assert resolver._needs == []
+
+
+class TestPricedAdjustmentInLotCurrency:
+    """J-9 in the lots builders: the lot opened by an ADJUSTMENT +5 at 90 USD a unit, row currency None, report EUR.
+
+    The engine gives that lot the currency its price is in, USD (J-9), and each builder that converts the lot reads it:
+    with USD→EUR at 0.9 on the opening day, a cost of 5 × 90 = 450 USD is 405 EUR and a unit price of 90 USD is 81 EUR.
+    Before CP-16 the lot was in None, which the FX resolver reads as already EUR: 450 and 90, a USD price shown as euros.
+    """
+
+    _OPENED = date(2024, 1, 10)
+
+    def _priced_adjustment_in(self) -> Transaction:
+        return _tx(
+            1,
+            tx_type=TransactionType.ADJUSTMENT,
+            tx_date=self._OPENED,
+            quantity=D("5"),
+            amount=D("0"),
+            currency=None,
+            cost_basis_override=D("90"),
+            cost_basis_currency="USD",
+        )
+
+    def _usd_at_090(self) -> FxRateResolver:
+        return _resolver("EUR", {("USD", self._OPENED): D("0.9")})
+
+    def _opening_rows(self, opening: Transaction) -> list[tuple[LotTimelineEventKind, Decimal | None]]:
+        """(kind, unit price) of the lot history's opening row of ``opening``'s lot."""
+        result = _engine_run(opening)
+        rows = _svc()._build_lot_event_rows(
+            engine_result=result,
+            selected_ids=[opening.id],
+            fx_resolver=self._usd_at_090(),
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+        )
+        opening_kinds = (LotTimelineEventKind.BUY, LotTimelineEventKind.ADJUSTMENT_IN)
+        return [(row.kind, row.unit_price) for row in rows if row.transaction_id == opening.id and row.kind in opening_kinds]
+
+    def test_the_summary_converts_the_lots_cost_from_the_currency_it_is_in(self):
+        """The lot summary (``_build_lot_summaries``): currency USD, original cost 405 EUR, opening unit price 81 EUR.
+
+        Before CP-16: currency None, original cost 450, opening unit price 90 — the USD amounts read as euros.
+        """
+        result = _engine_run(self._priced_adjustment_in())
+
+        rows = _svc()._build_lot_summaries(
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            selected_ids=[1],
+            fx_resolver=self._usd_at_090(),
+            market_prices={},
+            price_lookup=PriceHistoryLookup([]),
+            closures_by_lot={},
+            income_by_lot={},
+            fees_by_lot={},
+            taxes_by_lot={},
+            estimated_mode=False,
+            quote_base_quantity=1,
+            analysis_end=date(2024, 3, 1),
+        )
+        row = next(row for row in rows if row.lot_id == 1)
+        observed = {"currency": row.currency, "original_cost": row.original_cost, "opening_unit_price": row.opening_unit_price}
+
+        assert observed == {"currency": "USD", "original_cost": D("405"), "opening_unit_price": D("81")}
+
+    def test_the_opening_row_of_the_lot_history_converts_its_price_from_the_lots_currency(self):
+        """The lot history's ADJUSTMENT_IN row (``_build_opening_and_split_rows``): unit price 90 USD × 0.9 = 81 EUR.
+
+        An opening row converts its price from the lot's currency — the cost basis's for a priced ADJUSTMENT, the BUY's
+        own for a BUY. Before CP-16 it converted with the row's currency (``tx.currency``, None): 90, a USD price shown
+        as euros — the J-9 defect again, in the history.
+        """
+        assert self._opening_rows(self._priced_adjustment_in()) == [(LotTimelineEventKind.ADJUSTMENT_IN, D("81"))]
+
+    def test_a_buys_opening_row_still_converts_from_its_own_currency(self):
+        """GUARD: 10 bought at 20 USD — a BUY's lot is in the BUY's currency, so its row reads 20 × 0.9 = 18 EUR, as before CP-16."""
+        buy = _tx(1, tx_date=self._OPENED, quantity=D("10"), amount=D("-200"), currency="USD")
+
+        assert self._opening_rows(buy) == [(LotTimelineEventKind.BUY, D("18"))]
+
+    def test_the_event_history_needs_the_lots_currency_on_its_opening_date(self):
+        """``collect_fx_needs`` for EVENT_HISTORY alone, the lot selected: ("USD", the opening date), the rate its opening row needs.
+
+        Before CP-16 the history registered only each event's row currency — None for this ADJUSTMENT — so nothing was asked.
+        """
+        adjustment = self._priced_adjustment_in()
+        result = _engine_run(adjustment)
+        resolver = _resolver("EUR")
+
+        collect_fx_needs(
+            fx_resolver=resolver,
+            analyses=[LotAnalysisType.EVENT_HISTORY],
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            selected_ids=[1],
+            transactions=[adjustment],
+            price_lookup=PriceHistoryLookup([]),
+            prices=[],
+            fragments=result.fragment_intervals,
+            events=result.classified_events,
+            closures=result.closures,
+            split_ratios_by_tx_id={},
+            actual_to=date(2024, 3, 1),
+            computed_from=self._OPENED,
+            asset_currency="EUR",
+        )
+
+        assert resolver._needs == [("USD", self._OPENED)]

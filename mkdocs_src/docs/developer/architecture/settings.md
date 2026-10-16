@@ -45,7 +45,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
-      topic, owned by the workstream of that area. Four exist today: `platform.py` (H:
+      topic, owned by the workstream of that area. Six exist today: `platform.py` (H:
       `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
@@ -54,10 +54,18 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
       `web_link_finder_max_results()`, and `plugin_setting_env()` and `plugin_setting_env_origin()`
-      for the [plugin settings](patterns/plugin_settings.md#environment)) and `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      for the [plugin settings](patterns/plugin_settings.md#environment)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
-      `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)). `sleep_wake.py`
-      and `backup.py` will follow when their areas add variables. Unlike a `Settings` field, an
+      `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)),
+      `sleep_wake.py` (Z: the pauses a provider gets after answering HTTP 429,
+      `provider_cooldown_base_seconds()`, `provider_cooldown_max_seconds()` and
+      `provider_cooldown_settings()`; the shutdown budget, `shutdown_timeout_seconds()`, and
+      uvicorn's share of it, `shutdown_drain_seconds()` and `uvicorn_drain_env()`; see
+      *Stopping the Server* in [Configuration](../../admin/configuration.md); the token of the
+      scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
+      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)) and `backup.py` (B:
+      `backup_download_token()`, the token a hosting panel presents to download the instance's
+      backups, also as `_FILE`). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first
