@@ -85,47 +85,52 @@ poll, so an error of the page's own code counts as a failure too.
 
 ### 🔎 Asset detail: one poll for the summary and the chart {: #asset-detail }
 
-The detail page runs one poll: every 30 s, a single `POST /assets/prices/current` for the asset
-(`pollLivePriceOnce`), whose answer feeds the price summary (`applyLiveSummary`) and then the
-chart's last point (`applyLiveChartHead`). It replaced two loops on the same endpoint — the
+The detail page runs one poll, in `AssetDetailLive` (`lib/components/assets/detail/assetDetailLive.svelte.ts`),
+which the page creates while it initialises and which reads the page's state through getters: every
+30 s, a single `POST /assets/prices/current` for the asset (`#pollLivePriceOnce`), whose answer feeds
+the price summary (`#applyLiveSummary`) and then the chart's last point (`#applyLiveChartHead`). It
+replaced two loops on the same endpoint — the
 summary every 30 s, the chart head every minute after a 5 s warm-up, so three requests a minute
 for an asset with a provider — and the chart-head loop kept asking even on a range that ends in
 the past.
 
-The effect re-runs when `assetInfo`, `displayCurrency`, `fxConversionMissing` or `isHeadToday`
-change, and each run starts a new poller, so one poll at once. An answer that lands after the
+The instance's effect re-runs when `assetInfo`, `displayCurrency`, `fxConversionMissing` or
+`isHeadToday` change, and each run starts a new poller, so one poll at once. An answer that lands after the
 effect re-ran — another asset, another currency — changes nothing on the page: each run hands the
 poll its own `isCurrent()` check, read after the price request, after the conversion and before
 the chart head, and the poll also checks that the asset is still the page's.
 
-`pollLivePriceOnce` returns the poll's [outcome](#backoff): `livePollFailure(error)` when the
+`#pollLivePriceOnce` returns the poll's [outcome](#backoff): `livePollFailure(error)` when the
 request fails; otherwise `livePollOutcome([toLivePriceResult(item)])` (of an empty list when the
 answer has no item), worked out before the `isCurrent()` checks and returned on every path after
-them. An error of `applyLiveSummary` or `applyLiveChartHead` is not caught: the poller counts the
+them. An error of `#applyLiveSummary` or `#applyLiveChartHead` is not caught: the poller counts the
 throw as a failure.
 
-`applyLiveSummary` replaces the last chart close with the live price in `AssetPriceSummary`. When
+`#applyLiveSummary` sets `currentPrice`, which the page shows in `AssetPriceSummary` instead of the
+last chart close. When
 the display currency differs from the asset's, the price is converted for today through
 `POST /api/v1/fx/currencies/convert`; if that fails, the native price is shown with the asset's
-currency and a ⚠ tooltip (`livePriceConversionFailed`).
+currency and a ⚠ tooltip (`conversionFailed`, passed as `livePriceConversionFailed`).
 
 The direction compares the **native** values of two consecutive polls, so switching the display
 currency never fakes a tick, and the first poll after a (re)mount is neutral.
 
 #### ✨ Price flash {: #price-flash }
 
-On an up or down tick the page sets `livePriceDirection` and increments `livePriceFlashToken`.
+On an up or down tick the instance sets `direction` and increments `flashToken`, which the page
+passes to `AssetPriceSummary` as `livePriceDirection` and `livePriceFlashToken`.
 `AssetPriceSummary` re-keys the price element on the token (`{#key}`), so the animation restarts
 even on two ticks in the same direction, and applies `.lf-price-flash-up` or
 `.lf-price-flash-down` (`src/app.css`): the number jumps to emerald or red and eases back to its
-resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms) then resets the direction to
+resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms, exported by the module) then resets
+the direction to
 neutral. Under `prefers-reduced-motion` the colour swaps without the animation and the same timer
 clears it. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
 
 #### 📈 Chart head {: #chart-head }
 
-`applyLiveChartHead` merges the polled close into today's point of the chart
-(`mergeChartPointsIncremental`) when it changed — no reload, no flicker. The fields the answer does
+`#applyLiveChartHead` merges the polled close into today's point of the page's `chartData`, through
+the input's setter (`mergeChartPointsIncremental`), when it changed — no reload, no flicker. The fields the answer does
 not carry (`original_close`, `backward_fill_info`…) stay on the point, and the signals, derived
 from `chartData`, recompute. It acts only when the asset has a provider — without one the endpoint
 echoes the last stored close, so there is nothing to merge — and not while the chart, or the
