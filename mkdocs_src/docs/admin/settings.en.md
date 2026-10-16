@@ -73,7 +73,9 @@ The **Registration** setting decides who can create an account:
 
 - 👑 The first account of a new instance can always be created, whatever the mode: until it
   exists, the login page shows **Register here**, and the account it creates becomes the
-  administrator.
+  administrator. With `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio creates that administrator itself at its
+  first start, and nobody can register in its place: see
+  [The Initial Administrator](configuration.md#initial-admin).
 - 🆕 A new instance starts **By invitation**. An instance upgraded from an earlier version keeps
   the mode it had: one that was **Open**, the earlier default, stays **Open** until you change it
   (**Reset to Default** proposes **By invitation**). Once everyone has an account, choose
@@ -106,6 +108,10 @@ The **Registration** setting decides who can create an account:
     ```
 
     With Docker: `docker compose exec librefolio python dev.py user create <username> <email> <password>`.
+
+    Or give LibreFolio `LIBREFOLIO_ADMIN_EMAIL` before its first start: it then creates the
+    administrator itself, with a setup link for you, and nobody can register in its place
+    ([The Initial Administrator](configuration.md#initial-admin)).
 
 ---
 

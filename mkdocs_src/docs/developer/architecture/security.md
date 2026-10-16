@@ -76,13 +76,14 @@ Tokens are signed with HS256 and one key per process, `_JWT_SECRET` in
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
-- Read each time a session cookie is issued — at login, and when a password or email change re-issues it — it sets
-  both the token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to
-  the cookies issued after it
+- Read each time a session cookie is issued — at login, at the setup of the initial administrator, and when a password
+  or email change re-issues it — it sets both the token's `exp` and the cookie's `max_age` (24 hours when the setting
+  cannot be read): a new value applies to the cookies issued after it
 - After expiration, the user must log in again
 - There is no token refresh mechanism — a new login is required. The only cookies issued without a login are the ones
   a password change or an email change sends back to the device that made it
-  ([Session Revocation](#session-revocation))
+  ([Session Revocation](#session-revocation)), and the one that signs in the initial administrator once its setup link
+  is spent ([The Initial Administrator](access_control.md#initial-admin))
 
 ### 🚪 Logout
 
@@ -100,7 +101,7 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Six changes call it:
+not commit: the caller commits it with the change that asks for it. Seven changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
@@ -110,13 +111,15 @@ not commit: the caller commits it with the change that asks for it. Six changes 
 | Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
+| Setup of the initial administrator | A [setup link](access_control.md#initial-admin) spent by `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()` | All of them, though an account waiting for its setup has none: the same response sets a new cookie at the new version, which signs the administrator in |
 
 Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
 [password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
 `change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
-reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
-equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
+reset or setup link that is not valid. So do issuing a reset or setup link, which ends nothing until it is spent, a
+`PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
+stored email sent again).
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -129,10 +132,10 @@ equal the current ones, and a profile change that changes no email (a new userna
   found*, *User account is disabled*), then refuses a token whose version differs from the account's, behind or
   ahead, with `401` *Session expired or invalid*: the answer to an invalid token, so nothing tells the holder why.
   While an account is deactivated, its cookies get *User account is disabled* first.
-- **The re-issued cookie.** Login, password change and email change set the cookie through one helper,
-  `_issue_session_cookie()`: a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the
-  setting cannot be read), with the same name and attributes as the login cookie, so the browser replaces the old
-  cookie instead of keeping both.
+- **The re-issued cookie.** Login, password change, email change and the setup of the initial administrator set the
+  cookie through one helper, `_issue_session_cookie()`: a JWT at the account's current version, lasting
+  `session_ttl_hours` (24 hours when the setting cannot be read), with the same name and attributes as the login
+  cookie, so the browser replaces the old cookie instead of keeping both.
 
 !!! note "A request in flight during a password or email change"
 
@@ -217,18 +220,19 @@ session):
 | `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
 | `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
 | `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
+| `POST /api/v1/auth/setup` ([setup link](access_control.md#initial-admin) of the initial administrator) | The link's token, likewise |
 | `./dev.py user create`, `./dev.py user reset` | Anything in the database, the username included: `validate_password()` in `scripts/user_cli.py` is a thin wrapper over `failed_rules()` |
 
-- **The refusal.** The three routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
+- **The refusal.** The four routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
   with `{"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": […]}`
   in `detail`, `rules` being the codes missed, in the rules' order. Nothing is written: a refused change or reset
   leaves the password, the session version and the sessions as they were. The command line prints
   `❌ Password does not meet security requirements:`, then one line per rule missed that starts with its code
   (`_RULE_MESSAGES`), such as `min_length: the password must be at least 8 characters long`, and exits with `1`.
-- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password` and
-  `PasswordResetRequest.new_password` (`backend/app/schemas/auth.py`) only require a non-empty string
-  (`min_length=1`): an empty password is still a `422` of the request validation, not `PASSWORD_TOO_WEAK`. The
-  length is the policy's rule.
+- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password`,
+  `PasswordResetRequest.new_password` and `AdminSetupRequest.new_password` (`backend/app/schemas/auth.py`) only require
+  a non-empty string (`min_length=1`): an empty password is still a `422` of the request validation, not
+  `PASSWORD_TOO_WEAK`. The length is the policy's rule.
 - **Published to the app.** `password_rules_public()` is the list `GET /api/v1/system/instance` publishes as
   `accounts.password_rules`, `[{code, value}]` (`PasswordRuleRead`), `value` being `null` for every rule but
   `min_length` ([Public instance configuration](settings.md#public-instance-configuration)). The app draws and checks
@@ -243,7 +247,9 @@ points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-0
 and password change, the new password checked before the current one, a login that never checks);
 `./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
 RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
-block); `./dev.py test utils dev-cli-image` (`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
+block); `./dev.py test api admin-setup` (`test_api/test_admin_setup_api.py`, SETUP-006, SETUP-007 and SETUP-011: the
+setup link left unspent, the password read before the token); `./dev.py test utils dev-cli-image`
+(`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
 `validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
 `./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
 (`PasswordStrength.test.ts`).
@@ -273,8 +279,8 @@ curl -b cookies.txt -X POST \
 ### 📄 Secrets from Files {: #secrets-from-files }
 
 Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`
-today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` and
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -297,7 +303,10 @@ names the source without reading the file: `NAME`, `NAME_FILE (<path>)` or `None
 
 The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
 `LIBREFOLIO_INSTANCE_KEY_FILE` stops the start ([JWT Secret](#jwt-secret),
-[Configuration Checks](#configuration-checks)). A broken `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`
+[Configuration Checks](#configuration-checks)), and so does a broken
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE`: `admin_bootstrap_config()` reads it in the startup audit,
+whatever the other variables of the [initial administrator](access_control.md#initial-admin). A
+broken `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`
 does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
@@ -446,13 +455,18 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    they cannot read raises `ValueError`. On a blocked instance, a warning
    `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`, with `deletion_date`, goes to
    the log: see [Instance Block](#instance-block).
-3. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+3. `admin_bootstrap_config()` (`backend/app/config/accounts.py`): an unusable `LIBREFOLIO_ADMIN_*`
+   value raises `AdminBootstrapConfigError`, which names the variable and never the token, and an
+   unreadable `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` raises `SecretFileError`, on an instance with
+   accounts too: see [The Initial Administrator](access_control.md#initial-admin).
+4. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-4. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+5. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit`. What the administrator sees and does is in
+Tests: `./dev.py test services config-audit`; the stop on a `LIBREFOLIO_ADMIN_*` value is in
+`./dev.py test services admin-bootstrap`. What the administrator sees and does is in
 [Configuration](../../admin/configuration.md), section «Startup Checks».
 
 ## 🛡️ Endpoint Protection
@@ -466,8 +480,9 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
 | `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
-| `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
+| `/auth/tokens/inspect` | POST | The status of an invitation, password-reset or setup link, for whoever holds its token: see [Links in use](#account-token-links) |
 | `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
+| `/auth/setup` | POST | Spend the setup link of the [initial administrator](access_control.md#initial-admin): its password, under the [password rules](#password-rules), the account activated and signed in |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
@@ -494,9 +509,11 @@ an instance that registers by invitation, the default of a new install. Publishi
 - **The window is short.** The flag turns false with the first registration, normally minutes after
   the install; the administrator manual asks to register before exposing the instance
   ([Global Settings](../../admin/settings.md), section «Who Can Sign Up»).
-- **A managed instance will not show it.** With lot A7 (F02, not delivered yet), the first account of
-  a managed instance will be the administrator created from the environment, so the flag will be
-  false from the start. Until then a managed instance starts empty, like any other.
+- **An instance with F02 never shows it.** With `LIBREFOLIO_ADMIN_EMAIL`
+  ([The Initial Administrator](access_control.md#initial-admin)), the `admin-bootstrap` startup step
+  creates the administrator, inactive, before the server answers its first request: the instance is
+  never empty while it serves, so the flag is false from the start, and nobody can register as the
+  first account. Without the variable, a managed instance starts empty, like any other.
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -678,20 +695,25 @@ job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. Invitations and password-reset links use it today ([Links in use](#account-token-links));
-email verification and the setup link have no caller yet.
+guarantees for all four. Invitations, password-reset links and the setup link of the
+[initial administrator](access_control.md#initial-admin) use it ([Links in use](#account-token-links)); email
+verification is workstream E's ([Email Verification](../backend/email.md#verification)).
 
 ### 🎲 Generation and Storage
 
-- `issue_token()` draws a new token on every call with `secrets.token_urlsafe(32)`: 32 random bytes (256 bits),
-  written as 43 URL-safe characters.
+- `issue_token()` draws a new token with `secrets.token_urlsafe(32)`: 32 random bytes (256 bits), written as 43
+  URL-safe characters. One caller gives its own instead (`token=`): the initial administrator's setup link, with
+  the value of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, whose format the configuration has checked (32 to 200 unreserved
+  URL characters). A given token is stored like a drawn one, by its hash; an empty one is a `ValueError`.
 - The plaintext is returned once, in `IssuedToken.token`, beside the new row (`IssuedToken.record`). The database
   keeps only `hash_token(token)` — the SHA-256 of the UTF-8 token, 64 lowercase hex characters — in
   `account_tokens.token_hash`, which is unique. A link cannot be rebuilt from the database: a lost one is replaced
   by a new token, never recovered.
 - A fast hash is enough: unlike a password, 256 random bits are out of reach of guessing, so no slow salted hash
   is needed. Being deterministic, the hash is also the lookup key: `inspect_token()` and `consume_token()` hash
-  the token they receive and search `token_hash`.
+  the token they receive and search `token_hash`. A token given through `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is as
+  random as the hosting panel makes it: the configuration checks only its length and its characters, and the
+  administrator manual makes it with `openssl rand -hex 32`, 256 bits.
 
 ### 🎯 Purposes, Lifetimes and Links
 
@@ -748,43 +770,60 @@ Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke ev
   `revoke_tokens()` run their `UPDATE` in the session's transaction. The caller commits: spending an invitation
   and creating the account it opens share one transaction, and fail together. A rollback undoes an issue, a
   consumption or a revocation.
-- The plaintext token is never logged, and neither is its hash. The events *Account token issued*, *Account
-  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids.
+- The service never logs the plaintext token, nor its hash. The events *Account token issued*, *Account
+  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids. One caller logs a
+  link, by design: the setup link of the initial administrator, when the server generated its token, is written
+  once in the log ([Links in Use](#account-token-links)).
 
 `./dev.py test services account-tokens` (`backend/test_scripts/test_services/test_account_tokens.py`) pins this
 contract, including two sessions consuming one token at once and a search of the logs and of every database
-column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
+column for the plaintext; a given token (`issue_token(token=)`) is pinned by `./dev.py test services admin-bootstrap`
+(TOKEN-001 to TOKEN-005). The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
 
-### 🔗 Links in Use: Invitations and Password Resets {: #account-token-links }
+### 🔗 Links in Use: Invitations, Password Resets and the Setup Link {: #account-token-links }
 
-Two purposes have callers: invitations and password-reset links. Their rules — who may register, the
-user limit, what each endpoint answers — are in
-[Registration, Invitations and the Admin API](access_control.md#registration). What protects their
-tokens:
+Three purposes have callers: invitations, password-reset links and the setup link of the initial administrator.
+Their rules — who may register, the user limit, what each endpoint answers — are in
+[Registration, Invitations and the Admin API](access_control.md#registration) and, for the setup link, in
+[The Initial Administrator](access_control.md#initial-admin). What protects their tokens:
 
-- **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
+- **Only an administrator, or whoever runs the server, issues a link.** `POST /api/v1/users/invites` and
   `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
   `./dev.py user reset-link` run on the server. The token is in that response, or printed by that command,
-  once. A lost link is replaced with a new one.
-- **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
-  spending one revokes any other.
+  once. A lost link is replaced with a new one. The setup link has no route that issues it: the startup issues it,
+  from the variables the operator set on the server, and `./dev.py user setup-link` replaces it.
+- **Only the newest reset or setup link of an account works.** Issuing a reset link revokes the account's live
+  reset links, and spending one revokes any other. Likewise, a setup link re-armed by a new
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
+  any other.
 - **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
-  a reset link in the commit that sets the new password, raises the session version and revokes the other links.
-  If the account cannot be created, the invitation stays unspent.
+  a reset link in the commit that sets the new password, raises the session version and revokes the other links;
+  a setup link in the commit that sets the password, activates the account, raises the session version and revokes
+  the other setup links. If the account cannot be created, the invitation stays unspent. A setup link presented
+  for an account already active is refused, and revoked.
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
-  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
-  Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
+  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset or
+  setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
   and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
   locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
   [password rules](#password-rules), the same on every instance.
-- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
-  `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
-  for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
-  never puts the fragment in a `Referer` either. A token in the query string would be in all those logs. The page
-  reads it with JavaScript (`location.hash`); a `token` in the query string is not read at all.
+- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
+  `/reset-password#token=…` and `/setup#token=…`. A browser never sends the fragment to the server, so the token is
+  not in the request for the page: it stays out of the server's access log and out of the logs of every proxy on
+  the way. A browser never puts the fragment in a `Referer` either. A token in the query string would be in all
+  those logs. The page reads it with JavaScript (`location.hash`); a `token` in the query string is not read at
+  all. A token given through `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is made of the unreserved characters of a URL only,
+  so the hosting panel builds the very same link itself, with nothing to encode.
+- **The setup link is the one link written in the log, once, by design.** When the server generated its token,
+  `deliver_setup_link()` writes the link at `WARNING` right after the creation, then emails it when email works:
+  a scripted install without email still gets its link. Restarts never write it again, the link works once and for
+  72 hours, and `./dev.py user setup-link` replaces it. Whoever reads that log before the link is spent can take
+  the administrator account: keep the log private, or give the token through the variable. A token from
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is stored only as its hash and never logged nor emailed, and no error holds it:
+  `AdminBootstrapConfigError` names the variable only.
 - **The link pages hide and keep the token.** `/invite` and `/reset-password` read the token when they mount,
   then put the bare path in the address bar (`replaceState`), so the token stays out of the history and of a
   bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on

@@ -278,7 +278,7 @@ The most common changes:
 | (4) | All configuration | Edit `.env` file (copied from `.env.example`) |
 | (5) | Run another image tag | Set `LIBREFOLIO_IMAGE` in `.env`, for example `LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0` |
 
-The first account created in the browser automatically becomes the administrator: no command needed.
+The first account created in the browser automatically becomes the administrator: no command needed. To have LibreFolio create the administrator at its first start instead, from `LIBREFOLIO_ADMIN_EMAIL`, see [The Initial Administrator](configuration.md#initial-admin).
 
 ??? example "📄 The repository's `docker-compose.yml`, annotated"
 

@@ -107,7 +107,7 @@ erDiagram
 
 ### 👤 `USER`
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)).
+The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
 
 Migration `005_accounts_invites` added three columns:
 
@@ -115,7 +115,8 @@ Migration `005_accounts_invites` added three columns:
   cookie carries the version it was issued at (the JWT's `sv` claim), and `get_current_user()` refuses, on every
   request, a cookie whose version is not the account's. `user_service.end_sessions()` raises it by one on a password
   change or reset (a reset link included), an email change, a deactivation or a demotion (from the CLI or the
-  administrator API), and when an administrator signs the account out everywhere, ending every older session of the
+  administrator API), when an administrator signs the account out everywhere, and when the initial administrator
+  spends its setup link, ending every older session of the
   account. See [Session Revocation](../security.md#session-revocation).
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified. The accounts that
   existed before the migration stay `NULL` — not verified, which is true — with no backfill: how they are
@@ -139,7 +140,7 @@ One-to-one with `USER`. Stores user-specific preferences: display language, base
 
 ### 🌍 `GLOBAL_SETTING` {: #global-setting }
 
-System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36.
+System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36. The startup step that creates the [initial administrator](../access_control.md#initial-admin) writes `registration_mode` = `invite` too, in the same transaction, with `updated_by_user_id` `NULL`.
 
 Migration `006_registration_mode` changes data only: the row `enable_registration` (`bool`) becomes
 `registration_mode` (`value_type` `str`). The new value is `open` when the old one, lower-cased, was `true`, `1`,
@@ -299,18 +300,19 @@ The three foreign keys reference `users.id`:
 | `created_by_user_id` | `SET NULL` | It only records who issued the token: deleting that account keeps the token as it is and forgets the name |
 | `consumed_by_user_id` | `SET NULL` | It only records who spent the token, likewise |
 
-Two purposes are in use, with the rules of
-[Registration, Invitations and the Admin API](../access_control.md#registration). This is how they use the table:
+Three purposes are in use, with the rules of
+[Registration, Invitations and the Admin API](../access_control.md#registration) and of
+[The Initial Administrator](../access_control.md#initial-admin). This is how they use the table:
 
-| | `invite` | `password_reset` |
-|---|---|---|
-| `user_id` | `NULL` | The account whose password the link resets |
-| `email` | What the administrator wrote, if anything: a note, never compared with the address of the new account | `NULL` |
-| `grants_admin` | Whether the account it opens is an administrator | false |
-| `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same |
-| Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links |
-| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` |
-| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent |
+| | `invite` | `password_reset` | `admin_setup` |
+|---|---|---|---|
+| `user_id` | `NULL` | The account whose password the link resets | The administrator waiting for its setup |
+| `email` | What the administrator wrote, if anything: a note, never compared with the address of the new account | `NULL` | `NULL` |
+| `grants_admin` | Whether the account it opens is an administrator | false | false |
+| `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same | `NULL`: the startup or the command line issues it |
+| Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links | By the startup that creates the administrator, with the token of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` or a generated one; a new value of that variable and `./dev.py user setup-link` first revoke the earlier setup links |
+| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` | Set by `POST /api/v1/auth/setup`, `consumed_by_user_id` to the account, in the commit that activates it |
+| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent | Set on the earlier setup links, expired ones included, when a new one is issued; on the other ones when one is spent; on a link presented for an account already active |
 
 Two indexes: `ix_account_tokens_purpose_expires_at` on `(purpose, expires_at)`, and `ix_account_tokens_user_id`
 on `user_id`, used by the revocation of an account's tokens and by the cascade when the account is deleted. The

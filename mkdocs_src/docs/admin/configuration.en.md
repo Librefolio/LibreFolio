@@ -111,6 +111,7 @@ read from a file.
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` | The token of the hosting panel that backs up the instance: see [Hosting for Others](hosting_providers.md#panel-backups). Like the web-search key, a file that cannot give it does not stop the server: the panel's backup routes answer `503`. |
 | `LIBREFOLIO_WAKE_TOKEN` | `LIBREFOLIO_WAKE_TOKEN_FILE` | The token of the [scheduled wake-up](sleep_wake.md#wake-sync), in the main options above. A token that cannot be used, or a file that cannot give it, does not stop the server either: the scheduled wake-up answers `503` until it is fixed. |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` | The token of the setup link of the [initial administrator](#initial-admin), when a hosting panel delivers that link. A token that cannot be used stops the server at startup, and so does, as for the first two, a file that cannot give it. |
 
 A plugin may have secrets of its own, such as the API key of a paid data source: see
 [Plugin Settings](#plugin-settings).
@@ -129,9 +130,10 @@ and out of the container's environment.
   space is never used as a key.
 - Set one of the two. When both are set, the variable itself wins, the file is ignored and the start
   log has a [warning](#startup-checks).
-- For `JWT_SECRET_FILE` and `LIBREFOLIO_INSTANCE_KEY_FILE`, a file that is missing, cannot be read, is
-  empty or blank (only spaces and line breaks), is not UTF-8 text or is larger than 64 KiB stops the
-  server at startup. The error names the variable and the path, never the secret.
+- For `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE`,
+  a file that is missing, cannot be read, is empty or blank (only spaces and line breaks), is not
+  UTF-8 text or is larger than 64 KiB stops the server at startup. The error names the variable and
+  the path, never the secret.
 - `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` is read only when a search uses the `apikey` engine. A
   file that cannot give the key does not stop the server: the search goes on without the web search,
   with a warning in the log (`web_link_finder: …; disabling`), and the providers' own search keeps
@@ -181,7 +183,8 @@ and out of the container's environment.
     file `cannot be read`.
 
     `LIBREFOLIO_INSTANCE_KEY_FILE`, `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`,
-    `LIBREFOLIO_SMTP_PASSWORD_FILE` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` work the same way.
+    `LIBREFOLIO_SMTP_PASSWORD_FILE`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` and
+    `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` work the same way.
 
 ### 🗝️ The Instance Key {: #instance-key }
 
@@ -343,6 +346,10 @@ start, and a blocked instance logs a warning at every start,
 `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`: see
 [Hosting for Others](hosting_providers.md#block-variables).
 
+So does a value of the [initial administrator](#initial-admin) that LibreFolio cannot use, in
+`LIBREFOLIO_ADMIN_EMAIL`, `LIBREFOLIO_ADMIN_USERNAME` or `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, even on an
+instance that already has accounts.
+
 ---
 
 ## ⏹️ Stopping the Server {: #shutdown }
@@ -405,18 +412,19 @@ The budget is spent in this order:
 Who may create an account, and how many accounts the instance may hold. Without these variables,
 nothing changes: the **Registration** setting of the [Global Settings](settings.md#registration)
 decides who may sign up, and there is no limit. All four are optional: uncomment a line of the
-**Accounts** section of `.env.example` to set one.
+**Accounts** section of `.env.example` to set one. Three more, for hosting providers and scripted
+installs, create the [initial administrator](#initial-admin) of a new instance.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). |
-| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
+| `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). With `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio creates that administrator itself instead: see [The Initial Administrator](#initial-admin). |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, and the [initial administrator](#initial-admin) while it waits for its setup; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
-An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
-LibreFolio stays on the safe side, and writes an error to its log the first time each server
-process needs the value: `Invalid account configuration`, with the variable and its value in
+An empty value counts as not set. A wrong value of these four does not stop the server, unlike the
+main options: LibreFolio stays on the safe side, and writes an error to its log the first time each
+server process needs the value: `Invalid account configuration`, with the variable and its value in
 `problem`, and in `consequence` what it costs until you fix it. Fix the value, then restart:
 
 | Wrong value | What LibreFolio does | `consequence` in the log |
@@ -428,7 +436,8 @@ process needs the value: `Invalid account configuration`, with the variable and 
 
 ### 📏 When the Instance Is Full {: #user-limit }
 
-When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+When the active accounts, the pending invitations and an [initial administrator](#initial-admin)
+waiting for its setup reach `LIBREFOLIO_MAX_USERS`:
 
 - nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
   mode;
@@ -439,6 +448,76 @@ When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS
 
 A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
 expires. The first account of a new instance can always be created.
+
+### 👑 The Initial Administrator {: #initial-admin }
+
+LibreFolio can create the administrator of a new instance by itself, at its first start, for the
+address you give it: nobody can register first and take its place. It is meant for hosting
+providers and scripted installs. Without these variables nothing changes, and the first account
+registered becomes the administrator ([Who Can Sign Up](settings.md#registration)).
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_ADMIN_EMAIL` | _not set_ | The email address of the administrator. Setting it turns the initial administrator on. |
+| `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, as at registration. |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | _not set_ | Optional: the token of the setup link, for a hosting panel that delivers the link itself. 32 to 200 characters, only letters, digits and `-` `.` `_` `~`, since it travels in a link: the output of `openssl rand -hex 32`, for example. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Not set: LibreFolio generates the token. |
+
+An empty value counts as not set. Spaces around the email and the username do not matter; the token
+is used exactly as written, so a space in it, even at the end, makes it unusable.
+
+At the first start of an instance **without any account**, LibreFolio:
+
+1. creates the administrator, not yet active, with a random password nobody knows: nobody can sign
+   in with it yet;
+2. sets the **Registration** [global setting](settings.md#registration) to **By invitation**;
+   `LIBREFOLIO_REGISTRATION`, when set, still decides;
+3. issues a **setup link**, `/setup#token=…`, that works once, for 72 hours. It opens the
+   instance's setup page, where the administrator chooses the password and is signed in.
+
+While the administrator waits, nobody can register as the first account, and the administrator
+takes a place of `LIBREFOLIO_MAX_USERS`. Who hands over the link depends on the token:
+
+- **With `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`**, the hosting panel that chose it: the link is the
+  instance's address followed by `/setup#token=` and the token. LibreFolio neither logs it nor
+  emails it. See [Hosting for Others](hosting_providers.md#initial-admin).
+- **Without it**, LibreFolio generates the token and hands the link over itself:
+    - it writes the link **once** in its log, as a warning:
+      `Setup link of the initial administrator, single use: open it to choose the password`, with
+      the link in `link` (with Docker: `docker compose logs librefolio`). The link is the full
+      address when `LIBREFOLIO_PUBLIC_URL` is set; otherwise it is the path, and `note` asks you to
+      put the address of your server in front of it;
+    - it emails the link to `LIBREFOLIO_ADMIN_EMAIL` when email works, that is with an SMTP server
+      set up ([Email](email.md)) and `LIBREFOLIO_PUBLIC_URL` set. The email is in the instance's
+      default language, and goes out once the server is up, so a slow mail server never delays the
+      start. If it cannot go, the log has `Setup link of the initial administrator not emailed`,
+      with the reason, and the link in the log still works.
+
+A restart while the administrator waits issues nothing new, and does not write the link in the log
+again. Once no link works any more, each start logs the warning
+`The initial administrator's setup link has expired: run ./dev.py user setup-link…`: that command
+prints a new link ([A New Setup Link](cli_tools.md#setup-link)). A new value of
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` also gives a new link, at the next start. Changing the username
+or the email before the setup, and the rest of the provider's side:
+[Hosting for Others](hosting_providers.md#initial-admin).
+
+On an instance that already has accounts, and no administrator waiting, the variables create
+nothing: each start logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts`. The same
+holds once the setup is done.
+
+A value LibreFolio cannot use **stops the server at startup**, on any instance, one that already
+has accounts included:
+
+- `LIBREFOLIO_ADMIN_USERNAME` or `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` set without
+  `LIBREFOLIO_ADMIN_EMAIL`;
+- an email that is not an address;
+- a username shorter than 3 or longer than 50 characters;
+- a token shorter than 32 or longer than 200 characters, or with a character other than letters,
+  digits and `-` `.` `_` `~`, a space included;
+- a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` that cannot give the token
+  ([Secrets in Files](#secret-files)).
+
+The error is in the server's console output (`docker compose logs librefolio` with Docker): it
+names the variable, never the token. Fix the value, then start again.
 
 ---
 

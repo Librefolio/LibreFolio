@@ -25,9 +25,10 @@ After each change, the tab reloads its lists, so it always shows what the server
 ## 📏 Places and Subscription {: #places }
 
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
-**3 accounts** when it has none. Active accounts and open invitations take a place; deactivated
-accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance
-Is Full» in [Environment Variables](configuration.md).
+**3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
+[initial administrator](hosting_providers.md#initial-admin) still waiting for its setup link;
+deactivated accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When
+the Instance Is Full» in [Environment Variables](configuration.md).
 
 - 💳 **Manage subscription** appears next to the count only when the server has a billing page
   (`LIBREFOLIO_BILLING_URL`), as a hosting provider sets one for a managed instance. It opens that

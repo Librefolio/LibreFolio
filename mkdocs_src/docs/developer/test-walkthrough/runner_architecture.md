@@ -140,6 +140,9 @@ is small because an exclusive has to survive being written down.
 The units that came with the registration modes show the other way out: `api registration` and `api users-admin`
 run every case that needs another mode, an accounts variable or a user limit in-process, on a private database, and
 touch only their own accounts and tokens on the lane's server, so they stay WRITE-SCOPED with no exclusive.
+`api admin-setup` goes the same way: an administrator waiting for its setup exists only on an instance that had no
+account, so every case that needs one runs in-process on a private database, and the lane's server only gets
+refusals that write nothing.
 
 Two claims that look like reasons and are not:
 

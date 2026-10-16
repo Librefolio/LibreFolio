@@ -106,9 +106,10 @@ The lifespan (`lifespan()` in `backend/app/services/platform/app_lifespan.py`) p
 9. `database`: creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()` in `database_bootstrap.py`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
 10. `post-migration-fixes`: runs the [post-migration fixes](database/index.md#post-migration-fixes) in a thread; they never stop the startup.
 11. `global-settings`: seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
-12. `provider-prewarm`: starts the provider cache pre-warm in the background (`_prewarm_provider_caches()`).
-13. `market-holidays`: starts building the market-holiday table in the background, in its own process (`start_market_holiday_prewarm()`).
-14. `scheduler`: starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
+12. `admin-bootstrap`: applies the variables of the [initial administrator](access_control.md#initial-admin) (`startup_admin_bootstrap()`, in `backend/app/services/accounts/bootstrap_admin_service.py`): on an instance without accounts it creates the administrator, inactive, with its setup link; a generated link goes out by email in a background task, so the step never waits for the mail server.
+13. `provider-prewarm`: starts the provider cache pre-warm in the background (`_prewarm_provider_caches()`).
+14. `market-holidays`: starts building the market-holiday table in the background, in its own process (`start_market_holiday_prewarm()`).
+15. `scheduler`: starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
 
 On shutdown, the lifespan's `finally` runs `FINALLY_STEPS`: `tool-executor` stops the Tool executor, also when serving ended with an error. Then, only after a normal end, it logs `Shutting down LibreFolio` and runs `SHUTDOWN_STEPS`: `scheduler` (sets the scheduler's stop event and awaits its task), `providers` (the asset, FX and BRIM providers), `brim-parse-pool`, `quant-pools`, `market-holidays` (ends any holiday build at once), `caches` (closes the TTL caches) and `child-processes` (terminates the child processes still alive, such as parse, risk and Tool workers, so that none outlives the server; only where the watchdog is installed).
 
