@@ -614,7 +614,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `4a7ba1d7e`; base merge `1427d5ea1` (DV e BK), gate 119/119 |
 | 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `26b45f520` |
 | 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
-| 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | 🔄 checkpoint consegnato (15:4x): 1179/1179, `SimpleSelect.test.ts` 45/45; mutazione e `front check` nello slot |
+| 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
+| 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | 🔄 prove leggere minime 115/115 |
 
 ## Avanzamento
 
@@ -2793,3 +2794,27 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `files/T-r2/tc15_mutation.sh`: M0 di controllo, M1 senza attributo, M2 che segue la selezione, M3 senza la guardia dei
 > disabilitati) e `front check`, che passa allo slot. Il coordinatore (15:41): le prove fatte bastano per il checkpoint,
 > il resto lo copre lo slot.
+
+> ✅ **Committato** dal coordinatore: `4b59cfe53` (15:4x); base merge con la punta `e9b4ac6b0` (IW): **`4a3f5cf3f`**, senza
+> conflitti, gate sull'albero unito 119/119.
+
+### I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 15:41 e 15:4x): IW è entrato (`e9b4ac6b0`); solo lo `<style>` con `dialogs.css`, prove leggere
+> minime sotto `nice`, poi checkpoint e slot. FE8b della 1.3 aspetta il mio ingresso (sposta
+> `components/transactions/**`): il mio lotto è il collo di bottiglia.
+
+> ✅ **1 · Sui ruoli** (`files/T-r2/ct_transform4.py`): 18 regole `.dark` tolte, 31 letture sui ruoli, l'import di
+> `dialogs.css` tolto, i 49 token `--lf-cmp-broker-mismatch-*` cancellati (con l'intestazione dell'area). Ogni token ha
+> un ruolo esatto: bordi `border-subtle`; titolo e nomi `text-primary`; contatore ed etichette `text-muted`; messaggio
+> `text-secondary`; il riquadro del motivo su `warning-soft`, la sua barra a sinistra `warning` (una striscia d'accento
+> sulla sua tinta: lo stato sulla propria tinta è nel gate), l'etichetta `warning-on-soft` (lo stesso valore di prima), il
+> testo `text-primary`; le parti `surface-panel`, quella di partenza su `danger-soft` con `danger-line`; il bersaglio
+> scelto `checked` (bordo e anello) su `selected` (dentro nessun muted, quindi la regola 5 non serve); i chip del plugin
+> `danger-soft`/`danger-on-soft` e `success-soft`/`success-on-soft` (gli stessi valori di prima); i pulsanti
+> `surface-panel`/`surface-neutral` col testo secondary, `action` con `on-action`, il contorno di pericolo
+> `danger-line`/`danger`, al passaggio `danger-soft`.
+
+> ✅ **2 · Prove leggere minime** (carico 137, sotto `nice`): Prettier verde (`dialogs.css` riformattato: la riga vuota
+> prima della graffa); `--check` pulito; il gate dei token di componente, quello dei ruoli e
+> `ImportBrokerMismatchModal.test.ts` **115/115**. Il resto nello slot (`tx-import-broker-mismatch` in testa).
