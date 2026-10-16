@@ -15,12 +15,13 @@
     import type {AllocationHistoryDimensions, PortfolioSummary} from '$lib/stores/portfolio/portfolioStore.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
-    import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
+    import AllocationHistoryChart from '$lib/features/dashboard/AllocationHistoryChart.svelte';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
     type AllocationTab = 'type' | 'sector' | 'geo';
     type AllocationView = 'now' | 'history';
-    type AllocEntry = {name: string; value: number; amount: number; emoji?: string | null};
+    type AllocEntry = {name: string; value: number; amount: number};
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -62,8 +63,14 @@
         return (items as any[]).flatMap((i) => {
             const v = parseFloat(i?.value ?? '0');
             if (v <= 0) return [];
-            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), emoji: i?.emoji ?? null}];
+            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0')}];
         });
+    }
+
+    /** The cash the backend reports in a list when it is below zero: an overdraft the pie cannot draw (decision 49). */
+    function negativeCash(items: any[] | null | undefined): number | null {
+        const amount = parseFloat((items ?? []).find((i) => i?.name === 'Liquidity')?.amount ?? '');
+        return Number.isFinite(amount) && amount < 0 ? amount : null;
     }
 
     async function loadAllocationHistory(dimension: AllocationTab) {
@@ -91,6 +98,8 @@
     const allocationByType = $derived(toAllocEntries(summary?.allocation_by_type as any));
     const allocationBySector = $derived(toAllocEntries(summary?.allocation_by_sector as any));
     const allocationByGeo = $derived(toAllocEntries(summary?.allocation_by_geography as any));
+    // Type and sector carry the cash; geography never does. The history chart draws it below zero by itself.
+    const shownNegativeCash = $derived(allocationView !== 'now' ? null : allocationTab === 'type' ? negativeCash(summary?.allocation_by_type as any) : allocationTab === 'sector' ? negativeCash(summary?.allocation_by_sector as any) : null);
     const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
     const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
     const allocationHistoryData = $derived.by(() => {
@@ -162,4 +171,9 @@
             {/if}
         {/if}
     </div>
+    {#if shownNegativeCash !== null}
+        <p class="text-xs text-lf-muted text-center" data-testid="allocation-negative-cash-note">
+            {$_('dashboard.allocationNegativeCash', {values: {amount: formatCurrencyAmountPlain(shownNegativeCash, displayCurrency)}})}
+        </p>
+    {/if}
 </div>

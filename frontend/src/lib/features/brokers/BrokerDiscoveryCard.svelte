@@ -2,7 +2,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {Share2} from 'lucide-svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 

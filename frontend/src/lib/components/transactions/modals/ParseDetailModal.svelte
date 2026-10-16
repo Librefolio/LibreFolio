@@ -9,7 +9,7 @@
     import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info, Eye, Download} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
     import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';

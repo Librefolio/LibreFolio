@@ -86,7 +86,7 @@
  * imported after asserting the generated file exists, so a missing client is reported with the command
  * that fixes it — never skipped.
  *
- * @module components/dashboard/AllocationHistoryChart.test
+ * @module features/dashboard/AllocationHistoryChart.test
  */
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';

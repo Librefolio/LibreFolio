@@ -55,7 +55,7 @@ Final round of Phase 7 Part 4. Introduces `createEntityStore<T>()` factory patte
 | DataTable | `frontend/src/lib/components/table/DataTable.svelte` |
 | DataTable filter | `frontend/src/lib/components/table/DataTableColumnFilter.svelte` |
 | Asset modal | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| Broker modal | `frontend/src/lib/components/brokers/BrokerModal.svelte` |
+| Broker modal | `frontend/src/lib/features/brokers/BrokerModal.svelte` |
 | Assets page | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Brokers page | `frontend/src/routes/(app)/brokers/+page.svelte` |
 | Files page | `frontend/src/routes/(app)/files/+page.svelte` |

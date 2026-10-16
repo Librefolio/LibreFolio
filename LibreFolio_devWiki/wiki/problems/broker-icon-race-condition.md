@@ -92,10 +92,10 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 | Role | Path |
 |------|------|
 | brokerHelpers | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
-| FilesTable | `frontend/src/lib/components/files/FilesTable.svelte` |
+| FilesTable | `frontend/src/lib/features/files/FilesTable.svelte` |
 | files page (missing call) | `frontend/src/routes/(app)/files/+page.svelte` |
 | transactions page (race) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | dashboard page (race) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | The shared reactive icon chain (Form B fix) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The store that starts the plugin-icon cache; `ensureBrokerIconFieldsLoaded` | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| C-56, latent: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| C-56, latent: the chain reads only the props | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |

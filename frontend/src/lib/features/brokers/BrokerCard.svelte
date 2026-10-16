@@ -8,7 +8,7 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import {Crown, ExternalLink, Eye, Pencil, Share2, Trash2, Wallet} from 'lucide-svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';

@@ -147,6 +147,7 @@
     "unrealizedAssetEffect": "Actifs en {currency}",
     "unrealizedFxEffect": "Taux {from} → {to}",
     "unrealizedUnsplit": "{currency}, non décomposé",
-    "fxOnCash": "Effet de change sur les liquidités"
+    "fxOnCash": "Effet de change sur les liquidités",
+    "allocationNegativeCash": "Liquidités négatives : {amount}"
   }
 }

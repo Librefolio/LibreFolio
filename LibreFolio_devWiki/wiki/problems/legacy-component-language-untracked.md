@@ -60,7 +60,7 @@ The trap had already bitten twice, three weeks before plan 42:
 
 | Role | Path |
 |------|------|
-| The card | `frontend/src/lib/components/brokers/BrokerCard.svelte` |
-| The sharing panel | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` |
+| The card | `frontend/src/lib/features/brokers/BrokerCard.svelte` |
+| The sharing panel | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` |
 | `formatPercent` and its `locale` option | `frontend/src/lib/utils/core/formatPercent.ts` |
 | E2E | `frontend/e2e/brokers/brokers-detail.spec.ts` |

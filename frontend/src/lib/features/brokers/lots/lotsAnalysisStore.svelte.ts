@@ -10,12 +10,12 @@
  * asks again. A failure rejects and leaves the previous answer where it was; a session change
  * forgets everything.
  *
- * @module stores/portfolio/lotsAnalysisStore
+ * @module features/brokers/lots/lotsAnalysisStore
  */
 
 import {zodiosApi} from '$lib/api';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
-import {registerPortfolioMutationListener} from './portfolioMutation';
+import {registerPortfolioMutationListener} from '../../../stores/portfolio/portfolioMutation';
 
 type LotsAnalysisEndpoint = typeof zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post;
 export type LotsAnalysisRequest = Parameters<LotsAnalysisEndpoint>[0];
