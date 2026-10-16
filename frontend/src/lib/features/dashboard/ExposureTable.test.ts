@@ -51,7 +51,7 @@ vi.stubGlobal('localStorage', {
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
-import {locale, waitLocale} from 'svelte-i18n';
+import {_, locale, waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -86,7 +86,7 @@ interface YieldOnCostProvenance {
 interface YieldOnCostResult {
     status: 'available' | 'no_income' | 'unavailable';
     value: string | null;
-    reason: 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac' | null;
+    reason: 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac' | 'negative_net_income' | null;
     provenance: YieldOnCostProvenance;
 }
 
@@ -371,6 +371,41 @@ describe('ExposureTable — Yield on Cost', () => {
         expect(unavailableLines[1]).toBe('The 🇯🇵 JPY → 🇪🇺 EUR exchange rate required for the calculation is missing on Jun 20, 2026.');
         expect(unavailableLines[1]).toContain('🇯🇵 JPY → 🇪🇺 EUR');
         expect(unavailableLines[1]).toContain('Jun 20, 2026');
+    });
+
+    it('names corrections exceeding the year income as the unavailable reason (MF-O2)', async () => {
+        // Labels resolved through i18n as the cell resolves them, never as literal text.
+        const titleKey = 'dashboard.yieldOnCostUnavailable';
+        const reasonKey = 'dashboard.yieldOnCostReasons.negativeNetIncome';
+        const title = get(_)(titleKey);
+        const reason = get(_)(reasonKey);
+        // Controls: the catalogue carries both keys (a missing key renders as itself), and the
+        // reason is not the generic text the cell falls back to for a reason it does not know.
+        expect(title, `control: the catalogue carries ${titleKey}`).not.toBe(titleKey);
+        expect(reason, `control: the catalogue carries ${reasonKey}`).not.toBe(reasonKey);
+        expect(reason, 'control: the reason differs from the generic unavailable text').not.toBe(title);
+
+        const yieldOnCost: YieldOnCostResult = {
+            status: 'unavailable',
+            value: null,
+            reason: 'negative_net_income',
+            provenance: baseProvenance({
+                gross_income_transaction_count: 2,
+                gross_income_per_unit: {code: 'EUR', amount: '-2'},
+            }),
+        };
+        render(ExposureTable, {holdings: [holding(11, 1, {yieldOnCost})], navAmount: 1000, displayCurrency: 'EUR'});
+        await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
+
+        const row = within(rowEl(11, 1));
+        expect(row.getByTestId('yield-on-cost-unavailable')).toHaveTextContent('-');
+        expect(row.queryByTestId('yield-on-cost-value')).not.toBeInTheDocument();
+        const info = row.getByTestId('yield-on-cost-info');
+        expect(info.getAttribute('aria-label')).toBe(`${title}\n${reason}`);
+
+        const lines = await tooltipLines(info);
+        expect(lines).toHaveLength(2);
+        expect(lines[1]).toBe(reason);
     });
 
     it('deduplicates YOC FX tuples and caps distinct conversion lines with neutral overflow', async () => {

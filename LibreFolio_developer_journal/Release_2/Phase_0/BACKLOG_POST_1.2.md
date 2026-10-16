@@ -4862,5 +4862,55 @@ Workstream nato il 16/10 (decisione del developer su P21). Piano:
 punto di partenza, l'audit dello stesso giorno:
 [`Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md`](../Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md).
 
-- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Le voci per lotto le
-  scrive MF dopo la sua analisi.
+- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
+  scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
+  la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
+- **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
+  grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
+  sezione «MF-A».
+- **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
+- **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
+  `nav_weight_percent`; T-U7, W1–W5) — piccolo-medio, numeri nei casi limite; audit 16/10, Y. Decisione D-MF7.
+  Dettagli: piano MF, sezione «MF-C».
+- **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
+  senza guardia sullo zero) — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-D».
+- **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
+  aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
+- **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
+  16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
+- **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
+  audit 16/10. Dettagli: piano MF, sezione «MF-G».
+- **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
+  D-MF2. Dettagli: piano MF, sezione «MF-H».
+- **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
+  piano MF, sezione «MF-I».
+- **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
+  (J1), piccolo-medio (J2, numeri); audit 16/10. Decisione D-MF4. Dettagli: piano MF, sezione «MF-J».
+- **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
+  netti) — piccolo-medio, numeri; audit 16/10, riverifica MF (`portfolio_service.py:882`). Decisione D-MF5. Dettagli:
+  piano MF, sezione «MF-K».
+- **MF-L · `BRSummary.holdings`: togliere o valutare col motore** — piccolo/medio, API; audit 16/10. Decisione D-MF1,
+  file di W. Dettagli: piano MF, sezione «MF-L».
+- **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
+  «MF-M».
+- **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
+  16/10. Dettagli: piano MF, sezione «MF-N».
+- **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
+  sezione «MF-O».
+- **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
+  consumo è di Y) — medio; audit 16/10, Y12a. Decisione D-MF6. Dettagli: piano MF, sezione «MF-P».
+- **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
+  robustezza; test-author di MF, 16/10 (letto nel codice, non provato). Il reddito per unità somma i redditi col segno
+  (`yield_on_cost.py`, `_calculate_income_position`): se nei 365 giorni le correzioni negative superano i dividendi, il
+  risultato `AVAILABLE` ha un valore negativo che il validatore di `YieldOnCostResult` rifiuta
+  (`schemas/portfolio.py:335-340`), con un errore invece di «—». Cura proposta: `UNAVAILABLE` con un motivo nuovo
+  (`negative_net_income`) nello schema di J, poi `api sync` e l'etichetta nei 4 cataloghi; rosso prima. Dettagli: piano
+  MF, sezione «MF-F1».
+- **MF-K3 · La card e la linea del TWRR e del ROI semplice in due casi limite** — basso, numeri (proposta, da decidere);
+  test-author di MF, 16/10 (K2). (1) Come l'MWRR prima di D-MF5: la card calcola il TWRR solo con NAV > 0
+  (`portfolio_service.py`, `get_summary`), la linea (`calculate_twrr_series`) no: col portafoglio svuotato la card dice
+  «—» e la linea resta piatta a −50 %. (2) Come l'MWRR prima di N54: il ROI semplice della card
+  (`period_net_invested = Σ −flussi`) e la sua linea (`calculate_simple_roi_series`) vedono 0 di capitale quando
+  l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
+  anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
+  MF, sezione «Ondata 1b», K2.
