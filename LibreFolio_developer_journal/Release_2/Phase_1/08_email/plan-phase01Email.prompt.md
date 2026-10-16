@@ -2631,3 +2631,71 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >
 > **`check-links`** (14:14, `files/tools/e6_check_links.sh`): ✅ 97 link validi, tutti quelli che attraversano i confini.
 > Le prove del primo gruppo di E6 sono così complete.
+
+#### E6.8 — Il mini-lotto `SMTPUTF8`, per P18 di A ✅ (2026-10-16, 14:25–14:47)
+> Il primo gruppo di E6 è committato (14:2x): `75b8d5c9e` (correzione), `3480cbc53` (docs), `589c72cf7` (TODO e
+> devWiki) e `0e0c14868` (journal). La base è `0e0c14868`.
+>
+> **Perché serve** (la domanda di A, 13:2x): P18 rende l'email unica con l'indice su `lower(email)`, quindi i due test
+> «whatever the account» usano varianti non ASCII della stessa casella. Ma il finto SMTP non annuncia `SMTPUTF8`: con un
+> indirizzo non ASCII, `smtplib.send_message` si ferma lato client (`SMTPNotSupportedError`, cioè `SEND_FAILED`), e
+> niente arriva al finto.
+>
+> **Il lavoro**:
+> - **Il finto e i test** li scrive il `test-author`, in sottofondo, in `fixtures/email/fake_smtp.py` e
+>   `test_email_delivery.py`:
+>   - l'opzione `smtputf8=True`, con cui l'EHLO annuncia `SMTPUTF8` e `8BITMIME`;
+>   - il campo `ReceivedMessage.mail_options`, con i parametri dopo `MAIL FROM:<…>`;
+>   - tre o quattro EMD nuovi: il non ASCII consegnato con `SMTPUTF8`, il non ASCII senza `SMTPUTF8` che dà
+>     `SEND_FAILED`, l'ASCII senza parametri (la prova che gli altri test non cambiano), più il controllo del finto.
+> - **Docs**: in `admin/email.en.md`, la riga `SEND_FAILED` dice che un indirizzo con lettere non ASCII prima della `@`
+>   ha bisogno di un server con `SMTPUTF8`, e che il log nomina `SMTPNotSupportedError` (verificato:
+>   `smtp._server_words`, senza l'indirizzo). Le docs per sviluppatori (il finto, gli ID EMD) dopo il rapporto del
+>   `test-author`.
+> - **La devWiki**: le quattro righe dello storico nelle pagine condivise, con il via del coordinatore (14:2x):
+>   - un punto in `domains/auth.md`, «Key decisions»;
+>   - `domains/email` nei `related:` di `decisions/link-tokens-in-the-url-fragment.md`;
+>   - una nota sotto «Impact» in `problems/generated-client-widens-nullable-scalar.md`, più `domains/email` nei
+>     `related:`;
+>   - la riga del piano 08 in `raw/ingest-registry.md`, a `0e0c14868`.
+>
+> **Le prove**, poi: `services email-delivery`, e ogni suite che usa il finto, perché l'EHLO cambia per tutte:
+> `services email-flows`, `services email-verification`, `api email`, `api email-verification`,
+> `api email-verification-hooks`, `api email-change-notice`.
+>
+> **Il rapporto del `test-author`** (14:3x):
+> - **Il finto** (`fake_smtp.py`):
+>   - l'opzione `smtputf8: bool = True`: l'EHLO annuncia `8BITMIME` e `SMTPUTF8` prima di `STARTTLS`;
+>   - `ReceivedMessage.mail_options`, con i parametri dopo `MAIL FROM:<…>` nell'ordine ricevuto, nessuno rifiutato;
+>   - `_reverse_path` restituisce `(indirizzo, parametri)`;
+>   - la docstring: un indirizzo internazionale si legge da `rcpt_tos` o da `data`, non dal `message` analizzato, il
+>     cui parser trasforma quei byte in escape.
+> - **I test nuovi** (`test_email_delivery.py`):
+>   - EMD-046: il non ASCII viene consegnato con `SMTPUTF8 BODY=8BITMIME`, con il `To` in UTF-8 dentro `data`;
+>   - EMD-047: senza `SMTPUTF8` è `SEND_FAILED`, `detail` nomina `SMTPNotSupportedError`, una connessione e nessun
+>     messaggio;
+>   - EMD-048: l'ASCII parte con `mail_options == ()`, dopo un controllo che i parametri esistono;
+>   - EMD-049: l'EHLO del finto, con l'opzione e senza.
+>
+> **Le docs per sviluppatori** (`developer/backend/email.md`):
+> - il paragrafo del finto: `8BITMIME` e `SMTPUTF8`, `mail_options`, e come leggere un indirizzo internazionale;
+> - la riga `SEND_FAILED` della tabella dei codici;
+> - la tabella «Testing»: EMD-001…049.
+>
+> **Prove** (`files/tools/e6s_checks.sh` ed `e6s_docs.sh`, carico sotto 50):
+>
+> | Prova | Esito |
+> |---|---|
+> | `ruff` e `black` sui due file | puliti ✅ |
+> | `services email-delivery` | 108 ✅, nessuno saltato |
+> | `services email-flows` | 156 ✅, invariato |
+> | `services email-verification` | 124 ✅ |
+> | `api email` | 158 ✅, invariato |
+> | `api email-verification` | 49 ✅ |
+> | `api email-verification-hooks` | 16 ✅ |
+> | `api email-change-notice` | 13 ✅, invariato |
+> | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
+> | `check-links` | 97 ✅ |
+> | `check_source_paths.py` (devWiki) | 5 mancanti, gli stessi di prima; nessuno nuovo ✅ |
+>
+> Il finto cambia per tutte le sette suite che lo usano: verdi tutte e sette.
