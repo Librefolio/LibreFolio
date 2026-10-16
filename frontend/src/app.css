@@ -251,11 +251,6 @@ html.dark .text-libre-green {
     color: #39af50 !important; /* Lighter green for dark mode */
 }
 
-/* Dark mode: Cards and modals */
-html.dark .bg-white\/90 {
-    background-color: rgba(30, 41, 59, 0.95) !important;
-}
-
 /* Dark mode: Rounded containers */
 html.dark .rounded-xl:where(:not([class*='-lf-'])),
 html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
