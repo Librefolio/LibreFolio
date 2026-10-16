@@ -1486,3 +1486,220 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 >
 > Nessun codice dell'applicazione, nessun file di A; `fix-openapi-discriminators.mjs` non è toccato. Le prove della
 > diagnosi stanno in `/tmp/libreFolio_e5_bt/`, con una copia nella cartella della sessione (`files/e5_bt/`).
+>
+> **Ingresso** (2026-10-16): E-5 è salvato in `43ad48952` e `fc418255b`, e la base è fusa in `c47d02a28` (con B2 e
+> Y4b).
+> - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_after_b2.log`). 4 478 punti, nessuno segnalato.
+> - I latenti passano da 49 a 52, con tre schemi nuovi di B2: `RestoreUpload`, `RestoreStageReport` e `RestoreStage`
+>   (`schemas/backup.py`). Hanno docstring su più righe con doppi backtick, la forma di E2b. Oggi si raggiungono solo
+>   come membri di unione e come risposte; un campo tipizzato direttamente con uno di loro romperebbe il client. Li ho
+>   segnalati al coordinatore, che decide se girarli a B.
+
+### E5b — gli agganci della verifica nei file di A (2026-10-16)
+
+Via del coordinatore (02:58): A6d e A6e sono in `dev_release2`; prima chiudere E-5, poi E5b sulla base nuova. Per le
+E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/libreFolio_e5b/README.md` (E5.3).
+
+#### E5b.0 — Base e patch ✅ (2026-10-16)
+> Base: HEAD `c47d02a28`, cioè E-5 più la fusione di `dev_release2` (`16cff5610`, con A6d, A6e, B2 e Y4b).
+>
+> Il controllo (`git apply --check`):
+> - le patch sui file di A (`e5b_hooks_A6d.patch`, poi `e5b_users_flag_optional.patch`) passano, con spostamenti di
+>   1–3 righe;
+> - `e5b_mine.patch` passa da sola. `e5b_mine_optional.patch` da sola no, perché il suo contesto è `holds_place`, che
+>   aggiunge la prima: `git apply --check` con due patch sullo stesso file non le concatena.
+>
+> Applicate in quattro invocazioni separate, solo nel worktree e mai nell'indice: le mie due, poi le due di A. Nessun
+> file `.rej` né `.orig`. Il risultato: 21 file di codice; `verification.py` riceve `holds_place` e `place_holders`.
+>
+> La revisione contro A6e: da `ce4acff6c`, dove le patch erano state preparate, A6e ha cambiato solo `update_profile`,
+> in tre file su 19 (`api/v1/auth.py`, `schemas/auth.py`, `user_service.py`). Lì aggiunge la password attuale per
+> cambiare l'email, `email_verified_at = None` e la fine delle altre sessioni. Nessun aggancio di E5b tocca
+> `update_profile`, e quelli che stanno negli stessi file (login, `register`, `update_user_status`, `set_user_active`)
+> convivono senza intrecci.
+> - Ogni funzione che gli agganci chiamano esiste in `verification.py`: `awaiting_verification`, `holds_place`,
+>   `place_holders`, `registration_email_work` (più quelle importate pigramente).
+> - `ruff check` e `black --check` (`--config pyproject.toml`) sono puliti sui 12 file Python; `prettier --check` è
+>   pulito sugli 8 file del frontend.
+
+#### E5b.1 — i18n e client ✅ (2026-10-16)
+> `e5b_i18n.py` aggiunge `email.verification.{registered, signUpUnavailable, settingNeedsEmail, settingUnavailable}`
+> nelle 4 lingue del mio catalogo. Prima di lanciarlo ho verificato due cose:
+> - la riscrittura con `indent=2` dà un file identico a quello di oggi, quindi il formato non cambia;
+> - «Settings › Email» corrisponde alle etichette vere nelle 4 lingue (Impostazioni/Paramètres/Configuración ›
+>   Email/E-mail/Correo).
+>
+> `dev.py i18n build`: 4 705 chiavi × 4 lingue. `i18n check` passa, in modalità stretta. `dev.py api sync` passa: il
+> client rigenerato contiene `verification_required` e `holds_place` e si legge con 0 errori di sintassi e 0 template
+> taggati (`ts_scan.cjs` di E-5).
+
+#### E5b.2 — I test al loro posto ✅ (2026-10-16)
+> Gli 8 file del pacchetto sono copiati nei loro percorsi (prima nessuno esisteva) e registrati come dice
+> `tests/REGISTRATION.md`, in modo additivo:
+> - `_backend_api.py`: `api email-verification-hooks`, pura;
+> - `_backend_services.py`: `services email-verification-hooks`, pura;
+> - `_frontend_utility.py`: 2 file in core-unit e 4 in component-unit.
+>
+> La prima esecuzione:
+> - `services email-verification-hooks`: 25 passati, 2 falliti;
+> - `--no-shared-server api email-verification-hooks`: 6 passati, 8 falliti;
+> - Vitest dei 6 file più `auth.test.ts`: 114 passati, 2 falliti (UVR-02).
+>
+> **⚠️ Fuori pista**:
+> - I 10 rossi del backend hanno una causa sola, `INVITE_REQUIRED`. Dal commit di A `683b4ff5b` («new instances
+>   register by invitation», già dentro A6d) un'istanza nuova parte con `registration_mode = invite`, mentre i test
+>   preparati di notte, mai eseguiti, contavano su `open`. La cura è nei test: impostare `open` nei loro DB privati,
+>   senza `LIBREFOLIO_REGISTRATION`, che bloccherebbe la modalità.
+> - UVR-02: in jsdom `fireEvent.click` arriva anche a un bottone disabilitato, e il gestore delegato di Svelte 5 parte;
+>   un browser non manda click a un controllo disabilitato. Lo stile di casa è `toBeDisabled()` senza click.
+>
+> Correzioni e il caso EVH in più (la risposta del `PATCH` dice `holds_place: true`): `test-author`.
+>
+> **Note implementazione**: correzioni del `test-author`, solo nei file di test.
+> - L'helper `_registration_open(engine)`, fatto come `_option`, aggiorna la riga `registration_mode` a `open` e
+>   verifica che una riga sia cambiata.
+>   - Nei servizi lo usano EVK-002, nel caso senza invito, ed EVK-003.
+>   - Nelle API: EVH-001, i due casi senza invito di EVH-004, EVH-005 e `_registered_and_waiting`, quindi
+>     EVH-006/007/008/011.
+>   - Restano sul default `invite` EVH-002 (il primo account entra con ogni modalità), EVH-003 (con l'invito) ed
+>     EVH-009/010 (nessuna registrazione).
+> - UVR-02 non clicca più il bottone disabilitato e tiene `toBeDisabled()`, `data-disabled-reason="limit"` e il testo.
+>   La convenzione di A, scritta in `SettingControls.test.ts`, è cliccare un bottone disabilitato solo quando il
+>   componente ha una guardia nel gestore; `UserRow` non ne ha su nessun bottone.
+> - Nuovo **EVH-012**: la risposta del `PATCH` no-op (`is_active: false`) e quella della promozione di un account in
+>   attesa dicono `holds_place: true` (`is_active` resta false, il link è ancora valido), e lo stesso dice
+>   `GET /users`. Con il link scaduto, la stessa risposta dice `false`: il flag è calcolato.
+> - La descrizione di `api email-verification-hooks` nel runner ora cita il flag nella risposta del `PATCH`.
+>
+> Le esecuzioni, una alla volta:
+> - `services email-verification-hooks`: 27 passati (`/tmp/libreFolio_e5b_svc_hooks_2.log`);
+> - `--no-shared-server api email-verification-hooks`: 15 passati (`/tmp/libreFolio_e5b_api_hooks_2.log`);
+> - Vitest dei 6 file più `auth.test.ts`: 7 file, 116 passati (`/tmp/libreFolio_e5b_vitest_2.log`);
+> - `ruff`, `black` e `prettier` puliti.
+>
+> Il commento rimasto indietro in `SettingControls.test.ts:239`, punto 3 del README del pacchetto, ora dice che
+> `require_email_verification` era un segnaposto fino a E5b.
+
+#### E5b.3 — Documentazione ✅ (2026-10-16; l'esito sotto, in «E5b.3, seguito»)
+> `docs-writer` applica le sue bozze E5b (`/tmp/libreFolio_e5b/docs/`):
+> - `admin/email.en.md`, la sezione «Email Verification»;
+> - `admin/users.en.md`, modifiche 1–3;
+> - le pagine developer, le modifiche E5b;
+> - la riga EN di `admin/settings.en.md` (IT/FR/ES li allineo io, poi `translate-stamp`);
+> - `user/getting-started.en.md`, modifiche 1–3, solo EN (debito di traduzione).
+>
+> `extra_pages.md` aspetta il via del coordinatore (pagine tradotte di altri).
+>
+> **Decisione notturna, da rivedere: la riga di `admin/settings`.** Le pagine IT, FR ed ES erano già indietro prima di
+> E5b: hanno ancora la riga «Abilita registrazione», che A ha cambiato in inglese. All'HEAD l'MD5 della pagina inglese
+> (`ba4a8f…`) non è quello della cache (`07bbf1…`, ultima traduzione il 10/10).
+> - Allineo a mano solo la mia riga (IT «Richiedi verifica email», FR «Vérification Email Requise», ES «Verificación
+>   Email Requerida»), così chi legge in quelle lingue non trova più «in arrivo».
+> - **Nessun `translate-stamp`**: segnerebbe come tradotto anche il debito di A. La pagina resta alla pipeline.
+> - Il link resta di pagina, `email.md`, perché `admin/email` è solo in inglese; il testo del link segue la `nav`
+>   (Email, E-mail, Correo).
+
+#### E5b.4 — CHANGELOG ✅ scritto (2026-10-16)
+> Il coordinatore aveva rimandato la riga di E5a a E5b. Ora c'è:
+> - in «✨ Added», «**Email verification at sign-up**», con il comportamento e le rotte;
+> - in «🔄 Changed», `LIBREFOLIO_MAX_USERS` che conta gli account in attesa con il link vivo, la riattivazione
+>   senza un posto nuovo e la revoca del link quando un account si attiva o con `user deactivate`.
+
+#### E5b.5 — Prove ✅ sulla base `c47d02a28` (2026-10-16, notte), E2E escluse
+> Una alla volta, `nice -n 10`, carico sotto 70; gli script sono `/tmp/libreFolio_e5b_gates.sh` e `gates2.sh`.
+>
+> Backend, primo giro:
+>
+> | Selettore | Esito |
+> |---|---|
+> | `services registration` | 147 ✅ |
+> | `services email-verification` | 115 ✅ |
+> | `services settings` | 23 ✅ |
+> | `services global-settings` | 19 ✅ |
+> | `services user-profile` | 42 ✅ |
+> | `services account-tokens` | 65 ✅ |
+> | `api auth` | 58 ✅, 2 ❌ |
+> | `api registration` | 77 ✅ (un avviso: `HTTP_422_UNPROCESSABLE_ENTITY`, già nel backlog come E-4) |
+> | `api users-admin` | 59 ✅, 5 ❌ |
+> | `api settings` | 98 ✅ |
+> | `api email-verification` | 48 ✅ |
+> | `utils dev-cli-image` | 75 ✅ (il dev.py dell'immagine carica `user_cli` con l'import nuovo) |
+>
+> **⚠️ Fuori pista**, due test di A da adattare alla firma e al contratto nuovi di E5b (`test-author`, solo modifica):
+> - `test_auth_api.py`: `test_register_disabled_allows_bootstrap_when_no_users` e LOOP-002 chiamano la rotta
+>   `register` direttamente, con argomenti posizionali `(request, session)`. L'aggancio aggiunge
+>   `background: BackgroundTasks` in seconda posizione, così `session` restava al `Depends` di default. Ora passano
+>   `background=BackgroundTasks()` e `session=session` per nome, come fa FastAPI. Con l'opzione spenta nessun lavoro
+>   viene accodato, quindi il senso dei test non cambia.
+> - `test_users_admin_api.py`: `USER_ITEM_KEYS` fissava i 7 campi esatti di un account. Con `holds_place` sono 8, e
+>   `_user_item_violations` ora pretende `holds_place: False` per ogni account del file, quindi il contratto resta
+>   stretto. Ho corretto anche la docstring di UADM-052, da «seven fields» a «eight».
+>
+> Rilanciati dopo le correzioni: `api auth` 60 ✅, `api users-admin` 64 ✅.
+>
+> Frontend e documentazione (`/tmp/libreFolio_e5b_gates2.sh`):
+>
+> | Prova | Esito |
+> |---|---|
+> | `dev.py front check` | 1 errore ❌, poi 0/0 ✅ |
+> | `front-utility core-unit` | 173 file, 5 926 ✅ |
+> | `front-utility component-unit` | 150 file, 3 882 ✅ |
+> | `theme-roles.mjs --check` | pulito ✅ |
+> | `check-orphans` | ✅ |
+> | `mkdocs build` stretto | uscita 0, nessun WARNING o ERROR ✅ |
+> | `check-links` | 96 ✅ |
+>
+> **⚠️ Fuori pista**, un terzo test di A (`test-author`, solo modifica): in `LoginCard.test.ts:459`
+> `EMITTED: Record<AuthErrorKey, true>` elenca ogni chiave che lo store emette e la disegna nel riquadro `login-error`.
+> - E5b aggiunge `email.verification.loginRequired` ad `AuthErrorKey`, ma per quella chiave `LoginCard` mostra
+>   `VerificationNotice` al posto del riquadro.
+> - Aggiungerla al record avrebbe spostato il rosso dal type check all'esecuzione. Il record è ora tipato
+>   `Record<Exclude<AuthErrorKey, 'email.verification.loginRequired'>, true>`, con il perché nel commento: la chiave è
+>   coperta da LVR in `LoginCard.verification.test.ts`.
+> - Il controllo resta esaustivo per le chiavi del riquadro.
+>
+> Rilanciati: `front check` 0 errori e 0 avvisi; Vitest di `LoginCard.test.ts` e `LoginCard.verification.test.ts`,
+> 2 file, 39 ✅.
+>
+> Lint finale sul delta intero: `git diff --check` pulito; `ruff` e `black` puliti sui 19 file Python; `prettier`
+> pulito sul frontend. La porta 6188 è libera.
+>
+> Non ancora fatti: le E2E (serve lo slot dal coordinatore) e la revisione di sicurezza mirata (in E6).
+
+#### E5b.3, seguito — Documentazione applicata ✅ (2026-10-16)
+> `docs-writer` ha applicato tutte le sue bozze E5b; le modifiche E4b ed `extra_pages.md` restano fuori.
+>
+> Le pagine:
+> - `admin/email.en.md`: la sezione «✅ Email Verification», con `#verification`, `#verification-switch`,
+>   `#verification-waiting` e `#verification-limits`;
+> - `admin/users.en.md`: `#waiting`;
+> - `admin/settings.en.md`, la riga;
+> - `user/getting-started.en.md`: `#verify-email`, solo EN;
+> - `developer/backend/email.md`;
+> - le pagine developer `architecture/settings`, `security`, `database/users_access` e `access_control`;
+> - `frontend/components/features/auth` e `settings`.
+>
+> Nessuna ancora tolta.
+>
+> Le verifiche fatte da me sul codice: le email in attesa partono nella lingua dell'istanza, perché la riga
+> `UserSettings` nasce solo al primo aggiornamento; `user create` passa da `create_user`, quindi non aspetta mai; i
+> limiti sono 10 ogni 15 minuti per indirizzo, con IPv6 per /64, più 5 minuti e 3 all'ora per account. Ho portato
+> EVH-001…012 nella tabella «Testing».
+>
+> Lasciato aperto da `docs-writer`: la bozza E4b di `admin/email` va rifatta sul testo di A6e (il riquadro «Held for
+> now» e il punto di sicurezza sono stati riscritti).
+
+### Checkpoint E5b, intermedio 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
+> Avviso del coordinatore (03:45): A6c, con le regole della password, entra prima di E5b, verso le 04:30. Tocca
+> `api/v1/auth.py`, `schemas/auth.py` e `RegisterCard.svelte`, gli stessi file di tre agganci. Il checkpoint finale
+> arriva dopo il merge con A6c; questo intermedio serve perché il merge parta da un albero committato.
+>
+> **Base**: HEAD `c47d02a28`. Il delta: 48 file tracciati e 8 nuovi.
+> - Il codice degli agganci: 18 file di A (10 del backend, `user_cli.py` compreso, e 8 del frontend) più `verification.py`.
+> - I test: gli 8 file nuovi; tre test di A adattati (`test_auth_api.py`, `test_users_admin_api.py`,
+>   `LoginCard.test.ts`) più `test_settings_api.py` dalla patch; il commento di `SettingControls.test.ts`.
+> - La registrazione nei 3 file del runner.
+> - i18n × 4.
+> - Le docs: 11 pagine EN più la riga della pagina impostazioni in IT/FR/ES.
+> - Il CHANGELOG.
+> - Questo piano.
