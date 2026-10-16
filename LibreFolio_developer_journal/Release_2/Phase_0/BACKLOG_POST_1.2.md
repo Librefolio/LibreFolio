@@ -2786,15 +2786,22 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 - **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
   16/10 (W5-PAC, W5-charts).
-  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
-    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
-      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
-    - Serve un ruolo per la traccia (T) o una scelta della designer.
-  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
-    `DistributionDialog`:102.
+  - ✅ (16/10, W6-e) **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100
+    dark:bg-slate-700`): tutte e due su `bg-lf-neutral`, il ruolo delle tracce.
+    - Il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` passa da `bg-lf-neutral` (ΔE00 0 dalla traccia) a
+      `bg-lf-secondary`: il colore che l'obiettivo ha già nel risultato, 5,77/5,84:1 sulla traccia (coordinatore,
+      16/10).
+    - È una scelta provvisoria: il coordinatore la porta alla designer, nella raccolta al punto 27.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149 e `ResultCell`:79.
     - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
       scuro è spento sulla traccia.
     - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
+  - **La barra della distribuzione attuale** di `DistributionDialog` (la costante `FILL`, `bg-libre-green`): il peso
+    attuale di ogni asset posseduto, cioè un colore di dato, resta legacy (W6-e).
+    - In scuro è il verde fluo `#00d681`, quello che il developer ha rifiutato nel PAC (TD-1).
+    - Per TD-1 il «reale» prende il colore della categoria della riga, accanto al neutro «ideale»: qui la riga è un
+      asset, quindi sarebbe il colore del suo tipo (GR1). È un cambio di disegno: aspetta la stessa scelta delle barre
+      «dopo il piano».
   - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario). Restano 14 classi, cioè le 6 fasi e
     l'attesa in coda. Il separatore dei segmenti è sui ruoli dal 16/10 (`divide-lf-card` sul contenitore, G-18).
   - **La legenda di `RiskReturnLevel`** (W6-a), 4 classi: il punto «portafoglio» cielo e il rombo «benchmark» ambra
