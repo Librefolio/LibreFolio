@@ -52,6 +52,7 @@ backend/app/services/financial_math/
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the usable-ratio rule
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only

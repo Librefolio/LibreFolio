@@ -393,8 +393,8 @@ class PortfolioHolding(StrictModel):
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
     gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
-    allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
-    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
+    allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value of the holdings (excludes cash), rounded to 0.01; None when the holding has no value or that total is zero or negative")
+    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100, rounded to 0.01; None when the holding has no value or the NAV is zero or negative")
     oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at report end for this (asset, broker); None if fully closed")
     yield_on_cost: YieldOnCostResult = Field(
         description="Trailing-365-day gross recorded income per eligible unit divided by residual unit WAC.",
