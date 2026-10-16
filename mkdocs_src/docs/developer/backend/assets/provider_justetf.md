@@ -45,8 +45,8 @@ The provider supports 4 currencies via JustETF's chart API (`load_chart(isin, cu
 - Searches against a **cached ETF list** (`load_overview()` DataFrame).
 - Search is performed in-memory across: `name`, `ticker`, `wkn`, and ISIN (index).
 - Case-insensitive string matching using pandas vectorized operations.
-- **Multi-currency**: emits 4 results per ETF match (EUR/USD/CHF/GBP) with flag emojis.
-- Fund's native currency marked with 👑 (e.g., `"🇺🇸👑 iShares Core MSCI World"` for a USD-denominated fund).
+- **Multi-currency**: emits one result per ETF match in each of the 4 currencies (EUR/USD/CHF/GBP), with flag emojis; only in the user's `preferred_currency` when it is one of them. The setting is the user's own (`scope=user`, default `all`), read with `self.settings.get("preferred_currency")` in `search()` only, after the cached ETF list: prices and history never depend on it ([Plugin Settings](../../architecture/patterns/plugin_settings.md#shipped-plugins)).
+- Fund's native currency marked with 👑 (e.g., `"🇺🇸👑 iShares Core MSCI World"` for a USD-denominated fund); with a preferred currency, 👑 appears only on the funds denominated in it.
 - All results have `identifier_type: ISIN` and `type: "ETF"`.
 
 ### 📋 Metadata (`fetch_asset_metadata`)

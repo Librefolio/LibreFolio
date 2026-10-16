@@ -10,7 +10,7 @@ responsibility:
 | Module | Responsibility |
 |--------|----------------|
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
-| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors, and runs the call in a thread of its own (`_run_provider_in_thread`); `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
+| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
@@ -20,7 +20,7 @@ responsibility:
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
-| `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution. |
+| `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution; for each provider that did not answer, the reason the client needs ([Interactive Search Stack](#interactive-search)). |
 | `web_link_finder.py` | The last-resort web lookup of `search.py`: an external metasearch engine that turns a query into candidate provider-domain URLs (see [Asset Search & Link-Finder](search_link_finder.md)). |
 | `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, price-store, currency-change, event-store, query, and refresh operation mixins. |
 | `market_calendar.py` | Market holidays and the rule that tells a stored carry from a quote, shared by risk and by the signal price query (see [Market Calendar](../risk/architecture.md#market-calendar)). |
@@ -231,18 +231,34 @@ Operations (selectable per request):
 | `history` | Fetches the last 7 days of data → validates historical data availability |
 | `metadata` | Fetches asset metadata → validates identifier resolution |
 
-Each operation returns `success`, `execution_time_ms`, and operation-specific data. The frontend
+Each operation returns `success`, `execution_time_ms`, and operation-specific data. The response's
+`provider_url` is the plugin's `get_asset_url()`, withheld (`null`) when it shows one of the
+provider's secrets: `core.public_asset_url()` drops it and logs a warning naming the provider
+([Plugin Settings](../../architecture/patterns/plugin_settings.md#secrets)). The frontend
 runs `current_price` + `history` for the **Test Configuration** button in the provider assignment
 section, and automatically after a search result is picked; it counts `NO_DATA`,
-`NOT_IMPLEMENTED` and `RATE_LIMITED` as soft failures (a ⚠️ that still passes the test). For
-`RATE_LIMITED`, `resolveProviderError.ts` writes «Paused for too many requests until {time}»,
-`{time}` being the end of the pause in local time, rounded up to the minute: the time alone when the
-pause ends today (`providerErrors.RATE_LIMITED`), the date and time when it ends another day
-(`providerErrors.RATE_LIMITED_DAY`, a key of its own because Italian, French and Spanish need a
-different article before a date). With no known wait it writes «Too many requests: try again later»
-(`providerErrors.RATE_LIMITED_NO_TIME`). Each text, date included, must fit the 60 characters of the
-result's one-line summary: `summarizeProbeError()` (`providerProbe.ts`) cuts a longer one. Both
-files are in `frontend/src/lib/components/assets/`.
+`NOT_IMPLEMENTED` and `RATE_LIMITED` as soft failures (a ⚠️ that still passes the test).
+`resolveProviderError.ts` writes a failure in the user's language when `providerErrors.<CODE>`
+exists, and keeps the backend's English message otherwise. Among the codes it knows:
+
+- `NOT_CONFIGURED`, a required [plugin setting](../../architecture/patterns/plugin_settings.md#not-configured)
+  without a value, stays a failure (❌): *This provider must be configured before use*
+  (`providerErrors.NOT_CONFIGURED`). **Configure**, next to the provider select, opens the
+  provider's settings.
+- `PROVIDER_ERROR`, an error the boundary had to replace because it still showed a secret: *The
+  provider failed: {detail}* (`providerErrors.PROVIDER_ERROR`), `{detail}` being the masked
+  description the error carries in `error_details.detail` (`<type>: ***` when the call carried a
+  personal secret).
+- `RATE_LIMITED`: «Paused for too many requests until {time}», `{time}` being the end of the pause in
+  local time, rounded up to the minute: the time alone when the pause ends today
+  (`providerErrors.RATE_LIMITED`), the date and time when it ends another day
+  (`providerErrors.RATE_LIMITED_DAY`, a key of its own because Italian, French and Spanish need a
+  different article before a date). With no known wait it writes «Too many requests: try again
+  later» (`providerErrors.RATE_LIMITED_NO_TIME`).
+
+Each text, date included, must fit the 60 characters of the result's one-line summary:
+`summarizeProbeError()` (`providerProbe.ts`) cuts a longer one. Both files are in
+`frontend/src/lib/components/assets/`.
 
 The asset modal's **Ask Provider**, and the comparison that follows a search selection, run
 `metadata` alone and diff its `patch_data` against the form in the browser: nothing is written until
@@ -250,7 +266,7 @@ the asset is saved.
 
 ---
 
-## 🔎 Interactive Search Stack
+## 🔎 Interactive Search Stack {: #interactive-search }
 
 `GET /assets/provider/search` and `GET /assets/provider/search/stream` use a three-layer stack:
 
@@ -264,6 +280,22 @@ the asset is saved.
 The identifier post-filter keeps only resolved items whose identifier matches a known hint/query
 term when such a match exists. This is how a broad external result set is narrowed to an exact ISIN
 from a broker report.
+
+Both endpoints search for the signed-in user: each provider is a `configured_provider(code,
+user_id=…)`, so it receives that user's [personal settings](../../architecture/patterns/plugin_settings.md#scopes),
+such as justETF's preferred currency, and the query cache key carries their fingerprint. A provider
+that does not answer is reported with its reason:
+
+| Reason | Standard search (`FAProviderSearchResponse`) | Stream (`provider_error` event) |
+|---|---|---|
+| Not configured: a required setting has no value | In `providers_with_errors` and in `providers_not_configured`; logged at info level | `error_code: "NOT_CONFIGURED"`; logged at info level |
+| Paused after «too many requests» | In `providers_with_errors` | `error_code: "RATE_LIMITED"` and `retry_after`, the seconds before it may be called again |
+| Another `AssetSourceError` | In `providers_with_errors` | The provider's own `error_code`, such as `SEARCH_ERROR` |
+| Any other error | In `providers_with_errors` | No `error_code` |
+
+A provider without search (`supports_search` false) is left out of both, not reported. The search
+box shows a row with **Configure** for each provider not configured, whichever endpoint answered
+([The Interface](../../architecture/patterns/plugin_settings.md#interface)).
 
 !!! warning "Interactive only"
 
