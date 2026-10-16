@@ -218,7 +218,7 @@
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-min`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.min ?? ''}
                                         oninput={(event) => {
@@ -234,7 +234,7 @@
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-max`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.max ?? ''}
                                         oninput={(event) => {
