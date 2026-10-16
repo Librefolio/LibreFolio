@@ -15,12 +15,14 @@ off. The contract pinned here:
    the base is above 0. Pauses on, a max below the base is ``PROVIDER_COOLDOWN_MAX_INVALID`` on the max's variable; an
    invalid variable raises its own error. Every accessor reads the environment at each call.
 5. ``provider_cooldown.PROVIDER_COOLDOWNS``: a ``Cooldowns`` built with the defaults, read by every function at call
-   time; the key of a provider is ``(domain, provider, scope)``, and keys pause apart.
+   time; the key of a provider is ``(domain, provider, scope)``, and keys pause apart. A fresh ``Cooldowns`` put in its
+   place is therefore how a test starts clean — the module has no function that forgets the pauses (N58) —: every
+   function then works on that one alone, and the instance it replaced keeps its own.
 6. ``wait_before_call`` is ``check``; ``record_refusal`` is ``refused`` with the base and max of
    ``provider_cooldown_settings()`` read at each call and ``retry_after`` passed on; ``record_success`` is ``succeeded``;
-   ``record_no_verdict`` is ``released``; ``cooldown_snapshot`` is the snapshot; ``reset_provider_cooldowns`` clears.
-   So the answers of calls already in flight when a pause began — a burst of 429s, a late success — change nothing
-   (``Cooldowns``' rule for a running pause): refusals in a row are those of calls made after each pause ended.
+   ``record_no_verdict`` is ``released``; ``cooldown_snapshot`` is the snapshot. So the answers of calls already in
+   flight when a pause began — a burst of 429s, a late success — change nothing (``Cooldowns``' rule for a running
+   pause): refusals in a row are those of calls made after each pause ended.
 7. Pauses off (base 0): nothing is skipped — ``wait_before_call`` is always 0, even for a pause recorded before — and
    nothing is recorded — ``record_refusal`` returns 0 —; ``record_success`` and ``record_no_verdict`` do nothing.
 8. An invalid configuration never makes a function raise: they work on the defaults, 60 and 3600, and the fault is
@@ -66,7 +68,6 @@ from backend.app.services.platform.provider_cooldown import (
     record_no_verdict,
     record_refusal,
     record_success,
-    reset_provider_cooldowns,
     wait_before_call,
 )
 from backend.app.utils.runtime.cooldown import Cooldowns
@@ -454,17 +455,29 @@ def test_answers_of_calls_in_flight_when_a_pause_began_change_nothing(cooldowns:
     print_success("five 429s, one refusal; the late success ignored; then 120 s")
 
 
-def test_reset_provider_cooldowns_forgets_every_provider(cooldowns: Cooldowns) -> None:
-    """PCD-018 — contract 6: ``reset_provider_cooldowns`` empties the instance: no pause left anywhere."""
-    print_section("PCD-018: reset_provider_cooldowns")
+def test_a_fresh_instance_put_in_place_forgets_every_pause(monkeypatch: pytest.MonkeyPatch, cooldowns: Cooldowns, clock: FakeClock) -> None:
+    """PCD-018 — contract 5: the module has no function that forgets the pauses (N58): a test puts a fresh ``Cooldowns`` in place of ``PROVIDER_COOLDOWNS``, and every function reads that one. Pauses in both domains, with and without a scope, a second refusal in a row among them, are gone from every function's view — nothing to wait for, an empty snapshot, nothing for a success or an outcome without a verdict to find, and the next refusal the first in a row, 60 s, not the third, 240 s —; the instance replaced keeps them all."""
+    print_section("PCD-018: a fresh instance in place forgets every pause")
+    keys = [("asset", "yfinance", None), ("fx", "ECB", None), ("asset", "css_scraper", "example.com")]
+    for domain, provider, scope in keys:
+        assert record_refusal(domain, provider, scope=scope) == 60.0
+    clock.now = 1_060.0
+    assert _refusals(clock, "asset", "yfinance", 1) == [120.0]
+    before = cooldowns.snapshot()
+    assert {(state.key, state.refusals) for state in before} == {(keys[0], 2), (keys[1], 1), (keys[2], 1)}, "barrier: three pauses, a second refusal in a row among them"
 
-    record_refusal("asset", "yfinance")
-    record_refusal("fx", "ECB")
-    assert len(cooldowns) == 2
-    assert reset_provider_cooldowns() is None
-    assert (len(cooldowns), cooldown_snapshot()) == (0, ())
-    assert (wait_before_call("asset", "yfinance"), wait_before_call("fx", "ECB")) == (0.0, 0.0)
-    print_success("emptied")
+    fresh = Cooldowns(60, 3600, clock=clock, rng=lambda: 0.0)
+    monkeypatch.setattr(provider_cooldown, "PROVIDER_COOLDOWNS", fresh)
+
+    assert cooldown_snapshot() == ()
+    assert [wait_before_call(domain, provider, scope=scope) for domain, provider, scope in keys] == [0.0] * len(keys)
+    assert record_success("asset", "yfinance") is None
+    assert record_no_verdict("fx", "ECB") is None
+    assert len(fresh) == 0
+    assert record_refusal("asset", "yfinance") == 60.0
+    assert [state.key for state in fresh.snapshot()] == [keys[0]]
+    assert cooldowns.snapshot() == before
+    print_success("every pause gone from the functions' view; the replaced instance untouched")
 
 
 # =============================================================================
@@ -518,7 +531,6 @@ def test_an_invalid_configuration_never_raises_and_falls_back_to_the_defaults(mo
     assert record_no_verdict("asset", "yfinance") is None
     assert record_success("asset", "yfinance") is None
     assert cooldown_snapshot() == ()
-    assert reset_provider_cooldowns() is None
     print_success("no exception; 60 → 3600 as by default")
 
 
