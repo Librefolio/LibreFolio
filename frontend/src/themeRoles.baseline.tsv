@@ -156,7 +156,7 @@ lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	6
-routes/(app)/assets/+page.svelte	234
+routes/(app)/assets/+page.svelte	4
 routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/+page.svelte	38
 routes/(app)/brokers/[id]/+page.svelte	141
