@@ -137,7 +137,6 @@ routes/(app)/brokers/[id]/+page.svelte	141
 routes/(app)/dashboard/+page.svelte	77
 routes/(app)/fx/+page.svelte	4
 routes/(app)/fx/[pair]/+page.svelte	54
-routes/(app)/transactions/+page.svelte	2
 routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
