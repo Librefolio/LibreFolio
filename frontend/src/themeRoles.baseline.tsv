@@ -142,24 +142,11 @@ lib/features/risk/levels/l4/L4Replay.svelte	29
 lib/features/risk/levels/l4/L4Shock.svelte	25
 lib/features/risk/levels/l4/L4Simulation.svelte	45
 lib/features/risk/levels/l4/TornadoChart.svelte	4
-lib/features/settings/CachePanel.svelte	34
-lib/features/settings/PasswordChangeModal.svelte	31
-lib/features/settings/SchedulerConfigModal.svelte	112
-lib/features/settings/SchedulerLogModal.svelte	114
-lib/features/settings/SettingActions.svelte	15
-lib/features/settings/SettingBulkActions.svelte	15
-lib/features/settings/SettingCurrency.svelte	8
-lib/features/settings/SettingNumber.svelte	28
-lib/features/settings/SettingSelect.svelte	8
-lib/features/settings/SettingTheme.svelte	19
 lib/features/settings/SettingToggle.svelte	18
-lib/features/settings/SettingsLayout.svelte	61
-lib/features/settings/tabs/AboutTab.svelte	157	#ffffff
-lib/features/settings/tabs/GlobalSettingsTab.svelte	110
-lib/features/settings/tabs/ProfileTab.svelte	153
+lib/features/settings/tabs/AboutTab.svelte	21
+lib/features/settings/tabs/ProfileTab.svelte	1
 lib/features/support/DonationPopupModal.svelte	28	#ffffff
-lib/features/support/SocialShareModal.svelte	57
-lib/features/support/SupportActions.svelte	11
+lib/features/support/SocialShareModal.svelte	1
 lib/features/support/supportLinks.ts	14
 lib/features/tools/ToolAboutPanel.svelte	58
 lib/features/tools/ToolDiagnosticsPanel.svelte	78
@@ -172,8 +159,6 @@ lib/features/tools/pac-allocator/planner/result/ExposureMaps.svelte	4
 lib/features/tools/pac-allocator/planner/result/ResultCell.svelte	1
 lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	3
 lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	2
-lib/features/update-check/AskAdminModal.svelte	27
-lib/features/update-check/UpdateAvailableModal.svelte	25	#334155×2	#e2e8f0×2
 lib/stores/app/themeStore.ts	0	#1b4334×2
 lib/theme/toneClasses.ts	22
 lib/utils/assetTypes.ts	80
@@ -187,7 +172,6 @@ routes/(app)/brokers/[id]/+page.svelte	141
 routes/(app)/dashboard/+page.svelte	77
 routes/(app)/fx/+page.svelte	97
 routes/(app)/fx/[pair]/+page.svelte	169
-routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
