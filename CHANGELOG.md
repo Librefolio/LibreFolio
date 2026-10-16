@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+- **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
 
 #### 🎨 A new colour palette
 
