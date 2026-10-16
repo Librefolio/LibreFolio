@@ -5115,3 +5115,41 @@ nota su `backup_restore.en.md:33`.
 >   - **slot 2** (01:03–01:11, con la ricostruzione): `front-asset asset-modal` → **21/21**, i tre test di F21/P20
 >     compresi (19, 20, 21);
 >   - `git diff --check` pulito; porta 6183 libera.
+
+**X-R37 committato ed entrato** (coordinatore, 01:12): `c7434f00c` e `983612ed5`, dev `908fe6c90`, il mio ramo
+portato avanti con un fast-forward. `instance_links.py` l'ha rivisto il coordinatore: solo testo, senza bisogno di H.
+
+### X-R35 — `env_url` rifiuta utente e password ✅ (2026-10-17, 01:00–01:23; consegnato al coordinatore)
+
+> **Note implementazione**:
+> - **I rossi** (test-author, 00:43–01:05), 28 + 4 casi, tutti con `user_info` nel nome:
+>   - `test_config_package.py`: `env_url` rifiuta l'utente nell'autorità (13 forme, IPv4 e IPv6 comprese), non cita
+>     mai utente e password nemmeno quando un'altra regola rifiuta l'indirizzo (8 righe, comprese quelle senza `//` e
+>     con la parentesi IPv6 aperta), accetta una `@` fuori dall'autorità (controlli verdi); `support_url()` fa lo
+>     stesso, ma un `mailto:` resta valido; `support_link()` non pubblica l'indirizzo e nessun record del log lo
+>     contiene;
+>   - `test_registration_service.py`: lo stesso per `public_url` e `billing_url`, e per i loro link;
+>   - via una vecchia riga che chiedeva a `env_url` di citare `mailto:help@a.example`: contraddiceva la regola nuova;
+>   - i testi N61 di tre test aggiornati (`test_config_package.py` due volte, `test_system_api.py:917`).
+> - **⚠️ Fuori pista**: la prima corsa di `config-package` (01:12:33) è caduta in un `ImportError`
+>   (`HoldingGroupGainLoss`). Il nome esiste: la corsa era partita proprio mentre il coordinatore portava avanti il mio
+>   ramo, e Python ha letto un albero aggiornato a metà. Rilanciata sull'albero fermo. Lezione: dopo un handoff, non
+>   lanciare finché il coordinatore non dice il nuovo HEAD.
+> - **Rosso confermato** (01:14): `config-package` **23 rossi, 820 verdi**; `registration` **4 rossi, 147 verdi**. Tutti
+>   i rossi sono i casi `user_info`.
+> - **Il codice** (`files/checks/xr35_code.py`): in `config/__init__.py`, `env_url` rifiuta una `@` nell'autorità
+>   (`urlsplit(value).netloc`); il `ValueError` non cita il valore se contiene una `@` da qualche parte, altrimenti resta
+>   il messaggio di oggi. ruff e black puliti.
+> - **Verde** (01:15–01:19, carico ≤ 50): `config-package` **843/843**, `registration` **151/151**, `email-links`
+>   **74/74**, `email-checks` **87/87**. Gli ultimi due passano da `links_state()`, che prende il `ValueError`.
+> - **Doc**: al docs-writer, la regola di `env_url` in `developer/architecture/settings.md` e una frase nelle righe di
+>   `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL` in `admin/configuration.en.md`. Quelle due righe sono di A: le
+>   rivede il coordinatore.
+>   - Il docs-writer ha corretto anche il paragrafo sotto la tabella (il log non mostra un valore con una `@`) e le due
+>     righe dei valori sbagliati. La nota «non mostrato» vale solo per gli indirizzi: gli errori di
+>     `LIBREFOLIO_REGISTRATION` e `LIBREFOLIO_MAX_USERS` mostrano ancora il valore.
+> - **Fuori perimetro, per E**: in `services/email/links.py` la docstring di `_usable_base` dice ancora che
+>   `public_url()` «checks the scheme only»; il suo controllo delle credenziali ora è ridondante.
+> - **Prove della doc**: `mkdocs build` stretto → 0 avvisi, nessuna riga INFO su ancore; `check-links` → 97;
+>   `git diff --check` pulito.
+> - **CHANGELOG**: niente, perché le tre variabili sono nuove della 1.3 e nessuna versione rilasciata è esposta.
