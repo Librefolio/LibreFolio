@@ -138,7 +138,7 @@ i rendimenti giornalieri, non i prezzi.
 - `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress/plugin.py`) accetta fino a 100 coppie
   `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
   ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
-- `RiskService._prepare_historical_replay_context` (`backend/app/services/risk/service.py`) controlla due cose: che gli
+- `prepare_historical_replay_context` (`backend/app/services/risk/replay.py`, da CP-9a) controlla due cose: che gli
   asset sostituiti siano nello scope e che i sostituti esistano. L'asset sostituito salta l'esclusione automatica. Per
   tutta la finestra il replay usa i rendimenti del sostituto: `proxy_series_usage: "returns_only"`, e non c'è nessuna
   giunzione con la storia propria dell'asset.
@@ -166,7 +166,7 @@ i rendimenti giornalieri, non i prezzi.
   confermata dall'utente.
 - ⚠️ **Un buco da verificare con un test prima di riaprire.** La copertura del sostituto non passa per
   `replay_coverage`, che gira solo sugli asset senza sostituto (`own_ids` in
-  `_prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
+  `prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
   `dev_release2` con la sua integrazione). Un sostituto quotato dopo l'inizio della finestra entrerebbe quindi nella
   serie congiunta. Il commento sull'esclusione automatica, nello stesso metodo, spiega cosa succede allora: un asset
   che parte tardi sposta la base del replay e lo accorcia per tutti gli altri. Il sostituto andrà controllato con la
@@ -175,7 +175,7 @@ i rendimenti giornalieri, non i prezzi.
 **Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
 L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
 
-**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
+**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `risk/replay.py` (`prepare_historical_replay_context`);
 `schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
 `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
 `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.
