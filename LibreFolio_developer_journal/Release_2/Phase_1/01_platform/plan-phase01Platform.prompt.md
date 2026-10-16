@@ -4157,3 +4157,10 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    - `mkdocs build`: solo l'avviso noto di `wac.md`, quindi `#request-logs` si risolve. `check-links`: 97.
    - Nessun riferimento alle due funzioni in `backend/app`, `scripts` e `dev.py`, fuori dalle descrizioni di
      `_backend_services.py`.
+5. ✅ **Commit e testo del selettore** (20:50–20:54). Il coordinatore ha committato `420cc6d13` (refactor),
+   `9afcf93bf` (docs) e `9b6fc7486` (journal), e ha registrato **N58 nella forma circoscritta**: «nessun record che
+   LibreFolio scrive contiene l'indirizzo di un client; l'access log di uvicorn sì, vedi Request Logs».
+   `_backend_services.py` non lo modificava nessuno (X e W lo avevano solo in stage dai loro merge con dev), quindi
+   l'ha dato a me. Ho applicato `files/h22/apply_backend_services_desc.py`: 4 sostituzioni, 3+/3−, coincide byte per
+   byte con la prova a secco, ruff e black puliti. Prove a carico < 50: `services client-address` **122/122**, con la
+   nuova riga «Testing: … (client_address, client_rate_key)»; `check-orphans` verde. Porta libera.
