@@ -1955,7 +1955,7 @@ plugin.
     - livello `category` per chiave, scritto; `verify-export` trova le righe di categoria per chiave e tema;
     - `CHART_PATH_RE` accetta già `features/{dashboard,risk,brokers/lots}` (Y3, Y4b, Y5).
 
-    Checkpoint intermedio il 16/10 alle 02:0x. Resta da fare: la copia sostituita da `lookupKey` di TD-1 dopo il merge di base, poi la validazione pesante dopo T.
+    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15). Resta la validazione pesante dopo T.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
 
 - **L-17 · Il selettore di elementi nomina la categoria di una fetta** — basso; L, 15/10 (L-16, punto 5, nel backlog su decisione del coordinatore).

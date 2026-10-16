@@ -144,7 +144,7 @@ async function translucentVariable(lab: Page): Promise<{name: string; from: stri
 const CATEGORY_TABLES_FILE = 'src/lib/theme/chartCategories.ts';
 
 /** The roles the charts read through `chartRoles` (`ChartRole`, lib/theme/roleColors.ts): their names, never their values. */
-const CHART_ROLES = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-primary', '--lf-text-on-inverse', '--lf-danger', '--lf-info'];
+const CHART_ROLES = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-primary', '--lf-text-secondary', '--lf-text-on-inverse', '--lf-danger', '--lf-info'];
 
 /** The app tab's window, with what the C4 test leaves on it: its count of chart-colours signals, and its no-reload mark. */
 type C4Window = Window & {__e2eLabC4?: number; __e2eLabNoReload?: boolean};
