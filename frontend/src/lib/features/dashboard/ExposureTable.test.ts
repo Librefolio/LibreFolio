@@ -92,6 +92,8 @@ interface YieldOnCostResult {
 
 interface HoldingOptions {
     currentValue?: string;
+    /** The backend's `nav_weight_percent`. Omitted, the field is absent; `null` is the backend sending no weight. */
+    navWeightPercent?: string | null;
     yieldOnCost: YieldOnCostResult;
 }
 
@@ -104,6 +106,7 @@ function holding(asset_id: number, broker_id: number, options: HoldingOptions) {
         broker_name: `Broker ${broker_id}`,
         quantity: '10',
         current_value: options.currentValue ?? String(asset_id * 1000), // distinct values → deterministic sort
+        ...(options.navWeightPercent === undefined ? {} : {nav_weight_percent: options.navWeightPercent}),
         yield_on_cost: options.yieldOnCost,
     };
 }
@@ -186,6 +189,20 @@ function renderedRowIds(): string[] {
     return [...document.querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((row) => row.dataset.rowId ?? '');
 }
 
+/**
+ * The trimmed text of the cell of `columnId` in the row of asset 11, the position every describe that
+ * reads a cell mounts. The row renders no per-cell handle, so the cell is found through its header's
+ * index (`dt-header-<id>`), among the row's structural `td-data` cells (see the privacy describe).
+ */
+function cellText(columnId: string): string {
+    const headers = [...document.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')];
+    const index = headers.findIndex((header) => header.dataset.testid === `dt-header-${columnId}`);
+    if (index < 0) throw new Error(`column ${columnId} not rendered`);
+    const cells = [...rowEl(11, 1).querySelectorAll<HTMLElement>('td.td-data')];
+    if (cells.length !== headers.length) throw new Error(`${cells.length} data cells for ${headers.length} headers`);
+    return (cells[index].textContent ?? '').trim();
+}
+
 async function tooltipLines(trigger: HTMLElement): Promise<string[]> {
     await fireEvent.click(trigger);
     const tooltip = screen.getByRole('tooltip');
@@ -207,7 +224,6 @@ describe('ExposureTable — analyzedAssetId row highlight (F9)', () => {
     it('marks only the analyzed asset row with row-analyzed', async () => {
         render(ExposureTable, {
             holdings: [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(33, 2, {yieldOnCost: noIncomeYieldOnCost()})],
-            navAmount: 6000,
             displayCurrency: 'EUR',
             analyzedAssetId: 22,
         });
@@ -223,7 +239,6 @@ describe('ExposureTable — analyzedAssetId row highlight (F9)', () => {
     it('marks nothing when no analysis is open (analyzedAssetId null/absent)', async () => {
         render(ExposureTable, {
             holdings: [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()})],
-            navAmount: 3000,
             displayCurrency: 'EUR',
             analyzedAssetId: null,
         });
@@ -236,7 +251,6 @@ describe('ExposureTable — analyzedAssetId row highlight (F9)', () => {
     it('moves the tint when the analyzed asset changes', async () => {
         const {rerender} = render(ExposureTable, {
             holdings: [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()})],
-            navAmount: 3000,
             displayCurrency: 'EUR',
             analyzedAssetId: 11,
         });
@@ -245,7 +259,6 @@ describe('ExposureTable — analyzedAssetId row highlight (F9)', () => {
 
         await rerender({
             holdings: [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()})],
-            navAmount: 3000,
             displayCurrency: 'EUR',
             analyzedAssetId: 22,
         });
@@ -263,7 +276,6 @@ describe('ExposureTable — Yield on Cost', () => {
                     yieldOnCost: availableYieldOnCost(),
                 }),
             ],
-            navAmount: 1000,
             displayCurrency: 'EUR',
         });
 
@@ -299,7 +311,6 @@ describe('ExposureTable — Yield on Cost', () => {
                     yieldOnCost: unavailableYieldOnCost(),
                 }),
             ],
-            navAmount: 6000,
             displayCurrency: 'EUR',
         });
 
@@ -340,7 +351,6 @@ describe('ExposureTable — Yield on Cost', () => {
                     yieldOnCost: unavailableYieldOnCost(),
                 }),
             ],
-            navAmount: 6000,
             displayCurrency: 'EUR',
         });
 
@@ -435,7 +445,6 @@ describe('ExposureTable — Yield on Cost', () => {
 
         render(ExposureTable, {
             holdings: [holding(11, 1, {yieldOnCost})],
-            navAmount: 1000,
             displayCurrency: 'EUR',
         });
 
@@ -474,7 +483,6 @@ describe('ExposureTable — Yield on Cost', () => {
                     yieldOnCost: unavailableYieldOnCost('missing_wac'),
                 }),
             ],
-            navAmount: 10000,
             displayCurrency: 'EUR',
         });
 
@@ -507,7 +515,6 @@ describe('ExposureTable — Yield on Cost', () => {
                     yieldOnCost: availableYieldOnCost(),
                 }),
             ],
-            navAmount: 1000,
             displayCurrency: 'EUR',
         });
 
@@ -556,7 +563,7 @@ describe('ExposureTable — privacy (D5′)', () => {
     }
 
     function mount(): void {
-        render(ExposureTable, {holdings: [position()], navAmount: VALUE, displayCurrency: 'EUR'});
+        render(ExposureTable, {holdings: [position()], displayCurrency: 'EUR'});
     }
 
     /** Barrier: the row is rendered and the stored override has revealed price and PMC. */
@@ -564,16 +571,6 @@ describe('ExposureTable — privacy (D5′)', () => {
         await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('dt-header-price')).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('dt-header-pmc')).toBeInTheDocument());
-    }
-
-    /** The trimmed text of the cell of `columnId` in the row of asset 11. */
-    function cellText(columnId: string): string {
-        const headers = [...document.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')];
-        const index = headers.findIndex((header) => header.dataset.testid === `dt-header-${columnId}`);
-        if (index < 0) throw new Error(`column ${columnId} not rendered`);
-        const cells = [...rowEl(11, 1).querySelectorAll<HTMLElement>('td.td-data')];
-        if (cells.length !== headers.length) throw new Error(`${cells.length} data cells for ${headers.length} headers`);
-        return (cells[index].textContent ?? '').trim();
     }
 
     /** Set the flag, then flush: synchronously, and once more through the microtask the app itself waits on. */
@@ -691,12 +688,15 @@ describe('ExposureTable — privacy (D5′)', () => {
 describe('ExposureTable — the quantity in the interface language (M-18)', () => {
     /** Grouped from 10,000 — Italian groups only from there — and with four decimals, so both separators are read. */
     const QUANTITY = 12_345.6789;
-    /** `holding(11, …)` values the position at 11 000: on this NAV it weighs 30.94%. */
-    const NAV = 35_555;
-    const WEIGHT = (11_000 / NAV) * 100;
+    /**
+     * The backend's weight, carried by the fixture as the backend sends it: `holding(11, …)` values the
+     * position at 11 000, and on a NAV of 35 555 its `nav_weight_percent` is 11 000 / 35 555 · 100,
+     * quantized to 0.01. The table computes no weight of its own (W7), so it is given no NAV.
+     */
+    const WEIGHT = 30.94;
 
     function mount(): void {
-        render(ExposureTable, {holdings: [{...holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), quantity: String(QUANTITY)}], navAmount: NAV, displayCurrency: 'EUR'});
+        render(ExposureTable, {holdings: [{...holding(11, 1, {navWeightPercent: WEIGHT.toFixed(2), yieldOnCost: noIncomeYieldOnCost()}), quantity: String(QUANTITY)}], displayCurrency: 'EUR'});
     }
 
     /** Barrier: the row is rendered with both columns read below. */
@@ -704,16 +704,6 @@ describe('ExposureTable — the quantity in the interface language (M-18)', () =
         await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('dt-header-quantity')).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('dt-header-weight')).toBeInTheDocument());
-    }
-
-    /** The trimmed text of the cell of `columnId` in the row of asset 11, found through its header's index. */
-    function cellText(columnId: string): string {
-        const headers = [...document.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')];
-        const index = headers.findIndex((header) => header.dataset.testid === `dt-header-${columnId}`);
-        if (index < 0) throw new Error(`column ${columnId} not rendered`);
-        const cells = [...rowEl(11, 1).querySelectorAll<HTMLElement>('td.td-data')];
-        if (cells.length !== headers.length) throw new Error(`${cells.length} data cells for ${headers.length} headers`);
-        return (cells[index].textContent ?? '').trim();
     }
 
     /** The two figures of the row. */
@@ -787,5 +777,53 @@ describe('ExposureTable — the quantity in the interface language (M-18)', () =
 
         await switchLanguage('en');
         expect(readRow(), 'it → en in place — today’s text again').toEqual(ENGLISH);
+    });
+});
+
+/**
+ * W7 (U8 of the release plan): the NAV weight is the backend's.
+ *
+ * The frontend shows the backend's figures; financial math has one home, the backend. The backend sends
+ * `nav_weight_percent` — current value / NAV · 100, quantized to 0.01 — and null when the position has
+ * no current value. The table used to fill a null with a weight of its own, `current_value / navAmount
+ * · 100`: the same figure by a second rule, in a second place.
+ *
+ * The position is worth 100 and the table is handed a NAV of 1 000, so a weight it computed would read
+ * 10.0%. The red sends no weight and expects the placeholder; the control sends the backend's 12.34
+ * and expects it as it is.
+ */
+describe('ExposureTable — the NAV weight is the backend’s (W7 / U8)', () => {
+    /** One position worth 100, carrying the backend's `nav_weight_percent`. */
+    function mount(navWeightPercent: string | null): void {
+        render(ExposureTable, {
+            holdings: [holding(11, 1, {currentValue: '100', navWeightPercent, yieldOnCost: noIncomeYieldOnCost()})],
+            // Why, on purpose: after W7 this is a legacy prop the component's catch-all ignores. Kept, it is
+            // what a fallback would divide by, so a fallback brought back fails the first test below again.
+            navAmount: 1000,
+            displayCurrency: 'EUR',
+        });
+    }
+
+    /** Barrier: the row is rendered with the weight column, and carries the value a fallback would divide. */
+    async function mounted(): Promise<void> {
+        await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-weight')).toBeInTheDocument());
+        expect(cellText('value').replace(/\D/g, ''), 'precondition: the row is worth 100.00').toBe('10000');
+    }
+
+    it('shows no weight when the backend sends none, not value / NAV computed by the table', async () => {
+        mount(null);
+        await mounted();
+
+        expect(cellText('weight'), 'nav_weight_percent null: the placeholder, not 100 / 1 000 · 100').toBe('—');
+    });
+
+    it('control: shows the backend’s weight as it is, not value / NAV', async () => {
+        mount('12.34');
+        await mounted();
+
+        const backend = formatPercent(12.34, {signed: false, digits: 1});
+        expect(backend, 'control: the backend’s weight reads differently from value / NAV').not.toBe(formatPercent(10, {signed: false, digits: 1}));
+        expect(cellText('weight')).toBe(backend);
     });
 });
