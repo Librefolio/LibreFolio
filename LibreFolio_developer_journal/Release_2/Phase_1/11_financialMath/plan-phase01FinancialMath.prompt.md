@@ -932,6 +932,62 @@ Quattro commit, uno per lotto che cambia numeri:
 3. **K2 + N54** (Dashboard) — `fix(portfolio): one MWRR rule for card and line`. CHANGELOG 🐛: la proposta sopra.
 4. **O2** (Yield on Cost) — `fix(yoc): negative net income shows a reason`. CHANGELOG 🐛: «Yield on Cost: when
    corrections exceed the income of the last year, the holding shows "—" with the reason instead of an error.»
+
+- ✅ Committati dal coordinatore: `5a4e42085` (M+G1), `4f678deaf` (N+F2), `e3424c7f4` (K2+N54), `2650a7da4` (O2),
+  `2b9adb538` (giornale). HEAD verificata. Prossimo: CP-13a di J entra in dev (~18:50), poi l'aggiornamento di base
+  (conflitto atteso solo in `developer/backend/financial_math.md`, lo risolvo io), poi `all-backend` nello slot 2 dopo A
+  (~19:15), poi l'ingresso.
+
+#### MF-C — disegno (16/10, sola lettura, in attesa dell'aggiornamento di base)
+
+- **Stato reale**: le quote «parte / totale × 100» stanno in quattro posti con regole diverse —
+  `portfolio_service.py:~846-852` (`allocation_percent` su `Σ current_value or 1`; `nav_weight_percent` su
+  `NAV if NAV > 0 else 1`: con NAV ≤ 0 il peso diventa `valore × 100`), `derived_views.py:212-247` (`_alloc` e
+  `build_allocation_history`, `Σ or 1`, la liquidità negativa ammessa: J-20), `risk/service.py:~545-551` (float, solo
+  valori ≥ 0, errori di composizione, D59), `technical_shared.py:467-485` (pesi lordi `|end_value|`, vuoto se il totale ≤
+  0). L'HHI e il peso massimo due volte, identici (`broker_financial.py:205-212`, `broker_concentration_context.py:88-104`,
+  «Mirrors exactly»), sui `nav_weight_percent` già arrotondati.
+- **Disegno**: un modulo nuovo `financial_math/weights.py` con
+  - `share_of(part, total) -> Decimal | None` (non arrotondato; None quando il totale è ≤ 0) e la variante a denominatore
+    con segno per le fette d'allocazione (`allocation_shares`, che tiene la regola di oggi: totale 0 → tutte 0; la
+    liquidità negativa ammessa come dice J-20);
+  - `concentration(weights_percent) -> (peso massimo |w|, HHI)`: una copia sola, stessi ingressi di oggi (i pesi
+    arrotondati del contratto), quindi nessun numero cambia e nessuna versione sale;
+  - chiamanti: i due pesi delle posizioni (D-MF7), `_alloc`/`build_allocation_history`, i pesi del rischio (stessi float),
+    i pesi lordi tecnici, le due copie dell'HHI.
+- **Numeri**: solo D-MF7 — `nav_weight_percent` «—» con NAV ≤ 0 (oggi `valore × 100`), e per coerenza
+  `allocation_percent` «—» con un totale dei valori ≤ 0 (oggi diviso per un totale negativo o per 1). Il resto identico.
+  Y toglie il ripiego del frontend (W7). Descrizione dei due campi in `schemas/portfolio.py` (nullable), `api sync`.
+- **Rossi** (test-author): NAV ≤ 0 → peso «—»; totale ≤ 0 → allocazione «—»; casi normali identici; HHI e peso massimo
+  dalla casa uguali a oggi su un corpus; i pesi del rischio identici (float).
+- **CHANGELOG** (🐛 Fixed): «Holdings: when the net worth is zero or negative, the weight on net worth shows "—" instead
+  of a meaningless percentage.»
+- **J-24 (J, 18:33)** tocca anche `portfolio/engine.py` (un pezzo nella raccolta dei cambi, ~:480-540) e una frase di
+  `valuation_semantics` in `ai_export/components/portfolio_financial.py` e `broker_financial.py` (senza versione).
+  `portfolio_service.py` no: i commenti «Realized G/L of the SELLs» (~:658, ~:1605) diventano «SELLs and priced
+  outgoing ADJUSTMENTs» → li porto io in MF-A se riscrivo quei pezzi. **Sovrapposizione con C**: anche C tocca
+  `broker_financial.py` (`_concentration_metrics`, altro pezzo) → detto a J; il coordinatore ordina gli ingressi.
+- **J per MF-D** (18:40): dopo CP-13a, su una perdita totale (drawdown −1, solo per arrotondamento)
+  `remaining_to_peak_ratio` e `maximum_drawdown_trough_to_peak_ratio` sono null con l'avviso non degradante
+  `total_loss_no_recovery`; `drawdown_context.py` li vuole ancora non null su `ok`/`partial`
+  (`DrawdownContextPayload._SUCCESS_REQUIRED_FIELDS` ~:151, `PortfolioAssetDrawdownRow` ~:423), quindi oggi la sezione
+  cade con una sola diagnostica (prima di CP-13a era un `failed` onesto). Quando D alza quei componenti: accettare null
+  con l'avviso, o un payload «non disponibile» onesto.
+
+#### Aggiornamento di base 3 (16/10, 18:39) — merge di `dev_release2` `0452e592c` (CP-13a, C-97a, X-R28, H-12, AF)
+
+- Merge aperto dal coordinatore nel mio worktree. Un conflitto: `developer/backend/financial_math.md`, la riga del
+  selettore `services financial-math` (la mia aggiungeva `splits.py`, quella di CP-13a `required_recovery_return()`).
+  **Risolto additivo**: entrambe, più `test_period_mwrr.py`; `git add` solo di quel file (la sola risoluzione).
+  `returns.py` e `__init__.py` uniti da soli.
+- **Mappe di `returns.py`** (attese da K1, ora che CP-13a è dentro), **non messe nella fusione**: docstring di
+  `financial_math/__init__.py`, `financial-math.instructions.md`, `backend.instructions.md`, l'albero e un paragrafo
+  nuovo dopo l'albero in `financial_math.md` (`period_mwrr()`/`period_mwrr_series()`: la regola della Dashboard, D-MF5
+  e N54; `calculate_mwrr*` restano i solve nudi). Vanno nel prossimo checkpoint.
+- ✅ **Prove leggere sulla revisione combinata** (18:42–18:45, `nice -n 10`, carico < 50; log `files/logs/merge2/`):
+  `services financial-math` **488 passed** (473 + i test di CP-13a), `services roi-fifo-utils` **831 passed**,
+  `utils roi-utils` **9 passed**; ruff e black puliti sulla casa (27 file); `mkdocs build` stretto verde (46 s, nessun
+  avviso), `check-links` verde (97). Verificato con le mappe nuove nel worktree (non ancora nella fusione).
 - **MF-O2** non ancora: tocca anche `features/dashboard/YieldOnCostCell.svelte` (il tipo dei motivi e l'etichetta) e i
   cataloghi `dashboard/*`: serve l'OK del coordinatore per il `.svelte`.
 - **J sulle versioni** (17:17): ok le due voci (v1 nella 1.2.1, quindi v2 nella regola). Il segnaposto del catalogo è
