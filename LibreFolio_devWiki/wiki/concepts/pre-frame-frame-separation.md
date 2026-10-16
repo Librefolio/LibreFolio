@@ -65,7 +65,8 @@ acquisition's date. The pool arithmetic is the same — see [[concepts/inline-wa
 rate of a foreign currency held as **cash** changes (`NativeCash.rate_change_days(None, t0 − 1)`), and revalues that
 cash to its native balances at the day's rate — after the day's cash, before its pool rules
 ([[decisions/native-cash-daily-revaluation]]). Securities are still not valued. In the frame the same days become dirty
-days; a day on which only the rate of a currency held as a security moves is still skipped
+days. *Since 2026-10-16 (J CP-6, decision 28)* the frame also makes dirty the days on which a rate the day reads for its
+securities or its cash in transit changes, every market-quote day and the first day a carried price turns stale
 ([[problems/dirty-days-ignore-fx-only-moves]]). In production the pre-frame is empty (`date_from=None`).
 
 ## Frame Computation [t0, t1]

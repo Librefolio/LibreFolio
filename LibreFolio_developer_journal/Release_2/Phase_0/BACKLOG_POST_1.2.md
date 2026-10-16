@@ -528,10 +528,11 @@ debito di traduzione di F-5 (di M).
   `:1789` e `:1806`, converte i prezzi uno a uno (`:1795`, `:1813`) e su un TRANSFER sposta l'unrealized al costo. Va
   in T-U5 con V2/P2 e R4 di T e con le quantità di B12: insieme 1½–2 g. Dettagli: idem, §14 e §17.6.
 - **B10 · `periodBasePnl` dichiarato e mai usato** — minimo; I, 10/10. `GrowthChart.svelte:594-600`.
-- **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
+- ✅ **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
   si contano solo per le valute tenute in cassa (`native_cash.py:271-279`; motore `:808` e `:922-923`). La cura cambia
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
+  - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
 - **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
@@ -2500,8 +2501,46 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   vicino e lo annota nel piano come **«da rivedere»**.
   - W3-a: le barre della dashboard prendono il ruolo del testo (più scure in chiaro, niente fluo in scuro); le barre
     categoriali «Costo d'acquisto» e «Liquidità» restano blu e smeraldo, in attesa di un ruolo categoriale.
+  - TD-3: i pulsanti attivi della card «Allocazione Patrimoniale» seguono la designer (`--lf-action`), non D-T16
+    (`--lf-checked`); solo in quel pannello.
+  - W3-c: i toast in scuro diventano pieni chiari col testo scuro, anche l'errore (`danger` + `on-status`, non
+    `danger-solid`); il banner della qualità dei dati tiene l'errore nel tono d'avviso, e per l'hover dei suoi pulsanti
+    manca un ruolo; la barra PAC «bilanciata» passa da `libre-green` a `success`, la «sconosciuta» va su `neutral` con
+    la traccia ancora di palette; i chip neutri su `bg-lf-neutral`.
+  - Rimandato: le due funzioni di segno di `brokers/lots/LotCustodyModal.svelte` (righe 103–114), dopo l'ingresso di J,
+    che ha il file aperto; `ui/input/DistributionEditor.svelte` (copie di `pacTargetBar`/`pacTargetTotal`) con W1-d,
+    dopo che G avrà cambiato l'asserzione `text-green-600` di `gallery.spec.ts:6067`. ✅ `LotCustodyModal` fatto il 16/10
+    dopo J CP-16 (I1).
+  - I1: le righe evidenziate delle liste su `bg-lf-selected`, più quiete in scuro della vecchia piena verde; il bordo
+    quasi nero del selettore dei segnali su `border-lf-input` (manca un bordo di campo forte); il filtro attivo di
+    `CheckMenu` sui ruoli `info`; l'avviso dentro il tooltip di `FxProviderSelect` resta `#fbbf24` finché
+    `ui/feedback/Tooltip.svelte` non passa a `bg-lf-inverse` (Q10 li lega: da proporre come lotto a parte). ✅ Q10 fatto
+    il 16/10.
+  - Q10: in scuro tutti i tooltip diventano chiari col testo scuro; tre ruoli `-on-inverse` nuovi (pericolo, info,
+    attenuato) col valore del tema opposto, la regola di Q10 estesa; info e attenuato a 4,54:1 in chiaro; l'ombra dei
+    tooltip è quella dei menu.
+  - W1-d: il suggerimento evidenziato di `TagInput` passa dal blu a `bg-lf-selected`.
+  - Rimandati da W1-d: `ui/input/ExactDecimalInput.svelte` ed `ExactQuantityInput.svelte`, insieme ai chiamanti che gli
+    passano classi di palette (`INPUT` del pianificatore PAC, `ui.ts:39`; `!bg-white` in `TxFormSingleSection` e
+    `TxFormPairSection`) e ai test che leggono i loro colori, con l'OK dei proprietari.
+  - W1-c, W1-e, W2-a (bozze dello slot, in ingresso col secondo slot): preset inattivi che si scuriscono al passaggio come
+    oggi; badge della durata personalizzata ancora ambra; tooltip, modali e onboarding sui ruoli (fondale delle modali e
+    del coachmark al 60 %, tessere del logo bianche anche in scuro, contorno di «Riprova» tenue sul banner).
+  - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
+    `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
+    della modale, non un `contentClass`.
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
+- **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
+  `test-author` il 16/10 in I1, fuori dai colori. `SimpleSelect`: la lista resta aperta quando `disabled` o `loading` si
+  accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
+  `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
+  va tolto. Dettagli: piano di T, I1, passo 4.
+- **TC-12 · Dopo l'ingresso di Y5: la voce orfana del coachmark nel gate** — minimo; T, 16/10. Con W2-a il bagliore del
+  coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione `ARBITRARY_ALLOWED` di
+  `frontend/scripts/theme/theme-roles.mjs` (riga 84). La si toglie quando Y5 è entrato (Y cambia la riga 70 dello stesso
+  file), insieme ai commenti di `src/themeRoles.gate.test.ts` (righe ~218 e ~547) che descrivono ancora il vecchio
+  bagliore `rgba`. Dettagli: piano di T, «W1-c, W1-e e W2-a», passo 3.
 
 ---
 
@@ -3624,6 +3663,27 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
   ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
   scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
+- **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
+  segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
+  calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
+  del risultato. Carico fra 80 e 96, macchina molto in swap. Rifatto con il carico a 40–61: 8 su 8 verdi. Il runtime dei
+  Tools non è cambiato da `g-final3`. Dettagli: checkpoint di G-13 dei colori.
+  - **Dal codice** (J, sola lettura): un superamento misurato della memoria dà `memory_limit`
+    (`tools/process_tree.py`, `observe_memory_limit`), un tempo scaduto dà `execution_timeout`
+    (`tools/executor.py`, `_read_exact`, `_wait_result`). `worker_crashed` vuol dire che il figlio è uscito o ha chiuso il
+    tubo senza nessuno dei due: ucciso da fuori, un limite colpito dentro il figlio, o un errore all'avvio sotto swap.
+  - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
+    segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
+    Tools: lotto piccolo, d'accordo col proprietario del runtime.
+- ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
+  chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
+  `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
+  quote positive superano 100 e la riga della liquidità va sotto zero. Cura: descrivere la quota sul totale netto, che
+  può superare 100 o scendere sotto zero quando la liquidità è negativa; poi `api sync`. Nessun valore cambia. Lotto: J,
+  dentro CP-6.
+  ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
+  0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
+  senza file tracciati cambiati. Commit: il checkpoint di CP-6.
 
 ## Z · Sospensione e risveglio (fase 01)
 

@@ -157,10 +157,12 @@ generator version in `frontend/package-lock.json` (1.18.3, pinned in the guard) 
 
 ## 🗜️ Response Compression
 
-Starlette's `GZipMiddleware` (`minimum_size=1024`, `compresslevel=6`) is the first, outermost entry
-of `MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`), which `install_middleware(app)`
-puts on the whole application, so it covers API JSON as well as the SvelteKit
-bundle and the documentation served by the same process.
+Starlette's `GZipMiddleware` (`minimum_size=1024`, `compresslevel=6`) is the `gzip` entry of
+`MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`), inside `activity` and
+`security_headers` and outside `cors` (the whole stack:
+[Steps and Middleware: the Contract](../architecture/overview.md#lifecycle-contract)).
+`install_middleware(app)` puts the stack on the whole application, so GZip covers API JSON as well
+as the SvelteKit bundle and the documentation served by the same process.
 
 - A response is compressed only when the request's `Accept-Encoding` header contains `gzip`.
   Browsers send it and decompress transparently, so frontend code never handles compressed
