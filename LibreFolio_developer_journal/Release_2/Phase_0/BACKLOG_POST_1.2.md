@@ -3635,6 +3635,27 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
   ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
   scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
+- **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
+  segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
+  calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
+  del risultato. Carico fra 80 e 96, macchina molto in swap. Rifatto con il carico a 40–61: 8 su 8 verdi. Il runtime dei
+  Tools non è cambiato da `g-final3`. Dettagli: checkpoint di G-13 dei colori.
+  - **Dal codice** (J, sola lettura): un superamento misurato della memoria dà `memory_limit`
+    (`tools/process_tree.py`, `observe_memory_limit`), un tempo scaduto dà `execution_timeout`
+    (`tools/executor.py`, `_read_exact`, `_wait_result`). `worker_crashed` vuol dire che il figlio è uscito o ha chiuso il
+    tubo senza nessuno dei due: ucciso da fuori, un limite colpito dentro il figlio, o un errore all'avvio sotto swap.
+  - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
+    segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
+    Tools: lotto piccolo, d'accordo col proprietario del runtime.
+- ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
+  chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
+  `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
+  quote positive superano 100 e la riga della liquidità va sotto zero. Cura: descrivere la quota sul totale netto, che
+  può superare 100 o scendere sotto zero quando la liquidità è negativa; poi `api sync`. Nessun valore cambia. Lotto: J,
+  dentro CP-6.
+  ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
+  0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
+  senza file tracciati cambiati. Commit: il checkpoint di CP-6.
 
 ## Z · Sospensione e risveglio (fase 01)
 
