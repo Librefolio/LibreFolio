@@ -425,7 +425,7 @@ class TestDataDirResolution:
 
         assert not production_dir.exists() and not candidate.exists()
 
-    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key"])
+    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key", "backups", ".restore"])
     def test_managed_symlink_escaping_into_another_root_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_relative):
         # Both roots are synthetic: the only thing under test is whether the guard
         # resolves symlinks instead of comparing unresolved path strings.

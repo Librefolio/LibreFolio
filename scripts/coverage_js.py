@@ -181,7 +181,7 @@ JS_PRIORITY_MAP = {
     "src/lib/services/": "HIGH",
     "src/lib/api/": "HIGH",
     "src/lib/utils/": "HIGH",
-    "src/lib/risk/": "HIGH",
+    "src/lib/features/risk/": "HIGH",
     # MEDIUM — presentation with real behaviour inside
     "src/lib/components/": "MEDIUM",
     "src/lib/charts/": "MEDIUM",
@@ -241,7 +241,7 @@ def classify_category_js(filepath: str, func_name: str, stmts: int) -> str:  # n
         return "JS_ACTION"
     if filepath.startswith("src/lib/i18n/"):
         return "JS_I18N"
-    if filepath.startswith("src/lib/utils/") or filepath.startswith("src/lib/risk/"):
+    if filepath.startswith("src/lib/utils/") or filepath.startswith("src/lib/features/risk/"):
         return "JS_UTILITY"
     if filepath.startswith("src/routes/"):
         return "JS_ROUTE"

@@ -4,11 +4,13 @@
  *
  * The catalogue is synthetic, so every place an export lists follows from the entries below. What is pinned:
  *   - each layer exports where it lives in the code — palette uses and definitions for a variable, the stylesheet
- *     occurrences of a colour (one theme leaves out only the occurrences certainly of the other), and for a
- *     specialisation (`element`) its anchor and the candidate places to bind it;
+ *     occurrences of a colour (one theme leaves out only the occurrences certainly of the other), for a
+ *     specialisation (`element`) its anchor and the candidate places to bind it, and for a chart category its own line
+ *     in each theme of the change, found by key, never the other places that write its value;
  *   - the Markdown and the summary carry the same facts, in the Lab's language for the headings;
- *   - the import refuses what the Lab cannot apply safely, keeps an anchor only in the shape and sizes the Lab
- *     writes, and finds a single occurrence again by place and value, never by an id of another catalogue.
+ *   - the import refuses what the Lab cannot apply safely — a category its catalogue does not know included —, keeps
+ *     an anchor only in the shape and sizes the Lab writes, and finds a single occurrence again by place and value,
+ *     never by an id of another catalogue.
  */
 
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -570,6 +572,116 @@ describe('parseImport', () => {
         expect(other.warnings[0]).toMatch(/^catalog_hash differs/);
         expect(other.state?.changes).toEqual([VAR]);
         expect(parseImport(json({...doc, catalog_hash: undefined}), emptyState(), CATALOG).warnings).toEqual([]);
+    });
+});
+
+describe('buildExport and parseImport — a chart category, edited by key', () => {
+    const CATEGORIES_TS = 'src/lib/theme/chartCategories.ts';
+    /** A line of the category tables (file 7): a chart colour with its category and the theme of its property. */
+    const tableLine = (id: number, line: number, raw: string, theme: 'light' | 'dark', category: string): CatalogLiteral => literal(id, {file: 7, line, col: 16, raw, key: raw.toLowerCase(), zone: 'ts', theme, layer: 'chart-color', chart: true, snippet: `${theme}: '${raw}',`, category});
+    // `type:AAA` and `sector:Zed Sector` share their light value, and a chart elsewhere writes it too: a category change
+    // must name the category's own lines, never the other places of its value.
+    const CATEGORY_LITERALS = [
+        tableLine(12, 40, '#2B4C7E', 'light', 'type:AAA'),
+        tableLine(13, 41, '#7EA6E0', 'dark', 'type:AAA'),
+        tableLine(14, 80, '#2B4C7E', 'light', 'sector:Zed Sector'),
+        tableLine(15, 81, '#334455', 'dark', 'sector:Zed Sector'),
+        tableLine(16, 90, '#5A6B7C', 'light', 'bucket:Nowhere'),
+        literal(17, {file: 2, line: 130, col: 30, raw: '#2b4c7e', key: '#2b4c7e', zone: 'svelte-script', theme: 'light', layer: 'chart-color', chart: true}),
+    ];
+    const WITH_CATEGORIES = catalogOf({
+        files: [APP_CSS, DATA_TABLE, GROWTH, COLORS_TS, OFFLINE, BADGE, TX_TABLE, CATEGORIES_TS],
+        literals: [...LITERALS, ...CATEGORY_LITERALS],
+        categories: [
+            {target: 'type:AAA', kind: 'type', key: 'AAA', light: 12, dark: 13},
+            {target: 'sector:Zed Sector', kind: 'sector', key: 'Zed Sector', light: 14, dark: 15},
+            // A table without a dark value for it.
+            {target: 'bucket:Nowhere', kind: 'bucket', key: 'Nowhere', light: 16, dark: null},
+        ],
+    });
+    const aaa = (scope: LabChange['scope']) => make({layer: 'category', target: 'type:AAA', scope, from: '#2B4C7E', to: '#123456'});
+    const AAA = aaa('both');
+    const exportWith = (catalog: ColorCatalog, changes: LabChange[]) => buildExport(stateOf(changes), catalog, APP, [], NOW);
+    const json = (doc: unknown) => JSON.stringify(doc);
+    const occurrence = (line: number, raw: string, theme: 'light' | 'dark') => ({file: CATEGORIES_TS, line, col: 16, raw, layer: 'chart-color', theme_context: theme, snippet: `${theme}: '${raw}',`});
+
+    it('exports the category with its kind and key, and as occurrences its own line in each theme of the change', () => {
+        expect(only(exportWith(WITH_CATEGORIES, [aaa('light')]))).toEqual({
+            id: 'category:type:AAA@light',
+            layer: 'category',
+            scope: 'light',
+            preview: true,
+            target: 'type:AAA',
+            from: '#2B4C7E',
+            to: '#123456',
+            category: {kind: 'type', key: 'AAA'},
+            occurrences: [occurrence(40, '#2B4C7E', 'light')],
+        });
+        expect(only(exportWith(WITH_CATEGORIES, [aaa('dark')])).occurrences).toEqual([occurrence(41, '#7EA6E0', 'dark')]);
+        const both = only(exportWith(WITH_CATEGORIES, [AAA]));
+        expect(both.occurrences).toEqual([occurrence(40, '#2B4C7E', 'light'), occurrence(41, '#7EA6E0', 'dark')]);
+        // By key: neither the dark-only reach nor the value-wide reach of a literal layer.
+        expect('granularity' in both).toBe(false);
+        expect('alpha_variants' in both).toBe(false);
+    });
+
+    it('exports a key written with spaces as its table writes it, and a theme its table leaves empty with no occurrence', () => {
+        const zed = only(exportWith(WITH_CATEGORIES, [make({layer: 'category', target: 'sector:Zed Sector', scope: 'both', from: '#2B4C7E', to: '#123456'})]));
+        expect(zed.category).toEqual({kind: 'sector', key: 'Zed Sector'});
+        expect(zed.occurrences).toEqual([occurrence(80, '#2B4C7E', 'light'), occurrence(81, '#334455', 'dark')]);
+        const nowhere = make({layer: 'category', target: 'bucket:Nowhere', scope: 'dark', from: '', to: '#123456'});
+        expect(only(exportWith(WITH_CATEGORIES, [nowhere])).occurrences).toEqual([]);
+        expect(only(exportWith(WITH_CATEGORIES, [{...nowhere, scope: 'both'}])).occurrences).toEqual([occurrence(90, '#5A6B7C', 'light')]);
+    });
+
+    it('exports a category its catalogue does not know with no occurrence and no category, a catalogue without categories included', () => {
+        const ghost = only(exportWith(WITH_CATEGORIES, [make({layer: 'category', target: 'type:Ghost', scope: 'both', from: '', to: '#123456'})]));
+        expect(ghost.occurrences).toEqual([]);
+        expect('category' in ghost).toBe(false);
+        const older = only(exportWith(CATALOG, [AAA]));
+        expect(older.occurrences).toEqual([]);
+        expect('category' in older).toBe(false);
+    });
+
+    it('reads a category change back as the Lab stored it, without translucent variants', () => {
+        const changes = [AAA, make({layer: 'category', target: 'sector:Zed Sector', scope: 'dark', from: '#334455', to: '#654321', note: 'calmer'}), make({layer: 'category', target: 'bucket:Nowhere', scope: 'light', from: '#5A6B7C', to: '#abcdef'})];
+        const doc = exportWith(WITH_CATEGORIES, changes);
+        // An export written by hand may carry the field of the literal layers: it is not read for a category.
+        const result = parseImport(json({...doc, changes: doc.changes.map((c) => ({...c, alpha_variants: false}))}), emptyState(), WITH_CATEGORIES);
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual([]);
+        expect(result.state?.changes).toEqual(changes);
+        expect(result.state?.changes[0].id).toBe('category:type:AAA@both');
+        expect(result.state?.changes.filter((c) => 'alphaVariants' in c)).toEqual([]);
+    });
+
+    it('refuses a category its catalogue does not know, and keeps the other changes', () => {
+        const doc = exportWith(WITH_CATEGORIES, [AAA]);
+        const result = parseImport(json({...doc, changes: [{...doc.changes[0], target: 'type:Ghost'}, doc.changes[0]]}), emptyState(), WITH_CATEGORIES);
+        expect(result.errors).toEqual(['change 0: unknown category type:Ghost']);
+        expect(result.state?.changes).toEqual([AAA]);
+    });
+
+    it.each([
+        ['markup in the key', 'type:<script>'],
+        ['a kind the tables do not have', 'region:Europe'],
+        ['no key', 'sector:'],
+        ['a key longer than sixty characters', `sector:${'x'.repeat(61)}`],
+        ['a colour instead of a category', '#2b4c7e'],
+    ])('refuses a category target with %s, whatever the catalogue', (_label, target) => {
+        const doc = exportWith(WITH_CATEGORIES, [AAA]);
+        for (const catalog of [WITH_CATEGORIES, CATALOG]) {
+            const result = parseImport(json({...doc, changes: [{...doc.changes[0], target}]}), emptyState(), catalog);
+            expect(result.errors).toEqual([`change 0: unknown category ${target.slice(0, 80)}`]);
+            expect(result.state?.changes).toEqual([]);
+        }
+    });
+
+    it('accepts any well-formed category from a catalogue built before the categories, which has no list to check', () => {
+        const doc = exportWith(WITH_CATEGORIES, [AAA]);
+        const result = parseImport(json({...doc, changes: [{...doc.changes[0], target: 'type:Ghost'}]}), emptyState(), CATALOG);
+        expect(result.errors).toEqual([]);
+        expect(result.state?.changes).toEqual([{...AAA, target: 'type:Ghost', id: 'category:type:Ghost@both'}]);
     });
 });
 

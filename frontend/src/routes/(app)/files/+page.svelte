@@ -22,7 +22,7 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -32,6 +32,7 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
@@ -45,7 +46,7 @@
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
-    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
+    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import '$lib/theme/components/files.css';
@@ -57,6 +58,7 @@
     const urlFilterColumns: UrlFilterConfig[] = [
         {urlKey: 'filename', type: 'text'},
         {urlKey: 'uploader', type: 'enum'},
+        {urlKey: 'scope', type: 'enum'},
         {urlKey: 'broker', type: 'enum'},
         {urlKey: 'status', type: 'enum'},
         {urlKey: 'size', type: 'size'},
@@ -235,6 +237,13 @@
             getValue: (row) => getStaticUploaderKey(row),
         },
         {
+            id: 'scope',
+            header: '',
+            cell: (row) => row.scope,
+            type: 'enum',
+            getValue: (row) => row.scope,
+        },
+        {
             id: 'size',
             header: '',
             cell: (row) => row.size_bytes,
@@ -338,7 +347,8 @@
         try {
             // Upload ALL files directly (user should use Edit button to crop before upload)
             for (const file of files) {
-                await uploadFile(file);
+                // A file uploaded here is personal: its owner shares it from the list (decision 36)
+                await uploadFile(file, undefined, 'personal');
             }
 
             // Close uploader and refresh
@@ -608,17 +618,30 @@
         }
     }
 
+    /** The selected files the user may delete; the others (uploaded by someone else) stay, with a notice. */
+    function deletableSelection(isBrim: boolean): string[] {
+        const files: Array<UploadedFile | BrimFile> = isBrim ? brimFiles : staticFiles;
+        const blocked = new Set(files.filter((file) => (file as {can_delete?: boolean}).can_delete === false).map((file) => ('file_id' in file ? file.file_id : file.id)));
+        return selectedFileIds.filter((fileId) => !blocked.has(fileId));
+    }
+
     async function handleBulkDeleteFiles() {
         const isBrim = activeTab === 'brim';
+        const deletable = deletableSelection(isBrim);
+        const kept = selectedFileIds.length - deletable.length;
+        if (kept > 0) {
+            notify({name: 'file.delete.skipped', detail: {count: kept, isBrim}, toast: {variant: 'warning', message: $t('uploads.deleteSkipped')}});
+        }
+        if (deletable.length === 0) return;
         try {
-            for (const fileId of selectedFileIds) {
+            for (const fileId of deletable) {
                 if (isBrim) {
                     await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
                 } else {
                     await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
                 }
             }
-            const deletedCount = selectedFileIds.length;
+            const deletedCount = deletable.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
             await loadFiles();
@@ -626,6 +649,34 @@
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
             notify({name: 'file.delete.failed', detail: {isBrim, reason: error}});
+        }
+    }
+
+    // Scope (decision 36): sharing is immediate; making a file personal asks first, since the others lose it
+    let scopeConfirmFile: UploadedFile | null = null;
+
+    function requestScopeChange(file: UploadedFile, scope: UploadScope) {
+        if (scope === 'personal') {
+            scopeConfirmFile = file;
+            return;
+        }
+        void applyScopeChange(file, scope);
+    }
+
+    function confirmMakePersonal() {
+        const file = scopeConfirmFile;
+        scopeConfirmFile = null;
+        if (file) void applyScopeChange(file, 'personal');
+    }
+
+    async function applyScopeChange(file: UploadedFile, scope: UploadScope) {
+        try {
+            const updated = await setUploadScope(file.id, scope);
+            staticFiles = staticFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate));
+            const message = scope === 'common' ? $t('uploads.scope.nowShared', {values: {name: file.original_name}}) : $t('uploads.scope.nowPersonal', {values: {name: file.original_name}});
+            notify({name: 'file.scope.changed', detail: {fileId: file.id, scope}, toast: {variant: 'success', message}});
+        } catch (e) {
+            notify({name: 'file.scope.change.failed', detail: {fileId: file.id, scope, reason: e instanceof Error ? e.message : String(e)}, toast: {variant: 'error', message: $t('uploads.scope.changeFailed')}});
         }
     }
 
@@ -788,7 +839,16 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid files={applyStaticGridFilters(staticFiles, currentFilters)} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
+                <FileGrid
+                    files={applyStaticGridFilters(staticFiles, currentFilters)}
+                    mode="browse"
+                    cardSize="full"
+                    showSearch={true}
+                    showActions={true}
+                    ondelete={(e) => deleteFile(e.id, false)}
+                    onpreview={(e) => openStaticPreview(e.file)}
+                    onscopechange={(e) => requestScopeChange(e.file, e.scope)}
+                />
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
@@ -800,6 +860,7 @@
                     initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
+                    onScopeChange={requestScopeChange}
                 />
             {/if}
         {:else}
@@ -941,6 +1002,9 @@
     </div>
 </ModalBase>
 
+<!-- Confirm making a file personal: the other users lose it, also where it shows as an icon or a photo -->
+<ConfirmModal open={scopeConfirmFile !== null} testId="files-scope-confirm" warning title={$t('uploads.scope.makePersonal')} message={$t('uploads.scope.makePersonalConfirm')} confirmText={$t('uploads.scope.makePersonal')} onConfirm={confirmMakePersonal} onCancel={() => (scopeConfirmFile = null)} />
+
 <!-- Confirm close uploader modal -->
 <ModalBase maxWidth="sm" onRequestClose={cancelCloseUploader} open={showCloseUploaderConfirm} zIndex={60}>
     <div class="modal-header">
@@ -974,6 +1038,7 @@
     open={showImageEditModal}
     preset="custom"
     uploadOnComplete={imageEditFileIndex === null}
+    scope="personal"
 />
 
 <!-- File Edit Modal (non-image files) -->
@@ -986,6 +1051,7 @@
     }}
     open={showFileEditModal}
     uploadOnComplete={fileEditFileIndex === null}
+    scope="personal"
 />
 
 <BrokerModal isOpen={createBrokerOpen} mode="create" onclose={() => (createBrokerOpen = false)} />

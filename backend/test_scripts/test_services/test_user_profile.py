@@ -1056,3 +1056,100 @@ class TestLastActiveAdministrator:
         assert outcome == (True, None), f"Deactivating {dormant.username}, already inactive, takes no active admin away: today's (True, None) must stay"
         after = _flags(await _stored_users(isolated_engine))
         assert after == {dormant.id: (True, False), member.id: (False, True)}, f"The flags stay as they were: {after}"
+
+
+# ============================================================================
+# AN EMAIL CHANGE RESETS THE VERIFICATION — lot A6e, C6 (release 1.3, workstream A)
+# ============================================================================
+# These helpers serve TestUpdateProfileEmailVerification only, so they live next to it. Every test runs on the
+# private database of isolated_engine. The users are set up and committed in a session of their own, so update_profile
+# runs in isolated_session, which has never loaded them, and starts from the committed row, as a request does: a
+# session still holding the row as created (email_verified_at NULL) would turn the reset into a no-op UPDATE and fail
+# a correct cure. The outcome is read in a fresh session.
+
+#: When the address was verified: any value that is not NULL; what a kept verification keeps is the value read back.
+_VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0)
+
+
+@dataclass(frozen=True)
+class _StoredProfile:
+    """A committed users row, as far as a profile change goes, read in a fresh session."""
+
+    username: str
+    email: str
+    email_verified_at: Optional[datetime]
+
+
+async def _stored_profile(engine: AsyncEngine, user_id: int) -> _StoredProfile:
+    """The committed row of ``user_id``, read in a fresh session (never the identity map of the session under test)."""
+    async with AsyncSession(engine) as fresh:
+        row = (await fresh.execute(select(User.username, User.email, User.email_verified_at).where(User.id == user_id))).one()
+        return _StoredProfile(row.username, row.email, row.email_verified_at)
+
+
+async def _committed_user(engine: AsyncEngine, role: str, *, verified: bool) -> tuple[_UserRef, _StoredProfile]:
+    """A regular user, its address verified when asked, committed in a setup session of its own; and its row as read back."""
+    async with AsyncSession(engine, expire_on_commit=False) as setup:
+        ref = await _new_user(setup, role, is_superuser=False)
+        if verified:
+            user = await setup.get(User, ref.id)
+            user.email_verified_at = _VERIFIED_AT
+            await setup.commit()
+    stored = await _stored_profile(engine, ref.id)
+    assert (stored.email_verified_at is not None) == verified, f"Setup: {ref.username} must {'' if verified else 'not '}have a verified address: {stored}"
+    return ref, stored
+
+
+class TestUpdateProfileEmailVerification:
+    """C6 of lot A6e: an email change sets users.email_verified_at back to NULL, in the commit of the new address (the
+    verification was of the old one); a change that is no email change leaves it as it was.
+
+    An email change is the one of C2: ``email`` given and different from the stored one, compared exactly, as
+    update_profile compares it. Today update_profile never touches email_verified_at: the two resets are red on their
+    last assertion, after a change that is committed; the keeps are guards, green today and after.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("with_username", [False, True], ids=["email-only", "email-and-username"])
+    async def test_an_email_change_clears_the_verification(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, with_username: bool):
+        """NEW, red today (email_verified_at stays set): the new address is not verified, alone or beside a new username."""
+        ref, before = await _committed_user(isolated_engine, "verified", verified=True)
+        tag = uuid.uuid4().hex[:8]
+        new_email = f"changed_{tag}@example.com"
+        new_username = f"renamed_{tag}" if with_username else None
+
+        updated, error = await user_service.update_profile(session=isolated_session, user_id=ref.id, username=new_username, email=new_email)
+
+        assert error is None and updated is not None, f"The change of {ref.username}'s email must succeed: error {error!r}"
+        after = await _stored_profile(isolated_engine, ref.id)
+        assert (after.username, after.email) == (new_username or before.username, new_email), f"The change must be committed: {before} → {after}"
+        assert after.email_verified_at is None, f"An email change must set email_verified_at back to NULL, in the commit of the new address: {before} → {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("change", ["username-only", "same-email", "username-and-same-email"])
+    async def test_a_change_that_is_no_email_change_keeps_the_verification(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, change: str):
+        """GUARD, green today and after: a new username, the account's own email sent again, or both, change no address,
+        so email_verified_at stays as it was; the username changes when one is given."""
+        ref, before = await _committed_user(isolated_engine, "verified", verified=True)
+        username = None if change == "same-email" else f"renamed_{uuid.uuid4().hex[:8]}"
+        email = None if change == "username-only" else before.email
+
+        updated, error = await user_service.update_profile(session=isolated_session, user_id=ref.id, username=username, email=email)
+
+        assert error is None and updated is not None, f"The {change} change must succeed: error {error!r}"
+        after = await _stored_profile(isolated_engine, ref.id)
+        expected = _StoredProfile(username or before.username, before.email, before.email_verified_at)
+        assert after == expected, f"A {change} change must keep the address and its verification: {before} → {after}"
+
+    @pytest.mark.asyncio
+    async def test_a_refused_email_change_keeps_the_verification(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD, green today and after: an address another account already uses is refused, and nothing is written,
+        the verification included."""
+        ref, before = await _committed_user(isolated_engine, "verified", verified=True)
+        _, holder = await _committed_user(isolated_engine, "holder", verified=False)
+
+        updated, error = await user_service.update_profile(session=isolated_session, user_id=ref.id, email=holder.email)
+
+        assert (updated, error) == (None, "Email already registered"), f"{holder.email} is {holder.username}'s: the change must be refused, got {(updated, error)}"
+        after = await _stored_profile(isolated_engine, ref.id)
+        assert after == before, f"A refused change must write nothing, the verification included: {before} → {after}"

@@ -91,10 +91,10 @@
                 <span class="text-base shrink-0 leading-none">{option.icon}</span>
             {/if}
             <div class="min-w-0">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <div class="text-sm font-medium text-lf-primary">
                     {option.value || ''}
                 </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+                <div class="text-xs text-lf-muted truncate" title={option.label}>{option.label}</div>
             </div>
         </div>
     {/snippet}
@@ -104,7 +104,7 @@
                 {#if option.icon}
                     <span class="text-sm shrink-0 leading-none">{option.icon}</span>
                 {/if}
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{option.value || ''}</span>
+                <span class="text-sm font-medium text-lf-primary truncate">{option.value || ''}</span>
             </div>
         {:else}
             <div class="flex items-center space-x-2 min-w-0">
@@ -112,10 +112,10 @@
                     <span class="text-base shrink-0 leading-none">{option.icon}</span>
                 {/if}
                 <div class="min-w-0">
-                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div class="text-sm font-medium text-lf-primary">
                         {option.value || ''}
                     </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+                    <div class="text-xs text-lf-muted truncate" title={option.label}>{option.label}</div>
                 </div>
             </div>
         {/if}

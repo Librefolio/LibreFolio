@@ -22,6 +22,8 @@ class WakeSyncJob(StrictModel):
     items_ok: int = Field(default=0, description="Items brought up to date")
     items_err: int = Field(default=0, description="Items that failed")
     error: str | None = Field(default=None, description="What went wrong: the class of the error, never its message")
+    items_deferred: int = Field(default=0, description="Items a provider's pause after too many requests deferred: neither ok nor failed")
+    retry_at: datetime | None = Field(default=None, description="When the job runs again before its regular round, in UTC: the end of a provider's pause or of the wait after a failure; null when none")
 
 
 class WakeSyncResponse(StrictModel):

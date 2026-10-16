@@ -29,28 +29,34 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
 
 `ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
-(`$auth.user?.is_superuser ?? false`). The registry holds seven tabs:
+(`$auth.user?.is_superuser ?? false`). The registry holds eight tabs:
 
 | `id` | `order` | Body | Visible to | Extras |
 |---|---|---|---|---|
 | `profile` | 10 | `ProfileTab` | everyone | — |
 | `preferences` | 20 | `PreferencesTab` | everyone | — |
+| `plugins` | 25 | `PluginSettingsTab` | everyone | — |
 | `about` | 30 | `AboutTab` | everyone | — |
 | `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
 | `users` | 110 | [`UsersTab`](#userstab) | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `backup` | 120 | `BackupTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 
-The first five bodies are in `lib/features/settings/tabs/`. The Backup tab's body, `lib/features/backup/BackupTab.svelte`
-(label `backup.tab`), and the Email tab's, `lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live
-with their features: for the Email tab see [The Email Tab](../../../backend/email.md#email-tab).
+Five bodies are in `lib/features/settings/tabs/`. The Plugins tab's body,
+`lib/features/plugin-settings/PluginSettingsTab.svelte` (label `pluginSettings.tab.label`), the
+Backup tab's, `lib/features/backup/BackupTab.svelte` (label `backup.tab`), and the Email tab's,
+`lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live with their features:
+for the Plugins tab see [Plugin Settings › The Interface](../../../architecture/patterns/plugin_settings.md#interface),
+for the Email tab [The Email Tab](../../../backend/email.md#email-tab). The Plugins tab takes no
+props: every user sees it, and the catalogue the API returns already says which fields this user may
+change.
 
 The page is the runtime of the registry, written in Svelte 5 runes:
 
 - **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
   sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
   with the labels hidden on a phone (`hideLabelOnMobile`). The bar is also `scrollable`: tabs that
-  do not fit the card (an administrator sees seven) scroll sideways instead of being clipped by its
+  do not fit the card (an administrator sees eight) scroll sideways instead of being clipped by its
   `overflow-hidden`, and the active tab stays whole in view (see
   [Scrollable tab bar](../core-ui/toolbar.md#tabbar-scrollable)).
 - **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
@@ -71,7 +77,7 @@ import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
 import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-    // profile (10), preferences (20), about (30), admin (100, alignEnd)
+    // profile (10), preferences (20), plugins (25), about (30), admin (100, alignEnd)
     // Administrators only: the accounts and the open invitations (decision D-A10).
     {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser},
 ];
@@ -218,12 +224,43 @@ Manages user profile information:
 - **Avatar**: Editable via `ImagePickerWrapper` → `AssetPickerModal` → crop
 - **Username** and **Email**: editable once the edit lock is open, each with its own save and undo
   (`PUT /api/v1/auth/profile`)
-- **Password change**: Opens `PasswordChangeModal`
+- **The email's password** ([Changing the Email](../../../architecture/security.md#email-change)):
+  while the tab is unlocked and the email differs from the stored one, a password input appears
+  under the email's hint (`profile-email-password`, `autocomplete="current-password"`, placeholder
+  `settings.currentPassword`), described by `profile-email-password-hint`
+  (`settings.emailPasswordHint`). Both email Saves and `profile-save-all` stay disabled while it is
+  empty; the username's Saves do not wait for it. The email's request is
+  `{email, current_password}`, the username's never carries the password. The password is emptied
+  whenever the email is back to the stored one, after a save included
+- **Refusals**: `CURRENT_PASSWORD_REQUIRED` and `CURRENT_PASSWORD_INVALID` are worded by the tab
+  (`settings.currentPasswordRequired`, `settings.currentPasswordIncorrect`) and published on
+  `profile-error` as `data-error-code`; the typed email stays and only the password is emptied. Any
+  other refusal shows the server's `detail` when it is a sentence (*Email already registered*),
+  `settings.updateFailed` for any other `detail` (another code, a `422` list), and puts the field
+  back to the stored value. The banner clears after 5 seconds
+- **Password change**: opens `PasswordChangeModal` (`features/settings/PasswordChangeModal.svelte`):
+  the current password, the new one with `PasswordStrength` under it, and the confirmation. The
+  modal binds `PasswordStrength`'s `valid` (`bind:valid={passwordMeetsRules}`) and keeps no copy of
+  the [password rules](../../../architecture/security.md#password-rules): `password-change-submit`
+  stays disabled until the three fields are filled, the rules hold and the confirmation matches.
+  A refusal whose `detail` is `{error_code: "PASSWORD_TOO_WEAK", …}` shows
+  `auth.validation.passwordTooWeak`; the plain-string `detail`s of a wrong current password
+  (*incorrect*) and of a new password equal to it (*different*) show
+  `settings.currentPasswordIncorrect` and `settings.passwordMustBeDifferent`; anything else, the
+  message `trySave` extracts, `settings.passwordChangeFailed` when it finds none. An object `detail`
+  is never lower-cased as a string: before A6c that threw
 - **Delete account**: `delete-account-button` opens the
   [`AccountDeletionDialog`](#accountdeletiondialog) in `self` mode, with
   `testIdPrefix="profile-delete"`; once the account is deleted, the tab calls `auth.logout()` and
   goes to `/`
 - Edit mode toggle to prevent accidental changes
+
+Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`),
+and the «A6e» block of `frontend/e2e/settings.spec.ts` (`./dev.py test front-utility settings`) on the
+lane's real backend, with a throwaway account and a second browser context signed in before the change,
+and signed out by it. The password change: `PasswordChangeModal.test.ts`, in the same
+`component-unit` action (what enables Save, what reaches the server, the refusals with
+`PASSWORD_TOO_WEAK` among them, the rules taken from `PasswordStrength`).
 
 ### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
 
@@ -250,7 +287,9 @@ tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passin
 `embedded` prop (see below) so they sit inside the tab's own cards without double separators.
 
 **Registration mode.** `registration_mode`, in the *Security* category, is a `SettingSelect`
-(default `open`, `SETTING_DEFAULTS`). The server variable `LIBREFOLIO_REGISTRATION` can pin it
+(default `invite`, `SETTING_DEFAULTS`, as in `GLOBAL_SETTINGS_DEFAULTS`: **Reset to Default** and
+**Reset All to Defaults** propose `invite`, also on an upgraded instance that kept `open`). The
+server variable `LIBREFOLIO_REGISTRATION` can pin it
 ([Registration Modes](../../../architecture/access_control.md#registration-modes)); the tab learns
 it from the [instance configuration](../../state/app-state.md#instance-config),
 `instanceConfig.config.accounts.registration_locked`:

@@ -27,9 +27,11 @@ Environment Variables (see .env):
     SESSION_COOKIE_SECURE: Secure attribute of the session cookie: auto | always | never (default: auto)
     RISK_SIMULATION_WORKERS: Spawned simulation workers (default: 1)
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
-    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
-    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600)
-    LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted)
+    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600; managed: 60)
+    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600; managed: 60)
+    LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted); a profile's defaults: PROFILE_DEFAULTS
+    LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response (default: off; managed: on)
+    LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
 env_secret(). Every variable the code reads is listed in .env.example.
@@ -39,7 +41,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from backend.app.utils.runtime.version import get_git_version
@@ -58,6 +60,20 @@ DEFAULT_PROD_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "prod"
 DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
 PRODUCTION_DATA_MARKER = ".librefolio-production-data"
 TEST_LANE_HEADER = "X-LibreFolio-Test-Lane"
+
+#: What a profile changes (decision D5, F27): ``Settings`` gives every listed field the environment and ``.env`` leave
+#: unset the active profile's value. A value the operator sets always wins, even one equal to the code default. A
+#: self-hosted install keeps every code default.
+PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
+    "selfhosted": {},
+    "managed": {
+        # A hosting provider runs many instances: idle risk workers give their memory back after a minute (F27)
+        "RISK_SIMULATION_IDLE_TIMEOUT_SECONDS": 60.0,
+        "RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS": 60.0,
+        "LIBREFOLIO_FRAME_PROTECTION": True,
+        "LIBREFOLIO_CSP_REPORT_ONLY": True,
+    },
+}
 
 #: The secrets that make an instance trust a session or decrypt its data, in every form. A test runtime never inherits
 #: them (``configure_test_runtime`` in ``scripts/cli_base.py``): a test lane signs and derives with secrets of its own.
@@ -221,13 +237,20 @@ class Settings(BaseSettings):
         return value.strip().lower() if isinstance(value, str) else value
 
     # Instance profile: "selfhosted" (an install run by its owner) or "managed" (an instance a hosting provider runs for
-    # its customers), reported by GET /system/instance
+    # its customers), reported by GET /system/instance. Its defaults: PROFILE_DEFAULTS
     LIBREFOLIO_PROFILE: Literal["selfhosted", "managed"] = "selfhosted"
 
     @field_validator("LIBREFOLIO_PROFILE", mode="before")
     @classmethod
     def _instance_profile(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    # Frame protection (D5): X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' on every
+    # response. Off by default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant panels)
+    LIBREFOLIO_FRAME_PROTECTION: bool = False
+    # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
+    # is blocked. Off by default
+    LIBREFOLIO_CSP_REPORT_ONLY: bool = False
 
     # Native quantitative engines
     RISK_SIMULATION_WORKERS: int = Field(1, ge=1, le=8)
@@ -238,6 +261,16 @@ class Settings(BaseSettings):
     RISK_OPTIMIZATION_TIMEOUT_SECONDS: float = Field(60.0, gt=0)
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
+
+    @model_validator(mode="after")
+    def _apply_profile_defaults(self) -> "Settings":
+        """Give every field the profile changes, and that neither the environment nor ``.env`` set, the profile's value."""
+        for name, value in PROFILE_DEFAULTS.get(self.LIBREFOLIO_PROFILE, {}).items():
+            if name not in self.model_fields_set:
+                # Not an assignment, which would count the field as set by the operator and skip its validation; the
+                # table's values are checked against the fields' types by services profile-defaults
+                object.__setattr__(self, name, value)
+        return self
 
     model_config = ConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -396,6 +429,9 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("scenario_catalog"),
         Path("secrets"),
         Path("secrets/instance.key"),
+        # Instance backup (workstream B): the archives, and the restore's copies and its pending marker (lots B2, B3).
+        Path("backups"),
+        Path(".restore"),
     )
     for relative in managed_paths:
         test_target = (candidate / relative).resolve()

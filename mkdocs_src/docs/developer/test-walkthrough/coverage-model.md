@@ -338,7 +338,7 @@ whichever exists. Pass `--input` to point elsewhere.
 | `JS_FEATURE` | `src/lib/features/` — AI export, import wizard, asset grouping |
 | `JS_STORE` | `src/lib/stores/` — shared client state |
 | `JS_API` | `src/lib/api/`, `src/lib/services/` |
-| `JS_UTILITY` | `src/lib/utils/`, `src/lib/risk/` — pure functions, the cheapest to test |
+| `JS_UTILITY` | `src/lib/utils/`, `src/lib/features/risk/` — pure functions, the cheapest to test |
 | `JS_CHART` | `src/lib/charts/` — chart building and signal overlays |
 | `SVELTE_UI` | `.svelte` component blocks |
 | `JS_ROUTE` | `src/routes/` — pages and layouts |
