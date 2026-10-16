@@ -56,7 +56,13 @@ zero silently** — hence the dedicated coverage test.
 
 ### Conventions
 
-- **Decimal columns**: `Numeric(18, 6)` for precision
+- **Decimal columns** (C-97): `Numeric(18, 6)` for amounts and event values; quantities `RealDecimal(22, 10)`;
+  prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
+  the decimal written, at most 15 significant digits); FX rates `Numeric(24, 10)`. A value typed or read from a
+  file over its column's limit is refused, never rounded (`db/precision.decimal_limit_issue`); a value LibreFolio
+  or a plugin computes is rounded explicitly (`db/precision.round_computed_value`); provider prices are truncated
+  (`truncate_priceHistory`). Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
+  `financial_math` (`position_quantities`, `native_balances`)
 - **Timestamps**: UTC via `utcnow()` helper
 - **Daily-point policy**: one record per day for prices and FX rates
 - **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`

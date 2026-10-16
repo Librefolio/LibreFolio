@@ -7,7 +7,8 @@ Verifies:
 - Foreign keys enforced
 - Unique constraints present
 - Indexes created
-- Decimal columns use Numeric(18, 6)
+- Decimal columns: Numeric(18, 6) for amounts, RealDecimal for quantities (22, 10), prices and the per-unit cost
+  basis (24, 12) (C-97)
 - Daily-point policy constraints
 
 Usage:

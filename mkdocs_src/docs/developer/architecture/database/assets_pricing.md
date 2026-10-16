@@ -92,6 +92,8 @@ A subtype says which base type the instrument contains: `ETF_BOND` is an ETF tha
 
 Daily OHLCV (Open, High, Low, Close, Volume) price data for each asset, one row per `(asset_id, date)`. Populated by asset pricing providers. `open`, `high`, `low` and `close` are all nullable: the [price resolver](../../backend/transactions/price_resolver.md) values a day from `close`, and uses the day's range only when `open`, `high` and `low` are all present.
 
+The prices (`open`, `high`, `low`, `close`, `adjusted_close`) are `RealDecimal(24, 12)`: up to 12 decimal places, read back as written; `volume` is `Numeric(24, 0)`. A provider's prices are truncated to 12 decimal places and 15 significant digits; a manual price over either limit is refused (see [Decimal Columns](index.md#decimal-columns)).
+
 ### 🔌 `ASSET_PROVIDER_ASSIGNMENT`
 
 Decouples the asset from its data source. This table configures which provider to use for fetching prices and metadata.
