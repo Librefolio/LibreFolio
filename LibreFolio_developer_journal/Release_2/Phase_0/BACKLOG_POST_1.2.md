@@ -2704,6 +2704,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   (978/979). Verdetto della triage: l'orologio (un'assunzione del test), nessun difetto del prodotto né dei miei file. Cura
   per il proprietario dell'area dei file: un budget esplicito su quel `waitFor`. Dettagli: piano di T, «I component
   tokens, parte 1», passo 5.
+- **TC-17 · `tx-picker-pagination.spec.ts` apre il picker con un budget esplicito di 5 s** — minimo; T, 16/10, lotto «le
+  tabelle». `openPicker` (riga ~67) aspetta `tx-picker-modal` visibile con `timeout: 5_000`, e la spec ha altri budget
+  espliciti di 2–3 s. Nel sesto slot, a carico 90–140, P1 è caduto lì una volta: il modale non era visibile entro 5 s.
+  Da sola a carico ~45 la spec è passata 5/5, P1 in 7,0 s. Verdetto della triage: l'orologio, un'assunzione del test;
+  nessun difetto del prodotto né del lotto, che cambia solo gli stili. Cura per il proprietario della spec delle
+  transazioni: togliere i budget brevi espliciti e lasciare il timeout di `expect` della configurazione. Dettagli: piano
+  di T, «Sesto slot» e «La spec del rischio sui ruoli», passo 3.
 
 ---
 

@@ -616,7 +616,9 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
 | 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
 | 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `d39728347`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
-| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | 🔄 prove leggere verdi (1.991/1.991); slot E2E al via |
+| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `77bfa6a39`, base merge `9a02a02c7`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); ingresso dopo il fermo di FE8b |
+| 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ⏳ CHECKPOINT READY (23:3x): `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
+| 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ⏳ CHECKPOINT READY (23:3x): Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
 
 ## Avanzamento
 
@@ -2921,3 +2923,139 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **3 · Prove leggere** (carico 50–55, sotto `nice`): Prettier verde (una riga vuota doppia tolta in
 > `DataTableColumnFilter`); `--check` pulito; i quattro gate dei colori e i 49 file di unità che nominano tabelle,
 > `DataEditor` e le tabelle della dashboard **1.991/1.991**. Lo slot E2E al via del coordinatore (fermo di FE8b).
+
+> ✅ **Committato** dal coordinatore: `77bfa6a39` (21:28; negli 8 componenti cambiano solo lo `<style>` e l'import); base
+> merge con la punta `102fa9ec1` (E, Y12b, C-66 della 1.3): **`9a02a02c7`**, pulita.
+
+### Sesto slot — 16/10/2026 sera (le tabelle)
+
+> **Via** del coordinatore (21:42): corsia 6155 su `9a02a02c7`, carico 118 (le tre run della 1.3), 1 worker sopra 60,
+> taglio alle 22:50; le spec rimaste e i rossi di carico si recuperano dopo; l'ingresso dopo il fermo di FE8b.
+
+> **Esito** (21:42–22:47, carico 48–185; `files/T-r2/slot6/`): `api sync` rc 0; `--check` pulito; i quattro gate
+> 134/134; `front check` 0 e 0; `component-unit` 160 file, **4.147/4.147**. E2E, tutte e 14 le spec partite: **298
+> verdi, 3 rossi, 32 saltati dalla spec stessa** (`tx-import-report-set`): `asset-list` 30, `transactions-table` 25,
+> `asset-data-editor` 26, `tx-bulk-diagnostics` 2, `tx-selection-after-bulk` 10, `front-broker detail` 38,
+> `front-portfolio dashboard` 27, `tx-import-report-set` 32, `files-uploader` 8, `front-portfolio risk` 36 + **2
+> rossi**, `risk-lab` 44, `fx-list` 12, `tx-picker-pagination` 4 + **1 rosso**, `tx-import-scalable-transfers` 4. Porta
+> libera alle 22:47.
+
+> ⚠️ **Fuori pista — i due rossi di `risk-analysis.spec.ts`, triage:** il describe «L3's table, as the developer
+> approved it on 06/10/2026» confronta letterali esadecimali: a :3528 la riga di possesso `rgb(255, 255, 255)` (il
+> bianco di prima di `DataTable`, ora la card `rgb(250, 251, 250)`), a :3611 e :3619 la riga scelta `rgba(34, 197, 94,
+> 0.12)` (il verde di L3 schiarito dalla review 4, ora `--lf-selected`); la selezione vince sulla tinta del riferimento
+> come prima. **Verdetto: assunzione** (contro la regola 10 dello skill). **Decisione del coordinatore** (22:3x, «strada
+> 1»): si tiene `--lf-selected` (lo scopo della review 4, una selezione chiara invece del verde pesante, resta; il
+> developer conferma al mattino; il verde proprio di L3 si può ripristinare dopo come eccezione da 2 token); la spec,
+> del rischio, la cambio io nel lotto con test-author (i ruoli risolti nella pagina, i commenti della review 4), poi
+> `front-portfolio risk` da solo, poi un checkpoint a parte, solo test. Il cambio di colore è il punto 31 della raccolta
+> per la designer.
+
+> ⚠️ **Fuori pista — `tx-picker-pagination`, P1:** tempo scaduto (45 s) all'apertura del picker (`tx-picker-modal` non
+> visibile entro 5 s), sul primo test della spec, carico 90–140; gli altri 4 test aprono lo stesso picker e passano, e
+> il lotto cambia solo gli stili. Ipotesi 2 della triage (l'orologio): da rilanciare da solo a carico più basso prima di
+> giudicarlo.
+
+### La spec del rischio sui ruoli — 🔄 16/10/2026 notte («strada 1»)
+
+> ✅ **1 · test-author** (22:48–22:55, agente `risk-l3-roles-spec`): in `e2e/portfolio/risk-analysis.spec.ts`, describe
+> «L3's table…», un aiuto `roleBackground(page, role)`: una sonda dipinta col ruolo, letta con `getComputedStyle` e
+> tolta, come `expectComputedBorderColor` (regola 10 dello skill), con la premessa che il ruolo si risolva (una sonda
+> trasparente farebbe passare due assenze). La riga di possesso contro `--lf-surface-card` (era :3528, ora :3554), le
+> due righe scelte contro `--lf-selected` (erano :3611 e :3619, ora :3640 e :3648), letti dopo `expectLightTheme`; il
+> cielo e l'ambra dei riferimenti, i titoli e i messaggi invariati; i commenti della review 4 aggiornati. +35/−6, solo
+> quel describe; Prettier pulito. Chromium scrive il `color-mix()` come `oklab(… / 0.12)` sia per la sonda sia per la
+> riga.
+
+> ✅ **2 · Il controllo dei tipi di `e2e/`** (`tsc -p tsconfig.e2e.json`, perché `front check` esclude `e2e/`;
+> 23:01–23:02, carico 48, `files/T-r2/rm/tsc_e2e.log`): **0 errori** in `risk-analysis.spec.ts`. Gli altri 4 stanno in
+> file che il lotto non tocca: `e2e/fixtures/sync-overwrite.ts` (2, TS2769), `e2e/onboarding-tour.spec.ts` (TS2322) e
+> `src/lib/types/files.ts` (TS2307, l'alias `$lib` che `tsconfig.e2e.json` non risolve); sono preesistenti e fuori
+> perimetro.
+
+> ✅ **3 · La rilanciata** (`files/T-r2/rerun7.sh`, lanciata da `go7.sh`; corsia 6155, `/tmp/librefolio-r2-t`): il via
+> del coordinatore alle 23:08, con partenza alla fine della run b di G (che sta nella sua corsia, 6153 e
+> `/tmp/librefolio-r2-g`) e al più tardi alle 23:15. G è finita alle 23:11:17; la rilanciata è partita subito e ha
+> finito alle 23:33, con la porta libera. Albero: `9a02a02c7` con le modifiche dei due checkpoint. **Tutto verde, 63
+> E2E:** `front check` 0 e 0 (23:11–23:14); `front-portfolio risk` **38/38** (23:14–23:22, 1 worker a carico 86; il
+> build rifatto perché i sorgenti erano cambiati), compresi i due rossi del sesto slot, :3532 (le tinte e la riga
+> semplice) e :3625 (la selezione sopra la tinta); `tx-picker-pagination` **5/5** (23:22–23:28, 2 worker a carico 42, P1
+> in 7,0 s); `support-copy-and-go` **16/16** (desktop e mobile); `asset-event-editor-save` **4/4**. Log:
+> `files/T-r2/rerun7/`.
+
+> Le asserzioni nuove distinguono ancora gli stati: `--lf-selected` (`oklab(… / 0.12)`) non è né il cielo del
+> riferimento (`rgba(2, 132, 199, 0.1)`) né la card (`rgb(250, 251, 250)`).
+
+> ✅ **4 · Il verdetto su P1 di `tx-picker-pagination`:** l'orologio, cioè un'assunzione del test. `openPicker` (riga 67)
+> aspetta il modale visibile con un budget esplicito di 5 s, e la spec ne ha altri di 2–3 s: a carico 90–140 non
+> bastano, a carico ~45 il test intero dura 7 s. Non è un difetto del prodotto né del lotto, che cambia solo gli stili.
+> La spec è delle transazioni, fuori perimetro: la cura va al suo proprietario, ed è nell'indice come **TC-17**.
+
+> 🔄 **5 · Il checkpoint, solo test:** la spec più TC-17.
+
+### I 27 «ruolo-mancante» — 🔄 16/10/2026 notte (coda della notte, D-T27/D-T28)
+
+> **Avvio** (coordinatore, 21:5x; il developer dorme, i lotti validati entrano senza il suo OK): i file della colonna
+> `ruolo-mancante` di `designer/colori-residui-motivi.csv` (cartella di sessione del coordinatore); per D-T27 il ruolo
+> più vicino con «da rivedere», solo dove il cambio d'aspetto è piccolo; gli altri restano, col motivo. Prima un'analisi
+> breve. Gli interruttori e le categorie no: aspettano la designer.
+
+> ✅ **1 · L'analisi** (inviata 21:5x, approvata dal coordinatore: «23 migrano, 4 restano»; nessun ramo con modifiche sui
+> 4 file toccati; Z-3 della 1.3 tocca due righe dello `<script>` di `routes/(app)/assets/+page.svelte`, un hunk
+> diverso): i 27 sono le classi m1 dei 5 file del CSV (scanner: `files/T-r2/rm/legacy.mjs`).
+> - I 18 chip `<code>` nei banner info di `EventDataImportModal` (12) e `PriceDataImportModal` (6): `bg-white/30
+>   dark:bg-slate-700/50` → **`bg-lf-neutral/50`** (la palette dà `neutral` ai «neutral chips»). Misure
+>   (`files/T-r2/rm/chip_visibility.mjs`): stacco dalla tinta del banner 1,05/1,24 prima, 1,06/1,07 ora; `panel`, il
+>   ruolo del codice in linea, sparirebbe in chiaro (1,003); il testo del banner sul chip 6,90/8,60. «Da rivedere».
+> - Lo stato vuoto degli asset (`routes/(app)/assets/+page.svelte:1707–1708`): il cerchio verde e l'icona →
+>   `bg-lf-selected` e `text-lf-link`, l'accento dell'app («accent icons»); l'icona sul cerchio 5,19/4,53.
+> - Lo stato vuoto dei cambi (`routes/(app)/fx/+page.svelte:1141–1142`, 4 classi): **resta** — l'accento ambra della
+>   pagina, nessun ruolo d'accento ambra, `warning` lo leggerebbe come un avviso. **Domanda 7** nello skill.
+> - `SocialShareModal:243`: via `dark:focus-visible:ring-offset-slate-800` — lo stacco dell'anello trasparente nei due
+>   temi, come in chiaro; niente ruolo, perché il bottone riceve le classi di marca in palette (`bg-slate-900
+>   text-white`) e un ruolo lo renderebbe misto.
+
+> ✅ **2 · Applicati** (22:49, dopo lo slot, dalle bozze in `files/T-r2/rm/drafts/`, base `9a02a02c7` uguale): 12
+> sostituzioni in 4 file, le 23 classi. Lo skill `design-system`: la domanda aperta 7 (l'accento degli stati vuoti).
+
+> 🔄 **3 · Le prove leggere** (22:56–22:59, carico 38–44, sotto `nice`; log in `files/T-r2/rm/`): Prettier pulito sui 4
+> file e sulla spec del rischio; `theme-roles.mjs --check` pulito, 4 file sotto il record; `--update`: **m1 697 → 674**,
+> m2 2 → 2, le 4 righe tolte dal TSV. Vitest: i quattro gate del colore, `htmlSink` e `clipboardSink`,
+> `SocialShareModal`, `SupportActions`, `DataEditor` (rende i due modali d'import) e `clipboard`: **298/300**, 2 rossi
+> in `htmlSink.gate.test.ts`.
+
+> ⚠️ **Fuori pista — il gate `{@html}`:** `REVIEWED_SINKS` riconosce il punto `{@html}` di `PriceDataImportModal` per
+> espressione esatta, e il chip dentro quella stringa ha cambiato classe: il punto risulta non rivisto e la voce
+> stantia. Cambio accoppiato, fatto da test-author (agente `html-sink-entry`): solo l'`expr` della voce, una riga (il
+> `why`, un messaggio i18n statico con un `<code>` statico, resta vero); Prettier pulito. **Rilancio del gate: 7/7**
+> (23:02, carico 46): l'insieme torna **300/300**.
+
+> ⚠️ **Fuori pista — una prova partita sopra 50:** il controllo dei tipi di `e2e/` è partito a carico 83 (il carico è
+> salito fra la lettura e l'avvio); fermato subito. D'ora in poi le prove leggere passano da `files/T-r2/light.sh`, che
+> aspetta il carico sotto 50 e usa `nice`.
+
+> ✅ **4 · Le verifiche d'impatto** (lettura): nessun test confronta le classi tolte (i `bg-emerald-100` di
+> `AssetTable.test.ts` e `asset-list.spec.ts` sono il badge del tipo, un'altra cosa); `git diff --check` pulito. Le spec
+> E2E che aprono i file del lotto: `front-utility support-copy-and-go` (8 test, `SocialShareModal`) e `front-asset
+> asset-event-editor-save` (4, la modale d'import), proposte al coordinatore insieme alle rilanciate.
+
+> ⚠️ **Fuori pista — il TSV e FE8b, previsione corretta:** avevo scritto che le 4 righe tolte (8, 10, 40 e 52) non
+> toccano quelle che FE8b rinomina. Le intestazioni degli hunk dicono il contrario per una: la riga 52
+> (`routes/(app)/assets/+page.svelte`) confina con la 51 (`lib/utils/transactions/pairCellHtml.ts`), una delle 12 che
+> FE8b rinomina, e git dà conflitto sulle modifiche adiacenti. Il secondo dei due ad entrare avrà probabilmente un
+> conflitto lì. Si risolve con `node frontend/scripts/theme/theme-roles.mjs --resolve`, che fonde i tre stadi
+> dell'indice: la riga di `assets/+page.svelte` tolta, quella di `pairCellHtml.ts` col percorso nuovo di FE8b. Poi il
+> gate. Le altre tre righe sono lontane da quelle di FE8b.
+
+> ⚠️ **Fuori pista — `front check` dentro lo slot:** il carico non è sceso sotto 50 per 5 minuti (67–90, le prove
+> leggere di altre sessioni). Ho fermato l'attesa e ho messo `front check` come primo passo della rilanciata, nella
+> nostra corsia, come nel sesto slot.
+
+> ✅ **5 · `front check`** (primo passo della rilanciata, 23:11–23:14, `files/T-r2/rerun7/front-check.log`): **0 errori e
+> 0 avvisi**.
+
+> ✅ **6 · Le due spec E2E dei 23** (sì del coordinatore alle 23:08; in coda alla rilanciata, 23:28–23:33):
+> `front-utility support-copy-and-go` **16/16** (`SocialShareModal`, desktop e mobile) e `front-asset
+> asset-event-editor-save` **4/4** (la modale d'import).
+
+> 🔄 **7 · Il checkpoint**.
