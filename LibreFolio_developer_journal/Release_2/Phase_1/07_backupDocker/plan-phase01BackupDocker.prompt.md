@@ -2773,6 +2773,61 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   segnaposto tolti (BACKUP-010) non si scontrano con i percorsi nuovi.
 > - **Prossimo**: dopo le 06:45 `api backup`, poi l'handoff FROZEN.
 
+### B3 committato; B-13 e B6a-bis approvati (2026-10-16, 05:19-05:30) — fermo della macchina 05:30-06:45
+
+> - **B3 committato dal coordinatore** come checkpoint intermedio (non è un ingresso): `5f1543e81`
+>   `feat(backup): apply checked restore at next start` (20 file), `2c2c8fc3e` `docs(backup): restore an archive,
+>   follow or cancel it` (5), `887a24123` `docs(journal): B3 restore, security review, backlog B` (2). HEAD `887a24123`,
+>   worktree pulito. Il testo del CHANGELOG lo tiene il coordinatore per l'ingresso; le decisioni notturne (sessioni,
+>   P7, P11, `restore_in_use`, il lock) sono nella lista del developer.
+> - **B-13 approvato com'è analizzato** (`files/b13-analysis.md` della sessione): `changed` è un avviso, mai un
+>   rifiuto; il manifest resta v1. Dopo le 06:45: `api backup`, poi i rossi con test-author; commit separati da B3.
+> - **B6a-bis, via alle 05:24** (solo scrittura durante il fermo): la pagina nuova `admin/backup_restore.en.md` dalla
+>   scaletta (`files/b6-guide-outline.md`), senza la UI del ripristino (B5b) né gli archivi cifrati (B4), che vanno in
+>   B6b; una riga in `filesystem.en.md` «💾 Backup» (di H, permesso del coordinatore); la voce di navigazione sotto
+>   «🧹 Maintenance & Operations» con le tre `nav_translations` (etichette date da me); una riga in `admin/index.en.md`.
+>   docs-writer al lavoro; `mkdocs build` stretta e `check-links` dopo le 06:45, dopo `api backup`. Commit separato da
+>   B-13.
+
+### B6a-bis — la guida «Backup, Restore and Moving Your Instance» (2026-10-16, 05:24-06:55) ✅ — 🧊 FROZEN
+
+> - **docs-writer `a769f9f9`**, solo scrittura durante il fermo (nessuna build, nessun `dev.py`):
+>   - pagina nuova `admin/backup_restore.en.md` (301 righe; ancore `#contents`, `#what-follows`, `#create`,
+>     `#settings-backup`, `#command-line`, `#keep-copies`, `#check`, `#restore`, `#restore-command`, `#next-start`,
+>     `#supervisors`, `#bring-home`, `#to-your-server`, `#by-hand`, `#to-a-hosted-instance`, `#never-backwards`,
+>     `#troubleshooting`, `#check-refused`, `#restart-problems`, `#after-restore`);
+>   - una frase in testa a «💾 Backup» di `filesystem.en.md` (di H, permesso del coordinatore);
+>   - la voce di navigazione dopo «CLI Admin Tools» e le tre `nav_translations` (etichette mie, alla lettera);
+>   - un punto in `admin/index.en.md`.
+> - **Riletta da me**: i nomi di sezione citati fra «…» (che la build non controlla) esistono tutti, le etichette della
+>   UI («Reactivate», quelle della scheda) sono quelle dei cataloghi i18n; nessuna funzione inesistente (né il
+>   ripristino dalla scheda né gli archivi cifrati).
+> - **⚠️ Fuori pista — niente ancore di `cli_tools` nella pagina nuova**: le pagine it, fr ed es di `cli_tools` non
+>   hanno le sezioni del backup, e le build tradotte usano la pagina inglese come ripiego risolvendo i link sulle pagine
+>   tradotte: un link a `cli_tools.md#backup…` romperebbe la build stretta (regola della devWiki
+>   `docs-anchors-from-the-render`). Rimandi per nome di sezione, come già fa `hosting_providers`.
+> - **⚠️ Fuori pista — la scaletta sbagliava in quattro punti**, corretti nella pagina: la cartella è `./LibreFolio-data`
+>   (non `./data`); la pagina di blocco **non ha** il pulsante del backup (l'API, la CLI e il pannello sì) → **B-14** nel
+>   backlog, proposta per B5 con il permesso di H; per il ripristino da CLI su un'istanza nuova non serve creare prima
+>   l'admin; i totali di controllo non sono ancora nel manifest (B-13).
+> - **Corretto in `cli_tools`** (sezione mia, di B3): «🚚 Use an Archive on Another Installation» aveva una lista
+>   numerata seguita subito da una puntata, che Python-Markdown fonde: aggiunto «Good to know:» fra le due.
+> - **Trovati fuori dal perimetro, al coordinatore**: `user/settings/index.en.md` dice «five tabs» (per un admin ora
+>   sono sette: Backup ed Email); `configuration.en.md` dice che nessun plugin chiede impostazioni personali (justETF e
+>   Borsa Italiana ora le hanno).
+> - Debito di traduzione (nessun timbro): la pagina nuova, la frase di `filesystem`, il punto di `index` → B-11.
+> - **B-14 in corso, H** (coordinatore, 05:52): la pagina di blocco monta `BackupDownloadCard.svelte` senza props, con
+>   un `ToastContainer`; quando entra, B chiude la riga e aggiorna le due frasi della doc. **Vincolo per B5b**: non
+>   spostare, rinominare o dare props obbligatorie a quel componente senza dirlo al coordinatore.
+> - **H-17** (coordinatore, 06:03, opzione 2, comportamento invariato): dopo l'ingresso di B3, in
+>   `backup_max_upload_mb()` il ripiego diventa `profile_default(MAX_UPLOAD_VARIABLE, 0)` di H; proposto di togliere
+>   `MANAGED_MAX_UPLOAD_MB` e di fissare nel test (e) il valore del profilo gestito attraverso `profile_default`. B5 e B-13
+>   non toccano `config/backup.py`; B7 sì (le variabili di Litestream).
+> - **Dopo il fermo** (06:46-06:53, una prova alla volta, `nice`, carico sotto 70): `api backup` **23 passati** (il pin
+>   BACKUP-001 riparato, prova che chiude il checkpoint di B3); `mkdocs build` stretta **0 avvisi nostri** (141 s);
+>   `check-links` **96 validi**; `utils gate-docs-links` **63 passati**. `dev-cli-image` e `release-image-contract`
+>   leggono pagine che B6a-bis non tocca. Porta 6187 libera.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

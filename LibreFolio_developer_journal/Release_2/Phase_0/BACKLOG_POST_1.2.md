@@ -3750,7 +3750,8 @@ sulla base `23f6578f3`.
   - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
 
   `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
-  `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
+  `#restore-upload-limit`. Da B6a-bis: la pagina nuova `admin/backup_restore.en.md` (tutta), una frase in «💾 Backup» di
+  `filesystem` e un punto in `admin/index`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
   §13, «B2b — l'API della prova su copia».
 - **B-12 · Un salto d'orologio fra i worker di un server con `--workers N`, nel primo avvio dopo un ripristino** —
   piccolo, nessun rischio per i dati; B, 16/10 (B3, revisione di sicurezza di metà percorso). Ogni processo legge il
@@ -3767,6 +3768,15 @@ sulla base `23f6578f3`.
   CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
   il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
   `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
+- **B-14 · La pagina di blocco non ha il pulsante del backup** — piccolo; B, 16/10 (docs-writer, B6a-bis). Il piano 07
+  (§3.11) voleva la scheda di scaricamento di B5a (`BackupDownloadCard.svelte`) anche nella pagina di blocco
+  (`features/instance/components/InstanceBlockedPage.svelte`, di H); oggi un admin di un'istanza bloccata scarica il
+  backup solo dall'API, dalla CLI o dal pannello (le rotte sono in `ALLOWED_WHEN_BLOCKED`), e la doc lo dice
+  (`hosting_providers`, `backup_restore`). Proposta: in B5, con il permesso di H sulla pagina. Dettagli: piano 07, §13,
+  «B6a-bis». **In corso, H** (coordinatore, 16/10 alle 05:52): la pagina di blocco monta `BackupDownloadCard.svelte`
+  (senza props) sotto l'avviso, in una sezione sua, con un `ToastContainer`. Si chiude quando entra il lotto di H; poi B
+  aggiorna le due frasi della doc («no backup button yet» in `backup_restore.en.md`, «the block page has no button for
+  it yet» in `hosting_providers.en.md`).
 
 ## E · Email (fase 01)
 
