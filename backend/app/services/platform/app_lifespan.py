@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import ensure_data_dirs, get_settings, is_test_mode
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts.bootstrap_admin_service import startup_admin_bootstrap
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
@@ -206,6 +207,8 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
+    Step("admin-bootstrap", lambda: startup_admin_bootstrap()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),

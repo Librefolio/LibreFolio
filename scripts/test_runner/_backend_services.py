@@ -473,6 +473,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F02, the initial administrator: its variables, the startup bootstrap, the setup link, setup-link."""
+    print_section("Services: Initial Administrator (F02)")
+    print_info("Testing: backend/app/config/accounts.py admin_bootstrap_config, services/accounts/bootstrap_admin_service.py, token_service.issue_token(token=), user_usage, scripts/user_cli.py setup-link")
+    print_info("Tests: the variables and their errors, created/ignored/pending/rearmed/expired, two workers, the link logged once and emailed, setup completed, the waiting administrator in the usage")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_admin_bootstrap.py", test_names)
+    return run_command(cmd, "Initial administrator tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -1516,6 +1526,16 @@ Note: No backend server required.
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
         # private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "admin-bootstrap",
+        services_admin_bootstrap,
+        name="Initial Administrator (F02)",
+        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
+        # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
+        # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
         isolation="pure",
     )
     add_test(

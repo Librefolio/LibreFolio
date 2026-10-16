@@ -48,7 +48,9 @@ backend/
 
 - Cookie-based sessions (JWT in HttpOnly cookie)
 - Multi-worker: JWT stateless (no session store)
-- First user = automatic admin
+- The first account of an instance without accounts is an administrator (registration, in any mode); with
+  `LIBREFOLIO_ADMIN_EMAIL` (F02) that administrator is created at startup instead, and activates through a
+  single-use `/setup` link (`services/accounts/bootstrap_admin_service.py`)
 - Broker roles: Owner / Editor / Viewer
 
 ## Financial Math — One Home

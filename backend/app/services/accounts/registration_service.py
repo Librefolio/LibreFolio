@@ -141,11 +141,12 @@ def _live_invites(now: datetime):
 
 
 async def user_usage(session: AsyncSession, *, now: Optional[datetime] = None) -> UserUsage:
-    """How many places are taken: active accounts plus live invitations."""
+    """How many places are taken: active accounts, live invitations and the administrator waiting for its setup (F02)."""
     moment = now or utcnow()
     active = (await session.execute(select(func.count()).select_from(User).where(User.is_active.is_(True)))).scalar() or 0  # type: ignore[attr-defined]
     invites = (await session.execute(select(func.count()).select_from(AccountToken).where(*_live_invites(moment)))).scalar() or 0
-    return UserUsage(used=active + invites, max_users=_max_users())
+    waiting = (await session.execute(select(func.count()).select_from(User).where(*pending_admin_filter()))).scalar() or 0  # type: ignore[arg-type]
+    return UserUsage(used=active + invites + waiting, max_users=_max_users())
 
 
 async def create_invite(
@@ -247,3 +248,13 @@ async def register_user(
     await session.refresh(user)
     logger.info("User registered", user_id=user.id, username=user.username, is_superuser=user.is_superuser, invited=invited, first_user=first)
     return user
+
+
+def pending_admin_filter():
+    """The conditions of the account waiting for its F02 setup: inactive, with an ``admin_setup`` link, none of them used."""
+    setup_links = select(AccountToken.id).where(AccountToken.user_id == User.id, AccountToken.purpose == AccountTokenPurpose.ADMIN_SETUP)
+    return (
+        User.is_active.is_(False),  # type: ignore[attr-defined]
+        setup_links.exists(),
+        ~setup_links.where(AccountToken.consumed_at.is_not(None)).exists(),  # type: ignore[union-attr]
+    )

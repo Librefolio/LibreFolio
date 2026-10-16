@@ -16,6 +16,7 @@ from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
     AddressProbeResult,
+    AdminSetupRequest,
     AuthLoginRequest,
     AuthLoginResponse,
     AuthLogoutResponse,
@@ -33,7 +34,7 @@ from backend.app.schemas.auth import (
     UpdateProfileResponse,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, password_policy, registration_service, settings_service, token_service, user_service
+from backend.app.services.accounts import address_probe, bootstrap_admin_service, password_policy, registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -464,3 +465,38 @@ async def delete_own_account(
     )
 
     return {"message": "Account deleted successfully"}
+
+
+@router.post("/setup", response_model=AuthLoginResponse)
+async def setup_admin(
+    request: AdminSetupRequest,
+    response: Response,
+    http_request: Request,
+    session: AsyncSession = Depends(get_session_generator),
+):
+    """
+    Spend the setup link of the initial administrator (F02): choose the password, activate the account, sign in.
+
+    The password rules come first (400 ``PASSWORD_TOO_WEAK``). A link that is not a live setup link (used, expired,
+    revoked, unknown, of another purpose, or of an account already active, whose link is then revoked) answers 400
+    ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
+    """
+    _refuse_weak_password(request.new_password)
+    user = await bootstrap_admin_service.complete_admin_setup(session, request.token, request.new_password)
+    if user is None:
+        raise HTTPException(status_code=400, detail={"error_code": "TOKEN_INVALID", "message": "This setup link is not valid"})
+
+    show_donation_popup = record_login_and_maybe_show_popup(user)
+    session.add(user)
+    await session.commit()
+
+    _issue_session_cookie(response, http_request, user, await _session_ttl_hours(session))
+    logger.info("Initial administrator signed in after the setup", user_id=user.id, username=user.username)
+
+    user_settings = await settings_service.get_user_settings(user.id, session)
+    return AuthLoginResponse(
+        user=AuthUserResponse.model_validate(user),
+        user_settings=user_settings,
+        message="Setup complete",
+        show_donation_popup=show_donation_popup,
+    )
