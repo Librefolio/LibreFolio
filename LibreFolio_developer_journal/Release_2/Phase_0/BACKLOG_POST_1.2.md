@@ -3205,11 +3205,23 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     li genera da sé.
   - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+  ✅ **Chiusa da X il 16/10**:
+  - la chiamata della storia finisce oggi;
+  - i prezzi della storia dopo ieri restano fuori dalla cache e dai prezzi, così il prezzo di oggi resta il valore
+    corrente;
+  - gli eventi fino a oggi restano;
+  - con un buco nella cache, la chiamata va fino a oggi.
+
+  Sei test di regressione in `test_asset_source_refresh.py`, tre dei quali rossi sul codice di prima. Non su `mockprov`
+  ma su un fornitore finto in processo, che restituisce gli eventi solo dentro l'intervallo chiesto. Commit del
+  coordinatore, lotto X-R12. Decisione notturna N17 sul costo di justETF. Dettagli: piano 03, sezione «X-R12».
 - **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
   colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
   ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
   settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
+  ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
+  Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
 
 ## W · Import e transazioni (fase 01)
 
@@ -3793,6 +3805,10 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
   esegua i job, con lo stato riletto dentro il lock. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+- **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10 (Z7c-2).
+  Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
+  nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
 
 ## B · Backup e Docker (fase 01)
 
