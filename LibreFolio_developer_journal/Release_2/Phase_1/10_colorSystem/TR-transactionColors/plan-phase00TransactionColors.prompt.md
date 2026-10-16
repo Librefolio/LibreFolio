@@ -550,10 +550,22 @@ deve essere vuoto.
    > costruzione, mentre nel target L-20 lo ha già staccato. Per lo slot basta `front-designer-lab live`: legge il
    > sottotitolo con `colourSourceOf`, che regge sia la classe di palette sia il ruolo. Il picker si valida dopo
    > l'ingresso, o dopo una base merge con L-20.
-9. ⏳ Slot breve (verso le 15:00, al massimo 30 minuti), con lo script `slot_c.sh` in cartella di sessione:
-   - `server --test --build-only`;
-   - `front-transaction tx-import-flow`, `tx-import-matching`, `tx-import-resolution`;
-   - `front-designer-lab live`.
-
-   Nessun passo nuovo dopo +25 minuti; il passo in corso si taglia a +30.
-10. ⏳ Checkpoint (passo 7 e lotto 6), poi l'ingresso.
+9. ✅ (16/10) Slot breve, 14:47–14:56 (8 minuti), sulla base merge **`6c6d1979f`** del coordinatore: la punta
+   `1c7b9def2` con L-20, DV, IM e il fix di C4 (la regola morta `bg-white/90` tolta da `app.css`). I gate sull'albero
+   unito li ha verificati il coordinatore: 89/89.
+   > **Note implementazione:** `api sync` è stato lanciato fuori dallo slot appena è arrivata la merge (14:35, uscita 0,
+   > da un osservatore che aspettava HEAD nuovo, nessuna merge in corso e albero pulito). Lo slot (`slot_c.sh`, tagli
+   > assoluti: nessun passo nuovo dopo le 15:15, taglio alle 15:20; nessuno è servito) ha fatto, in serie, carico 19–45:
+   >
+   > | Passo | Uscita | Durata | Esito |
+   > |---|---|---|---|
+   > | `server --test --build-only` | 0 | 156 s | `svelte-check` **0 errori, 0 avvisi** |
+   > | `front-transaction tx-import-flow` | 0 | 90 s | **10/10** |
+   > | `front-transaction tx-import-matching` | 0 | 61 s | **6/6** |
+   > | `front-transaction tx-import-resolution` | 0 | 85 s | **15/15** |
+   > | `front-designer-lab picker` | 0 | 45 s | **4/4**: la versione di L-20, col sottotitolo migrato |
+   > | `front-designer-lab live` | 0 | 66 s | **12/12**: i tre test del sottotitolo leggono il ruolo |
+   >
+   > Porta 6154 libera alla fine. **I rossi dello slot A+B sono confermati «ambiente»:** le stesse tre spec, a macchina
+   > sveglia, passano tutte (31/31). Il backlog ha lo SHA di TR-1 (`546204732`).
+10. ⏳ L'ingresso in `dev_release2` (coordinatore).
