@@ -3175,3 +3175,68 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
     liberi dopo l'allineamento della base, che il coordinatore fa al prossimo checkpoint;
   - Z-13b non tocca più `refreshVersion`; Z-15 (il ricaricamento dei pannelli dopo un aggiornamento dei prezzi) si
     decide dopo Y11.
+
+### Passo 2 · E2E ✅ (2026-10-16, slot 2, 15:10–15:43; HEAD `94e5e146e`, la fusione con dev `b51bb3663`)
+
+> **Note implementazione**.
+> - **I commit**: il passo 2 l'ha salvato il coordinatore (`ec018afdf` feat, `77ae9bcd7` journal). Poi la fusione con dev
+>   `b51bb3663` (AF, IM, DV, H, W), con commit `94e5e146e`.
+>   - L'unico conflitto, nel backlog (Y-13 contro la nuova sezione MF), l'ho risolto tenendo i due lati.
+>   - `dashboard/+page.svelte` si è fuso da solo con DV: il pulsante ha i ruoli di DV e i miei attributi.
+> - **Le prove leggere sulla revisione fusa**: verdi, tranne **C4 `bg-white/90`**. Quel rosso viene da dev: le ultime
+>   occorrenze le hanno tolte IM e DV, senza togliere la regola da `app.css`. L'ho segnalato; i colori l'hanno corretto
+>   su dev in `1c7b9def2`.
+> - **La E2E**, una spec alla volta, `--workers 2`, script `files/scripts/y11_e2e.sh`, `DEADLINE=1545`:
+>   `front-portfolio page-busy` **5/5** (prima corsa); `dashboard` 27/27; `dashboard-cache` 6/6; `front-utility files`
+>   29/29; `front-broker detail` 38/38. In tutto **105/105**.
+> - **Saltata per la scadenza**: `front-ai-export memory`, da mettere nel prossimo slot.
+> - **⚠️ Fuori pista**: la build del primo passo, con il sito della documentazione, ha preso 15 minuti con il carico a
+>   80–120; il resto è stato nella norma. Porta 6189 libera alle 15:43.
+
+### Passo 3 · le pagine di AF e DV (2026-10-16, dalle 15:45) — prove leggere verdi, E2E da fare
+
+> **Note implementazione** (base `94e5e146e`, che contiene già gli ingressi di AF e DV).
+> - **AF**, con le patch preparate in `files/patches/` e provate a secco sulla stessa revisione:
+>   - **lista FX**: gettoni sul primo caricamento (catalogo, coppie e cambi), Aggiorna, periodo, impostazioni che vanno
+>     al backend, nuovo tentativo dei segnali, e il ricaricamento dopo la creazione di una coppia.
+>     **Senza gettone**: i ricaricamenti dopo una sincronizzazione (P3), l'aggiornamento della singola card (che ha il suo
+>     indicatore) e la lista degli asset, che non si aspetta;
+>   - **dettaglio FX**: gettoni su primo caricamento, cambio d'utente, orientamento, Aggiorna, periodo, segnali e
+>     confronto, nuovo tentativo dei segnali. Senza gettone: il completamento della sincronizzazione di una coppia
+>     appena creata, e le sincronizzazioni di coppie e asset (P3);
+>   - **lista asset**: gettoni su primo caricamento (catalogo, asset e prezzi), periodo, Aggiorna tutto, aggiornamento di
+>     una selezione, impostazioni, nuovo tentativo, e i ricaricamenti dopo la creazione o la modifica di un asset.
+>     Senza gettone: il poller dal vivo (`refreshLivePricesNow`), i ricaricamenti dopo una sincronizzazione,
+>     l'aggiornamento della singola riga e gli slug FX;
+>   - **i pulsanti**: `disabled`, `data-busy` e rotazione su `pageBusy.busy`, più `disabled:opacity-50`, che è
+>     un'opacità e non un colore. Il pulsante della lista asset riceve il suo primo test id: `assets-refresh-button`.
+>     Prettier ha solo rimesso a capo i miei due pulsanti delle pagine FX.
+> - **DV**:
+>   - `risk-refresh-button` tolto da `RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte`, con l'icona e, nel
+>     pannello, la funzione `loadBase` che restava senza chiamanti. Restano `risk-sync-button` e il derivato
+>     `refreshing`, che serve alle cornici dei risultati;
+>   - `ToolsHub` e `ToolHost`: gettoni su catalogo, caricamento dello strumento, Aggiorna, nuovo tentativo e
+>     ricaricamento confermato. Il pulsante gira e pubblica `data-busy` su `pageBusy.busy`; `disabled` tiene anche il
+>     `busy` locale, così i Vitest di oggi restano validi.
+> - **Le spec che cliccano `risk-refresh-button`** (`dashboard-cache`, `risk-real`, `risk-analysis`, `asset-detail`): le
+>   adatta `test-author`.
+> - **Le quattro spec**, adattate da `test-author`. Nessuna faceva clic su `risk-refresh-button`: tre lo usavano come
+>   barriera («l'ondata è arrivata», con `toBeEnabled`) e `asset-detail` controllava solo che mancasse.
+>   - `dashboard-cache`: l'aiutante `pressRefresh` aspetta che `sync-button` sia abilitato, poi prende il segno, poi
+>     clicca; la barriera diventa `sync-button` `data-busy="false"`, poi `riskSettled`.
+>   - `risk-real` (`openRiskTab`): `sync-button` `data-busy="false"`, 90 s.
+>   - `risk-analysis`: la stessa barriera, 20 s invece di 15, perché ora aspetta anche il report di 1 anno.
+>   - `asset-detail`: via il controllo di assenza di un test id che non esiste più. Prima di armare l'attesa della
+>     richiesta c'è ora una barriera: `risk-analysis-panel` `data-busy="false"`.
+>   - L'«Aggiorna» del dettaglio asset ricarica davvero il pannello del rischio (`riskRefreshVersion`).
+>   - Prettier pulito.
+> - **Prove leggere** (15:46–16:01, carico sotto 50; script `files/scripts/y11_light.sh`, log `files/logs/y11_*.log`):
+>   svelte-check 0/0; `theme-roles` pulito; store 76; risk-controller 102; risk-levels 498; allocation 192; component
+>   4 044 (i Vitest degli strumenti compresi); `check-orphans` pulito; `git diff --check` pulito; 6189 libera.
+>   - `core-unit` fa 6 412/6 413: l'unico rosso è il C4 `bg-white/90` ereditato da dev. La correzione dei colori
+>     (`1c7b9def2`) non è ancora nella mia base.
+> - **Checkpoint**: 11 file (+143/−87), elencati in `files/y11s3_stage_code.txt`, più il piano. La E2E del passo 3 è
+>   `files/scripts/y11s3_e2e.sh`, circa 45 minuti:
+>   - prima le spec adattate: dashboard-cache, risk, risk-real, asset-detail;
+>   - poi le pagine: fx-list, fx-detail, asset-list;
+>   - poi `pac-allocator-real` (gli strumenti), `live-pause` e `ai-export memory`.
