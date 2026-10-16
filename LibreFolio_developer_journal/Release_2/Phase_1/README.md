@@ -230,3 +230,5 @@ Sono tutti locali: la push la fa il developer.
 | 140 | 16/10 21:42 | Y: Y12b (P19: la riga del recupero di L1 legge il campo del backend) + spec dei tooltip di L3 resa robusta; L4 lento sotto carico → Y-21 | `23f71e739` |
 | 141 | 16/10 21:36 | B: B3 ripristino (CLI e scheda Backup, B5b), P7 (mai applicato a istanza bloccata), B5c biglietto dell'esito (N53), B-17, B-13 totali di controllo, B6a-bis guida, ordine d'avvio N57; all-backend 7/7 | `0cd910a7e` |
 | 142 | 16/10 21:55 | W: decisione 47 (la metà che cede va al costo medio; gambe sole convertite all'avvio) provata con J-24; all-backend 7/7 su `6162dfc0f` | `ea72346b7` |
+| 143 | 16/10 22:08 | H: docstring di `instance_block.py` (rotte pubbliche fuori lista, pagine dei link) | `3f561e204` |
+| 144 | 16/10 22:10 | Y: Y-14 («Aggiorna» della lista dei broker ricalcola le schede) | `47ed8ebc4` |
