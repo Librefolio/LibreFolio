@@ -3358,3 +3358,99 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
   4. `risk`, `privacy-masking`, `yield-on-cost-real`, `data-quality-real`, `toolbar-width-sweep`, `default-currency` e
      `price-refresh`.
   - Circa 60 minuti in tutto, 68 con TR: la guardia della scadenza salta la coda, da recuperare in uno slot successivo.
+- **18:00, conferma di `dashboard-cache`**: da sola, con `--workers 2`, su `8268f65ec` più i tre file del checkpoint.
+  - **6/6 in 36 s**, con il carico da 70 a 41; `:420` è verde.
+  - Il verdetto sul rosso delle 17:21 è confermato: lentezza da sovraccarico.
+- **Checkpoint**: il coordinatore ha committato `3324a9f59` (test P3 e riflusso della Dashboard) e `d99f7987d` (journal).
+  HEAD è `d99f7987d`, con l'albero pulito.
+
+### Passo 4 · BK e TR (dalle 18:02, su `d99f7987d`) — ✅ codice e prove leggere 18:29; E2E da fare
+
+> **Note implementazione**.
+> - **Via del coordinatore**:
+>   - applicare le patch;
+>   - `transactions/+page.svelte` è libero, e lui avvisa il programma colori;
+>   - nessuna classe di palette, e `theme-roles --check` fra le prove leggere.
+> - **Patch applicate** (`files/patches/y11_brokers_list.py`, `y11_broker_detail.py`, `y11_transactions.py`): ogni
+>   ancora è stata trovata una sola volta, quindi nessuna scrittura parziale.
+>   - **Lista dei broker**:
+>     - gettoni sul primo caricamento, sul cambio di valuta, sui ricaricamenti dopo creazione, modifica e cancellazione,
+>       e sul clic di `brokers-refresh`;
+>     - il pulsante pubblica `data-busy` e legge `pageBusy.busy`;
+>     - la radice `brokers-page` tiene il suo `data-busy`, che segue `loading`.
+>   - **Pagina del broker**:
+>     - gettoni sul primo caricamento, sul periodo, su «Aggiorna», sulla valuta, sulla prima apertura della scheda
+>       Transazioni e su `handleUpdated`;
+>     - anche sullo storico dell'allocazione, chiesto quando l'utente sceglie la vista Storico o quando questa viene
+>       ripristinata al montaggio, e su candele e contributo, come nella Dashboard;
+>     - `reloadAfterPriceCatchUp` resta senza gettone (P3). Il pulsante non segue più `reportLoading`, quindi non gira
+>       più durante il ricaricamento di sfondo: è la correzione chiesta dalla nota di Z.
+>   - **Transazioni**:
+>     - gettoni sul primo caricamento (prima le liste di riferimento, poi `reload()`), sui ricaricamenti morbidi dopo le
+>       modifiche dell'utente e sul clic di `tx-refresh-button`;
+>     - la radice `transactions-page` tiene il suo `data-busy`, che segue `loading`;
+>     - la pagina non ha ascoltatori dei prezzi.
+> - **Prettier**: le tre pagine erano pulite a HEAD. `--write` ha riformattato solo le mie due righe lunghe, cioè il
+>   pulsante della lista e la riga di `GrowthChart` della pagina del broker. `--check` è pulito su tutte e tre.
+> - **`theme-roles --check`**: pulito («0 files dropped below their record»). Nessuna stringa di classe è cambiata:
+>   solo `disabled`, `data-busy`, il gestore del clic e la condizione della rotazione.
+> - **`test-author`** (dalle 18:06 alle 18:26; non ha eseguito nulla tranne Prettier):
+>   - `page-busy.spec.ts` (+269/−16): quattro test nuovi, mentre i sei vecchi restano com'erano.
+>     - **Pagina del broker, P3**: tiene fermo il ricaricamento di sfondo dopo un aggiornamento simulato dei prezzi.
+>       Intanto `broker-refresh` resta `data-busy="false"` e abilitato, e il registratore non vede mai `true`; vale
+>       anche dopo l'arrivo del ricaricamento. Il controllo è il preset 6M: il pulsante diventa occupato e il
+>       registratore vede `true`.
+>     - **Pagina del broker, «Aggiorna»**: tiene fermo l'overview richiesto di nuovo.
+>     - **Lista dei broker**: tiene fermo `GET /brokers?include_inaccessible=true`.
+>     - **Transazioni**: tiene fermo `GET /transactions` senza query.
+>     - Il broker è «Interactive Brokers» del mock, cercato per nome con `page.request`. Non si scrive nulla.
+>   - Correzioni di soli commenti in `risk-analysis.spec.ts` (`openBrokerRiskWithHoldings`) e in
+>     `toolbar-width-sweep.spec.ts` (`brokerDetailReady`); il `desc=` di `page-busy` in `_frontend_portfolio.py`.
+> - **Revisione**:
+>   - nessun `waitForTimeout`, nessun `.first()`, nessun testo tradotto; ogni richiesta trattenuta viene rilasciata
+>     nel `finally`;
+>   - **⚠️ Fuori pista, contatore nella pagina**. La radice della pagina del broker non pubblica `data-busy`. Per
+>     sapere quando il ricaricamento di sfondo è arrivato, la spec avvolge `XMLHttpRequest.open/send` con
+>     `page.evaluate` e conta i report inviati e arrivati: un report conta come arrivato un task dopo il suo
+>     `loadend`. Prima di fidarsi di un arrivo, la spec controlla di vedere il report in volo.
+>   - L'ho accettato. Aggiungere un `data-busy` alla radice scavalcherebbe la voce di Z sull'`aria-busy` della
+>     radice durante i ricaricamenti di sfondo, e P3 vuole quel ricaricamento silenzioso.
+> - **Prove leggere** (`files/scripts/y11s4_light.sh`, dalle 18:27 alle 18:29, carico 21–24):
+>   - svelte-check: 0 errori e 0 avvisi, `e2e/**` compreso;
+>   - `theme-roles`: pulito;
+>   - `core-unit`: 6 472/6 472;
+>   - Prettier: pulito sui sei file;
+>   - `py_compile` di `_frontend_portfolio.py`: superato;
+>   - `git diff --check`: pulito.
+> - **⚠️ Fuori pista, un caso di P3 rimasto** (trovato da `test-author`, verificato nel codice, segnalato alle 18:26):
+>   - il ricaricamento di sfondo azzera le candele: nella Dashboard `applyReport` alla riga 524, nel broker
+>     `applyOverview` alla 335; nel broker azzera anche il contributo, alla 331;
+>   - nella vista Candele `GrowthChart` (976–980) le richiede di nuovo, e nella vista Performance del broker
+>     `PositionsPanel` (112–116) richiede il contributo;
+>   - entrambe le callback sono tracciate, quindi il pulsante gira per tutta quella richiesta. Nella Dashboard succede
+>     dal passo 2.
+>   - **Decisione N55 del coordinatore** (da rivedere con il developer): l'opzione 1, `pageBusy.join`. Candele e
+>     contributo tengono fermo il pulsante solo se si aggiungono a un caricamento già in corso.
+>   - Va fatta come **passo 4b**, dopo il checkpoint del passo 4, con i test Vitest del metodo e il test P3 con la
+>     vista Candele salvata.
+> - **BACKLOG**:
+>   - Y-14: «Aggiorna» della lista dei broker rilegge solo l'elenco;
+>   - Y-15: il `title="Refresh"` di `brokers-refresh` è scritto in inglese nel codice. Il coordinatore chiede di
+>     proporre la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli altri pulsanti «Aggiorna»; sceglie
+>     il developer.
+> - **Conflitti previsti**: nessuno. Dev è a `5609b16d7`, 97 commit avanti, e non tocca i miei percorsi. Nel BACKLOG le
+>   sue modifiche finiscono intorno alla riga 4 297, mentre la sezione Y comincia alla 4 439.
+> - **Script E2E** `files/scripts/y11s4_e2e.sh`, rivisto: la conferma di `dashboard-cache` è già fatta e TR è applicato.
+>   L'ordine è `page-busy`, `front-broker detail` e `list`, `transactions-table`, `tx-broker-icon-hydration`,
+>   `price-refresh`, `default-currency`, `risk`, `privacy-masking`, `toolbar-width-sweep`, `yield-on-cost-real` e
+>   `data-quality-real`.
+> - **Documentazione, da fare alla chiusura di Y11** con `docs-writer`, insieme alla riga del CHANGELOG. Ricerca fatta
+>   sulle pagine inglesi di `mkdocs_src/docs`: né `risk-refresh-button` né `pageBusy` vi compaiono.
+>   - `user/dashboard/index.en.md`, sezione «Coming back and refreshing» (riga 81): oggi non dice che «Refresh» gira ed
+>     è grigio mentre la pagina carica ciò che l'utente ha chiesto, né che non lo fa durante un ricalcolo di sfondo
+>     (P3);
+>   - `user/brokers/index.en.md:86`: lo stesso, per la pagina del broker;
+>   - `user/dashboard/risk.en.md:139` («press **Refresh**») resta vero, perché dal passo 3 il «Refresh» della pagina
+>     ricarica la scheda Rischio. Basta, al più, un collegamento alla sezione della Dashboard;
+>   - lato sviluppatori manca una pagina sullo schema `pageBusy`: dove va `track`, mai dentro le funzioni di
+>     caricamento, e niente gettoni sui ricaricamenti di sfondo.

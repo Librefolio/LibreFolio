@@ -4541,6 +4541,22 @@ da Y il 15/10.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
     (`DataTable.svelte:1098-1149`).
   - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
+- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - `brokers-refresh` rilegge solo l'elenco (`GET /brokers?include_inaccessible=true`). Le cifre delle schede vengono
+    dalla cache dei report finché questa è fresca.
+  - Nella Dashboard e nella pagina del broker, invece, «Aggiorna» ricalcola tutto (documentazione utente, «Coming back
+    and refreshing»).
+  - Da decidere: forzare il report delle schede, oppure dire nella documentazione che lì «Aggiorna» rilegge l'elenco.
+    Dettagli: piano di Y, «Passo 4 · BK e TR».
+- **Y-15 · Il `title` di `brokers-refresh` è scritto in inglese nel codice** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - Il pulsante, solo icona, ha `title="Refresh"`, che è anche il suo nome accessibile. `common.refresh` in inglese vale
+    «Reload», mentre la pagina del broker usa `dashboard.syncData`.
+  - Quindi correggerlo vuol dire anche scegliere la chiave e la parola, nelle quattro lingue. Dettagli: piano di Y,
+    «Passo 4 · BK e TR».
+  - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
+    altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
 
 ## MF · Matematica finanziaria (fase 01)
 
