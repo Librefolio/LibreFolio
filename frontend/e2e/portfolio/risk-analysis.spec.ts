@@ -1702,11 +1702,12 @@ async function openDashboardRiskWithHoldings(page: Page): Promise<Locator> {
  * card is whichever name sorts first.
  *
  * Broker Detail loads the asset cache and its report side by side and publishes
- * no busy flag on the page, so the barrier is its refresh control, which stays
- * disabled while `loading || reportLoading` — `reportLoading` starts `true` and
- * drops only after `portfolioSummary`, the object `assetIds` is drawn from, has
- * been assigned. The Risk tab is opened after it, so the picker mounts with the
- * holdings already known.
+ * no busy flag on its root, so the barrier is its refresh control, disabled
+ * while `pageBusy.busy`: the first load is tracked (`broker-first-load`) and
+ * ends only after the `Promise.all` of the broker, its overview and the broker
+ * and asset caches, and `loadOverview` assigns `portfolioSummary` — the object
+ * `assetIds` is drawn from — before it resolves. The Risk tab is opened after
+ * it, so the picker mounts with the holdings already known.
  */
 async function openBrokerRiskWithHoldings(page: Page, brokerId: number): Promise<Locator> {
     await navigateTo(page, `/brokers/${brokerId}`);

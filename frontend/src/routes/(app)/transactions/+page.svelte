@@ -26,6 +26,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -169,8 +170,11 @@
         // tooltip) render with the proper "$ 🇺🇸 USD" format instead of the
         // bare-code fallback. `$currencyStoreVersion` is referenced inside
         // the cell builders so they re-render once data arrives.
-        await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
-        await reload();
+        // The first load holds the page's Refresh button (Y11): the reference lists, then the transactions.
+        await pageBusy.track('tx-first-load', async () => {
+            await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
+            await reload();
+        });
         urlInitialized = true;
         onboardingGuide.maybeStartContextual('transactions_page_guide');
     });
@@ -294,7 +298,7 @@
     }
     function handleFormCommitted() {
         formOpen = false;
-        void reload({soft: true});
+        void pageBusy.track('tx-reload', () => reload({soft: true}));
     }
     function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
@@ -322,7 +326,7 @@
                 toasts.success(`✅ ${mainMsg}${body}`);
             }
         }
-        void reload({soft: true});
+        void pageBusy.track('tx-reload', () => reload({soft: true}));
     }
 
     // =========================================================================
@@ -435,7 +439,7 @@
                 promoteTarget = null;
                 promoteMergeData = null;
                 clearSelection();
-                await reload({soft: true});
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
             } else {
                 // W-B39: a refusal says why; the confirmation stays open.
                 toasts.error(commitRefusalMessage(result, $_('transactions.promote.failed') || 'Promote failed', $_, issueContext()));
@@ -466,7 +470,7 @@
                 splitConfirmTx = null;
                 splitConfirmPartner = null;
                 clearSelection();
-                await reload({soft: true});
+                await pageBusy.track('tx-reload', () => reload({soft: true}));
             } else {
                 // W-B39: a refusal says why; the confirmation stays open.
                 toasts.error(commitRefusalMessage(result, $_('transactions.split.failed') || 'Split failed', $_, issueContext()));
@@ -758,16 +762,17 @@
                 data-testid="tx-refresh-button"
                 title={$_('transactions.refresh') || 'Refresh from server'}
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
-                disabled={loading}
+                disabled={pageBusy.busy}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 onclick={() => {
                     // Reset column filters, selection, and URL filter state before reloading.
                     transactionsTableComponent?.resetFilters();
                     clearSelection();
                     filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, without_asset: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
-                    void reload();
+                    void pageBusy.track('tx-refresh', () => reload());
                 }}
             >
-                <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={15} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" data-testid="tx-import-button" use:guideAnchor={'transactions.page.import'} onclick={onImportFromBroker}>
                 <Upload size={15} />
