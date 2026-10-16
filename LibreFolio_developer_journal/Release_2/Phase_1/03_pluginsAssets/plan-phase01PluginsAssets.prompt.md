@@ -4213,3 +4213,146 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 > - **⚠️ Fuori pista**: il controllo di `api plugin-settings` del lotto icone (12:28) è rimasto in attesa del carico, a
 >   ~160. L'ho fermato prima che partisse, senza server né porta da pulire, per dare la precedenza alle prove del 9b. Lo
 >   rilancio con il lotto icone.
+
+### Quindicesimo aggiornamento di base: `dev_release2` (`0f3b9e3db`, lotti di H, W-B30, colori) nel ramo X ✅ (2026-10-16) — merge `42d25081d`
+
+> - **Conflitto**: solo `backend/app/config/__init__.py`, sugli import (`cast` di H, `urlsplit` mio). Tenuti tutti e
+>   due; messo in stage solo quel file.
+> - **Prove combinate**, carico sotto 50:
+>   - `api sync`; `front check` 0/0; `core-unit` 185 file, 6699/6699;
+>   - `config-package` 739, `config-env-example` 38, `profile-defaults` 52;
+>   - `plugin-settings-service` 96, `plugin-settings-runtime` 120, `api plugin-settings` 14.
+>   - `config-package` aveva 740 casi alle 08:34. Il file di test non è cambiato nel merge, quindi la differenza
+>     dovrebbe venire da una parametrizzazione derivata dal prodotto; 0 fallimenti. I log di confronto erano in `/tmp`
+>     e il riavvio li ha cancellati.
+> - **⚠️ Fuori pista (ambiente)**: il primo giro di `api plugin-settings` è finito 14/14 rossi, tutti sulla stessa
+>   precondizione: «db populate non è girato su questa corsia».
+>   - Causa: il riavvio delle 10:03 ha cancellato `/tmp/librefolio-r13-x`, e le unità `services` ricreano il DB vuoto.
+>   - Rimedio: `test db --force populate` sulla mia data dir (7096 record); al secondo giro 14/14.
+>   - Regola: dopo un giro di unità `services`, `populate` prima delle unità API.
+
+### Sedicesimo aggiornamento di base: `dev_release2` (`1248b7908`, AF A+B+C dei colori e IM) nel ramo X ✅ (2026-10-16) — merge `668d27837`
+
+> - **Conflitto**: solo `frontend/src/themeRoles.baseline.tsv`, fra le righe `--split` del 9a e i numeri di AF.
+>   - Risolto **solo con lo strumento**: `node frontend/scripts/theme/theme-roles.mjs --resolve`, a tre vie dagli
+>     stadi dell'indice. Nessun marcatore rimasto, `--check` pulito.
+>   - Il risultato tiene i numeri più stretti di AF, le mie righe `detail/**`, la pagina a 123 e le cinque righe
+>     `~split`.
+>   - In stage **solo** quel file; il commit del merge è del coordinatore.
+> - **Prove leggere sulla revisione combinata**, tutte verdi:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` 185 file, 6699/6699 (13:28, con i cancelli dei colori).
+> - **⏸️ PAUSA del developer (13:29)**: lo slot E2E 1 non è partito. Il copione è pronto in
+>   `files/checks/fe5c_e2e_slot.sh` della cartella di sessione:
+>   - `mkdocs build`;
+>   - poi, uno alla volta, `front-asset` `asset-detail`, `live-pause`, `asset-mobile-layout`, `asset-data-editor`,
+>     `asset-event-delete`;
+>   - infine `front-utility onboarding-guides`, sulla porta 6183.
+> - **Fuori dal merge, non in stage**: il backend del lotto icone, 4 file:
+>   - `schemas/plugin_settings.py`, `services/plugin_settings/service.py`;
+>   - i due file di test, `test_services/…` e `test_api/…`.
+> - **Prossimo passo, al via**:
+>   1. il coordinatore crea il commit del merge;
+>   2. lo slot E2E del FE5c sulla revisione con AF;
+>   3. le correzioni dal vivo 1 e 2, con i rossi prima;
+>   4. il frontend del lotto icone.
+> - **Ripresa (14:14)**:
+>   - il coordinatore ha creato il commit del merge, `668d27837` (genitori `42d25081d` + `1248b7908`);
+>   - lo slot E2E 1 è mio dalle 14:15, con cut-off alle 15:00;
+>   - controllato prima di partire: HEAD giusto e sporchi solo i 4 file del lotto icone e questo piano.
+> - **Ricevuti nella pausa**, da mettere nei lotti giusti (dettagli nella cartella di sessione):
+>   - **la decisione di H su `LIBREFOLIO_SUPPORT_URL` con `mailto:`**, per il lotto CP13 che legge la variabile:
+>     - una sola variabile, `mailto:` più un indirizzo, controllato con `EmailStr` senza DNS;
+>     - rifiutati `?`, `#`, `%`, `,`, `;`, spazi, a capo e `mailto:` vuoto;
+>     - `env_url` resta solo http(s);
+>     - un valore illeggibile vale «non impostato»;
+>     - il frontend ricontrolla lo schema, mai `javascript:`.
+>     - Verificato in sola lettura che `EmailStr` da solo **accetta** `#`, `%` e `?` nella parte locale (ATEXT di
+>       `email-validator`), toglie gli spazi ai bordi e accetta la forma `Nome<a@b.c>`. Quindi serve un controllo
+>       esplicito dei caratteri prima di `EmailStr`.
+>   - **Una regola dei colori** (T `a317392d4`): un campo nativo con classi `-lf-` nomina anche `text-lf-primary` e
+>     `placeholder:text-lf-placeholder`. `INPUT_CLASS` delle impostazioni dei plugin la rispetta già.
+>   - **L'ok dei colori al commento di `app.css`**, solo quella riga, nel commit delle correzioni dal vivo.
+>   - **Le note di Z per lo stesso commit**:
+>     - in `live-ticker.md`, i paragrafi «Price flash» e «Chart head»;
+>     - i due difetti sono nella v1.2.1, quindi due righe 🐛 nel CHANGELOG;
+>     - i test del lampeggio in `asset-detail.spec.ts` sono miei.
+> - **⚠️ Fuori pista (metodo)**: lo slot gira sull'albero di lavoro, e il runner ricostruisce il frontend se un file
+>   qualsiasi di `frontend/src` (test compresi) o `CHANGELOG*.md` è più nuovo della build (`cli_base.py`,
+>   `check_frontend_needs_build`).
+>   - Durante lo slot quindi non tocco né il frontend, né la documentazione, né il CHANGELOG: preparo le correzioni
+>     nella cartella di sessione.
+>   - Così ogni spec gira sulla stessa build di `668d27837`, e non se ne ricostruisce una a metà slot.
+
+#### FE5c · lo slot E2E 1 ✅ (2026-10-16, 14:15–14:39, cut-off 15:00)
+
+> - **Revisione**: `668d27837`, più il backend del lotto icone non in stage, che aggiunge un campo alle impostazioni
+>   dei plugin e non tocca queste pagine.
+> - **Esito, uno spec alla volta**, con `files/checks/fe5c_e2e_slot.sh`, porta 6183, data dir della corsia:
+>
+>   | Spec | Esito | Durata |
+>   |---|---|---|
+>   | `front-asset asset-detail` | 34/34 | 5,1 min |
+>   | `front-asset live-pause` | 8/8 | 34 s |
+>   | `front-asset asset-mobile-layout` | 21/21 | 58 s |
+>   | `front-asset asset-data-editor` | 26/26 | 2,0 min |
+>   | `front-asset asset-event-delete` | 4/4 | 17 s |
+>   | `front-utility onboarding-guides` | 24/24 | 4,0 min |
+>
+>   In tutto **117/117**, 0 ritentativi. La build del frontend è stata rifatta una sola volta, al primo spec, dopo il
+>   merge. Alla fine la porta 6183 era libera.
+> - **⚠️ Fuori pista (base)**: il `mkdocs build` stretto prima dello slot è fallito su un'àncora di dev.
+>   - Il link è `developer/backend/transactions/wac.md:592` → `split_promote.md#transfer-giving-leg`, arrivato con
+>     `54880598b`: il cherry-pick W-B30 di un link a un'àncora che arriva solo con 47.
+>   - Segnalato al coordinatore, che l'ha corretto su dev in `ed500643f`; mi arriva al prossimo aggiornamento di base.
+>   - Effetto sullo slot: nessuno. `auto_build_mkdocs()` non controlla l'esito, e il sito interrotto aveva solo en e
+>     it; nessuno spec ha chiesto una pagina in fr o es.
+> - **Galleria (G, slot 1 dopo di me)**: ho proposto la coppia base **`1248b7908`** (dev con AF, senza FE5c) → testa
+>   **`668d27837`**.
+>   - Fra le due, `frontend/src` differisce solo per il FE5c (29 file).
+>   - `039ccc9d5`, proposta come base, ha già i pezzi 2–9a e non ha AF: 78 file diversi.
+>   - Aspetto la conferma del coordinatore.
+
+#### Correzioni dal vivo 1 e 2, più il commento di `app.css` ✅ scritte e provate (2026-10-16, 14:40–14:57)
+
+> - **Rossi prima** (test-author, solo `assetDetailLive.svelte.test.ts`): **4 rossi**, ciascuno sulla sua asserzione,
+>   e 66 verdi.
+>   1. Grafico convertito, prezzo nativo fermo: punto `{close: 92, original_close: 100}`, quotazione 100. Ricaricava:
+>      `loadChartData` chiamato una volta.
+>   2. Grafico convertito, prezzo nativo sceso proprio al `close` convertito (quotazione 92). Non ricaricava, e il
+>      punto restava vecchio: è la seconda faccia del difetto 1, trovata dal test-author.
+>   3. e 4. Il lampeggio, quando l'effetto riparte (cambio di valuta, oppure cambio d'asset diretto), restava `'up'`.
+>   - **Guardie verdi**:
+>     - un punto senza `original_close`, o con `null` (nessun cambio quel giorno);
+>     - un prezzo nativo salito a 101: un'invalidazione, poi un `loadChartData(true)`.
+>   - **Docblock del file**: tolto «Not pinned here, on purpose…»; il contratto ora è scritto nei punti «The summary»
+>     e «The chart head».
+> - **Correzioni** in `assetDetailLive.svelte.ts`:
+>   1. La guardia confronta `Number(original_close ?? close)`. Il backend mette `original_close` solo quando converte
+>      (`price_query.py` ~474–522), quindi il grafico non convertito resta identico.
+>   2. La pulizia dell'effetto mette anche `direction = 'neutral'`. L'effetto non legge `direction`, quindi non
+>      riparte per questo.
+>   - Aggiornato anche il commento di testa del blocco.
+> - **`app.css`**: solo la riga del commento, con l'ok dei colori: `+page.svelte` → `assetDetailLive.svelte.ts`.
+> - **`live-ticker.md`**, con le note di Z:
+>   - «Price flash»: la pulizia spegne anche il lampeggio;
+>   - «Chart head»: il confronto avviene sul close nativo, e il grafico si ricarica solo se è cambiato;
+>   - la riga del test unitario nella tabella «How it is tested», che mancava dal 9b.
+> - **CHANGELOG**, `[Unreleased]` › 🐛 Fixed: due righe, il grafico convertito che si ricaricava ogni 30 s e il
+>   lampeggio che restava acceso. Entrambi i difetti erano già nella v1.2.1.
+> - **Prove**:
+>   - il file da solo → **70/70**;
+>   - `front check` → 0/0;
+>   - `core-unit` → **185 file, 6706/6706** (+7);
+>   - prettier e `git diff --check` puliti;
+>   - `mkdocs build` stretto: c'è solo l'avviso noto di dev, corretto in `ed500643f` ma non ancora nella mia base, e
+>     nessun avviso viene dalle mie modifiche.
+> - **E2E non rifatti dopo le correzioni**: lo slot era già finito. Nessun E2E passa dai rami cambiati:
+>   - i 4 test di «Live price direction flash» non fanno ripartire l'effetto a metà lampeggio;
+>   - gli altri `/current` di `asset-detail.spec.ts` (righe 85 e 2330) rispondono senza prezzo.
+> - **Note del test-author che non ho preso**:
+>   - X-R26 va nel backlog: con un cambio d'asset diretto il primo tick si confronta col prezzo dell'asset di prima.
+>     La pagina non ci arriva.
+>   - Un commento esistente («The converted chart reloads on every landing poll», nel caso della conversione
+>     arrivata tardi) resta vero per quel caso, il cui grafico non ha il punto di oggi.
