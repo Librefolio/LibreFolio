@@ -59,7 +59,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()` | Parse create, update, split, and promote rows independently |
+| 1 | `parse_inputs()`, then `check_decimal_limits()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount or manual cost basis over its column's limit (C-97, see [Decimal limits](#decimal-limits)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -132,6 +132,31 @@ tags or date, or the field re-sent as stored. A promote changes the type, which 
 a changed cash and quantity, so it checks all four. A create (`changed_fields=None`)
 keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
 an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
+
+### 🔢 Decimal limits {: #decimal-limits }
+
+`check_decimal_limits()` (`transaction_batch_stages.py`; C-97, issue #43) reads every
+parsed create and update. A `quantity` keeps 10 decimal places, a `cash.amount` 6 and a
+manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
+columns; any of them at most 15 significant digits: `decimal_limit_issue()`
+(`backend/app/db/precision.py`) takes the scale from the model and does not count
+trailing zeros. A value over a limit
+is refused, never rounded: one issue per field, with code `decimalPlacesExceeded` or
+`significantDigitsExceeded` (both in `TXValidationCode`, listed by
+`GET /transactions/types` → `validation_codes`), params `{"max": N}` and `field`
+(`quantity`, `cash.amount` or `cost_basis_override`). The frontend puts the field label
+in front (`resolveValidationMessage.ts`): *Quantity: At most 10 decimal places*.
+
+The issue keeps the batch from being committed, but the row stays in it: the later
+stages still apply it, so a linked pair is not broken by it, and the batch's other
+issues are reported with it (the inline WAC is skipped, as for any non-balance issue).
+The check runs when a batch is confirmed (`/transactions/validate`,
+`/transactions/commit`), not when a broker import builds its rows (decision D2): the
+import hands its rows to the bulk workspace, which shows the refusal with the batch's
+other issues. A figure a plugin computes instead of reading it, such as a per-unit cost
+from a total, is rounded by the plugin and never reaches this refusal (decision D6, see
+[Decimal places](../../architecture/patterns/brim_plugin_guide.md#decimal-places)). The
+column types are in [Decimal Columns](../../architecture/database/index.md#decimal-columns).
 
 ---
 
@@ -409,8 +434,21 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
   `NativeCash.balances()`, sums them by currency without any rate (see
   [The Native-Cash Function](wac.md#compute-native-cash)). A currency whose
   movements cancel out keeps its line, at zero.
-- **Holdings** stay a SQL sum of `quantity` per asset, with the same date cut:
-  the layer has no home for a broker's quantities at a date.
+- **Holdings** come from the layer too: `financial_math.ledger_totals.position_quantities()`
+  sums the `quantity` of the broker's rows per asset, with the same date cut (see
+  [Ledger Control Totals](../financial_math.md#ledger-totals)). It skips a row of
+  quantity 0, so an asset whose rows all have quantity 0 has no line: the broker
+  summary reads a missing line as zero.
+
+Both sums run in Python, exactly, over the rows the query returns; the query keeps
+only the filters. `get_balances_at_end_of()` sums the same way, through
+`_get_balances_before_date()` — the starting balances of the
+[end-of-day replay](balance_validation.md), and LibreFolio's side of the BRIM gap-fix,
+without its excluded ids — and so does the asset list's set of held assets
+(`AssetCRUDService.list_assets()`, then `> QUANTITY_DUST_THRESHOLD`). Never an SQL
+`SUM` (C-97): SQLite stores these columns as doubles, and `SUM` adds the doubles, not
+the decimals — `0.1 + 0.2 − 0.3` gives `2.8e-17`, not 0 — an error the read at 6
+decimals used to hide. Summed in Python, a zero balance is exactly zero.
 
 The holdings' cost no longer comes from this service: the broker summary computes
 it with the shared average cost, on the same `as_of` (see
