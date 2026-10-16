@@ -3620,3 +3620,27 @@ il FE5c, quindi un commit separato.
     `/tmp/libreFolio_x_fe5c_hold/` e rientrano solo al loro innesto, nello stesso commit del `--split`.
   - I moduli `.ts` puri dei pezzi 4 e 6 restano al loro posto: non hanno classi, e `front check` li controlla subito.
   - **Le righe del runner**: test-author non registra il secondo giro; ogni riga entra col suo pezzo.
+
+**Commit dei lotti del mattino**:
+- FE5c-2: `a400a7cd1` + journal `ae25f0070`;
+- K-16/O-9: `c21f050bc` + journal `a6b9faf81`, già in `dev_release2` con `bfc0db8aa` (treno 96), con la riga del
+  CHANGELOG;
+- X-R12/X-R13 in `dev_release2` con `92a0d4daf` (treno 94).
+
+#### FE5c-3 · il pannello dei metadati ✅ (2026-10-16, 06:53–06:59)
+
+> **Note implementazione**:
+> - `AssetDetailMetadataPanel.svelte` è rientrato da `/tmp/libreFolio_x_fe5c_hold/` e innestato con
+>   `/tmp/libreFolio_x_fe5c_splice.py 3 --apply`. La pagina passa da 3407 a 3308 righe.
+> - Dagli import della pagina escono `Info`, `AllocationPieChart`, `GeographyMap` e `uiLocale`, che nessun'altra riga
+>   usava; `ChevronDown` e `currentLanguage` restano, perché servono altrove.
+> - Prettier ha cambiato solo il pannello: il bottone «Modifica», senza più `disabled`, sta su una riga. La pagina era
+>   già formattata.
+> - **`--split`**: la pagina scende da 312 a 258 classi di tavolozza, e il pannello ne prende 54. La somma resta 312:
+>   nessuna classe persa né aggiunta, nessun elemento misto.
+> - **Prove** (con `nice`, dopo il controllo del carico):
+>   - `front check` → 0 errori, 0 avvisi (06:57, carico 64);
+>   - `front-utility core-unit` → 177 file, 6343/6343, cancelli dei colori compresi (06:59);
+>   - `git diff --check` pulito; porta 6183 libera.
+> - Le E2E del pannello (`asset-detail.spec.ts:327`, `onboarding-guides`, la galleria) girano alla fine, nello slot
+>   pesante.
