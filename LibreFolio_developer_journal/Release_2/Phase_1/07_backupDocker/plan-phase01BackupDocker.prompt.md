@@ -3446,6 +3446,69 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   non ASCII: lo strumento di modifica o Python.
 > - **20:30, handoff del merge** al coordinatore, 🧊 FROZEN: lui crea il commit del merge; fuori staging solo questo
 >   piano; poi lo slot di `all-backend` prima dell'ingresso.
+> - **Committato** dal coordinatore: `92a190efa` (il merge), `618fe8be4` (questo piano). L'ordine dei passi lo passa lui
+>   a H; B-14 nel prossimo checkpoint, d'accordo.
+
+### Secondo aggiornamento di base — merge di `dev_release2` `979d0a151` (2026-10-16, dalle 20:26) — in corso
+
+> - Nel frattempo in `dev_release2` sono entrati A (P18/A-27, la migrazione 009 e F02) e W-B53 (il passo
+>   `brim-parse-pool`). Merge aperto dal coordinatore (HEAD `618fe8be4`, MERGE_HEAD `979d0a151`, base `0c79932a7`).
+>   Tre conflitti, risolti per somma, in staging solo quei tre.
+>   - `app_lifespan.py`: il conflitto non era il passo di W (git l'ha messo da solo dopo `market-holidays` e prima di
+>     `scheduler`, come chiedeva il coordinatore), ma **`admin-bootstrap` di A (F02)**, anche lui subito dopo
+>     `global-settings`. Ordine scelto: `global-settings`, **`admin-bootstrap`, `restore-commit`**,
+>     `plugin-secrets-check`, `provider-prewarm`, `market-holidays`, `brim-parse-pool`, `scheduler`, `idle-monitor`.
+>     Perché: il test di A (STEP-001, `test_admin_bootstrap.py:1794`) fissa `admin-bootstrap` esattamente alla posizione
+>     di `global-settings` più uno, mentre il mio pin e quello di H sono d'ordine relativo: così reggono tutti e tre.
+>     Nel merito: su un database ripristinato il bootstrap trova gli account e li lascia stare (`IGNORED`: ogni archivio
+>     ripristinabile ha un amministratore attivo, il blocco `no_administrator`); se fallisse sui dati ripristinati, il
+>     ripristino tornerebbe indietro come per ogni passo prima del commit. **Caso limite, per A**: un archivio con
+>     l'amministratore iniziale ancora in attesa **e** un altro amministratore attivo (creato dalla CLI), ripristinato
+>     su un'istanza con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto: il bootstrap riarma il link prima del commit, e
+>     `_close_the_way_in` lo revoca con tutti gli altri link vivi; l'amministratore dovrebbe chiederne un altro con
+>     `./dev.py user setup-link`. Con `restore-commit` prima di `admin-bootstrap` il link sopravvivrebbe, ma servirebbe
+>     che A rilassi STEP-001 a ordine relativo: da decidere con A, non è un difetto della 1.3 per i flussi reali.
+>   - `developer/architecture/database/users_access.md`: la frase di A (il link di setup speso chiude le sessioni) e la
+>     mia (la versione di sessione dopo un ripristino), tutte e due nel punto di `session_version`.
+>   - `developer/architecture/security.md`: il paragrafo dei test della revoca, quello allargato di A (contratto 7,
+>     REVOKE-003…007) più la mia frase sulla versione del ripristino (`services backup-apply`).
+> - **⚠️ Fuori pista**: un controllo dei marcatori partito nello stesso lotto parallelo della modifica ha letto il file
+>   prima della scrittura (3 marcatori): riletto dopo, nessuno. D'ora in poi la verifica di un file mai nello stesso
+>   lotto della sua modifica.
+> - **Debito trovato (per il prossimo checkpoint, con B-14)**: `developer/architecture/overview.md` numera 18 passi
+>   d'avvio (di H, con `plugin-secrets-check`), ma il codice ne ha 21: mancano i miei `pending-restore`,
+>   `serving-lock` e `restore-commit`. Nessun test confronta quella lista con il codice.
+> - **Prove leggere sulla revisione combinata**: `services app-lifecycle`, `backup-apply`, `config-brim` (del
+>   coordinatore), più `services admin-bootstrap` (fissa l'adiacenza scelta) ed `e2e backup-roundtrip` (la sua fetta di
+>   passi, da `pending-restore` a `restore-commit`, ora comprende il bootstrap); poi `mkdocs build` stretta,
+>   `check-links`, `utils gate-docs-links`. **Tutto verde** (20:28-20:36): `services app-lifecycle` 51,
+>   `backup-apply` 228, `config-brim` 51, `admin-bootstrap` 156; `e2e backup-roundtrip` 3 (col bootstrap nella fetta);
+>   `mkdocs build` stretta 0 avvisi, `check-links` 97, `utils gate-docs-links` 63. Porta libera.
+> - **20:30, decisione N57** del coordinatore (proposta di H, da rivedere col developer): proprio quest'ordine,
+>   `global-settings` → `admin-bootstrap` → `restore-commit` → `plugin-secrets-check` → … Perché: il passo di A legge e
+>   scrive i dati ripristinati (conta gli utenti, crea l'amministratore in attesa, imposta `registration_mode`) e può
+>   sollevare su un errore dei dati; prima del commit un fallimento fa tornare indietro il ripristino, dopo il server
+>   cadrebbe a ogni avvio. Richieste: il pin `("admin-bootstrap", "restore-commit")` nel mio test, col perché (a un
+>   test-author nuovo, `2334eaf9`: il precedente non c'era più); un commento sul mio passo (fatto: «A step before this
+>   one that raises rolls the restore back at the next start; one after it no longer does (N57)», ruff e black puliti).
+> - **Frase diventata falsa col merge, corretta nella risoluzione**: in `security.md` il passo `plugin-secrets-check`
+>   era «right after `global-settings`»; ora «after `global-settings`, `admin-bootstrap` and `restore-commit`». Era nel
+>   file in conflitto; la build stretta l'ha già coperta.
+> - **Da H, per la guida (prossimo checkpoint, con B-14 e `overview.md`)**: un ripristino senza la chiave lascia
+>   illeggibili i segreti di sistema dei plugin, e da ogni avvio il passo `plugin-secrets-check` logga l'errore
+>   «Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore
+>   the instance key they were saved with», finché non sono reinseriti o la chiave vecchia non torna. La guida dice già
+>   «reported as set but unreadable: enter it again» (riga 33): ci aggiungo il log.
+> - **Il pin di N57** (test-author `2334eaf9`, ruff, black e `--collect-only` puliti): in `test_backup_apply.py`
+>   `assert_in_relative_order(STARTUP_STEPS, ("admin-bootstrap", "restore-commit"), why=…)`, relativo (STEP-001 di A
+>   intatto); l'aiuto, locale al file, prende un `why` facoltativo che chiude i due messaggi; docstring del test, riga di
+>   `print_success` e docblock (j) aggiornati. **`services backup-apply` 228 su 228** (20:37), il pin stampato.
+>   Il test-author segnala lo stesso caso limite del link di setup revocato dal commit; il suo primo caso (un database
+>   ripristinato senza account) non può darsi: la prova rifiuta un archivio senza amministratore attivo
+>   (`no_administrator`).
+> - **20:39, handoff del merge** al coordinatore, 🧊 FROZEN: in staging i tre conflitti più, per N57, il pin
+>   (`test_backup_apply.py`) e la frase corretta di `security.md` (file già in conflitto); fuori staging solo questo
+>   piano.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
