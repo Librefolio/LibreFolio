@@ -56,6 +56,6 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
 | The gate | `frontend/src/clipboardSink.gate.test.ts` |
 | The model gate (HTML sinks) | `frontend/src/htmlSink.gate.test.ts` |
 | AI Export's own writer (the exception) | `frontend/src/lib/features/ai-export/aiExportClipboard.ts` |
-| File list and grid (C-63) | `frontend/src/lib/components/files/FilesTable.svelte`, `frontend/src/lib/components/files/FileGrid.svelte` |
+| File list and grid (C-63) | `frontend/src/lib/features/files/FilesTable.svelte`, `frontend/src/lib/features/files/FileGrid.svelte` |
 | Copy-and-go E2E | `frontend/e2e/support-copy-and-go.spec.ts` |
 | Plan 48 | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |

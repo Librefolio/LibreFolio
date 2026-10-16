@@ -47,28 +47,28 @@
     }
 </script>
 
-<section class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" aria-label={$t('tools.metrics.title', {default: 'Backend timings'})} data-testid="tool-execution-metrics" data-busy="false" aria-busy={false}>
+<section class="min-w-0 rounded-xl border border-lf-subtle bg-lf-card p-4 text-lf-primary" aria-label={$t('tools.metrics.title', {default: 'Backend timings'})} data-testid="tool-execution-metrics" data-busy="false" aria-busy={false}>
     <h3 class="flex items-center gap-2 text-sm font-semibold">
         <Clock3 size={16} aria-hidden="true" class="shrink-0" />
         {$t('tools.metrics.title', {default: 'Backend timings'})}
     </h3>
-    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+    <p class="mt-2 text-xs text-lf-muted">
         {$t('tools.metrics.description', {
             default: 'Measured by the backend, excluding network time. Phases can overlap; parallel items are not added to obtain the request duration.',
         })}
     </p>
 
     <dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="min-w-0 rounded-lg bg-lf-panel p-3">
+            <dt class="text-xs text-lf-muted">
                 {$t('tools.metrics.serverProcessing', {default: 'Request · server processing'})}
             </dt>
             <dd class="mt-1 break-words text-sm font-semibold tabular-nums" data-testid="tool-metrics-server_processing_ms">
                 {duration(batch?.server_processing_ms ?? null)}
             </dd>
         </div>
-        <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
-            <dt class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="min-w-0 rounded-lg bg-lf-panel p-3">
+            <dt class="text-xs text-lf-muted">
                 {$t('tools.metrics.itemTotal', {default: 'Item · total'})}
             </dt>
             <dd class="mt-1 break-words text-sm font-semibold tabular-nums" data-testid="tool-metrics-total_ms">
@@ -80,7 +80,7 @@
     <dl class="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
         {#each phases as phase (phase.key)}
             <div class="min-w-0">
-                <dt class="text-xs text-gray-500 dark:text-gray-400">
+                <dt class="text-xs text-lf-muted">
                     {$t(phase.label, {default: phase.fallback})}
                 </dt>
                 <dd class="mt-1 break-words text-sm tabular-nums" data-testid={`tool-metrics-${phase.key}`}>
@@ -90,14 +90,14 @@
         {/each}
     </dl>
 
-    <details class="mt-4 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="tool-metrics-details">
-        <summary class="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-green-700 dark:focus-visible:outline-green-400" data-testid="tool-metrics-details-toggle">
+    <details class="mt-4 border-t border-lf-subtle pt-3" data-testid="tool-metrics-details">
+        <summary class="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lf-focus" data-testid="tool-metrics-details-toggle">
             {$t('common.detail')}
         </summary>
         <dl class="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             {#each validationPhases as phase (phase.key)}
                 <div class="min-w-0">
-                    <dt class="text-xs text-gray-500 dark:text-gray-400">
+                    <dt class="text-xs text-lf-muted">
                         {$t(phase.label, {default: phase.fallback})}
                     </dt>
                     <dd class="mt-1 break-words text-sm tabular-nums" data-testid={`tool-metrics-${phase.key}`}>

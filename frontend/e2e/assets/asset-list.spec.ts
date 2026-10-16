@@ -477,15 +477,12 @@ test.describe('Asset List Page', () => {
                 })
                 .toEqual([`asset-card-${panel.active.id}`, `asset-card-${panel.inactive.id}`]);
 
+            // The lifecycle is the state the card publishes, never its surface colour:
+            // that is a theme role, and it changes whenever the colours do.
             const activeCard = page.getByTestId(`asset-card-${panel.active.id}`);
             const inactiveCard = page.getByTestId(`asset-card-${panel.inactive.id}`);
             await expect(activeCard).toHaveAttribute('data-lifecycle', 'active');
-            await expect(activeCard).toHaveClass(/(^|\s)bg-white(\s|$)/);
-            await expect(activeCard).toHaveClass(/(^|\s)dark:bg-slate-800(\s|$)/);
-            await expect(activeCard).not.toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
             await expect(inactiveCard).toHaveAttribute('data-lifecycle', 'inactive');
-            await expect(inactiveCard).toHaveClass(/(^|\s)bg-amber-50(\s|$)/);
-            await expect(inactiveCard).toHaveClass(/(^|\s)dark:bg-amber-950\/30(\s|$)/);
         }
 
         await page.getByTestId('view-mode-list').click();

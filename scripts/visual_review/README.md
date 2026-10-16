@@ -16,8 +16,8 @@ else `~/LibreFolio_visual_review`.
 
 | File | What it does |
 |---|---|
-| `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json` and the log |
-| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `browse` (HTML pages, light and dark side by side) |
+| `gallery_snapshot.sh` | Runs `./dev.py mkdocs gallery` in a lane and freezes the PNGs it wrote into `<work>/snapshots/<label>/` with `meta.json`, the log and `mixed_elements.json` |
+| `gallery_tool.py` | `diff` (pixel compare), `stability` (classify shots from a noise run), `sheet` (rank a diff's shots by visible change, contact sheet), `mixed` (the elements that mix role and legacy colour classes, by area), `browse` (HTML pages, light and dark side by side) |
 | `live_price_check.py` | Checks, in the lane's backend log, that no live-price request reached the backend while a snapshot was captured (exit 1: capture again) |
 | `build_designer_package.py` | Offline package for the designer: `APRI_QUI.html`, `desktop.html`, `mobile.html`, `note_designer.txt`, images, zip |
 | `build_review_notes.py` | The team's Markdown working notes: navigation per shot, role vocabulary, decisions |
@@ -142,6 +142,33 @@ scripts/visual_review/designer_live.sh            # --refresh to re-copy the lat
 pipenv run python -m scripts.visual_review.color_inventory            # → $W/inventory/00_inventory_summary.md + CSVs
 pipenv run python -m scripts.visual_review.build_review_notes $W/snapshots/ref   # → $W/notes/NOTE_DESIGNER.md
 ```
+
+### 6. Mixed elements (the runtime twin of G3)
+The colour gate G3 (`frontend/scripts/theme/theme-roles.mjs`) forbids an element that mixes role utilities
+(`bg-lf-card`) with legacy colour classes (`text-gray-500`): `app.css` exempts every element carrying `-lf-` from its
+legacy dark remap, so such an element breaks in dark. G3 reads the sources, and cannot see a class composed at runtime:
+a `className` or `contentClass` prop passed between areas, an imported constant, a concatenation.
+
+So every snapshot scans each shot, after the capture, with the gate's own patterns. The scan is
+`frontend/e2e/fixtures/galleryMixed.ts`, on only when `gallery_snapshot.sh` sets `LF_GALLERY_MIXED_DIR`. It only
+reports: a scan error is a record, never a red, and the PNG does not change.
+- `mixed_elements.json` in the snapshot has one record per shot: the elements with classes, with a role class, with a
+  legacy class, and the mixed ones (tag, test id, nearest test id above it, selector, classes, on screen or not).
+- A run's log shows `🎨 <shot>: N mixed` for a shot that has some.
+
+```bash
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand                # by folder of the candidate file
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --by section    # by gallery section
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --area lib/components/assets --on-screen
+```
+- The summary checks that every PNG has its record, and prints each distinct mixed element once, with its shots.
+- **The candidate file is a hint, not a proof.** It is the file that writes the element's test id, or its nearest
+  ancestor's: after a test-id key (`data-testid=`, `testid=`, `testId:`), whole, else composed from its longest prefix
+  (`global-settings-category-{cat.id}`). The element may belong to a child component, and its class may come from the
+  caller. An id found only as a plain string (`'chart'`) is a weak clue: such elements sit in their own group, not in
+  an area.
+- `gallery_tool mixed <snapshot> --collect` merges the records by hand, for example after a run interrupted before the
+  script's end. On a retry, the latest record of a shot wins.
 
 ## Known gallery behaviour (16/10/2026, commit `a2c1c39f4`, G-13)
 
