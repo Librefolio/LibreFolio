@@ -24,7 +24,6 @@
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';
-    import '$lib/theme/components/media.css';
 
     // Props
     export let open: boolean = false;
@@ -293,7 +292,7 @@
                             <button
                                 type="button"
                                 class="btn btn-secondary"
-                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:var(--lf-cmp-asset-picker-url-clear-btn-text);"
+                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:var(--lf-danger);"
                                 on:click={() => {
                                     urlInput = '';
                                 }}
@@ -402,22 +401,14 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.75rem 1rem;
-        border-bottom: 1px solid var(--lf-cmp-asset-picker-border);
-    }
-
-    :global(.dark) .picker-header {
-        border-bottom-color: var(--lf-cmp-asset-picker-border-dark);
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .picker-title {
         font-size: 1rem;
         font-weight: 600;
         margin: 0;
-        color: var(--lf-cmp-asset-picker-strong-text);
-    }
-
-    :global(.dark) .picker-title {
-        color: var(--lf-cmp-asset-picker-strong-text-dark);
+        color: var(--lf-text-primary);
     }
 
     .close-btn {
@@ -429,30 +420,21 @@
         border: none;
         border-radius: 0.375rem;
         background: transparent;
-        color: var(--lf-cmp-asset-picker-close-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
     }
 
     .close-btn:hover {
-        background: var(--lf-cmp-asset-picker-close-btn-hover-bg);
-        color: var(--lf-cmp-asset-picker-strong-text);
-    }
-
-    :global(.dark) .close-btn:hover {
-        background: var(--lf-cmp-asset-picker-close-btn-hover-bg-dark);
-        color: var(--lf-cmp-asset-picker-strong-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     /* Tabs */
     .picker-tabs {
         display: flex;
         gap: 0;
-        border-bottom: 1px solid var(--lf-cmp-asset-picker-border);
+        border-bottom: 1px solid var(--lf-border-subtle);
         padding: 0 0.5rem;
-    }
-
-    :global(.dark) .picker-tabs {
-        border-bottom-color: var(--lf-cmp-asset-picker-border-dark);
     }
 
     .tab-btn {
@@ -465,31 +447,18 @@
         border: none;
         border-bottom: 2px solid transparent;
         background: transparent;
-        color: var(--lf-cmp-asset-picker-muted-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .tab-btn:hover {
-        color: var(--lf-cmp-asset-picker-strong-text);
+        color: var(--lf-text-primary);
     }
 
     .tab-btn.active {
-        color: var(--lf-cmp-asset-picker-tab-btn-active-text);
-        border-bottom-color: var(--lf-cmp-asset-picker-accent-border);
-    }
-
-    :global(.dark) .tab-btn {
-        color: var(--lf-cmp-asset-picker-muted-text-dark);
-    }
-
-    :global(.dark) .tab-btn:hover {
-        color: var(--lf-cmp-asset-picker-strong-text-dark);
-    }
-
-    :global(.dark) .tab-btn.active {
-        color: var(--lf-cmp-asset-picker-tab-btn-active-text-dark);
-        border-bottom-color: var(--lf-cmp-asset-picker-accent-border-dark);
+        color: var(--lf-link);
+        border-bottom-color: var(--lf-focus);
     }
 
     .hidden-input {
@@ -514,51 +483,36 @@
     .url-label {
         font-size: 0.75rem;
         font-weight: 500;
-        color: var(--lf-cmp-asset-picker-muted-text);
-    }
-
-    :global(.dark) .url-label {
-        color: var(--lf-cmp-asset-picker-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .url-input {
         padding: 0.5rem 0.75rem;
-        border: 1px solid var(--lf-cmp-asset-picker-url-input-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
         font-size: 0.8125rem;
         outline: none;
-        background: var(--lf-cmp-asset-picker-field-bg);
-        color: var(--lf-cmp-asset-picker-strong-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
+    }
+
+    .url-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .url-input:focus {
-        border-color: var(--lf-cmp-asset-picker-accent-border);
-    }
-
-    :global(.dark) .url-input {
-        background: var(--lf-cmp-asset-picker-field-bg-dark);
-        border-color: var(--lf-cmp-asset-picker-url-input-border-dark);
-        color: var(--lf-cmp-asset-picker-strong-text-dark);
-    }
-
-    :global(.dark) .url-input:focus {
-        border-color: var(--lf-cmp-asset-picker-accent-border-dark);
+        border-color: var(--lf-focus);
     }
 
     .url-preview {
-        border: 1px solid var(--lf-cmp-asset-picker-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
         max-height: 250px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: var(--lf-cmp-asset-picker-url-preview-bg);
-    }
-
-    :global(.dark) .url-preview {
-        border-color: var(--lf-cmp-asset-picker-border-dark);
-        background: var(--lf-cmp-asset-picker-url-preview-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     .url-preview-img-wrapper {
@@ -604,20 +558,16 @@
         width: min(100%, 200px);
         aspect-ratio: 1;
         border-radius: 50%;
-        box-shadow: 0 0 0 9999px var(--lf-cmp-asset-picker-circle-overlay-shadow);
-        border: 2px solid var(--lf-cmp-asset-picker-circle-overlay-border);
+        box-shadow: 0 0 0 9999px var(--lf-surface-overlay);
+        border: 2px solid color-mix(in oklab, var(--lf-on-overlay) 60%, transparent);
         flex-shrink: 0;
     }
 
     .url-hint {
         font-size: 0.6875rem;
-        color: var(--lf-cmp-asset-picker-url-hint-text);
+        color: var(--lf-text-muted);
         margin-top: 0.25rem;
         font-style: italic;
-    }
-
-    :global(.dark) .url-hint {
-        color: var(--lf-cmp-asset-picker-url-hint-text-dark);
     }
 
     /* Existing tab */
@@ -639,15 +589,20 @@
         align-items: center;
         gap: 0.375rem;
         padding: 0.375rem 0.5rem;
-        border: 1px solid var(--lf-cmp-asset-picker-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
-        background: var(--lf-cmp-asset-picker-field-bg);
-        color: var(--lf-cmp-asset-picker-faint-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-muted);
     }
 
-    :global(.dark) .search-box {
-        background: var(--lf-cmp-asset-picker-field-bg-dark);
-        border-color: var(--lf-cmp-asset-picker-field-border-dark);
+    /* A field's edge (as FileGrid's search): the input border, darker under the pointer (D-T18), the focus
+       colour while its input has the focus — the input itself draws no outline. */
+    .search-box:hover {
+        border-color: var(--lf-border-input-hover);
+    }
+
+    .search-box:focus-within {
+        border-color: var(--lf-focus);
     }
 
     .search-input {
@@ -656,11 +611,11 @@
         outline: none;
         background: transparent;
         font-size: 0.8125rem;
-        color: var(--lf-cmp-asset-picker-search-input-text);
+        color: var(--lf-text-primary);
     }
 
-    :global(.dark) .search-input {
-        color: var(--lf-cmp-asset-picker-search-input-text-dark);
+    .search-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .search-clear {
@@ -670,15 +625,10 @@
         width: 16px;
         height: 16px;
         border: none;
-        background: var(--lf-cmp-asset-picker-search-clear-bg);
+        background: var(--lf-surface-neutral);
         border-radius: 50%;
-        color: var(--lf-cmp-asset-picker-muted-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
-    }
-
-    :global(.dark) .search-clear {
-        background: var(--lf-cmp-asset-picker-search-clear-bg-dark);
-        color: var(--lf-cmp-asset-picker-muted-text-dark);
     }
 
     .view-toggle {
@@ -692,33 +642,21 @@
         justify-content: center;
         width: 28px;
         height: 28px;
-        border: 1px solid var(--lf-cmp-asset-picker-field-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.25rem;
-        background: var(--lf-cmp-asset-picker-field-bg);
-        color: var(--lf-cmp-asset-picker-muted-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-muted);
         cursor: pointer;
     }
 
     .toggle-btn:hover {
-        background: var(--lf-cmp-asset-picker-toggle-btn-hover-bg);
+        background: var(--lf-surface-hover);
     }
 
     .toggle-btn.active {
-        background: var(--lf-cmp-asset-picker-accent-bg);
-        color: var(--lf-cmp-asset-picker-toggle-btn-active-text);
-        border-color: var(--lf-cmp-asset-picker-accent-border);
-    }
-
-    :global(.dark) .toggle-btn {
-        background: var(--lf-cmp-asset-picker-field-bg-dark);
-        border-color: var(--lf-cmp-asset-picker-field-border-dark);
-        color: var(--lf-cmp-asset-picker-muted-text-dark);
-    }
-
-    :global(.dark) .toggle-btn.active {
-        background: var(--lf-cmp-asset-picker-accent-bg-dark);
-        border-color: var(--lf-cmp-asset-picker-accent-border-dark);
-        color: var(--lf-cmp-asset-picker-toggle-btn-active-text-dark);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
+        border-color: var(--lf-checked);
     }
 
     .empty-state {
@@ -726,7 +664,7 @@
         align-items: center;
         justify-content: center;
         padding: 2rem;
-        color: var(--lf-cmp-asset-picker-faint-text);
+        color: var(--lf-text-muted);
         font-size: 0.875rem;
     }
 
@@ -736,12 +674,8 @@
     .list-table-wrapper {
         max-height: 320px;
         overflow-y: auto;
-        border: 1px solid var(--lf-cmp-asset-picker-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.375rem;
-    }
-
-    :global(.dark) .list-table-wrapper {
-        border-color: var(--lf-cmp-asset-picker-border-dark);
     }
 
     /* Make DataTable compact inside picker */
@@ -759,11 +693,7 @@
         justify-content: flex-end;
         gap: 0.5rem;
         padding: 0.75rem 1rem;
-        border-top: 1px solid var(--lf-cmp-asset-picker-border);
-    }
-
-    :global(.dark) .picker-footer {
-        border-top-color: var(--lf-cmp-asset-picker-border-dark);
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn {
@@ -785,37 +715,22 @@
     }
 
     .btn-primary {
-        background: var(--lf-cmp-asset-picker-accent-bg);
-        color: var(--lf-cmp-asset-picker-btn-primary-text);
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: var(--lf-cmp-asset-picker-btn-primary-hover-bg);
-    }
-
-    :global(.dark) .btn-primary {
-        background: var(--lf-cmp-asset-picker-accent-bg-dark);
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: var(--lf-cmp-asset-picker-btn-primary-hover-bg-dark);
+        background: var(--lf-action-hover);
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-asset-picker-btn-secondary-bg);
-        color: var(--lf-cmp-asset-picker-btn-secondary-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-cmp-asset-picker-btn-secondary-hover-bg);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-asset-picker-btn-secondary-bg-dark);
-        color: var(--lf-cmp-asset-picker-btn-secondary-text-dark);
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-cmp-asset-picker-btn-secondary-hover-bg-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 </style>

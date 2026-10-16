@@ -6,7 +6,8 @@ around an orphan cash leg (CASH LEGS).
 Workstream W (lot N1b-1) writes the conversion of the surviving half; workstream J ("Numeri e
 analisi") reviewed the expected numbers below on 15/10. What N1b-1 converts (coordinator, point 47):
 an incoming TRANSFER half into an ADJUSTMENT, a CASH_TRANSFER / FX_CONVERSION half into a DEPOSIT or
-a WITHDRAWAL by its sign; an outgoing TRANSFER half stays as it is (MIRROR).
+a WITHDRAWAL by its sign; and, with decision 47, an outgoing TRANSFER half into an ADJUSTMENT −q handed
+over at its own broker's Auto cost (MIRROR).
 
 THE SCENARIO — S7 of test_portfolio_cost_currency.py, with a cost basis on the arrival. One user
 owns brokers A and B, 100 % each. On 1 Oct 2018 A receives 200 EUR and buys 10 X for 200 EUR, 20
@@ -86,19 +87,29 @@ basis 0, and S5's MISSING_COST_BASIS banner (test_portfolio_cost_currency.py:556
 finds it, a TRANSFER without its pair, reads 100 invested and 20 of P&L: the change J declares before the
 migration, 100 → 0 and 20 → 120. Controls, green today.
 
-MIRROR — B deleted: A's outgoing leg survives. N1b-1 leaves an outgoing TRANSFER half exactly as
-today: a TRANSFER, its related_transaction_id NULL, nothing else changed. What it becomes after the
-coordinator's decision is open (J 15/10). Converted literally it would be an ADJUSTMENT −4, which
-cannot carry a cost basis (type_metadata.py:286, TRANSFER cost_basis_pair ["forbidden", …]): no
-capital adjustment without a cost (DailyStateBuilder._is_capital_adjustment), so A's P&L would drop
-from +80 to 180 − 200 = −20, and the lots too — ADJUSTMENT_OUT closes at price 0
-(financial_math/fifo/engine.py:374-382): 6 × (30 − 20) − 4 × 20 = −20. The moved units would read
-as destroyed. The MIRROR values are today's, guards green today and after N1b-1 — A alone on 5 Oct:
-invested 100 (200 deposited − 100, _transfer_leg_capital booking the orphan at market, 4 × 25), net
-worth 180 (6 × 30), P&L 80; A's X 6 at 20, value 180, gain 60; the lots FAILED on
-TRANSFER_PAIR_MISSING, the WAC lines 10 at 20 then 6 at 20 from 3 Oct. Not pinned, measured on
-2026-10-15: that FAILED analysis still lists A's lot of 1 Oct with its 10 X open — the engine does not
-apply a TRANSFER without its pair — so value 300 and P&L 100 against the position's 180 and 60.
+MIRROR — B deleted: A's outgoing leg survives. Decision 47 (W's part; J's CP-16 reads it,
+financial_math/fifo/engine.py): the deletion makes it an ADJUSTMENT −4 handed over at cost —
+cost_basis_override and cost_basis_currency written together, A's Auto cost:
+TransactionService._handover_cost, compute_wac_iterative over A up to 3 Oct without the leg, the 10 X
+bought for 200 EUR, so 20 EUR a unit (BR-U-073/078/086 in test_broker_service.py). The numbers are
+those of J's book (test_adjustment_out_with_cost_numbers.py: the same scenario, the leg written
+directly), run twice as case 1's are: on a control book whose A holds that ADJUSTMENT −4 at 20 EUR
+written as such — green today, after CP-16 — and on the orphan the deletion leaves, RED until decision
+47. A alone on 5 Oct:
+- lots: COMPLETE, no issue. The only lot is A's BUY of 1 Oct, 10 at 20; the ADJUSTMENT_OUT closes 4 of
+  it at the row's 20 EUR (engine._handover_unit_price): realized 4 × (20 − 20) = 0, proceeds 4 × 20 =
+  80, the value handed over at cost. Open 6, value 6 × 30 = 180, pnl 180 + 80 − 200 = 60, market 60,
+  total 60, total return 60 / 200 = 0.3. A BUY lot opens with no reference price of its own, so its
+  reference is its own unit price, 20, "exact" (lots/prices.py, opening_reference_price): relative
+  return 30 / 20 − 1 = 0.5. The WAC lines are today's — 10 at 20, then 6 at 20 from 3 Oct: a reduction
+  leaves the average as it was (financial_math/average_cost.py).
+- Dashboard: invested 200 − 4 × 20 = 120 — an ADJUSTMENT −4 with a cost is a capital distribution
+  (DailyStateBuilder._is_capital_adjustment) —, net worth 6 × 30 = 180, P&L 60; A's X 6 at 20, value
+  180, gain 60; open cost basis 120; no warning.
+Today the leg stays a TRANSFER without its pair: the lots FAIL on TRANSFER_PAIR_MISSING — and that
+FAILED analysis still lists A's lot of 1 Oct with its 10 X open, value 300, P&L 100 —, and the Dashboard
+books the orphan at market (_transfer_leg_capital, 4 × 25): invested 100, P&L 80. Not pinned here: a leg
+whose Auto cost needs a missing conversion stays that TRANSFER (BR-U-087).
 
 CASH LEGS — J (15/10): an orphan cash leg already counts as an external flow
 (financial_math/portfolio/classifier.py:96-107), as the DEPOSIT or WITHDRAWAL it becomes, so capital
@@ -288,24 +299,48 @@ DASHBOARD_LEFT_WITHOUT_COST_BASIS = {
 # banner read the same; capital and P&L are what J declares before the migration: 100 → 0, 20 → 120.
 DASHBOARD_BEFORE_THE_FIX = {**DASHBOARD_LEFT_WITHOUT_COST_BASIS, "total_invested": Decimal("100"), "total_gain_loss": Decimal("20")}  # 120 − 100
 
-# MIRROR: A once B is deleted, read on 5 Oct. Today's values, kept by N1b-1: it leaves an outgoing
-# TRANSFER half as it is until the coordinator decides (J 15/10).
+# MIRROR: A once B is deleted, read on 5 Oct. Decision 47: A's outgoing leg handed over at A's Auto cost.
+HANDOVER_COST_PER_UNIT = "20"  # A's average on 3 Oct without its outgoing leg: 200 / 10
 MIRROR_LEG = {
     "broker": "A",
     "asset": "X",
-    "type": TransactionType.TRANSFER,  # not converted: an ADJUSTMENT −4 would read the 4 X as destroyed
+    "type": TransactionType.ADJUSTMENT,  # today a TRANSFER without its pair
     "date": TRANSFER_DAY,
     "quantity": Decimal("-4"),
-    "cost_basis_override": None,  # an outgoing leg carries none
-    "cost_basis_currency": None,
-    "related_transaction_id": None,  # the only change: its pair is gone
+    "cost_basis_override": Decimal(HANDOVER_COST_PER_UNIT),  # A's Auto cost (today None)
+    "cost_basis_currency": "EUR",  # written with it: the model wants both or neither (today None)
+    "related_transaction_id": None,  # its pair is gone
 }
 _SIX_AT_TWENTY, _TEN_AT_TWENTY = (Decimal("20"), Decimal("6")), (Decimal("20"), Decimal("10"))  # WAC line points
+# The figures of a lot that its closures move: what a handover at cost changes.
+_CLOSURE_FIELDS = ("cumulative_proceeds", "realized_pnl", "market_pnl", "total_pnl")
 MIRROR_LOTS = {
-    "calculation_status": "FAILED",  # the FIFO engine meets a TRANSFER without its pair
-    "issue codes": ["TRANSFER_PAIR_MISSING"],
-    # The average-cost lines follow the position: 10 at 20, then 6 from the transfer day. The lot list
-    # of this FAILED analysis is printed, not pinned (module docstring).
+    "calculation_status": "COMPLETE",  # today FAILED: the FIFO engine meets a TRANSFER without its pair
+    "issue codes": [],  # today ["TRANSFER_PAIR_MISSING"]
+    "lots": [
+        {
+            "opens on": "A's purchase",  # the only lot: A's BUY of 1 Oct
+            "broker": "A",
+            "direction": "LONG",
+            "opening_date": FUNDING_DAY,
+            "original_quantity": Decimal("10"),
+            "opening_unit_price": Decimal("20"),  # 200 / 10
+            "original_cost": Decimal("200"),
+            "open_quantity": Decimal("6"),  # 4 handed over on 3 Oct
+            "open_value": Decimal("180"),  # 6 × 30
+            "pnl": Decimal("60"),  # 180 + 80 of proceeds − 200
+            # A BUY lot has no reference price of its own: opening_reference_price falls back to its unit price, "exact".
+            "reference_unit_price": Decimal("20"),
+            "reference_price_source": "exact",
+            "relative_return": Decimal("0.5"),  # 30 / 20 − 1
+            "total_return": Decimal("0.3"),  # total_pnl / original_cost = 60 / 200
+            "cumulative_proceeds": Decimal("80"),  # 4 × 20, the value handed over at cost (CP-16)
+            "realized_pnl": Decimal("0"),  # 4 × (20 − 20): closed at the row's cost, which is the lot's
+            "market_pnl": Decimal("60"),  # pnl − realized
+            "total_pnl": Decimal("60"),  # market + realized + 0 of income: the Dashboard's P&L
+        }
+    ],
+    # As today: 10 at 20, then 6 at 20 from 3 Oct — a reduction leaves the average as it was.
     "A's WAC line": {FUNDING_DAY: _TEN_AT_TWENTY, date(2018, 10, 2): _TEN_AT_TWENTY, TRANSFER_DAY: _SIX_AT_TWENTY, date(2018, 10, 4): _SIX_AT_TWENTY, READING_DAY: _SIX_AT_TWENTY},
     "cumulative WAC line": {FUNDING_DAY: _TEN_AT_TWENTY, date(2018, 10, 2): _TEN_AT_TWENTY, TRANSFER_DAY: _SIX_AT_TWENTY, date(2018, 10, 4): _SIX_AT_TWENTY, READING_DAY: _SIX_AT_TWENTY},
 }
@@ -319,9 +354,9 @@ MIRROR_DASHBOARD = {
     },
     "open_cost_basis": Decimal("120"),  # 6 × 20
     "net_worth": Decimal("180"),  # 6 × 30, and no cash: 200 − 200
-    # 200 deposited − 100: _transfer_leg_capital books the orphan leg at market, 4 × 25 (an ADJUSTMENT −4 without cost: 200)
-    "total_invested": Decimal("100"),
-    "total_gain_loss": Decimal("80"),  # 180 − 100 (an ADJUSTMENT −4 without cost: 180 − 200 = −20)
+    # 200 deposited − 4 × 20 handed over at cost, a capital distribution (today 100: the orphan leg at market, 4 × 25)
+    "total_invested": Decimal("120"),
+    "total_gain_loss": Decimal("60"),  # 180 − 120 (today 80: 180 − 100)
     "warnings and errors": [],
 }
 
@@ -409,7 +444,8 @@ async def session(engine):
 class Book:
     """One test's user, the broker the readings are about, asset X and that broker's leg of the transfer.
 
-    The broker is B, its leg the arrival; in the MIRROR it is A, its leg the departure.
+    The broker is B, its leg the arrival; in the MIRROR it is A, its leg the departure, and its purchase
+    the BUY whose lot the lots page lists.
     """
 
     user: User
@@ -418,6 +454,7 @@ class Book:
     leg: Transaction
     name: str = "B"
     leg_name: str = "B's arrival"
+    purchase: Transaction | None = None
 
 
 async def _owned_broker(session: AsyncSession, user: User, label: str) -> Broker:
@@ -511,8 +548,30 @@ async def _mirror_book(session: AsyncSession) -> Book:
     """The scenario, then B deleted: A's outgoing leg is left without its pair. The book of A."""
     book_b, owner_a, broker_a = await _transfer_book(session, cost_basis=COST_BASIS_PER_UNIT)
     departure = await session.get(Transaction, book_b.leg.related_transaction_id)
+    # A's one BUY, found by what owns it: the broker this test made, the type.
+    purchase = (await session.execute(select(Transaction).where(Transaction.broker_id == broker_a.id, Transaction.type == TransactionType.BUY))).scalar_one()
     await _delete_broker(session, book_b.user, book_b.broker)
-    return Book(user=owner_a, broker=broker_a, asset=book_b.asset, leg=departure, name="A", leg_name="A's departure")
+    return Book(user=owner_a, broker=broker_a, asset=book_b.asset, leg=departure, name="A", leg_name="A's departure", purchase=purchase)
+
+
+async def _mirror_control_book(session: AsyncSession) -> Book:
+    """A alone, its −4 written as the ADJUSTMENT decision 47 makes the deletion of B leave — handed over at A's
+    average, 20 EUR a unit, with its currency — and never a B. The book of A, as J's book of CP-16."""
+    user, asset = await _user_and_asset(session, "mirror control")
+    broker_a = await _owned_broker(session, user, "A")
+    purchase = Transaction(broker_id=broker_a.id, asset_id=asset.id, type=TransactionType.BUY, date=FUNDING_DAY, quantity=Decimal("10"), amount=Decimal("-200"), currency=REPORT)
+    handover = Transaction(
+        broker_id=broker_a.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=TRANSFER_DAY,
+        quantity=Decimal("-4"),
+        cost_basis_override=Decimal(HANDOVER_COST_PER_UNIT),
+        cost_basis_currency=REPORT,
+    )
+    session.add_all([Transaction(broker_id=broker_a.id, type=TransactionType.DEPOSIT, date=FUNDING_DAY, amount=Decimal("200"), currency=REPORT), purchase, handover])
+    await session.flush()
+    return Book(user=user, broker=broker_a, asset=asset, leg=handover, name="A", leg_name="A's departure", purchase=purchase)
 
 
 async def _leg_now(session: AsyncSession, book: Book) -> dict | None:
@@ -538,6 +597,11 @@ _ORIGINS = [
     pytest.param("control", id="control-adjustment-in-written-as-such"),
     pytest.param("orphan", id="orphan-left-by-deleting-broker-a"),
 ]
+_MIRROR_BUILDERS = {"control": _mirror_control_book, "orphan": _mirror_book}
+_MIRROR_ORIGINS = [
+    pytest.param("control", id="control-adjustment-out-at-cost-written-as-such"),
+    pytest.param("orphan", id="orphan-left-by-deleting-broker-b"),
+]
 
 
 async def _lots(session: AsyncSession, book: Book) -> LotsAnalysisResponse:
@@ -562,14 +626,22 @@ def _amount(value: Currency | None) -> Decimal | None:
     return None if value is None else value.amount
 
 
-def _lots_view(response: LotsAnalysisResponse, book: Book) -> dict:
+def _opened_by(opening_transaction_id: int, book: Book) -> str | int:
+    """The row that opened a lot, by the book's name for it — its leg, or its purchase — or else its id."""
+    names = {book.leg.id: book.leg_name}
+    if book.purchase is not None:
+        names[book.purchase.id] = f"{book.name}'s purchase"
+    return names.get(opening_transaction_id, opening_transaction_id)
+
+
+def _lots_view(response: LotsAnalysisResponse, book: Book, *, closure_fields: tuple[str, ...] = ()) -> dict:
     quality = response.data_quality
     return {
         "calculation_status": response.calculation_status,
         "issue codes": [issue.code for issue in quality.issues] if quality is not None else None,
         "lots": [
             {
-                "opens on": book.leg_name if lot.opening_transaction_id == book.leg.id else lot.opening_transaction_id,
+                "opens on": _opened_by(lot.opening_transaction_id, book),
                 "broker": book.name if lot.opening_broker_id == book.broker.id else lot.opening_broker_id,
                 "direction": lot.direction,
                 "opening_date": lot.opening_date,
@@ -583,6 +655,7 @@ def _lots_view(response: LotsAnalysisResponse, book: Book) -> dict:
                 "reference_price_source": lot.reference_price_source,
                 "relative_return": lot.relative_return,
                 "total_return": lot.total_return,
+                **{name: getattr(lot, name) for name in closure_fields},
             }
             for lot in response.lots or []
         ],
@@ -809,37 +882,40 @@ class TestReceivedTransferLeftWithoutCostBasis:
 
 
 # =============================================================================
-# MIRROR — B deleted: A's outgoing leg stays a TRANSFER, unlinked (module docstring). Guards.
+# MIRROR — B deleted: A's outgoing leg handed over at A's Auto cost (decision 47, module docstring)
 # =============================================================================
 
 
 class TestOrphanOutgoingTransfer:
     @pytest.mark.asyncio
-    async def test_lots_of_x_at_a_still_fail_once_broker_b_is_deleted(self, session):
-        """MIRROR (a), guard green today and after N1b-1: A's leg stays a TRANSFER without its pair, so the lots FAIL on TRANSFER_PAIR_MISSING; the WAC lines hold 6 at 20 from 3 Oct."""
-        print_section("V-3 mirror (a) — lots of X once B is deleted")
-        book = await _mirror_book(session)
+    @pytest.mark.parametrize("origin", _MIRROR_ORIGINS)
+    async def test_lots_of_x_at_a_once_broker_b_is_deleted(self, session, origin):
+        """MIRROR (a) — control green, orphan RED until decision 47: A's leg an ADJUSTMENT −4 at A's Auto cost, 20 EUR; the lots COMPLETE, A's BUY lot handing 4 over at 20 — realized 0, proceeds 80, open 6 worth 180, P&L 60, total 60 —, the WAC lines 10 then 6 at 20. Today the orphan stays a TRANSFER and the lots FAIL on TRANSFER_PAIR_MISSING."""
+        print_section(f"V-3 mirror (a) — lots of X once B is deleted ({origin})")
+        book = await _MIRROR_BUILDERS[origin](session)
 
-        leg = await _leg_now(session, book)
-        lots = _lots_view(await _lots(session, book), book)
-        print(f"A's row: {leg}")
-        print(f"lots: {lots}")
+        observed = {
+            "A's row": await _leg_now(session, book),  # first: it refreshes the copy the readings below go through
+            "lots": _lots_view(await _lots(session, book), book, closure_fields=_CLOSURE_FIELDS),
+        }
+        for part, view in observed.items():
+            print(f"{part}: {view}")
 
-        observed = {"A's row": leg, "lots": {part: view for part, view in lots.items() if part != "lots"}}  # the lot list: printed only
         assert observed == {"A's row": MIRROR_LEG, "lots": MIRROR_LOTS}
-        print_success("V-3 mirror (a): A's leg left a TRANSFER, the lots FAILED")
+        print_success(f"V-3 mirror (a) {origin}: A's leg handed over at 20, the lots COMPLETE")
 
     @pytest.mark.asyncio
-    async def test_dashboard_of_a_once_broker_b_is_deleted(self, session):
-        """MIRROR (b), guard green today and after N1b-1: 100 invested — the orphan leg at market, 4 × 25 — net worth 180, P&L 80; A's X 6 at 20, value 180, gain 60."""
-        print_section("V-3 mirror (b) — Dashboard of A once B is deleted")
-        book = await _mirror_book(session)
+    @pytest.mark.parametrize("origin", _MIRROR_ORIGINS)
+    async def test_dashboard_of_a_once_broker_b_is_deleted(self, session, origin):
+        """MIRROR (b) — control green, orphan RED until decision 47: 120 invested — 200 less the 4 × 20 handed over at cost —, net worth 180, P&L 60; A's X 6 at 20, value 180, gain 60. Today the orphan reads 100 invested (the leg at market, 4 × 25) and 80 of P&L."""
+        print_section(f"V-3 mirror (b) — Dashboard of A once B is deleted ({origin})")
+        book = await _MIRROR_BUILDERS[origin](session)
 
         observed = _dashboard_view(await _dashboard(session, book), book)
         print(f"dashboard: {observed}")
 
         assert observed == MIRROR_DASHBOARD
-        print_success("V-3 mirror (b): 100 invested, 80 of P&L")
+        print_success(f"V-3 mirror (b) {origin}: 120 invested, 60 of P&L")
 
 
 # =============================================================================

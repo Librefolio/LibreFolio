@@ -53,35 +53,6 @@ Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il
 
 ---
 
-## 📧 Server email — verifica account, inviti, recupero password (da P2-1)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — non prioritario; nel frattempo l'opzione `require_email_verification` è marcata come placeholder (read-only + badge "coming soon") nella UI admin
-**Origine**: audit 08_newCleanAndDocumentation_audit (P2-1) + decisione utente 03/09/2026
-
-### Obiettivo
-
-Connettere LibreFolio a un server email (SMTP configurabile dalle impostazioni admin) e
-costruirci sopra tre funzioni:
-
-1. **Verifica email** — rende vera l'opzione `require_email_verification` (oggi placeholder:
-   la chiave esiste ma nessuna verifica avviene).
-2. **Link di invito** — un admin genera un invito via email; utile soprattutto quando la
-   registrazione libera dalla pagina di login è disattivata (l'utente si registra solo
-   tramite invito).
-3. **Recupero password via email** — reset self-service invece del reset manuale admin.
-
-### Note
-
-- Configurazione SMTP nelle impostazioni globali (host, porta, auth, mittente) con
-  test di connessione stile "Test Configuration" dei provider.
-- Il flusso invito/reset richiede token monouso a scadenza (tabella dedicata o
-  riuso del pattern dei settings con TTL).
-- Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
-- Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
-
----
-
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
 
 **Data aggiunta**: 3 Settembre 2026
@@ -167,7 +138,7 @@ i rendimenti giornalieri, non i prezzi.
 - `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress/plugin.py`) accetta fino a 100 coppie
   `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
   ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
-- `RiskService._prepare_historical_replay_context` (`backend/app/services/risk/service.py`) controlla due cose: che gli
+- `prepare_historical_replay_context` (`backend/app/services/risk/replay.py`, da CP-9a) controlla due cose: che gli
   asset sostituiti siano nello scope e che i sostituti esistano. L'asset sostituito salta l'esclusione automatica. Per
   tutta la finestra il replay usa i rendimenti del sostituto: `proxy_series_usage: "returns_only"`, e non c'è nessuna
   giunzione con la storia propria dell'asset.
@@ -195,7 +166,7 @@ i rendimenti giornalieri, non i prezzi.
   confermata dall'utente.
 - ⚠️ **Un buco da verificare con un test prima di riaprire.** La copertura del sostituto non passa per
   `replay_coverage`, che gira solo sugli asset senza sostituto (`own_ids` in
-  `_prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
+  `prepare_historical_replay_context`; `own_ids` e `replay_coverage` sono nel ramo della famiglia Risk ed entrano in
   `dev_release2` con la sua integrazione). Un sostituto quotato dopo l'inizio della finestra entrerebbe quindi nella
   serie congiunta. Il commento sull'esclusione automatica, nello stesso metodo, spiega cosa succede allora: un asset
   che parte tardi sposta la base del replay e lo accorcia per tutti gli altri. Il sostituto andrà controllato con la
@@ -204,7 +175,7 @@ i rendimenti giornalieri, non i prezzi.
 **Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
 L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
 
-**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
+**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `risk/replay.py` (`prepare_historical_replay_context`);
 `schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
 `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
 `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.

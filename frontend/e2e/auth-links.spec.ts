@@ -1,5 +1,6 @@
 /**
- * The account link pages (release 1.3, workstream A, accounts lot A5b): `/invite` and `/reset-password`.
+ * The account link pages (release 1.3, workstream A, accounts lots A5b and A7b): `/invite`, `/reset-password` and
+ * `/setup`.
  *
  * An administrator issues a single-use link over the API — `POST /users/invites`, `POST /users/{id}/password-reset-link`
  * — and hands its path over: `/invite#token=…`, `/reset-password#token=…`. The token rides in the fragment, which the
@@ -19,17 +20,24 @@
  *     is disabled, which says it is closed: both modes served to that page alone (fixtures/instance-config.ts), the lane
  *     staying open;
  *   - a password-reset link: the account it names, a new password, and afterwards only the new password signs in;
- *   - a token nobody issued; a page opened without a token, which sends no inspection; the way back to the login page.
+ *   - a token nobody issued; a page opened without a token, which sends no inspection; the way back to the login page;
+ *   - the setup link of the initial administrator, `/setup#token=…` (A7b), as a link that cannot be used: a token nobody
+ *     issued, inspected for `admin_setup` and unknown, the page staying on `/setup`; no token; a token in the query,
+ *     never read.
  * Not here: `expired` (an invitation lives 7 days, a reset link 30 minutes, and no API backdates one) and `error` with
  * its retry — a clock and a failing server are for the pages' unit tests to fake — nor the registration mode pinned by an
- * environment variable, which the plan leaves to Vitest (A5b.1).
+ * environment variable, which the plan leaves to Vitest (A5b.1). Nor a setup link that works, nor a blocked instance:
+ * only the administrator `LIBREFOLIO_ADMIN_EMAIL` creates at startup, on an instance without accounts, has a setup link,
+ * and the lane runs without that variable — those are the setup page's unit tests', against a mocked API
+ * (src/routes/setup/page.test.ts).
  *
  * Ownership. Each test creates its own invitations and accounts, and records each one the moment it exists, or, for an
  * account registered through the page, just before. The `links` fixture removes them after the test, red or green:
  * every invitation still pending is revoked (`DELETE /users/invites/{id}`; a 404 is an invitation already spent or
  * revoked), every account deletes itself (`DELETE /auth/users/me`, signed in as that very account, its identity
  * checked first). Nothing reads a list it did not fill, and nothing changes the lane's registration mode, which is open
- * there. Parallel by default: no test depends on another.
+ * there. The `/setup` tests create nothing: every token they open is one nobody issued. Parallel by default: no test
+ * depends on another.
  *
  * Registered in scripts/test_runner/_frontend_utility.py, action `auth-links` of front-utility.
  */
@@ -54,6 +62,7 @@ const LANDED_MS = 10_000;
 const LINK_PAGES = {
     invite: {path: '/invite', testId: 'invite-page'},
     reset: {path: '/reset-password', testId: 'reset-password-page'},
+    setup: {path: '/setup', testId: 'setup-page'},
 } as const;
 type LinkPage = keyof typeof LINK_PAGES;
 
@@ -290,7 +299,7 @@ function recordInspections(page: Page): unknown[] {
 }
 
 /** The page asked about `token`, for `purpose`: at least once, and never about anything else. */
-async function expectAskedOnlyAbout(bodies: unknown[], token: string, purpose: 'invite' | 'password_reset'): Promise<void> {
+async function expectAskedOnlyAbout(bodies: unknown[], token: string, purpose: 'invite' | 'password_reset' | 'admin_setup'): Promise<void> {
     await expect.poll(() => bodies.length, {message: `The page never sent POST ${INSPECT_PATH}`, timeout: 5_000}).toBeGreaterThan(0);
     expect(bodies, `Every POST ${INSPECT_PATH} asks about the token of the link, for ${purpose}`).toEqual(bodies.map(() => ({token, purpose})));
 }
@@ -533,5 +542,75 @@ test.describe('Links without a usable token', () => {
         await expect(page, 'The way back leads to /').toHaveURL((url) => url.pathname === '/', {timeout: FIRST_PAINT_MS});
         await expect(page.getByTestId('login-page')).toBeVisible({timeout: FIRST_PAINT_MS});
         await expect(page.getByTestId('login-modal')).toBeVisible();
+    });
+});
+
+// The setup link of the initial administrator (accounts lot A7b, F02): `/setup#token=…`. Only the administrator that
+// `LIBREFOLIO_ADMIN_EMAIL` creates at startup, on an instance without accounts, has one; the lane runs without that
+// variable, so it holds no pending administrator and no setup link, and only links that cannot be used are tried here.
+// A link that works, the setup itself and a blocked instance are the page's unit tests', against a mocked API
+// (src/routes/setup/page.test.ts). Every token opened here is one nobody issued: nothing is created, nothing to clean up.
+test.describe('Setup links (/setup)', () => {
+    // A7b: the page takes the token out of the address bar, asks the server about it for the setup purpose, and says the
+    // link cannot be used — with the setup's own line on where a new link comes from, since no administrator exists yet
+    // to send one — without ever drawing the form.
+    test('a setup token nobody issued: the token leaves the address bar, the page asks about it for admin_setup, says it is unknown with the setup hint, and stays on /setup', async ({page}) => {
+        const token = uniqueToken(43);
+        const asked = recordInspections(page);
+
+        await openLink(page, 'setup', handBuiltLink('setup', token));
+        expect(page.url(), 'The token left the address bar: the URL no longer carries it').not.toContain(token);
+        await expect(page.getByTestId('link-status'), 'A token nobody issued is unknown').toHaveAttribute('data-status', 'unknown', {timeout: FIRST_PAINT_MS});
+        await expect(page.getByTestId('link-status-hint'), 'A link that cannot be used says where a new one comes from').toBeVisible();
+        await expect(page.getByTestId('link-status-goto-login')).toBeVisible();
+        await expect(page.getByTestId('setup-card'), 'An unknown token opens no setup form').toBeHidden();
+        await expectAskedOnlyAbout(asked, token, 'admin_setup');
+        // A <meta> in the head carries no test id: its name is what the browser reads the referrer policy by, a contract.
+        await expect(page.locator('meta[name="referrer"]'), 'The page sends no Referer: its address stays out of any link followed from it').toHaveAttribute('content', 'no-referrer');
+        // A link page has no session to lose, so nothing it sends takes the visitor to the login page. Neither request this
+        // page sends on the lane (GET /system/instance, the inspection) answers 401: this holds the page to its path — no
+        // guard, no redirect — while the client's 401 exemption itself is on trial in zodios-client.test.ts.
+        await expect(page, 'The page stays on /setup: it is not sent to the login').toHaveURL((url) => url.pathname === '/setup');
+    });
+
+    // A7b: no token, nothing to ask — the link is missing, and the page says where a new one comes from all the same.
+    test('a setup page opened without a token says the link is missing, and asks the server nothing', async ({page}) => {
+        const asked = recordInspections(page);
+
+        await page.goto('/setup');
+        await expect(page.getByTestId('setup-page')).toBeVisible({timeout: FIRST_PAINT_MS});
+        await expect(page.getByTestId('link-status')).toHaveAttribute('data-status', 'missing', {timeout: FIRST_PAINT_MS});
+        await expect(page.getByTestId('link-status-hint')).toBeVisible();
+        await expect(page.getByTestId('link-status-goto-login')).toBeVisible();
+        await expect(page.getByTestId('setup-card'), 'No token, no setup form').toBeHidden();
+        expect(asked, `With no token there is nothing to inspect: no POST ${INSPECT_PATH}`).toEqual([]);
+
+        // The positive control, as on the reset page: a token nobody issued, opened in the same tab. openLink leaves for
+        // about:blank first, so the page above is gone with every request it ever sent already recorded: a record holding
+        // only the control's inspection means the page without a token sent none, however late.
+        const control = uniqueToken(43);
+        await openLink(page, 'setup', handBuiltLink('setup', control));
+        await expect(page.getByTestId('link-status')).toHaveAttribute('data-status', 'unknown', {timeout: FIRST_PAINT_MS});
+        await expectAskedOnlyAbout(asked, control, 'admin_setup');
+    });
+
+    // A7b: a token in the query has already reached the server in the request line, and its access log with it. No link
+    // carries one there, and the page never reads it.
+    test('a token in the query is never read: the setup page says the link is missing, and asks the server nothing', async ({page}) => {
+        const queried = uniqueToken(43);
+        const asked = recordInspections(page);
+
+        await page.goto(`/setup?${new URLSearchParams({token: queried})}`);
+        await expect(page.getByTestId('setup-page')).toBeVisible({timeout: FIRST_PAINT_MS});
+        await expect(page.getByTestId('link-status'), 'A token in the query is no link: the page reads none').toHaveAttribute('data-status', 'missing', {timeout: FIRST_PAINT_MS});
+        await expect(page.getByTestId('setup-card'), 'No token read, no setup form').toBeHidden();
+        expect(asked, `The token in the query is never inspected: no POST ${INSPECT_PATH}`).toEqual([]);
+
+        // The positive control, as above, with another token nobody issued, in the fragment this time: every inspection
+        // in the record is about it, so none was about the token in the query.
+        const control = uniqueToken(43);
+        await openLink(page, 'setup', handBuiltLink('setup', control));
+        await expect(page.getByTestId('link-status')).toHaveAttribute('data-status', 'unknown', {timeout: FIRST_PAINT_MS});
+        await expectAskedOnlyAbout(asked, control, 'admin_setup');
     });
 });

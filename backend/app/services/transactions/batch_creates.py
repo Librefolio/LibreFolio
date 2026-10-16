@@ -13,6 +13,7 @@ from backend.app.db.models import Asset, AssetType, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResultItem, TXPromoteBatchItem, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import tags_to_csv, validate_transaction_business_rules
+from backend.app.schemas.transactions.type_metadata import cost_basis_allowed
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 
@@ -114,6 +115,12 @@ async def apply_promotes(
         transaction_b.type = target_type
         transaction_a.related_transaction_id = transaction_b.id
         transaction_b.related_transaction_id = transaction_a.id
+        for transaction in (transaction_a, transaction_b):
+            # Decision 47: a side whose new type takes no cost basis (the giving side of a TRANSFER) drops the cost an
+            # ADJUSTMENT-out carried.
+            if not cost_basis_allowed(target_type, transaction.quantity):
+                transaction.cost_basis_override = None
+                transaction.cost_basis_currency = None
         _apply_promote_resolved_fields(
             transaction_a,
             transaction_b,

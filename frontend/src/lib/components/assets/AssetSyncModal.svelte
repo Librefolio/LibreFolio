@@ -27,11 +27,13 @@
         dateStart: string;
         dateEnd: string;
         assets: AssetSyncItem[];
+        /** The assets whose shown prices already hold a stored row in the range: the dialog warns (C-66). */
+        withDataInRange?: number[];
         onsynced: () => void;
         onclose: () => void;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, assets, onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, assets, withDataInRange = [], onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,6 +94,7 @@
             targetIds,
             resultRow,
             countLabel: $t('assets.sync.assetsCount') ?? 'assets',
+            existingIds: withDataInRange.map(String),
         },
     ]);
 </script>

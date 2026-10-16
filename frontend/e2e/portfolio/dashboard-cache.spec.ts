@@ -25,9 +25,11 @@
  * price of the asset page (`POST /assets/prices/current` writes today's candle and asks a live
  * provider), is answered in the browser with a schema-valid "no quote" answer: no provider is reached,
  * nothing is written, and the axios interceptor still sees a successful mutation — the trigger under
- * test. Owned brokers are read from `GET /brokers` (`page.request`, which no route intercepts), never
- * hard-coded. Every request the page sends is recorded per test with `page.on('request')`; nothing
- * here counts a request it did not watch the page send.
+ * test. The asset page asks for it only for an asset with a provider (Z-8), so the path goes through a
+ * Performance row whose asset has one, checked through `GET /assets/query`, never assumed. Owned brokers
+ * are read from `GET /brokers` (`page.request`, which no route intercepts), never hard-coded. Every
+ * request the page sends is recorded per test with `page.on('request')`; nothing here counts a request
+ * it did not watch the page send.
  *
  * Settled states read: `dashboard-page` / `positions-panel` `data-busy`, `risk-levels-panel`
  * `data-catalog="ready"` and `data-busy`, `risk-l1-cards` visible with no `risk-l1-loading`, and the
@@ -262,6 +264,29 @@ async function ownedPerformanceRow(page: Page, owned: readonly number[]): Promis
     return {rowId, ...parseRowId(rowId)};
 }
 
+/** The assets with a provider assigned: `provider_code` of `GET /assets/query`, which reads the provider assignments. */
+async function assetIdsWithProvider(page: Page): Promise<Set<number>> {
+    const response = await page.request.get(`${API}/assets/query`);
+    expect(response.ok(), `GET ${API}/assets/query → HTTP ${response.status()}`).toBe(true);
+    const assets = (await response.json()) as Array<{id: number; provider_code?: string | null}>;
+    return new Set(assets.filter((asset) => !!asset.provider_code).map((asset) => asset.id));
+}
+
+/**
+ * A Performance row on a broker the user owns whose asset has a provider — both checked, neither inferred: the asset
+ * page polls the live price only for an asset with a provider (Z-8), and that poll is the trigger of the path under test.
+ */
+async function ownedPricedPerformanceRow(page: Page, owned: readonly number[]): Promise<{rowId: string; brokerId: number; assetId: number}> {
+    const priced = await assetIdsWithProvider(page);
+    const rowIds = await contributionRowIds(page);
+    const rowId = rowIds.find((id) => {
+        const {brokerId, assetId} = parseRowId(id);
+        return owned.includes(brokerId) && priced.has(assetId);
+    });
+    if (!rowId) throw new Error(`No Performance row on an owned broker whose asset has a provider (owned: ${owned.join(', ') || 'none'}; rows: ${rowIds.join(', ')}). Check populate_mock_data.py (populate_asset_provider_assignments).`);
+    return {rowId, ...parseRowId(rowId)};
+}
+
 /** The row's «Analizza lotti», the way a user opens it: right click, then the menu action. Ends on the panel loaded. */
 async function analyzeLots(page: Page, rowId: string): Promise<Locator> {
     await page.getByTestId('contribution-table').locator(`tbody tr[data-row-id="${rowId}"]`).click({button: 'right'});
@@ -373,7 +398,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             // The developer's path: Positions → Performance → row → «Analizza lotti» → «Vedi asset».
             await openPerformanceTable(page);
             const owned = await ownedBrokerIds(page);
-            const {rowId, assetId} = await ownedPerformanceRow(page, owned);
+            const {rowId, assetId} = await ownedPricedPerformanceRow(page, owned);
             const lotsPanel = await analyzeLots(page, rowId);
             await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
             await lotsPanel.getByTestId('lots-analysis-panel-asset-link').click();

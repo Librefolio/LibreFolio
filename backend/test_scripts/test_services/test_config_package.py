@@ -5,7 +5,7 @@ Package under guard: ``backend/app/config/`` — the base (constants, data direc
 ``__init__.py``, and one section module per owner (``platform.py``, ``accounts.py``, ...) holding that owner's variables.
 
 The project rule, in one line: every environment variable of the application is read inside ``backend/app/config/``; a
-module elsewhere calls an accessor of the package instead of reading ``os.environ``. Six checks:
+module elsewhere calls an accessor of the package instead of reading ``os.environ``. Seven checks:
 
 (a) The detector. A source READS the environment wherever it evaluates ``os.environ`` (or ``os.environb``) for anything
     but an item assignment or deletion — a subscript, ``.get``, ``.copy``, ``.items``, ``.keys``, ``.values``, ``in``,
@@ -42,13 +42,30 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     loses one trailing slash, one only (``https://a.example//`` keeps one), nothing else changed; any other value raises
     ``ValueError`` naming the variable and quoting the value. The scheme is not enough (N48): a host must follow it — a
     name, an IPv4 or an IPv6 address, with a port or not —, and no whitespace may stand inside the address, in the host
-    or the path. ``support_url()`` (``config/platform.py``) reads ``LIBREFOLIO_SUPPORT_URL`` by that rule;
-    ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are pinned in ``test_registration_service.py``.
+    or the path. ``support_url()`` (``config/platform.py``) reads an http(s) ``LIBREFOLIO_SUPPORT_URL`` by that rule,
+    and takes a ``mailto:`` address besides (g); ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are
+    pinned in ``test_registration_service.py``, ``mailto:`` refused.
 (f) ``support_link()`` (``services/platform/instance_links.py``), what ``GET /system/instance`` publishes as
     ``support_url``, never raises: the address, or ``None`` when it is unset or invalid, and the app then links to the
     project's issues on GitHub. An invalid address is logged once per process (``_report_invalid``, ``functools.cache``):
     one error event, ``Invalid instance link``, whose ``problem`` names the variable and quotes the value and whose
     ``consequence`` says what it costs. A missing or a valid address logs nothing.
+(g) One more form, for the support address alone (CP13/P20, the rule of workstream H): ``LIBREFOLIO_SUPPORT_URL`` may
+    also be ``mailto:`` and one email address, so an instance can send its users to a mailbox. The value is stripped
+    first, as ``env_url`` does; the scheme, in any case, comes back as ``mailto:``; the address must be one pydantic's
+    ``EmailStr`` accepts, without a DNS lookup, and comes back as ``EmailStr`` normalizes it: the local part as written,
+    the domain lowercased and in Unicode — a punycode domain (``xn--``) is given back decoded. Refused, as a
+    ``ValueError`` naming the variable — so ``support_link()`` publishes no link and logs the one error of (f) —: an
+    empty address; ``?``, ``#``, ``%``, ``,``, ``;`` or ``/`` in it, a trailing ``/`` included (never removed, as
+    ``env_url`` removes it from an http(s) address); whitespace inside the value once stripped; the "pretty" forms
+    ``Name <a@b.c>`` and ``<a@b.c>``, and quotes; an address ``EmailStr`` refuses (no ``@``, no dot in the domain, a
+    special-use domain such as ``.test`` or ``.local``, an invalid one); and every scheme but ``http``, ``https`` and
+    ``mailto``, ``mailto`` without its colon included. ``EmailStr`` alone lets several of those through — ``?``, ``#``,
+    ``%`` and ``/`` are legal in a local part, where a mail client reads headers, a fragment or an escape, and where
+    ``mailto://help@…``, written by analogy with ``https://``, would mail ``//help``; it strips the whitespace around
+    the address and unwraps the pretty forms —, so each has a case of its own. ``env_url`` is not widened: it is the
+    rule of ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BILLING_URL`` too, and still refuses a ``mailto:`` value, even
+    read from ``LIBREFOLIO_SUPPORT_URL``.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
 ``HTTPS_PROXY``) and ``os`` reached dynamically (``importlib``, ``sys.modules``). The rule is about the variables the
@@ -812,11 +829,115 @@ def test_support_url_is_librefolio_support_url_by_the_rule_of_env_url(monkeypatc
 
 @pytest.mark.parametrize("value", [pytest.param("help.example.com", id="no-scheme"), pytest.param("ftp://help.example.com", id="ftp")])
 def test_support_url_raises_naming_librefolio_support_url(monkeypatch, value):
-    """(e) An address that is not http(s) is an error naming ``LIBREFOLIO_SUPPORT_URL``: the accessor never guesses, and ``support_link()`` decides what it costs."""
+    """(e) An address that is neither http(s) nor ``mailto:`` (g) is an error naming ``LIBREFOLIO_SUPPORT_URL``: the accessor never guesses, and ``support_link()`` decides what it costs."""
     monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
     with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
         support_url()
     print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: {raised.value}")
+
+
+# =============================================================================
+# The support address may also be mailto: and one email address (CP13/P20)
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param("mailto:help@example.org", "mailto:help@example.org", id="mailto"),
+        pytest.param("MAILTO:help@example.org", "mailto:help@example.org", id="upper-case-scheme-saved-lowercase"),
+        pytest.param("MailTo:help@example.org", "mailto:help@example.org", id="mixed-case-scheme-saved-lowercase"),
+        pytest.param("mailto:Help@Example.ORG", "mailto:Help@example.org", id="domain-lowercased-local-part-kept"),
+        pytest.param("  mailto:help@example.org  ", "mailto:help@example.org", id="stripped"),
+        pytest.param(" \tMAILTO:Help@Example.ORG\n", "mailto:Help@example.org", id="stripped-then-scheme-and-domain-lowercased"),
+        pytest.param("mailto:support@help.example.co.uk", "mailto:support@help.example.co.uk", id="subdomain"),
+        pytest.param("mailto:support+librefolio@example.org", "mailto:support+librefolio@example.org", id="plus-tag-in-the-local-part-kept"),
+        pytest.param("mailto:info@Bücher.DE", "mailto:info@bücher.de", id="internationalized-domain-lowercased"),
+        pytest.param("mailto:info@xn--bcher-kva.de", "mailto:info@bücher.de", id="punycode-domain-given-back-in-unicode"),
+    ],
+)
+def test_support_url_accepts_mailto_and_one_address_as_email_str_normalizes_it(monkeypatch, value, expected):
+    """(g) ``LIBREFOLIO_SUPPORT_URL`` may be ``mailto:`` and one email address: the value stripped, the scheme saved as ``mailto:`` whatever its case, the address as pydantic's ``EmailStr`` normalizes it.
+
+    ``EmailStr`` keeps the local part as written and gives the domain back lowercased and in Unicode: a punycode domain
+    comes back decoded, ``xn--bcher-kva.de`` as ``bücher.de``.
+    """
+    _set_variable(monkeypatch, SUPPORT_URL_VARIABLE, value)
+    address = support_url()
+    assert address == expected, f"{SUPPORT_URL_VARIABLE}={value!r} must give {expected!r}, support_url gave {address!r}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: support_url() == {address!r}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        # An empty address
+        pytest.param("mailto:", id="empty-mailto"),
+        pytest.param(" MailTo:  ", id="empty-mailto-once-stripped"),
+        # ? # % , ; — EmailStr alone takes the first three in a local part, where a mail client reads headers, a fragment, an escape
+        pytest.param("mailto:help?cc=boss@example.org", id="question-mark-a-header-in-the-local-part"),
+        pytest.param("mailto:help@example.org?subject=Help", id="question-mark-a-subject-query"),
+        pytest.param("mailto:help#desk@example.org", id="hash-in-the-local-part"),
+        pytest.param("mailto:help@example.org#top", id="hash-a-fragment"),
+        pytest.param("mailto:he%6Cp@example.org", id="percent-escape-in-the-local-part"),
+        pytest.param("mailto:help%40example.org", id="percent-escaped-at-sign"),
+        pytest.param("mailto:help@example.org,sales@example.org", id="comma-two-addresses"),
+        pytest.param("mailto:help@example.org;sales@example.org", id="semicolon-two-addresses"),
+        # / anywhere in the address — EmailStr alone takes it in a local part, so mailto:// written by analogy with https:// would mail "//help"; a trailing one is never removed, as env_url removes it from an http(s) address
+        pytest.param("mailto://help@example.org", id="double-slash-after-the-colon"),
+        pytest.param("mailto:help/desk@example.org", id="slash-in-the-local-part"),
+        pytest.param("mailto:help@example.org/", id="trailing-slash-never-removed"),
+        # Whitespace inside the value once stripped — EmailStr alone strips it around the address
+        pytest.param("mailto: help@example.org", id="space-after-the-colon"),
+        pytest.param("mailto:\thelp@example.org", id="tab-after-the-colon"),
+        pytest.param("mailto:\nhelp@example.org", id="line-break-after-the-colon"),
+        pytest.param("mailto:\u00a0help@example.org", id="no-break-space-after-the-colon"),
+        pytest.param("mailto:help desk@example.org", id="space-in-the-local-part"),
+        # The pretty forms and quotes — EmailStr alone unwraps the address out of the first four
+        pytest.param("mailto:Help Desk <help@example.org>", id="pretty-name-and-angle-brackets"),
+        pytest.param("mailto:<help@example.org>", id="angle-brackets"),
+        pytest.param("mailto:Help<help@example.org>", id="pretty-name-without-a-space"),
+        pytest.param('mailto:"Help"<help@example.org>', id="quoted-pretty-name"),
+        pytest.param('mailto:"help"@example.org', id="quoted-local-part"),
+        # An address EmailStr refuses
+        pytest.param("mailto:help", id="no-at-sign"),
+        pytest.param("mailto:@example.org", id="no-local-part"),
+        pytest.param("mailto:help@", id="no-domain"),
+        pytest.param("mailto:a@localhost", id="domain-without-a-dot"),
+        pytest.param("mailto:help@example.test", id="special-use-domain-test"),
+        pytest.param("mailto:help@printer.local", id="special-use-domain-local"),
+        pytest.param("mailto:help@-example.org", id="invalid-domain"),
+        pytest.param("mailto:help@[192.0.2.1]", id="ip-literal-domain"),
+        # Every scheme but http, https and mailto
+        pytest.param("javascript:alert(1)", id="javascript"),
+        pytest.param("JavaScript:alert(1)", id="javascript-any-case"),
+        pytest.param("data:text/html,x", id="data"),
+        pytest.param("ftp://example.org", id="ftp"),
+        pytest.param("file:///etc/passwd", id="file"),
+        pytest.param("mailto", id="mailto-alone-without-its-colon"),
+        pytest.param("mailtohelp@example.org", id="mailto-without-its-colon"),
+    ],
+)
+def test_support_url_refuses_anything_but_mailto_and_one_plain_address_naming_librefolio_support_url(monkeypatch, value):
+    """(g) Any other ``mailto:`` value, and any scheme but ``http``, ``https`` and ``mailto``, is an error naming ``LIBREFOLIO_SUPPORT_URL``: the accessor never guesses, and ``support_link()`` decides what it costs.
+
+    One address, written plainly: never empty, without ``? # % , ; /``, without whitespace inside, never a pretty form
+    or quoted, and one ``EmailStr`` accepts. The cases ``EmailStr`` would let through on its own are the ones this table
+    exists for.
+    """
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
+        support_url()
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: {raised.value}")
+
+
+@pytest.mark.parametrize("value", [pytest.param("mailto:help@example.org", id="mailto"), pytest.param("MAILTO:help@example.org", id="mailto-any-case")])
+def test_env_url_still_refuses_mailto_even_read_from_librefolio_support_url(monkeypatch, value):
+    """(g) The ``mailto:`` form belongs to ``support_url()`` alone: ``env_url``, the rule of ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BILLING_URL`` too, still refuses it — even from the very variable ``support_url()`` reads."""
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
+        env_url(SUPPORT_URL_VARIABLE)
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: env_url() still refuses it — {raised.value}")
 
 
 # =============================================================================
@@ -880,6 +1001,54 @@ def test_an_invalid_support_address_is_no_link_and_one_error_however_often_it_is
 
     And one error for the whole process, ``Invalid instance link``, whose ``problem`` names the variable and quotes the
     value and whose ``consequence`` says what it costs.
+    """
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with _captured_link_log() as events:
+        links = [instance_links.support_link(), instance_links.support_link()]
+    errors = _error_events(events)
+    assert links == [None, None], f"{SUPPORT_URL_VARIABLE}={value!r}: every reading must give no link, got {links}"
+    reported = [(error.get("event"), error.get("consequence")) for error in errors]
+    assert reported == [(INVALID_INSTANCE_LINK, instance_links._DEFAULT_SUPPORT)], f"two readings of an invalid {SUPPORT_URL_VARIABLE} must log exactly one error, {INVALID_INSTANCE_LINK!r}, saying what it costs: {errors}"
+    problem = str(errors[0].get("problem"))
+    assert SUPPORT_URL_VARIABLE in problem and value in problem, f"the problem must name {SUPPORT_URL_VARIABLE} and quote the value it refused, {value!r}: {problem!r}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: no link twice, one error — {problem}")
+
+
+@pytest.mark.usefixtures("fresh_link_reports")
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param("mailto:help@example.org", "mailto:help@example.org", id="mailto-is-the-address"),
+        pytest.param(" MailTo:Help@Example.ORG ", "mailto:Help@example.org", id="mailto-stripped-and-normalized"),
+    ],
+)
+def test_support_link_publishes_a_mailto_address_and_logs_nothing(monkeypatch, value, expected):
+    """(g) ``support_link()`` publishes a ``mailto:`` support address as ``support_url()`` normalizes it, for ``GET /system/instance``: a valid address is no problem, nothing is logged."""
+    _set_variable(monkeypatch, SUPPORT_URL_VARIABLE, value)
+    with _captured_link_log() as events:
+        link = instance_links.support_link()
+    assert link == expected, f"{SUPPORT_URL_VARIABLE}={value!r}: support_link() must publish {expected!r}, gave {link!r}; errors logged: {_error_events(events)}"
+    assert _error_events(events) == [], f"a valid mailto: {SUPPORT_URL_VARIABLE} is no problem to report: {_error_events(events)}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: support_link() == {link!r}, nothing logged")
+
+
+@pytest.mark.usefixtures("fresh_link_reports")
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("mailto:", id="empty-mailto"),
+        pytest.param("mailto:help?cc=boss@example.org", id="question-mark-a-header"),
+        pytest.param("mailto: help@example.org", id="space-after-the-colon"),
+        pytest.param("mailto:Help Desk <help@example.org>", id="pretty-form"),
+        pytest.param("mailto:a@localhost", id="an-address-email-str-refuses"),
+        pytest.param("JavaScript:alert(1)", id="javascript"),
+    ],
+)
+def test_an_invalid_mailto_support_address_is_no_link_and_one_error_however_often_it_is_read(monkeypatch, value):
+    """(g) A ``mailto:`` value the rule refuses, or a foreign scheme, never reaches the published link: ``support_link()`` gives no link at every reading, so the app keeps its default one.
+
+    And, as for any invalid address (f), one error for the whole process, ``Invalid instance link``, whose ``problem``
+    names the variable and quotes the value and whose ``consequence`` says what it costs.
     """
     monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
     with _captured_link_log() as events:

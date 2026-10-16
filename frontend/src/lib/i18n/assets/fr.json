@@ -281,7 +281,8 @@
       "notTested": "Non testé",
       "totalTime": "Total",
       "copyErrorDetail": "Copier le détail de l'erreur",
-      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}"
+      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}",
+      "scopeNote": "Le test ne lit que les derniers jours : un nouvel actif reçoit tout son historique de prix à sa création."
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",
@@ -327,7 +328,20 @@
       "timeout": "Recherche expirée. Veuillez réessayer.",
       "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable",
       "notConfigured": "{provider} doit être configuré avant de pouvoir chercher",
-      "crownLegend": "👑 la devise du fonds"
+      "crownLegend": "👑 la devise du fonds",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Aucun résultat des sources premium.",
+      "communitySection": "Sources non premium (communauté) · {count, plural, one {# résultat} many {# résultats} other {# résultats}}",
+      "communityWarning": "Sources tierces : LibreFolio ne garantit ni leurs prix ni leurs données. Ce choix ne vaut que pour cet actif.",
+      "reportQuestion": "Vous ne le trouvez pas ?",
+      "reportAction": "Signalez-le-nous",
+      "reportVia": {
+        "mailto": "Ouvre votre messagerie avec les détails de cette recherche",
+        "page": "Ouvre la page d'assistance et copie les détails de cette recherche, à y coller",
+        "github": "Ouvre un ticket public sur GitHub avec les détails de cette recherche : relisez-le avant de l'envoyer"
+      },
+      "reportCopied": "Détails de la recherche copiés : collez-les dans la page d'assistance.",
+      "reportCopyFailed": "Impossible de copier les détails de la recherche : décrivez votre recherche sur la page d'assistance."
     },
     "comparison": {
       "title": "Comparaison des données du fournisseur",

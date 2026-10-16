@@ -88,9 +88,9 @@ const result = await commitBatch(batch);
 
 | Role | Path |
 |------|------|
-| Payload helpers | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
-| Commit API | `frontend/src/lib/utils/transactions/txCommitApi.ts` |
+| Payload helpers | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
+| Commit API | `frontend/src/lib/features/transactions/txCommitApi.ts` |
 | trySave wrapper | `frontend/src/lib/utils/trySave.ts` |
-| BulkModal (main consumer) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| FormModal (dual creates) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal (main consumer) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| FormModal (dual creates) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | Page-level delete/split/promote | `frontend/src/routes/(app)/transactions/+page.svelte` |

@@ -9,7 +9,8 @@ contract pinned here:
    reset 30 minutes, setup 72 hours, e-mail verification 24 hours; ``hash_token``, the SHA-256 hex digest of the UTF-8
    token; ``token_path``, one front-end page per purpose with the token in the URL fragment (``#token=…``, encoded by
    ``urlencode``), never in the query string — a browser never sends the fragment, so the token stays out of the
-   instance's access log and out of every proxy's (review of 15/10); ``IssuedToken`` and ``TokenInspection``, frozen.
+   instance's access log and out of every proxy's (review of 15/10), and those pages are the API client's
+   ``LINK_PAGES``, where a 401 does not go to the login (a guard, A7b); ``IssuedToken`` and ``TokenInspection``, frozen.
 2. ``issue_token``: 256 random bits, URL-safe (43 characters); only the hash is stored; ``created_at`` is ``now`` and
    ``expires_at`` is ``now`` plus the purpose's TTL, or the one given, which must be positive. An invite belongs to
    nobody yet and may carry an e-mail, the admin role and its creator; the other purposes belong to a user and never
@@ -274,6 +275,99 @@ def test_token_path_encodes_the_token_in_the_fragment_as_urlencode_does() -> Non
     assert parse_qs(parts.fragment) == {"token": [odd]}, f"the fragment must give the token back intact: {path!r}"
     assert path == "/invite#" + urlencode({"token": odd})
     print_success("the fragment gives the token back intact")
+
+
+# The guard of A7b (review by H): the API client's LINK_PAGES and the pages of token_path (_TOKEN_PATHS) are one list
+# written twice, once in TypeScript and once in Python. The TS file is read as text, never run.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+API_CLIENT_FILE = "frontend/src/lib/api/zodios-client.ts"
+TOKEN_SERVICE_FILE = "backend/app/services/accounts/token_service.py"
+LINK_PAGES_DECLARATION = re.compile(r"\b(?:const|let|var)\s+LINK_PAGES\b")
+# The one form the guard reads: a literal Set of strings, exported and typed or not, on one line or wrapped by Prettier.
+LINK_PAGES_LITERAL = re.compile(r"\b(?:const|let|var)\s+LINK_PAGES\b[^=;]*=\s*new\s+Set\s*(?:<[^>]*>)?\(\s*\[(?P<entries>[^\]]*)\]\s*\)\s*;")
+QUOTED_PAGE = re.compile(r"""(?P<quote>['"])(?P<page>[^'"\n]*)(?P=quote)""")
+# Synthetic declarations, with the entries the parser must give back: exactly those, in that order.
+LINK_PAGES_READ = [
+    # as zodios-client.ts writes it today, between a comment and a use of the set that declares nothing
+    ("// The pages of a link.\nconst LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email']);\nreturn LINK_PAGES.has(path);", ["/setup", "/invite", "/reset-password", "/verify-email"]),
+    # double quotes, exported and typed, wrapped by Prettier with its trailing comma
+    ('export const LINK_PAGES: ReadonlySet<string> = new Set<string>([\n    "/invite",\n    "/setup",\n]);', ["/invite", "/setup"]),
+]
+# Synthetic declarations the parser must refuse rather than guess at, with the reason it gives.
+LINK_PAGES_REFUSED = [
+    ("const PAGES = new Set(['/setup']);", "0 declarations of LINK_PAGES"),
+    ("const LINK_PAGES = new Set(['/setup']);\nlet LINK_PAGES = new Set(['/invite']);", "2 declarations of LINK_PAGES"),
+    ("const LINK_PAGES = new Set(PAGES);", "not a literal"),
+    ("const LINK_PAGES = new Set(['/setup', SETUP_PAGE]);", "not a quoted string"),
+]
+
+
+def _link_pages(source: str) -> list[str]:
+    """The entries of the one ``LINK_PAGES`` declaration in a TS source, in order; ``ValueError`` on anything the guard does not read."""
+    declarations = len(LINK_PAGES_DECLARATION.findall(source))
+    if declarations != 1:
+        raise ValueError(f"{declarations} declarations of LINK_PAGES: the guard reads exactly one")
+    literal = LINK_PAGES_LITERAL.search(source)
+    if literal is None:
+        raise ValueError("LINK_PAGES is not a literal new Set([...]) of strings: the guard reads only that form")
+    listed = literal["entries"].strip().removesuffix(",")  # the trailing comma Prettier adds to a list it wraps
+    if not listed:
+        return []
+    entries = []
+    for item in listed.split(","):
+        quoted = QUOTED_PAGE.fullmatch(item.strip())
+        if quoted is None:
+            raise ValueError(f"LINK_PAGES holds {item.strip()!r}, not a quoted string: the guard reads only string literals")
+        entries.append(quoted["page"])
+    return entries
+
+
+def _link_page_drift(link_pages: set[str], token_pages: set[str]) -> tuple[list[str], list[str]]:
+    """``(the pages a link opens that LINK_PAGES lacks, the LINK_PAGES no link opens)``: ``([], [])`` when the two lists agree."""
+    return sorted(token_pages - link_pages), sorted(link_pages - token_pages)
+
+
+def test_token_path_pages_are_the_link_pages_of_the_api_client() -> None:
+    """Contract 1, a guard — green on arrival, the two lists agree today (A7b, review by H): the pages ``token_path`` sends a link to are exactly ``LINK_PAGES``, the pages where the API client lets a 401 through instead of going to the login.
+
+    On a 401 the client goes to the login, except on the anonymous page a link opens: there the 401 is the instance's
+    block, which the page receives, and a trip to the login would lose the token in the URL fragment (backlog A-13).
+    Those pages are written twice, in two languages: ``LINK_PAGES`` in ``frontend/src/lib/api/zodios-client.ts`` and
+    ``_TOKEN_PATHS`` in ``backend/app/services/accounts/token_service.py``, read here through ``token_path``. A page added
+    to one list only is a link whose token a 401 throws away.
+
+    Barriers first, so that the equality cannot pass on nothing: the parser gives back exactly the entries of synthetic
+    declarations — today's, one in double quotes, one a page short for each page — and refuses what it does not read;
+    the comparison names a page short and a page more, each on its side; the real file gives at least one entry, each a
+    path, none twice.
+    """
+    print_section("Contract 1 (guard): the pages of token_path are the API client's LINK_PAGES")
+    token_pages = {urlsplit(token_path(purpose, SAMPLE_TOKEN)).path for purpose in AccountTokenPurpose}
+
+    for snippet, entries in LINK_PAGES_READ:
+        assert _link_pages(snippet) == entries, f"the parser misreads {snippet!r}"
+    for snippet, reason in LINK_PAGES_REFUSED:
+        with pytest.raises(ValueError, match=reason):
+            _link_pages(snippet)
+    for dropped in sorted(token_pages):
+        short = sorted(token_pages - {dropped})
+        listed = ", ".join(f"'{page}'" for page in short)
+        assert _link_pages(f"const LINK_PAGES = new Set([{listed}]);") == short, f"the parser misreads a LINK_PAGES without {dropped}"
+        assert _link_page_drift(set(short), token_pages) == ([dropped], []), f"the comparison must name {dropped}, missing from LINK_PAGES"
+    assert _link_page_drift(token_pages | {"/elsewhere"}, token_pages) == ([], ["/elsewhere"]), "the comparison must name a page only LINK_PAGES has"
+
+    link_pages = _link_pages((REPO_ROOT / API_CLIENT_FILE).read_text(encoding="utf-8"))
+    assert link_pages, f"LINK_PAGES in {API_CLIENT_FILE} is empty: nothing to compare"
+    assert all(page.startswith("/") for page in link_pages), f"LINK_PAGES in {API_CLIENT_FILE} holds something that is not a path: {link_pages}"
+    assert len(set(link_pages)) == len(link_pages), f"LINK_PAGES in {API_CLIENT_FILE} lists a page twice: {link_pages}"
+
+    missing, extra = _link_page_drift(set(link_pages), token_pages)
+    assert (missing, extra) == ([], []), (
+        f"LINK_PAGES ({API_CLIENT_FILE}) and the pages of token_path (_TOKEN_PATHS, {TOKEN_SERVICE_FILE}) differ; a link page belongs in both or in neither.\n"
+        f"  missing from LINK_PAGES: {missing} — a 401 there sends the browser to the login, and the token in the fragment is lost\n"
+        f"  missing from _TOKEN_PATHS: {extra} — a 401 there never goes to the login, yet no link opens the page"
+    )
+    print_success(f"{len(link_pages)} link pages, the same in both files: {', '.join(sorted(link_pages))}")
 
 
 def test_the_results_are_frozen_dataclasses() -> None:
