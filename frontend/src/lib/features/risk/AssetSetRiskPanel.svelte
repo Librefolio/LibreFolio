@@ -74,7 +74,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SelectPopover from '$lib/components/ui/select/SelectPopover.svelte';

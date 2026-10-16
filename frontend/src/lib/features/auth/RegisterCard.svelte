@@ -94,9 +94,10 @@
 
         loading = true;
         try {
-            await zodiosApi.register_api_v1_auth_register_post(inviteToken ? {username, email, password, invite_token: inviteToken} : {username, email, password});
+            const answer = await zodiosApi.register_api_v1_auth_register_post(inviteToken ? {username, email, password, invite_token: inviteToken} : {username, email, password});
             // Success - go back to login with message
-            dispatch('gotoLogin', {message: $_('auth.accountCreated')});
+            // An account waiting for its email verification (workstream E) is told to open the link first
+            dispatch('gotoLogin', {message: answer.verification_required ? $_('email.verification.registered') : $_('auth.accountCreated')});
         } catch (e: unknown) {
             const described = describeRegistrationError(e);
             error = 'key' in described ? $_(described.key) : described.raw;

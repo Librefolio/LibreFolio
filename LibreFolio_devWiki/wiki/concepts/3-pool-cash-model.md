@@ -208,6 +208,6 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 | Sold cost C (average-cost step, since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | KPI realized P&L from `realized_sales` (since 2026-10-07) | `backend/app/services/portfolio_service.py` |
 | Math spec §11 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
-| GrowthChart component | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| GrowthChart component | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | vNext unit tests | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
