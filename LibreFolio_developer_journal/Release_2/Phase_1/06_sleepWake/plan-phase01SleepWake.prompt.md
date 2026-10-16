@@ -2761,3 +2761,9 @@ base.
 5. ✅ 16/10 16:54 — `mkdocs build` stretto, atteso il carico sotto 50: nessun avviso della pagina, solo quello noto di dev
    (`wac.md`, corretto in `ed500643f`, non ancora nella base); `check-links` 97 validi.
 6. ✅ 16/10 16:56 — Checkpoint FROZEN inviato: due file (`admin/sleep_wake.en.md`, questo piano).
+7. ✅ 16/10 16:56 — Checkpoint salvato (`b93fddb06`, `cc232ec10`) ed entrato in dev con Z-17: merge `4f0a5d323`.
+   Poi, su richiesta del coordinatore (da Y), Z-18 nel backlog: durante la ricarica in background dopo un recupero la
+   radice del Dashboard passa ad `aria-busy="true"` (`reportLoading` messo da `loadAll()`), e un lettore di schermo
+   annuncia «occupato»; da decidere dopo l'ingresso di Y11. Verificato sul codice: la radice
+   (`routes/(app)/dashboard/+page.svelte:841`) lega `aria-busy` e `data-busy` a `reportLoading`; la pagina del
+   broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue `reportLoading`.
