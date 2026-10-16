@@ -2913,6 +2913,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
     «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
     Your Email», «🔑 Change Password»), `admin/email`.
+  - Da A7a (16/10), nessun timbro: sezioni nuove in `admin/configuration` («The Initial Administrator») e
+    `admin/cli_tools` (`user setup-link`), con le ancore `#initial-admin` e `#setup-link` da tenere uguali in ogni lingua;
+    `admin/hosting_providers` (`#initial-admin`); una o due frasi in `admin/settings`, `admin/users`, `admin/index`,
+    `admin/host_installation`, `admin/docker_advanced`, `user/installation`, `user/getting-started`.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
