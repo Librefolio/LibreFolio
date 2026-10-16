@@ -4,7 +4,8 @@ Every e-mail of release 1.3 — password reset, invitation, e-mail verification,
 test message — is built by one typed builder from the texts of ``templates/{en,it,fr,es}.json`` and the HTML layout
 ``templates/layout.html``, then composed into a ``multipart/alternative`` message. The contract pinned here:
 
-1. ``EMAIL_LANGUAGES`` are the four languages ``default_language`` accepts; ``EmailKind`` has five values;
+1. ``EMAIL_LANGUAGES`` are the four languages ``default_language`` accepts; ``EmailKind`` has six values (lot E4a adds
+   ``email_changed``);
    ``email_language`` reduces any language tag to one of them (``it-IT``, ``IT``, ``it_IT`` → ``it``), English when it
    is unknown, empty or missing.
 2. ``EmailContent(kind, language, subject, text, html)`` is frozen.
@@ -28,6 +29,13 @@ test message — is built by one typed builder from the texts of ``templates/{en
    separator (Zl, Zp) becomes one space, so the plain-text part keeps its lines whatever a value holds; a bidirectional
    embedding, override or isolate (U+202A–U+202E, U+2066–U+2069) is removed, so a value cannot reorder the text around
    it; the HTML part is escaped as before.
+8. The notice of an email change (lot E4a): the sections of every catalogue are exactly the kinds of ``EmailKind`` and
+   ``common``; ``build_email_changed(*, language, username, new_address, instance)`` writes, in each language, the
+   greeting with the username, the intro naming ``$instance`` and the new address, the advice naming ``$instance``,
+   then the footer — and nothing else: no link, no button, no ``href`` at all. The new address appears only as
+   ``masked_address`` writes it, ``***@domain``: its local part is in no part of the email, its domain on one line and
+   escaped in the HTML like any value. ``masked_address`` keeps what follows the last ``@`` of the stripped address,
+   letter case included, and is ``***`` without an ``@`` or without a domain.
 
 Pure: no database, no server, no network; the catalogue is read from the package, never written. The autouse fixture
 that removes inherited ``LIBREFOLIO_SMTP_*`` variables is here as in every module of the e-mail lot, though nothing
@@ -63,12 +71,14 @@ from backend.app.services.email.messages import (
     EmailContent,
     EmailKind,
     build_admin_setup,
+    build_email_changed,
     build_invite,
     build_password_reset,
     build_test_message,
     build_verification,
     compose_message,
     email_language,
+    masked_address,
 )
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -85,17 +95,22 @@ HTTP_LINK = "http://192.168.1.10:6040/invite#token=bGFu_aW52aXRl"
 USERNAME = '<b>zq-alice</b>&"'
 INSTANCE = "Zq Family <Folio> & Co"
 INVITER = "zq-O'Brien <admin>"
+#: The new address of an email change: a local part of its own, never shown, and a domain in mixed case, shown as is.
+NEW_ADDRESS = "zq.new-alice.secret@Example.ORG"
+NEW_LOCAL_PART = "zq.new-alice.secret"
+NEW_MASKED = "***@Example.ORG"
 #: What may never reach a subject, in any case: the cores of the user's values, and any trace of the link.
-NOT_IN_A_SUBJECT = ("zq-alice", "zq family", "brien", "://", "folio.example.com", TOKEN.lower())
+NOT_IN_A_SUBJECT = ("zq-alice", "zq family", "brien", "://", "folio.example.com", TOKEN.lower(), "example.org")
 
-PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST = (
+PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED = (
     EmailKind.PASSWORD_RESET,
     EmailKind.INVITE,
     EmailKind.EMAIL_VERIFICATION,
     EmailKind.ADMIN_SETUP,
     EmailKind.TEST,
+    EmailKind.EMAIL_CHANGED,
 )
-ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST)
+ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED)
 LINK_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP)
 TTL = {PASSWORD_RESET: timedelta(minutes=30), INVITE: timedelta(days=7), EMAIL_VERIFICATION: timedelta(hours=24), ADMIN_SETUP: timedelta(hours=72)}
 
@@ -106,6 +121,7 @@ BUILDERS = {
     EMAIL_VERIFICATION: (build_verification, {"username": USERNAME, "link": LINK, "ttl": TTL[EMAIL_VERIFICATION], "instance": INSTANCE}),
     ADMIN_SETUP: (build_admin_setup, {"username": USERNAME, "link": LINK, "ttl": TTL[ADMIN_SETUP], "instance": INSTANCE}),
     TEST: (build_test_message, {"username": USERNAME, "instance": INSTANCE}),
+    EMAIL_CHANGED: (build_email_changed, {"username": USERNAME, "new_address": NEW_ADDRESS, "instance": INSTANCE}),
 }
 #: The user's values each kind shows.
 SHOWN_VALUES = {
@@ -114,6 +130,7 @@ SHOWN_VALUES = {
     EMAIL_VERIFICATION: (USERNAME, INSTANCE),
     ADMIN_SETUP: (USERNAME, INSTANCE),
     TEST: (USERNAME, INSTANCE),
+    EMAIL_CHANGED: (USERNAME, INSTANCE),
 }
 #: The parameters of each builder, all keyword-only, and the defaults of the optional ones.
 SIGNATURES = {
@@ -122,14 +139,17 @@ SIGNATURES = {
     "build_verification": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_admin_setup": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_test_message": ({"language", "username", "instance"}, {}),
+    "build_email_changed": ({"language", "username", "new_address", "instance"}, {}),
 }
-#: The arguments of each builder that an e-mail shows to its reader.
+#: The arguments of each builder that an e-mail shows to its reader (the new address of an email change is shown
+#: masked: EMM-036 to EMM-038).
 SHOWN_FIELDS = {
     PASSWORD_RESET: ("username", "instance"),
     INVITE: ("instance", "inviter"),
     EMAIL_VERIFICATION: ("username", "instance"),
     ADMIN_SETUP: ("username", "instance"),
     TEST: ("username", "instance"),
+    EMAIL_CHANGED: ("username", "instance"),
 }
 SHOWN_FIELD_CASES = [pytest.param(kind, field, id=f"{kind.value}-{field}") for kind, fields in SHOWN_FIELDS.items() for field in fields]
 #: Characters that would break a line of the plain-text part, or hide in it: control characters (Cc), the line and
@@ -238,7 +258,7 @@ def test_the_email_languages_are_those_of_default_language() -> None:
 
 
 def test_the_kinds_of_email_have_their_values() -> None:
-    """EMM-002 — contract 1: five kinds, a StrEnum of lowercase values."""
+    """EMM-002 — contract 1: six kinds, a StrEnum of lowercase values (``email_changed`` since lot E4a)."""
     print_section("EMM-002: EmailKind")
 
     assert issubclass(EmailKind, StrEnum)
@@ -248,8 +268,9 @@ def test_the_kinds_of_email_have_their_values() -> None:
         "EMAIL_VERIFICATION": "email_verification",
         "ADMIN_SETUP": "admin_setup",
         "TEST": "test",
+        "EMAIL_CHANGED": "email_changed",
     }
-    print_success("5 kinds")
+    print_success("6 kinds")
 
 
 @pytest.mark.parametrize(
@@ -738,3 +759,93 @@ def test_markup_across_a_line_break_is_still_escaped(kind: EmailKind) -> None:
     assert html.escape("<b>zq <i>evil</i></b>") in content.html, "the username must be escaped, on one line, in the HTML"
     assert "<i>evil" not in content.html and "<b>zq" not in content.html, "markup from a username reached the HTML"
     print_success("one line in the text, escaped in the HTML")
+
+
+# =============================================================================
+# 8. THE NOTICE OF AN EMAIL CHANGE (lot E4a)
+# =============================================================================
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_each_catalogue_has_a_section_per_kind_and_nothing_else(language: str) -> None:
+    """EMM-034 — contract 8: the sections of each catalogue are exactly the kinds of ``EmailKind`` — ``email_changed`` included — and ``common``: a kind without its texts, or texts without a kind, is a gap. ``email_changed`` has a subject, an intro and an advice, and no ``action``: it carries no link; the intro names the instance and the new address, the advice the instance."""
+    print_section(f"EMM-034: sections of {language}.json")
+    catalogue = _catalogue(language)
+
+    assert set(catalogue) == {kind.value for kind in EmailKind} | {"common"}
+    section = catalogue["email_changed"]
+    assert set(section) == {"subject", "intro", "advice"}
+    assert (set(string.Template(section["intro"]).get_identifiers()), set(string.Template(section["advice"]).get_identifiers())) == ({"instance", "address"}, {"instance"})
+    print_success(f"{len(EmailKind)} kinds and common; email_changed without an action")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_email_changed_notice_is_the_greeting_the_intro_the_advice_and_the_footer(language: str) -> None:
+    """EMM-035 — contract 8: ``build_email_changed`` in each language: its kind, its language, the section's subject; the text is the greeting with the username, the intro with the instance and the masked new address, the advice with the instance, then the footer — nothing else, no link —; the HTML holds each of these escaped, and no ``href``, no button, not the button's fallback line."""
+    print_section(f"EMM-035: email_changed in {language}")
+    catalogue = _catalogue(language)
+    section, common = catalogue["email_changed"], catalogue["common"]
+    values = {"username": USERNAME, "instance": INSTANCE, "address": NEW_MASKED}
+    blocks = [string.Template(text).substitute(values) for text in (common["greeting"], section["intro"], section["advice"])]
+    footer = string.Template(common["footer"]).substitute(values)
+
+    content = build_email_changed(language=language, username=USERNAME, new_address=NEW_ADDRESS, instance=INSTANCE)
+
+    assert (content.kind, content.language, content.subject) == (EMAIL_CHANGED, language, section["subject"])
+    assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
+    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
+    assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
+    assert "://" not in content.text
+    print_success("greeting, intro, advice, footer; no link")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_new_address_shows_its_domain_only(language: str) -> None:
+    """EMM-036 — contract 8: the new address appears only as ``***@domain``, its domain in its own letter case: its local part is in no part of the email — not the subject, not the text, not the HTML, in any letter case —, nor is the whole address."""
+    print_section(f"EMM-036: the new address in {language}")
+
+    content = build_email_changed(language=language, username=USERNAME, new_address=NEW_ADDRESS, instance=INSTANCE)
+
+    for name, part in (("subject", content.subject), ("text", content.text), ("html", content.html)):
+        assert NEW_LOCAL_PART.casefold() not in part.casefold(), f"the local part of the new address is in the {name}"
+        assert NEW_ADDRESS.casefold() not in part.casefold(), f"the new address is in the {name}"
+    assert NEW_MASKED in content.text and html.escape(NEW_MASKED) in content.html
+    print_success(f"{NEW_MASKED} only")
+
+
+@pytest.mark.parametrize(
+    ("address", "masked"),
+    [
+        pytest.param("alice@example.com", "***@example.com", id="an-address"),
+        pytest.param("  alice@example.com \n", "***@example.com", id="spaces-and-a-line-break-around"),
+        pytest.param("Alice@Example.COM", "***@Example.COM", id="the-domain-keeps-its-letter-case"),
+        pytest.param("alice@first.example@second.example", "***@second.example", id="several-at-signs-the-last-one-counts"),
+        pytest.param("@example.com", "***@example.com", id="no-local-part"),
+        pytest.param("alice", "***", id="no-at-sign"),
+        pytest.param("alice@", "***", id="no-domain"),
+        pytest.param("alice@   ", "***", id="a-blank-domain"),
+        pytest.param("", "***", id="nothing"),
+    ],
+)
+def test_masked_address_keeps_the_domain_alone(address: str, masked: str) -> None:
+    """EMM-037 — contract 8: ``masked_address`` keeps what follows the last ``@`` of the stripped address, letter case included, after ``***@``; without an ``@``, or without a domain, it is ``***``."""
+    print_section(f"EMM-037: masked_address({address!r})")
+
+    assert masked_address(address) == masked
+    print_success(masked)
+
+
+def test_the_masked_domain_is_one_line_and_escaped_like_any_value() -> None:
+    """EMM-038 — contract 8 (and 7): a new address whose domain holds markup is shown verbatim in the text and escaped in the HTML, never as markup; one whose domain holds a CR LF stays on one line — the text has as many lines as with a plain address, the header-like rest reads after a space."""
+    print_section("EMM-038: markup and a line break in the domain")
+    plain = build_email_changed(language="en", username="zq-alice", new_address=NEW_ADDRESS, instance="zq-folio")
+
+    marked = build_email_changed(language="en", username="zq-alice", new_address="zq@<b>evil</b>.example", instance="zq-folio")
+    broken = build_email_changed(language="en", username="zq-alice", new_address="zq@evil.example\r\nBcc: zq-spy", instance="zq-folio")
+
+    assert "***@<b>evil</b>.example" in marked.text
+    assert html.escape("***@<b>evil</b>.example") in marked.html and "<b>evil" not in marked.html
+    assert len(broken.text.splitlines()) == len(plain.text.splitlines())
+    assert "***@evil.example  Bcc: zq-spy" in broken.text and "\r" not in broken.text
+    print_success("escaped in the HTML, one line in the text")
