@@ -51,7 +51,7 @@
 
     export interface AllocationEntry {
         name: string;
-        /** Percentage share 0-100 */
+        /** Percentage share of the NET total: with negative cash the positive shares add up above 100 (decision 49). */
         value: number;
         /** Absolute amount in base currency */
         amount: number;

@@ -605,16 +605,19 @@
         const percent = (value: number) => formatPercent(value, {digits: 1, signed: false});
         const families = styling
             .map((family) => {
-                const members = family.members.map((key) => ({key, value: valueAt(key), pure: key.toUpperCase() === family.id})).filter((member) => member.value > 0.01);
+                const members = family.members.map((key) => ({key, value: valueAt(key), pure: key.toUpperCase() === family.id})).filter((member) => Math.abs(member.value) > 0.01);
                 return {...family, members, value: members.reduce((sum, member) => sum + member.value, 0)};
             })
-            .filter((family) => family.value > 0.01)
+            .filter((family) => Math.abs(family.value) > 0.01)
             .sort((left, right) => right.value - left.value);
-        const shown = families.length <= 6 ? families : families.slice(0, 5);
-        const rest = families.slice(shown.length);
+        // Negative cash (decision 49) is listed on its own, after the positives: the top-five rule and «Remaining» count
+        // the positive families only, so an overdraft is never folded into a sum of holdings.
+        const positives = families.filter((family) => family.value > 0);
+        const negatives = families.filter((family) => family.value < 0);
+        const shown = positives.length <= 6 ? positives : positives.slice(0, 5);
+        const rest = positives.slice(shown.length);
 
-        let html = '';
-        for (const family of shown) {
+        const familyHtml = (family: (typeof families)[number]): string => {
             let rows = buildTooltipRow(escapeHtml(getDisplayName(family.id)), percent(family.value), family.color);
             if (!(family.members.length === 1 && family.members[0].pure)) {
                 const ordered = [...family.members].sort((left, right) => (left.pure !== right.pure ? (left.pure ? -1 : 1) : right.value - left.value));
@@ -623,13 +626,15 @@
                     rows += `<div data-allocation-member="${escapeHtml(member.key)}" style="padding-left:16px">${buildTooltipRow(escapeHtml(label), percent(member.value))}</div>`;
                 }
             }
-            html += `<div data-allocation-family="${escapeHtml(family.id)}">${rows}</div>`;
-        }
+            return `<div data-allocation-family="${escapeHtml(family.id)}">${rows}</div>`;
+        };
+
+        let html = shown.map(familyHtml).join('');
         if (rest.length > 0) {
             const sum = rest.reduce((total, family) => total + family.value, 0);
             html += buildTooltipRow(escapeHtml(`${remainingLabel} (${rest.length})`), percent(sum), theme.mutedColor);
         }
-        return html;
+        return html + negatives.map(familyHtml).join('');
     }
 
     function buildChartOption(dataset: AggregatedAllocationDataset, isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
@@ -677,6 +682,8 @@
                 name: getDisplayName(id),
                 type: 'line',
                 stack: 'allocation',
+                // Positives stack up from 0, a negative cash share down from it (decision 49): said, not left to the default.
+                stackStrategy: 'samesign',
                 data:
                     members.length === 1
                         ? dataset.seriesDataByName[members[0]]
@@ -748,9 +755,23 @@
                             value: dataset.rawDataByName[id]?.[idx] ?? 0,
                             color,
                         }))
-                        .filter((item) => item.value > 0.01);
+                        .filter((item) => Math.abs(item.value) > 0.01);
+                    // Negative cash (decision 49) gets its own rows, after the others: a share below zero is never part of «Remaining».
+                    const negativeRows = allItems
+                        .filter((item) => item.value < 0)
+                        .map((item) => buildTooltipRow(escapeHtml(item.name), formatPercent(item.value, {digits: 1, signed: false}), item.color))
+                        .join('');
 
-                    return header + buildTooltipByThreshold(allItems, 3, theme, remainingLabel);
+                    return (
+                        header +
+                        buildTooltipByThreshold(
+                            allItems.filter((item) => item.value > 0),
+                            3,
+                            theme,
+                            remainingLabel,
+                        ) +
+                        negativeRows
+                    );
                 },
             },
             legend: {
@@ -775,7 +796,11 @@
             },
             yAxis: {
                 type: 'value',
-                max: 100,
+                // Shares of the NET total: with negative cash the positives add up above 100 and the cash sits below 0
+                // (decision 49), so the bounds follow the stack, to the next ten. Within a point of 0–100 they stay there:
+                // shares rounded to two decimals can add up to 100.01, which must not open a new band of axis.
+                min: (extent: {min: number}) => (extent.min >= -1 ? 0 : Math.floor(extent.min / 10) * 10),
+                max: (extent: {max: number}) => (extent.max <= 101 ? 100 : Math.ceil(extent.max / 10) * 10),
                 axisLabel: {color: textColor, fontSize: 14, formatter: (value: number) => formatPercent(value, {digits: 2, signed: false, trim: true})},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
