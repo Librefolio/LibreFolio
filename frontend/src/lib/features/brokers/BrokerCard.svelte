@@ -79,14 +79,14 @@
 
 <a
     href="/brokers/{broker.id}"
-    class="block w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden cursor-pointer
-           transition-all duration-200 hover:shadow-lg hover:border-libre-green/30 hover:bg-libre-green/5 dark:hover:bg-slate-700
-           focus:outline-none focus:ring-2 focus:ring-libre-green focus:ring-offset-2"
+    class="block w-full text-left bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden cursor-pointer
+           transition-all duration-200 hover:shadow-lg hover:border-lf-link/30 hover:bg-lf-selected/50
+           focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2"
     class:opacity-60={broker.is_active === false}
     data-testid="broker-card-{broker.id}"
 >
     <!-- Header -->
-    <div class="p-4 border-b border-gray-100 dark:border-slate-700">
+    <div class="p-4 border-b border-lf-subtle">
         <div class="flex items-start justify-between">
             <div class="flex items-center gap-3 flex-1 min-w-0">
                 <!-- Broker Icon -->
@@ -107,31 +107,31 @@
                                 {#if broker.user_role === 'OWNER'}<Crown size={11} />{:else if broker.user_role === 'EDITOR'}<Pencil size={11} />{:else}<Eye size={11} />{/if}
                             </span>
                         {/if}
-                        <h3 use:scrollOnOverflow class="{overflowScrollTextClass} text-lg font-semibold text-gray-800 dark:text-gray-100" title={broker.name}>{broker.name}</h3>
+                        <h3 use:scrollOnOverflow class="{overflowScrollTextClass} text-lg font-semibold text-lf-primary" title={broker.name}>{broker.name}</h3>
                     </div>
                     {#if broker.description}
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{broker.description}</p>
+                        <p class="text-sm text-lf-muted mt-0.5 line-clamp-1">{broker.description}</p>
                     {/if}
                 </div>
             </div>
 
             <!-- Actions -->
             <div class="flex items-center space-x-1 ml-2">
-                <button class="p-2 text-gray-400 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-share-{broker.id}" on:click={handleShare} title={$_('brokers.sharing.title')}>
+                <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-share-{broker.id}" on:click={handleShare} title={$_('brokers.sharing.title')}>
                     <Share2 size={18} />
                 </button>
-                <button class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" data-testid="broker-edit-{broker.id}" on:click={handleEdit} title={$_('common.edit')}>
+                <button class="p-2 text-lf-muted hover:text-lf-info hover:bg-lf-info-soft rounded-lg transition-colors" data-testid="broker-edit-{broker.id}" on:click={handleEdit} title={$_('common.edit')}>
                     <Pencil size={18} />
                 </button>
-                <button class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" data-testid="broker-delete-{broker.id}" on:click={handleDelete} title={$_('common.delete')}>
+                <button class="p-2 text-lf-muted hover:text-lf-danger hover:bg-lf-danger-soft rounded-lg transition-colors" data-testid="broker-delete-{broker.id}" on:click={handleDelete} title={$_('common.delete')}>
                     <Trash2 size={18} />
                 </button>
                 {#if broker.portal_url}
-                    <button type="button" class="p-2 text-gray-400 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-portal-{broker.id}" on:click={handleOpenPortal} title={$_('brokers.openPortal')} aria-label={$_('brokers.openPortal')}>
+                    <button type="button" class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-portal-{broker.id}" on:click={handleOpenPortal} title={$_('brokers.openPortal')} aria-label={$_('brokers.openPortal')}>
                         <ExternalLink size={18} />
                     </button>
                 {:else}
-                    <span class="p-2 text-gray-300 dark:text-gray-600 rounded-lg" aria-hidden="true">
+                    <span class="p-2 text-lf-muted rounded-lg" aria-hidden="true">
                         <ExternalLink size={18} />
                     </span>
                 {/if}
@@ -143,8 +143,8 @@
     <div class="p-4">
         <div class="space-y-1.5 mb-4 text-sm">
             <div class="flex items-center justify-between gap-3">
-                <span class="text-gray-500 dark:text-gray-400">{$_('brokers.nav')}</span>
-                <span class="font-medium text-gray-800 dark:text-gray-100">
+                <span class="text-lf-muted">{$_('brokers.nav')}</span>
+                <span class="font-medium text-lf-primary">
                     {#if summary}
                         <CurrencyAmount amount={toNumber(summary.net_worth.amount)} code={summary.net_worth.code} />
                     {:else}
@@ -153,19 +153,19 @@
                 </span>
             </div>
             <div class="flex items-center justify-between gap-3">
-                <span class="text-gray-500 dark:text-gray-400">{$_('brokers.gainLoss')}</span>
+                <span class="text-lf-muted">{$_('brokers.gainLoss')}</span>
                 <span class="font-medium {summary && toNumber(summary.gain_loss.amount) < 0 ? SIGN_TEXT.brokerCard.loss : SIGN_TEXT.brokerCard.gain}">
                     {#if summary}
                         <CurrencyAmount amount={toNumber(summary.gain_loss.amount)} code={targetCurrency} options={{showSign: true}} />
                         <span class="ml-1 text-xs">({formatPercent(toNumber(summary.gain_loss_percent), {scale: 100, signed: false, locale: $uiLocaleStore})})</span>
                     {:else}
-                        <span class="text-gray-800 dark:text-gray-100">—</span>
+                        <span class="text-lf-primary">—</span>
                     {/if}
                 </span>
             </div>
         </div>
 
-        <div class="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
+        <div class="flex items-center space-x-2 text-sm text-lf-muted mb-3">
             <Wallet size={16} />
             <span>{$_('brokers.cashBalances')}</span>
         </div>
@@ -173,18 +173,18 @@
         {#if summary?.cash_balances && summary.cash_balances.length > 0}
             <div class="flex flex-wrap gap-2">
                 {#each [...summary.cash_balances].sort((a, b) => toNumber(b.amount) - toNumber(a.amount)) as balance}
-                    <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                    <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
                         <CurrencyAmount amount={toNumber(balance.amount)} code={balance.code} />
                     </span>
                 {/each}
             </div>
         {:else}
-            <p class="text-sm text-gray-400 dark:text-gray-500 italic">{$_('brokers.noCashBalances')}</p>
+            <p class="text-sm text-lf-muted italic">{$_('brokers.noCashBalances')}</p>
         {/if}
     </div>
 
     <!-- Footer Stats -->
-    <div class="px-4 py-3 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+    <div class="px-4 py-3 bg-lf-panel border-t border-lf-subtle flex items-center justify-between text-xs text-lf-muted">
         <span>
             {$_('brokers.assets', {values: {n: assetCount}})}
         </span>

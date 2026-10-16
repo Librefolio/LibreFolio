@@ -48,18 +48,18 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 text-lf-primary py-4 border-b border-lf-subtle last:border-0">
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
-        <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+        <div class="flex items-center text-sm font-medium text-lf-secondary">
             {#if icon}
                 {@const Icon = icon}
-                <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                <Icon size={16} class="mr-2 text-lf-muted" />
             {/if}
             {label}
         </div>
         {#if hint}
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p>
+            <p class="text-xs text-lf-muted mt-1">{hint}</p>
         {/if}
     </div>
 
@@ -80,17 +80,15 @@
                     oninput={handleInput}
                     disabled={isLocked}
                     class="w-20 px-3 py-2 border rounded-lg text-sm text-right
-                        {isLocked
-                        ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-600'
-                        : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                        {isLocked ? 'bg-lf-panel text-lf-muted cursor-not-allowed border-lf-subtle' : 'bg-lf-field text-lf-primary border-lf-input hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus focus:border-lf-focus'}"
                 />
                 {#if unit}
-                    <span class="text-sm text-gray-500 dark:text-gray-400">{unit}</span>
+                    <span class="text-sm text-lf-muted">{unit}</span>
                 {/if}
             </div>
             <!-- Warning -->
             {#if showWarning && warnMessage}
-                <div class="flex items-center text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+                <div class="flex items-center text-xs text-lf-warning-on-soft bg-lf-warning-soft px-2 py-1 rounded">
                     <AlertCircle size={12} class="mr-1 flex-shrink-0" />
                     <span>{warnMessage}</span>
                 </div>

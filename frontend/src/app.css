@@ -247,23 +247,8 @@ html.dark textarea:where(:not([class*='-lf-']))::placeholder {
     color: var(--theme-text-tertiary);
 }
 
-/* Dark mode: Main background and beige areas */
-html.dark .bg-libre-beige {
-    background-color: var(--theme-bg-primary) !important;
-}
-
-/* Dark mode: Text colors on brand elements */
-html.dark .text-libre-dark {
-    color: var(--theme-text-primary) !important;
-}
-
 html.dark .text-libre-green {
     color: #39af50 !important; /* Lighter green for dark mode */
-}
-
-/* Dark mode: Cards and modals */
-html.dark .bg-white\/90 {
-    background-color: rgba(30, 41, 59, 0.95) !important;
 }
 
 /* Dark mode: Rounded containers */
