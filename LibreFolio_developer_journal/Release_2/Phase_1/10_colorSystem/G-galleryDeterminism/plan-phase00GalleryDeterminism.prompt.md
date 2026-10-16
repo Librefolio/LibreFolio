@@ -1085,3 +1085,49 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
    >
    > Il coordinatore credeva la run morta col turno della sessione, caduto per la rete fra le 11:53 e le 11:57. In
    > realtà era già finita da sola alle 11:55:24, e lo script ha raccolto i record.
+
+## Dopo G-18: lavori chiesti dal coordinatore (16/10)
+
+- **Verifica in galleria di FE5c (X) ✅, 16/10 pomeriggio.** X ha diviso la pagina di dettaglio dell'asset (da 3.603 a
+  2.757 righe), senza cambiare classi né `data-testid`.
+  - Due snapshot filtrati sui 15 test che aprono il dettaglio, `-f "Asset (detail|chart settings|distribution)"`, a 6
+    worker nella corsia 6153:
+    - A `d69e14a6e`: la testa di X con i 27 file di FE5c riportati a dev;
+    - B `668d27837`: la testa di X.
+  - Kit di sessione, `files/fe5c/`: `fe5c_verify.sh` (preflight, prebuild, snap, fill, compare) e `fe5c_check.py`
+    (lockcheck, select, paths, merge, verdict).
+  - I rossi di carico (carico 80–166) li hanno recuperati dei fill sullo stesso SHA e nello stesso giorno: 6 su A, 5 su B.
+  - Verdetto: **identiche entro il rumore.**
+    - 288 immagini contro 288: 223 identiche, 40 dentro il rumore, 10 trascurabili, 13 su scatti instabili, 0
+      strutturali.
+    - 2 «oltre il rumore»: l'antialiasing di un'icona SVG, in 1 variante su 16.
+    - Pixel oltre 12 livelli: 6 immagini, ognuna allo 0,002 % al massimo.
+    - Misti a runtime: 0 e 0.
+
+  > **⚠️ Fuori pista**:
+  > - «rolling return» desktop si è ripetuto rosso nel fill di B. `test-triage`: verdetto ambiente.
+  >   - Richieste ferme per 25 s.
+  >   - Lo stesso percorso di codice in A e in B.
+  >   - Verde da solo a carico normale.
+  >   - Resta una debolezza della spec: G-19 nel backlog.
+  > - Su mobile `detail-events` tre icone SVG cambiano a due stati, con lo stesso schema esatto fra r1 e r2, che sono
+  >   dello stesso commit: rumore noto.
+  > - Durante `snap a` ho modificato lo script che stava girando: errore di sintassi a fine run, dopo il salvataggio dei
+  >   risultati. Nessun dato perso. Non si modifica uno script mentre gira.
+- **Pacchetto per la designer, giro 3 ⏳.** Chiesto dal developer (testuale, via coordinatore): rifare il lavoro
+  comparativo dall'output della galleria e preparare uno zip con:
+  - le schermate;
+  - il prima e dopo;
+  - i colori residui;
+  - le domande aperte;
+  - ogni pagina anche in Markdown.
+
+  Piano approvato con D1 (WebP lossless) e D2 (checkpoint del builder prima della galleria).
+  - Nuovo `scripts/visual_review/build_designer_round.py`.
+    - I colori residui da `color_inventory.py`, tenuti solo dove li conta il gate: codice di produzione, fuori dai
+      commenti. Su HEAD dà gli stessi 185 file del baseline del gate.
+    - Durante lo sviluppo, la regex dei vecchi token prendeva anche i ruoli (`text-lf-primary`): 100 file di troppo,
+      corretto.
+  - Prova a secco: diff `baseline-r2` → `g-cand16a`, inventario di HEAD.
+  - Poi la galleria completa `designer-16b` sul target con il lotto di T, i fill dei rossi, il diff con `sheet` e il
+    pacchetto `LibreFolio_review_colori_giro3_2026-10-16`.
