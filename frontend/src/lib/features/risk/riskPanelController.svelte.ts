@@ -24,6 +24,7 @@
  * `riskPanelController.test.ts` holds the line.
  */
 import {untrack} from 'svelte';
+import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
 
 import {buildRiskAnalyticRequest, buildRiskQueryRequest, canonicalizeScope, type RiskAnalyticParameters} from '$lib/features/risk/riskRequest';
 import {riskDataQuality, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
@@ -588,7 +589,9 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         baseEpoch += 1;
         const rerun = untrack(() => discardOnDemand());
         untrack(() => {
-            void loadBase(false);
+            // The panel opens or its scope changes: its base wave holds the page's Refresh button (Y11). The
+            // on-demand analyses keep their own indicators, and a sync (`handleSynced`) reloads in background.
+            void pageBusy.track('risk-load', () => loadBase(false));
             for (const analysis of rerun) void launchers.get(analysis)?.();
         });
     }
@@ -652,7 +655,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         }
         if (version === lastRefreshVersion) return;
         lastRefreshVersion = version;
-        untrack(() => void loadBase(true));
+        untrack(() => void pageBusy.track('risk-refresh', () => loadBase(true)));
     });
 
     if (options.eagerScenarioCatalog) {
