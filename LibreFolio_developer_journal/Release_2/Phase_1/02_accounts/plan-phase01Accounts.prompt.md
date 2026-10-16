@@ -4273,3 +4273,223 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Doc**: `security.md`, «How Login Works»: un paragrafo sui log dei login rifiutati.
 > - **Backlog**: A-22 ✅; A-21 allargata (username senza distinzione di maiuscole, `@`, ricerca per email); A-23 nuova
 >   (da H-19, l'«address probe» che risponde 500).
+
+#### P16 — Risposta del developer su A7 (2026-10-16, 11:15)
+> - **Cloud**: il token lo crea il pannello, lo passa in `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, e il pannello costruisce e
+>   manda il link lui («ci può aggiungere più informazioni»): A7a lo fa già.
+> - **Self-hosted con le variabili**: LibreFolio genera il token, scrive il link nel log una volta, e lo manda per email se
+>   c'è l'email. Senza email: il link solo nel log, `./dev.py user setup-link` lo riemette. Verificato sul codice (11:20):
+>   `deliver_setup_link()` scrive sempre il link a `WARNING`, poi prova l'email e, se non può, logga «not emailed». In
+>   più: l'email chiede anche `LIBREFOLIO_PUBLIC_URL` (regola di E), senza la quale il log porta il solo percorso con la
+>   nota; `setup-link` stampa, non manda email. Senza variabili F02 non cambia niente (il primo account è l'admin, A6d).
+> - Le decisioni notturne (b) e (c) restano. **(d) No**: `/auth/setup` non entra in `ALLOWED_WHEN_BLOCKED` («bloccata
+>   vuol dire bloccata finché non paga», come per il ripristino, P7): sull'istanza bloccata risponde 401.
+> - **Doc di (d)** (nel prossimo checkpoint): `admin/hosting_providers` (un punto nella sezione F02, e `POST
+>   /api/v1/auth/setup` fra le chiamate aperte che rispondono 401 da bloccata), `security.md` (la riga delle rotte
+>   pubbliche fuori dalla lista), `access_control.md` (un paragrafo dopo «The setup»). La docstring di
+>   `instance_block.py` (file di H) elenca le stesse rotte: chiesto al coordinatore chi la aggiorna.
+
+#### P18.1 — Rossi scritti, parcheggiati per `all-backend` (2026-10-16, 10:55–11:30)
+> - **Rossi** (due `test-author`, solo scrittura):
+>   - API: `test_registration_api.py` LIVE-004 ×3 (registrazione con una variante di maiuscole → 400 «Email already
+>     registered»), LIVE-005 ×2 (guardie), LIVE-006 (login per indirizzo in un'altra forma); `test_profile_api.py`
+>     PROF-020 ×2 (cambio di sole maiuscole del proprio indirizzo: 200, senza password, nessuna sessione chiusa), PROF-021
+>     (l'indirizzo di un altro account in un'altra forma → 400), PROF-022 (guardia A6e).
+>   - Servizi: `test_services/test_email_case.py` nuovo, ECASE-001…051 (`email_fold`, `same_email`, l'indice, le
+>     ricerche, `create_user`, `register_user`, C5, F02).
+>   - Migrazione: `test_db/test_migration_009_email_case.py` nuovo, MIG009-001…011 (rifiuto con id e username e nessun
+>     indirizzo, niente scritto; il rimedio `cmd_set_email` su un DB a 008; downgrade; un'installazione 1.1).
+>   - CLI: `test_dev_cli_image.py` IMG-032, IMG-033 e 033b…e (`create-user`, `set-email`).
+> - **Bozze** (cartella di sessione `work/p18/`): `apply_p18.py` (modello: indice `ux_users_email_lower` su
+>   `lower(email)`; `user_service`: `email_fold`, `same_email`, ricerche con `lower()`, C5 in `update_profile`; la rotta
+>   del profilo con `same_email`; F02 `_follow_variables`; CLI `set-email`) e la migrazione 009. Combaciano a secco. Già
+>   coprono i tre contrasti segnalati dai `test-author` (l'unicità che trovava l'account stesso in `update_profile` e in
+>   F02, il `!=` della rotta).
+> - **Decisione tecnica**: l'id della revisione diventa `009_email_unique_ignoring_case` (30 caratteri): quello del
+>   contratto ne aveva 36, oltre il `VARCHAR(32)` di `alembic_version` che le suite di 005 e 008 fissano. Il
+>   `test-author` aggiorna la copia parcheggiata del test.
+> - **Al coordinatore** (11:32): il ripristino di B esegue le migrazioni sulla copia, quindi un backup con due account con
+>   lo stesso indirizzo a parte le maiuscole sarebbe rifiutato dalla 009, e `set-email` non raggiunge la copia; e i
+>   cinque `casefold` di E contro la piega solo A–Z di P18 (limite documentato).
+> - **Parcheggio** (istruzione del coordinatore, come J): `git diff --binary` dei tre file di test modificati in
+>   `work/p18/park/p18_reds_tracked.patch`, le due copie dei file nuovi in `work/p18/park/files/`, gli SHA-256 in
+>   `sha256_dirty.txt`; `git apply -R --check`, poi `git apply -R`; i due file nuovi tolti solo dopo `cmp` con le copie.
+>   Nel worktree restano solo la doc di P16 (d) e il piano.
+> - **`all-backend --workers 2`** (slot 1, `nice`, 11:29–): log per unità in `work/allbackend_1115/units/`.
+> - **Il test-author** ha aggiornato la copia parcheggiata di `test_migration_009_email_case.py` con l'id corto
+>   (`REV_009`, i docstring, `len(script.revision) <= 32` in MIG009-001 come la suite di 008).
+> - **Risposta di B** (11:35): il controllo del ripristino non mostra l'errore della migrazione, solo il codice
+>   `upgrade_failed`; il messaggio di 009 sta nel log del server (`stderr`, gli ultimi 4000 caratteri di alembic). B
+>   scrive la riga di doc in `admin/backup_restore` e `cli_tools` («separali sull'istanza che ha fatto il backup, poi rifai
+>   il backup»); gli ho mandato il testo dell'eccezione e il comando `set-email`. Nessun codice in più in B.
+> - **Risposta di E** (11:35): E usa `user_service.same_email()` in `email_changed_work` (stesso indirizzo → nessun
+>   avviso) e in `confirm_email` (l'indirizzo del link contro quello dell'account), in un suo lotto dopo l'ingresso di
+>   P18; tiene `strip().casefold()` per le chiavi dei limiti. Contratto di `same_email` mandato a E: pura, sincrona, senza
+>   `strip`, piega solo A–Z come `lower()` di SQLite; e un cambio di sole maiuscole non raggiunge l'aggancio di E (C5).
+
+#### Slot 1 — `all-backend --workers 2` ✅ (2026-10-16, 11:29:34–12:17:27)
+> - **Revisione**: HEAD `946285a91`, con nel worktree solo la doc di P16 (d) e il piano; rossi di P18 parcheggiati.
+> - **Comando**: `nice -n 10 env PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port
+>   6182 --data-dir /tmp/librefolio-r13-a --workers 2 --log-dir <sessione>/work/allbackend_1115/units all-backend`.
+> - **Esito**: rc=0, **7/7** («ALL BACKEND TESTS PASSED»), 47 min 48 s, carico 132 all'avvio. Quattro passate parallele
+>   verdi (162 unità in 701,8 s, 48 in 919,8 s, 12 in 7,1 s, 69 API in 768,5 s); tutte le unità seriali PASSED (DB,
+>   migrazioni 005–008, post-migrazione, provider FX e asset, BRIM, schema). **20 268 passati** nei log per unità, nessun
+>   rosso, nessun `ReadTimeout` noto. Le righe «❌» nel log dei provider FX esterni sono stampe dei test che si
+>   aspettano un errore (unità 28 passati, 21 saltati). Snapshot del DB di prova: `00_archive/test-db_20261016_121726.tar.xz`.
+> - **Interruzione**: un errore del servizio ha interrotto il mio turno verso le 11:55; la prova è andata avanti da sola
+>   (PID 33727) e non è stata riavviata. Porta 6182 libera alla fine (`lsof` rc=1), runner uscito.
+> - **⚠️ Fuori pista** (trovato mentre aspettavo, per P18): l'indice `ux_users_email_lower` è un indice su
+>   un'espressione, e SQLAlchemy 2.0.52 non lo riflette su SQLite (`get_indexes` lo salta con un avviso; misurato su un DB
+>   in memoria). Quindi `db_schema_validate.py::test_indexes`, che prende i nomi attesi dal modello e quelli reali
+>   dall'inspector, diventerebbe rosso dopo P18 («Missing indexes: users.ux_users_email_lower») con l'indice presente.
+>   Riparazione solo nel test (i nomi reali da `sqlite_master`), affidata a un `test-author` nel lotto P18 (brief in
+>   `work/p18/brief_schema_validate_repair.md`). Verificato invece che restano verdi: `test_migration_005_accounts.py`
+>   (`_shape` salta l'indice da entrambe le parti, `_index_list` vede `(None,)` da entrambe), la ricostruzione
+>   AUTOINCREMENT di `post_migration/autoincrement.py` (riesegue l'SQL di ogni indice da `sqlite_master`), e
+>   l'autogenerate di Alembic 1.19.2 (salta gli indici su espressione su SQLite con un avviso: `db migrate` non li
+>   ricrea). Nessun confronto di indirizzi negli inviti (l'indirizzo serve solo all'invio).
+
+#### P18.2 — Rossi rimessi e osservati (2026-10-16, 12:20–)
+> - **Ripristino**: `git apply --check` poi `git apply` di `park/p18_reds_tracked.patch`; i due file nuovi ricopiati.
+>   SHA-256 uguali a `sha256_dirty.txt` per quattro file su cinque; `test_migration_009_email_case.py` diverso come
+>   previsto (la copia parcheggiata aggiornata dal `test-author` all'id corto dopo il parcheggio).
+> - **Runner** (`apply_p18_runner.py`): `db migration-009` (pure, anche nell'ordine di `db`) e `services email-case`
+>   (pure). `ruff`: i 3 PLC0415 di `_backend_db.py` ci sono identici a HEAD, nessuno nuovo.
+> - **Rossi osservati** (`work/p18/reds_all.sh`, `nice`, carico < 50 all'avvio; log in `work/p18/logs/`):
+>   - `services email-case`: 63 rossi, 4 verdi (le guardie: ricerca per uguaglianza, mai per pattern ×2; F02 col
+>     proprio indirizzo in altra forma ×2). Cause giuste: `user_service` senza `email_fold`/`same_email`, ricerche
+>     esatte, nessun rifiuto delle varianti, C5 non applicato.
+>   - `db migration-009`: 11 rossi su 11, cause giuste (revisione assente, nessun indice, l'upgrade va oltre gli
+>     account in collisione).
+> - **Riparazione del validatore** (`test-author`, solo `db_schema_validate.py::test_indexes`): i nomi reali da
+>   `sqlite_master` (`type = 'index' AND sql IS NOT NULL`, la stessa query di `post_migration/autoincrement.py`) invece
+>   di `inspector.get_indexes`. Provato in privato: verde prima e dopo P18 con stampe identiche prima, rosso se l'indice
+>   manca davvero. `ruff`/`black` puliti. Nessun altro punto dei test riflette gli indici di `users` in modo cieco.
+> - **Verificato**: `./dev.py user …` non esegue migrazioni (`user_cli.py` e `db/session.py` senza Alembic), quindi
+>   `set-email` funziona su un database che la 009 ha rifiutato.
+> - **Rossi osservati, seguito** (carico tornato sotto 50 alle 12:41 e alle 12:52):
+>   - `utils dev-cli-image`: 9 rossi (la classe P18: `set-email` non è un comando ×7, `create` accetta una variante di
+>     maiuscole ×2), 85 verdi.
+>   - `api registration`: 4 rossi (LIVE-004 ×3: 201 invece di 400; LIVE-006: 401 invece di 200), 98 verdi.
+>   - `api profile`: 3 rossi (PROF-020 ×2: 400 `CURRENT_PASSWORD…` invece di 200; PROF-021: 200 invece di 400), 25 verdi.
+>   - **Totale 90 rossi**, tutti per la causa attesa; guardie verdi; porta 6182 libera alla fine.
+
+#### P18.3 — Implementazione ✅ (2026-10-16, 12:55)
+> - `apply_p18.py` (a secco, poi scritto): `models.py`, `user_service.py`, `auth.py`, `bootstrap_admin_service.py`,
+>   `user_cli.py`; creato `backend/alembic/versions/009_email_unique_ignoring_case.py`. `ruff check` e `black --check`
+>   puliti sui sei file.
+> - Nessun cambio di schema dell'API (solo comportamento): `api sync` e `front check` non servono.
+
+#### P18.4 — Verdi, doc, e tre punti emersi (2026-10-16, 12:55–)
+> - **Verdi** (`work/p18/greens_all.sh`, `nice`, carico < 50): `services email-case` 67, `user-profile` 47,
+>   `registration` 147, `admin-bootstrap` 156 ✅.
+> - **⚠️ Fuori pista — due test di E diventano impossibili**: `services email-flows`
+>   (`test_three_reset_emails_an_hour_per_mailbox_whatever_the_account`, `ONE_MAILBOX` l. 1356) e `services
+>   email-verification` (`test_a_mailbox_gets_three_registration_emails_an_hour_whatever_the_account`,
+>   `MAILBOX_VARIANTS` l. 166) creano quattro account sulla stessa casella in quattro forme ASCII →
+>   `UNIQUE constraint failed: index 'ux_users_email_lower'`. È la regola che lavora. Proposta (al coordinatore, file di
+>   E): varianti con due lettere non ASCII in maiuscolo/minuscolo diversi (una casella per le chiavi `casefold` di E,
+>   quattro righe distinte per l'indice A–Z). In attesa di chi scrive.
+> - **Doc** (`docs-writer`, sei pagine EN): `database/users_access.md` (ancora `#user`, regola, indice, limite ASCII, il
+>   rifiuto e il rimedio), `database/index.md` (riga 009), `security.md` (sessioni, C5, `400` «in qualunque forma A–Z»,
+>   test), `admin/cli_tools.en.md` (`#set-email`, `#email-case-conflict`), `admin/users.en.md` (un punto),
+>   `user/settings/profile.en.md` (stessa casella con maiuscole diverse). Debito di traduzione lasciato:
+>   `cli_tools`, `profile`.
+> - **⚠️ Fuori pista — tre punti del `docs-writer`**:
+>   1. `ProfileTab.svelte` l. 89–92 confronta l'indirizzo esatto: su un cambio di sole maiuscole la scheda chiede la
+>      password, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5) non chiede nulla. Correzione
+>      solo di logica, area colori IM: chiesto il via al coordinatore.
+>   2. Il suggerimento Docker del messaggio di 009 (`docker compose exec`) non regge: una migrazione fallita fa
+>      `sys.exit(1)` e con `restart: unless-stopped` il container riparte in ciclo. Va sostituito con `stop` + `run --rm`
+>      + `start` (lo schema di `docker_advanced` per le correzioni post-migrazione); il testo nuovo andrà a B.
+>   3. «Il rifiuto lascia tutto com'era?» **Verificato in privato** (`work/p18/repro_12_refusal.py`, file temporaneo,
+>      motore dell'app come trappola): un'installazione 1.2 (004) con due account in collisione si ferma **a 008**.
+>      Alembic su SQLite fa COMMIT dopo ogni migrazione (tracciato con il log di SQLAlchemy), quindi la mia nota «tutte
+>      le migrazioni in una transazione» era sbagliata. Nessun account cambiato; `cmd_set_email` funziona a 008 e
+>      l'avvio dopo arriva a 009.
+> - **Risposte del coordinatore** (13:20):
+>   1. I due test di E li adatto io nel lotto P18 con un `test-author`, con le varianti non ASCII, **dopo la conferma di
+>      E** (senso dei test e `rcpt_tos` non ASCII nel suo SMTP finto); E mi risponde direttamente.
+>   2. `ProfileTab.svelte`: **sì**, solo logica (helper `sameEmail` A–Z, `emailNeedsPassword`, la condizione del blocco
+>      della password), rossi prima in `ProfileTab.test.ts`; **dopo l'aggiornamento di base** che porta IM
+>      (`1248b7908`), come commit a sé. Conflitti attesi all'aggiornamento: `app_lifespan.py`, `overview.md`,
+>      `security.md`, `ProfileTab.svelte`.
+>   3. Suggerimento Docker: OK; testo finale mandato a B (13:18).
+> - **P13 deciso dal developer: (a) + (b)** — in `TabBar` la barra scorre con la rotella verticale, con una sfumatura
+>   sul bordo quando ci sono schede nascoste (maschera alfa, nessun colore); le cinque schede admin raggruppate sotto
+>   «Amministrazione» con una seconda barra, tenendo `?tab=users` e gli altri link diretti. È la cornice di A8, dopo P18.
+>   `TabBar.svelte` è in un'area colori: avvisare prima di toccarlo.
+> - **Verdi, seguito**: `db migration-009` 11/11 ✅ (con il nuovo suggerimento Docker). **⚠️ Fuori pista**: `db
+>   migration-005` 1 rosso, `test_the_models_and_the_migration_build_the_same_table[users]`. `_shape` ordina gli insiemi
+>   unici di colonne e l'indice su espressione dà `(None,)` da `PRAGMA index_info` → `TypeError` in `sorted()`. Le due
+>   parti hanno l'indice: è l'aiutante che si rompe prima di confrontare. L'avevo escluso a torto. Riparazione solo nel
+>   test affidata allo stesso `test-author`.
+> - **Suggerimento Docker cambiato** in 009: «in Docker, with the container stopped: `docker compose run --rm librefolio
+>   python dev.py user set-email <username> <address>`». `ruff`/`black` puliti; testo finale a B (13:18).
+> - **Doc, secondo giro** (`docs-writer`): `cli_tools.en.md` (ci si ferma alla 009, i passi prima restano, nessun account
+>   cambiato, il riavvio riprende da lì), `users_access.md` e `database/index.md` (COMMIT per revisione su SQLite: resta a
+>   008), `users_and_brokers.md` (`user set-email` nell'elenco dei comandi), `docker_advanced.en.md` (un riavvio non
+>   aiuta finché gli account non sono separati). Nuovo debito di traduzione: `docker_advanced`, `cli_tools`.
+
+#### ⏸️ PAUSA del developer (2026-10-16, 13:23) — stato congelato
+> - **HEAD** `946285a91`, nessun merge aperto, porta 6182 libera; `greens_all.sh` fermato mentre aspettava il carico
+>   (nessun test in corso).
+> - **Verdi fatti**: `services email-case` 67, `user-profile` 47, `registration` 147, `admin-bootstrap` 156; `db
+>   migration-009` 11. **Rossi noti**: `services email-flows` 1 e `email-verification` 1 (test di E, in attesa della
+>   conferma di E per le varianti non ASCII); `db migration-005` 1 (`_shape` con `(None,)`, riparazione del
+>   `test-author` in corso al momento della pausa).
+> - **Da fare alla ripresa** (`greens_all.sh` dal passo `migration-005`): `db migration-005…008`,
+>   `autoincrement-schema`, `post-migration`, `create`, `validate`, `populate`, `api registration`/`profile`/`auth`/
+>   `users-admin`/`admin-setup`/`email-verification`, `utils dev-cli-image`; poi i due test di E, `mkdocs build` +
+>   `check-links`, handoff P18. Dopo l'aggiornamento di base (IM): la correzione di `ProfileTab.svelte`.
+> - **Riparazione di 005 alla pausa**: il `test-author` aveva solo letto, nessuna modifica (file intatto e coerente). Il
+>   rosso `TypeError` resta. Piano pronto: `_index_list` nomina una chiave su espressione col suo testo da
+>   `sqlite_master.sql`. Il suo grep non trova altri punti che ordinano `(None,)` su `users`, da confermare.
+> - **Risposta di E** (alla pausa) sui due test: **il senso resta** (chiavi dei limiti `strip().casefold()`, anche dopo
+>   E4c; dopo P18 è l'unico modo in cui due account condividono una casella). Usare letterali **NFC** (`\u00e4`
+>   precomposta). Però **oggi il finto SMTP di E non riceve indirizzi non ASCII**: non annuncia `SMTPUTF8`, e
+>   `smtplib.send_message` (`smtp.py:129`) alza `SMTPNotSupportedError`, che diventa `SEND_FAILED`. **La cura è di E**:
+>   `SMTPUTF8`/`8BITMIME` nell'EHLO, i parametri dopo `MAIL FROM`, più un caso che fissa `SEND_FAILED` verso un server
+>   senza `SMTPUTF8`. La fa al via; il coordinatore la ordina prima di P18 o insieme. Quindi l'adattamento dei due test
+>   di E nel lotto P18 dipende da quel lotto di E.
+
+#### P18.5 — Ripresa (2026-10-16, 14:14–)
+> - **Via del developer** (14:14, dal coordinatore): riparazione di 005, il resto dei verdi (carico < 50), i controlli
+>   della doc, handoff P18 con i test di E segnati in attesa del mini-lotto `SMTPUTF8` di E; poi ProfileTab dopo
+>   l'aggiornamento di base con IM.
+> - **Riparazione di 005** (`test-author`, solo `test_migration_005_accounts.py`, +45/−4): `_index_list` dà a una chiave
+>   su espressione il suo testo da `sqlite_master.sql` (`_written_keys`, normalizzato come in 009), `(None,)` →
+>   `('lower(email)',)`; tutto il resto identico (80 voci su 82 uguali, le 2 diverse sono `ux_users_email_lower`).
+>   Provato in privato: il confronto `[users]` passa, e fallisce se manca l'indice da una parte, se non è unico, o se è su
+>   `upper(email)`; 007 usa `_shape` solo sulle sue due tabelle; 006/008/009 importano ancora tutti i nomi.
+>   `ruff`/`black` puliti. Punto cieco rimasto (non toccato): la chiave `indexes` di `_shape` viene dall'inspector, che salta
+>   gli indici su espressione da entrambe le parti (vedi A-26).
+> - **Un terzo test di E** impossibile con P18, trovato cercando nei test gli indirizzi uguali a parte le maiuscole:
+>   `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, quattro account in attesa sulla stessa casella), gemello
+>   API di EMV-043. EMA-036 (`api email`, un solo account, quattro grafie): con P18 le richieste 2 e 3 trovano l'account,
+>   ma il suo limite (un link ogni intervallo) le ferma, quindi resta «una email in tutto». Nessuna collisione nei dati di
+>   `db populate` né nei fixture E2E.
+> - **Verdi, parte A** (`work/p18/greens_resume_a.sh`): `db create` ✅, `db validate` 17 ✅ (la riparazione del
+>   validatore), `db autoincrement-schema` 4 ✅, `db post-migration` 41 ✅ (la ricostruzione AUTOINCREMENT riporta
+>   l'indice), `db populate` ✅; `api registration` 102 ✅ (LIVE-004…006), `api profile` 28 ✅ (PROF-020…022), `api
+>   auth` 95 ✅, `api users-admin` 64 ✅, `api admin-setup` 42 ✅, `api email` 160 ✅ (EMA-036 compreso, come previsto),
+>   `utils dev-cli-image` 94 ✅ (IMG-032/033); `api email-verification` 48 ✅ + 1 rosso atteso, EVA-016 (`UNIQUE
+>   constraint failed: index 'ux_users_email_lower'`, A-24). Porta 6182 libera alla fine (14:50).
+> - **Backlog**: A-10 allargata col debito di traduzione di P18; nuove A-24 (i tre test di E), A-25 (ProfileTab), A-26 (il
+>   punto cieco di `_shape`).
+> - **Verdi, parte B** (`work/p18/greens_resume_b.sh`, dopo la riparazione di 005): `db migration-005` 25 ✅ (il
+>   confronto `[users]` compreso), `migration-006` 37 ✅, `migration-007` 29 ✅, `migration-008` 23 ✅, `migration-009` 11
+>   ✅. Porta libera (14:51).
+> - **Doc** (`work/p18/docs_checks.sh`): `mkdocs build` (`--strict`) ✅ in 39 s, 3 076 URL relativi risolti;
+>   `mkdocs check-links` ✅ 97 link. `mkdocs translate-validate` sulle quattro pagine tradotte toccate: 168 errori, quasi
+>   tutti debito già noto (A-10: le sezioni di A5–A7a); di P18 le ancore `#set-email` e `#email-case-conflict` (×3
+>   lingue), il blocco di codice nuovo di `cli_tools`, la frase di `docker_advanced`, il punto di `profile`. Il build
+>   stretto resta verde.
+> - `git diff --check` pulito; `ruff`/`black` puliti sui file toccati.
+
+#### P18.6 — Handoff FROZEN 🧊 (2026-10-16, 14:55)
+> - HEAD `946285a91`, nessun merge aperto; 24 file modificati + 3 nuovi (923+/46−); porta 6182 libera.
+> - Rossi attesi, fuori da questo checkpoint: i tre test di E (A-24), in attesa del mini-lotto `SMTPUTF8` di E.
+> - Non eseguiti: `all-backend` (da fare in uno slot dopo l'ingresso, P18 cambia lo schema), E2E e `front check` (nessun
+>   cambio del frontend), `api sync` (nessun cambio dello schema dell'API).
+> - Dopo l'aggiornamento di base con IM: A-25 (ProfileTab), commit a sé.

@@ -2999,6 +2999,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `admin/cli_tools` (`user setup-link`), con le ancore `#initial-admin` e `#setup-link` da tenere uguali in ogni lingua;
     `admin/hosting_providers` (`#initial-admin`); una o due frasi in `admin/settings`, `admin/users`, `admin/index`,
     `admin/host_installation`, `admin/docker_advanced`, `user/installation`, `user/getting-started`.
+  - Da P18 (16/10), nessun timbro: in `admin/cli_tools` due sezioni nuove, «Change the Email Address of an Account»
+    (`#set-email`) e «Two Accounts with the Same Email Address» (`#email-case-conflict`), con le ancore da tenere uguali
+    in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
+    `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
+    «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -3115,6 +3120,31 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     (`verify_probe_nonce()`) lo tollera.
   - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
     A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
+- **A-24 · Tre test di E diventano impossibili con P18** — basso, blocca il verde completo di P18; A (16/10, dai verdi di
+  P18).
+  - `test_email_flows.py` (`ONE_MAILBOX`, la riga 1356), `test_email_verification.py` EMV-043 (`MAILBOX_VARIANTS`, la
+    riga 166) e `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, la riga 122) creano quattro account sulla
+    stessa casella scritta in quattro forme ASCII: con l'indice `ux_users_email_lower` la seconda riga è rifiutata.
+  - Cura (decisa dal coordinatore, approvata da E, 16/10): varianti con lettere non ASCII in letterali NFC (`\u00e4`
+    precomposta), una casella per le chiavi `casefold` di E, quattro righe per l'indice A–Z. La scrive A con un
+    `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
+    ASCII dà `SEND_FAILED`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
+- **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; dal `docs-writer` di P18
+  (16/10).
+  - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
+    la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
+    P18) non chiede nulla e non chiude sessioni.
+  - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
+    `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
+    Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
+- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+  `test-author` di P18 (16/10).
+  - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
+    indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
+    indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
+  - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
+    `ux_users_email_lower` nome e SQL li fissa MIG009-003.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
