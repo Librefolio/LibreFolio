@@ -215,7 +215,7 @@
                 bind:this={inputEl}
                 type="text"
                 autocomplete="off"
-                class="flex-1 min-w-[5rem] bg-transparent text-xs outline-none placeholder:text-lf-placeholder"
+                class="flex-1 min-w-[5rem] bg-transparent text-xs text-lf-primary outline-none placeholder:text-lf-placeholder"
                 {placeholder}
                 bind:value={inputBuffer}
                 onkeydown={handleKeydown}

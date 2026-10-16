@@ -9,7 +9,8 @@
  *     selected lots, the three lists in any order;
  *   - a fresh answer is served without asking, identical questions in flight share one request, a
  *     forced fetch («Aggiorna») asks again;
- *   - a portfolio mutation, or `requestPortfolioRefresh()`, marks the answers stale and keeps them:
+ *   - a portfolio mutation, `requestPortfolioRefresh()` or the price catch-up (`notifyPricesCaughtUp()`, Z-13) marks
+ *     the answers stale and keeps them:
  *     `peekLotsAnalysis(body)` still returns them, `{response, stale: true}`, so the panel shows them
  *     while the next fetch asks again and stores the fresh one;
  *   - a failed fetch rejects — the panel decides what a failure means — and the previous answer stays;
@@ -198,6 +199,22 @@ describe('lotsAnalysisStore (page cache, phase 1)', () => {
         requestPortfolioRefresh!();
 
         expect(store.peekLotsAnalysis(SELECTION), '«Aggiorna» did not mark the lots analysis stale, or threw it away').toMatchObject({response: answer('old'), stale: true});
+    });
+
+    it('marks the answers stale on notifyPricesCaughtUp() as well (Z-13), and asks nothing by itself', async () => {
+        // The store needs no change for Z-13: its listener marks stale on any signal. Pinned for the new kind
+        // because the pages rely on it: on `{kind: 'prices'}` they leave `refreshVersion` alone (the user's
+        // Refresh, Y11), so the lots panel keeps its stale answer and asks again the next time it loads.
+        const store = await loadStore();
+        const notifyPricesCaughtUp = (portfolioMutation as unknown as {notifyPricesCaughtUp?: () => void}).notifyPricesCaughtUp;
+        expect(typeof notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up has no signal of its own').toBe('function');
+        lotsApi.mockResolvedValueOnce(answer('old'));
+        await store.fetchLotsAnalysis(MAIN);
+
+        notifyPricesCaughtUp!();
+
+        expect(store.peekLotsAnalysis(MAIN), 'the price catch-up left the lots analysis fresh, or threw it away').toMatchObject({response: answer('old'), stale: true});
+        expect(lotsApi, 'a mark must not ask anything by itself').toHaveBeenCalledTimes(1);
     });
 
     it('rejects when the refresh fails, keeps the previous answer stale, and asks again next time', async () => {
