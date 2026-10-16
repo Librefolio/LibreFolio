@@ -17,6 +17,8 @@ import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
 import {t} from '../fixtures/i18n-data';
 import {schemas} from '../../src/lib/api/generated';
+import {daysAgoIso} from '../fixtures/dates';
+import {overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 
 test.describe('Shared chart settings source contracts', () => {
     const fxPageSource = () => readFileSync(new URL('../../src/routes/(app)/fx/+page.svelte', import.meta.url), 'utf8');
@@ -8636,5 +8638,73 @@ test.describe('Provider chip names the provider once its catalogue arrives', () 
             // make the failure screenshot, taken after the test function, show about:blank.
             release();
         }
+    });
+});
+
+// ============================================================================
+// The page sync dialog's warning before it replaces stored prices (C-66, F-094)
+// ============================================================================
+
+/**
+ * The detail page's sync syncs this asset over the page's period — with any compared asset that has a provider, and
+ * the FX pairs the page converts through, in a section of their own — and a sync replaces what is stored in that
+ * period with the provider's values, manual edits included. Before the start the dialog says so, one warning per
+ * section. The asset section counts the page's own asset when the prices it shows in the period hold a stored row (a
+ * compared asset is not counted): `page-sync-modal-overwrite-warning` with `data-section="assets"`.
+ *
+ * The asset is Apple, the suite's known asset with price history, found by its unique name through the endpoint the
+ * page reads its prices from — which also verifies, rather than assumes, that it has a provider and stores prices in
+ * the period. The dialog is never started.
+ */
+test.describe('Asset detail — the page sync dialog warns before replacing stored prices (C-66)', () => {
+    // A ceiling, never a delay: the test reads every priced asset over its period before loading the detail page, and
+    // a describe's timeout also covers the sign-in below. Only the timeout is set: the file's parallel mode is
+    // inherited unchanged.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        // The page polls live prices whenever its period reaches today — by its UTC reckoning, which a local «yesterday»
+        // can still reach just after midnight — and a fresh quote is written as today's price of the shared asset.
+        // Answered here, empty: no provider is called, nothing is written. The warning reads the stored prices.
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    });
+
+    test('the assets section counts this asset when its period holds stored prices', async ({page}) => {
+        const assetName = 'Apple Inc.';
+        const period: SyncPeriod = {start: daysAgoIso(30), end: daysAgoIso(1)};
+        const asset = (await storedAssetPrices(page, period)).find((target) => target.name === assetName);
+        if (!asset) throw new Error(`precondition: «${assetName}» is not an asset with a provider, so the page would not sync it — check populate_mock_data.py (populate_assets, populate_asset_provider_assignments)`);
+        if (asset.stored === 0) throw new Error(`precondition: «${assetName}» stores no price between ${period.start} and ${period.end} (${asset.shown} shown) — check populate_mock_data.py (populate_price_history)`);
+
+        const syncRequests = recordSyncRequests(page);
+        await goToAssetDetailPage(page, asset.id, period);
+        const syncButton = page.getByTestId('asset-detail-sync-btn');
+        // Enabled once the page has read the asset's provider assignment: a round trip of its own.
+        await expect(syncButton).toBeEnabled({timeout: 10_000});
+        await syncButton.click();
+
+        const modal = page.getByTestId('page-sync-modal');
+        await expect(modal).toBeVisible();
+        const scope = modal.getByTestId('sync-modal-count');
+        // The dialog syncs the page's period: the one the prices were read over.
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+
+        const warning = modal.locator('[data-testid="page-sync-modal-overwrite-warning"][data-section="assets"]');
+        await expect(warning, 'one warning for the assets section').toHaveCount(1);
+        const {existing, total} = await overwriteCounts(warning);
+        expect(existing, 'the page counts its own asset, whose stored prices it shows').toBe(1);
+        expect(total, 'out of the assets the dialog syncs: this one, and any compared asset with a provider').toBeGreaterThanOrEqual(1);
+        expect(total, 'the assets section is part of what the dialog syncs').toBeLessThanOrEqual(Number(await scope.getAttribute('data-item-count')));
+        // The catalogue's sentence for these counts, in the page's language — led by the section's title when the FX
+        // section is active too, hence contained rather than equal.
+        await expect(warning).toContainText(overwriteWarningSentence(await pageLanguage(page), existing, total));
+
+        // Still before the start, and closed from there: the dialog is never started.
+        await expect(modal.getByTestId('sync-modal-results')).toHaveCount(0);
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
     });
 });
