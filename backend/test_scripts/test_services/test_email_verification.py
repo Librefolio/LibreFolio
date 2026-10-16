@@ -48,7 +48,7 @@ status, the setting) are not written yet: this module calls the functions of ``v
    account, the account's other verification tokens are revoked, other purposes and other accounts untouched;
    committed. A link spent meanwhile is ``consumed``, and nothing changes.
 7. ``resend_verification(session, *, identifier, password, address)``: the limit per client address first, keyed by
-   ``flows.address_key`` and skipped without an address, before any password is checked; then the password as the
+   H's ``client_rate_key`` and skipped without an address, before any password is checked; then the password as the
    login checks it — a dummy hash for an unknown account, one refusal ``INVALID_CREDENTIALS`` for both —; an active
    account is ``EMAIL_VERIFICATION_NOT_NEEDED``, an inactive one that does not wait ``ACCOUNT_DISABLED``; then the
    block, email and links; then the limits per account, counted on the links emailed — tokens carrying an address,
@@ -1478,8 +1478,8 @@ async def test_the_limit_per_address_comes_before_the_password(monkeypatch: pyte
         pytest.param(ADDRESS, MAPPED, ADDRESS, id="an-ipv4-address-and-its-mapped-form"),
     ],
 )
-async def test_the_limit_per_address_is_keyed_by_address_key(engine: AsyncEngine, resend_limit: SlidingWindowLimiter, first: str, eleventh: str, key: str) -> None:
-    """EMV-033 — contract 7: the requests are counted by ``flows.address_key``: two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address — ten from one form, the eleventh from the other is refused."""
+async def test_the_limit_per_address_is_keyed_by_client_rate_key(engine: AsyncEngine, resend_limit: SlidingWindowLimiter, first: str, eleventh: str, key: str) -> None:
+    """EMV-033 — contract 7: the requests are counted by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17): two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address — ten from one form, the eleventh from the other is refused."""
     print_section(f"EMV-033: {first} then {eleventh}")
     moment = utcnow()
     await _waiting(engine, ALICE, created=moment)
