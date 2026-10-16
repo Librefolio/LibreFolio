@@ -40,9 +40,10 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
 (e) One rule for the address variables (CP13-1): ``env_url(name)`` reads ``name`` from the process environment, stripped;
     unset, empty or blank is ``None``; otherwise the value must start with ``http://`` or ``https://``, in any case, and
     loses one trailing slash, one only (``https://a.example//`` keeps one), nothing else changed; any other value raises
-    ``ValueError`` naming the variable and quoting the value. ``support_url()`` (``config/platform.py``) reads
-    ``LIBREFOLIO_SUPPORT_URL`` by that rule; ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are pinned in
-    ``test_registration_service.py``.
+    ``ValueError`` naming the variable and quoting the value. The scheme is not enough (N48): a host must follow it — a
+    name, an IPv4 or an IPv6 address, with a port or not —, and no whitespace may stand inside the address, in the host
+    or the path. ``support_url()`` (``config/platform.py``) reads ``LIBREFOLIO_SUPPORT_URL`` by that rule;
+    ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are pinned in ``test_registration_service.py``.
 (f) ``support_link()`` (``services/platform/instance_links.py``), what ``GET /system/instance`` publishes as
     ``support_url``, never raises: the address, or ``None`` when it is unset or invalid, and the app then links to the
     project's issues on GitHub. An invalid address is logged once per process (``_report_invalid``, ``functools.cache``):
@@ -726,10 +727,18 @@ SUPPORT_URL_VARIABLE = "LIBREFOLIO_SUPPORT_URL"
         pytest.param("https://a.example/help/", "https://a.example/help", id="trailing-slash-of-a-path-removed"),
         pytest.param("https://a.example//", "https://a.example/", id="one-slash-removed-only"),
         pytest.param(" https://a.example/ \n", "https://a.example", id="stripped-before-the-slash-is-removed"),
+        pytest.param("http://192.168.1.20:6040/", "http://192.168.1.20:6040", id="ipv4-with-a-port-trailing-slash-removed"),
+        pytest.param("https://[::1]:6040", "https://[::1]:6040", id="ipv6-with-a-port-unchanged"),
+        pytest.param("https://help.example/path?x=1", "https://help.example/path?x=1", id="query-unchanged"),
+        pytest.param("HTTPS://Help.Example/", "HTTPS://Help.Example", id="mixed-case-host-kept-trailing-slash-removed"),
     ],
 )
 def test_env_url_is_the_address_stripped_and_without_one_trailing_slash(monkeypatch, value, expected):
-    """(e) ``env_url(name)``: ``None`` when unset, empty or blank; otherwise the value stripped, ``http://`` or ``https://`` in any case, one trailing slash removed — one only —, nothing else changed."""
+    """(e) ``env_url(name)``: ``None`` when unset, empty or blank; otherwise the value stripped, ``http://`` or ``https://`` in any case, one trailing slash removed — one only —, nothing else changed.
+
+    The host is a name, an IPv4 or an IPv6 address, with a port or not; the case of the scheme and of the host, the path
+    and the query stay as written. Controls of N48: every case here stays valid once a host is required.
+    """
     _set_variable(monkeypatch, URL_PROBE, value)
     address = env_url(URL_PROBE)
     assert address == expected, f"{URL_PROBE}={value!r} must give {expected!r}, env_url gave {address!r}"
@@ -755,6 +764,31 @@ def test_env_url_raises_on_anything_but_an_http_or_https_address(monkeypatch, va
     with pytest.raises(ValueError, match=URL_PROBE) as raised:
         env_url(URL_PROBE)
     assert value.strip() in str(raised.value), f"the error must quote the value it refused, {value.strip()!r}: {raised.value}"
+    print_success(f"{URL_PROBE}={value!r}: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("https://", id="https-alone"),
+        pytest.param("http://", id="http-alone"),
+        pytest.param("https:///path", id="empty-host"),
+        pytest.param("https://:443", id="port-without-a-host"),
+        pytest.param("https://help .example", id="space-in-the-host"),
+        pytest.param("https://help.example/a b", id="space-in-the-path"),
+        pytest.param("https://help.example/a\tb", id="tab-in-the-path"),
+    ],
+)
+def test_env_url_raises_on_an_address_without_a_host_or_with_whitespace_inside(monkeypatch, value):
+    """(e) N48: the scheme is not enough. Without a host — the scheme alone, an empty host, a port without a host —, or with whitespace inside, the address is an error naming the variable and quoting the value.
+
+    Either way the link the instance hands out would lead nowhere, or not where it says.
+    """
+    monkeypatch.setenv(URL_PROBE, value)
+    with pytest.raises(ValueError, match=URL_PROBE) as raised:
+        env_url(URL_PROBE)
+    # Quoted as repr() quotes it, as the message does today: a tab must show as \t in the log line, not as a blank
+    assert repr(value) in str(raised.value), f"the error must quote the value it refused, as repr() does, {value!r}: {raised.value}"
     print_success(f"{URL_PROBE}={value!r}: {raised.value}")
 
 
