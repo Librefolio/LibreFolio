@@ -5,7 +5,7 @@
  * The filter, search and "select visible" rules came here from the Asset Global lab
  * (`risk/assetSetSelection.ts`) with the panel, unchanged. The search and order rules of
  * `AssetSelect` live here too, so that a select and a panel listing the same assets cannot disagree
- * on what a query finds or on what comes first. Nothing here imports from `components/risk/`: a
+ * on what a query finds or on what comes first. Nothing here imports from `features/risk/`: a
  * verdict is described by its shape, which the risk engine's worded verdicts already have.
  */
 

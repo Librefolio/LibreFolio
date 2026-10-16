@@ -3,15 +3,20 @@
 
   Three modes:
   1. URL - Enter a URL directly
-  2. Existing - Browse existing uploaded files (grid/table)
+  2. Existing - Browse existing uploaded files (grid/table): the common ones and the user's own personal ones. A personal
+     file picked here becomes common, with a notice: the picked image is shown to other users (decision 36)
   3. Upload - Upload a new file (opens ImageEditModal for images)
 
   Returns the selected URL or uploaded file URL.
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
+    import {get} from 'svelte/store';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
+    import {currentUser} from '$lib/stores/app/auth';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {setUploadScope} from '$lib/utils/files/upload';
     import {File as FileIcon, FolderOpen, Image as ImageIcon, LayoutGrid, Link, List, Search, Upload, X} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
@@ -79,8 +84,11 @@
         }
     }
 
-    // Load files when tab is 'existing' and modal is open
-    $: if (open && activeTab === 'existing' && existingFiles.length === 0) {
+    // Load files when tab is 'existing' and modal is open: once per opening. An empty list must not load again
+    // and again (each assignment of existingFiles re-ran this statement).
+    let existingLoaded = false;
+    $: if (open && activeTab === 'existing' && !existingLoaded) {
+        existingLoaded = true;
         loadExistingFiles();
     }
 
@@ -88,6 +96,7 @@
     $: if (open) {
         selectedFile = null;
         searchQuery = '';
+        existingLoaded = false;
         // Set URL input and tab based on initialUrl
         urlInput = initialUrl || '';
         if (initialUrl) {
@@ -104,6 +113,9 @@
         try {
             const data = await zodiosApi.list_files_api_v1_uploads_get();
             let files = (data.items || []) as UploadedFile[];
+            // Common files and the user's own: an admin is listed every file, but picks only what others see already or his own
+            const userId = get(currentUser)?.id;
+            files = files.filter((f) => f.scope === 'common' || f.uploaded_by_user_id === userId);
             // Filter to images if required
             if (filterImages) {
                 files = files.filter((f) => f.mime_type?.startsWith('image/'));
@@ -120,7 +132,10 @@
         selectedFile = file;
     }
 
-    function confirmSelection() {
+    /** True while a personal file picked here is being made common */
+    let confirming = false;
+
+    async function confirmSelection() {
         if (activeTab === 'url') {
             if (urlValid) {
                 dispatch('select', {url: urlInput});
@@ -131,7 +146,22 @@
                 close();
             }
         } else if (activeTab === 'existing' && selectedFile) {
-            dispatch('select', {url: selectedFile.url});
+            const picked = selectedFile;
+            if (picked.scope === 'personal') {
+                // The picked image is shown to other users (an icon, a logo, a photo): it becomes common first
+                if (confirming) return;
+                confirming = true;
+                try {
+                    await setUploadScope(picked.id, 'common');
+                } catch {
+                    notify({name: 'file.scope.change.failed', detail: {fileId: picked.id, scope: 'common'}, toast: {variant: 'error', message: $_('uploads.scope.changeFailed')}});
+                    return;
+                } finally {
+                    confirming = false;
+                }
+                notify({name: 'file.scope.shared-on-pick', detail: {fileId: picked.id}, toast: {variant: 'info', message: $_('uploads.scope.sharedOnPick', {values: {name: picked.original_name}})}});
+            }
+            dispatch('select', {url: picked.url});
             close();
         }
     }
@@ -220,7 +250,7 @@
 
     function handleRowDoubleClick(row: UploadedFile) {
         selectedFile = row;
-        confirmSelection();
+        void confirmSelection();
     }
 </script>
 
@@ -350,7 +380,7 @@
             <button class="btn btn-secondary" data-testid="asset-picker-cancel" on:click={close} type="button">
                 {$_('common.cancel') || 'Cancel'}
             </button>
-            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)} on:click={confirmSelection} type="button">
+            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile) || confirming} on:click={confirmSelection} type="button">
                 {$_('uploads.useSelected') || 'Use Selected'}
             </button>
         </div>

@@ -14,7 +14,7 @@ panel controller and the shared benchmark store are in
 the [Correlation Tab](../../../../user/assets/correlation.md) and
 [Risk Tab](../../../../user/dashboard/risk.md) user pages.
 
-Paths are relative to `frontend/src/lib/components/risk/` unless stated otherwise. The lab never shows an
+Paths are relative to `frontend/src/lib/features/risk/` unless stated otherwise. The lab never shows an
 amount of money: a selection has no weights.
 
 ---
@@ -239,7 +239,7 @@ API. Which analytics each section asks for is the table in
 - **Frames.** `RiskLevelSection` keeps under each section only what did not come back
   (`levelErrorHealth()`, `levels/partialNotice.ts:49`), in an amber alert
   (`levels/RiskLevelSection.svelte:179`), plus `answer_discarded` (`ANSWER_DISCARDED_CODE`,
-  `frontend/src/lib/stores/risk/riskPanelController.svelte.ts:57`) once the controller's re-asks are exhausted — the
+  `frontend/src/lib/features/risk/riskPanelController.svelte.ts:57`) once the controller's re-asks are exhausted — the
   bound and the wording are in [The Panel Controller](../../../backend/risk/architecture.md#panel-controller).
   The section bodies offer **Retry** (`loadBase(true)`) when they have no figure to show, for example
   `AssetSetCorrelationSection.svelte:139`, l.153.
@@ -407,7 +407,7 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
 - **Refresh and retry.** There is no **Retry** button. The header's **Refresh** is `loadBase(true)`
   (`levels/RiskPanelHeader.svelte:98`); the Dashboard's own Refresh bumps `refreshVersion` (Dashboard host,
   l.695-698), which the controller turns into `loadBase(true)`
-  (`frontend/src/lib/stores/risk/riskPanelController.svelte.ts:647-656`). Re-asks, `answer_discarded`,
+  (`frontend/src/lib/features/risk/riskPanelController.svelte.ts:647-656`). Re-asks, `answer_discarded`,
   the page cache and `loadError` are in [The Panel Controller](../../../backend/risk/architecture.md#panel-controller).
   Here `onrefreshfailed` toasts `risk.states.loadFailed` (`RiskLevelsPanel.svelte:82`),
   `setTweenHydration()` stops cached cards from counting up (l.106), and `loadError` replaces the notice

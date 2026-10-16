@@ -50,6 +50,9 @@
  * save that wrote the mode. `$lib/features/instance/instanceConfig.svelte` is a
  * fake with the real store's shape — enumerable getters over `$state`
  * (`reactiveBox`) and a `load` spy — unpinned and open before every test.
+ * Accounts lot A6d (decision 36) moves the mode's default to `invite`, the
+ * backend's for a new install: the row's reset and «reset all» propose it, and
+ * the cases that need a row off the default store `open`.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -588,7 +591,8 @@ describe('GlobalSettingsTab — every row it renders is named in the four catalo
     /** What the instance sends: every key of the backend's `GLOBAL_SETTINGS_DEFAULTS` (`schemas/settings.py`), at its default. */
     const SERVER_LIST: Fixture[] = [
         setting('session_ttl_hours', '24', 'int'),
-        setting('registration_mode', 'open', 'string'),
+        // invite since A6d (decision 36): the default of a new install, open before.
+        setting('registration_mode', 'invite', 'string'),
         setting('require_email_verification', 'false', 'bool'),
         setting('max_file_upload_mb', '10', 'int'),
         setting('scheduler_enabled', 'true', 'bool'),
@@ -1109,9 +1113,13 @@ describe('GlobalSettingsTab — the category filter', () => {
 /**
  * Who may create an account: `registration_mode` (accounts lot A5b, plan A5b.1).
  *
- * A5a made the mode a string setting — `open`, `invite`, `disabled`, default `open` — and let the operator pin it with
+ * A5a made the mode a string setting — `open`, `invite`, `disabled` — and let the operator pin it with
  * `LIBREFOLIO_REGISTRATION`: then the database row is not what is in force, saving it answers 409
- * `SETTING_LOCKED_BY_ENV`, and `GET /system/instance` says `registration_locked: true` with the mode in force. The row:
+ * `SETTING_LOCKED_BY_ENV`, and `GET /system/instance` says `registration_locked: true` with the mode in force. Its
+ * default, the backend's for a new install and the tab's `SETTING_DEFAULTS`, is `invite` since A6d (decision 36; it was
+ * `open`): an unpinned row off it offers a reset that proposes `invite`, and «reset all» sends `invite` for it. The
+ * cases below therefore store `open` where the row must be off the default — the pinned ones too, so that the pin, not
+ * the default, is what leaves the row alone. The row:
  *   - a `SettingSelect` of the three modes (`setting-select-option-<mode>`, labelled `settings.registrationModes.*`) in
  *     `global-setting-registration_mode`, the security category's;
  *   - pinned: the control locked on the mode in force, not on the row's value; the hint `settings.lockedByEnv`;
@@ -1180,13 +1188,26 @@ describe('GlobalSettingsTab — registration_mode, who may create an account (A5
     });
 
     it('is an ordinary row while the server does not pin the mode: unlocked, the stored mode, a reset off the default', async () => {
-        await mountUnlocked([mode('invite')]);
+        await mountUnlocked([mode('open')]);
 
         expect(row()).toHaveAttribute('data-locked', 'false');
         expect(modeSelect()).toBeEnabled();
-        expect(modeSelect()).toHaveTextContent(label('invite'));
+        expect(modeSelect()).toHaveTextContent(label('open'));
         expect(row()).not.toHaveTextContent('settings.lockedByEnv');
-        expect(within(row()).getByTestId('setting-reset'), 'invite is off the default, open').toBeInTheDocument();
+        expect(within(row()).queryByTestId('setting-reset'), 'open is off the default, invite (A6d): the row offers a reset').not.toBeNull();
+    });
+
+    it('proposes invite on the reset of a mode the server does not pin: the default of a new install (A6d)', async () => {
+        await mountUnlocked([mode('open')]);
+        expect(within(row()).queryByTestId('setting-reset'), 'open is off the default, invite (A6d): the row offers a reset').not.toBeNull();
+
+        await fireEvent.click(within(row()).getByTestId('setting-reset'));
+
+        await waitFor(() => expect(modeSelect(), 'the reset proposes the default').toHaveTextContent(label('invite')));
+        // Reset only proposes: the row is modified, and its own save sends the default.
+        await fireEvent.click(await within(row()).findByTitle('common.save'));
+        await waitFor(() => expect(axiosPatch).toHaveBeenCalledTimes(1));
+        expect(lastPatchBody()).toEqual({items: [{key: 'registration_mode', value: 'invite'}]});
     });
 
     it('saves a new mode through the bulk route, then reloads the instance configuration, forced, once the save landed', async () => {
@@ -1235,23 +1256,25 @@ describe('GlobalSettingsTab — registration_mode, who may create an account (A5
     });
 
     it('is locked while the server pins the mode: the mode in force, the hint, data-locked, no actions', async () => {
-        // The row stores invite; LIBREFOLIO_REGISTRATION=disabled is what is in force.
+        // The row stores open, off the default (invite, A6d), so that unpinned it would offer a reset;
+        // LIBREFOLIO_REGISTRATION=disabled is what is in force.
         pinnedOnServer('disabled');
-        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), mode('invite')]);
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), mode('open')]);
 
         expect(screen.getByRole('spinbutton'), 'premise: the tab itself is unlocked').toBeEnabled();
         expect(row()).toHaveAttribute('data-locked', 'true');
         expect(modeSelect(), 'the control is locked').toBeDisabled();
         expect(modeSelect(), 'it shows the mode in force, from /system/instance').toHaveTextContent(label('disabled'));
-        expect(modeSelect(), 'not the stored row').not.toHaveTextContent(label('invite'));
+        expect(modeSelect(), 'not the stored row').not.toHaveTextContent(label('open'));
         expect(row()).toHaveTextContent('settings.lockedByEnv');
         for (const action of ['setting-save', 'setting-undo', 'setting-reset']) {
             expect(within(row()).queryByTestId(action), `${action}: nothing to do on a pinned mode`).toBeNull();
         }
     });
 
-    it('control: reset all moves a mode the server does not pin back to open', async () => {
-        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('invite')]);
+    it('control: reset all moves a mode the server does not pin to invite, the default of a new install (A6d)', async () => {
+        // The row stores open, the default until A6d: reset all must now move it, to invite.
+        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('open')]);
 
         await fireEvent.click(resetAll());
         await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
@@ -1260,15 +1283,16 @@ describe('GlobalSettingsTab — registration_mode, who may create an account (A5
         await waitFor(() => expect(axiosPatch).toHaveBeenCalledTimes(1));
         expect(lastPatchBody().items).toEqual([
             {key: 'session_ttl_hours', value: '24'},
-            {key: 'registration_mode', value: 'open'},
+            {key: 'registration_mode', value: 'invite'},
         ]);
     });
 
     it('reset all passes a pinned mode by', async () => {
         // Green against a tab with no default for the mode, for the wrong reason: the control above is the half that
-        // proves reset all reaches the mode at all.
+        // proves reset all reaches the mode at all. The same stored row as there, open, off the default (invite, A6d):
+        // the pin, not the default, is what leaves it alone.
         pinnedOnServer('disabled');
-        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('invite')]);
+        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('open')]);
 
         await fireEvent.click(resetAll());
         await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
