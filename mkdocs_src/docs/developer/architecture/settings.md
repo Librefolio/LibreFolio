@@ -102,7 +102,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
       no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
       alone included, raises `ValueError`, which names the variable. The accessor's caller decides
-      what an invalid address costs, and logs it.
+      what an invalid address costs, and logs it. `support_url()` (`platform.py`) also takes
+      `mailto:` and one email address, the scheme in any case: `?`, `#`, `%`, `,`, `;`, `<`, `>`, `"`,
+      `/` and any whitespace are refused before pydantic's `EmailStr` reads the address, without DNS,
+      and it returns `mailto:` and the address as `EmailStr` normalizes it. `env_url()` itself stays
+      http(s) only.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
