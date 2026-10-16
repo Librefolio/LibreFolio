@@ -3887,6 +3887,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     (`test_openapi_client_text.py`, OCT-001…032). Legge `app.openapi()`, fallisce nominando campo, forma e
     carattere, e scatta se cambiano la versione o le opzioni del generatore. La regola 4 di «Contract Rules» è in
     `developer/api/overview.md`. Dettagli: piano 08, «E-5.0»…«E-5.3».
+    Commit `43ad48952` (test) e `fc418255b` (journal), in `dev_release2` al treno 83 (merge `01598f9ad`).
 - **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
