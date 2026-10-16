@@ -238,7 +238,8 @@ used, nor from anything else in a request.
   links you copy, from the [command line](cli_tools.md) for one, stay as they are.
 - **What the email says**: it names your instance by the host of `LIBREFOLIO_PUBLIC_URL`, and says
   how long the link still works: 7 days for a new invitation, 30 minutes for a reset link, 24 hours
-  for a verification link. A link works once.
+  for a verification link, 72 hours for the setup link of the initial administrator. A link works
+  once.
 - **The secret part** of the link comes after `#`: browsers never send it to the server, so it
   stays out of server and proxy logs.
 - **To check it**: with email **Ready**, Settings › Email shows a notice when
@@ -423,7 +424,8 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
 
 - **Who waits**: every account created from the registration page while the switch is on, the
   ones opened with an invitation included. The first account of a new instance, its administrator,
-  never waits; neither do the accounts created with `user create` on the
+  never waits, nor does the administrator LibreFolio creates from `LIBREFOLIO_ADMIN_EMAIL`, which
+  its setup link activates; neither do the accounts created with `user create` on the
   [command line](cli_tools.md), nor the accounts that already exist.
 - **Right after the registration**, the login page says: *Account created. We sent you an email
   with a link to activate it: open it within 24 hours, then sign in.*
@@ -520,6 +522,10 @@ LibreFolio writes to the address the account had **before**:
 - **At most 3 an hour for an account, and 3 an hour to the same mailbox**, in capitals or not. Past
   either, the change still goes through and the notice is skipped. Without these limits, an account
   could point its email at any address and change it again, to make your instance write there.
+- **Not for capitals alone.** Changing only the capitals of the letters A to Z, such as
+  `Anna@example.com` for `anna@example.com`, is no change of address, so no notice goes. Accented
+  letters count as different: `Émile@example.com` for `émile@example.com` is a change, with its
+  notice.
 
 ---
 
@@ -610,7 +616,7 @@ the start.
 | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | `warning` | At startup, with `check` set to `email.smtp_encryption`: `none` towards a server outside your local network, which the line names ([Security Notes](#security)). |
 | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` | `info` | At startup, with `check` set to `email.links`: email works, but `LIBREFOLIO_PUBLIC_URL` is not set ([Emails with a Link](#public-url)). |
 | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` | `warning` | At startup, with `check` set to `email.links`: email works, but the variable cannot start a link ([Emails with a Link](#public-url)). |
-| `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite`, `password_reset`, `email_verification` or `email_changed`. |
+| `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite`, `password_reset`, `email_verification`, `email_changed` or `admin_setup`. |
 | `Email not sent` | `warning` | The server refused the email or did not answer: `code`, as in [Sending Errors](#sending-errors), and `detail`, the server's own reply, the most precise clue. |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | The hourly limit stopped an email; `retry_after` is in seconds. |
 | `Test email sent by an administrator` | `info` | A test email went out, with the `admin_id` and the `language`. |

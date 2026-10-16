@@ -14,12 +14,13 @@ guide is [Email](../../admin/email.md).
 
 !!! note "Status: lots E1 to E5 of release 1.3"
 
-    Every email but one has a caller: the test email ([`POST /api/v1/email/test`](#api-test)), the links an
+    Every email has a caller: the test email ([`POST /api/v1/email/test`](#api-test)), the links an
     administrator emails ([`POST /api/v1/email/links`](#api-links)), a reset link for a forgotten password
     ([`POST /api/v1/email/password-reset`](#api-password-reset)), the verification email of a new account
-    ([Email Verification](#verification)) and the [notice of an email change](#flow-email-changed).
-    `build_admin_setup()`, the activation link of the first administrator, has none yet: see
-    [Coming Next](#coming-next).
+    ([Email Verification](#verification)), the [notice of an email change](#flow-email-changed), and the setup
+    link of the initial administrator: workstream A's `deliver_setup_link()`
+    (`backend/app/services/accounts/bootstrap_admin_service.py`, lot A7a) sends `build_admin_setup()` for a link
+    the instance generated itself.
 
 ---
 
@@ -274,9 +275,8 @@ have a table of their own: [What Is Logged](#verification-logs).
 recipient's full address, the new address of an email change (not even its domain), the identifier of a «forgot
 password» request or of a «send the link again». The recipient appears as the domain of its address and as the
 `user_id` the caller passes; a link, as the `token_id` of its row. Outside this module, workstream A's
-`Profile updated` (`update_profile()`, `backend/app/api/v1/auth.py`) and `User profile updated`
-(`user_service.update_profile()`) events write the account's address on every profile update, the new one after a
-change.
+`deliver_setup_link()` writes the setup link of the initial administrator to the log once, on purpose: without email,
+the log is how it reaches whoever runs the server.
 
 That holds for the server's own words too. Servers quote the address they refuse, so before `detail` reaches the
 `Email not sent` event, `_redacted()` replaces the SMTP password with `***` and the recipient's address with
@@ -323,7 +323,9 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
 `build_test_message()`, `build_invite()` and `build_password_reset()` have callers ([Flows](#flows));
 `build_verification()` has one in [`verification.py`](#verification-email);
 `build_email_changed()` has one in [`email_changed_work()`](#flow-email-changed);
-`build_admin_setup()` has none ([Coming Next](#coming-next)).
+`build_admin_setup()` has one since workstream A's lot A7a: `deliver_setup_link()` in
+`backend/app/services/accounts/bootstrap_admin_service.py`, for a link the instance generated (a token from the
+hosting panel is the panel's to deliver, decision D-E11).
 
 ### 🌍 Languages
 
@@ -620,7 +622,9 @@ address changed. It runs after the answer, as a background task with a session o
 with the current password — with the address read before the change. A username-only change, or a refused one,
 queues nothing. In this order:
 
-1. The old and the new address the same, compared stripped and case-folded: nothing, not even a log line.
+1. The old and the new address the same, as workstream A's `user_service.same_email()` compares them (A–Z in any
+   case, nothing else folded, decision P18): nothing, not even a log line. A's route already queues the notice only
+   for a real change, so this is a second guard.
 2. Email off — no host set, the default of a self-hosted instance — gives the `info` event
    `Email change notice: email is off, nothing sent`, never a warning. The configuration is read in a worker thread.
 3. An account that no longer exists: the `info` event `Email change notice: the account no longer exists, nothing sent`.
@@ -805,9 +809,9 @@ leaves the hold in place: the account waits, and its owner asks for the link aga
    with `revoked` but not revoked, and nothing is written: it may be the account's only unspent token, and revoking
    it would end the wait. The account keeps waiting and «send the link again» works. The
    `Email verification refused: the link's email did not go out` event is logged.
-3. A token emailed to an address the account no longer has (compared stripped and case-folded) is revoked and
-   committed, the `Email verification refused: the link was sent to another address` event is logged, and the
-   refusal is `revoked`.
+3. A token emailed to an address the account no longer has (compared with `user_service.same_email()`, decision
+   P18) is revoked and committed, the `Email verification refused: the link was sent to another address` event is
+   logged, and the refusal is `revoked`.
 4. `consume_token()`: a link that another request spent meanwhile rolls back as `consumed`.
 5. The account active, `email_verified_at` set, its other verification tokens revoked; the commit, then the
    `Email verified` event.
@@ -1321,10 +1325,9 @@ users, settings and email routers, on a private SQLite file. The Settings tab re
 
 ## 🔭 Coming Next {: #coming-next }
 
-Still open: the activation email of the first administrator (lot E3), after workstream A's lot A7.
-
 Not in release 1.3: a badge of its own for an account waiting for its email verification in the Users tab (backlog
-E-7), and a choice of language for «Send by email» (backlog E-8).
+E-7), a choice of language for «Send by email» (backlog E-8), and per-mailbox limits that see aliases such as
+`name+tag@` (backlog E-9).
 
 ---
 

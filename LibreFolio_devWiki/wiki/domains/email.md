@@ -34,8 +34,10 @@ What it sends — six kinds of email, with texts in English, Italian, French and
   on `/verify-email`; meanwhile the login, given the right password, answers 403 `EMAIL_NOT_VERIFIED` and offers
   **Send the link again**.
 - **A notice to the old address** when an account's email changes: no link, the new address masked as `***@domain`.
-- **The activation link of the initial administrator**: `build_admin_setup()` exists but has no caller yet — pending
-  workstream A's lot A7a.
+- **The setup link of the initial administrator**: when LibreFolio creates the administrator from
+  `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself, workstream A's `deliver_setup_link()` (lot A7a) writes it to
+  the log once and emails it with `build_admin_setup()` when email works; a link from the hosting panel's token is the
+  panel's to deliver (D-E11).
 
 Every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone, never from the request's Host, Origin or
 forwarded headers (the test email, which carries no link, names the instance after the request's host). Without that
@@ -126,9 +128,10 @@ the why.
   password.
 - **P1 (the developer, 16/10).** With email working, `ForgotPasswordCard` shows the email form, and the server
   commands stay in a panel closed by default — a native `<details>`, the house model — with the same test ids.
-- **The E4c rule (accepted with A, 16/10).** Comparisons of two account addresses will use A's
-  `user_service.same_email()` (A–Z folding, like SQLite's `lower()`), so the rule lives in one place; the four limiter
-  keys stay `strip().casefold()`, where the broader grouping is the prudent side.
+- **The E4c rule (accepted with A, 16/10; done).** Comparisons of two account addresses use A's
+  `user_service.same_email()` (A–Z folding, like SQLite's `lower()` and A's unique index): `email_changed_work()` and
+  `confirm_email()`, so the rule lives in one place with A's `PUT /auth/profile`, where a capitals-only change is no
+  change. The four limiter keys stay `strip().casefold()`, where the broader grouping is the prudent side.
 
 ## Known problems / limitations
 
@@ -154,11 +157,11 @@ the why.
 - **Backlog E-7 and E-8.** A waiting account looks like any inactive one in the Users tab: the `holds_place` field
   exists, the badge is out of 1.3. «Send by email» always invites in the instance's default language:
   `POST /email/links` accepts `language`, the dialog has no selector.
-- **Address comparison, until E4c.** E compares addresses `strip().casefold()`, while A's P18 folds A–Z only: for
-  `Émile@` and `émile@` the change notice would not go, and a verification link sent to the old form would stay
-  valid. Separately, A's `get_user_by_username_or_email()` takes the first match without an order and usernames may
-  hold `@`, so login and «forgot password» can land on the wrong account — never a takeover, since the link goes to
-  the found account's own address (routed to A: A-21, with P18).
+- **Lookups by identifier.** A's `get_user_by_username_or_email()` takes the first match without an order, and
+  usernames may hold `@`, so login and «forgot password» can land on the wrong account — never a takeover, since the
+  link goes to the found account's own address (routed to A: A-21). Since P18 the email half is case-insensitive.
+- **Aliases** (backlog E-9): the per-mailbox limits do not merge `name+tag@` or Gmail's dots, so with open
+  registration the hourly budget can be aimed at one inbox (final security review, plan «E6.9»).
 - **Out of 1.3**: notifications (F19). `admin/email.en.md` is English only, by choice; the translation debt of the
   touched pages is declared, without stamps.
 
@@ -227,23 +230,19 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 
 ## What comes next
 
-- **Integration** (16/10): E4b enters `dev_release2` after H, Z5 and A7a with P18; E resolves the merge of
-  `auth.py::update_profile`, keeping every line of A plus E's four additions.
-- **After A7a**: `build_admin_setup()` gets its caller, so `developer/backend/email.md` and `admin/email.en.md` gain
-  the `admin_setup` kind; the docs sentence saying that A's `Profile updated` events write the address goes (A's
-  `bde624b38` removed it from those logs); backlog E-4 (the deprecated 422 name in `api/v1/settings.py`) with A's OK.
-- **E4c** (pending, after A7a/P18): `email_changed_work()` and `confirm_email()` compare with `same_email()`; ECN-004,
-  EMF-046 and the EMV confirmations change; the docs drop «stripped and case-folded».
-- **E6, the closure** (started 16/10): the seven C-99 rows in `admin/configuration.en.md` are written (build pending),
-  «📧 Server email» has moved from `TODO_FUTURI.md` to `TODO_Completati.md`, and the FAQ's forgotten-password answer
-  now points to **Forgot Password?**. Left: a coherence pass on `admin/email.en.md`, the slots (`all-backend`, the
-  domain's E2E, the `settings/email` gallery shot), the final security review, the CHANGELOG text for the coordinator.
+- **Integration** (16/10): A's lots A7a, P18 and A-27 entered `dev_release2` (`68355911f`); E merged them, keeping
+  every line of A's `update_profile` plus E's four additions, and applied E4c on top. E enters after its `all-backend`
+  slot.
+- **E6, what is left**: the domain's E2E and the `settings/email` gallery shot (with G), a delta security review of
+  E4c, the CHANGELOG text for the coordinator, and backlog E-4 (the deprecated 422 name in `api/v1/settings.py`) with
+  A's OK. Done: the C-99 rows, the TODO moved, the FAQ, the coherence pass on `admin/email.en.md`, the A7a docs (the
+  `admin_setup` kind), the final security review (no finding; E-9 to the backlog, A-27 to A).
 - **Developer decisions**: the «Confirm» button on `/verify-email`, the message after a held email, the proxy for the
   cloud; and the review of the night decisions (the hold removed entirely, E-8, the notice-limit compromise, P1 as a
   `<details>`).
 - **Backlog «E · Email (fase 01)»**: E-1 and E-5 closed. E-2 (the widened optional type,
   [[problems/generated-client-widens-nullable-scalar]]), E-3 (`ApiError`) and E-6 (the settings tab registry) deferred
-  to 1.4, as they touch shared files. E-4 in E6, with A's OK. E-7 out of 1.3. E-8 open, proposed for 1.4.
+  to 1.4, as they touch shared files. E-4 in E6, with A's OK. E-7 out of 1.3. E-8 and E-9 open, proposed for 1.4.
 
 ## Source files
 

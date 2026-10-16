@@ -208,9 +208,9 @@ advises. Back on the filled-in address, the message goes away. How the check wor
 
 ## 📧 Send by Email {: #send-by-email }
 
-While the instance can send emails with a link — email **Ready** and `LIBREFOLIO_PUBLIC_URL` set
-([Emails with a Link](email.md#public-url)) — both link dialogs have **Send by email** under the
-link:
+While the instance can send emails with a link — email **Ready** and `LIBREFOLIO_PUBLIC_URL` set to
+an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — both link dialogs have
+**Send by email** under the link:
 
 - **An invitation**: **Send to** starts with the address written in the invitation, and you can
   change it. Left empty, the email goes to the address written in the invitation; without one, the
