@@ -15,7 +15,7 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 | `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made, the unit cost of each movement (`movement_unit_costs`) |
 | `native_cash.py` | cash per broker and currency: balances, value in the report currency on any day, period flows, FX results |
 | `ledger_totals.py` | control totals of the transaction ledger, with no price, rate or cost: cash per broker and currency, quantity per broker and asset (`compute_control_totals`, what a backup writes and a restore checks) |
-| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`) |
+| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`); the return between two prices (`price_return`) |
 | `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
 | `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
 | `yield_on_cost.py` | Yield on Cost of holdings, replayed from the transaction ledger |

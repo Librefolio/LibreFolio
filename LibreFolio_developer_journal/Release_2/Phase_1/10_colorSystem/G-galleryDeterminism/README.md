@@ -7,8 +7,10 @@
 > rende ripetibile.
 >
 > **✅ Chiusa il 15/10/2026:** DoD raggiunta con la misura `g-final3`
-> ([piano](plan-phase00GalleryDeterminism.prompt.md), passo 6 e §1). Resta nel backlog G-11. Il prossimo compito di G è
-> G-13, la nuova coppia di riferimento dopo l'ingresso di T.
+> ([piano](plan-phase00GalleryDeterminism.prompt.md), passo 6 e §1). Resta nel backlog G-11.
+>
+> **Riferimento attuale (16/10, G-13):** `g-ref13-r3`, con le maschere e la stabilità della coppia del rumore
+> `g-ref13__r1__vs__r2`. Dettagli: [analisi G-13](evidence/analysis-g13-2026-10-16.md).
 
 ## Il problema, misurato
 
