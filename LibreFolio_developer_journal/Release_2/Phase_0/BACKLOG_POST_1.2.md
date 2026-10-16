@@ -3028,6 +3028,17 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     girare ad A.
 
   Dettagli: piano H, §14 «H-3, il resto».
+- **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
+  16/10.
+  - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
+    che scrive su un file. In un `all-backend -q` il file resta fermo per mezz'ora alle righe della build: quelle
+    escono da un sottoprocesso. Le righe del runner, come «Starting shared test backend» e «Shared backend ready»,
+    arrivano solo all'uscita. Chi segue un run lungo non ne vede l'avanzamento, salvo leggere i log per unità di
+    `.testLog`.
+  - Cura possibile: `sys.stdout.reconfigure(line_buffering=True)` all'avvio del runner, oppure `PYTHONUNBUFFERED=1`
+    nei comandi documentati. Nessuna fretta: il run non ne soffre.
+
+  Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
 
 ## A · Account e accessi (fase 01)
 
