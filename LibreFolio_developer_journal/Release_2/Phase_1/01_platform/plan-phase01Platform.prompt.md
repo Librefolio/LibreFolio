@@ -2919,3 +2919,29 @@ Via del coordinatore alle 03:48 del 16/10. Il lotto più delicato: ogni campo ha
 > cambiata vi si aggiungono. Pagina non marcata. Porta 6181 libera.
 
 ### Checkpoint CP7b-2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Prove d'ingresso**. Commit `c8113aee8` (feat), `59fa4b645` (doc), `cb1c852e8` (diario); merge di `dev_release2`
+> `3edfc4b9a` (Z2b e CP-6), pulito, HEAD `887c6dd12`. Riletti i file fusi da soli: `.env.example` (le mie righe e la
+> sospensione di Z2b), `configuration.en.md` (le righe di tutti e due), `overview.md` (la riga della pila col mio
+> testo, il passo `idle-monitor` di Z), `settings.md`, il runner (nessun doppione, ruff pulito).
+>
+> Una alla volta, `nice -n 19`, carico sotto 70 (04:40–04:50): `services profile-defaults` 37, `managed-headers` 169,
+> `config-env-example` 38, `app-lifecycle` 42; `db populate --force`; `api system` 118; `mkdocs build` strict senza
+> avvisi; `check-links` 96 validi. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**: `services config-package` 692 passati, **1 rosso, non di CP7b-2**. Il caso
+> `test_a_module_outside_the_config_package_reads_no_environment_variable[services/platform/sleep_wake/suspend.py]`:
+> Z2b (`7080e9f38`) legge `FLY_APP_NAME` e `FLY_MACHINE_ID` con `os.environ` fuori da `backend/app/config/`
+> (`suspend.py:48`). È rosso anche su `dev_release2`, dove il test e il file sono identici. La cura è di Z: un accessore
+> in `config/sleep_wake.py`. L'ho segnalato al coordinatore, non tocco i file di Z.
+>
+> **Controllo dei colori** (richiesta del coordinatore: niente classi `-lf-` su un elemento con classi di tavolozza).
+> Nessun elemento misto nel mio markup:
+>
+> - CP-U2 aggiunge solo `action-btn` in `FileGrid`, CSS locale sui token `--lf-cmp-file-grid-*` con le sue regole
+>   scure. La colonna `scope` passa solo `variant` a DataTable, che disegna `cell-badge {variant}` da `table.css`;
+> - `InstanceNotices` e `InstanceBlockedPage` (15/10) hanno solo ruoli;
+> - CP-U1, CP2b, CP7b-1 e CP7b-2 non hanno markup.
+>
+> Ho guardato anche i punti ciechi di G3: classi composte in script, passate a componenti figli o alle props delle
+> colonne.
