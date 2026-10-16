@@ -4,11 +4,16 @@ The pure calculator (:class:`AssetPriceSeries`) is tested in isolation with hand
 observations — no DB, no FX, no async. :func:`build_asset_price_series` is tested with
 lightweight transaction stand-ins (attribute-only, no SQLModel) since the builder only
 reads attributes.
+
+J-17 (developer's P2, 16/10): only BUY and SELL are TRADE observations; an ADJUSTMENT never is,
+in or out, with or without ``cost_basis_override`` (it carries a WAC, not the asset's price).
 """
 
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
+
+import pytest
 
 from backend.app.services.financial_math.price_marks import (
     AssetPriceSeries,
@@ -200,17 +205,132 @@ def test_build_sell_produces_trade_observation():
     assert mark.estimated is True
 
 
-def test_build_priced_adjustment_observation():
-    adj = _tx(1, "ADJUSTMENT", day="2025-01-10", quantity="20", cost_basis_override="5.16", cost_basis_currency="EUR")
+# --------------------------------------------------------------------------- #
+# J-17 — an ADJUSTMENT is never a price observation (developer's P2, 16/10)
+# --------------------------------------------------------------------------- #
+#
+# «Adjustments are transactions; an adjustment carries a WAC, which can mean many things and is
+# not the asset's price at that moment. Prices are deduced only from a buy.» BUY and SELL stay
+# observations; an ADJUSTMENT never is, in or out, with or without ``cost_basis_override``.
+
+
+@pytest.mark.parametrize(
+    ("quantity", "cost_basis_override", "cost_basis_currency", "quote_base_quantity"),
+    [
+        pytest.param("20", "5.16", "EUR", 1, id="in-eur"),
+        pytest.param("-5", "6.40", "EUR", 1, id="out-eur"),
+        pytest.param("20", "5.16", "USD", 1, id="in-foreign-cost-currency"),
+        pytest.param("3", "98.50", "EUR", 100, id="in-bond-qbq-100"),
+    ],
+)
+def test_build_priced_adjustment_is_not_an_observation(quantity, cost_basis_override, cost_basis_currency, quote_base_quantity):
+    """A priced ADJUSTMENT, in or out, adds no observation: the series stays empty and resolves MISSING.
+
+    Before J-17: ``has_observations`` was True and the adjustment's day resolved TRADE_AVG at
+    ``cost_basis_override × quote_base_quantity`` in ``cost_basis_currency`` (e.g. 5.16 EUR).
+    """
+    adj = _tx(1, "ADJUSTMENT", day="2025-01-10", quantity=quantity, cost_basis_override=cost_basis_override, cost_basis_currency=cost_basis_currency)
     series = build_asset_price_series(
         price_rows=[],
         transactions=[adj],
         split_linked_tx_ids=set(),
         asset_currency="EUR",
+        quote_base_quantity=quote_base_quantity,
+    )
+
+    assert series.has_observations is False
+    for day in (date(2025, 1, 10), date(2025, 1, 31)):
+        mark = series.resolve(day)
+        assert mark.source is MarkSource.MISSING, f"{day}: {mark}"
+        assert mark.currency is None
+        assert mark.as_of_date is None
+    assert series.latest().is_missing
+
+
+def test_build_priced_adjustments_after_a_buy_leave_the_buy_carried():
+    """BUY on 01-10, priced ADJUSTMENT-in on 01-14, priced ADJUSTMENT-out on 01-16: the BUY stays the mark.
+
+    The day of each adjustment and every later day resolve to the BUY (100 EUR/unit) CARRIED from
+    01-10, estimated (a trade, not a quote), with its age counted from 01-10.
+
+    Before J-17: 01-14 resolved TRADE_AVG 130 (the ADJUSTMENT-in's override), 01-16 TRADE_AVG 140
+    (the ADJUSTMENT-out's override), 01-20 CARRIED 140 from 01-16, and ``latest()`` was the 01-16
+    adjustment.
+    """
+    buy = _tx(1, "BUY", day="2025-01-10", quantity="10", amount="-1000")
+    adj_in = _tx(2, "ADJUSTMENT", day="2025-01-14", quantity="5", cost_basis_override="130", cost_basis_currency="EUR")
+    adj_out = _tx(3, "ADJUSTMENT", day="2025-01-16", quantity="-3", cost_basis_override="140", cost_basis_currency="EUR")
+    series = build_asset_price_series(
+        price_rows=[],
+        transactions=[buy, adj_in, adj_out],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
         quote_base_quantity=1,
     )
-    mark = series.resolve(date(2025, 1, 10))
-    assert mark.unit_price == _d("5.16")
+
+    buy_day = series.resolve(date(2025, 1, 10))
+    assert (buy_day.source, buy_day.unit_price, buy_day.as_of_date) == (MarkSource.TRADE_AVG, _d("100"), date(2025, 1, 10))
+    for day, days_back in ((date(2025, 1, 14), 4), (date(2025, 1, 16), 6), (date(2025, 1, 20), 10)):
+        mark = series.resolve(day)
+        assert mark.source is MarkSource.CARRIED, f"{day}: {mark}"
+        assert mark.unit_price == _d("100"), f"{day}: {mark}"
+        assert mark.currency == "EUR"
+        assert mark.as_of_date == date(2025, 1, 10), f"{day}: {mark}"
+        assert mark.price_backward_fill.days_back == days_back
+        assert mark.estimated is True
+    latest = series.latest()
+    assert (latest.source, latest.unit_price, latest.as_of_date) == (MarkSource.TRADE_AVG, _d("100"), date(2025, 1, 10))
+
+
+def test_build_market_quote_stays_the_mark_over_a_later_priced_adjustment():
+    """Quote on Friday 01-03 (50 EUR), priced ADJUSTMENT-in on Saturday 01-04 (40 EUR), nothing on Sunday 01-05.
+
+    Saturday and Sunday resolve to Friday's quote CARRIED: a real quote, stale-aged from Friday,
+    not estimated; the last market date stays Friday.
+
+    Before J-17: Saturday resolved TRADE_AVG 40 (estimated) and Sunday CARRIED 40 from Saturday.
+    """
+    adj = _tx(1, "ADJUSTMENT", day="2025-01-04", quantity="10", cost_basis_override="40", cost_basis_currency="EUR")
+    series = build_asset_price_series(
+        price_rows=[(date(2025, 1, 3), _d("50"), "EUR")],
+        transactions=[adj],
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+    )
+
+    for day, days_back in ((date(2025, 1, 4), 1), (date(2025, 1, 5), 2)):
+        mark = series.resolve(day)
+        assert mark.source is MarkSource.CARRIED, f"{day}: {mark}"
+        assert mark.unit_price == _d("50"), f"{day}: {mark}"
+        assert mark.as_of_date == date(2025, 1, 3)
+        assert mark.price_backward_fill.days_back == days_back
+        assert mark.estimated is False, f"{day}: a carried quote is stale, never estimated"
+        assert series.last_market_date(day) == date(2025, 1, 3)
+
+
+def test_build_buy_and_sell_still_observe_next_to_adjustments():
+    """Guard: BUY and SELL stay TRADE observations (in ``tx.currency``, ×qbq) when adjustments sit beside them.
+
+    Before J-17: same values (guard, green before and after); only the adjustments' days differed.
+    """
+    buy = _tx(1, "BUY", day="2025-01-10", quantity="10", amount="-1000", currency="USD")
+    adj = _tx(2, "ADJUSTMENT", day="2025-01-12", quantity="2", cost_basis_override="90", cost_basis_currency="USD")
+    sell = _tx(3, "SELL", day="2025-01-15", quantity="-4", amount="480", currency="USD")
+    series = build_asset_price_series(
+        price_rows=[],
+        transactions=[buy, adj, sell],
+        split_linked_tx_ids=set(),
+        asset_currency="USD",
+        quote_base_quantity=100,
+    )
+
+    assert series.has_observations is True
+    buy_mark = series.resolve(date(2025, 1, 10))
+    assert (buy_mark.source, buy_mark.unit_price, buy_mark.currency) == (MarkSource.TRADE_AVG, _d("10000"), "USD")  # 100 USD/unit × qbq 100
+    sell_mark = series.resolve(date(2025, 1, 15))
+    assert (sell_mark.source, sell_mark.unit_price, sell_mark.currency) == (MarkSource.TRADE_AVG, _d("12000"), "USD")  # 120 USD/unit × qbq 100
+    assert sell_mark.estimated is True
 
 
 def test_build_skips_split_linked_and_zero_qty_and_unpriced_adjustment():
