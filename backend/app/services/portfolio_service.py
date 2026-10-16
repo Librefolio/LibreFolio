@@ -606,7 +606,6 @@ class PortfolioService:
         all_missing_pairs: list[WACMissingPairInfo] = []
         missing_price_assets: list[MissingPriceAsset] = []
         broker_names: dict[int, str] = {}
-        broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
         # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
         lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
@@ -707,8 +706,6 @@ class PortfolioService:
             all_missing_pairs.extend(yield_on_cost_calculation.missing_fx_pairs)
 
             current_value = ps.market_value
-            if current_value is not None:
-                broker_market_values[ps.broker_id] += current_value
 
             gain_loss = ps.unrealized_pnl
             gain_loss_pct = gain_loss_ratio(gain_loss, ps.cost_basis, positive_base=False)
@@ -815,16 +812,14 @@ class PortfolioService:
 
         if include_breakdown:
             for broker_id, broker_name in broker_names.items():
-                # Capital and in-transit value come from the engine's per-broker slice, so an
-                # internal transfer moves capital on arrival instead of showing -X / +X, and
-                # the value in transit stays on the sender's card. Market value and cash keep
-                # their own valuation at valuation_date: the engine re-values a day only when
-                # something happens on it.
+                # Each card is the engine's per-broker slice of the headline on valuation_date
+                # (the cards add up to it): market value, cash at that day's rates and the value
+                # in transit, which stays on the sender's card; capital moves on arrival, so an
+                # internal transfer never shows -X / +X.
                 contribution = last_state.broker_contributions.get(broker_id) if last_state is not None else None
-                broker_in_transit = contribution.in_transit_contribution if contribution is not None else Decimal("0")
                 broker_capital = contribution.capital_contribution if contribution is not None else Decimal("0")
-                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0")) + broker_in_transit
-                broker_gain = broker_nav - broker_capital
+                broker_nav = contribution.nav_contribution if contribution is not None else Decimal("0")
+                broker_gain = contribution.pnl_contribution if contribution is not None else Decimal("0")
                 broker_gl_ratio = gain_loss_ratio(broker_gain, broker_capital, positive_base=True)
                 broker_gl_pct = broker_gl_ratio if broker_gl_ratio is not None else Decimal("0")
                 by_broker_list.append(
