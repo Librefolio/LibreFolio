@@ -19,8 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
+    import {ChartLine, ChevronDown, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -30,9 +29,8 @@
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
-    import AssetBrowseNav from '$lib/components/assets/AssetBrowseNav.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
     import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -69,7 +67,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
-    import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
+    import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -83,7 +81,6 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {startActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {ASSET_DETAIL_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
-    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
@@ -103,8 +100,6 @@
         type CalendarReturnWindowSelection,
         type CalendarReturnWindowUnit,
     } from '$lib/components/charts/calendarReturnWindow';
-    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -2510,62 +2505,7 @@
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
-    <div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
-        <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')}>
-            <ArrowLeft size={20} />
-        </button>
-
-        {#if assetInfo}
-            <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
-                 line, so a long name widened the page (below ~341 px, and just above 1024 px where
-                 the title loses its max width); the title itself scrolls (scrollOnOverflow). -->
-            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0" data-testid="asset-detail-info">
-                <div class="flex items-center gap-3 min-w-0">
-                    <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
-                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
-                    <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-gray-800 dark:text-gray-100 max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
-                </div>
-
-                <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">
-                    {#if assetInfo.asset_type}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
-                            <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5" />
-                            {$t(`assets.types.${assetInfo.asset_type}`)}
-                        </span>
-                    {/if}
-
-                    <span class="text-lg emoji-flag">{currencyFlag}</span>
-                    <span class="text-sm font-mono text-gray-500 dark:text-gray-400">{assetInfo.currency}</span>
-                    {#if (assetInfo.tx_count ?? 0) > 0}
-                        <a href={buildTransactionsFiltersUrl({asset_id: assetInfo.id})} data-testid="asset-detail-transactions-link" class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
-                            {$t('transactions.title')} ({assetInfo.tx_count})
-                        </a>
-                    {/if}
-
-                    {#if assetInfo.provider_code}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                            {#if providerIconUrl}
-                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
-                            {/if}
-                            {assetProviderName}
-                        </span>
-                    {:else}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
-                    {/if}
-
-                    {#if userUrl || providerExternalUrl}
-                        <a href={userUrl || providerExternalUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors" title={userUrl || providerExternalUrl}>
-                            <ExternalLink size={14} />
-                        </a>
-                    {/if}
-                    <LiveUpdatesStatus state={liveUpdatesState} />
-                </div>
-            </div>
-        {:else if loading}
-            <div class="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-        {/if}
-        <AssetBrowseNav assetId={data.assetId} />
-    </div>
+    <AssetDetailHeader assetId={data.assetId} {assetInfo} {loading} {currencyFlag} {providerIconUrl} {assetProviderName} {userUrl} {providerExternalUrl} transactionsHref={assetInfo ? buildTransactionsFiltersUrl({asset_id: assetInfo.id}) : ''} {liveUpdatesState} />
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
