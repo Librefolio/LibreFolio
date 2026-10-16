@@ -2706,6 +2706,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       scuro è spento sulla traccia.
     - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
   - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **La legenda di `RiskReturnLevel`** (W6-a), 4 classi: il punto «portafoglio» cielo e il rombo «benchmark» ambra
+    (riga 170), con le tinte delle righe della tabella (`--lf-cmp-risk-return-row-*` in `theme/components/table.css`).
+    Sono le categorie della serie ECharts del grafico rischio/rendimento: aspettano il punto 2.5 della designer.
   - **I 4 interruttori di `ChartAestheticsSection`** (W5-charts), 16 classi: traccia e manopola alle righe 111/119,
     133/141, 155/162 e 176/184.
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
@@ -2727,6 +2730,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `chartPalettes.ts`, `features/dashboard/growthChartSeries.ts` e i loro test; è logica, non classi, quindi dopo W6.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «W6», passo W6-c.
+- **DV-9 · Adottare `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` quando T li aggiunge** — minimo; DV, 16/10 (W6-a,
+  regola 7 dello skill `design-system`).
+  - Oggi `LOSS_CLASS` di `features/risk/AssetSetLossComparisonSection.svelte` scrive `text-lf-loss`, e le barre sotto
+    il taglio di `features/risk/levels/l1/ReturnHistogram.svelte` scrivono `bg-lf-loss/80`: i ruoli giusti, ma non
+    presi dalle tabelle per significato, come vuole la regola 7.
+  - Il coordinatore (11:3x) ha chiesto le due voci a T, nel suo lotto dei ruoli insieme a `SIGN_BADGE`. Dopo il suo
+    ingresso le adotto; con `SIGN_BADGE` migrano anche i badge di segno di `OtherPeriodEffectsTable` (W6-b).
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «W6», passo W6-a.
 
 ---
 

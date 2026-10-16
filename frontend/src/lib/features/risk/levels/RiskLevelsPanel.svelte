@@ -317,11 +317,11 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
+<div class="space-y-4 text-lf-primary" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
     <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} />
 
     {#if backtest}
-        <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300" data-testid="risk-backtest-notice">
+        <p class="rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-backtest-notice">
             {$t('risk.levels.backtestNotice')}
         </p>
     {/if}

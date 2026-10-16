@@ -43,7 +43,7 @@ export interface AssetSetTableRow {
  */
 export function assetNameCellHtml(testIdPrefix: string, row: AssetSetTableRow, iconUrl: string | undefined): string {
     const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="h-5 w-5 shrink-0 object-contain" data-testid="${testIdPrefix}-icon" />` : '';
-    return `<div class="flex min-w-0 items-center gap-2" data-testid="${testIdPrefix}-name" data-asset-id="${row.assetId}">${iconHtml}<span class="min-w-0 flex-1 text-gray-700 dark:text-gray-200 ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
+    return `<div class="flex min-w-0 items-center gap-2" data-testid="${testIdPrefix}-name" data-asset-id="${row.assetId}">${iconHtml}<span class="min-w-0 flex-1 text-lf-secondary ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
 }
 
 const compareNames = nameComparator();
