@@ -511,6 +511,10 @@ most 200 characters) is public:
 4. The answer is the login's: `200` `AuthLoginResponse`, `show_donation_popup` included, and the
    session cookie of `_issue_session_cookie()`. The administrator is signed in.
 
+The route is not in `ALLOWED_WHEN_BLOCKED` (developer's decision P16: a blocked instance stays blocked until the
+subscription is paid): on a [blocked instance](security.md#instance-block) it answers `401`, like registration, and the
+link keeps running out its 72 hours. The pinned list of `test_instance_block.py` refuses any addition.
+
 `POST /api/v1/auth/tokens/inspect` takes `purpose: "admin_setup"`: a valid setup link answers
 `username` and `expires_at`, as a reset link does ([Invitations](#invitations)).
 

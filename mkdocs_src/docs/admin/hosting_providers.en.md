@@ -170,6 +170,9 @@ is reachable from the internet from its first minute.
   people join with an invitation link. `LIBREFOLIO_REGISTRATION`, if you set it, still decides.
 - 📏 With `LIBREFOLIO_MAX_USERS`, the administrator takes a place from the first start, while it
   waits too.
+- ⛔ While the instance is [blocked](#instance-block), the setup link does not work: the setup is
+  refused until you unblock the instance, and the 72 hours keep running meanwhile. If the link
+  expires in the meantime, give a new one ([A New Link](#initial-admin-new-link)).
 - 🔑 Without `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, the instance generates the token: it writes the
   link once in its log, and emails it to `LIBREFOLIO_ADMIN_EMAIL` when its [email](email.md) works
   and `LIBREFOLIO_PUBLIC_URL` is set. A token of your own lets your panel know the link before the
@@ -304,8 +307,9 @@ For a caller without a session, most of the API answers as on any other instance
 - the calls of the list above answer as usual: `/system/instance`, `/system/info` and
   `/system/ready` do not reveal the block.
 
-A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the address
-probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
+A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the setup of
+the [initial administrator](#initial-admin) (`POST /api/v1/auth/setup`), the address probe
+(`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
 Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
 then cannot confirm a public address, and the check of your instance's address reports it as not
 verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
