@@ -65,7 +65,7 @@ pipenv run ./dev.py user create <username> <email> <password> --role user
 pipenv run ./dev.py user list
 ```
 
-- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open**, or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
+- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open** (on a new instance, also until its first account exists), or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
 - 🔒 The password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `user create` warns `The instance is at its limit (LIBREFOLIO_MAX_USERS: 5 of 5 places taken): the command line creates the account anyway`, then creates it: the command line is how you go past the limit.
 

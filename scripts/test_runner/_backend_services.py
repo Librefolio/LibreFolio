@@ -650,7 +650,9 @@ def services_account_deletion_preview(verbose: bool = False, test_names: list = 
     """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
     print_section("Services: Account Deletion Preview")
     print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
-    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+    print_info(
+        "Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
     return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
