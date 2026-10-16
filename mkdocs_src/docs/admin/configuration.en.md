@@ -294,7 +294,9 @@ the database.
 
 If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
 reports them as unreadable, and never uses a wrong value: enter them again. The tab says so under
-each one: *Saved, but this instance's key cannot read it: enter it again.*
+each one: *Saved, but this instance's key cannot read it: enter it again.* From the first start after
+the change, and at every start until they are entered again or the old key is back, the log has an
+error that counts the instance-wide ones, if there are any: see [Startup Checks](#startup-checks).
 
 If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
 the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
@@ -346,6 +348,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
 | ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
 | ⚠️ `warning` | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Write the address with `http://` or `https://` and a host name, without user name, password, `?` or `#`, such as `https://librefolio.example.com`, then restart: see [Email](email.md). |
+| ❌ `error` | `Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore the instance key they were saved with` (`check` is `platform.plugin_secrets`; this one comes later in the start, once the database is ready) | The instance key changed after these instance-wide [plugin secrets](#plugin-secrets) were saved: a lost `secrets/instance.key` that LibreFolio replaced with a new one, data restored without its `secrets/`, or another `LIBREFOLIO_INSTANCE_KEY`. Either put the old key back (the `secrets/instance.key` of the backup taken with the data, or the old value of the variable) and restart, or enter the secrets again in **Settings › Plugins**. If the log also says `The instance key cannot be used: …`, fix that first: see above. Personal secrets are not counted: each user sees theirs in their own tab. The server starts anyway. |
 
 Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
