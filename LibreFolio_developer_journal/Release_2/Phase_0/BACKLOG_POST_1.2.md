@@ -3090,14 +3090,31 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
     inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
     password (decisione 37).
-- **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; dal
-  `test-author` di A7c (16/10).
+  - In più (dal `test-author` di A-22, 16/10): uno username può contenere `@` e somigliare a un indirizzo, quindi un
+    evento di log che porta lo username («User logged in» e altri) può scrivere qualcosa che sembra un'email; e il login
+    cerca «username o email» con un solo campo, quindi uno username uguale all'indirizzo di un altro account è ambiguo.
+    Il carattere `@` va escluso con la stessa regola.
+  - **Allargata dal coordinatore** (16/10, con P18): gli username diventano unici senza distinzione di maiuscole, come gli
+    indirizzi (P18); username nuovi senza `@`, e un identificativo con `@` cerca solo l'email (oggi
+    `get_user_by_username_or_email` prende il primo dei due, senza ordine: il login e la «password dimenticata» per email
+    possono finire sull'account sbagliato, nota di E). Per gli username già salvati con `@` o con varianti di maiuscole,
+    prima un'analisi, nessun cambio silenzioso. Lotto dopo P18.
+- ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
+  (16/10); dal `test-author` di A7c (16/10).
   - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
     `username=request.username`; il login accetta anche l'email in quel campo, quindi un tentativo fallito con l'email
     la scrive nel log, contro la regola di E (nessun indirizzo nei log).
   - Cura proposta: `user_id` quando l'account esiste (password sbagliata, account disattivo), niente dell'identificativo
     quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
     Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
+  - Fatta così (16/10): LOGIN-027…033 in `test_auth_api.py`; dettagli nel piano, «A-22».
+- **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
+  H (H-19, tramite il coordinatore, 16/10).
+  - `POST /api/v1/users/address-probe` (`address_probe.issue_probe_nonce()`, firma il nonce con una chiave derivata dalla
+    chiave d'istanza) risponde 500 se la chiave non si può usare, mentre `GET /auth/address-probe`
+    (`verify_probe_nonce()`) lo tollera.
+  - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
+    A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
