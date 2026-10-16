@@ -957,8 +957,7 @@ Three source gates keep the rule in force; the first two run in
   each sink. An entry that no longer matches a sink fails the gate.
 - `frontend/src/lib/utils/core/escapeHtml.single.test.ts` fails when a non-test `.svelte` or `.ts`
   file under `frontend/src` holds an HTML escaper of its own (`&` mapped to `&amp;`) outside
-  `escapeHtml.ts`. Two files are exempt: `inlineMath.ts`, the KaTeX variant above, and
-  `TransactionBulkModal.svelte`, until its inline copy is replaced by `escapeHtml`. An exempt file
+  `escapeHtml.ts`. One file is exempt: `inlineMath.ts`, the KaTeX variant above. An exempt file
   that no longer holds a copy fails the gate (see
   [Tooltip HTML](../frontend/components/charts.md#chart-tooltip-escaping)).
 
