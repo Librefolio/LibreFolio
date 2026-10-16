@@ -172,8 +172,10 @@ checks with its guards that a day whose terms do not move keeps its values, and 
 
 `ledger_totals.py` reduces the transaction ledger to its control totals — the cash of every
 broker in each currency and the quantity of every position — read from the rows alone, with no
-price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest
-and, after a restore, compares them with the totals recomputed on the restored database.
+price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest.
+The check of a restore recomputes them on the archive's copy, once upgraded to the app's schema,
+and compares them before the restore is confirmed. A difference is a warning in the check's
+report, never a refusal: a migration may correct data.
 
 | Name | Contract |
 |------|----------|
@@ -216,6 +218,17 @@ Every amount is canonical decimal text — plain notation without trailing zeros
 text. `ControlTotals.from_json(data)` is the inverse of `to_json()` and raises `ValueError` for
 another version or a malformed document. Read `version` before calling it: totals of another
 version are not comparable, which is not the same as a difference.
+
+`from_json()` reads an amount only as `to_json()` writes it.
+
+- **Accepted:** an optional `-`, then at most 60 ASCII digits before the point and 60 after it,
+  the precision of the exact context.
+- **Refused with `ValueError`:** everything else that `Decimal` would also take — an exponent
+  (`"1E+9"`), a `+`, spaces, `_`, other scripts' digits.
+- **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
+  exponent out in full; `"1E+50000000"` alone costs about 121 MB.
+- **Round trip:** it holds for every total within that bound, and every ledger the database can
+  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 
