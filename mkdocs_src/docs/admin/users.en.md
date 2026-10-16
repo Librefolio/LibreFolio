@@ -27,7 +27,7 @@ After each change, the tab reloads its lists, so it always shows what the server
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
 **3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
 account [waiting for its email](#waiting) while its link is live, and so does an
-[initial administrator](hosting_providers.md#initial-admin) still waiting for its setup link; deactivated
+initial administrator still [waiting for its setup link](#pending-setup); deactivated
 accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
 [Environment Variables](configuration.md).
 
@@ -55,6 +55,7 @@ date.
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
 | **Deactivated** | The account cannot sign in, and takes no place — unless it is [waiting for its email](#waiting) |
+| **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
@@ -66,7 +67,7 @@ your account. Manage it from:* with a link to **Profile**, the tab where you cha
 | Action | What it does | Asks first |
 |---|---|---|
 | **Deactivate** | The account can no longer sign in, and is signed out of every device. Its brokers and transactions stay, and its place is freed. Shown for an active account | ✅ |
-| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one. Shown for a deactivated account | — |
+| **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one. Shown for a deactivated account, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
 | **Make administrator** | The account manages the instance too: settings, users and invitations | ✅ |
 | **Remove administrator** | The account stays, as a regular user, and is signed out of every device | ✅ |
 | **Password-reset link** | A link to choose a new password: see [Password-Reset Links](#reset-links) | Its own dialog |
@@ -84,6 +85,7 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 | *It is the only active administrator: it cannot be deactivated or demoted.* | **Deactivate**, **Remove administrator** | Make another account an administrator first |
 | *The instance is full: free a place to reactivate it.* | **Reactivate** | Deactivate or delete another account, or revoke an invitation; the command line's `user activate` goes past the limit |
 | *An administrator must be demoted before it can be deleted.* | **Delete** | **Remove administrator** first, then **Delete** |
+| *This administrator account activates through its setup link. If the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.* | No **Reactivate** | Have its setup link used, or give a new one: see [Waiting for Its Setup Link](#pending-setup) |
 
 - 👑 The instance always keeps an active administrator. Your own row has no actions, so to step
   down: make another account an administrator, then ask them to remove your rights.
@@ -109,6 +111,31 @@ its owner opens the link LibreFolio emails to its address. Until then:
   working, its place is free, and it can sign in only once reactivated.
 
 How the verification works, and its limits: [Email Verification](email.md#verification).
+
+### 👑 Waiting for Its Setup Link {: #pending-setup }
+
+When LibreFolio creates the administrator of `LIBREFOLIO_ADMIN_EMAIL` at its first start, the
+account waits, not yet active, until someone opens its setup link and chooses the password: see
+[The Initial Administrator](hosting_providers.md#initial-admin). Until then:
+
+- its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired;
+- it takes a place, as an active account does;
+- its panel has no **Reactivate**: nobody knows its password, and activating it would also stop its
+  setup link from working. Under the buttons, the panel says instead: *This administrator account
+  activates through its setup link. If the link is lost, run `dev.py user setup-link` on the
+  server, or ask your hosting provider.*;
+- the other actions are those of any deactivated account. **Remove administrator**, for example,
+  leaves it waiting for its setup, as a regular account.
+
+The server refuses to activate it too: `PATCH /api/v1/users/{id}` with `is_active: true` answers
+`409`, with the code `PENDING_SETUP`, and changes nothing. If a **Reactivate** reaches the server
+anyway, for example from a list loaded before, the tab says why instead of a generic error.
+`GET /api/v1/users` marks the account with `pending_setup: true`.
+
+This version has no button for a new setup link: on the server, `user setup-link` prints one (see
+«A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)), and on an
+instance a hosting provider runs, the provider gives it. Once the link is used, the account is
+active, like any other.
 
 ---
 

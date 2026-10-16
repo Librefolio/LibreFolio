@@ -288,7 +288,7 @@ export interface ColumnDef<T> {
     /** If true, column is hidden by default (user can toggle via column visibility) */
     hiddenByDefault?: boolean;
 
-    /** Optional tooltip text shown on hover over the header (info icon) */
+    /** Optional tooltip text shown on hover over the header label; the info icon appears only with `headerTooltipUrl` */
     headerTooltip?: string | (() => string);
 
     /** Optional URL — clicking the info icon navigates to this documentation page */

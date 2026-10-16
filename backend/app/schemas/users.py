@@ -52,6 +52,10 @@ class AdminUserRead(StrictModel):
     created_at: UTCDateTime
     protected: bool = Field(..., description="Nobody may delete, deactivate or demote this account (the paying administrator of a managed instance)")
     holds_place: bool = Field(default=False, description="Inactive and waiting for its email verification with a live link: it already holds its place, so reactivating it needs none")
+    pending_setup: bool = Field(
+        default=False,
+        description="The initial administrator of LIBREFOLIO_ADMIN_EMAIL waiting for its setup (F02): inactive, with a setup link never used; it activates through that link, never with a reactivation",
+    )
 
 
 class AdminUserListResponse(BaseListResponse[AdminUserRead]):

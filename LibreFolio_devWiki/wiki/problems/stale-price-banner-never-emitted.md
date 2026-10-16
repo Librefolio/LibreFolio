@@ -68,7 +68,7 @@ reports partial portfolio results while a filtered asset is stale.
 | `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/data_quality.py` |
 | Threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
-| Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
+| Risk: stale assets → partial results | `backend/app/services/risk/data_quality.py`, `backend/app/services/risk/results.py` |
 | Current price write-back | `backend/app/services/assets/price_query.py` |
 | Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
 | Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |

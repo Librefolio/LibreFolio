@@ -16,8 +16,8 @@ Module under test: ``backend/app/services/financial_math/weights.py``, new. Five
 
 Its callers, each of which wrote its own formula in place before MF-C: ``portfolio_service.get_summary``
 (a holding's ``allocation_percent`` and ``nav_weight_percent``), ``financial_math/portfolio/derived_views``
-(``_alloc`` in ``build_allocation_current`` and ``build_allocation_history``), ``risk/service`` (the
-current-composition weights), ``ai_export/components/technical_shared.compute_nav_weights``,
+(``_alloc`` in ``build_allocation_current`` and ``build_allocation_history``), ``risk/scope`` (the
+current-composition weights, in ``risk/service`` before CP-9a), ``ai_export/components/technical_shared.compute_nav_weights``,
 ``ai_export/components/broker_financial._concentration_metrics`` and
 ``ai_export/components/broker_concentration_context.concentration_metrics``.
 
@@ -375,7 +375,7 @@ class TestParityWithTheOldFormulas:
 
     @pytest.mark.parametrize("asset_values, scope_value", list(RISK_SCOPES.values()), ids=list(RISK_SCOPES))
     def test_risk_weights_are_the_old_floats(self, asset_values, scope_value):
-        """``RiskService``: ``float(share_of(value, scope))`` under the same guard is the old ``float(value / scope)``, to the bit."""
+        """``risk/scope.load_scope_inputs``: ``float(share_of(value, scope))`` under the same guard is the old ``float(value / scope)``, to the bit."""
         weights = _weights()
         new = {asset_id: float(weights.share_of(value, scope_value)) for asset_id, value in asset_values.items() if value >= 0} if scope_value > 0 else {}
         old = _old_risk_weights(asset_values, scope_value)

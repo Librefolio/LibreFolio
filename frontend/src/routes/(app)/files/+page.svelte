@@ -50,7 +50,6 @@
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
-    import '$lib/theme/components/files.css';
 
     type Tab = 'static' | 'brim';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
@@ -1072,6 +1071,7 @@
         margin: 0 auto;
         min-width: 0;
         overflow: hidden;
+        color: var(--lf-text-primary);
     }
 
     .files-page .content {
@@ -1089,12 +1089,8 @@
     .page-header h1 {
         font-size: 1.5rem;
         font-weight: 600;
-        color: var(--lf-cmp-files-page-strong-text);
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .page-header h1 {
-        color: var(--lf-cmp-files-page-strong-text-dark);
     }
 
     .header-actions {
@@ -1105,42 +1101,28 @@
 
     .view-toggle {
         display: flex;
-        border: 1px solid var(--lf-cmp-files-page-view-toggle-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
     }
 
-    :global(.dark) .view-toggle {
-        border-color: var(--lf-cmp-files-page-view-toggle-border-dark);
-    }
-
     .view-btn {
         padding: 0.5rem;
-        background: var(--lf-cmp-files-page-view-btn-bg);
+        background: var(--lf-surface-card);
         border: none;
-        color: var(--lf-cmp-files-page-muted-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.2s ease;
     }
 
-    :global(.dark) .view-btn {
-        background: var(--lf-cmp-files-page-view-btn-bg-dark);
-        color: var(--lf-cmp-files-page-muted-text-dark);
-    }
-
     .view-btn:hover {
-        background: var(--lf-cmp-files-page-view-btn-hover-bg);
-        color: var(--lf-cmp-files-page-strong-text);
-    }
-
-    :global(.dark) .view-btn:hover {
-        background: var(--lf-cmp-files-page-view-btn-hover-bg-dark);
-        color: var(--lf-cmp-files-page-strong-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .view-btn.active {
-        background: var(--lf-cmp-files-page-accent-bg);
-        color: var(--lf-cmp-files-page-on-fill-text);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     .btn {
@@ -1153,34 +1135,26 @@
     }
 
     .btn-primary {
-        background-color: var(--lf-cmp-files-page-accent-bg);
-        border: 1px solid var(--lf-cmp-files-page-btn-primary-border);
-        color: var(--lf-cmp-files-page-on-fill-text);
+        background-color: var(--lf-action);
+        border: 1px solid var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background-color: var(--lf-cmp-files-page-btn-primary-hover-bg);
+        background-color: var(--lf-action-hover);
     }
 
     .upload-area {
         margin-bottom: 1.5rem;
         padding: 1rem;
-        background: var(--lf-cmp-files-page-upload-area-bg);
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
-    }
-
-    :global(.dark) .upload-area {
-        background: var(--lf-cmp-files-page-upload-area-bg-dark);
     }
 
     .loading {
         text-align: center;
         padding: 3rem;
-        color: var(--lf-cmp-files-page-muted-text);
-    }
-
-    :global(.dark) .loading {
-        color: var(--lf-cmp-files-page-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .empty-state {
@@ -1189,7 +1163,7 @@
         align-items: center;
         justify-content: center;
         padding: 4rem 2rem;
-        color: var(--lf-cmp-files-page-faint-text);
+        color: var(--lf-text-muted);
     }
 
     .empty-state p {
@@ -1205,41 +1179,28 @@
         justify-content: space-between;
         align-items: center;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--lf-cmp-files-page-divider-border);
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: var(--lf-cmp-files-page-divider-border-dark);
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .modal-header h3 {
         margin: 0;
         font-size: 1.125rem;
         font-weight: 600;
-        color: var(--lf-cmp-files-page-strong-text);
-    }
-
-    :global(.dark) .modal-header h3 {
-        color: var(--lf-cmp-files-page-strong-text-dark);
+        color: var(--lf-text-primary);
     }
 
     .modal-close {
         background: none;
         border: none;
         cursor: pointer;
-        color: var(--lf-cmp-files-page-modal-close-text);
+        color: var(--lf-text-muted);
         padding: 0.25rem;
         border-radius: 0.25rem;
     }
 
     .modal-close:hover {
-        background: var(--lf-cmp-files-page-hover-bg);
-        color: var(--lf-cmp-files-page-strong-text);
-    }
-
-    :global(.dark) .modal-close:hover {
-        background: var(--lf-cmp-files-page-hover-bg-dark);
-        color: var(--lf-cmp-files-page-strong-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .modal-body {
@@ -1248,21 +1209,13 @@
 
     .modal-body p {
         margin: 0;
-        color: var(--lf-cmp-files-page-body-text);
-    }
-
-    :global(.dark) .modal-body p {
-        color: var(--lf-cmp-files-page-body-text-dark);
+        color: var(--lf-text-secondary);
     }
 
     .pending-count {
         margin-top: 0.5rem !important;
         font-weight: 500;
-        color: var(--lf-cmp-files-page-strong-text) !important;
-    }
-
-    :global(.dark) .pending-count {
-        color: var(--lf-cmp-files-page-strong-text-dark) !important;
+        color: var(--lf-text-primary) !important;
     }
 
     .modal-footer {
@@ -1270,52 +1223,39 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid var(--lf-cmp-files-page-divider-border);
-    }
-
-    :global(.dark) .modal-footer {
-        border-top-color: var(--lf-cmp-files-page-divider-border-dark);
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-files-page-btn-secondary-bg);
-        border: 1px solid var(--lf-cmp-files-page-btn-secondary-border);
-        color: var(--lf-cmp-files-page-text);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-files-page-btn-secondary-bg-dark);
-        border-color: var(--lf-cmp-files-page-btn-secondary-border-dark);
-        color: var(--lf-cmp-files-page-text-dark);
+        background: var(--lf-surface-panel);
+        border: 1px solid var(--lf-border-subtle);
+        color: var(--lf-text-secondary);
     }
 
     .btn-secondary:hover {
-        background: var(--lf-cmp-files-page-btn-secondary-hover-bg);
-    }
-
-    :global(.dark) .btn-secondary:hover {
-        background: var(--lf-cmp-files-page-btn-secondary-hover-bg-dark);
+        background: var(--lf-surface-neutral);
     }
 
     .btn-danger {
-        background: var(--lf-cmp-files-page-btn-danger-bg);
-        border: 1px solid var(--lf-cmp-files-page-btn-danger-border);
-        color: var(--lf-cmp-files-page-on-fill-text);
+        background: var(--lf-danger-solid);
+        border: 1px solid var(--lf-danger-solid);
+        color: var(--lf-on-danger-solid);
     }
 
     .btn-danger:hover {
-        background: var(--lf-cmp-files-page-btn-danger-hover-bg);
+        background: var(--lf-danger-hover);
     }
 
     .btn-disabled {
-        background: var(--lf-cmp-files-page-btn-disabled-bg) !important;
-        border-color: var(--lf-cmp-files-page-btn-disabled-border) !important;
+        background: var(--lf-surface-neutral) !important;
+        border-color: var(--lf-surface-neutral) !important;
         cursor: not-allowed;
         opacity: 0.7;
+        color: var(--lf-text-muted);
     }
 
     .btn-disabled:hover {
-        background: var(--lf-cmp-files-page-btn-disabled-bg) !important;
+        background: var(--lf-surface-neutral) !important;
     }
 
     /* BRIM Upload Modal Styles — class applied via ModalBase contentClass */
@@ -1338,24 +1278,16 @@
         align-items: center;
         gap: 0.75rem;
         padding: 0.75rem;
-        background: var(--lf-cmp-files-page-assign-all-section-bg);
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
         margin-bottom: 1rem;
     }
 
-    :global(.dark) .assign-all-section {
-        background: var(--lf-cmp-files-page-assign-all-section-bg-dark);
-    }
-
     .assign-all-label {
         font-weight: 500;
-        color: var(--lf-cmp-files-page-text);
+        color: var(--lf-text-secondary);
         white-space: nowrap;
         flex: 1;
-    }
-
-    :global(.dark) .assign-all-label {
-        color: var(--lf-cmp-files-page-text-dark);
     }
 
     /* BrokerSelect in assign-all-section should match file-row width */
@@ -1372,12 +1304,8 @@
 
     .files-count {
         font-size: 0.875rem;
-        color: var(--lf-cmp-files-page-muted-text);
+        color: var(--lf-text-muted);
         margin: 0 0 0.5rem 0;
-    }
-
-    :global(.dark) .files-count {
-        color: var(--lf-cmp-files-page-muted-text-dark);
     }
 
     .file-row {
@@ -1386,15 +1314,10 @@
         justify-content: space-between;
         gap: 1rem;
         padding: 0.625rem 0.75rem;
-        background: var(--lf-cmp-files-page-file-row-bg);
-        border: 1px solid var(--lf-cmp-files-page-divider-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         position: relative;
-    }
-
-    :global(.dark) .file-row {
-        background: var(--lf-cmp-files-page-file-row-bg-dark);
-        border-color: var(--lf-cmp-files-page-divider-border-dark);
     }
 
     .file-info {
@@ -1407,11 +1330,7 @@
 
     .file-info :global(svg) {
         flex-shrink: 0;
-        color: var(--lf-cmp-files-page-muted-text);
-    }
-
-    :global(.dark) .file-info :global(svg) {
-        color: var(--lf-cmp-files-page-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .brim-edit-btn {
@@ -1421,25 +1340,20 @@
         padding: 0.25rem;
         border: none;
         background: transparent;
-        color: var(--lf-cmp-files-page-faint-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         border-radius: 0.25rem;
         flex-shrink: 0;
     }
 
     .brim-edit-btn:hover {
-        color: var(--lf-cmp-files-page-brim-edit-btn-hover-text);
-        background: var(--lf-cmp-files-page-brim-edit-btn-hover-bg);
-    }
-
-    :global(.dark) .brim-edit-btn:hover {
-        color: var(--lf-cmp-files-page-brim-edit-btn-hover-text-dark);
-        background: var(--lf-cmp-files-page-brim-edit-btn-hover-bg-dark);
+        color: var(--lf-link);
+        background: var(--lf-selected);
     }
 
     .file-row .file-name {
         font-size: 0.875rem;
-        color: var(--lf-cmp-files-page-text);
+        color: var(--lf-text-secondary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1447,13 +1361,9 @@
         min-width: 0;
     }
 
-    :global(.dark) .file-row .file-name {
-        color: var(--lf-cmp-files-page-text-dark);
-    }
-
     .file-size {
         font-size: 0.75rem;
-        color: var(--lf-cmp-files-page-faint-text);
+        color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 

@@ -11,7 +11,6 @@
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
-    import '$lib/theme/components/files.css';
     import {isDarkTheme} from '$lib/theme/themeMode';
 
     interface Props {
@@ -837,7 +836,7 @@
         align-items: flex-start;
         justify-content: space-between;
         gap: 1rem;
-        border-bottom: 1px solid var(--lf-cmp-file-preview-header-border);
+        border-bottom: 1px solid var(--lf-border-subtle);
         padding: 1rem 1.25rem;
         flex-shrink: 0;
     }
@@ -866,7 +865,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.4rem;
-        color: var(--lf-cmp-file-preview-meta-text);
+        color: var(--lf-text-muted);
         font-size: 0.85rem;
     }
 
@@ -881,7 +880,7 @@
     .preview-toggle {
         display: inline-flex;
         align-items: center;
-        border: 1px solid var(--lf-cmp-file-preview-toggle-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
     }
@@ -893,8 +892,8 @@
         align-items: center;
         gap: 0.35rem;
         border: none;
-        background: var(--lf-cmp-file-preview-surface-bg);
-        color: var(--lf-cmp-file-preview-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-primary);
         cursor: pointer;
         text-decoration: none;
         padding: 0.55rem 0.8rem;
@@ -902,13 +901,13 @@
     }
 
     .preview-toggle button.active {
-        background: var(--lf-cmp-file-preview-accent-bg);
-        color: var(--lf-cmp-file-preview-on-accent-text);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     .icon-btn,
     .close-btn {
-        border: 1px solid var(--lf-cmp-file-preview-control-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
     }
 
@@ -933,17 +932,17 @@
         justify-content: center;
         gap: 0.75rem;
         padding: 1.25rem;
-        color: var(--lf-cmp-file-preview-muted-text);
+        color: var(--lf-text-muted);
     }
 
     .preview-inline-error {
         justify-content: flex-start;
         padding-inline: 0;
-        color: var(--lf-cmp-file-preview-inline-error-text);
+        color: var(--lf-warning);
     }
 
     .error-state {
-        color: var(--lf-cmp-file-preview-error-state-text);
+        color: var(--lf-danger);
     }
 
     .preview-spinner {
@@ -968,7 +967,7 @@
     .image-stage {
         overflow: auto;
         border-radius: 0.75rem;
-        background: var(--lf-cmp-file-preview-image-stage-bg);
+        background: var(--lf-surface-panel);
         padding: 1rem;
         overscroll-behavior: contain;
     }
@@ -1007,15 +1006,15 @@
     .grid-host,
     .table-fallback {
         width: 100%;
-        border: 1px solid var(--lf-cmp-file-preview-stage-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.75rem;
-        background: var(--lf-cmp-file-preview-surface-bg);
+        background: var(--lf-surface-field);
         overscroll-behavior: contain;
     }
 
     .pdf-stage,
     .pdf-fallback {
-        border-color: var(--lf-cmp-file-preview-strong-border);
+        border-color: var(--lf-border-input);
     }
 
     .pdf-stage,
@@ -1038,7 +1037,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        color: var(--lf-cmp-file-preview-muted-text);
+        color: var(--lf-text-muted);
         font-size: 0.85rem;
     }
 
@@ -1049,11 +1048,12 @@
     }
 
     .table-toolbar select {
-        border: 1px solid var(--lf-cmp-file-preview-control-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.45rem;
-        background: var(--lf-cmp-file-preview-surface-bg);
+        background: var(--lf-surface-field);
         padding: 0.4rem 0.6rem;
         color: inherit;
+        color: var(--lf-text-primary);
     }
 
     .table-summary {
@@ -1079,16 +1079,16 @@
     }
 
     .table-fallback td {
-        border: 1px solid var(--lf-cmp-file-preview-table-border);
+        border: 1px solid var(--lf-border-subtle);
         padding: 0.45rem 0.6rem;
         white-space: nowrap;
     }
 
     .text-stage {
-        border: 1px solid var(--lf-cmp-file-preview-table-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.75rem;
-        background: var(--lf-cmp-file-preview-text-stage-bg);
-        color: var(--lf-cmp-file-preview-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         overflow: auto;
         padding: 0.75rem 0 1rem;
         overscroll-behavior: contain;
@@ -1111,11 +1111,11 @@
     }
 
     .text-line:hover {
-        background: var(--lf-cmp-file-preview-subtle-bg);
+        background: var(--lf-surface-hover);
     }
 
     .line-number {
-        color: var(--lf-cmp-file-preview-muted-text);
+        color: var(--lf-text-muted);
         text-align: right;
         user-select: none;
     }
@@ -1130,12 +1130,12 @@
 
     .markdown-stage {
         overflow: auto;
-        border: 1px solid var(--lf-cmp-file-preview-stage-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.75rem;
-        background: var(--lf-cmp-file-preview-markdown-stage-bg);
+        background: var(--lf-surface-field);
         padding: 1.25rem;
         overscroll-behavior: contain;
-        color: var(--lf-cmp-file-preview-text);
+        color: var(--lf-text-primary);
         line-height: 1.7;
     }
 
@@ -1184,11 +1184,11 @@
 
     .markdown-stage :global(blockquote) {
         margin: 1rem 0;
-        border-left: 4px solid var(--lf-cmp-file-preview-strong-border);
+        border-left: 4px solid var(--lf-border-input);
         border-radius: 0.5rem;
-        background: var(--lf-cmp-file-preview-subtle-bg);
+        background: var(--lf-surface-panel);
         padding: 0.3rem 1rem;
-        color: var(--lf-cmp-file-preview-markdown-stage-blockquote-text);
+        color: var(--lf-text-secondary);
     }
 
     .markdown-stage :global(table) {
@@ -1199,14 +1199,14 @@
 
     .markdown-stage :global(th),
     .markdown-stage :global(td) {
-        border: 1px solid var(--lf-cmp-file-preview-table-border);
+        border: 1px solid var(--lf-border-subtle);
         padding: 0.55rem 0.7rem;
         text-align: left;
         vertical-align: top;
     }
 
     .markdown-stage :global(th) {
-        background: var(--lf-cmp-file-preview-subtle-bg);
+        background: var(--lf-surface-panel);
         font-weight: 600;
     }
 
@@ -1214,13 +1214,13 @@
         margin: 1rem 0;
         overflow: auto;
         border-radius: 0.75rem;
-        background: var(--lf-cmp-file-preview-markdown-stage-pre-bg);
-        color: var(--lf-cmp-file-preview-markdown-stage-pre-text);
+        background: var(--lf-terminal-bg);
+        color: var(--lf-terminal-text);
         padding: 1rem;
     }
 
     .markdown-stage :global(code) {
-        background: var(--lf-cmp-file-preview-markdown-stage-code-bg);
+        background: var(--lf-surface-panel);
         border-radius: 0.35rem;
         padding: 0.1rem 0.3rem;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1234,7 +1234,7 @@
 
     .markdown-stage :global(hr) {
         border: none;
-        border-top: 1px solid var(--lf-cmp-file-preview-stage-border);
+        border-top: 1px solid var(--lf-border-subtle);
         margin: 1.25rem 0;
     }
 
@@ -1244,81 +1244,6 @@
 
     .markdown-stage :global(.katex-display) {
         margin: 0.75rem 0;
-    }
-
-    :global(.dark) .preview-header {
-        border-bottom-color: var(--lf-cmp-file-preview-header-border-dark);
-    }
-
-    :global(.dark) .preview-meta,
-    :global(.dark) .table-toolbar,
-    :global(.dark) .preview-state {
-        color: var(--lf-cmp-file-preview-meta-text-dark);
-    }
-
-    :global(.dark) .preview-toggle,
-    :global(.dark) .icon-btn,
-    :global(.dark) .close-btn,
-    :global(.dark) .table-toolbar select,
-    :global(.dark) .grid-host,
-    :global(.dark) .table-fallback,
-    :global(.dark) .markdown-stage {
-        background: var(--lf-cmp-file-preview-surface-bg-dark);
-        border-color: var(--lf-cmp-file-preview-toggle-border-dark);
-        color: var(--lf-cmp-file-preview-text-dark);
-    }
-
-    :global(.dark) .pdf-stage,
-    :global(.dark) .pdf-fallback {
-        background: var(--lf-cmp-file-preview-surface-bg-dark);
-        border-color: var(--lf-cmp-file-preview-strong-border-dark);
-        color: var(--lf-cmp-file-preview-pdf-stage-text-dark);
-    }
-
-    :global(.dark) .preview-toggle button {
-        background: var(--lf-cmp-file-preview-surface-bg-dark);
-        color: var(--lf-cmp-file-preview-text-dark);
-    }
-
-    :global(.dark) .preview-toggle button.active {
-        background: var(--lf-cmp-file-preview-accent-bg-dark);
-    }
-
-    :global(.dark) .image-stage {
-        background: var(--lf-cmp-file-preview-image-stage-bg-dark);
-    }
-
-    :global(.dark) .text-stage {
-        background: var(--lf-cmp-file-preview-text-stage-bg-dark);
-        border-color: var(--lf-cmp-file-preview-table-border-dark);
-        color: var(--lf-cmp-file-preview-text-dark);
-    }
-
-    :global(.dark) .text-line:hover {
-        background: var(--lf-cmp-file-preview-subtle-bg-dark);
-    }
-
-    :global(.dark) .table-fallback td {
-        border-color: var(--lf-cmp-file-preview-table-border-dark);
-    }
-
-    :global(.dark) .markdown-stage :global(blockquote) {
-        background: var(--lf-cmp-file-preview-subtle-bg-dark);
-        border-left-color: var(--lf-cmp-file-preview-strong-border-dark);
-        color: var(--lf-cmp-file-preview-markdown-stage-blockquote-text-dark);
-    }
-
-    :global(.dark) .markdown-stage :global(th),
-    :global(.dark) .markdown-stage :global(td) {
-        border-color: var(--lf-cmp-file-preview-table-border-dark);
-    }
-
-    :global(.dark) .markdown-stage :global(th) {
-        background: var(--lf-cmp-file-preview-subtle-bg-dark);
-    }
-
-    :global(.dark) .markdown-stage :global(code) {
-        background: var(--lf-cmp-file-preview-markdown-stage-code-bg-dark);
     }
 
     :global(.file-preview-modal) {
