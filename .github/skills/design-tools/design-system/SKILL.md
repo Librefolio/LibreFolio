@@ -108,13 +108,16 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   write `text-lf-primary` themselves, and `placeholder:text-lf-placeholder` when they have a placeholder, even where
   the parent already gives the colour. `app.css` colours the text and the placeholder of native fields in dark only
   while they carry no `-lf-` class: a field on roles falls back to the Tailwind preflight, the inherited colour and a
-  placeholder at 50 % of it. Checkboxes, radios, ranges, file and colour pickers and the button kinds are exempt.
+  placeholder at 50 % of it. Checkboxes, radios, ranges, file and colour pickers and the button kinds are exempt. The
+  gate checks it (G6), but it cannot tell a ternary that gives a text role in each branch from one that gives it in
+  one branch only: `{err ? 'text-lf-danger' : 'text-lf-primary'}`, never `{err ? 'text-lf-danger' : ''}`.
 - **Class names stay whole literals.** Never `'bg-lf-' + x`: Tailwind would not generate it, and the gate could not
   see it.
 - **The gate:** `src/themeRoles.gate.test.ts`. The ratchet (R1–R5: a new file starts with no legacy class and no colour
   literal, an existing one only loses them) and the grammar (G1 no `dark:` on a role, G2 no unknown role, G3 no mixed
-  element, G4 no arbitrary colour that is not a role). Run it alone with `node frontend/scripts/theme/theme-roles.mjs
-  --check`, together with the Vitest file of the gate: the file checks more than the command line.
+  element, G4 no arbitrary colour that is not a role, G5 one property, one ternary (rule 4), G6 a native field names its
+  text and placeholder roles). Run it alone with `node frontend/scripts/theme/theme-roles.mjs --check`, together with
+  the Vitest file of the gate: the file checks more than the command line.
 
 ### 2. No `dark:` on a role
 
@@ -142,6 +145,11 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   in the idle branch: `{open ? 'border-lf-focus' : 'border-lf-input hover:border-lf-input-hover'}`.
 - Variants (`hover:`, `focus:`, `aria-*:`) come after the base utilities and add specificity. A state that must beat a
   colour the caller passes is a variant: `aria-invalid:border-lf-danger`.
+- **The gate checks it (G5):** two role utilities on one colour utility with the same variants, in one element, one of
+  them always on — the static classes, a `{…}` that does not branch, or an UPPER_CASE string constant, the file's own or
+  imported. A `class:` directive and a branching `{…}` or `${…}` are the conditions. Two conditions are never
+  compared: they may exclude each other. What it cannot see: a class prop, a variable that is no UPPER_CASE constant,
+  an object of a table such as `toneClasses.ts`.
 - Details: devWiki
   [`problems/tailwind4-same-property-utilities-sorted-by-name`](../../../../LibreFolio_devWiki/wiki/problems/tailwind4-same-property-utilities-sorted-by-name.md).
 
@@ -167,7 +175,9 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 | `on-danger-solid` | `danger-solid`, `danger-hover` | 4.5 |
 | `on-checked` | `checked` | 4.5 |
 | `text-on-inverse` and the four `-on-inverse` | `inverse` | 4.5 |
-| `on-overlay` | the backdrop `surface-overlay`, composited over each of `app`, `page`, `header`, `card`, `panel`, `field` | 4.5 |
+| `on-overlay` | the backdrop `surface-overlay`, composited over each of `app`, `page`, `header`, `card`, `panel`, `field`; the backdrop is the same in both themes | 4.5 |
+| `link` | the tint `selected`, composited over `app`, `page`, `header`, `card`, `field`: **never over a `panel`** | 4.5 |
+| `text-primary`, `text-secondary` | the tint `selected`, composited over `app`, `page`, `header`, `card`, `panel`, `field` | 4.5 |
 | `mark-text` | `mark-bg` | 4.5 |
 | `terminal-text`, `terminal-prompt`, `terminal-comment` | `terminal-bg` | 4.5 |
 | `ai` | `ai-soft`, `card`, `panel` | 4.5 |
@@ -183,8 +193,17 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 | `bar-focus` | the sidebar, its hover, the active item, the logout button | 3 |
 | `bar-success`, `bar-danger` | the sidebar and its hover | 3 |
 
-- **A pair not in the list is not promised:** a state on another state's tint, any text on `selected` or on
-  `neutral`, a text on a translucent colour. If your design needs one, ask for the pair to be measured and added.
+- **A pair not in the list is not promised:** a state on another state's tint, any text on `neutral`, a text on a
+  translucent colour. If your design needs one, ask for the pair to be measured and added.
+- **On a selected row, option or chip** (`bg-lf-selected`), the text is `text-lf-primary`, `text-lf-secondary` or
+  `text-lf-link`, and `link` never on a `selected` that lies on a `panel` (4.09:1 in dark). **The muted text, the
+  statuses and the signs fail there** (3.84–4.48:1 on most surfaces; a lighter tint would not cure it): a muted caption
+  of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). The selects of `ui/select` do
+  it for every option, a caller's snippet included, with one rule in their `<style>`:
+  `[data-highlighted='true'] :global(.text-lf-muted) { color: var(--lf-text-secondary) }` (`TreeSelect`: its active and
+  hovered options). A new list that tints its rows does the same, and publishes the state it keys on. A selected chip
+  under the pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to
+  3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
   as the backdrop is).
 - **What no pair can hold:** the switch turned off is recognised by the edge of its knob, and a translucent colour that
@@ -225,8 +244,9 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   A card on a page: `shadow-lf-shadow-card`.
 - **A modal uses `src/lib/components/ui/modals/ModalBase.svelte`**: the backdrop `bg-lf-overlay`, the card, the 1 px
   raised border, the raised shadow. It frames every modal the same way; do not draw a second frame inside it.
-- **A modal that needs another border colour** (the red one of `AssetCurrencyChangeModal`) needs a variant of
-  `ModalBase`, not a colour in `contentClass`: a role sorting before `border-lf-raised` would lose (rule 4).
+- **A modal about a destructive or irreversible change** takes `tone="danger"` on `ModalBase`: a 2 px
+  `border-lf-danger-line` frame, in one ternary with the raised border, published as `data-tone`. Never a border colour
+  in `contentClass`: a role sorting before `border-lf-raised` would lose (rule 4).
 
 ### 10. State for tests, not colours
 
@@ -391,6 +411,13 @@ Until she answers, follow what is written here and do not decide them in a compo
      white field).
 
    Until then: use them as they are.
+6. **The selected tint.** `--lf-selected`, a selected or highlighted row, option or chip, is the focus green at 12 %
+   over its surface (T, from her «Focus, link attivi»). On it the muted text, the statuses and the signs fall to
+   3.84–4.48:1, and a lighter tint would not cure it (6 %: 4.17:1). Under review: the tint, and how a selected row keeps
+   its muted captions.
+
+   Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
+   never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
 
 **Values waiting for her confirmation** (backlog TC-8):
 - the seven minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in

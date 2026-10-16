@@ -26,7 +26,7 @@ directory holds everything a run writes: the SQLite database, uploads, broker re
 
 - `configure_test_runtime()` (`scripts/cli_base.py`) validates and exports one lane's port and data directory and
   refuses a test port equal to the production port.
-- `validate_test_data_dir()` (`backend/app/config.py`) refuses the production data directory, including relative-path
+- `validate_test_data_dir()` (`backend/app/config/__init__.py`) refuses the production data directory, including relative-path
   and symlink aliases, and a directory carrying the persistent production marker.
 - **Readiness carries an identity**: the runner accepts a server only if its HTTP answer carries the lane's nonce, so a
   `200` from a server of another lane on a reused port is not mistaken for its own.

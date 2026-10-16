@@ -90,7 +90,7 @@ function nickname(): SettingField {
 }
 
 function justetf(configured: boolean): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', configured, fields: [nickname()]};
+    return {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured, fields: [nickname()]};
 }
 
 // --- Helpers ---------------------------------------------------------------------------------------------------------

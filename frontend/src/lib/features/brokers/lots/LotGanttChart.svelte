@@ -1435,15 +1435,15 @@
     });
 </script>
 
-<div bind:this={wrapperEl} class="flex w-full flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-testid="lot-gantt-chart">
+<div bind:this={wrapperEl} class="flex w-full flex-col gap-3 rounded-xl border border-lf-subtle bg-lf-card text-lf-primary p-4 shadow-sm shadow-lf-shadow-card" data-testid="lot-gantt-chart">
     <div class="flex items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+        <h3 class="text-sm font-semibold text-lf-secondary">
             {$t('brokers.lots.ganttTitle') || 'Lot life & custody'}
         </h3>
 
-        <div class="flex w-fit overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-gantt-state-filter">
+        <div class="flex w-fit overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-gantt-state-filter">
             <button
-                class="px-3 py-1 transition-colors {openSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                class="px-3 py-1 transition-colors {openSelected ? '' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
                 onclick={() => onToggleOpen?.()}
                 data-testid="lot-gantt-filter-open"
@@ -1453,7 +1453,7 @@
                 {$t('brokers.lots.openOnly') || 'Open'}
             </button>
             <button
-                class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {closedSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                class="border-l border-lf-subtle px-3 py-1 transition-colors {closedSelected ? '' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
                 onclick={() => onToggleClosed?.()}
                 data-testid="lot-gantt-filter-closed"
@@ -1465,7 +1465,7 @@
         </div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700">
+    <div class="overflow-hidden rounded-lg border border-lf-subtle">
         <div bind:this={lanesScrollEl} class="max-h-[34rem] overflow-auto" data-testid="lot-gantt-scroll" onscroll={handleLanesScroll}>
             {#if chartHasData}
                 <div class="relative min-w-[720px]">
@@ -1498,21 +1498,21 @@
                     {/each}
                 </div>
             {:else}
-                <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-gray-400 dark:text-gray-500">
+                <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-lf-muted">
                     {$t('brokers.lots.noGanttData') || 'No lot custody history in selected range'}
                 </div>
             {/if}
         </div>
 
         {#if chartHasData}
-            <div class="overflow-hidden border-t border-gray-100 bg-white dark:border-slate-700 dark:bg-slate-800" data-testid="lot-gantt-sticky-axis">
+            <div class="overflow-hidden border-t border-lf-subtle bg-lf-card" data-testid="lot-gantt-sticky-axis">
                 <div bind:this={axisContainer} class="will-change-transform" style={`height:${STICKY_AXIS_HEIGHT}px; width:${axisContentWidthPx}px; min-width:${CHART_MIN_WIDTH}px; transform:translateX(-${axisScrollLeft}px);`}></div>
             </div>
         {/if}
     </div>
 
     {#if visibleBrokers.length > 0}
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-300" data-testid="lot-gantt-legend">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-lf-secondary" data-testid="lot-gantt-legend">
             {#each visibleBrokers as broker (broker.id)}
                 <span data-testid={`lot-gantt-legend-broker-${broker.id}`}>
                     <BrokerBadge {broker} {brokers} size={14} showName={true} nameClass="text-xs" />

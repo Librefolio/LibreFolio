@@ -11,6 +11,11 @@
  *   - the root `plugin-settings-form-{plugin_code}` publishes `data-configured`, and `data-busy` (with `aria-busy`)
  *     true from the click on Save until the plugin's state has been read again; `plugin-settings-status` says whether
  *     the plugin is configured (`data-configured`);
+ *   - the heading (`h4`), which names the form (`aria-labelledby`), starts with the plugin's icon:
+ *     `plugin-settings-plugin-icon`, an image of `icon_url`, decorative (`alt=""`) and fetched without a referrer;
+ *     without an icon, or once that address has failed to load, the neutral `plugin-settings-plugin-icon-fallback`
+ *     (`aria-hidden`), until the plugin publishes another address. Either way the form is named by the plugin's name
+ *     alone;
  *   - one container `plugin-setting-{key}` per declared field, publishing `data-type`, `data-scope`, `data-source`,
  *     `data-editable`, `data-locked`, `data-problem` and `data-edit` (the kind of the field's unsaved edit, else
  *     empty), drawing one control by type: `plugin-setting-input` (a text, a number), `plugin-setting-select` (its
@@ -53,7 +58,8 @@
  *
  * The rules themselves — what an edit is, what is wrong with one, the items of a write — are pinned without the DOM by
  * `pluginSettingsForm.test.ts`; here, that the form draws them and wires them. Every wait is on a state: `data-busy`,
- * `data-edit`, an element appearing, a deferred the test resolves. No clock.
+ * `data-edit`, an element appearing, a deferred the test resolves. No clock. No image is fetched: jsdom loads none, so
+ * an icon fails only when a test dispatches its `error`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {inspect} from 'node:util';
@@ -124,8 +130,12 @@ function field(over: Partial<SettingField> & Pick<SettingField, 'key'>): Setting
 }
 
 function entry(fields: SettingField[], over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', configured: false, fields, ...over};
+    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: false, fields, ...over};
 }
+
+/** Icons the plugin may publish: a remote URL (a reserved domain, which never resolves) and a path of this instance. */
+const ICON = 'https://icons.example/mockprov.png';
+const OTHER_ICON = '/api/v1/uploads/plugin/asset/mockprov.svg';
 
 /** A user choice at its default; the label of `us` has a key the translator does not know. */
 const REGION = field({
@@ -178,9 +188,25 @@ const noteOf = (key: string, kind: string) =>
         .find((note) => note.getAttribute('data-note') === kind);
 const saveButton = () => screen.getByTestId('plugin-settings-save');
 const discardButton = () => screen.getByTestId('plugin-settings-discard');
+/** The form's title: the level-4 heading that names it. */
+const heading = () => within(form()).getByRole('heading', {level: 4});
+const pluginIcon = () => within(form()).queryByTestId('plugin-settings-plugin-icon');
+const fallbackIcon = () => within(form()).queryByTestId('plugin-settings-plugin-icon-fallback');
 
 function text(element: Element | undefined): string {
     return (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** The text of `container` on either side of `element`, blanks collapsed: what is read before it, and after it. */
+function textAround(container: Element, element: Element): {before: string; after: string} {
+    const before = document.createRange();
+    before.setStart(container, 0);
+    before.setEndBefore(element);
+    const after = document.createRange();
+    after.setStartAfter(element);
+    after.setEnd(container, container.childNodes.length);
+    const read = (range: Range) => range.toString().replace(/\s+/g, ' ').trim();
+    return {before: read(before), after: read(after)};
 }
 
 async function typeIn(key: string, value: string): Promise<void> {
@@ -902,5 +928,75 @@ describe('PluginSettingsForm — a field named like a property every object inhe
         expect(fake.save.mock.calls, 'exactly what was typed, nothing in front of it').toStrictEqual([[[{family: 'asset', plugin_code: 'mockprov', field_key: 'constructor', scope: 'user', secret_value: SECRET}]]]);
         expect(inSetting('constructor', 'plugin-setting-secret-input'), 'sent once, then forgotten: empty again').toHaveValue('');
         expect(setting('constructor')).toHaveAttribute('data-edit', '');
+    });
+});
+
+// =====================================================================================================================
+describe('PluginSettingsForm — the plugin’s icon', () => {
+    it('PSF-26: a plugin with an icon shows it first in its heading: one image of that address, decorative, fetched without a referrer — and the form is still named by the plugin’s name alone', () => {
+        mount(entry([NICKNAME], {icon_url: ICON}));
+
+        const icons = within(form()).getAllByTestId('plugin-settings-plugin-icon');
+        expect(icons, 'one icon').toHaveLength(1);
+        const [icon] = icons;
+        expect(icon).toBeInstanceOf(HTMLImageElement);
+        expect(heading(), 'in the heading').toContainElement(icon);
+        expect(icon).toHaveAttribute('src', ICON);
+        expect(icon, 'the name beside it says what it shows: an alt text would say it twice').toHaveAttribute('alt', '');
+        expect(icon, 'the icon’s host is not told which page asked for it').toHaveAttribute('referrerpolicy', 'no-referrer');
+        expect(textAround(heading(), icon), 'the icon first, then the name').toEqual({before: '', after: 'Mock provider'});
+        expect(fallbackIcon(), 'no neutral icon beside it').toBeNull();
+        expect(form(), 'named by its heading: the plugin’s name, nothing of the icon').toHaveAccessibleName('Mock provider');
+    });
+
+    it('PSF-27: a plugin without an icon shows the neutral one in its place, hidden from assistive technology, and no image', () => {
+        mount(entry([NICKNAME], {icon_url: null}));
+
+        const fallback = within(form()).getByTestId('plugin-settings-plugin-icon-fallback');
+        expect(fallback).toHaveAttribute('aria-hidden', 'true');
+        expect(heading(), 'in the heading').toContainElement(fallback);
+        expect(textAround(heading(), fallback), 'the neutral icon first, then the name').toEqual({before: '', after: 'Mock provider'});
+        expect(pluginIcon()).toBeNull();
+        expect(form().querySelector('img'), 'no image at all').toBeNull();
+        expect(form()).toHaveAccessibleName('Mock provider');
+    });
+
+    it('PSF-28: an icon that fails to load gives way to the neutral one, still before the name', async () => {
+        mount(entry([NICKNAME], {icon_url: ICON}));
+        const icon = within(form()).getByTestId('plugin-settings-plugin-icon');
+        expect(fallbackIcon(), 'premise: the image shows until it fails').toBeNull();
+
+        await fireEvent.error(icon);
+
+        expect(icon, 'the broken image is gone, not merely hidden').not.toBeInTheDocument();
+        expect(pluginIcon()).toBeNull();
+        const fallback = within(form()).getByTestId('plugin-settings-plugin-icon-fallback');
+        expect(fallback).toHaveAttribute('aria-hidden', 'true');
+        expect(textAround(heading(), fallback), 'the neutral icon first, then the name').toEqual({before: '', after: 'Mock provider'});
+        expect(form()).toHaveAccessibleName('Mock provider');
+    });
+
+    it('PSF-29: an icon that failed is not tried again while the plugin publishes that address: its fresh state keeps the neutral one', async () => {
+        const {rerender} = mount(entry([NICKNAME], {icon_url: ICON}));
+        await fireEvent.error(within(form()).getByTestId('plugin-settings-plugin-icon'));
+        expect(fallbackIcon(), 'premise: the icon failed').toBeInTheDocument();
+
+        // What the parent hands over after a save: a new entry, the same address.
+        await rerender({entry: entry([NICKNAME], {icon_url: ICON, configured: true})});
+
+        expect(form(), 'premise: the fresh state is the one drawn').toHaveAttribute('data-configured', 'true');
+        expect(pluginIcon(), 'the address that failed is not asked again').toBeNull();
+        expect(fallbackIcon()).toBeInTheDocument();
+    });
+
+    it('PSF-30: after a failure, the next address the plugin publishes brings the image back, with that address', async () => {
+        const {rerender} = mount(entry([NICKNAME], {icon_url: ICON}));
+        await fireEvent.error(within(form()).getByTestId('plugin-settings-plugin-icon'));
+        expect(fallbackIcon(), 'premise: the icon failed').toBeInTheDocument();
+
+        await rerender({entry: entry([NICKNAME], {icon_url: OTHER_ICON})});
+
+        expect(within(form()).getByTestId('plugin-settings-plugin-icon')).toHaveAttribute('src', OTHER_ICON);
+        expect(fallbackIcon(), 'the neutral icon gives the place back').toBeNull();
     });
 });

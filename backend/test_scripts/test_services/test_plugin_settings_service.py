@@ -11,7 +11,13 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
    shown to an administrator only. A user's values reach nobody else's catalogue, an administrator's included. Each
    plugin says whether it is ``configured``: every required field has a usable value — a secret set and readable by
    the current key — and no environment variable of its fields is invalid, optional fields included; a row the field
-   refuses now while a default stands in does not unconfigure it.
+   refuses now while a default stands in does not unconfigure it. Each plugin shows its name and its icon
+   (``icon_url``), read from one instance as its family's provider list reads them (``_plugin_identity``): ``get_icon``
+   for an asset plugin (``GET /assets/provider``), ``icon`` for an FX one (``GET /fx/providers``), never the other
+   family's, stripped. A plugin that cannot be instantiated shows its code and no icon; a name that raises is the code,
+   the icon read all the same; an icon that raises, or is not a non-blank string, is no icon, the name read all the
+   same; a family without a row in ``FAMILY_ICON_ATTRIBUTES`` has no icon, and every family of ``FAMILY_REGISTRIES``
+   has its row.
 2. **Writes are all or nothing**: every item is checked first; one refused item refuses the write, the refusal lists
    every item with its outcome and nothing is written. A system field needs an administrator (``FORBIDDEN_SCOPE``); a
    field an environment variable sets is ``LOCKED_BY_ENV`` (the derived name, its ``_FILE``, the alias; never a user
@@ -34,7 +40,9 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
 Pure: the database is a private SQLite file under ``tmp_path`` built by ``create_all``, with its own users; the instance
 key is a test key set with ``monkeypatch`` and the data directory points into ``tmp_path``; every variable is set with
 ``monkeypatch``, the ambient ones of the plugins removed first. The plugin with required fields is a lab plugin of this
-module, put in the service's place of the asset registry with ``monkeypatch`` for the tests that need it.
+module, put in the service's place of the asset registry with ``monkeypatch`` for the tests that need it. The icons are
+read from stand-in classes of this module, handed to ``_plugin_identity`` directly; no FX plugin declares settings and
+an icon yet, so ``MOCKFX`` is given one with ``monkeypatch`` where the FX family needs it.
 """
 
 from __future__ import annotations
@@ -394,6 +402,173 @@ async def test_an_invalid_variable_leaves_the_plugin_not_configured_even_for_an_
     assert (with_a_valid_value.configured, with_an_invalid_value.configured) == (True, False)
 
 
+# -----------------------------------------------------------------------------
+# The plugin's name and icon (_plugin_identity): one instance, read as its family's provider list reads it
+# -----------------------------------------------------------------------------
+
+#: The icons of the shipped plugins that declare settings, today: what their ``get_icon`` gives, and ``GET /assets/provider`` publishes.
+SHIPPED_ICONS = {
+    "borsa_italiana": "https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico",
+    "justetf": "https://www.justetf.com/android-chrome-144x144.png?v2",
+}
+STAND_IN_CODE = "stand_in"
+STAND_IN_NAME = "Stand-in plugin (testing)"
+ASSET_ICON = "https://icons.example.test/stand-in-asset.png"
+FX_ICON = "https://icons.example.test/stand-in-fx.svg"
+#: Where each family's provider list reads a plugin's icon: ``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``.
+PROVIDER_LIST_ICONS = [pytest.param("asset", "get_icon", id="asset-get_icon"), pytest.param("fx", "icon", id="fx-icon")]
+
+
+def _stand_in(**attributes: Any) -> type:
+    """A plugin class of these tests, never registered: each keyword is a property that returns its value, or raises it
+    when the value is an exception."""
+
+    def readable(value: Any) -> property:
+        def read(_self: Any) -> Any:
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        return property(read)
+
+    return type("StandInPlugin", (), {key: readable(value) for key, value in attributes.items()})
+
+
+class _Unbuildable:
+    """A plugin class whose constructor raises. Its name and both icons are class attributes, readable without an
+    instance: none of them may show."""
+
+    provider_name = STAND_IN_NAME
+    name = STAND_IN_NAME
+    get_icon = ASSET_ICON
+    icon = FX_ICON
+
+    def __init__(self) -> None:
+        raise RuntimeError("cannot be instantiated (testing)")
+
+
+@pytest.mark.parametrize(
+    ("family", "plugin_class", "icon"),
+    [
+        pytest.param("asset", _stand_in(provider_name=STAND_IN_NAME, get_icon=f"  {ASSET_ICON}\n"), ASSET_ICON, id="asset-get_icon-stripped"),
+        pytest.param("fx", _stand_in(name=STAND_IN_NAME, icon=f"\t{FX_ICON} "), FX_ICON, id="fx-icon-stripped"),
+        pytest.param("asset", _stand_in(provider_name=STAND_IN_NAME, get_icon=ASSET_ICON, icon=FX_ICON), ASSET_ICON, id="asset-with-both-reads-get_icon"),
+        pytest.param("fx", _stand_in(name=STAND_IN_NAME, get_icon=ASSET_ICON, icon=FX_ICON), FX_ICON, id="fx-with-both-reads-icon"),
+        pytest.param("asset", _stand_in(provider_name=STAND_IN_NAME, icon=FX_ICON), None, id="asset-with-only-the-fx-attribute"),
+        pytest.param("fx", _stand_in(name=STAND_IN_NAME, get_icon=ASSET_ICON), None, id="fx-with-only-the-asset-attribute"),
+        pytest.param("asset", _stand_in(provider_name=STAND_IN_NAME), None, id="asset-without-an-icon-attribute"),
+        pytest.param("fx", _stand_in(name=STAND_IN_NAME), None, id="fx-without-an-icon-attribute"),
+    ],
+)
+def test_the_icon_is_the_attribute_its_familys_provider_list_publishes(family: str, plugin_class: type, icon: str | None):
+    """1: ``get_icon`` for an asset plugin, ``icon`` for an FX one, stripped; never the other family's; without it, no icon."""
+    assert service._plugin_identity(family, plugin_class, STAND_IN_CODE) == (STAND_IN_NAME, icon)
+
+
+@pytest.mark.parametrize("error", [RuntimeError("the icon cannot be built (testing)"), AttributeError("the icon needs an attribute it does not find (testing)")], ids=["RuntimeError", "AttributeError"])
+@pytest.mark.parametrize(("family", "attribute"), PROVIDER_LIST_ICONS)
+def test_an_icon_that_raises_is_no_icon_and_the_name_is_still_read(family: str, attribute: str, error: Exception):
+    """1: an icon is decoration: a property that raises gives no icon, never a failed catalogue, and the name still shows."""
+    plugin_class = _stand_in(provider_name=STAND_IN_NAME, **{attribute: error})
+    with pytest.raises(type(error)):
+        getattr(plugin_class(), attribute)  # barrier: reading the icon does raise, so the None below is the guard's
+
+    assert service._plugin_identity(family, plugin_class, STAND_IN_CODE) == (STAND_IN_NAME, None)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("", id="empty"),
+        pytest.param(" \t\n ", id="blank"),
+        pytest.param(None, id="None"),
+        pytest.param(123, id="an-int"),
+        pytest.param(b"https://icons.example.test/bytes.png", id="bytes"),
+        pytest.param(["https://icons.example.test/in-a-list.png"], id="a-list"),
+    ],
+)
+@pytest.mark.parametrize(("family", "attribute"), PROVIDER_LIST_ICONS)
+def test_an_icon_that_is_not_a_non_blank_string_is_no_icon(family: str, attribute: str, value: Any):
+    assert service._plugin_identity(family, _stand_in(provider_name=STAND_IN_NAME, **{attribute: value}), STAND_IN_CODE) == (STAND_IN_NAME, None)
+
+
+@pytest.mark.parametrize("family", ["asset", "fx"])
+def test_a_plugin_that_cannot_be_instantiated_shows_its_code_and_no_icon(family: str):
+    """1: its class attributes are never read in place of an instance's."""
+    with pytest.raises(RuntimeError):
+        _Unbuildable()  # barrier: the constructor does raise
+
+    assert service._plugin_identity(family, _Unbuildable, STAND_IN_CODE) == (STAND_IN_CODE, None)
+
+
+def test_a_family_without_an_icon_attribute_has_no_icon_and_still_its_name():
+    """1: the attribute is the family's row of ``FAMILY_ICON_ATTRIBUTES``; without a row, none — not another family's."""
+    family = "lab_family"
+    assert family not in service.FAMILY_ICON_ATTRIBUTES, "barrier: the family has no row"
+
+    assert service._plugin_identity(family, _stand_in(provider_name=STAND_IN_NAME, get_icon=ASSET_ICON, icon=FX_ICON), STAND_IN_CODE) == (STAND_IN_NAME, None)
+
+
+@pytest.mark.parametrize(
+    ("plugin_class", "name", "icon"),
+    [
+        pytest.param(_stand_in(provider_name="Provider name (testing)", name="Name (testing)"), "Provider name (testing)", None, id="provider_name-first"),
+        pytest.param(_stand_in(provider_name="", name="Name (testing)"), "Name (testing)", None, id="empty-provider_name-then-name"),
+        pytest.param(_stand_in(name="Name (testing)"), "Name (testing)", None, id="name-without-provider_name"),
+        pytest.param(_stand_in(), STAND_IN_CODE, None, id="neither-then-the-code"),
+        # A RuntimeError, not an AttributeError: getattr(..., None) would swallow the latter by itself, so only this one
+        # proves the guard. The icon shows that a name that cannot be read does not cost the icon too.
+        pytest.param(_stand_in(provider_name=RuntimeError("the name cannot be built (testing)"), get_icon=ASSET_ICON), STAND_IN_CODE, ASSET_ICON, id="provider_name-raises-then-the-code-icon-still-read"),
+    ],
+)
+def test_the_name_is_provider_name_else_name_else_the_code(plugin_class: type, name: str, icon: str | None):
+    """1: ``provider_name``, else ``name``, else the code; a name that raises is the code, and the icon is read all the same."""
+    assert service._plugin_identity("asset", plugin_class, STAND_IN_CODE) == (name, icon)
+
+
+def test_every_settings_family_has_its_icon_attribute():
+    """1, guard: a family added to ``FAMILY_REGISTRIES`` adds its row to ``FAMILY_ICON_ATTRIBUTES``, or its plugins show
+    no icon without a word; and every plugin its registry holds has the attribute the row names, so it is no typo."""
+    unmapped = sorted(set(service.FAMILY_REGISTRIES) - set(service.FAMILY_ICON_ATTRIBUTES))
+    assert not unmapped, f"add the icon attribute of these families to FAMILY_ICON_ATTRIBUTES: {unmapped}"
+    for family, registry in service.FAMILY_REGISTRIES.items():
+        attribute = service.FAMILY_ICON_ATTRIBUTES[family]
+        codes = registry.list_plugin_codes()
+        assert codes, f"barrier: the {family} registry holds no plugin"
+        without = [code for code in codes if not hasattr(registry.get_plugin(code), attribute)]
+        assert not without, f"{family} plugins without {attribute!r}, the attribute FAMILY_ICON_ATTRIBUTES names: {without}"
+
+
+def test_the_plugins_of_the_catalogue_carry_their_icons(monkeypatch: pytest.MonkeyPatch):
+    """1: ``_plugins``, no database: justetf and borsa_italiana with their own icons; mockprov, named, with none; MOCKFX,
+    named, with none, then with the ``icon`` it is given here — the FX family's icon reaches the catalogue too."""
+    print_section("1: the icons of the catalogue's plugins")
+    listed = {(plugin.family, plugin.code): plugin.icon_url for plugin in service._plugins(None, None)}
+    (mockprov,) = service._plugins("asset", "mockprov")
+    (mockfx,) = service._plugins("fx", "MOCKFX")
+    assert service.FAMILY_REGISTRIES["fx"].get_plugin("MOCKFX") is MockFXProvider, "barrier: the class given an icon below is the registered one"
+    monkeypatch.setattr(MockFXProvider, "icon", property(lambda _self: FX_ICON))
+    (mockfx_with_an_icon,) = service._plugins("fx", "MOCKFX")
+
+    assert {("asset", code) for code in SHIPPED_ICONS} <= set(listed), f"the full catalogue lists {sorted(listed)}"
+    assert {code: listed[("asset", code)] for code in SHIPPED_ICONS} == SHIPPED_ICONS
+    assert (mockprov.family, mockprov.code, mockprov.icon_url) == ("asset", "mockprov", None)
+    assert (mockfx.family, mockfx.icon_url, mockfx_with_an_icon.icon_url) == ("fx", None, FX_ICON)
+    print_success("justetf and borsa_italiana with their icons; mockprov none; MOCKFX's own icon reaches it")
+
+
+@pytest.mark.asyncio
+async def test_each_entry_of_the_catalogue_carries_its_plugins_icon(engine: AsyncEngine, people: dict[str, User]):
+    """1: ``read_catalogue`` puts each plugin's icon in its entry: justetf's and borsa_italiana's own, none for mockprov."""
+    everything = await _catalogue(engine, people["alice"])
+    mockprov = await _entry(engine, people["alice"], "mockprov")
+
+    icons = {plugin.plugin_code: plugin.icon_url for plugin in everything.plugins}
+    assert set(SHIPPED_ICONS) <= set(icons), f"the full catalogue lists {sorted(icons)}"
+    assert {code: icons[code] for code in SHIPPED_ICONS} == SHIPPED_ICONS
+    assert mockprov.icon_url is None
+
+
 # =============================================================================
 # 2. WRITES AND READS
 # =============================================================================
@@ -724,7 +899,7 @@ async def test_in_the_managed_profile_configured_counts_a_hidden_field_without_n
         shown = entry.model_dump_json()
         assert [field.key for field in entry.fields] == [key for key in MOCKPROV_KEYS if key != "region"], name
         assert entry.configured is configured, name
-        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "configured", "fields"}, "the entry has no place for a missing field's name"
+        assert set(entry.model_dump()) == {"family", "plugin_code", "plugin_name", "icon_url", "configured", "fields"}, "the entry has no place for a missing field's name"
         assert "region" not in shown.lower() and REGION_VARIABLE not in shown and "atlantis" not in shown, f"{name}: the hidden field shows: {shown}"
     print_success(f"region hidden for everyone, configured={configured}, named nowhere")
 

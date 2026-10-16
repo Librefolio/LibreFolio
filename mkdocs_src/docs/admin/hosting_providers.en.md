@@ -102,6 +102,10 @@ your users sign in again after each restart. See
   [Environment Variables](configuration.md).
 - HTTPS in front of it: see [Expose Securely](service_exposure.md) and
   [HTTPS and reverse proxies](configuration.md#session-cookie-secure).
+- On Fly.io, `LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP`, so that the limits per visitor's address
+  count each visitor apart, not everyone as Fly's proxy. The managed profile does not set it, since
+  the header depends on the proxy in front of the instance: see «The Visitor's Address» in
+  [Checking Connection Security](connection_checks.md#reverse-proxy).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
@@ -111,6 +115,9 @@ your users sign in again after each restart. See
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
+- Optionally, your own support page, `LIBREFOLIO_SUPPORT_URL`: where the users of the instance ask for
+  help, such as an asset the search does not find. Without it, the help links go to LibreFolio's
+  issues on GitHub. See «Main Options» in [Environment Variables](configuration.md).
 
 ---
 
@@ -118,7 +125,8 @@ your users sign in again after each restart. See
 
 A hosting provider can block an instance, for example when its subscription is not paid. Users can
 still sign in, follow a password-reset link already sent to them, read why the instance is blocked
-and sign out; the rest of the app is closed.
+and sign out, and administrators can still download a backup of the instance; the rest of the app is
+closed.
 LibreFolio deletes nothing: the data stays as it is. The block works in both profiles.
 
 ### ⚙️ The Variables {: #block-variables }
@@ -153,8 +161,8 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   with the deletion date when there is one.
 - While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
-  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
-  (14 days by default).
+  catches up the history sync missed in the meantime and fills the gap the block left, going back
+  to each asset's and FX pair's last saved day, up to a year.
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -169,7 +177,16 @@ After signing in, users get a full page instead of the app, **This instance is b
 - with `LIBREFOLIO_BILLING_URL` ([Environment Variables](configuration.md)),
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
+- administrators also get a second card under the message, **Keep a copy of the data**: the backup
+  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
+  archive before the instance is gone, and delete it from the server. The other users do not see it:
+  their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
+
+The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
+the instance key, and the card says so. Keep your copy of the instance's key, its
+`secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
+encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
 A user still signed in after the restart gets the page as soon as the app asks the server for data.
 Once you lift the block and restart, users get the app back at their next page load.
@@ -183,7 +200,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |

@@ -451,7 +451,7 @@
     let EditRoleIcon = $derived(getRoleIcon(editRole));
 </script>
 
-<div class="space-y-4" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
+<div class="space-y-4 text-lf-primary" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
     <!-- Utility row: Reset (only when there are unsaved changes) -->
     {#if !readOnly && hasChanges}
         <div class="flex justify-end">
@@ -460,7 +460,7 @@
                 onclick={() => {
                     accesses = JSON.parse(JSON.stringify(originalAccesses));
                 }}
-                class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                class="p-1.5 text-lf-warning hover:bg-lf-warning-soft rounded-lg transition-colors"
                 title="Reset"
                 data-testid="sharing-reset-btn"
             >
@@ -488,14 +488,9 @@
     />
 
     {#if accessLoadState === 'error'}
-        <div class="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/50 dark:bg-red-900/20" data-testid="sharing-load-error-state">
-            <span class="text-sm text-red-700 dark:text-red-200">{$_('brokers.sharing.loadFailedBlocking')}</span>
-            <button
-                type="button"
-                class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
-                data-testid="sharing-retry-load-btn"
-                onclick={loadAccesses}
-            >
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-lf-danger-line bg-lf-danger-soft p-3" data-testid="sharing-load-error-state">
+            <span class="text-sm text-lf-danger-on-soft">{$_('brokers.sharing.loadFailedBlocking')}</span>
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-lf-danger-line px-3 py-1.5 text-sm font-medium text-lf-danger-on-soft transition-colors hover:bg-lf-danger-line" data-testid="sharing-retry-load-btn" onclick={loadAccesses}>
                 <RotateCcw size={14} />
                 {$_('common.retry')}
             </button>
@@ -504,7 +499,7 @@
 
     {#if loading}
         <div class="flex items-center justify-center py-12">
-            <Loader2 size={32} class="animate-spin text-libre-green" />
+            <Loader2 size={32} class="animate-spin text-lf-link" />
         </div>
     {:else}
         <!-- Ownership Chart + Center Info -->
@@ -513,16 +508,16 @@
             <!-- Center overlay: Allocated / Available + Add button -->
             <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                 <div class="text-center">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(totalAllocatedPercent, {signed: false, digits: 1})}</span>
+                    <div class="text-xs text-lf-muted">
+                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-lf-secondary">{formatPercent(totalAllocatedPercent, {signed: false, digits: 1})}</span>
                     </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(availablePercent, {signed: false, digits: 1})}</span>
+                    <div class="text-xs text-lf-muted">
+                        {$_('brokers.sharing.available')}: <span class="font-semibold text-lf-secondary">{formatPercent(availablePercent, {signed: false, digits: 1})}</span>
                     </div>
                     {#if canEditAccess}
                         <button
                             type="button"
-                            class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
+                            class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-lf-action text-lf-on-action hover:bg-lf-action-hover transition-colors shadow-sm"
                             onclick={() => {
                                 showAddModal = true;
                                 selectedUserId = null;
@@ -544,11 +539,11 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <!-- Owners Column -->
             <div data-testid="sharing-owners-column">
-                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
                     <Crown size={14} class="text-amber-500" />
                     {$_('brokers.sharing.owners')}
                 </h3>
-                <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.ownerDesc')}</p>
+                <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.ownerDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each owners as entry (entry.user_id)}
                         <button
@@ -580,11 +575,11 @@
 
             <!-- Editors Column -->
             <div data-testid="sharing-editors-column">
-                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
                     <Pencil size={14} class="text-blue-500" />
                     {$_('brokers.sharing.editors')}
                 </h3>
-                <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.editorDesc')}</p>
+                <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.editorDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each editors as entry (entry.user_id)}
                         <button
@@ -616,11 +611,11 @@
 
             <!-- Viewers Column -->
             <div data-testid="sharing-viewers-column">
-                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <h3 class="text-sm font-semibold text-lf-secondary flex items-center gap-1.5">
                     <Eye size={14} class="text-gray-400" />
                     {$_('brokers.sharing.viewers')}
                 </h3>
-                <p class="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{$_('brokers.sharing.viewerDesc')}</p>
+                <p class="text-[10px] text-lf-muted mb-2">{$_('brokers.sharing.viewerDesc')}</p>
                 <div class="flex flex-col gap-2">
                     {#each viewers as entry (entry.user_id)}
                         <button
@@ -653,15 +648,15 @@
 
         <!-- Self-service (F4): leave / self-demote — always available, even readOnly -->
         {#if selfEntry}
-            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/40 px-3 py-2" data-testid="sharing-self-service">
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                    {$_('brokers.sharing.yourAccess')}: <span class="font-medium text-gray-700 dark:text-gray-200">{getRoleShortLabel(selfEntry.role)}</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-lf-subtle bg-lf-panel px-3 py-2" data-testid="sharing-self-service">
+                <span class="text-xs text-lf-muted">
+                    {$_('brokers.sharing.yourAccess')}: <span class="font-medium text-lf-secondary">{getRoleShortLabel(selfEntry.role)}</span>
                 </span>
                 <div class="flex items-center gap-2">
                     {#if selfEntry.role === 'EDITOR'}
                         <button
                             type="button"
-                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-lf-input text-lf-secondary hover:bg-lf-neutral transition-colors disabled:opacity-50"
                             disabled={selfActionBusy}
                             onclick={() => (confirmDemoteOpen = true)}
                             data-testid="sharing-self-demote-btn"
@@ -672,9 +667,7 @@
                     {/if}
                     <button
                         type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 {selfIsLastOwner
-                            ? 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                            : 'border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 {selfIsLastOwner ? 'border-lf-danger-line text-lf-danger hover:bg-lf-danger-soft' : 'border-lf-input text-lf-secondary hover:bg-lf-neutral'}"
                         disabled={selfActionBusy}
                         onclick={() => (confirmLeaveOpen = true)}
                         data-testid="sharing-self-leave-btn"
@@ -688,14 +681,14 @@
 
         <!-- Action row: [Cancel/Close if provided] [Save Configuration] -->
         {#if !readOnly}
-            <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-slate-700">
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-lf-subtle">
                 {#if onCancel}
-                    <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onCancel} type="button">
+                    <button class="px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors" onclick={onCancel} type="button">
                         {$_('common.cancel')}
                     </button>
                 {/if}
                 <button
-                    class="flex items-center gap-2 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    class="flex items-center gap-2 px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-save-btn"
                     disabled={!hasChanges || saving || accessLoadState !== 'ready'}
                     onclick={handleSave}
@@ -740,15 +733,15 @@
         testId="sharing-add-user-modal"
         zIndex={60}
     >
-        <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col">
+        <div class="bg-lf-card rounded-xl w-full flex flex-col">
             <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <Plus class="text-libre-green" size={18} />
+            <div class="flex items-center justify-between p-4 border-b border-lf-subtle shrink-0">
+                <h3 class="text-base font-semibold text-lf-primary flex items-center gap-2">
+                    <Plus class="text-lf-link" size={18} />
                     {$_('brokers.sharing.addUser')}
                 </h3>
                 <button
-                    class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
+                    class="p-1.5 text-lf-muted hover:text-lf-secondary rounded-lg transition-colors"
                     onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
@@ -763,22 +756,22 @@
             <div class="p-4 space-y-4" data-testid="sharing-add-form">
                 <!-- User picker: opens showing every candidate, narrows down as you type -->
                 <div>
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <span class="block text-xs font-medium text-lf-muted mb-1">
                         {$_('brokers.sharing.searchPlaceholder')}
                     </span>
                     <UserSearchSelect bind:value={selectedUserId} dropdownPosition="bottom" loading={loadingUsers} maxVisibleItems={6} testId="sharing-user-select" users={selectableUsers} />
                     {#if !loadingUsers && selectableUsers.length === 0}
-                        <p class="mt-1 text-xs text-gray-400" data-testid="sharing-no-other-users">{$_('brokers.sharing.noOtherUsers')}</p>
+                        <p class="mt-1 text-xs text-lf-muted" data-testid="sharing-no-other-users">{$_('brokers.sharing.noOtherUsers')}</p>
                     {/if}
                 </div>
 
                 <!-- Role selection -->
                 <div class="flex flex-col gap-3">
                     <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.role')}:</span>
+                        <span class="text-xs font-medium text-lf-muted whitespace-nowrap">{$_('brokers.sharing.role')}:</span>
                         <div class="relative">
                             <button
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary hover:bg-lf-hover"
                                 onclick={() => (showRoleDropdown = !showRoleDropdown)}
                                 type="button"
                                 data-testid="sharing-add-role-trigger"
@@ -790,12 +783,12 @@
                                 <ChevronDown size={12} />
                             </button>
                             {#if showRoleDropdown}
-                                <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                                <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow py-1">
                                     {#each roleOptions as opt}
                                         {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
-                                            class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                                            class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-lf-hover text-lf-secondary whitespace-nowrap"
                                             data-testid="sharing-add-role-option-{opt.value}"
                                             onclick={() => {
                                                 newRole = opt.value;
@@ -816,7 +809,7 @@
 
                     {#if newRole === 'OWNER'}
                         <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{$_('brokers.sharing.sharePercentage')}:</span>
+                            <span class="text-xs font-medium text-lf-muted whitespace-nowrap">{$_('brokers.sharing.sharePercentage')}:</span>
                             <div class="flex items-center gap-1">
                                 <input
                                     type="number"
@@ -828,9 +821,9 @@
                                     onkeydown={(e) => {
                                         if (e.key === 'Enter') handleAddUser();
                                     }}
-                                    class="w-20 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                    class="w-20 px-2 py-1.5 text-sm text-center border border-lf-input hover:border-lf-input-hover rounded-lg bg-lf-field text-lf-primary"
                                 />
-                                <span class="text-xs text-gray-500">% (max {formatPercent(maxNewShare, {signed: false, digits: 1})})</span>
+                                <span class="text-xs text-lf-muted">% (max {formatPercent(maxNewShare, {signed: false, digits: 1})})</span>
                             </div>
                         </div>
                     {/if}
@@ -838,9 +831,9 @@
             </div>
 
             <!-- Footer -->
-            <div class="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
+            <div class="flex items-center justify-end gap-2 p-4 border-t border-lf-subtle shrink-0">
                 <button
-                    class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                    class="px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors"
                     onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
@@ -850,7 +843,7 @@
                     {$_('common.cancel')}
                 </button>
                 <button
-                    class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-confirm-add"
                     disabled={!selectedUser}
                     onclick={handleAddUser}
@@ -867,14 +860,14 @@
     <ModalBase allowOverflow={true} maxWidth="md" onRequestClose={cancelEdit} open={showEditModal} testId="sharing-edit-user-modal" zIndex={60}>
         {@const editEntry = accesses.find((a) => a.user_id === editingUserId)}
         {#if editEntry}
-            <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col overflow-visible">
+            <div class="bg-lf-card rounded-xl w-full flex flex-col overflow-visible">
                 <!-- Header -->
-                <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                        <Pencil size={18} class="text-libre-green" />
+                <div class="flex items-center justify-between p-4 border-b border-lf-subtle shrink-0">
+                    <h3 class="text-base font-semibold text-lf-primary flex items-center gap-2">
+                        <Pencil size={18} class="text-lf-link" />
                         {$_('common.edit')}: {editEntry.username}
                     </h3>
-                    <button type="button" onclick={cancelEdit} class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
+                    <button type="button" onclick={cancelEdit} class="p-1.5 text-lf-muted hover:text-lf-secondary rounded-lg transition-colors">
                         <X size={18} />
                     </button>
                 </div>
@@ -889,22 +882,22 @@
                             {#if editEntry.avatar_url}
                                 <LazyImage src="{editEntry.avatar_url}?img_preview=48x48" alt={editEntry.username} circle placeholder="avatar" />
                             {:else}
-                                <div class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                                    <span class="text-sm font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(editEntry.username)}</span>
+                                <div class="w-full h-full bg-lf-neutral flex items-center justify-center rounded-full">
+                                    <span class="text-sm font-semibold text-lf-muted">{getAvatarInitial(editEntry.username)}</span>
                                 </div>
                             {/if}
                         </div>
                         <!-- Username -->
-                        <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{editEntry.username}</span>
+                        <span class="text-sm font-medium text-lf-primary">{editEntry.username}</span>
 
                         <!-- Separator -->
-                        <span class="text-gray-300 dark:text-slate-600">|</span>
+                        <span class="text-lf-muted">|</span>
 
                         <!-- Role selector -->
                         <div class="relative">
                             <button
                                 type="button"
-                                class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
+                                class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary hover:bg-lf-hover"
                                 onclick={() => (showEditRoleDropdown = !showEditRoleDropdown)}
                                 data-testid="sharing-edit-role-trigger"
                             >
@@ -915,12 +908,12 @@
                                 <ChevronDown size={12} />
                             </button>
                             {#if showEditRoleDropdown}
-                                <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
+                                <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow py-1">
                                     {#each roleOptions as opt}
                                         {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
-                                            class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                                            class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-lf-hover text-lf-secondary whitespace-nowrap"
                                             data-testid="sharing-edit-role-option-{opt.value}"
                                             onclick={() => {
                                                 editError = null;
@@ -953,16 +946,16 @@
                                     onkeydown={(e) => {
                                         if (e.key === 'Enter') saveEdit();
                                     }}
-                                    class="w-16 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
+                                    class="w-16 px-2 py-1.5 text-sm text-center border border-lf-input hover:border-lf-input-hover rounded-lg bg-lf-field text-lf-primary"
                                 />
-                                <span class="text-xs text-gray-500">%</span>
+                                <span class="text-xs text-lf-muted">%</span>
                             </div>
                         {/if}
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
+                <div class="flex items-center justify-between p-4 border-t border-lf-subtle shrink-0">
                     <button
                         type="button"
                         onclick={() => {
@@ -970,16 +963,16 @@
                             cancelEdit();
                             if (entry) requestRemove(entry);
                         }}
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-lf-danger hover:bg-lf-danger-soft rounded-lg transition-colors"
                     >
                         <Trash2 size={14} />
                         {$_('brokers.sharing.remove')}
                     </button>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick={cancelEdit} class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
+                        <button type="button" onclick={cancelEdit} class="px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors">
                             {$_('common.cancel')}
                         </button>
-                        <button type="button" onclick={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="sharing-confirm-edit">
+                        <button type="button" onclick={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" data-testid="sharing-confirm-edit">
                             <Check size={16} />
                             {$_('common.confirm')}
                         </button>
