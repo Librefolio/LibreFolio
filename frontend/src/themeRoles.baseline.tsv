@@ -3,11 +3,8 @@
 # Written only by `node frontend/scripts/theme/theme-roles.mjs` (--init, --update, --split, --accept, --resolve).
 # Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.
 # Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).
-lib/components/assets/AssetBrowseNav.svelte	6
-lib/components/assets/AssetCard.svelte	70
 lib/components/assets/AssetCurrencyChangeModal.svelte	79
 lib/components/assets/AssetDataEditorSection.svelte	17
-lib/components/assets/AssetIcon.svelte	4
 lib/components/assets/AssetMergeModal.svelte	68
 lib/components/assets/AssetModal.svelte	26
 lib/components/assets/AssetModalDetails.svelte	79
@@ -16,9 +13,8 @@ lib/components/assets/AssetModalIdentifiers.svelte	12
 lib/components/assets/AssetModalImportNotices.svelte	10
 lib/components/assets/AssetModalProvider.svelte	20
 lib/components/assets/AssetModalSelectionPrompts.svelte	38
-lib/components/assets/AssetPriceSummary.svelte	13
 lib/components/assets/AssetSearchAutocomplete.svelte	57
-lib/components/assets/AssetTable.svelte	23	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
+lib/components/assets/AssetTable.svelte	12
 lib/components/assets/BoundaryDateModal.svelte	37
 lib/components/assets/CellDateRange.svelte	49
 lib/components/assets/DistributionDataImportModal.svelte	3
@@ -32,13 +28,6 @@ lib/components/charts/ChartAestheticsSection.svelte	16
 lib/components/charts/GeographyMap.svelte	4
 lib/components/charts/PriceChartFull.svelte	36
 lib/components/charts/ScatterChart.svelte	4
-lib/components/fx/FxCard.svelte	63
-lib/components/fx/FxDataEditorSection.svelte	15
-lib/components/fx/FxDataImportModal.svelte	20
-lib/components/fx/FxPairAddModal.svelte	49
-lib/components/fx/FxPriceSummary.svelte	4
-lib/components/fx/FxSyncModal.svelte	2
-lib/components/fx/FxTable.svelte	9
 lib/components/table/ColumnVisibilityToggle.svelte	27
 lib/components/table/DataTableCellContent.svelte	4
 lib/components/table/SelectionBar.svelte	23
@@ -185,8 +174,8 @@ routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/+page.svelte	38
 routes/(app)/brokers/[id]/+page.svelte	141
 routes/(app)/dashboard/+page.svelte	77
-routes/(app)/fx/+page.svelte	97
-routes/(app)/fx/[pair]/+page.svelte	169
+routes/(app)/fx/+page.svelte	4
+routes/(app)/fx/[pair]/+page.svelte	54
 routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/+page.svelte	1
