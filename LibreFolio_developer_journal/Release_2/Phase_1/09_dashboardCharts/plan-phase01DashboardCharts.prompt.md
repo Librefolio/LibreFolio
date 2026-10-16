@@ -4056,3 +4056,41 @@ vengono dal catalogo generato alle 18:27.
   - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
   - `holds` esiste nel test.
   - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
+- **22:32**: Y-19 committato (`9fd2dcdc0` fix e `54cce7263` journal) ed entrato in dev. Il via per Y-20 è arrivato
+  mentre Z lavora al lotto A.
+
+### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `54cce7263`) — ✅ 22:47
+
+> **Note implementazione**.
+> - **`docs-writer`** (dalle 22:33) aggiorna i sei riferimenti della tabella in «Y12b» (righe 119 e 302–310 della
+>   pagina), ognuno ricontrollato sul codice di oggi.
+>   - Controlla anche gli altri riferimenti `file:riga` della sezione «How Much Can It Hurt?» e del punto «Bad month».
+>   - Il resto della pagina non lo tocca: segnala soltanto.
+>   - Verifica con `dev.py mkdocs check-links`.
+> - **Primo giro di `docs-writer`** (dalle 22:33 alle 22:40): 9 riferimenti aggiornati, ognuno controllato sul codice,
+>   e `check-links` verde (97 validi).
+>   - **Requests**: `riskAnalysisHelpers.ts:334` → 336 e l.368-371 → 370-373; `:280` → 282, con l'uso alle righe
+>     321 e 342 invece della 340.
+>   - **Istogramma**: `l1Helpers.ts:136` → 138, e `holdsCut`/`belowCut` alle righe 94 e 103 invece di 92 e 101. Per
+>     la regola del bin a cavallo, al posto di `ReturnHistogram.svelte:51` ora ci sono il commento alla riga 18 e
+>     `barClass()` alle righe 40–43; `title` passa da 79 a 68.
+>   - **Cifre in denaro**: `lossMoney()` da 86 a 72.
+>   - **Etichette**: `RiskMetricCard.svelte` da 107 a 108; `DOC_PATHS`/`TAIL_DOCS` da 117/127 a 103/113.
+> - **Secondo giro**, le quattro osservazioni del primo giro, applicate:
+>   - **Worst fall**: ora la pagina dice che la durata segue la fonte della profondità (Y-19, riga 405).
+>   - **Money**: si aggiunge Broker Detail, che usa il patrimonio netto di quel broker (riga 718). La tabella degli host
+>     lo diceva già.
+>   - **Istogramma**: «neither», che era ambiguo, diventa: il bin a cavallo è quello ambra `holdsCut` e non conta mai
+>     come coda (`belowCut` falso, `l1Helpers.ts:175-176`).
+>   - **UnderwaterChart**: il riferimento va alla didascalia, righe 65–70 con il valore alla 67, invece che al suo
+>     link alla riga 69.
+> - **⚠️ Fuori pista**: con il primo giro la pagina citava due righe diverse per lo stesso fatto (718 nel punto, 686
+>   nella tabella degli host). Ho chiesto a `docs-writer` di aggiornare anche gli 11 numeri della tabella degli host e
+>   del punto «No owned broker», già verificati. Non si va oltre.
+> - **Terzo giro** (fino alle 22:47): gli 11 numeri della tabella degli host e del punto «No owned broker».
+>   - Ciascuno è stato confrontato con la stessa riga di `eee56b42a`, quando la pagina fu scritta: punta allo stesso
+>     codice, solo spostato (di 1, 31 o 32 righe).
+>   - Ora la pagina dà una riga sola per ogni fatto (`:718` sia nel punto sia nella tabella).
+>   - `check-links` verde, 97 link validi; `brokerStore.ts:262` era già giusto.
+> - **In tutto**: 20 riferimenti aggiornati e 4 precisazioni di testo, solo in `risk-lab.md`. Pagina solo in inglese,
+>   quindi niente traduzioni né marcatura. Y-20 ✅ nel BACKLOG.
