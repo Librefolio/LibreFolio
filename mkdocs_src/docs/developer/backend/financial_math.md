@@ -48,7 +48,7 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -67,7 +67,8 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
-│   ├── period.py            a period's boundary states, its P&L and the identity that closes it
+│   ├── period.py            a period's boundary states, its P&L and the identity that closes it; the day's P&L change
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: return on the start value, annualized returns, the internal-transfer split (P22)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
@@ -102,14 +103,20 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    an unusable ratio raises `ValueError`), and classifies them
    (`ScopeAwareTransactionClassifier`, `classifier.py`);
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
-   the same key — scope, currency, options and data fingerprints — that starts on or before the
-   requested start and ends on the requested end date;
+   the same key — scope, currency, options, data fingerprints and the day of
+   `position_states_start` — that starts on or before the requested start and ends on the
+   requested end date;
 4. loads the prices, `quote_base_quantity`, currencies, types and classifications of the held
    assets, and preloads the FX rates in one `convert_bulk()` call (`_preload_fx_rates()`);
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
 6. runs `DailyStateBuilder` (`daily_state.py`) and stores its result in the cache.
+
+`position_states_start` holds the positions at the end of `calculate(period_start=…)` — the caller's period start, while
+the replay runs from `date_from` (t=0 for the Dashboard) — or of the first frame day when it is not named.
+`internal_asset_transfers` lists each linked TRANSFER of a security between two brokers of the scope, with its value on
+arrival and the cost the sender moved: the Performance table's transfer split (`contributions.py`, developer decision P22).
 
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
@@ -139,7 +146,7 @@ day is dirty when it has:
   that moves a quantity — plus `STALE_PRICE_THRESHOLD_DAYS` + 1, since a price is stale when it
   is carried more than `STALE_PRICE_THRESHOLD_DAYS` days;
 - a split;
-- or it is `frame_start`.
+- or it is `frame_start`, or `period_start` when it falls in the frame.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its

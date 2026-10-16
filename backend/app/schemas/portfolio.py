@@ -410,7 +410,10 @@ class AssetPeriodContribution(BaseModel):
     asset_type: str
     broker_id: int
     broker_name: str
-    period_unrealized_delta: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L over the period")
+    period_unrealized_delta: Optional[SafeDecimal] = Field(
+        None,
+        description="Change in unrealized P&L over the period, from the portfolio's own valuation at the two boundaries; an internal transfer that leaves and arrives inside the period splits it between the two brokers at the value on arrival (P22). None when a boundary the position is held at has an unknown unrealized (no rate, incomplete cost)",
+    )
     period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss in period: SELLs, and outgoing ADJUSTMENTs with a cost basis (the value handed over, at the rate of its date, against the average cost)")
     period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
@@ -419,8 +422,14 @@ class AssetPeriodContribution(BaseModel):
     annualized_return: Optional[SafeDecimal] = Field(
         None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
     )
-    start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
-    end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
+    start_value: Optional[SafeDecimal] = Field(
+        None,
+        description="Position value at the end of the period's start day, as the portfolio values it (market quote, trade price, split adjustment, estimate at cost) at that day's rate; 0 if there was no opening position, None if it cannot be valued",
+    )
+    end_value: Optional[SafeDecimal] = Field(
+        None,
+        description="Position value at period end, as the portfolio values it (the holding's current_value) at that day's rate; 0 if the position was closed by period end, None if it cannot be valued",
+    )
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
     oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
@@ -464,6 +473,18 @@ class BrokerBreakdown(StrictModel):
     gain_loss_percent: SafeDecimal
     cash_total: Currency
     cash_balances: List[Currency] = Field(default_factory=list, description="Cash balance per currency, native (unconverted)")
+
+
+class HoldingGroupGainLoss(StrictModel):
+    """Unrealized gain or loss of a group of holdings: one broker's, or one asset type's at one broker."""
+
+    broker_id: int
+    asset_type: Optional[str] = Field(None, description="Asset type of the group, as the holdings report it; None for the broker's whole group")
+    gain_loss: Optional[Currency] = Field(None, description="Sum of gain_loss over the group's holdings whose current_value and gain_loss are both known; None when none is")
+    gain_loss_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="gain_loss / the cost of the same holdings (current_value − gain_loss), a fraction (0.05 = 5 %), unrounded; None when no holding counts or the cost is 0",
+    )
 
 
 class UnrealizedBreakdownRow(StrictModel):
@@ -524,11 +545,31 @@ class PortfolioSummary(StrictModel):
     mwrr_annualized_percent: Optional[SafeDecimal] = Field(None, description="Annualized MWRR / XIRR (None if not converged)")
     mwrr_cumulative_percent: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR for the period: (1+r_ann)^(days/365)-1")
     mwrr_period_days: Optional[int] = Field(None, description="Number of days in the MWRR calculation period")
+    timing_effect_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="mwrr_cumulative_percent − twrr_percent, a fraction: what the timing of deposits and withdrawals added to the period's return; None when either is missing",
+    )
+    pnl_change_1d: Optional[Currency] = Field(
+        None,
+        description="Change of the total P&L from the calendar day before the valuation date to it, from the engine's daily states; None for a portfolio born on the valuation date",
+    )
+    pnl_change_1d_vs_total_pnl_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="pnl_change_1d / |total P&L of the day before|, a fraction with the change's sign, unrounded; None on a zero base",
+    )
+    pnl_change_1d_vs_nav_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="pnl_change_1d / |NAV of the day before|, a fraction with the change's sign, unrounded; None on a zero base",
+    )
     simple_roi_percent: SafeDecimal
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
     allocation_by_geography: List[AllocationItem] = Field(default_factory=list)
     holdings: List[PortfolioHolding] = Field(default_factory=list)
+    holding_groups: List[HoldingGroupGainLoss] = Field(
+        default_factory=list,
+        description="Unrealized G/L of the holdings grouped by broker (asset_type None) and by asset type at each broker, ordered by broker_id then asset_type (the broker's group first)",
+    )
     by_broker: Optional[List[BrokerBreakdown]] = Field(None, description="Only populated when include_breakdown=True")
     missing_fx_pairs: List[WACMissingPairInfo] = Field(
         default_factory=list,
