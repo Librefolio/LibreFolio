@@ -2687,3 +2687,118 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
   (444 front, 338 backend); `mkdocs build` stretto verde (101 s); `check-links` verde (96 link).
 - **Nessuna riga di CHANGELOG**: il valore per l'utente arriva con B2 (la prova del ripristino), che la scrive lui.
 - **All'integrazione**: avviso B che firma e forma JSON sono quelle concordate e che `to_json()` dà un dict.
+
+#### Checkpoint CP-15 ✅ (2026-10-16) — committato dal coordinatore (`5254faa17`, journal `a33376e37`)
+
+- **Aggiornamento di base 8** — merge di `dev_release2` `68fd5c301`, HEAD `63e0374a3`, pulito. CP-16 era già entrato
+  (base comune `442fbfe02`).
+- **Ingresso** (16/10 01:40, `nice -n 10`, carico 38–41): `services financial-math` 392, `check-orphans` ✓. B lo
+  avvisa il coordinatore, con la firma e `to_json()` che dà un dict. J-18 resta nel backlog.
+- **J-19** nel backlog (richiesta del coordinatore, 01:39): `worker_crashed` del PAC sotto carico, «da capire: OOM o
+  timeout del worker», con la lettura del codice: memoria misurata → `memory_limit`, tempo → `execution_timeout`, quindi
+  `worker_crashed` è un'uscita del figlio senza nessuno dei due.
+- **Prossimo lotto**: CP-6 (B11 e il segno di prezzo dei giorni «dirty», decisione 28), annunciato al coordinatore
+  prima di cominciare.
+- **Regola** (coordinatore, nel via di CP-15 arrivato in ritardo alle 01:41): mentre gira una run pesante non si scrive
+  nel worktree, nemmeno i rossi, perché pytest li raccoglierebbe. Rispettata: stub e test di CP-15 sono nati dopo la
+  fine di `all-backend` (00:38); durante la run ho scritto solo il piano.
+- **J-20** nel backlog (coordinatore, 01:42, da Y10 e decisione 49): la descrizione di `AllocationItem.value`
+  (`schemas/portfolio.py:79`, «Percentage share (0-100)») non regge con la liquidità negativa. Va in CP-6, con
+  `api sync`.
+- ✅ **CP-16 in `dev_release2`** (treno 70, merge `240675ad1`), con la riga 🐛 nel CHANGELOG; i colori avvisati di
+  `LotCustodyModal.svelte` dal coordinatore.
+- ✅ **CP-15 in `dev_release2`** (treno 74, merge `fd41a0996`). J-19 resta nel backlog (lotto piccolo quando c'è posto).
+
+#### CP-6 — B11 e il segno di prezzo (via del coordinatore, 16/10 01:42)
+
+- **Via**: «CP-6: via, rossi prima, con i valori che cambiano dichiarati prima, poi `all-backend` su uno slot che ti do
+  io». Dentro anche J-20 (descrizione di `AllocationItem.value`, poi `api sync`). Base: HEAD `63e0374a3`.
+- **Letto sul codice di `63e0374a3`**: i giorni «dirty» (`daily_state.py:342-379`) contano i cambi della sola cassa
+  (`NativeCash.rate_change_days`) e, per i prezzi, solo una chiusura di mercato diversa dalla precedente. Il giorno
+  legge i cambi a giorno esatto da `fx_rate_map` per il valore dei titoli (`_market_value_for`, `:1036`), la parte
+  cambio del non realizzato (`_add_unrealized_part`, `:900`) e la cassa in transito (`_convert`, `:918`, da
+  `_compute_in_transit`). La mappa ha una voce al giorno per le valute dei prezzi e degli asset, e per la cassa in
+  transito nei suoi giorni (`engine.py:455-555`). Le posizioni finali (`position_states_end`) si valutano a `date_to`
+  da capo: scheda del broker e sintesi sono giuste, sbagliano le linee e le serie giornaliere.
+- **Decisioni notturne, da rivedere** (tecniche):
+  1. **Giorni di quotazione**: diventa «dirty» **ogni** giorno con una quotazione di mercato nel frame, non solo
+     quando la chiusura cambia. Comprende il caso del piano (da trade a mercato con la stessa chiusura) ed è più
+     semplice. Prende anche la quotazione uguale che azzera l'età del prezzo e la candela del giorno; costa poco, perché
+     una chiusura cambia quasi ogni giorno di borsa.
+  2. **Una casa sola**: `native_cash.change_days(read, currencies, days)`, pubblica e pura, al posto di `_change_days`.
+     Dà i giorni del calendario in cui la lettura del chiamante dà a una valuta un cambio diverso dal giorno prima: un
+     cambio che compare o sparisce conta, e conta il primo. La cassa la chiama con l'ultimo cambio noto sul calendario
+     dei suoi punti (stesso risultato di oggi); il motore con il cambio del giorno esatto da `fx_rate_map`, sul frame
+     per le valute dei prezzi e degli asset, e sui giorni di ogni transito per la sua cassa.
+- **Valori che cambiano (dichiarati prima)**:
+  - gli stati giornalieri nei giorni in cui si muove solo il cambio di un titolo, o della cassa in transito, fino al
+    giorno «dirty» seguente: valore di mercato, NAV, linee dei broker, parti cambio e titolo del non realizzato, valori
+    in transito;
+  - i giorni con una quotazione di mercato uguale alla precedente: segno e sorgente del prezzo (mercato e non trade),
+    insieme «implied», età del prezzo, candela del giorno;
+  - ciò che deriva dalle serie: TWRR, MWRR, drawdown, grafici storici, fatti di portafoglio dell'AI Export;
+  - golden `eur_only_golden.json`: cambia W1 (cambi EUR/IDR nei giorni 4, 18 e 22 senza transazioni né prezzi);
+    W2 dovrebbe restare identica, con la riserva dei giorni di quotazione uguale: il diff JSON lo dirà, e lo dichiaro;
+  - invariati: titoli nella sola valuta del report senza quotazioni uguali, sintesi e posizioni finali a `date_to`.
+- ✅ **J-20** (16/10 01:47): `AllocationItem.value` ora dice «Percentage share of the total, rounded to 0.01: amount /
+  sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can
+  exceed 100.» (la formula di `derived_views._alloc`). `dev.py api sync` verde: la descrizione è nel client generato,
+  nessun file tracciato cambiato oltre allo schema; impronta dei contratti dei Tool invariata. Ruff e black puliti.
+- **Rossi di CP-6**: test-author al lavoro su `test_portfolio_engine/test_fx_only_days.py` (R1–R7, guardie, test di
+  `change_days`). **Bozza del codice** pronta in `/tmp/libreFolio_j/cp6/apply.py` (sostituzioni esatte, ancore
+  verificate una per una), da applicare dopo i rossi: `change_days` in `native_cash`, `NativeCash` che la usa,
+  `_valuation_rate_change_days` e i giorni di quotazione nel motore.
+- **✅ Rossi** (test-author, 01:50–02:08): `test_portfolio_engine/test_fx_only_days.py`. 11 rossi su un valore
+  (R1, R2, R3b, R4, R5, R6, R7, R7b più guardie verdi), 7 sul `change_days` assente; R3 verde già oggi. Letture del
+  test-author, accettate:
+  - un acquisto pagato in USD fa tenere USD alla cassa, e allora ogni cambio USD è già un giorno «dirty»: i rossi
+    comprano in EUR;
+  - la cassa in transito era già coperta dai movimenti della coppia; il rosso vero è R3b, cambi che compaiono dentro il
+    transito;
+  - R5 usa cambi con decimali esatti;
+  - **R7 restava rosso con la mia bozza**: un prezzo portato avanti diventa vecchio solo per età, e né i giorni di
+    cambio né quelli di quotazione lo prendono.
+- **Decisione notturna, da rivedere (3)**: diventa «dirty» anche il primo giorno in cui un prezzo portato avanti è
+  vecchio: osservazione (quotazione o transazione con quantità) + `STALE_PRICE_THRESHOLD_DAYS` + 1, nel frame. Un
+  giorno in più per osservazione, anche quando una più nuova lo rende superfluo: il valore non cambia, cambia l'età.
+- **✅ Codice** (02:09, la bozza più la regola 3): `native_cash.change_days`, `NativeCash` che la usa sul calendario dei
+  suoi punti, `DailyStateBuilder._valuation_rate_change_days` (lettura `_read_rate` a giorno esatto, calendario
+  `_calendar`), ogni giorno di quotazione e il primo giorno vecchio. 19/19, `services financial-math` 392 (parità della
+  cassa compresa).
+- **Golden** (02:13): rosso solo lui (724 passed e 1 failed); rigenerato con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`.
+  Confronto JSON vecchio/nuovo: **406 differenze, tutte in W1; W2 identica**.
+  - Stati giornalieri dei giorni 4, 18–19 e 22–25 (indici 3, 17–18, 21–24): i cambi EUR/IDR dei giorni 4, 18 e 22, più i
+    giorni che li ricopiavano. Cambiano valore di mercato, NAV, linea del broker A, P&L, candela, ripartizioni, non
+    realizzato e le sue parti (IDR: la parte cambio del giorno 4 passa da 1E-25 a −3,409).
+  - Ciò che ne deriva: storia, storia delle allocazioni, candele, P&L per broker, «altri effetti» dei contributi.
+  - **La sintesi a fine W1** (giorno 25, che ricopiava il 21): NAV 13 458,95 → 13 454,10; valore di mercato
+    1 901,78 → 1 896,92; P&L −241,05 → −245,90; non realizzato 170,05 → 165,19; TWRR −1,7619 % → −1,7973 %; MWRR
+    cumulato −1,7468 % → −1,7820 % (annuo −23,51 % → −23,93 %); ROI semplice −1,7595 % → −1,7949 %; allocazioni.
+    `period_other_result` si muove solo alla 27ª cifra decimale (rumore dei Decimal).
+- **⚠️ Fuori pista**: nei «valori che cambiano» avevo scritto «invariati: … sintesi e posizioni finali a `date_to`».
+  Sbagliato per la sintesi: le posizioni finali si valutano da capo, ma NAV, P&L e rendimenti della sintesi leggono
+  l'ultimo stato giornaliero. Il piano di partenza lo diceva giusto («la sintesi a `date_to`, quando quel giorno muove
+  solo un cambio»). Corretto qui; il golden lo mostra.
+- **Cancelli leggeri** (02:16–): ruff e black puliti sui 4 file; `services roi-fifo-utils` 725 (golden nuovo);
+  `services portfolio-engine` 40; AI Export (portafoglio, broker, asset) 348; poi `api portfolio`, `check-orphans`.
+- ✅ **Cancelli leggeri**, fine (02:20–02:29): `api portfolio` 51, `check-orphans` ✓ (339 backend).
+- ✅ **devWiki** (skill `wiki-file`, 02:35): `problems/dirty-days-ignore-fx-only-moves` passa a «resolved», con le tre
+  regole nuove, `change_days`, la lezione dei test (comprare nella valuta del report, sennò la gamba di cassa nasconde il
+  difetto) e i file sorgente; riga dell'indice e voce del log. `check_source_paths.py`: nessun percorso mancante nella
+  pagina (i 5 segnalati sono di altre pagine, già alla base). Grafo non aggiornato: graphify non c'è in questo worktree.
+- **Doc dev** (docs-writer, in corso): i motivi dei giorni «dirty» nella pagina del motore, `change_days` in `wac.md`.
+- **CHANGELOG proposto** (🐛 Fixed): «Portfolio: on a day when only an exchange rate moves, foreign securities and cash
+  in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the
+  previous close; before, the daily lines and the summary on such a day kept the previous day's value.»
+- ✅ **Doc dev** (docs-writer, 02:35–02:50): `financial_math.md` nuova sottosezione «📅 The Days the Engine Recomputes»
+  (`#recomputed-days`: il ciclo del frame, tutti i motivi dei giorni «dirty», `change_days` e le due letture, i test,
+  la nota «Before release 1.3»); `transactions/wac.md` (riga `rate_change_days()`, frase su `change_days`, una riga per
+  `_valuation_rate_change_days()` tra i chiamanti della cassa). `mkdocs build` stretto verde (carico 38,7, dopo
+  un'attesa da 84), `check-links` verde (96). Nessun debito di traduzione (pagine solo EN).
+- ✅ **devWiki, tre pagine rimaste indietro** (trovate dal docs-writer, sistemate da me): `concepts/pre-frame-frame-separation`
+  («still skipped»), `decisions/native-cash-daily-revaluation` («stays open»), `entities/native-cash` (`change_days`
+  nell'API). Voce nel log; percorsi invariati (5 mancanti, di altre pagine).
+- **Stato**: worktree completo per CP-6; chiesto lo slot pesante per `all-backend`.
+- ✅ **`all-backend --workers 2`** (slot 1, 16/10 03:01 → 03:33, `nice -n 10`, carico all'avvio 35): 7/7 categorie
+  verdi; passate parallele 16 431 passed, 4 skipped, 0 failed, più la consolidata verde. Porta 6185 libera. Handoff
+  FROZEN mandato.

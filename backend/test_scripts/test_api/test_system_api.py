@@ -14,7 +14,7 @@ Covers:
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
 - GET /api/v1/system/instance: public, no session; {profile, accounts, email} live (the lane's default profile) and in-process
-  (a profile set)
+  (a profile set); accounts.first_account_open a boolean, optional and false unless set (A6d)
 - GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database), 503 with the same body
   in-process, 200 and 503 in OpenAPI
 """
@@ -51,6 +51,7 @@ from backend.app.api.v1.system.info import (
 from backend.app.config import TEST_LANE_HEADER, get_settings
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
+from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -819,10 +820,12 @@ class TestConnectionSecurityInProcess:
 #
 # What the app reads at startup, before anyone signs in: public by design, the same for
 # whoever asks, so behind no session. Three fields today: the profile from LIBREFOLIO_PROFILE
-# (selfhosted unless set), accounts, the registration mode and whether a variable locks it, and email, whether the
-# instance can send emails (workstream E).
+# (selfhosted unless set), accounts, the registration mode, whether a variable locks it and whether the instance has
+# no account yet (first_account_open, A6d: what the login page reads instead of the global settings, which now want a
+# session), and email, whether the instance can send emails (workstream E).
 # Live on the lane's backend for the lane's default, in-process for
-# a profile set through the environment, which the lane's server cannot be given from here.
+# a profile set through the environment, which the lane's server cannot be given from here. The lane's database is
+# shared: the registration mode and first_account_open are typed there, never pinned.
 # The Settings field itself (default, normalisation, refusal) is in test_config_misc.py.
 
 INSTANCE_URL = f"{API_BASE}/system/instance"
@@ -874,9 +877,10 @@ class TestInstanceConfigLive:
         assert response.status_code == 200, f"GET /system/instance is public: expected 200 without a valid session, got {response.status_code}: {response.text}"
         body = response.json()
         assert set(body) == {"profile", "accounts", "email"} and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+        accounts = body["accounts"]
         assert (
-            set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
-        ), f"accounts must be exactly the registration mode and whether it is locked (the mode is the lane's shared row, not pinned here): {response.text}"
+            set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
+        ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here): {response.text}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
 
 
@@ -907,10 +911,34 @@ class TestInstanceConfigInProcess:
         assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
         body = response.json()
         assert set(body) == {"profile", "accounts", "email"} and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts and email and nothing else: {response.text}"
+        accounts = body["accounts"]
         assert (
-            set(body["accounts"]) == {"registration_mode", "registration_locked"} and body["accounts"]["registration_mode"] in {"open", "invite", "disabled"} and isinstance(body["accounts"]["registration_locked"], bool)
-        ), f"accounts must be exactly the registration mode and whether it is locked: {response.text}"
+            set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
+        ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (read from the lane's shared database: not pinned here): {response.text}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
+
+
+def _schema_component(document: dict, schema: dict) -> dict:
+    """The component of ``document`` a schema refers to: its own ``$ref``, or the one of its ``allOf`` (a field with a description)."""
+    references = [schema.get("$ref"), *(option.get("$ref") for option in schema.get("allOf", []))]
+    reference = next((ref for ref in references if ref), None)
+    assert reference, f"the schema refers to no component: {schema}"
+    return document["components"]["schemas"][reference.rsplit("/", 1)[-1]]
+
+
+def test_first_account_open_is_optional_and_false_unless_set():
+    """accounts.first_account_open (A6d, C3): optional, false unless set. An AccountsInstanceConfig built without it
+    serializes it false, so an answer that forgets the flag never offers the first account to whoever asks; in the
+    OpenAPI of GET /system/instance, accounts declares it as a boolean without requiring it, as email.available is
+    (EMA-022 in test_email_api.py). Its value on the lane is not pinned: the lane's database is shared."""
+    answer = AccountsInstanceConfig(registration_mode="open", registration_locked=False).model_dump(mode="json")
+    document = _instance_app().openapi()
+    response_schema = document["paths"]["/api/v1/system/instance"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    accounts = _schema_component(document, _schema_component(document, response_schema)["properties"]["accounts"])
+
+    assert answer.get("first_account_open") is False, f"first_account_open must default to false when it is not given: {answer}"
+    assert accounts["properties"].get("first_account_open", {}).get("type") == "boolean", f"the OpenAPI must declare accounts.first_account_open, a boolean: {accounts}"
+    assert "first_account_open" not in accounts.get("required", []), f"accounts.first_account_open must stay optional in the OpenAPI: required {accounts.get('required')}"
 
 
 # ============================================================================

@@ -285,9 +285,11 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Session cookie TTL in hours (default: 24)",
     },
-    # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only.
+    # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only. A new install
+    # starts by invitation (decision 36): its first account can always be created, and an install upgraded with
+    # accounts but no row keeps registration open (the data migration registration_invite_default).
     "registration_mode": {
-        "value": "open",
+        "value": "invite",
         "type": "str",
         "description": "Who may create an account: open, invite or disabled",
     },

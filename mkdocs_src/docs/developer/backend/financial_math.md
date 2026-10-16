@@ -105,6 +105,59 @@ Callers derive their views from the result with `DerivedViewsBuilder` (`derived_
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
 
+#### 📅 The Days the Engine Recomputes {: #recomputed-days }
+
+`DailyStateBuilder.build()` emits one `DailyPortfolioState` for every day of the frame,
+`[frame_start, date_to]`, but evaluates only its **dirty** days: any other day gets a copy of the
+previous state, dated that day, with no external flow and no acquisition funding. The rule is
+developer decision 28 of release 1.3, «recompute whenever a term of the formula changes». A frame
+day is dirty when it has:
+
+- a cash movement, a transaction that moves a quantity, an external flow, or an internal flow
+  between two brokers;
+- a change in the rate of a foreign currency held as cash, its first rate included
+  (`NativeCash.rate_change_days()`);
+- a change from the day before in a rate the day reads to value it
+  (`_valuation_rate_change_days()`): the rate of every non-report currency of the assets and of
+  their quotes, which values the securities, held and in transit, and the exchange part of the
+  [unrealized split](transactions/wac.md#unrealized-split); and, on the days of its transit, the
+  rate of the departure currency of cash in transit. A rate that appears or disappears counts;
+- the departure day of a transit, its last day in transit, or its arrival day;
+- a market quote, even one equal to the previous close: the mark may have come from a trade the
+  day before, and a new quote restarts the price's age;
+- the first day a carried price turns stale: each observation day — a quote, or a transaction
+  that moves a quantity — plus `STALE_PRICE_THRESHOLD_DAYS` + 1, since a price is stale when it
+  is carried more than `STALE_PRICE_THRESHOLD_DAYS` days;
+- a split;
+- or it is `frame_start`.
+
+Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
+`native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
+order, on which `read(currency, day)` gives one of `currencies` another rate than on the
+calendar's previous day; a rate on the calendar's first day counts. The caller chooses the reading
+and the calendar. The native cash reads the last rate known on or before the day, on the calendar
+of its rate points. The engine reads the rate `fx_rate_map` holds for that exact day
+(`_read_rate()`), on every day of the frame — or of the transit, for cash in transit — each
+compared with the day before (`_calendar()` starts one day early). `_read_rate()` reads only the
+map, which `_preload_fx_rates()` already fills for these currencies on every day of the range, and
+for cash in transit on every day of its transit: the rule asks the FX service for nothing more.
+
+When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
+add its days to the dirty days, or show that the day cannot change.
+`test_fx_only_days.py` (`test_services/test_financial/test_portfolio_engine/`, run by
+`./dev.py test services roi-fifo-utils`) moves one term at a time on an otherwise quiet day,
+checks with its guards that a day whose terms do not move keeps its values, and tests
+`change_days()` under both readings.
+
+!!! note "Before release 1.3"
+
+    Until lot CP-6 (backlog B11), a day on which only a foreign security's rate moved (or the rate
+    of cash in transit in a currency the native cash did not hold), a quote equal to the previous
+    close replaced a trade mark or restarted the price's age, or a carried price turned stale, was
+    a copy of the last dirty day. The series derived from the daily states carried that copy, and
+    so did the summary when that day was `date_to`: it reads that day's state for NAV, P&L and
+    returns. Only the end positions (`position_states_end`) were valued afresh at `date_to`.
+
 ### 🧾 Ledger Control Totals {: #ledger-totals }
 
 `ledger_totals.py` reduces the transaction ledger to its control totals — the cash of every

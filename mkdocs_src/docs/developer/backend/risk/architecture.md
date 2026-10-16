@@ -27,7 +27,7 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |
 | AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
 
-The Svelte paths are relative to `frontend/src/lib/components/risk/`. The AI Export side is
+The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
 described in [AI Export Composition](../../architecture/patterns/ai_export_composition.md).
 
 ---
@@ -55,9 +55,9 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
-| `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
-| `frontend/src/lib/stores/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
-| `frontend/src/lib/components/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
+| `frontend/src/lib/features/risk/riskRequest.ts` | Request builders and canonicalization. |
+| `frontend/src/lib/features/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
+| `frontend/src/lib/features/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
 
 ---
 
@@ -320,7 +320,7 @@ weights, so there is nothing to aggregate.
 The frontend asks the four questions of the Dashboard and Broker Detail as levels L1–L4, and the
 lab on the Assets page as its own sections. Which component renders which result is presentation
 and may move; the request side is the contract: `buildBaseAnalytics()` in
-`frontend/src/lib/components/risk/riskAnalysisHelpers.ts` (the base waves) and
+`frontend/src/lib/features/risk/riskAnalysisHelpers.ts` (the base waves) and
 `LEVEL_ON_DEMAND_ANALYSES` in `riskPanelController.svelte.ts` (L3: `comparison`; L4: `stress`,
 `replay`, `simulation`).
 
@@ -463,7 +463,7 @@ section, `quant/` paths are under `backend/app/services/risk/` and `risk_plugins
 | `block_length_days` | Automatic | 1 to 5 000 calendar days; block bootstrap only. |
 
 The five modes of the UI are pairs of `process` and `regime` (the block bootstrap with each regime,
-then GBM), listed in `frontend/src/lib/components/risk/levels/l4/simulationModes.ts` so that an
+then GBM), listed in `frontend/src/lib/features/risk/levels/l4/simulationModes.ts` so that an
 invalid pair cannot be built. A payload that names no `process` is read as `gbm` when it still uses
 the legacy names `sampling`, `paths` or `seed`, asks for `qmc` or carries a parametric seed, and as
 the block bootstrap otherwise.
@@ -601,17 +601,17 @@ its own `risk.analytics.<name>.*` keys.
   `risk.warnings.*`) with `message_params`. For every warning whose `details` carry `asset_ids`
   (or a single `asset_id`), the service adds the display names as `names` and their `count` to the
   parameters. On the client, `warningSentence()`
-  (`frontend/src/lib/components/risk/levels/warningSentence.ts`) translates the key with those
+  (`frontend/src/lib/features/risk/levels/warningSentence.ts`) translates the key with those
   parameters, and falls back to the English `message` when the catalogue lacks the key or the ICU
   format fails: never a raw key, never a placeholder.
 - **Errors.** The UI words a refusal or a failure from `error.code` alone, except for a size
-  limit: `errorDisplayCode()` (`frontend/src/lib/components/risk/levels/errorDisplayCode.ts`,
+  limit: `errorDisplayCode()` (`frontend/src/lib/features/risk/levels/errorDisplayCode.ts`,
   re-exported from `levelHelpers.ts`) also reads `details.remedy`, and turns a `resource_limit`
   whose remedy it knows into the display code `resource_limit_<remedy>`. Any other code stays as
   it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. It has two
   callers: `resultErrorCodes()` in `levelHelpers.ts` (the four levels and the lab sections) and
   `RiskResultFrame.svelte` (Asset Detail). `translateErrorCode()`
-  (`frontend/src/lib/components/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
+  (`frontend/src/lib/features/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
   back to a generic sentence (`risk.errors.unknown` in the levels). The client-side
   `answer_discarded` code is worded the same way.
 - **Gate.** `test_risk_warnings_i18n.py` scans `backend/app/services/risk/` and
@@ -629,11 +629,11 @@ Panels change; the plumbing below them is the stable part.
 
 ### 🧾 Requests and the Session Cache {: #risk-store }
 
-- `frontend/src/lib/risk/riskRequest.ts` builds every request with `buildRiskQueryRequest()` and
+- `frontend/src/lib/features/risk/riskRequest.ts` builds every request with `buildRiskQueryRequest()` and
   `buildRiskAnalyticRequest()`. Requests are canonicalized — sorted scope ids, upper-case currency,
   sorted replay proxies and exclusions — and parsed with the generated Zod schema, so equivalent
   questions serialize identically.
-- `frontend/src/lib/stores/risk/riskStore.svelte.ts` caches the two catalogues, the query answers
+- `frontend/src/lib/features/risk/riskStore.svelte.ts` caches the two catalogues, the query answers
   and the eligibility verdicts for the session. A query key is the user id plus the canonical
   request, with one flight per key shared by every caller. `queryRisk()` answers in three ways: a
   response; a rejection, remembered only while there is no answer to fall back on; or `null`, a
@@ -651,7 +651,7 @@ How this store sits among the other caches is described in
 ### 🕹️ The Panel Controller {: #panel-controller }
 
 `createRiskPanelController(inputs, options)`
-(`frontend/src/lib/stores/risk/riskPanelController.svelte.ts`) is the plumbing behind every risk
+(`frontend/src/lib/features/risk/riskPanelController.svelte.ts`) is the plumbing behind every risk
 panel; it has no markup.
 
 - **Base waves.** It loads the analytics catalogue, then sends up to two requests, a `historical`
@@ -689,12 +689,12 @@ panel; it has no markup.
   reasons, the assets that cannot be measured over the page's period, asking `queryEligibility()`
   itself when it is given a period; and it publishes a stored choice that cannot be measured as
   `blocked`, so no page asks a comparison it would then have to drop.
-- `frontend/src/lib/components/risk/eligibility.ts` only reads and words the engine's verdicts. An
+- `frontend/src/lib/features/risk/eligibility.ts` only reads and words the engine's verdicts. An
   asset with no verdict — not asked yet, or the request failed — stays selectable.
 
 ### 🧱 Component Families {: #components }
 
-All under `frontend/src/lib/components/risk/`:
+All under `frontend/src/lib/features/risk/`:
 
 | Family | Entry | Mounted by |
 |---|---|---|
