@@ -1466,6 +1466,76 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >
   >   - `SignalOptionContent` non ha un test suo; lo coprono i due test delle select.
   >   - Alla fine la porta 6156 è libera e l'HEAD è `ec3d54ca3`.
+- [x] ✅ (16/10/2026) W6-e, micro-lotto: le ultime 5 classi dell'area dentro stringhe HTML, cioè le tracce e il
+  riempimento delle barre di `DistributionDialog`:102 e `TargetsStep`:63 (coordinatore, 18:44). Base `986c26a0b`,
+  stesso albero del target `81bc305b9`.
+  > **Note implementazione** (16/10, 18:44–19:00).
+  > - **Analisi** (18:47): la traccia di `DistributionDialog` va su `bg-lf-neutral` 1:1. Quella di `TargetsStep` no:
+  >   il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` era `bg-lf-neutral`, ΔE00 0 dalla traccia. Il
+  >   commento di T in `toneClasses.ts` lo prevedeva.
+  > - **Decisione del coordinatore** (dopo la conferma della 1.3 che i due file erano liberi, e il controllo dei 31
+  >   rami locali): la (a), tutta mia.
+  >   - `pacTargetBar.unknown` → **`bg-lf-secondary`**, il colore che l'obiettivo ha già nel risultato (`ResultCell`:78,
+  >     legenda di `AssetTable`:148), lo stesso neutro «ideale» di TD-1.
+  >   - Le due tracce su `bg-lf-neutral`.
+  >   - È una scelta provvisoria: il coordinatore la porta alla designer, punto 27 della raccolta.
+  > - **⚠️ Fuori pista, errore mio dell'analisi:** avevo dato solo il ΔE00 e il contrasto sulla card, non quello del
+  >   riempimento sulla traccia. Il coordinatore aveva scelto `bg-lf-input`, che sulla traccia nuova fa 2,69/2,73:1,
+  >   sotto il 3:1 non testuale. L'ho misurato prima di toccare i file e il coordinatore è passato a `secondary`.
+  > - **Fatto:**
+  >   - `TargetsStep`:63, la traccia `bg-gray-100 dark:bg-slate-700` → `bg-lf-neutral`. Il riempimento era già
+  >     interpolato (`${escapeHtml(BAR_CLASS[totalState])}`).
+  >   - `DistributionDialog`: due costanti, `TRACK` (`h-3 overflow-hidden rounded-full bg-lf-neutral`) e `FILL`
+  >     (`h-full rounded-full bg-libre-green`), interpolate nel template. Il gate legge ogni stringa di script per
+  >     intero (G3), quindi un solo template con la traccia sui ruoli e il riempimento legacy sarebbe misto. Il markup
+  >     a runtime resta identico.
+  >   - Il riempimento `bg-libre-green` resta legacy: è il peso attuale di ogni asset, un colore di dato (DV-7).
+  >   - **Fuori area, dichiarato:** `lib/theme/toneClasses.ts` è di T. Cambia solo `pacTargetBar.unknown` col suo
+  >     commento; `pacTargetBar` lo usa solo `TargetsStep`.
+  > - **Misure a mano** (`files/dv_w6e_measure*.py` della sessione, col risolutore del gate). Il gate C3 copre i
+  >   riempimenti sulle superfici (`text-secondary` a 4,5, gli stati a 4,5), non sulla traccia `neutral`:
+  >
+  >   | Sulla traccia `neutral` | Chiaro | Scuro |
+  >   |---|---|---|
+  >   | `secondary` («sconosciuto») | 5,77:1 | 5,84:1 |
+  >   | `success` | 4,02:1 | 7,92:1 |
+  >   | `danger` | 4,09:1 | 5,74:1 |
+  >   | `warning` | 4,01:1 | 6,70:1 |
+  >   | `libre-green` (`DistributionDialog`) | 8,57:1 | 7,50:1 |
+  >   | prima: `neutral` sulla traccia legacy | 1,22:1 | 1,39:1 |
+  >   | scartato: `input` | 2,69:1 | 2,73:1 |
+  >
+  >   - ΔE00 di `secondary` dagli stati: success 20,4/21,8, danger 36,9/34,9, warning 32,6/31,5.
+  >   - La traccia sulla card: 1,30/1,21:1, ΔE00 7,2/5,6. Prima, la traccia legacy: 1,06/1,69:1, ΔE00 2,1/17,9. In
+  >     chiaro si vede di più, in scuro di meno: come le altre tracce su `bg-lf-neutral`.
+  > - **Controllo G3 sulle stringhe composte a runtime,** con le regex del gate: 7 stringhe (2 tracce, il riempimento
+  >   di `DistributionDialog`, i 4 riempimenti di `TargetsStep`), 0 miste.
+  > - Nessun test legge queste barre: niente Vitest dei due componenti. `text.test.ts` legge il sorgente di
+  >   `DistributionDialog` solo per i testi d'aiuto. L'E2E `pac-allocator-real` non asserisce classi. Nessuna pagina
+  >   della documentazione descrive i colori delle barre.
+  > - **Prove leggere** (`files/dv_w6e_light.sh` della sessione, log in `files/w6e-light/`, 18:55, carico
+  >   25–31):
+  >   - Prettier, compilatore (0 avvisi), regola 4 (0), dark-only (0), campi nativi (0 su 412 file), `git diff
+  >     --check` puliti.
+  >   - `--update`: m1 934 → 930. `DistributionDialog` da 3 a 1, resta solo `FILL`; `TargetsStep` da 2 a 0.
+  >     `--check` pulito.
+  >   - Vitest: `themeRoles` 80/80, `themeTokens` 21/21 (C3 e C4), `themeComponentTokens` 18/18, `htmlInterpolation`
+  >     26/26, `htmlSink` 7/7, `text` 95/95.
+  > - Restano, al via del coordinatore: l'E2E `front-utility pac-allocator-real` e lo scatto di galleria
+  >   `tools/pac-step-targets`, se G ha la corsia libera.
+  > - Commit `63880bc8b` del coordinatore (18:58); la punta è ferma a `81bc305b9` e la simulazione dell'ingresso è
+  >   pulita. Lo scatto `tools/pac-step-targets` si salta: entra nella prossima galleria completa, quella del giro
+  >   della designer.
+  > - **Slot breve** (via del coordinatore alle 18:58), su `63880bc8b`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  >   18:59:35 alle 19:08:56, carico da 62 a 91 per le altre sessioni. Script e log in `files/w6e-slot/` della
+  >   sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 29 s |
+  >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 532 s: build di frontend e documentazione 411 s (la base aveva i docs di AF), il popolamento, il test in 11,5 s |
+  >
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `63880bc8b` e il worktree non ha file tracciati cambiati.
 - [ ] W6-d, dopo l'ingresso di Y.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
