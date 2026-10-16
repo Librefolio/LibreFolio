@@ -10,7 +10,9 @@ short on purpose: signing in and out, a password-reset or invitation link alread
 with it: someone who lost the password must still reach the block page, the account deletion or the backup), the block
 page, the deletion of one's own account and its preview, the probes, the full backup of an administrator or of the
 hosting panel (decision 12: on a blocked instance the data can still be taken away; the panel's routes want its
-token, not a session), and the scheduled wake-up, with its own token (decision D-W3: it runs no job and answers
+token, not a session), the outcome of a restore for the page that asked its restart, with that restart's one-time
+ticket instead of a session (lot B5c: it starts nothing, and tells that page that the restore waits for the unblock),
+and the scheduled wake-up, with its own token (decision D-W3: it runs no job and answers
 ``blocked``). Registration stays out; anything else goes through the developer first. A test pins the list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
@@ -32,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1 import auth
 from backend.app.api.v1.backup import instance as backup_instance
 from backend.app.api.v1.backup import panel as backup_panel
+from backend.app.api.v1.backup import restore as backup_restore
 from backend.app.api.v1.system import block, health, info, instance, ready, wake
 from backend.app.config.platform import instance_blocked
 from backend.app.db.session import get_session_generator
@@ -60,6 +63,9 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         backup_panel.get_panel_backup_job,
         backup_panel.download_panel_backup,
         backup_panel.delete_panel_backup_job,
+        # The outcome of a restore, for the page that asked its restart, with that restart's one-time ticket instead of a
+        # session (B5c): it starts nothing, and says that the restore waits for the unblock
+        backup_restore.get_restore_outcome,
         # The block page
         block.get_instance_block,
         instance.get_instance_config,
