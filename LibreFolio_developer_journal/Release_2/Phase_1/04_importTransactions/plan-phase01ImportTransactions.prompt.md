@@ -4445,3 +4445,48 @@ saltati; unità da sole 2 255 passati e 25 saltati (28 sessioni pytest); DB 20/2
 Le righe «❌» del log sono i messaggi attesi dei test negativi dei fornitori FX (`MOCKFX_FAIL`, valuta non supportata).
 Porta libera dopo; DB di test archiviato dal runner (`00_archive/test-db_20261016_215237.tar.xz`); log per unità in
 `files/logs/allb_47_units_2119/`. Pronta per l'ingresso (fusione del mio ramo in dev, 47 e journal).
+
+**La 47 entrata** (coordinatore, 21:5x): fusione `ea72346b7` (treno 142), CHANGELOG `bf2c22791`; il mio ramo portato avanti
+veloce a `bf2c22791`, pulito. Dal team dei colori: i 3 test del Designer Lab liberi (aggiornarli); i lotti T e AF di stasera
+non toccano le 12 righe della baseline; nessun ingresso durante il congelamento. **FE8b: via e congelamento annunciato.**
+
+### FE8b — la cartella delle transazioni in `features/`: lo spostamento ⏳ (2026-10-16)
+
+1. ✅ **Spostamento** (21:56, `files/scripts/fe8b_move.py --apply` su `bf2c22791`; prima il dry run sulla base nuova, identico:
+   tre commit di dev toccavano solo altre righe di `_frontend_utility.py` e altre rotte): 124 file in `features/transactions/`
+   (radice 24, `form/` 13, `bulk/` 18, `import/` 56, `events/` 8, `cells/` 3, `wac/` 2), i 2 barili tolti, `utils/brim/` con
+   `pluginText` e `pluginKind`; 191 file riscritti, 575 riferimenti (4 barili espansi, 6 `vi.mock`, 12 righe della baseline, 356
+   menzioni di percorso). Con `mv`, non `git mv`: lo staging è del coordinatore.
+   > **⚠️ Fuori pista — `import.meta.glob`**: lo strumento non leggeva i glob di Vite. Tre pattern relativi erano rimasti
+   > quelli della cartella vecchia: `GapFixStep.test.ts` (`../../../utils/transactions/gapFixModel.ts` → `./gapFixModel.ts`) e
+   > `ReportSetCard.test.ts` (`../../table/DataTable.svelte`, `../../ui/feedback/Tooltip.svelte` → `../../../components/…`),
+   > ognuno con la sua chiave di lettura: corretti a mano (4 righe). Trovati con il grep dei percorsi vecchi sui file nuovi (non
+   > tracciati, quindi fuori da `git grep`). Nessun altro glob, `new URL(…, import.meta.url)` o `readFileSync` nei file spostati;
+   > nessuno script che scandisce solo `lib/components`, `lib/utils` o `lib/stores` (`coverage_js.py` classifica già
+   > `src/lib/features/` come HIGH, come per i lotti di Y).
+2. ✅ **Controlli statici** (21:57–22:0x, carico 59–100): percorsi vecchi a zero in `frontend/`, `scripts/`, `backend/`,
+   `.github/`, `mkdocs_src/docs/`, devWiki, salvo le eccezioni dichiarate (le 3 righe `~split`, storia; 2 pagine della devWiki che
+   nominavano già file inesistenti; `frontend/design/REPORT.md`, rapporto datato); `git diff --check` pulito; `prettier --check`
+   sui 140 file toccati pulito; `theme-roles.mjs --check` «Colour gates: clean»; `check_source_paths.py` a 5 come prima (4 103
+   citati); `check-orphans` (504 unità e 138 spec registrati e raggiungibili); `black` pulito; `ruff`: i 4 PLC0415 di
+   `_frontend_transaction.py` ci sono già su HEAD, righe non toccate.
+3. ✅ **Prove del punto 1** (slot 1, 22:06–22:26, carico 55–102; `files/scripts/fe8b_point1.sh`):
+   - `front check` al primo giro **27 errori in 7 file, tutti in `features/backup/`** (`RestoreStatus`, `control_totals`, …),
+     che FE8b non tocca. > **⚠️ Fuori pista — ambiente**: il client generato (`src/lib/api/generated.ts` e `openapi.json`,
+     ignorati da git) era delle 21:47, cioè dell'avvio del server di `all-backend`, prima dell'avanzamento veloce che ha portato
+     l'API del ripristino di B (`1e2f6374a`). `dev.py api sync` (nessun file tracciato cambiato), poi di nuovo tutto il punto 1.
+     Lezione: dopo un aggiornamento di base che porta API, `api sync` prima di svelte-check.
+   - Secondo giro: `front check` **0 errori, 0 avvisi**; Vitest `front-transaction tx-unit` **907**, `front-utility core-unit`
+     **7 270** (con i gate dell'HTML e dei colori), `component-unit` **4 246**, `front-broker broker-unit` **60**, `front-asset
+     asset-unit` **881**; `front build` verde; `mkdocs build` strict (3 084 URL relativi risolti) e `check-links` verdi.
+   - `lint --dead-code --scope frontend`: exit 1 come sempre su questo albero (decine di reperti altrui: tipi di `lib/types`,
+     rischio, onboarding, dipendenze `@embedpdf` non elencate). Nella feature solo `txStoreGetFiltered` e `txStoreGetVersion`
+     (`txStore.svelte.ts`): **già inutilizzati su HEAD** al percorso vecchio, e nessun barile li esportava. **Nessun reperto
+     nuovo.**
+   - Dev è avanzato durante il congelamento (`bf2c22791` → `4e233fe5b`: Z-18, J CP-7b, E-4): l'unico file in comune è la rotta
+     della Dashboard (Z alle righe 109–650, FE8b alle righe d'import 78–79: nessun conflitto); nessun riferimento nuovo ai
+     percorsi vecchi, nessun file nuovo nelle cartelle congelate.
+   - **Commit pronto** (22:3x): 376 percorsi nel commit del codice (`files/fe8b/stage_code.txt`: 126 tolti, 124 nuovi, 126
+     modificati), il journal a parte (`files/fe8b/stage_journal.txt`); nessun file ignorato o generato fra loro; `git diff
+     --check` pulito; porta libera.
+4. ⏳ E2E (punto 2, `files/scripts/fe8b_point2.sh`) nello stesso slot, dopo il commit del coordinatore.
