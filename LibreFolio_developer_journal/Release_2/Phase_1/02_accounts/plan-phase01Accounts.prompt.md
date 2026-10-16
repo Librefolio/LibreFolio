@@ -3991,3 +3991,112 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Fuori pista — la pausa**: il messaggio «lo slot 2 dopo la galleria di X» è arrivato con la catena già partita;
 >   `kill -STOP` sullo script dopo `core-unit`, `component-unit` lasciata finire, `kill -CONT` al via (04:33:49).
 > - **Esito**: A6c pronto per l'ingresso.
+
+### A7 — F02 admin iniziale, `/setup`, K-5, avviso di registrazione aperta — contratto approvato (2026-10-16, 04:50)
+> **Approvato** dal coordinatore (C1–C8 come proposti; le tre domande vanno al developer come P16). Stanotte si costruisce
+> con le mie proposte, ognuna «Decisione notturna, da rivedere». **A7a** (backend, C1–C5) subito, rossi in file nuovi;
+> nei file di E5b (`auth.py`, `schemas/auth.py`, `user_usage`) solo aggiunte piccole: E5b entra prima, al mio
+> checkpoint il coordinatore aggiorna la base e risolvo io. **A7b** (C6–C8, frontend) dopo l'ingresso di E5b
+> (`LoginCard`). File di H assegnati, una riga ciascuno: `app_lifespan.py` (il passo), `config_audit.py`,
+> `instance_block.py`. Condivisi: `.env.example` (solo la sezione F02), `backend.instructions.md` («First user =
+> automatic admin»), i18n solo nel mio sottosistema. Macchina ferma 05:30–06:45; `all-backend` di A7a dopo le 06:45.
+> Tab bar di Impostazioni (nota di G): misure e tre opzioni al developer (P13); `TabBar.svelte` è di T stanotte.
+>
+> **Stato verificato** (`ef073af86`): `AccountTokenPurpose.ADMIN_SETUP` (72 h, `/setup`) e `build_admin_setup` di E ci
+> sono; `issue_token` genera sempre il token; `tokens/inspect` accetta solo `invite|password_reset`; `user_usage` conta
+> attivi + inviti vivi; `create_user(..., is_active=False, commit=False)` esiste; lo username unico basta come guardia
+> fra due worker (vince chi scrive per primo); `_add_link_commands` dà lo stesso comando a `user_cli.py` e a `dev.py`.
+>
+> **A7a — contratto dei test**:
+> - **C1 · `config/accounts.py`**: `admin_bootstrap_config() -> AdminBootstrapConfig | None` (`email`, `username`,
+>   `token`), letta a ogni chiamata; `None` con F02 spento. `AdminBootstrapConfigError(variable, code)` nomina la
+>   variabile, mai il token: `ADMIN_BOOTSTRAP_TOKEN_WITHOUT_EMAIL`, `ADMIN_USERNAME_WITHOUT_EMAIL`, `ADMIN_EMAIL_INVALID`,
+>   `ADMIN_USERNAME_INVALID` (3–50), `ADMIN_BOOTSTRAP_TOKEN_INVALID_CHARACTERS`, `…_TOO_SHORT` (< 32), `…_TOO_LONG`
+>   (> 200); un `_FILE` illeggibile dà `SecretFileError`. Vuoto = non impostata. `log_configuration_audit()` la chiama:
+>   un valore rotto ferma l'avvio.
+> - **C2 · `services/accounts/bootstrap_admin_service.py`**: `run_admin_bootstrap(session, config, now=)` →
+>   `off` | `ignored` (altri account, nessun admin in attesa; INFO) | `created` (istanza vuota: admin disattivo e
+>   superuser, segreto casuale, riga `registration_mode=invite`, token `admin_setup` dato o generato, 72 h; una
+>   transazione; fra due chiamate concorrenti una sola crea) | per l'admin in attesa (disattivo, con token `admin_setup`
+>   mai consumati): `rearmed` (token della variabile mai visto: revoca i vivi, salva il nuovo), `pending` (un link vivo),
+>   `expired` (nessun link vivo: WARNING che rimanda a `./dev.py user setup-link` o a un token nuovo); username o email
+>   della variabile cambiati: l'account li segue (username occupato: ERROR, invariato). Consegna solo dopo `created`
+>   con token generato: il link nel log una volta (WARNING) e per email (`build_admin_setup`, lingua dell'istanza) se
+>   l'email funziona e c'è `LIBREFOLIO_PUBLIC_URL`; un errore d'invio è un log, mai un blocco. Token della variabile:
+>   nessun log del token, nessuna email.
+> - **C3 · `complete_admin_setup(session, token, new_password)`** e `POST /auth/setup` `{token, new_password}`: prima
+>   `PASSWORD_TOO_WEAK`; token non valido, o account già attivo → 400 `TOKEN_INVALID` (il token dell'account attivo viene
+>   revocato); poi password (bcrypt fuori dal loop), attivo, `end_sessions`, gli altri token di setup revocati, commit; il
+>   cookie e la risposta come il login (`AuthLoginResponse`). `tokens/inspect` accetta `admin_setup` (risponde lo
+>   username).
+> - **C4 · `user_usage`**: conta anche l'admin in attesa (disattivo con un token `admin_setup` mai consumato).
+> - **C5 · `./dev.py user setup-link`**: revoca i link vivi dell'admin in attesa, ne emette uno generato (72 h), lo
+>   stampa come `reset-link`; senza admin in attesa ❌ e uscita 1.
+> - **Passo d'avvio** `admin-bootstrap` dopo `global-settings` (riga in `app_lifespan.py`); l'email parte in background.
+>
+> **Decisioni notturne, da rivedere** (ognuna facile da cambiare):
+> 1. Link generato: nel log una volta **e** per email quando si può (P16, approvata per stanotte).
+> 2. Una variabile F02 rotta ferma l'avvio nominandola (P16), anche su un'istanza con account: come `LIBREFOLIO_BLOCKED`.
+> 3. L'email dell'admin di bootstrap è trattata come quella di `user create` (P16): l'aggancio di E5 si allinea
+>    all'aggiornamento di base dopo E5b.
+> 4. Il token della variabile: 32–200 caratteri non riservati di un URL (`A–Z a–z 0–9 - . _ ~`), più stretto del token
+>    del pannello dei backup, perché viaggia in un link (`/setup#token=…`).
+> 5. `LIBREFOLIO_ADMIN_USERNAME` senza email è un errore: chi la mette vuole F02.
+> 6. Il link di setup di un account già attivo è rifiutato, e revocato.
+> 7. L'email parte in background dopo l'avvio: un SMTP lento non ritarda il server.
+>
+> **Domanda per il developer** (in pausa, il resto va avanti): `/auth/setup` su un'istanza bloccata. La decisione 12 ha
+> fatto decadere D-A15, e la lista consentita dice «il resto passa prima dal developer». Proposta: ammetterlo come il
+> link di reset (non crea account: attiva quello che il fornitore ha preparato), così un cliente bloccato prima del setup
+> arriva comunque alla pagina di blocco e a «Gestisci abbonamento». Finché non decide, la riga non c'è.
+
+#### A7a.1 — Rossi (due `test-author`, solo scrittura, file nuovi) ⏳ (2026-10-16, 04:58–)
+> - Due `test-author` in parallelo, solo scrittura: `test_services/test_admin_bootstrap.py` (C1, token dato, C2, C3 di
+>   servizio, C4, C5, il passo d'avvio) e `test_api/test_admin_setup_api.py` (C3 e `inspect`: in-process su DB privati
+>   per tutto ciò che ha un admin in attesa, sul server della corsia solo rifiuti che non scrivono).
+> - **Bozze** (solo scrittura, in attesa dei rossi), in `/tmp/libreFolio_a7a/`: `bootstrap_admin_service.py` (nuovo);
+>   `apply_a7a_backend.py` (config, `issue_token(token=)`, `user_usage` + `pending_admin_filter`, schemi, `POST
+>   /auth/setup` in fondo ad `auth.py`, una riga in `config_audit.py`, il passo in `app_lifespan.py`, `setup-link`);
+>   `apply_a7a_runner.py` (`services admin-bootstrap` pure, `api admin-setup`); `apply_a7a_shared.py`
+>   (`.env.example`: la sezione F02 e la riga «open by default» di A5, che A6d ha reso falsa; `backend.instructions.md`).
+>   Tutte combaciano a secco; il modulo nuovo passa `ruff` e `black`.
+> - **Decisione tecnica** (nel mio perimetro): SQLite è in WAL con `busy_timeout` 30 s. Una scrittura come prima
+>   istruzione di una transazione aspetta il lock; una lettura seguita da una scrittura può fallire subito con
+>   «database is locked» se un altro ha scritto nel frattempo. Quindi la creazione chiude le letture e comincia scrivendo
+>   la riga `registration_mode` (prende il lock, poi conta gli account: un solo worker crea); il setup consuma il token
+>   per primo, come il reset; al riavvio, il worker che trova il lock occupato mentre l'altro riarma o rinomina risponde
+>   `pending`.
+> - **Domanda al developer** inviata al coordinatore (05:00): `/auth/setup` sull'istanza bloccata (P16).
+> - **Rossi scritti** (05:25–05:35, nessuno lanciato: la macchina è ferma fino alle 06:45):
+>   - `test_services/test_admin_bootstrap.py`, 54 test: CFG-001…011 (variabili, codici d'errore, `_FILE`, l'audit
+>     d'avvio che si ferma), TOKEN-001…005 (`issue_token(token=)`), BOOT-001…022 (azioni, gara di due motori,
+>     scadenza al microsecondo, riarmo, rinomina, consegna: log una volta e email esatta di `build_admin_setup`, mai un
+>     token della variabile nei log), SETUP-001…004, USAGE-001…003, CLI-001…006, STEP-001…003.
+>   - `test_api/test_admin_setup_api.py`, 42 casi: SETUP-001…013 e INSPECT-010…013; in-process su DB privati, sul
+>     server della corsia solo 4 rifiuti che non scrivono.
+>   - Scelte dei `test-author` che ho adottato nella bozza: `deliver_setup_link(result, *, engine=None, now=None)` apre
+>     una sessione sua, e il passo d'avvio la chiama per nome con `engine=` in un task; il log «non inviata» dice solo il
+>     tipo dell'errore. Lasciate come lette: uno spazio intorno al token è `ADMIN_BOOTSTRAP_TOKEN_INVALID_CHARACTERS`;
+>     l'admin in attesa con il link scaduto occupa ancora un posto (definizione letterale di D-A10).
+> - **Doc** (`docs-writer`, durante la sosta, nessun comando): 18 pagine EN. Admin: `configuration` (sezione nuova
+>   «The Initial Administrator», `#initial-admin`), `hosting_providers` (`#initial-admin`, il lato del fornitore),
+>   `cli_tools` (`#setup-link`), `settings` (l'eccezione alla regola del primo account), `users` (l'admin in attesa occupa
+>   un posto), una frase in `index`, `host_installation`, `docker_advanced`, `user/installation`, `user/getting-started`;
+>   una riga nella pagina `admin/email` di E («What LibreFolio sends»). Dev: `access_control` (sezione F02),
+>   `security`, `overview` (il passo `admin-bootstrap`), `settings`, `database/users_access`, `users_and_brokers`,
+>   `runner_architecture`. Debito di traduzione (A-10): `configuration` e `cli_tools` con le ancore `#initial-admin` e
+>   `#setup-link` da tenere uguali; una o due frasi nelle altre.
+> - **Da segnalare** (non modificato): nelle pagine di E diventano false «`build_admin_setup()` has no caller», «three
+>   emails have a caller», la riga «Coming Next» e «Never logged… the link» (`developer/backend/email.md`), e in
+>   `admin/email.en.md` «Emails with a Link» e i `kind` di «Email sent» senza `admin_setup`. In `admin/users.en.md` il
+>   badge «Deactivated» «non occupa posti», ma l'admin in attesa è disattivo e lo occupa: per A7b la scheda Utenti deve
+>   mostrarlo come «in attesa del setup» (e non offrire «Riattiva», che lascerebbe un account attivo senza password
+>   nota). Gli elenchi delle rotte che rispondono 401 sull'istanza bloccata non nominano `/auth/setup`: aspettano la
+>   decisione P16.
+
+#### In attesa — la chiave «unpaired» dopo la decisione 47 (nota del coordinatore, 2026-10-16 06:10)
+> Quando la decisione 47 è approvata (aspetta J-17, il developer) e **solo al via del coordinatore**: la chiave V-3 di W,
+> `settings …unpaired` (anteprima della cancellazione dei broker), prende una frase in più, «assets sent to them leave at
+> their average cost» (EN; IT «quelli mandati a questi broker escono al loro costo medio»; FR «ceux envoyés à ces brokers
+> sortent à leur coût moyen»; ES «los enviados a estos brókers salen a su coste medio»). Il testo completo in FR ed ES lo
+> chiedo a W.
