@@ -35,9 +35,9 @@
     <div class="flex min-w-0 items-center gap-2 text-sm {item.family ? 'pl-4' : ''}">
         <img src={item.icon} alt="" class="h-6 w-6 shrink-0 object-contain" />
         <span class="min-w-0">
-            <span class="block truncate text-gray-800 dark:text-gray-100">{item.label}</span>
+            <span class="block truncate text-lf-primary">{item.label}</span>
             {#if item.hint}
-                <span class="block truncate text-[11px] leading-4 text-gray-400 dark:text-gray-500" data-testid="asset-type-tree-hint-{item.value}">{item.hint}</span>
+                <span class="block truncate text-[11px] leading-4 text-lf-muted" data-testid="asset-type-tree-hint-{item.value}">{item.hint}</span>
             {/if}
         </span>
     </div>
@@ -54,7 +54,7 @@
     testIdPrefix="asset-type-tree"
     defaultExpanded="selected"
     minDropdownWidth={300}
-    triggerBorderClass="border-gray-300 dark:border-slate-600"
+    triggerBorderClass="border-lf-input"
     searchPlaceholder={$t('assets.typeSelect.searchPlaceholder')}
     noMatchesText={$t('assets.typeSelect.noMatches')}
 >
@@ -63,7 +63,7 @@
             {#if group.icon}
                 <img src={group.icon} alt="" class="h-5 w-5 shrink-0 object-contain" />
             {/if}
-            <span class="truncate text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">{group.label}</span>
+            <span class="truncate text-xs font-semibold uppercase tracking-wide text-lf-secondary">{group.label}</span>
         </span>
     {/snippet}
     {#snippet selectedItem(item)}

@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
 - **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 - **Check a backup before restoring it**: `dev.py backup restore ARCHIVE --dry-run` and `/api/v1/backup/restore/*` unpack the archive into a copy, bring it to this version's schema, check it and report what a restore would do — the backup's administrators, the migrations applied, the rows — without touching the instance. Hosting providers can cap the upload with `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB by default in the managed profile).
+- **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again. A server variable can set the instance-wide ones and lock them.
+- **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
 
 ### 🔄 Changed
 
@@ -71,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+- **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
 
 #### 🎨 A new colour palette
 
@@ -138,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
 - **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
 - The image picker no longer reloads its list over and over when it has nothing to show.
+- **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
+- **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
 
 #### 🔒 Security
 
@@ -145,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
 - **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
+- **Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.** Fonts and source maps are served with their own type, also without the system's MIME table.
 
 ### ⚠️ Breaking changes
 
