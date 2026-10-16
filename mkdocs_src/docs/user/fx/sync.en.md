@@ -45,6 +45,8 @@ schedule.
 ## ⚠️ What a sync changes
 
 - Dates of the period that are already stored take the provider's value; missing dates are added.
+  Before you start, the window warns when the period already holds stored rates, and for how many of
+  its pairs.
 - Dates outside the period are left untouched.
 - If a pair's first route fails, LibreFolio tries the next one: see
   [Provider Config](detail/provider.md).

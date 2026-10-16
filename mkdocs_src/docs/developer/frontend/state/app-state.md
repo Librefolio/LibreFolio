@@ -324,7 +324,7 @@ The rules the primitives carry:
   and lots, where quantity × public price rebuilds what the user owns, and stays visible in the
   Transactions list. So the rule cannot live in a shared quantity formatter: `maskableQuantity` is a
   separate, searchable name with no `sensitivity`, and a site that must stay visible —
-  `formatTxQuantity` in `lib/components/transactions/shared/txDisplayHelpers.ts` — simply does not
+  `formatTxQuantity` in `lib/features/transactions/txDisplayHelpers.ts` — simply does not
   call it. Its callers today are `ExposureTable.svelte`, `unifiedLotsTableHelpers.ts`,
   `LotCustodyModal.svelte`, `LotGanttChart.svelte` and `LotWacPriceChart.svelte`. Units and tickers
   stay outside the argument, as the currency does for money; a partially closed lot keeps its open

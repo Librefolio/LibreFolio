@@ -387,10 +387,6 @@
      * selection (0,3,2) — for this table only.
      */
     :global(div.risk-return-table table tbody tr.clickable.selected) {
-        background: var(--lf-cmp-risk-return-row-selected-bg);
-    }
-
-    :global(.dark div.risk-return-table table tbody tr.clickable.selected) {
-        background: var(--lf-cmp-risk-return-row-selected-bg-dark);
+        background: var(--lf-selected);
     }
 </style>

@@ -9,7 +9,7 @@ from typing import Iterable, Mapping, Sequence
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
     DataQualityReport,
@@ -47,10 +47,11 @@ from backend.app.services.financial_math.lots.histories import (
     known_realized_pnl,
     trim_dates,
 )
-from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
-from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
 from backend.app.services.financial_math.returns import cumulative_to_annualized
+from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
@@ -137,18 +138,32 @@ class LotsAnalysisService:
             date_from=computed_from,
             date_to=actual_to,
         )
-        price_lookup = PriceHistoryLookup(prices)
-        estimated_mode = price_lookup.latest() is None
+        quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
+        # The unified price resolver is the SINGLE valuation brain for this asset: fed the
+        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
+        # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
+        # none exists, to the same-day / last-observed trade mark. Built before the FIFO engine, it
+        # gives a lot opened by an ADJUSTMENT its reference price (CP-7b), and after the engine it
+        # values the open lots and draws the chart price line, so lots-analysis shares one price
+        # model with the portfolio engine.
+        price_series = build_asset_price_series(
+            price_rows=[(row.date, row.close, row.currency) for row in prices],
+            transactions=transactions,
+            split_linked_tx_ids=set(split_ratios_by_tx_id),
+            asset_currency=asset.currency,
+            quote_base_quantity=quote_base_quantity,
+        )
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
 
         def reference_price_lookup(resolved_asset_id: int, opened_at: date_type) -> ReferencePriceResolution | None:
             if resolved_asset_id != asset_id:
                 return None
-            resolved = price_lookup.resolve(opened_at)
-            if resolved is None:
+            mark = price_series.resolve(opened_at)
+            if mark.is_missing:
                 return None
-            return ReferencePriceResolution(price=resolved.price, source=resolved.source)
+            # ``exact`` only for a market quote of that day; a carried quote or a trade mark is a fallback.
+            return ReferencePriceResolution(price=mark.unit_price, source="exact" if mark.source is MarkSource.MARKET else "fallback")
 
         # Resolve economic FX and build events BEFORE the engine run: the engine is target-value
         # aware (Option B), so it needs each event's pre-converted target amount and each trade's
@@ -214,6 +229,10 @@ class LotsAnalysisService:
         )
         display_from = date_from or computed_from
         history_dates = list(_date_range(computed_from, actual_to))
+        # A day with no observation on or before it — no quote, no BUY or SELL — values the open lots at cost, as the
+        # Dashboard values a holding (J-17). Those days run from the first transaction to the day before the first
+        # observation, or to the end when the asset has none: then the current price too is assumed at cost.
+        at_cost_until = last_day_without_observation(price_series, history_dates)
 
         performance_context = PerformanceSourceContext(
             transactions=transactions,
@@ -252,7 +271,7 @@ class LotsAnalysisService:
             lots_by_id=lots_by_id,
             selected_ids=selected_ids,
             transactions=transactions,
-            price_lookup=price_lookup,
+            price_series=price_series,
             prices=prices,
             fragments=engine_result.fragment_intervals,
             events=engine_result.classified_events,
@@ -270,7 +289,7 @@ class LotsAnalysisService:
             lots_by_id=performance_context.lots_by_id,
             asset_currency=asset.currency,
         )
-        if needs_income_alloc and estimated_mode:
+        if needs_income_alloc and at_cost_until is not None:
             # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
             for lot in lots_by_id.values():
                 fx_resolver.need(lot.currency, lot.opening_date)
@@ -280,42 +299,29 @@ class LotsAnalysisService:
         fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(engine_result)
 
         data_quality = self._build_data_quality_report(engine_result.issues, engine_result.economic_allocation_groups, withheld)
-        if estimated_mode and needs_market_series(normalized_analyses):
-            # estimated_mode == the asset has NO price points at all, so the whole analysis window
-            # [computed_from, actual_to] is the range with no market price. Surface it in the message
-            # so the user knows which period is uncovered (per user feedback on delisted/matured titles).
+        if at_cost_until is not None and needs_market_series(normalized_analyses):
+            # [computed_from, at_cost_until] has no observation (no quote, no BUY or SELL), so it is valued at
+            # cost: the whole window when the asset has none. Surface it in the message so the user knows which
+            # period is uncovered (per user feedback on delisted/matured titles).
             data_quality.issues.append(
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
                     code=IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
                     severity=IssueSeverity.WARNING,
                     message_i18n_key="dataQuality.currentPriceAssumedAtCostRange",
-                    message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": actual_to.isoformat()},
+                    message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": at_cost_until.isoformat()},
                 )
             )
         # The histories read every day's price, the summary only the last one: value no other day, so the
         # report never holds the gap of a day nobody reads.
         daily_series = any(analysis in normalized_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
         active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
-        quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
-        # The unified price resolver is the SINGLE valuation brain for this asset: fed the
-        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
-        # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
-        # none exists, to the same-day / last-observed trade mark. Both the open-lot valuation
-        # (``market_prices`` -> NAV / value / return / performance) and the chart price line
-        # (``estimated_market_prices``) read from it, so lots-analysis shares one valuation model
-        # with the portfolio engine — no legacy market-only map. Each native mark is converted to
-        # the target currency at *its own valuation date* (per-day FX, never frozen at the
-        # observation date); ``None`` marks a day the resolver has no observation for (genuine
-        # MISSING), or whose price cannot be converted: that day is not valued, never at the native
-        # price. Downstream only the estimated-at-cost mode (no price at all) falls back to cost.
-        price_series = build_asset_price_series(
-            price_rows=[(row.date, row.close, row.currency) for row in prices],
-            transactions=transactions,
-            split_linked_tx_ids=set(split_ratios_by_tx_id),
-            asset_currency=asset.currency,
-            quote_base_quantity=quote_base_quantity,
-        )
+        # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
+        # chart price line (``estimated_market_prices``) read the series built above. Each native mark is
+        # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
+        # observation date); ``None`` marks a day the resolver has no observation for (genuine MISSING),
+        # or whose price cannot be converted: that day is not valued, never at the native price.
+        # Downstream only a day with no observation on or before it (``at_cost_until``) falls back to cost.
         market_prices: dict[date_type, Decimal | None] = {}
         estimated_market_prices: dict[date_type, tuple[Decimal, bool]] = {}
         for current_date in active_price_dates:
@@ -344,12 +350,12 @@ class LotsAnalysisService:
                 selected_ids=selected_ids,
                 fx_resolver=fx_resolver,
                 market_prices=market_prices,
-                price_lookup=price_lookup,
+                price_series=price_series,
                 closures_by_lot=closures_by_lot,
                 income_by_lot=income_by_lot,
                 fees_by_lot=fees_by_lot,
                 taxes_by_lot=taxes_by_lot,
-                estimated_mode=estimated_mode,
+                estimated_mode=at_cost_until == actual_to,
                 quote_base_quantity=quote_base_quantity,
                 analysis_end=actual_to,
                 withheld=withheld,
@@ -391,7 +397,7 @@ class LotsAnalysisService:
                     income_prefix_by_lot=income_prefix_by_lot,
                     fees_prefix_by_lot=fees_prefix_by_lot,
                     taxes_prefix_by_lot=taxes_prefix_by_lot,
-                    estimated_mode=estimated_mode,
+                    at_cost_until=at_cost_until,
                     quote_base_quantity=quote_base_quantity,
                     withheld=withheld,
                 ),
@@ -407,14 +413,14 @@ class LotsAnalysisService:
                     lots_by_id=lots_by_id,
                     fragments_by_lot=fragments_by_lot,
                     market_prices=market_prices,
-                    price_lookup=price_lookup,
+                    price_series=price_series,
                     fx_resolver=fx_resolver,
                     history_dates=history_dates,
                     closures_by_lot=closures_by_lot,
                     income_prefix_by_lot=income_prefix_by_lot,
                     fees_prefix_by_lot=fees_prefix_by_lot,
                     taxes_prefix_by_lot=taxes_prefix_by_lot,
-                    estimated_mode=estimated_mode,
+                    at_cost_until=at_cost_until,
                     quote_base_quantity=quote_base_quantity,
                     withheld=withheld,
                 ),
@@ -574,12 +580,7 @@ class LotsAnalysisService:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
-        split_candidate_ids = [tx.id for tx in transactions if tx.id is not None and tx.asset_event_id is not None]
-        if not split_candidate_ids:
-            return {}
-        stmt = select(Transaction.id, AssetEvent.value).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_candidate_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        rows = (await self.db.execute(stmt)).all()
-        return dict(rows)
+        return {link.transaction_id: link.ratio for link in await load_split_links(self.db, transactions)}
 
     async def _load_broker_shorting(self, scope_broker_ids: Sequence[int]) -> dict[int, bool]:
         stmt = select(Broker.id, Broker.allow_asset_shorting).where(Broker.id.in_(scope_broker_ids))
@@ -717,7 +718,7 @@ class LotsAnalysisService:
         selected_ids: Sequence[int],
         fx_resolver: FxRateResolver,
         market_prices: dict[date_type, Decimal | None],
-        price_lookup: PriceHistoryLookup,
+        price_series: AssetPriceSeries,
         closures_by_lot: dict[int, list[LotClosure]],
         income_by_lot: dict[int, Decimal],
         fees_by_lot: dict[int, Decimal],
@@ -744,7 +745,7 @@ class LotsAnalysisService:
             known_buybacks = known_buyback_cost(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
-            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_lookup, quote_base_quantity)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_series, quote_base_quantity)
             reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             lot_realized_pnl = known_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             # A lot reached by an economic pool without a rate has that income, fee or tax unknown.

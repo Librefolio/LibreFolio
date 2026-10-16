@@ -13,7 +13,7 @@ from typing import Optional
 import structlog
 from sqlalchemy import and_, func, or_, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import (
@@ -25,6 +25,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
+from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -213,16 +214,13 @@ class PortfolioCalculationEngine:
         # ── 3b. Load ADJUSTMENT rows linked to unique SPLIT AssetEvents ──
         # A split rescales the average-cost pool instead of adding or reducing it: it
         # redistributes existing cost over a new quantity, it never adds/removes cost.
-        split_event_tx_ids = {tx.id for tx in all_txs if tx.id is not None and tx.asset_event_id is not None}
         split_linked_tx_ids: set[int] = set()
         split_records_by_event_id: dict[int, SplitRecord] = {}
-        if split_event_tx_ids:
-            split_asset_event_stmt = select(Transaction.id, AssetEvent.id, AssetEvent.asset_id, AssetEvent.date, AssetEvent.value).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_tx_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-            for tx_id, event_id, asset_id, split_date, split_ratio in (await self.db.execute(split_asset_event_stmt)).all():
-                if split_ratio is None or not split_ratio.is_finite() or split_ratio <= 0:
-                    raise ValueError(f"SPLIT AssetEvent {event_id} must have a positive finite ratio")
-                split_linked_tx_ids.add(tx_id)
-                split_records_by_event_id[event_id] = SplitRecord(event_id=event_id, asset_id=asset_id, date=split_date, ratio=split_ratio)
+        for link in await load_split_links(self.db, all_txs):
+            if not is_valid_split_ratio(link.ratio):
+                raise ValueError(f"SPLIT AssetEvent {link.event_id} must have a positive finite ratio")
+            split_linked_tx_ids.add(link.transaction_id)
+            split_records_by_event_id[link.event_id] = SplitRecord(event_id=link.event_id, asset_id=link.event_asset_id, date=link.event_date, ratio=link.ratio)
 
         split_history_lists: dict[int, list[SplitRecord]] = defaultdict(list)
         for split in split_records_by_event_id.values():
@@ -467,6 +465,8 @@ class PortfolioCalculationEngine:
 
         Includes rates for:
         - Transaction amounts → target_currency (all tx dates)
+        - Priced outgoing ADJUSTMENTs → their cost basis (or asset) currency at their date (J-24: the
+          value they hand over leaves the capital at that day's rate)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
         - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
@@ -484,6 +484,16 @@ class PortfolioCalculationEngine:
             tx = ctxn.tx
             if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
                 fx_needs.add((tx.currency, tx.date))
+
+        # From priced outgoing ADJUSTMENTs (J-24): the value they hand over, at the rate of their date, also before
+        # the range, in the cost basis currency or the asset's
+        for ctxn in classified_txs:
+            tx = ctxn.tx
+            if tx.type != TransactionType.ADJUSTMENT or tx.cost_basis_override is None or not tx.quantity or tx.quantity > 0:
+                continue
+            handover_ccy = tx.cost_basis_currency or asset_currencies.get(tx.asset_id)
+            if handover_ccy and handover_ccy != target_currency:
+                fx_needs.add((handover_ccy, tx.date))
 
         # From external cash flows
         for dt, _, _, ccy in external_cash_flows:

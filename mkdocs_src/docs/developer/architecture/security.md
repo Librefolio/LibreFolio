@@ -32,6 +32,11 @@ LibreFolio uses **stateless JWT (JSON Web Token)** authentication stored in **HT
 3. The browser **automatically includes** this cookie on all subsequent requests
 4. `<img>` tags, `fetch()` calls, and page navigations all send the cookie seamlessly
 
+A refused sign-in is logged without what was typed, because the field takes an email address too and no address goes
+in a log (workstream E's rule, lot A-22): *Login failed: user not found* carries nothing about the identifier, *Login
+failed: wrong password* and *Login failed: user inactive* carry the account's `user_id`. Tests: `./dev.py test api
+auth`, `TestSignInLogsNoTypedIdentifier` (LOGIN-027 to LOGIN-033, in-process).
+
 !!! success "Why cookies over Bearer headers?"
 
     HTTP-only cookies are **automatically sent** by the browser for all same-origin requests — including `<img src>`, `<link href>`, and AJAX calls. This means uploaded files and plugin assets are served securely without any special frontend handling.
@@ -76,13 +81,14 @@ Tokens are signed with HS256 and one key per process, `_JWT_SECRET` in
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
-- Read each time a session cookie is issued — at login, and when a password or email change re-issues it — it sets
-  both the token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to
-  the cookies issued after it
+- Read each time a session cookie is issued — at login, at the setup of the initial administrator, and when a password
+  or email change re-issues it — it sets both the token's `exp` and the cookie's `max_age` (24 hours when the setting
+  cannot be read): a new value applies to the cookies issued after it
 - After expiration, the user must log in again
 - There is no token refresh mechanism — a new login is required. The only cookies issued without a login are the ones
   a password change or an email change sends back to the device that made it
-  ([Session Revocation](#session-revocation))
+  ([Session Revocation](#session-revocation)), and the one that signs in the initial administrator once its setup link
+  is spent ([The Initial Administrator](access_control.md#initial-admin))
 
 ### 🚪 Logout
 
@@ -100,23 +106,47 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Six changes call it:
+not commit: the caller commits it with the change that asks for it. Seven changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
-| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change) | Every other session of the account, as for a password change: the same response sets a new cookie |
+| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change); `./dev.py user set-email` → the same function | From the Profile tab, every other session of the account, as for a password change: the same response sets a new cookie; from the command line, all of them |
 | Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
 | Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
+| Setup of the initial administrator | A [setup link](access_control.md#initial-admin) spent by `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()` | All of them, though an account waiting for its setup has none: the same response sets a new cookie at the new version, which signs the administrator in |
 
 Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
 [password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
 `change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
-reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
-equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
+reset or setup link that is not valid. So do issuing a reset or setup link, which ends nothing until it is spent, a
+`PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
+stored email sent again, as written or in another A–Z case).
+
+Since lot A-27, the password change, an email change and `./dev.py user reset` also revoke the account's live
+[reset links](access_control.md#reset-links), whoever issued them, in the commit of the change, with
+`token_service.revoke_tokens(…, purpose=AccountTokenPurpose.PASSWORD_RESET)` as issuing and spending a link already
+did: nothing else (invitations, email-verification and setup links stay), and nothing for a refused change, the same
+address in another A–Z case or a username alone; what it revokes is logged as *Account tokens revoked* (`count`,
+`user_id`, `purpose`), with no address. Otherwise whoever reads the mailbox — the old one, after an email change —
+could ask for a link through «forgot password» before the change and spend it after, within its 30 minutes (security
+review of workstream E, E6.9).
+
+**A restore** sets the version of every account at once, without `end_sessions()`. The first start on a restored backup
+([Restoring a Backup](#backup-restore)), in its step `restore-commit`, gives every account of the restored database the
+same version, through `sqlite3`: `max(R, A + 1, B + 1)`, where `R` is the restore time in milliseconds, `A` the largest
+version of the restored database and `B` the largest of the database of before (`.restore/previous/sqlite/app.db`,
+opened read-only; `0` when it cannot be read or holds no account, as on a new installation). With a clock that is
+right the value is `R`: a time, not a counter, which a later `end_sessions()` still raises by one. Why a time
+(decision 40): `JWT_SECRET` is not in the backup and a restore does not change it, so where it is configured a cookie
+issued before the restore keeps a valid signature. The restored database is another history, where an account's id
+and version can be those of such a cookie, issued by the database of before or by one an earlier restore replaced;
+the time is above every version a counter reaches in any of them. The `max` only matters when the clock is behind a
+stored value. The value is recorded in the restore's state (`session_version`). Code: `_close_the_way_in()` in
+`backend/app/services/platform/instance_backup/apply.py`.
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -129,10 +159,10 @@ equal the current ones, and a profile change that changes no email (a new userna
   found*, *User account is disabled*), then refuses a token whose version differs from the account's, behind or
   ahead, with `401` *Session expired or invalid*: the answer to an invalid token, so nothing tells the holder why.
   While an account is deactivated, its cookies get *User account is disabled* first.
-- **The re-issued cookie.** Login, password change and email change set the cookie through one helper,
-  `_issue_session_cookie()`: a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the
-  setting cannot be read), with the same name and attributes as the login cookie, so the browser replaces the old
-  cookie instead of keeping both.
+- **The re-issued cookie.** Login, password change, email change and the setup of the initial administrator set the
+  cookie through one helper, `_issue_session_cookie()`: a JWT at the account's current version, lasting
+  `session_ttl_hours` (24 hours when the setting cannot be read), with the same name and attributes as the login
+  cookie, so the browser replaces the old cookie instead of keeping both.
 
 !!! note "A request in flight during a password or email change"
 
@@ -141,39 +171,59 @@ equal the current ones, and a profile change that changes no email (a new userna
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
-token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
-(`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
-second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
-`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change).
+token, the check, the command-line callers and the refusals, in-process; its contract 7, the live reset links revoked
+by `reset_password()` and by a real address change in `update_profile()`, every other link left as it was),
+`./dev.py test api session-revocation` (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password
+change over HTTP, with two devices and a second account; REVOKE-003 to REVOKE-007, an administrator's reset link
+revoked by a password or an address change, kept by the own address in other A–Z capitals and by a refused change),
+and, for the administrator API and the reset links, `./dev.py test api users-admin` and
+`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change). The
+restore's version: `./dev.py test services backup-apply` (the clock behind, a restore on top of another, then a
+password change that adds one).
 
 ### ✉️ Changing the Email {: #email-change }
 
 An account's email is a way into it: a password-reset link sent to that address lets whoever reads it choose the
 password. `PUT /api/v1/auth/profile` used to change the email on the session cookie alone, so with the self-service
-«forgot password» ([held](../backend/email.md#flow-forgot) until lot E4) a moment inside someone else's session — an
+«forgot password» ([open](../backend/email.md#flow-forgot) since lot E4) a moment inside someone else's session — an
 XSS, a stolen cookie, a computer left unlocked — would become a permanent takeover: change the email, ask for a reset,
 choose the password (security review of lot E3, rated medium). Since lot A6e (release 1.3), an email change asks for
-the current password and ends the account's other sessions. No other route changes an account's email.
+the current password and ends the account's other sessions. No other route changes an account's email; on the server,
+`./dev.py user set-email` does, through the same `user_service.update_profile()` and without a password
+([Command-Line Tools](../../admin/cli_tools.md), «Change the Email Address of an Account»).
 
-- **What counts as an email change.** An `email` in the body that differs from the stored one, compared exactly, as
-  `user_service.update_profile()` compares it. A username-only change, or the stored email sent again, needs no
-  password, as before, and a `current_password` sent beside it is not checked.
+- **What counts as an email change.** An `email` in the body that is another address than the stored one, compared
+  regardless of A–Z case with `user_service.same_email()`, in the route and in `user_service.update_profile()` alike
+  (developer decision P18, see [`USER`](database/users_access.md#user)). A username-only change, or the stored email
+  sent again, needs no password, as before, and a `current_password` sent beside it is not checked. The stored email
+  in another A–Z case is treated the same way (decision C5): it is the same address, so only its stored form changes —
+  `email_verified_at` stays, no session ends, no cookie is set. Letters outside A–Z compare as written:
+  `Émile@example.com` and `émile@example.com` are two different addresses, and changing one into the other is an
+  email change.
 - **The body.** `UpdateProfileRequest` (`backend/app/schemas/auth.py`) has an optional `current_password` of at least
   one character: an empty string is refused with `422`.
 - **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
   anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. bcrypt runs in
   a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
-- **The sessions.** `user_service.update_profile()` calls `end_sessions()` and sets `users.email_verified_at` back to
-  `NULL` (the new address is not verified, and no flow of release 1.3 verifies a changed one), in the commit of the
-  new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
-  the device that made the change carries on, and every other session gets `401` at its next request. A
-  username-only change ends no session, nor does a refused one.
+- **The sessions.** `user_service.update_profile()` calls `end_sessions()`, revokes the account's live reset links
+  ([Session Revocation](#session-revocation)) and sets `users.email_verified_at` back to `NULL` (the new address is
+  not verified, and no flow of release 1.3 verifies a changed one), in the commit of the new address. The route then
+  sets a new session cookie through `_issue_session_cookie()`, as `change-password` does: the device that made the
+  change carries on, and every other session gets `401` at its next request. A username-only change ends no session,
+  nor does a refused one.
+- **The notice.** After a change of address, the route queues workstream E's `email_changed_work()` with the address
+  read before the change: a notice to that address, after the answer, with the new one masked
+  ([An Email Address Changes](../backend/email.md#flow-email-changed)). It changes neither the answer nor the cookie;
+  with email off, nothing is sent.
+- **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
+  profile updated* carry `user_id`, `username` and `email_changed`, true only when the address changed (lot A7c,
+  workstream E's rule: no address in any log).
 
 | Answer | `detail` | When |
 |--------|----------|------|
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
 | `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
-| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address or the name belongs to another account. Nothing is written |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or the name does, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
@@ -183,10 +233,14 @@ passwords: limiting the guesses here is planned with the login attempt limit (lo
 The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
 user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
 
-Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-016: the
+Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-022: the
 refusals, the taken address not revealed without the password, the sessions with two devices, the username-only and
-same-email guards), `./dev.py test services user-profile` (`backend/test_scripts/test_services/test_user_profile.py`,
-`TestUpdateProfileEmailVerification`: `email_verified_at`), and for the tab
+same-email guards, the own address and another account's in another A–Z case, and no address in the log of the route,
+in-process), `./dev.py test services user-profile`
+(`backend/test_scripts/test_services/test_user_profile.py`, `TestUpdateProfileEmailVerification`: `email_verified_at`;
+UPROF-001 and UPROF-002: no address in the service's log), `./dev.py test services email-case`
+(`backend/test_scripts/test_services/test_email_case.py`: the A–Z rule on the service, the index and the lookups), and
+for the tab
 `./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
 (`frontend/e2e/settings.spec.ts`, its «A6e» block).
 
@@ -217,18 +271,19 @@ session):
 | `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
 | `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
 | `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
+| `POST /api/v1/auth/setup` ([setup link](access_control.md#initial-admin) of the initial administrator) | The link's token, likewise |
 | `./dev.py user create`, `./dev.py user reset` | Anything in the database, the username included: `validate_password()` in `scripts/user_cli.py` is a thin wrapper over `failed_rules()` |
 
-- **The refusal.** The three routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
+- **The refusal.** The four routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
   with `{"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": […]}`
   in `detail`, `rules` being the codes missed, in the rules' order. Nothing is written: a refused change or reset
   leaves the password, the session version and the sessions as they were. The command line prints
   `❌ Password does not meet security requirements:`, then one line per rule missed that starts with its code
   (`_RULE_MESSAGES`), such as `min_length: the password must be at least 8 characters long`, and exits with `1`.
-- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password` and
-  `PasswordResetRequest.new_password` (`backend/app/schemas/auth.py`) only require a non-empty string
-  (`min_length=1`): an empty password is still a `422` of the request validation, not `PASSWORD_TOO_WEAK`. The
-  length is the policy's rule.
+- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password`,
+  `PasswordResetRequest.new_password` and `AdminSetupRequest.new_password` (`backend/app/schemas/auth.py`) only require
+  a non-empty string (`min_length=1`): an empty password is still a `422` of the request validation, not
+  `PASSWORD_TOO_WEAK`. The length is the policy's rule.
 - **Published to the app.** `password_rules_public()` is the list `GET /api/v1/system/instance` publishes as
   `accounts.password_rules`, `[{code, value}]` (`PasswordRuleRead`), `value` being `null` for every rule but
   `min_length` ([Public instance configuration](settings.md#public-instance-configuration)). The app draws and checks
@@ -243,7 +298,9 @@ points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-0
 and password change, the new password checked before the current one, a login that never checks);
 `./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
 RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
-block); `./dev.py test utils dev-cli-image` (`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
+block); `./dev.py test api admin-setup` (`test_api/test_admin_setup_api.py`, SETUP-006, SETUP-007 and SETUP-011: the
+setup link left unspent, the password read before the token); `./dev.py test utils dev-cli-image`
+(`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
 `validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
 `./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
 (`PasswordStrength.test.ts`).
@@ -274,10 +331,10 @@ curl -b cookies.txt -X POST \
 
 Every secret of LibreFolio is read by `env_secret(name)` in `backend/app/config/__init__.py`: today
 `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_WEB_LINK_FINDER_API_KEY`,
-`LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `LIBREFOLIO_WAKE_TOKEN`, and every
-variable of the plugin settings, secret or not (`plugin_setting_env()` in
-`backend/app/config/plugins.py`: the derived `LIBREFOLIO_PLUGIN_*` names and the aliases of secret
-fields, see [Plugin Settings](patterns/plugin_settings.md#environment)). In this order:
+`LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `LIBREFOLIO_WAKE_TOKEN`,
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, and every variable of the plugin settings, secret or not
+(`plugin_setting_env()` in `backend/app/config/plugins.py`: the derived `LIBREFOLIO_PLUGIN_*` names and the aliases
+of secret fields, see [Plugin Settings](patterns/plugin_settings.md#environment)). In this order:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -300,7 +357,10 @@ names the source without reading the file: `NAME`, `NAME_FILE (<path>)` or `None
 
 The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
 `LIBREFOLIO_INSTANCE_KEY_FILE` stops the start ([JWT Secret](#jwt-secret),
-[Configuration Checks](#configuration-checks)). A broken `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`
+[Configuration Checks](#configuration-checks)), and so does a broken
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE`: `admin_bootstrap_config()` reads it in the startup audit,
+whatever the other variables of the [initial administrator](access_control.md#initial-admin). A
+broken `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`
 does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
@@ -480,13 +540,18 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    they cannot read raises `ValueError`. On a blocked instance, a warning
    `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`, with `deletion_date`, goes to
    the log: see [Instance Block](#instance-block).
-3. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+3. `admin_bootstrap_config()` (`backend/app/config/accounts.py`): an unusable `LIBREFOLIO_ADMIN_*`
+   value raises `AdminBootstrapConfigError`, which names the variable and never the token, and an
+   unreadable `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` raises `SecretFileError`, on an instance with
+   accounts too: see [The Initial Administrator](access_control.md#initial-admin).
+4. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-4. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+5. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit`. What the administrator sees and does is in
+Tests: `./dev.py test services config-audit`; the stop on a `LIBREFOLIO_ADMIN_*` value is in
+`./dev.py test services admin-bootstrap`. What the administrator sees and does is in
 [Configuration](../../admin/configuration.md), section «Startup Checks».
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
@@ -516,7 +581,7 @@ count reaches the result and the log, by the rule of the plugin settings: a user
 user's, who sees them `unreadable` in their own settings and enters them again. So when only user
 secrets are unreadable, the check is `ok`.
 
-The startup step `plugin-secrets-check` (`STARTUP_STEPS`, right after `global-settings`) runs
+The startup step `plugin-secrets-check` (`STARTUP_STEPS`, after `global-settings`, `admin-bootstrap` and `restore-commit`) runs
 `log_plugin_secrets_check()`: it opens an `AsyncSession` on `get_async_engine()`, logs a result that
 is not `ok` at its severity, as `log_configuration_audit()` does (the `summary` as the event, `check`
 and `detail` as fields), and logs nothing when it is `ok`. It never raises: when the check fails, it
@@ -541,8 +606,9 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
 | `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
-| `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
+| `/auth/tokens/inspect` | POST | The status of an invitation, password-reset or setup link, for whoever holds its token: see [Links in use](#account-token-links) |
 | `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
+| `/auth/setup` | POST | Spend the setup link of the [initial administrator](access_control.md#initial-admin): its password, under the [password rules](#password-rules), the account activated and signed in |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
@@ -569,9 +635,11 @@ an instance that registers by invitation, the default of a new install. Publishi
 - **The window is short.** The flag turns false with the first registration, normally minutes after
   the install; the administrator manual asks to register before exposing the instance
   ([Global Settings](../../admin/settings.md), section «Who Can Sign Up»).
-- **A managed instance will not show it.** With lot A7 (F02, not delivered yet), the first account of
-  a managed instance will be the administrator created from the environment, so the flag will be
-  false from the start. Until then a managed instance starts empty, like any other.
+- **An instance with F02 never shows it.** With `LIBREFOLIO_ADMIN_EMAIL`
+  ([The Initial Administrator](access_control.md#initial-admin)), the `admin-bootstrap` startup step
+  creates the administrator, inactive, before the server answers its first request: the instance is
+  never empty while it serves, so the flag is false from the start, and nobody can register as the
+  first account. Without the variable, a managed instance starts empty, like any other.
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -682,6 +750,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
 | `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below) |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
+| `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -703,12 +772,13 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
-  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up
-  tells, and only to the holder of its token: `status: "blocked"`.
+  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up and the
+  outcome of a restore tell, and only to the holder of their token or ticket: `status: "blocked"`, and
+  `waiting: "instance_blocked"`.
 - The public routes outside the list answer `401` only while the instance is blocked. From them, a
   caller without a session can tell that the instance is blocked, and nothing more: they return no
   data.
@@ -739,7 +809,16 @@ that answer `401` on a blocked instance, so an invitation link can be read there
 full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
 delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
 instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
-of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). Any other
+of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). The routes of a
+restore stay out (`/backup/restore/…`: the upload, the check, the confirmation, the status, the cancellation and the
+restart): the block lets the data leave, never come in, and nobody stops the server through the API. Nor is a restore
+confirmed before the block applied while it lasts (developer decision P7): the startup step
+reads `LIBREFOLIO_BLOCKED` and leaves it waiting (`instance_blocked`) until the first start after the unblock
+([Restoring a Backup](#backup-restore)). The one route of a restore on the list is its outcome, read with the ticket of
+the restart (`GET /backup/restore/outcome`, lot B5c): it starts nothing, changes nothing but its own ticket, and
+returns three fields and no data. When the block takes effect at the restart that a page asked, that page reads `instance_blocked`
+there, where its session may be gone (without `JWT_SECRET` every start ends them) and the status route answers `401`
+or `423`. Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
@@ -757,20 +836,25 @@ job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. Invitations, password-reset links and email verification use it today
-([Links in use](#account-token-links)); the setup link has no caller yet.
+guarantees for all four, and all four use it ([Links in use](#account-token-links)): invitations, password-reset
+links, email verification ([Email Verification](../backend/email.md#verification)) and the setup link of the
+[initial administrator](access_control.md#initial-admin).
 
 ### 🎲 Generation and Storage
 
-- `issue_token()` draws a new token on every call with `secrets.token_urlsafe(32)`: 32 random bytes (256 bits),
-  written as 43 URL-safe characters.
+- `issue_token()` draws a new token with `secrets.token_urlsafe(32)`: 32 random bytes (256 bits), written as 43
+  URL-safe characters. One caller gives its own instead (`token=`): the initial administrator's setup link, with
+  the value of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, whose format the configuration has checked (32 to 200 unreserved
+  URL characters). A given token is stored like a drawn one, by its hash; an empty one is a `ValueError`.
 - The plaintext is returned once, in `IssuedToken.token`, beside the new row (`IssuedToken.record`). The database
   keeps only `hash_token(token)` — the SHA-256 of the UTF-8 token, 64 lowercase hex characters — in
   `account_tokens.token_hash`, which is unique. A link cannot be rebuilt from the database: a lost one is replaced
   by a new token, never recovered.
 - A fast hash is enough: unlike a password, 256 random bits are out of reach of guessing, so no slow salted hash
   is needed. Being deterministic, the hash is also the lookup key: `inspect_token()` and `consume_token()` hash
-  the token they receive and search `token_hash`.
+  the token they receive and search `token_hash`. A token given through `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is as
+  random as the hosting panel makes it: the configuration checks only its length and its characters, and the
+  administrator manual makes it with `openssl rand -hex 32`, 256 bits.
 
 ### 🎯 Purposes, Lifetimes and Links
 
@@ -813,7 +897,7 @@ otherwise it returns `None` and nothing changed — `inspect_token()` tells why.
 statement, with no gap between them: of two requests racing for the same link, only the one whose `UPDATE`
 changes the row gets it.
 
-### 🚫 Revocation
+### 🚫 Revocation {: #account-token-revocation }
 
 `revoke_tokens(session, token_id=…)` revokes one token, `revoke_tokens(session, user_id=…)` the tokens of one
 account, optionally of one `purpose`. It sets `revoked_at` on the matching tokens that are neither consumed nor
@@ -821,33 +905,60 @@ revoked — expired ones included — and returns how many; consumed and revoked
 Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke every token. An invitation has no
 `user_id`: it is revoked by its id.
 
+A restore revokes the live tokens of the whole restored database at once, at its first start
+([Restoring a Backup](#backup-restore)): in the transaction that sets the session versions
+([Session Revocation](#session-revocation)), every row of `account_tokens` that is neither consumed nor revoked,
+whatever its purpose and expired or not, gets `revoked_at` = the restore time, written as SQLAlchemy writes it (UTC,
+without offset). A link spent or revoked on the instance after the backup was taken is live again in the backup's
+database: without this it would work a second time. The links issued after the backup are not in the restored
+database at all. The count is logged, as `links_revoked` of *Restore committed: every session ended, the backup's
+one-time links revoked*.
+
+An account the backup held waiting for its email verification (inactive, with an unspent verification token:
+`verification.awaiting_verification()`) loses its token with the others, the hold included, and so stops waiting. The
+sign-in page's resend then answers `403` `ACCOUNT_DISABLED`, and nothing sends it a new link: an administrator activates
+it (`PATCH /users/{user_id}`, `email_verified_at` stays `NULL`), or deletes it so that its owner signs up again. Such an
+account never signed in, so it holds no data. Towards the administrator, the report of the check gives one notice only
+(developer decision P11, `scripts/backup_cli.py`): the invitations and links sent before the restore will have expired,
+and can be sent again.
+
 ### 🧾 Transactions and Logs
 
 - The service never commits. `issue_token()` flushes, so the new row has its id; `consume_token()` and
   `revoke_tokens()` run their `UPDATE` in the session's transaction. The caller commits: spending an invitation
   and creating the account it opens share one transaction, and fail together. A rollback undoes an issue, a
   consumption or a revocation.
-- The plaintext token is never logged, and neither is its hash. The events *Account token issued*, *Account
-  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids.
+- The service never logs the plaintext token, nor its hash. The events *Account token issued*, *Account
+  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids. One caller logs a
+  link, by design: the setup link of the initial administrator, when the server generated its token, is written
+  once in the log ([Links in Use](#account-token-links)).
 
 `./dev.py test services account-tokens` (`backend/test_scripts/test_services/test_account_tokens.py`) pins this
 contract, including two sessions consuming one token at once and a search of the logs and of every database
-column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
+column for the plaintext; a given token (`issue_token(token=)`) is pinned by `./dev.py test services admin-bootstrap`
+(TOKEN-001 to TOKEN-005). The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
 
-### 🔗 Links in Use: Invitations, Password Resets, Email Verification {: #account-token-links }
+### 🔗 Links in Use: Invitations, Password Resets, Email Verification and the Setup Link {: #account-token-links }
 
-Three purposes have callers: invitations, password-reset links and email verification. The rules of the first two —
-who may register, the user limit, what each endpoint answers — are in
-[Registration, Invitations and the Admin API](access_control.md#registration); those of email verification in
-[Email Verification](../backend/email.md#verification). What protects their tokens:
+All four purposes have callers: invitations, password-reset links, email verification and the setup link of the
+initial administrator. The rules of invitations and reset links — who may register, the user limit, what each
+endpoint answers — are in [Registration, Invitations and the Admin API](access_control.md#registration); those of
+email verification in [Email Verification](../backend/email.md#verification); those of the setup link in
+[The Initial Administrator](access_control.md#initial-admin). What protects their tokens:
 
-- **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
-  `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
+- **Only an administrator, or whoever runs the server, issues a link it can see.** `POST /api/v1/users/invites`
+  and `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
   `./dev.py user reset-link` run on the server. The token is in that response, or printed by that command,
-  once. A lost link is replaced with a new one.
-- **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
-  spending one revokes any other.
+  once. A lost link is replaced with a new one. The setup link has no route that issues it: the startup issues it,
+  from the variables the operator set on the server, and `./dev.py user setup-link` replaces it. «Forgot password»
+  issues a reset link for an anonymous request, but only by email, to the account's own address, and within its
+  limits: nobody sees that token but the mailbox ([A Forgotten Password](../backend/email.md#flow-forgot)).
+- **Only the newest reset or setup link of an account works.** Issuing a reset link revokes the account's live
+  reset links, and spending one revokes any other. Likewise, a setup link re-armed by a new
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
+  any other. A password change, an email change and `./dev.py user reset` also revoke the account's live reset
+  links (lot A-27, [Session Revocation](#session-revocation)).
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
   issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
   email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
@@ -855,22 +966,32 @@ who may register, the user limit, what each endpoint answers — are in
   `confirm_email()` refuses a token without an address, and revokes one emailed to an address the account no
   longer has.
 - **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
-  a reset link in the commit that sets the new password, raises the session version and revokes the other links.
-  If the account cannot be created, the invitation stays unspent.
+  a reset link in the commit that sets the new password, raises the session version and revokes the other links;
+  a setup link in the commit that sets the password, activates the account, raises the session version and revokes
+  the other setup links. If the account cannot be created, the invitation stays unspent. A setup link presented
+  for an account already active is refused, and revoked.
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
-  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
-  Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
+  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset or
+  setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
   and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
   locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
   [password rules](#password-rules), the same on every instance.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
-  `/reset-password#token=…` and `/verify-email#token=…`. A browser never sends the fragment to the server, so the
-  token is not in the request for the page: it stays out of the server's access log and out of the logs of every
-  proxy on the way. A browser never puts the fragment in a `Referer` either. A token in the query string would be
-  in all those logs. The page reads it with JavaScript (`location.hash`); a `token` in the query string is not read
-  at all.
+  `/reset-password#token=…`, `/verify-email#token=…` and `/setup#token=…`. A browser never sends the fragment to
+  the server, so the token is not in the request for the page: it stays out of the server's access log and out of
+  the logs of every proxy on the way. A browser never puts the fragment in a `Referer` either. A token in the query
+  string would be in all those logs. The page reads it with JavaScript (`location.hash`); a `token` in the query
+  string is not read at all. A token given through `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is made of the unreserved
+  characters of a URL only, so the hosting panel builds the very same link itself, with nothing to encode.
+- **The setup link is the one link written in the log, once, by design.** When the server generated its token,
+  `deliver_setup_link()` writes the link at `WARNING` right after the creation, then emails it when email works:
+  a scripted install without email still gets its link. Restarts never write it again, the link works once and for
+  72 hours, and `./dev.py user setup-link` replaces it. Whoever reads that log before the link is spent can take
+  the administrator account: keep the log private, or give the token through the variable. A token from
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is stored only as its hash and never logged nor emailed, and no error holds it:
+  `AdminBootstrapConfigError` names the variable only.
 - **The link pages hide and keep the token.** `/invite`, `/reset-password` and `/verify-email` read the token when
   they mount, then put the bare path in the address bar (`replaceState`), so the token stays out of the history and
   of a bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
@@ -879,6 +1000,212 @@ who may register, the user limit, what each endpoint answers — are in
   components are in [Authentication Components](../frontend/components/features/auth.md#link-pages), except those
   of `/verify-email`, which spends its token at once, without inspecting it first:
   [In the Frontend](../backend/email.md#verification-frontend).
+
+## 💾 Restoring a Backup {: #backup-restore }
+
+A restore of the whole instance comes in two moves, and neither touches the live data. The check (lot B2) unpacks an
+archive into `.restore/stage/<stage id>/`, brings the copy to this LibreFolio's revision and checks it. The
+confirmation (lot B3) records the restore; the next start of the server applies it, before any startup step reads the
+data. The code is in `backend/app/services/platform/instance_backup/`: `apply.py` (the state, the swap, the rollback,
+the commit), `restart.py`, `outcome.py` (the ticket of the outcome), `restore_jobs.py` (the checks of the API) and
+`paths.py`; the routes are in
+`backend/app/api/v1/backup/restore.py`, the command line in `scripts/backup_cli.py`. The administrator's side is
+«Restore an Archive» in [Command-Line Tools](../../admin/cli_tools.md).
+
+The check also compares the ledger's control totals ([Ledger Control Totals](../backend/financial_math.md#ledger-totals))
+that the backup recorded in its manifest with the copy's, once it is up to date (lot B-13, `instance_backup/totals.py`):
+a difference is a warning (`control_totals_changed`), never a refusal, since a migration may correct data. The copy's
+totals, like the snapshot's at the backup, come from J's `compute_control_totals()` on an engine of their own over an
+immutable, read-only connection (`mode=ro&immutable=1`), because every engine of the process sets the journal mode when
+it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only connection to a rollback-journal file
+refuses; the amounts the manifest recorded must be plain decimal text, at most 60 digits on each side of the point,
+before J reads them, since an exponent would be expanded in full.
+
+### 🔐 The Routes {: #backup-restore-routes }
+
+Every route under `/backup/restore` requires an administrator (`require_admin`), but `GET /backup/restore/outcome`,
+which takes the one-time ticket of a restart instead ([The Outcome Ticket](#backup-restore-outcome)); it is also the
+only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error answers `{"detail": {"code": …, "message": …}}`
+(`backup_error`), never with a path of the server in it.
+
+| Route | What it does |
+|-------|--------------|
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2) |
+| `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
+| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
+| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending` |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, or `restore_folder_unusable`: no restart then |
+| `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
+
+Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
+the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
+`backup_upload_unavailable`, and an error naming the variable is logged).
+
+On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
+with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
+what it reads from an archive or from the restore's state (versions, revision, table and administrator names, who
+confirmed, the data directory's path) through `_safe()` in `scripts/backup_cli.py`: every character that is not
+printable, control characters and escape sequences included, becomes `?`, so an archive cannot drive the operator's
+terminal.
+
+### 📄 The Restore State {: #backup-restore-state }
+
+One file holds the restore of a data directory, `.restore/restore.json` (`RestoreState`): `pending`, then `applying`,
+`applied` and `committed`, or `rolling_back` and `rolled_back`; with the stage, who confirmed it and when, the date and
+version of the backup, the journal of the swap, the boot that applied it, the reason of a rollback, why a start left it
+waiting (`waiting`), and the session version given at the commit.
+
+- **Written atomically.** A `.part` beside it, fsynced, then `os.replace` and an fsync of the folder: a reader, or the
+  next start, finds the old state or the new one, never half of one. Mode `0600`.
+- **Never through a link.** The file is opened with `O_NOFOLLOW`, and `.restore` must be a plain folder: a
+  confirmation that finds a link or a file there is refused (`BackupPathError`, `500` `restore_folder_unusable`), and
+  a startup step logs an error and ignores the restore. `.restore/` and the folders the restore makes in it are created
+  `0700` (`paths.ensure_private_dir`).
+- **Checked strictly.** A state is used only in the shape this LibreFolio writes: the journal may name only the four
+  swapped folders, and the stage id must be 32 lowercase hexadecimal digits, so nothing read from a file of the data
+  directory becomes a path outside the swap. Any other state is ignored, with an error logged.
+- **One at a time.** While a restore is not finished (`pending`, `applying`, `applied`, `rolling_back`), another one is
+  refused (`restore_already_pending`), and its checked copy is never dropped nor pruned, however old
+  (`restore_jobs.remove_check`, `prune`).
+- **The steps take turns** on an exclusive `flock` of `.restore/apply.lock`: the workers of one server run them one
+  after the other. An ordinary start, with no restore, only finds that the state file does not exist: it creates no
+  folder and no lock file.
+
+### 🔄 The Swap, the Journal and the Rollback {: #backup-restore-swap }
+
+The startup step `pending-restore` (`app_lifespan.STARTUP_STEPS`, after `tool-catalog`, before `data-directories` and
+`database`) applies a `pending` restore:
+
+1. It leaves it waiting, with `waiting` recorded, when the data directory's real path is not the one the restore was
+   confirmed for (`other_data_directory`: a copy of the data directory), when the hosting provider blocks the instance
+   (`instance_blocked`: `LIBREFOLIO_BLOCKED`, read at each start; a value that cannot be read counts as blocked), when
+   another server process serves the data directory (`server_running`, see below), or when a backup holds its lock
+   (`backup_running`), in this order. The undo of a swap and the commit still run on a blocked instance: the first
+   repairs the data directory, and the block cannot change during one start. A restore can so wait as long as the
+   block lasts: its copy keeps its disk space (an active restore's copy is never pruned; `backup pending --cancel`
+   frees it), and if LibreFolio was updated meanwhile, the step `database` of the first start after the unblock
+   migrates the restored database, checked at the revision of then, with the data of before still in
+   `.restore/previous/` until the commit (a failure rolls back, `first_start_failed`).
+2. It records it `rolled_back` without moving anything when the checked copy is gone or changed (`stage_missing`), or
+   when one of the four folders of the data directory is a link or a file (`swap_failed`).
+3. It writes the journal, fsynced, before the first move: `applying`, the boot, and for each folder of
+   `SWAPPED_FOLDERS` (`sqlite`, `custom-uploads`, `broker_reports`, `scenario_catalog`) whether the live one and the
+   copy's existed.
+4. It moves, by renames inside the data directory: each live folder to `.restore/previous/`, then the copy's in its
+   place, with the mode the live one had. Then `applied`.
+
+`secrets/`, `logs/`, `scheduler_state.json`, `backups/` and anything else in the data directory are never touched.
+
+The step `restore-commit` (after `global-settings`) completes a restore `applied` by this boot. In one transaction of
+the restored database it ends every session ([Session Revocation](#session-revocation)) and revokes the live one-time
+links ([Revocation](#account-token-revocation)); then it records `committed`, and removes `.restore/previous/`
+(decision 41: the data of before only served to go back), the copy and its check state. What a finished restore,
+`committed` or `rolled_back`, leaves behind, a later start removes too.
+
+**The boot.** A start is known by the server's root process — `restart.server_pid()`: the parent that started this
+process through `multiprocessing` while it is alive, uvicorn's master with `--workers N` or its reloader, otherwise
+this process — and by that process's creation time, read with psutil once per process, so that a reused pid is never
+taken for it and a clock step during a start does not make it another boot (`apply.current_boot()`, `boot_alive()`).
+The workers of one server share the boot: the first swaps, the others find the restore applied by their own boot.
+
+**Never under a running server.** The step `serving-lock`, right after `data-directories` and before any step reads
+the data, gives every server process a shared `flock` on the data directory itself (`hold_serving_lock()`; no file is
+created), which the system releases when the process exits, however it ends. `pending-restore` runs before it, and
+before it moves anything it takes the same lock exclusively, without waiting, until its last move
+(`_exclusive_serving_lock()`). It cannot get it while another process serves, and a process reaching `serving-lock`
+meanwhile waits until the folders have moved, so nobody reads them half moved. The processes it finds serving are
+others: a worker that uvicorn starts again beside its running siblings (after a crash, or with `SIGHUP` or `SIGTTIN`),
+or a second server on the same data directory. A pending restore then waits (`server_running`), and a restore that a
+dead start applied is not undone under such a process. Where `flock` cannot be used (no `fcntl`, a file system without
+it), the lock finds nobody and a warning says so: the restore works as if there were no lock.
+
+**The rollback** is driven by what the files say, in the reverse order of the journal, and can be cut and run again:
+whatever stands in the data directory goes to `.restore/failed/`, and the folder in `.restore/previous/` comes back. A
+start runs it when it finds:
+
+- `applying` or `rolling_back`: a start died during the swap, or during a rollback (`swap_interrupted`, or the reason
+  already recorded); only the rollback makes such a data directory whole again, so it runs whoever serves, with the
+  lock held exclusively when it can be;
+- `applied` by a boot that no longer runs, while no server process serves the data directory: the first start on the
+  restored data died before `restore-commit`, on a migration that fails or a damaged file (`first_start_failed`);
+- an `OSError` during its own moves: at once (`swap_failed`), and the start goes on with the data as it was.
+
+**Fail closed.** `RestoreInUseError` (`restore_in_use`) stops the start rather than serve data whose restore is not
+committed: in `pending-restore`, when the restore was `applied` by another boot that still runs, or by a dead one
+while a server process serves the data directory; in `restore-commit`, when it was `applied` by another boot. A
+rollback that fails raises `RestoreApplyError` (`restore_apply_failed`): the data directory is half restored, so the
+start stops, the state stays `rolling_back`, and every later start tries again.
+
+### 🔌 The Restart {: #backup-restore-restart }
+
+A restore is applied at a start, never while the server serves. `POST /backup/restore/restart` answers `202` with the
+restore waiting and the ticket of its outcome ([The Outcome Ticket](#backup-restore-outcome)); once the answer is sent,
+a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
+and sends SIGTERM to the server's root process (`restart.server_pid()`, as for the boot): uvicorn's master stops its
+workers, and the shutdown budget bounds the stop («Stopping the Server» in
+[Configuration](../../admin/configuration.md)). The route answers `409` `restore_not_pending` unless a restore waits,
+so an administrator stops the server only to apply one; on a blocked instance it is refused like the others. The
+signal goes through `restart.send_signal`, `os.kill` by default, read at each call: the tests replace it and never
+stop a real server. Since the signal goes to the root process, the next start is one of the whole server, which finds
+no sibling holding the serving lock. uvicorn's `SIGHUP` is not one: it replaces the workers one at a time, each new one
+started before the old one ends, so the restore keeps waiting (`server_running`).
+
+Nothing in LibreFolio starts the server again: whatever supervises it does, after a stop that is not a failure.
+
+| Supervisor | Starts it again | Does not |
+|------------|-----------------|----------|
+| Docker | `restart: unless-stopped` (both compose files of the repository) or `always` | `on-failure`, `no` |
+| systemd | `Restart=always` | `Restart=on-failure` |
+| Fly.io Machine | The `always` restart policy | `on-fail`, the default of `fly launch` and `fly deploy` |
+
+In the Docker image, uvicorn is the container's first process and ends with status `0`, or `1` when the shutdown
+budget runs out. A Fly.io Machine stopped under `on-fail` waits for the Fly Proxy to wake it on a request, when its
+service lets it. Without a supervisor the server stays stopped until someone starts it, and the restore is applied
+then.
+
+### 🎫 The Outcome Ticket {: #backup-restore-outcome }
+
+A restore ends every session, and without `JWT_SECRET` every start does too: once the server is back, the page that
+asked the restart cannot tell from its session what became of the restore. So the restart request hands it a one-time
+ticket (lot B5c, `instance_backup/outcome.py`), and `GET /backup/restore/outcome` tells the holder of that ticket, without
+a session, the state of that restore and nothing else.
+
+- **Issued** by `POST /backup/restore/restart`, before the stop is scheduled, under the restore's lock
+  (`apply.prepare_restart`), so that two restart requests take turns and no cancel or confirmation comes in between:
+  `secrets.token_urlsafe(32)`, 256 random bits, returned once in `outcome_ticket`. When it cannot be written, the route
+  answers `500` and the server keeps running.
+- **Kept as a hash.** Only its SHA-256 is stored, in `.restore/outcome-ticket.json` (`OutcomeTicket`), with the stage
+  of its restore, `issued_at` and `expires_at`: `0600`, written atomically, never through a link, and read only in the
+  shape this LibreFolio writes. `.restore` is never swapped, so the ticket outlives the restart, the swap, the commit and
+  a rollback.
+- **In a header.** The page sends it in `X-Restore-Ticket`, never in the URL, which the access log records
+  ([Request Logs](#request-logs)): the route ignores the query string, and a `?ticket=…` typed by hand is written there
+  as `***`. LibreFolio never logs it, and the page keeps it in memory only.
+- **One restore, one hour.** It answers only for the restore of its stage, until one hour after the restart request
+  (`OUTCOME_TICKET_TTL`), room for a first start that migrates a large database: as often as it is asked, a final
+  outcome (`committed`, `rolled_back`) included (decision N53). Were a final answer read only once, losing it, to a
+  connection reset while LibreFolio starts, would leave the retry a `404`, and the page would fall back on its session,
+  which reads «restored» after a rollback without `JWT_SECRET`. One-time means one ticket per restart: a new restart
+  request replaces it; a new confirmation and a cancel, from the API or the command line, remove it, and so does its
+  holder presenting it expired.
+- **One answer for every miss.** No ticket, a malformed one, an unknown one (never issued, replaced or removed), an
+  expired one (then removed) or one of another restore: the same `404` `restore_outcome_not_found`. The hashes are
+  compared in constant time (`hmac.compare_digest`), and a wrong ticket changes nothing: the route removes a ticket
+  only when its own holder presents it expired.
+- **Nothing more.** `RestoreOutcome` holds `state`, `reason` and `waiting`: no name, date, version or path.
+
+When the route answers `404`, `401` or `423` (a ticket expired, replaced or removed, a server without the route, a
+proxy in between), the page falls back on `GET /backup/restore/status` with its session, where a `401` means that the
+session ended (`restoreOutcome()`, `frontend/src/lib/features/backup/backupApi.ts`).
+
+Tests: `./dev.py test services backup-apply` (`backend/test_scripts/test_services/test_backup_apply.py`: the state,
+the swap, every rollback, the commit, the sessions and the links), `./dev.py test services backup-outcome`
+(`backend/test_scripts/test_services/test_backup_outcome.py`: the ticket), `./dev.py test api backup-restore-apply`
+(the routes, the ticket, the signal recorded and never sent), `./dev.py test utils backup-cli-restore` (the command
+line) and
+`./dev.py test e2e backup-roundtrip` (a populated instance backed up, restored on an empty one, then started in a
+fresh process).
 
 ## 📡 Address Probe {: #address-probe }
 
@@ -1101,10 +1428,10 @@ never shown as "up to date".
 uvicorn writes one line per request, with its path and query string: HTTP requests on the `uvicorn.access` logger,
 WebSocket handshakes on `uvicorn.error`. A credential in a query string would reach that line in clear, so
 `configure_logging()` (`backend/app/logging_config.py`) adds a filter to both loggers. It replaces with `***` the value
-of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `secret`, `password`,
-`passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as the app reads
-it. The filter masks every string argument of the record where it stands, so the line keeps its shape, and the log
-stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
+of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `ticket`, `secret`,
+`password`, `passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as
+the app reads it. The filter masks every string argument of the record where it stands, so the line keeps its shape,
+and the log stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
 
 The links the app writes carry their tokens in the URL fragment, which the browser never sends, and the app's
 redirects (`?redirect=`, `?returnTo=`) carry a path and query, never a fragment: the filter covers a token typed by
@@ -1269,15 +1596,14 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 |----------|---------|
 | `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one (a test client) |
 | `client_rate_key(address)` | The key of a limit per client: an IPv4 address whole, an IPv6 one by its /64, which one subscriber usually holds whole; anything else as written, and `None` without an address |
-| `mask_client_address(address)` | The form an address may take in a log: an IPv4 address by its /24, an IPv6 one by its /48, since an IP address is personal data |
 
 - **Validated at startup.** The field's validator strips the value (empty: unset), then wants the name of one HTTP
   header, an RFC 9110 `token`, and refuses `X-Forwarded-For` and `Forwarded` in any case: lists whose first value the
   client chooses, which uvicorn handles with `FORWARDED_ALLOW_IPS`. A refused value fails `Settings()`, which
   `backend/app/main.py` builds at import, so the server does not start.
 - **Read once per process.** `_configured_header()` (`functools.cache`) reads the field, lowercased, at the first call,
-  never per request: a change takes a restart. `reset_client_address_cache()` clears it and re-arms the warning, for
-  the tests.
+  never per request: a change takes a restart. There is no reset function: a test itself clears that cache and
+  `_warned`, the flag of the warning below (decision N58: no production function exists only for the tests).
 - **A malformed header** (repeated, a list, a port, a zone, any other text, empty) falls back to the connection's
   address and logs one warning per process, `Client address header unusable: using the connection's address`, with
   `header`, `lines` and `length`, never the value. A missing header falls back silently.
@@ -1285,7 +1611,9 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   crosses that proxy: a client that reaches the app directly (a published port, another path) can choose its address,
   to get around a limit or to spend another client's.
 - **Callers.** A limit per client takes its address from `client_address(request)` and its key from
-  `client_rate_key()`, and a log holds only the `mask_client_address()` form. The three per-address email limits read
+  `client_rate_key()`. LibreFolio's own log records never hold a client's address (a refusal logs at most the account,
+  never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
+  line (see [Request Logs](#request-logs)). The three per-address email limits read
   their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
   the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps

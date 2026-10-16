@@ -75,9 +75,9 @@ deduced. The gap only decides when the question is asked.
 
 | Role | Path |
 |------|------|
-| Split arithmetic | `frontend/src/lib/utils/transactions/splitRowCharges.ts` |
-| Split tests | `frontend/src/lib/utils/transactions/splitRowCharges.test.ts` |
-| Repair step | `frontend/src/lib/components/transactions/import/FixFlaggedStep.svelte` |
+| Split arithmetic | `frontend/src/lib/features/transactions/import/splitRowCharges.ts` |
+| Split tests | `frontend/src/lib/features/transactions/import/splitRowCharges.test.ts` |
+| Repair step | `frontend/src/lib/features/transactions/import/FixFlaggedStep.svelte` |
 | Hints, Crédit Agricole | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
 | Hints, Danske Bank | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
 | `INTEREST` cash rule | `backend/app/schemas/transactions/transactions.py` |

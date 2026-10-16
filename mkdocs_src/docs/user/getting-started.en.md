@@ -32,11 +32,15 @@ Fill in your details:
 !!! info "First User = Admin"
 
     The very first account to register becomes the **administrator**: it manages the instance-wide
-    **[Global Settings](../admin/settings.md)** and every admin feature.
+    **[Global Settings](../admin/settings.md)** and every admin feature. On an instance whose
+    administrator was created from the server's configuration, by a hosting provider for example,
+    nobody registers first: that administrator receives a setup link, which opens the instance's
+    setup page, where they choose the password and are signed in.
 
 ### ✉️ If You Received an Invitation Link {: #invitation-link }
 
-An administrator can invite you with a link of your own.
+An administrator can invite you with a link of your own, by message or by email: the email is
+*You are invited to LibreFolio*, and its **Create your account** button opens the link.
 
 1. Open the link. LibreFolio checks it, then shows the registration form with a note that you have
    been invited; a second note tells you when the invitation makes you an administrator.
@@ -91,9 +95,28 @@ first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+### 📧 If You Forgot Your Password {: #forgot-password }
+
+On the login page, click **Forgot Password?**. When your instance can send emails, the page has a
+form at the top:
+
+1. Type your username or your email address, then click **Email me a reset link**.
+2. The page answers the same way whether an account matches or not: look in your inbox, and in the
+   spam folder.
+3. Open the email *Reset your LibreFolio password* and click **Choose a new password**. The page
+   that opens is the one of a link sent by an administrator: follow
+   [If an Administrator Sent You a Password-Reset Link](#password-reset-link) from step 2.
+
+- ⏱️ The link works once, for 30 minutes.
+- 📭 No email after a few minutes? The account may be deactivated or registered with another
+  address, or the requests came too close together: try again later, or ask your administrator.
+- 💻 Under the form, a closed panel holds the command your administrator runs on the server to reset
+  a password; when your instance cannot send emails, the page shows it open. Either way: ask them.
+
 ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
 
-Forgot your password? Your administrator can send you a link to choose a new one yourself.
+Your administrator can also send you a link to choose a new password yourself, by message or by
+email.
 
 1. Open the link: the page shows the account it belongs to.
 2. Type the new password twice: it must meet the rules shown under the field.

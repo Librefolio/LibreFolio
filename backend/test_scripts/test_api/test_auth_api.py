@@ -2166,3 +2166,329 @@ class TestPasswordRulesOnEveryNewPassword:
         assert changed.status_code == 422, f"an empty new password is a request validation error: POST /auth/change-password must answer 422, got {changed.status_code} {changed.text}"
         assert not await _lane_user_exists(newcomer), f"a refused registration must create no account, yet {newcomer} exists"
         print_success("✓ empty: 422 on both routes")
+
+
+# ============================================================================
+# NO TYPED IDENTIFIER IN THE LOG OF A SIGN-IN — lot A-22 (LOGIN-027 to LOGIN-033), in-process on a private database
+# ============================================================================
+# Workstream E's rule: no email address in any log. The login field takes a username or an email address, so a sign-in
+# that logs what was typed writes an address whenever one was typed. These imports and helpers serve
+# TestSignInLogsNoTypedIdentifier only, so they live next to it. The lane's server writes its logs in a process of its
+# own, which no test can capture: so these cases run in-process, as TestProfileLogsNoAddress (test_profile_api.py, lot
+# A7c) runs its own, on a private instance — the real auth router, mounted as api/v1/router.py mounts it, in an app of
+# this test whose get_session_generator opens sessions on a private SQLite file under tmp_path, seeded as a new install
+# (the default global settings, email verification off among them, no account). No sign-in reaches the lane. bcrypt
+# runs at its lowest cost in this process (auth_service.BCRYPT_ROUNDS = 4), the dummy hash of an unknown login included,
+# in a cache of the test's own; the lane's server keeps its own. Each address has a local part of its own that no
+# username contains: a log may carry the stored username, never the address, and the check looks for the local part
+# alone too.
+
+import functools
+import logging
+from collections.abc import Iterable
+from typing import Any
+
+import structlog
+from fastapi import FastAPI
+from structlog.testing import capture_logs
+
+from backend.app.config import API_V1_PREFIX
+from backend.app.db.models import AccountTokenPurpose
+from backend.app.db.session import get_session_generator
+from backend.app.services.accounts import token_service
+from backend.app.services.accounts.settings_service import initialize_global_settings
+
+#: The logger of POST /auth/login: the auth routes' structlog.get_logger(__name__).
+_SIGN_IN_LOGGER = auth_api.__name__
+#: The canary logged through _SIGN_IN_LOGGER, to both captures.
+_SIGN_IN_CANARY = f"canary: the capture sees the events of {_SIGN_IN_LOGGER}"
+#: The events of POST /auth/login, word for word: the three failures of lot A-22, the refusal of an account waiting for
+#: its email verification (lot E5b), and the success.
+_LOGIN_FAILED_USER_NOT_FOUND = "Login failed: user not found"
+_LOGIN_FAILED_WRONG_PASSWORD = "Login failed: wrong password"
+_LOGIN_FAILED_USER_INACTIVE = "Login failed: user inactive"
+_LOGIN_REFUSED_EMAIL_NOT_VERIFIED = "Login refused: email not verified"
+_USER_LOGGED_IN = "User logged in"
+#: The keys of a captured structlog event that are not fields of the call: the message, the level, a timestamp.
+_STRUCTLOG_KEYS = frozenset({"event", "log_level", "timestamp"})
+#: The SQL loggers. Below WARNING they print every statement with its parameters and every row read, so the identifier
+#: the login's SELECT looks for and the address of the row it reads. configure_logging (backend/app/logging_config.py)
+#: sets them to WARNING: a running server never writes those records, caplog sees them only because it lowers the root's
+#: level. UADM-030 (test_users_admin_api.py) pins that premise, read from configure_logging's source.
+_SIGN_IN_SQL_LOGGERS = ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool")
+#: The password of every account of the private instance.
+_SIGN_IN_PASSWORD = "Sign-In-Pass-2026"
+
+
+@dataclass(frozen=True)
+class _PrivateSignIn:
+    """An instance of one test: the auth router, every session on ``engine``."""
+
+    engine: AsyncEngine
+    app: FastAPI
+
+
+def _private_sign_in_app(engine: AsyncEngine) -> FastAPI:
+    """The real auth router, mounted under the API prefix as ``api/v1/router.py`` mounts it; ``get_session_generator`` opens sessions on ``engine``."""
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+
+    async def private_session() -> AsyncIterator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_session_generator] = private_session
+    return app
+
+
+@pytest_asyncio.fixture
+async def private_sign_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_PrivateSignIn]:
+    """A private SQLite file under tmp_path, schema and default settings as a new install starts with, no account; bcrypt at cost 4. Disposed at teardown.
+
+    The dummy hash an unknown login is checked against is computed once per process (functools.cache), at the cost of
+    its first call: the test gets a cache of its own, so a dummy of cost 4 never outlives it (LOGIN-024 pins the real
+    cost on the process's own).
+    """
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    monkeypatch.setattr(auth_service, "_dummy_password_hash", functools.cache(auth_service._dummy_password_hash.__wrapped__))
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'sign-in-logs.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _PrivateSignIn(engine=engine, app=_private_sign_in_app(engine))
+    finally:
+        await engine.dispose()
+
+
+@dataclass(frozen=True)
+class _SignInAccount:
+    """An account of the private instance: its id, its username, and its address, whose local part the username does not contain."""
+
+    user_id: int
+    username: str
+    email: str
+
+
+async def _sign_in_account(private: _PrivateSignIn, *, active: bool = True, awaiting_verification: bool = False) -> _SignInAccount:
+    """An account written as a row with a real bcrypt hash of _SIGN_IN_PASSWORD (cost 4): all before any capture.
+
+    ``active=False`` alone is a plainly deactivated account, as an administrator leaves it: no verification token.
+    ``awaiting_verification`` adds one unspent email-verification token, the «hold» registration gives an account that
+    waits for its link (email_verification.hold_for_verification); such an account is inactive.
+    """
+    assert not (active and awaiting_verification), "Setup: an account waiting for its email verification is inactive"
+    username, email = f"signin_{uuid.uuid4().hex[:12]}", f"inbox_{uuid.uuid4().hex[:12]}@example.com"
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        user = User(username=username, email=email, hashed_password=auth_service.hash_password(_SIGN_IN_PASSWORD), is_active=active)
+        session.add(user)
+        await session.flush()
+        if awaiting_verification:
+            await token_service.issue_token(session, AccountTokenPurpose.EMAIL_VERIFICATION, user_id=user.id)
+        await session.commit()
+    assert user.id is not None and user.is_active is active, f"Setup: {username} must be written {'active' if active else 'inactive'}: {user!r}"
+    return _SignInAccount(user_id=user.id, username=username, email=email)
+
+
+async def _logged_sign_in(private: _PrivateSignIn, identifier: str, password: str, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> tuple[httpx.Response, list[dict[str, Any]], list[logging.LogRecord]]:
+    """POST /auth/login on the private instance with ``identifier`` typed in the login field, from a client of its own,
+    and everything that request logged, from the canary to the answer: the structlog events (capture_logs) and the stdlib
+    records (caplog at DEBUG, on the root and on _SIGN_IN_LOGGER, enabled even if a configuration disabled it).
+
+    Barrier first: the canary through _SIGN_IN_LOGGER must reach both captures, or a capture that sees nothing would pass
+    for a request that logs nothing.
+    """
+    monkeypatch.setattr(logging.getLogger(_SIGN_IN_LOGGER), "disabled", False)
+    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger=_SIGN_IN_LOGGER)
+    caplog.clear()
+    with capture_logs() as events:
+        structlog.get_logger(_SIGN_IN_LOGGER).debug(_SIGN_IN_CANARY)
+        logging.getLogger(_SIGN_IN_LOGGER).debug(_SIGN_IN_CANARY)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=private.app), base_url="http://test", timeout=TIMEOUT) as client:
+            response = await client.post(f"{API_V1_PREFIX}/auth/login", json={"username": identifier, "password": password})
+    records = list(caplog.records)
+    assert _SIGN_IN_CANARY in {event.get("event") for event in events}, f"barrier: structlog events of {_SIGN_IN_LOGGER} do not reach capture_logs"
+    assert (_SIGN_IN_LOGGER, _SIGN_IN_CANARY) in {(record.name, record.getMessage()) for record in records}, f"barrier: stdlib records of {_SIGN_IN_LOGGER} do not reach caplog at DEBUG"
+    return response, events, records
+
+
+def _shows_the_identifier(text: str, identifiers: Iterable[str]) -> bool:
+    """Whether ``text`` shows one of ``identifiers``, whole or, for an address, by its local part alone, compared in lower case."""
+    lowered = text.lower()
+    return any(identifier.lower() in lowered or identifier.lower().partition("@")[0] in lowered for identifier in identifiers)
+
+
+def _sign_in_record_text(record: logging.LogRecord) -> str:
+    """All a stdlib record shows: its message and every attribute."""
+    return record.getMessage() + repr(vars(record))
+
+
+def _sign_in_record_written_by_a_server(record: logging.LogRecord) -> bool:
+    """Whether a running server writes ``record``: every record but those below WARNING of the SQL loggers and their children."""
+    of_sql = any(record.name == name or record.name.startswith(f"{name}.") for name in _SIGN_IN_SQL_LOGGERS)
+    return record.levelno >= logging.WARNING or not of_sql
+
+
+def _assert_identifier_not_logged(events: list[dict[str, Any]], records: list[logging.LogRecord], identifiers: Iterable[str], call: str) -> None:
+    """No structlog event, and no stdlib record a server would write, shows one of ``identifiers``: in any key, value or
+    message, whole or, for an address, by its local part, in any case."""
+    needles = sorted(set(identifiers))
+    leaked_events = [event for event in events if _shows_the_identifier(repr(event), needles)]
+    leaked_records = [f"{record.name}: {record.getMessage()}" for record in records if _sign_in_record_written_by_a_server(record) and _shows_the_identifier(_sign_in_record_text(record), needles)]
+    assert leaked_events == [], f"{call}: structlog events showing {needles}, whole or by the local part: {leaked_events}"
+    assert leaked_records == [], f"{call}: stdlib records showing {needles}, whole or by the local part: {leaked_records}"
+
+
+def _the_sign_in_event(events: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    """The event ``name`` of the capture, asserted to be there once."""
+    matching = [event for event in events if event.get("event") == name]
+    assert len(matching) == 1, f"The sign-in must log «{name}» once: {matching}"
+    return matching[0]
+
+
+def _own_fields(event: dict[str, Any]) -> set[str]:
+    """The keys of a captured event beyond _STRUCTLOG_KEYS: the fields the logging call itself passed."""
+    return set(event) - _STRUCTLOG_KEYS
+
+
+class TestSignInLogsNoTypedIdentifier:
+    """Lot A-22 (release 1.3, workstream A): POST /auth/login writes in no log the identifier typed in the login field —
+    a username or an email address —, after workstream E's rule: no email address in any log. The three failures keep
+    their messages word for word: «Login failed: user not found» carries nothing of what was typed (no ``username`` key,
+    no key holding it); «Login failed: wrong password» and «Login failed: user inactive» carry the account's
+    ``user_id`` and no ``username`` key. The success's «User logged in» keeps ``user_id`` and the stored ``username``.
+
+    What is checked is everything the request logged, captured at DEBUG by ``_logged_sign_in``: no structlog event and
+    no stdlib record shows the typed address (or the account's own address), whole or by its local part, in any case —
+    the SQL loggers' records below WARNING aside, which no server writes (``_SIGN_IN_SQL_LOGGERS``).
+
+    Today the three failures log ``username=`` with what was typed: LOGIN-027 to LOGIN-031 are red until A-22, on that
+    keyword alone (every answer is already the contract's). LOGIN-032, the success, and LOGIN-033, the refusal of an
+    account waiting for its email verification (lot E5b, ``user_id`` only), log no address today and are guards.
+
+    Write-safe: every account lives in the test's own tmp_path (private_sign_in), and no sign-in reaches the lane.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_address_is_not_logged(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-027 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user not found» carries
+        the address as typed. An address no account has, typed to sign in: 401 «Invalid credentials», no event and no
+        record of that request shows the address, whole or by its local part, and «Login failed: user not found» is
+        there once, without a ``username`` key."""
+        print_section("LOGIN-027: an unknown address typed to sign in is not logged")
+        typed = f"ghost.{uuid.uuid4().hex[:12]}@example.com"
+
+        response, events, records = await _logged_sign_in(private_sign_in, typed, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: an unknown address must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [typed], "POST /auth/login with an unknown address")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_NOT_FOUND)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_NOT_FOUND}» must carry no 'username' key: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the address; no username key")
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_username_is_not_logged(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-028 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user not found» carries
+        the name as typed. A username no account has, typed to sign in: 401 «Invalid credentials», the typed name
+        appears in no event and no record of that request, and «Login failed: user not found» is there once, without a
+        ``username`` key."""
+        print_section("LOGIN-028: an unknown username typed to sign in is not logged")
+        typed = f"ghost_{uuid.uuid4().hex[:12]}"
+
+        response, events, records = await _logged_sign_in(private_sign_in, typed, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: an unknown username must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [typed], "POST /auth/login with an unknown username")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_NOT_FOUND)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_NOT_FOUND}» must carry no 'username' key: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the typed name; no username key")
+
+    @pytest.mark.asyncio
+    async def test_a_wrong_password_with_the_address_logs_the_user_id_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-029 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: wrong password» carries
+        the address as typed. An active account signed in by its address with a wrong password: 401 «Invalid
+        credentials», no event and no record of that request shows the address, and «Login failed: wrong password» is
+        there once, with the account's ``user_id`` and without a ``username`` key."""
+        print_section("LOGIN-029: a wrong password typed with the address logs the user_id, not the address")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: a wrong password must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address with a wrong password")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_WRONG_PASSWORD)
+        assert "username" not in event, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry no 'username' key: {event}"
+        assert event.get("user_id") == account.user_id, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry the account's user_id, {account.user_id}: {event}"
+        print_success(f"✓ 401; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_wrong_password_with_the_username_logs_only_the_user_id(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-030 — NEW, red until A-22: «Login failed: wrong password» carries ``username``, here the name as typed,
+        which is also the stored one. An active account signed in by its username with a wrong password: 401 «Invalid
+        credentials», its address in no event and no record of that request, and «Login failed: wrong password» there
+        once with exactly one field of its own, the account's ``user_id``: no ``username``, typed or stored."""
+        print_section("LOGIN-030: a wrong password typed with the username logs the user_id only")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.username, _wrong_password(), caplog, monkeypatch)
+
+        assert response.status_code == 401 and response.json() == INVALID_CREDENTIALS, f"barrier: a wrong password must get 401 {INVALID_CREDENTIALS}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the username with a wrong password")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_WRONG_PASSWORD)
+        assert _own_fields(event) == {"user_id"} and event["user_id"] == account.user_id, f"«{_LOGIN_FAILED_WRONG_PASSWORD}» must carry exactly one field beside {sorted(_STRUCTLOG_KEYS)}, user_id={account.user_id}, and no username: {event}"
+        print_success(f"✓ 401; the event's own fields are exactly user_id={account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_deactivated_account_signed_in_by_address_logs_the_user_id_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-031 — NEW, red until A-22, on the ``username=`` keyword alone: «Login failed: user inactive» carries
+        the address as typed. A plainly deactivated account — inactive, without a verification token, as an
+        administrator leaves it; an account waiting for its email verification gets EMAIL_NOT_VERIFIED instead
+        (LOGIN-033) — signed in by its address with the right password: 403 ACCOUNT_DISABLED, no event and no record of
+        that request shows the address, and «Login failed: user inactive» is there once, with the account's ``user_id``
+        and without a ``username`` key."""
+        print_section("LOGIN-031: a deactivated account signed in by its address logs the user_id, not the address")
+        account = await _sign_in_account(private_sign_in, active=False)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert response.status_code == 403 and response.json() == {"detail": ACCOUNT_DISABLED_DETAIL}, f"barrier: a deactivated account with the right password must get 403 with detail {ACCOUNT_DISABLED_DETAIL}: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address of a deactivated account")
+        event = _the_sign_in_event(events, _LOGIN_FAILED_USER_INACTIVE)
+        assert "username" not in event, f"«{_LOGIN_FAILED_USER_INACTIVE}» must carry no 'username' key: {event}"
+        assert event.get("user_id") == account.user_id, f"«{_LOGIN_FAILED_USER_INACTIVE}» must carry the account's user_id, {account.user_id}: {event}"
+        print_success(f"✓ 403 ACCOUNT_DISABLED; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")
+
+    @pytest.mark.asyncio
+    async def test_a_sign_in_by_address_logs_the_stored_username_not_the_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-032 — GUARD, green today and after: an active account signed in by its address with the right password:
+        200, no event and no record of that request shows the address, and «User logged in» is there once with the
+        account's ``user_id`` and its stored ``username`` — what a sign-in may log, never what was typed."""
+        print_section("LOGIN-032: a sign-in by the address logs the stored username, not the address")
+        account = await _sign_in_account(private_sign_in)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert response.status_code == 200 and response.json()["user"]["id"] == account.user_id, f"barrier: the account must sign in by its address with its password: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address with the right password")
+        event = _the_sign_in_event(events, _USER_LOGGED_IN)
+        assert (event.get("user_id"), event.get("username")) == (account.user_id, account.username), f"«{_USER_LOGGED_IN}» keeps user_id and the stored username: {event}"
+        print_success(f"✓ 200; {len(events)} events and {len(records)} records without the address; user_id and the stored username")
+
+    @pytest.mark.asyncio
+    async def test_an_account_awaiting_verification_signed_in_by_address_logs_no_address(self, private_sign_in: _PrivateSignIn, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """LOGIN-033 — GUARD, green today and after: an account waiting for its email verification (lot E5b) — inactive,
+        with an unspent verification token — signed in by its address with the right password: 403 EMAIL_NOT_VERIFIED,
+        no event and no record of that request shows the address, and «Login refused: email not verified» is there
+        once, with the account's ``user_id`` and without a ``username`` key."""
+        print_section("LOGIN-033: an account awaiting its email verification, signed in by its address, logs no address")
+        account = await _sign_in_account(private_sign_in, active=False, awaiting_verification=True)
+
+        response, events, records = await _logged_sign_in(private_sign_in, account.email, _SIGN_IN_PASSWORD, caplog, monkeypatch)
+
+        assert (response.status_code, _error_code(response)) == (403, "EMAIL_NOT_VERIFIED"), f"barrier: an account waiting for its email verification, with the right password, must get 403 EMAIL_NOT_VERIFIED: {response.status_code} {response.text}"
+        _assert_identifier_not_logged(events, records, [account.email], "POST /auth/login by the address of an account waiting for its verification")
+        event = _the_sign_in_event(events, _LOGIN_REFUSED_EMAIL_NOT_VERIFIED)
+        assert "username" not in event and event.get("user_id") == account.user_id, f"«{_LOGIN_REFUSED_EMAIL_NOT_VERIFIED}» carries the account's user_id, {account.user_id}, and no 'username' key: {event}"
+        print_success(f"✓ 403 EMAIL_NOT_VERIFIED; {len(events)} events and {len(records)} records without the address; user_id {account.user_id}")

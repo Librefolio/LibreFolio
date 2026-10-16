@@ -116,9 +116,9 @@
             </div>
             <div class="h-2 overflow-hidden rounded-full bg-lf-neutral" role="progressbar" aria-label={$_('backup.download.creating')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined}>
                 {#if percent === null}
-                    <div class="h-full w-1/3 animate-pulse rounded-full bg-lf-action"></div>
+                    <div class="h-full w-1/3 animate-pulse rounded-full bg-lf-checked"></div>
                 {:else}
-                    <div class="h-full rounded-full bg-lf-action transition-[width] duration-300" style:width="{percent}%"></div>
+                    <div class="h-full rounded-full bg-lf-checked transition-[width] duration-300" style:width="{percent}%"></div>
                 {/if}
             </div>
         </div>
@@ -159,7 +159,7 @@
             {:else}
                 <div class="flex flex-wrap items-center gap-2">
                     <a
-                        class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus"
+                        class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                         href={instanceBackupFileUrl(job.job_id)}
                         download={job.file_name ?? ''}
                         data-testid="backup-download-link"
@@ -168,7 +168,12 @@
                         <Download size={16} aria-hidden="true" />
                         {$_('backup.download.download')}
                     </a>
-                    <button class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus" type="button" data-testid="backup-delete" onclick={removeArchive}>
+                    <button
+                        class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                        type="button"
+                        data-testid="backup-delete"
+                        onclick={removeArchive}
+                    >
                         <Trash2 size={16} aria-hidden="true" />
                         {$_('backup.download.delete')}
                     </button>
@@ -188,19 +193,29 @@
     {#if !controller.busy}
         <div class="flex flex-wrap items-center gap-2">
             {#if controller.canRecheck}
-                <button class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus" type="button" data-testid="backup-recheck" onclick={() => controller.recheck()}>
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                    type="button"
+                    data-testid="backup-recheck"
+                    onclick={() => controller.recheck()}
+                >
                     <RefreshCw size={16} aria-hidden="true" />
                     {$_('backup.download.recheck')}
                 </button>
             {/if}
             {#if controller.state === 'done'}
-                <button class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus" type="button" data-testid="backup-create" onclick={() => controller.start()}>
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                    type="button"
+                    data-testid="backup-create"
+                    onclick={() => controller.start()}
+                >
                     <DatabaseBackup size={16} aria-hidden="true" />
                     {$_('backup.download.createAgain')}
                 </button>
             {:else}
                 <button
-                    class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus"
+                    class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                     type="button"
                     data-testid="backup-create"
                     onclick={() => controller.start()}

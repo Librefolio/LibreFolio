@@ -1455,6 +1455,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.fifo_summary', new Set([1, 2])],
     ['portfolio.reconciliation', new Set([1, 2])],
     ['broker.reconciliation', new Set([1, 2])],
+    ['portfolio.income_timeline', new Set([1, 2])],
+    ['broker.cost_efficiency', new Set([1, 2])],
 ]);
 const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
 

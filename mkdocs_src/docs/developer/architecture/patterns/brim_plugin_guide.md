@@ -530,6 +530,12 @@ Restart the app: the `BRIMProviderRegistry` finds the folder, loads `plugin.py` 
   plugins, whose `plugin.py` files hold only their properties (the string literals R13 reads among
   them) and calls to it. A helper only your plugin uses goes in its folder, as `_*.py` beside
   `plugin.py`.
+- **Importing the plugin starts nothing**: no thread, no process and no connection at module
+  level, in `plugin.py` or in a helper it imports. Discovery also runs inside the BRIM parse pool's
+  forkserver, and every parse worker is a fork of it
+  ([Preload and warm-up](../../backend/brim/architecture.md#parse-pool-warm-up)): a thread there is
+  how deadlocks start, and the single-thread guard of `./dev.py test services brim-parse-pool`
+  fails when it finds one; a process or a connection would be inherited by every worker.
 - **Import and patch** the plugin's names from its `plugin` module,
   `backend.app.services.brim_providers.broker_mybroker.plugin`: the package re-exports nothing, so
   a test that patches the package fails ([Importing and Patching a Plugin](registry_pattern.md#plugin-imports)).
@@ -633,7 +639,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     The user reads the file's language only if the notice code has **no**
     `importWizard.brimNotice.<code>` key. The wizard resolves a notice with
-    `resolveBrimNoticeMessage` (`frontend/src/lib/utils/transactions/resolveBrimNotice.ts`):
+    `resolveBrimNoticeMessage` (`frontend/src/lib/features/transactions/resolveBrimNotice.ts`):
     a key, when it exists, replaces the plugin's message with the text in the UI language;
     without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
@@ -809,7 +815,7 @@ and a **To** line in the bulk editor's markup (`renderFromToHtml` mirrors `rende
 row selects both legs (`setPairSelected`: its tick shows the pair as selected only when both
 legs are, and select all, deselect all and select visible move both legs too), only complete
 pairs reach the bulk editor, and each pair reaches it with a fresh `link_uuid`, the same for
-both legs (`frontend/src/lib/utils/transactions/importPairs.ts`, and `pairCellHtml.ts` beside
+both legs (`frontend/src/lib/features/transactions/import/importPairs.ts`, and `pairCellHtml.ts` beside
 it for the cell): the plugin's ids repeat whenever the same statement is parsed again, so two
 uploads of one statement would share them. The counters and the `Import {n} transactions`
 button count transactions, not rows, so a pair counts as two (`step4SelectedCount` and

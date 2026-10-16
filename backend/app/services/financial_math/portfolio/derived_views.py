@@ -20,6 +20,7 @@ from backend.app.services.financial_math.average_cost import (
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
+from backend.app.services.financial_math.weights import slice_percents
 from backend.app.utils.asset.sector import sector_emoji
 
 
@@ -210,11 +211,11 @@ class DerivedViewsBuilder:
         last = self.daily_states[-1]
 
         def _alloc(d: dict[str, Decimal], use_sector_emoji: bool = False) -> list[dict]:
-            total = sum(d.values()) or Decimal("1")
+            percents = slice_percents(d)
             return [
                 {
                     "name": name,
-                    "value": (amt / total * 100).quantize(Decimal("0.01")),
+                    "value": percents[name].quantize(Decimal("0.01")),
                     "amount": amt,
                     "emoji": sector_emoji(name) if use_sector_emoji else None,
                 }
@@ -236,11 +237,11 @@ class DerivedViewsBuilder:
             if date_from and s.date < date_from:
                 continue
             d = getattr(s, attr, {})
-            total = sum(d.values()) or Decimal("1")
+            percents = slice_percents(d)
             components = [
                 {
                     "name": name,
-                    "value": (amt / total * 100).quantize(Decimal("0.01")),
+                    "value": percents[name].quantize(Decimal("0.01")),
                     "amount": amt,
                 }
                 for name, amt in sorted(d.items(), key=lambda x: -x[1])
