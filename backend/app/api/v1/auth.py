@@ -378,8 +378,8 @@ async def update_profile(
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
     The change ends every other session of the account; this one receives a new session cookie and carries on. When
-    email works, the address the account had before gets a notice after the answer (workstream E), with the new one
-    masked.
+    email works, the address the account had before gets a notice after the answer (workstream E), which shows nothing
+    of the new one (N62).
     """
     # Nothing to update
     if request.username is None and request.email is None:
