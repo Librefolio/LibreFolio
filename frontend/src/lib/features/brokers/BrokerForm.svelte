@@ -202,16 +202,17 @@
     }
 </script>
 
-<form class="space-y-5" class:pointer-events-none={tourPreview} inert={tourPreview} on:submit|preventDefault={handleSubmit}>
+<form class="space-y-5 text-lf-primary" class:pointer-events-none={tourPreview} inert={tourPreview} on:submit|preventDefault={handleSubmit}>
     <!-- Name -->
     <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-name">
+        <label class="block text-sm font-medium text-lf-secondary mb-1" for="broker-name">
             {$_('common.name')} *
         </label>
         <input
             bind:value={name}
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors"
-            class:border-red-300={name.length > 0 && name.trim().length === 0}
+            class="w-full px-3 py-2 border {name.length > 0 && name.trim().length === 0
+                ? 'border-lf-danger'
+                : 'border-lf-input hover:border-lf-input-hover'} bg-lf-field text-lf-primary placeholder:text-lf-placeholder rounded-lg focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-colors"
             data-testid="broker-name-input"
             id="broker-name"
             maxlength="100"
@@ -224,32 +225,45 @@
 
     <!-- Description -->
     <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-description">
+        <label class="block text-sm font-medium text-lf-secondary mb-1" for="broker-description">
             {$_('common.description')}
         </label>
-        <textarea bind:value={description} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none" id="broker-description" maxlength="500" placeholder={$_('brokers.descriptionPlaceholder')} rows="3"></textarea>
+        <textarea
+            bind:value={description}
+            class="w-full px-3 py-2 border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder rounded-lg focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-colors resize-none"
+            id="broker-description"
+            maxlength="500"
+            placeholder={$_('brokers.descriptionPlaceholder')}
+            rows="3"
+        ></textarea>
     </div>
 
     <!-- Default Import Plugin (moved up) -->
     <div data-testid="broker-default-plugin" use:guideAnchor={'broker.plugin'}>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="broker-plugin">
+        <label class="block text-sm font-medium text-lf-secondary mb-1" for="broker-plugin">
             {$_('brokers.defaultImportPlugin')}
         </label>
         <ImportPluginSelect bind:value={defaultImportPlugin} placeholder={$_('brokers.selectPlugin')} />
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('brokers.defaultImportPluginHint')}</p>
+        <p class="text-xs text-lf-muted mt-1">{$_('brokers.defaultImportPluginHint')}</p>
     </div>
 
     <!-- Portal URL -->
     <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-portal">
+        <label class="block text-sm font-medium text-lf-secondary mb-1" for="broker-portal">
             {$_('brokers.portalUrl')}
         </label>
-        <input bind:value={portalUrl} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors" id="broker-portal" placeholder={$_('brokers.portalUrlPlaceholder')} type="url" />
+        <input
+            bind:value={portalUrl}
+            class="w-full px-3 py-2 border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder rounded-lg focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-colors"
+            id="broker-portal"
+            placeholder={$_('brokers.portalUrlPlaceholder')}
+            type="url"
+        />
     </div>
 
     <!-- Icon -->
     <div>
-        <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <span class="block text-sm font-medium text-lf-secondary mb-1">
             {$_('brokers.iconUrl')}
         </span>
         <div class="flex items-center gap-3">
@@ -258,14 +272,14 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="icon-picker-trigger group relative cursor-pointer" data-testid="broker-icon-trigger" use:guideAnchor={'broker.icon'} on:click={() => (showImagePicker = true)} title={$_('uploads.selectIcon') || 'Select Icon'}>
                 <BrokerIcon altText="Icon" {iconUrl} pluginCode={defaultImportPlugin} {portalUrl} size="lg" />
-                <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <div class="absolute inset-0 rounded-full bg-lf-overlay opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <Upload class="text-white" size={16} />
                 </div>
             </div>
             <div class="flex-1 min-w-0">
-                <p class="text-xs text-gray-500 dark:text-gray-400">{$_('brokers.iconUrlHint')}</p>
+                <p class="text-xs text-lf-muted">{$_('brokers.iconUrlHint')}</p>
                 {#if iconUrl}
-                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
+                    <p class="text-xs text-lf-muted mt-0.5 truncate" title={iconUrl}>{iconUrl}</p>
                 {/if}
             </div>
         </div>
@@ -287,7 +301,7 @@
 
         <!-- Is Active Toggle -->
         <div class="flex items-center gap-3 pb-2">
-            <span class="text-sm text-gray-700">{$_('brokers.isActive')}</span>
+            <span class="text-sm text-lf-secondary">{$_('brokers.isActive')}</span>
             <button
                 aria-checked={isActive}
                 aria-label={$_('brokers.isActive')}
@@ -304,43 +318,43 @@
     </div>
 
     <!-- Trading Flags (vertical layout with instant tooltips) -->
-    <div class="space-y-3 border rounded-lg p-4 bg-gray-50 dark:bg-slate-800 dark:border-slate-700">
-        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{$_('brokers.tradingOptions')}</h4>
+    <div class="space-y-3 border border-lf-subtle rounded-lg p-4 bg-lf-panel">
+        <h4 class="text-sm font-medium text-lf-secondary mb-2">{$_('brokers.tradingOptions')}</h4>
 
         <!-- Allow Leveraged Buying -->
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
-                <input bind:checked={allowOverdraft} class="w-4 h-4 text-libre-green rounded focus:ring-libre-green" type="checkbox" />
-                <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowOverdraft')}</span>
+                <input bind:checked={allowOverdraft} class="w-4 h-4 text-lf-link rounded focus:ring-lf-focus" type="checkbox" />
+                <span class="text-sm text-lf-secondary">{$_('brokers.allowOverdraft')}</span>
             </label>
             {#if !allowOverdraft}
                 <Tooltip text={$_('brokers.allowOverdraftHint')} position="left" maxWidth="320px">
-                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                    <span class="p-1 text-lf-muted hover:text-lf-secondary cursor-help">
                         <Info size={16} />
                     </span>
                 </Tooltip>
             {/if}
         </div>
         {#if allowOverdraft}
-            <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 -mt-1">{$_('brokers.allowOverdraftHint')}</p>
+            <p class="text-xs text-lf-muted ml-6 -mt-1">{$_('brokers.allowOverdraftHint')}</p>
         {/if}
 
         <!-- Allow Short Selling -->
         <div class="flex items-start gap-3">
             <label class="flex items-center gap-2 cursor-pointer flex-1">
-                <input bind:checked={allowShorting} class="w-4 h-4 text-libre-green rounded focus:ring-libre-green" type="checkbox" />
-                <span class="text-sm text-gray-700 dark:text-gray-300">{$_('brokers.allowShorting')}</span>
+                <input bind:checked={allowShorting} class="w-4 h-4 text-lf-link rounded focus:ring-lf-focus" type="checkbox" />
+                <span class="text-sm text-lf-secondary">{$_('brokers.allowShorting')}</span>
             </label>
             {#if !allowShorting}
                 <Tooltip text={$_('brokers.allowShortingHint')} position="left" maxWidth="320px">
-                    <span class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help">
+                    <span class="p-1 text-lf-muted hover:text-lf-secondary cursor-help">
                         <Info size={16} />
                     </span>
                 </Tooltip>
             {/if}
         </div>
         {#if allowShorting}
-            <p class="text-xs text-gray-500 dark:text-gray-400 ml-6 -mt-1">{$_('brokers.allowShortingHint')}</p>
+            <p class="text-xs text-lf-muted ml-6 -mt-1">{$_('brokers.allowShortingHint')}</p>
         {/if}
     </div>
 
@@ -349,10 +363,10 @@
         <div class="border-t pt-5">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <h4 class="text-sm font-medium text-gray-700">{$_('brokers.initialBalances')}</h4>
-                    <p class="text-xs text-gray-500 mt-0.5">{$_('brokers.initialBalancesHint')}</p>
+                    <h4 class="text-sm font-medium text-lf-secondary">{$_('brokers.initialBalances')}</h4>
+                    <p class="text-xs text-lf-muted mt-0.5">{$_('brokers.initialBalancesHint')}</p>
                 </div>
-                <button type="button" on:click={addBalance} class="flex items-center space-x-1 px-3 py-1.5 text-sm bg-libre-green/10 text-libre-green rounded-lg hover:bg-libre-green/20 transition-colors disabled:opacity-50">
+                <button type="button" on:click={addBalance} class="flex items-center space-x-1 px-3 py-1.5 text-sm bg-lf-selected text-lf-link rounded-lg hover:bg-lf-checked/20 transition-colors disabled:opacity-50">
                     <Plus size={16} />
                     <span>{$_('brokers.addCurrency')}</span>
                 </button>
@@ -364,7 +378,15 @@
                         <div class="flex items-center gap-2" use:guideAnchor={'brokers.currency'} data-testid="broker-tour-currency">
                             <!-- Amount first (60% width) -->
                             <div class="flex-[6]">
-                                <input type="number" use:numericArrows step="0.01" min="0" bind:value={balance.amount} placeholder={$_('brokers.amount')} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green h-[42px]" />
+                                <input
+                                    type="number"
+                                    use:numericArrows
+                                    step="0.01"
+                                    min="0"
+                                    bind:value={balance.amount}
+                                    placeholder={$_('brokers.amount')}
+                                    class="w-full px-3 py-2 border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder rounded-lg focus:ring-2 focus:ring-lf-focus focus:border-lf-focus h-[42px]"
+                                />
                             </div>
 
                             <!-- Currency Select (40% width, dropdown opens upward) -->
@@ -373,7 +395,7 @@
                             </div>
 
                             <!-- Remove -->
-                            <button type="button" on:click={() => removeBalance(i)} class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0">
+                            <button type="button" on:click={() => removeBalance(i)} class="p-2 text-lf-muted hover:text-lf-danger hover:bg-lf-danger-soft rounded-lg transition-colors shrink-0">
                                 <Trash2 size={18} />
                             </button>
                         </div>
@@ -381,7 +403,7 @@
                 </div>
 
                 {#if hasDuplicateCurrencies}
-                    <p class="text-sm text-amber-600 mt-2">⚠️ {$_('brokers.duplicateCurrencies')}</p>
+                    <p class="text-sm text-lf-warning mt-2">⚠️ {$_('brokers.duplicateCurrencies')}</p>
                 {/if}
             {/if}
         </div>
@@ -392,12 +414,12 @@
 <ImagePickerWrapper circularPreview={true} filterImages={true} initialUrl={iconUrl} oncancel={() => (showImagePicker = false)} onchange={handleImagePickerChange} open={showImagePicker} preset="broker-icon" title={$_('uploads.selectIcon') || 'Select Icon'} />
 
 <!-- Actions (sempre visibili - fuori dal form scrollabile) -->
-<div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">
-    <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" disabled={loading} on:click={handleCancel} type="button">
+<div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-lf-subtle bg-lf-card sticky bottom-0 pb-4 px-4 -mx-4 -mb-4 rounded-b-2xl">
+    <button class="px-4 py-2 text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors" disabled={loading} on:click={handleCancel} type="button">
         {$_('common.cancel')}
     </button>
     {#if !tourPreview}
-        <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
+        <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="broker-form-submit" disabled={!isValid || loading || hasDuplicateCurrencies} on:click={handleSubmit} type="button">
             {#if loading}
                 <span class="inline-flex items-center space-x-2">
                     <span class="animate-spin">⏳</span>
