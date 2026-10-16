@@ -472,4 +472,88 @@ deve essere vuoto.
    > **⚠️ Fuori pista:** il log complessivo di `tee` non si è scritto, perché la cartella `prep/` non c'era ancora
    > quando `tee` l'ha aperta. Per questo lo script esce con 1, mentre i suoi tre passi escono con 0. I log dei passi
    > ci sono.
-8. ⏳ Checkpoint finale, FROZEN.
+   >
+   > ✅ **Slot A+B eseguito il 16/10, 13:20–14:21**, sul ramo portato dal coordinatore alla punta `1248b7908` (lotti di
+   > AF e IM). Due note del diario committate (`9691e8936`), base merge **`814b93319`** (baseline col `--resolve`,
+   > m1 combinato 4.814). Albero pulito; porta 6154 libera prima e dopo.
+   >
+   > **Passi**, tutti finiti prima delle 14:20, senza tagli. Sulla scorta del coordinatore (13:19) la build di prima era
+   > vecchia: lo slot l'ha rifatta con `server --test --build-only`, e il suo `svelte-check` vale come `front check`.
+   >
+   > | Passo | Uscita | Durata | Esito |
+   > |---|---|---|---|
+   > | `api sync` | 0 | 81 s | — |
+   > | `server --test --build-only` | 0 | 322 s | `svelte-check` **0 errori, 0 avvisi**; build di debug e MkDocs ok |
+   > | `front-utility component-unit` | 0 | 188 s | **154 file, 4.041 test passati** |
+   > | `front-transaction all` (consolidato, 47 spec) | 1 | 51 min | **376 passati** (342 desktop + 34 del gruppo «all-projects»), **5 rossi**, 32 saltati (le spec `@mobile` sul desktop); Vitest della categoria **23 file, 907 test passati** |
+   >
+   > **Le mie 25 spec mirate sono tutte verdi.** Fra queste:
+   > - `tx-wac-mode`, con le asserzioni nuove su `aria-pressed`;
+   > - `transactions-modals`, `transactions-table`, tutte le `tx-wac*`, `tx-bulk-*` e `tx-event-*`;
+   > - `tx-import-duplicate-precedence`, che apre il confronto (TR-4), e IWR-006b di `tx-import-resolution`, «il
+   >   badge ⚠ dei duplicati apre la modale di confronto».
+   >
+   > **I 5 rossi**, tutti nelle spec dell'import fuori dalle mie: `tx-import-flow` R1 e G2, `tx-import-matching` E4-01
+   > ed E4-03, `tx-import-resolution` IWR-001.
+   > - **Errore:** fallisce sempre l'ingresso, prima della UI delle transazioni:
+   >   - `login()` resta su `auth-loading` o su `/dashboard` senza `app-shell` per 30 s;
+   >   - nella fixture «owned», `login-page` resta visibile per 20 s;
+   >   - in G2, `/welcome` non passa a `/dashboard` entro 15 s.
+   > - **Durate:** fuori misura, più lunghe del timeout dei test stessi (E4-01 15,4 min con un timeout di 120 s).
+   >
+   > **Triage** (skill `test-triage`, in sola lettura sui log, nessun rilancio: pausa del developer):
+   > - **§1, la forma della risposta:** no, la schermata d'accesso non ha posizioni né conteggi.
+   > - **§2, l'orologio:** no, le attese sono su condizioni.
+   > - **§4, il sintomo più forte:** sì. Il log del backend della corsia (`/tmp/librefolio-r2-tr/logs/librefolio.log`)
+   >   ha quattro silenzi totali, senza nessun record, nemmeno DEBUG, che coincidono con la durata dei rossi:
+   >   - 13:45:02–13:47:04 (R1);
+   >   - 13:47:49–14:03:14 (E4-01);
+   >   - 14:03:17–14:08:45 (E4-03);
+   >   - 14:09:30–14:12:52 (IWR-001).
+   > - **`pmset -g log`:** il portatile **dormiva**, a batteria. Ci sono «Entering Sleep» alle 14:03:14 e alle
+   >   14:09:28, DarkWake alle 14:03:12 e alle 14:08:43, e alle 14:12:45 «Wake … due to … lid … HID Activity» (il
+   >   coperchio riaperto), con il display riacceso. Nessuna attività di sistema registrata fra le 13:47 e le 14:03.
+   > - **Verdetto: ambiente.** I cinque test erano in corso a cavallo di un sonno della macchina, che ha sospeso
+   >   browser e backend. Nessun difetto del prodotto e nessun legame con TR.
+   >
+   > **Seguito, alla ripresa:** rilanciare solo le tre spec rosse (`--resume` del runner oppure le tre azioni), a
+   > macchina sveglia.
+   >
+   > **Reperti per altri:**
+   > - MkDocs, nella build: `developer/backend/transactions/wac.md` punta a `split_promote.md#transfer-giving-leg`,
+   >   un'ancora che non esiste (doc di W);
+   > - nel log del backend, 13:43:08: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
+   >   'provider_code'` (`services/assets/currency_change`, di X/AF).
+   >
+   > Ho girato al coordinatore entrambi i reperti.
+8. ✅ (16/10) Lotto 6: il sottotitolo di `/transactions` (TR-1), sbloccato da L-20 (`460529690`).
+   > **Pausa e ripresa:** il developer ha chiesto una pausa durante lo slot; si riparte dalle 14:14 (coordinatore,
+   > 14:27). Indicazioni: il lotto 6 con le prove leggere e senza un checkpoint a sé; poi uno slot breve (al massimo
+   > 30 minuti, nella nostra corsia, dopo BK, verso le 15:00) con la build, le tre spec dei rossi e la spec del
+   > sottotitolo; poi il checkpoint (passo 7 e lotto 6) e l'ingresso. Reperti: l'ancora di `wac.md` l'aveva già
+   > corretta la 1.3 (`ed500643f`); il log di `currency_change` lo gira il coordinatore alla 1.3.
+   >
+   > **Note implementazione:** `+page.svelte:738`, `text-gray-500 dark:text-gray-400` → `text-lf-muted`. Prove leggere
+   > (14:30, carico 46–48), tutte con uscita 0:
+   > - controllo per file: m1 2 → 0, G1–G4 a 0;
+   > - Prettier e `git diff --check` puliti;
+   > - `dark_only_check.py` 0 in 78 file e `native_field_check.py` 0 in 77 (base `6e569084a`: dentro ci sono anche i
+   >   file di AF e IM già uniti);
+   > - `--check` pulito; **`--update`: m1 4.814 → 4.812**, m2 22; `--check` di nuovo pulito;
+   > - gate 71/71; C4 non chiede di togliere selettori.
+   >
+   > Backlog: TR-1 chiusa ✅, lo SHA arriva col checkpoint.
+   >
+   > **⚠️ Fuori pista:** L-20 è entrato in `dev_release2` (`460529690`) dopo che il mio ramo era stato portato a
+   > `814b93319`, quindi qui c'è ancora la versione vecchia di `designer-lab-picker.spec.ts`. Il suo test «dark-theme
+   > pick of a text-gray-500 element» vuole il sottotitolo in `text-gray-500`: sul mio ramo, col lotto 6, fallisce per
+   > costruzione, mentre nel target L-20 lo ha già staccato. Per lo slot basta `front-designer-lab live`: legge il
+   > sottotitolo con `colourSourceOf`, che regge sia la classe di palette sia il ruolo. Il picker si valida dopo
+   > l'ingresso, o dopo una base merge con L-20.
+9. ⏳ Slot breve (verso le 15:00, al massimo 30 minuti), con lo script `slot_c.sh` in cartella di sessione:
+   - `server --test --build-only`;
+   - `front-transaction tx-import-flow`, `tx-import-matching`, `tx-import-resolution`;
+   - `front-designer-lab live`.
+
+   Nessun passo nuovo dopo +25 minuti; il passo in corso si taglia a +30.
+10. ⏳ Checkpoint (passo 7 e lotto 6), poi l'ingresso.
