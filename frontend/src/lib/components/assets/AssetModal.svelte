@@ -47,6 +47,7 @@
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
+    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -154,7 +155,11 @@
         importNotices?: Array<{kind: string; reason: string}>;
         /** Asset-global only; contextual creation keeps its existing plain success toast. */
         linkCreatedAsset?: boolean;
-        oncreated?: (assetId: number) => void;
+        /** The asset exists. `detail.syncing`: its one price sync started, and `onsynced` will tell how it ended. */
+        oncreated?: (assetId: number, detail?: {syncing: boolean}) => void;
+        /** The one price sync after a creation ended (O-20): its result for the asset, or null when the request failed.
+         * Never called when no sync starts (no provider, or its assignment failed). */
+        onsynced?: (assetId: number, result: AssetCreateSyncResult | null) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
@@ -175,6 +180,7 @@
         importNotices = [],
         linkCreatedAsset = false,
         oncreated,
+        onsynced,
         onupdated,
         onclose,
     }: Props = $props();
@@ -1231,20 +1237,29 @@
         const createdLabel = linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: assetId}, displayName) : escapeHtml(displayName);
         toasts.success($t('assets.modal.createSuccess', {values: {name: createdLabel}}));
         open = false;
-        oncreated?.(assetId);
+        const syncing = hasProvider && !skipProviderAssignment;
+        oncreated?.(assetId, {syncing});
 
-        // Trigger a full-history sync for new assets with a real data provider — fire-and-forget.
-        // Parametric providers (e.g. scheduled_investment) generate their own data and don't
-        // need a historical fetch. Errors are non-blocking (chart just stays empty until the
-        // next scheduled sync); we intentionally do NOT await this.
+        // The one price sync of a new asset with a provider (O-20): fire-and-forget, so the modal
+        // closes at once, and reported through `onsynced`, so the caller can show it and reload —
+        // the Assets page used to start a second sync of its own. Parametric providers (e.g.
+        // scheduled_investment) need it too: assigning one stores no price, the sync generates
+        // the series. Errors are non-blocking (the chart stays empty until the next sync).
         //
         // `start: 'resume'` is the backend sentinel for "the day after the last price I already
         // have, or the provider's full history if I have none". A just-created asset has none,
         // so this is a full-history fetch — expressed as the same rule every other auto-sync
         // uses, instead of a hardcoded date that silently truncates whatever precedes it.
-        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+        if (syncing) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).then(
+                (response) => onsynced?.(assetId, ((response as any)?.results?.[0] ?? null) as AssetCreateSyncResult | null),
+                // Only the request's failure: an error of the caller's handler must not report the sync a second time.
+                (syncErr) => {
+                    console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
+                    onsynced?.(assetId, null);
+                },
+            );
         }
     }
 
