@@ -26,6 +26,10 @@
       "logLevel": {
         "ok": "Le niveau de journalisation convient à la production.",
         "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."
+      },
+      "pluginSecrets": {
+        "ok": "Les secrets des plugins enregistrés sont lisibles avec la clé d'instance.",
+        "unreadable": "{count, plural, one {# secret de plugin enregistré est illisible avec la clé d'instance : saisissez-le à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle il a été enregistré.} many {# secrets de plugins enregistrés sont illisibles avec la clé d'instance : saisissez-les à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle ils ont été enregistrés.} other {# secrets de plugins enregistrés sont illisibles avec la clé d'instance : saisissez-les à nouveau dans Paramètres → Plugins, ou restaurez la clé d'instance avec laquelle ils ont été enregistrés.}}"
       }
     },
     "block": {
