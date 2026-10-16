@@ -38,5 +38,5 @@ key with the one taken at opening and asked to discard changes.
 
 | Role | Path |
 |------|------|
-| The bulk editor (`removeRow`, `addDualRowFromForm`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| The bulk editor (`removeRow`, `addDualRowFromForm`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Plan 46 (§12.10) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |
