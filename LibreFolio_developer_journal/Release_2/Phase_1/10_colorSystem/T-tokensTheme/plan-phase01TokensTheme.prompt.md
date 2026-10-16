@@ -2710,3 +2710,32 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **2 · Prove leggere** (sotto `nice`): Prettier verde (`files.css` riformattato: una riga vuota prima della graffa);
 > `--check` pulito (0 file sotto il record); i quattro gate dei colori e i 5 file di unità che nominano questi componenti
 > **312/312**. `front check` non lanciato: solo `<style>` e CSS, nessun tipo.
+
+> ✅ **Committato** dal coordinatore: `26b45f520` (14:54). Le due scelte da rivedere (il secondario come card, il
+> fantasma su `neutral`) e l'evidenza dei lotti da viola a `selected` sono nella raccolta per la designer.
+
+### TC-15: il muted nelle opzioni evidenziate delle select — 🔄 16/10/2026 (bozze su copie, durante l'attesa degli sblocchi)
+
+> **Il perimetro, cambiato** (14:5x, approvato dal coordinatore): le opzioni di `SearchSelect` hanno 11 chiamanti con un
+> loro snippet, e 6 mettono testo muted nelle opzioni (`UserSearchSelect`, `CountrySearchSelect`,
+> `CurrencySearchSelect` due volte, `ImportPluginSelect`, `ChartSignalsSection` di DV, `AiExportOptionsPanel` dentro
+> `SimpleSelect`); nessuno ci mette testo di stato, solo icone. Invece di correggerli uno per uno, **una regola centrale
+> in ognuna delle 4 select** (`ui/select`, mie), nello `<style>` del componente: dentro l'opzione evidenziata un
+> `.text-lf-muted`, del componente o di uno snippet, diventa secondary (regola 5 dello skill, al livello del
+> componente). `AiExportOptionsPanel` e `ChartSignalsSection` non si toccano più. DV intanto ha committato il suo TC-15
+> (`a6c79a8f3`, `ChartSignalsSection` e `SignalOptionContent`: i sottotitoli a secondary sempre, `hover:text-lf-link` →
+> `hover:text-lf-primary` sui bottoni icona); dopo l'ingresso della mia regola il coordinatore valuta se riportarli a
+> muted.
+
+> ✅ **1 · Le bozze** (`files/T-r2/tc15/`, base `26b45f520`; l'albero non è toccato):
+> - `SearchSelect`, `AssetPickerPanel`: `[data-highlighted='true'] :global(.text-lf-muted) { color:
+>   var(--lf-text-secondary) }`, attributo già presente;
+> - `SimpleSelect`: la stessa regola, e `data-highlighted={index === highlightedIndex}` sulle opzioni (serve anche ai
+>   test); la riga del valore scelto (`bg-lf-selected/50`, 6 % sulla card della tendina) passa già col muted, 4,78/4,63
+>   (`files/T-r2/tint6.mjs`);
+> - `TreeSelect`: `[aria-selected='true']` (l'attivo) **e `[aria-selected]:hover`**: le sue opzioni prendono la tinta
+>   anche al passaggio (`hover:bg-lf-selected`), che non sempre attiva la riga (la tastiera può spostare l'attivo con il
+>   mouse fermo). Segnalato da DV tramite il coordinatore. Le altre select al passaggio usano `hover:bg-lf-hover`, dove il
+>   muted regge (4,52).
+> - Prove sulle copie: Prettier verde; compilate col compilatore di Svelte (`files/T-r2/tc15_compile.mjs`): nessun
+>   avviso CSS, la regola sopravvive nell'output in tutti e quattro. Si applicano dopo la parte 2 dei component tokens.
