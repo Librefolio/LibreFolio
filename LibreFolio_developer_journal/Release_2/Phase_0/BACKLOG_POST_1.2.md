@@ -4578,6 +4578,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
   `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
   a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
+- **J-32 · Debito di traduzione di J-24 (la rettifica in uscita consegna al cambio del suo giorno)** — basso,
+  documentazione; J, 16/10. Pagine EN cambiate di senso, senza stamp, sotto
+  `financial-theory/technical-analysis/performance-metrics/`:
+  - `portfolio-engine/deposited-capital`: sezione nuova `#outgoing-adjustments` con esempio, più punti riscritti;
+    36 errori strutturali.
+  - `portfolio-engine/index`: §8, con l'ancora nuova `#8-realized-gain-loss`, che i titoli tradotti devono portare.
+  - `portfolio-engine/period-pnl`, `twrr`, `mwrr`, `weighted-average-cost`.
+  - `fifo-engine/index`, `fifo-engine/fifo-lot-analysis`.
+
+  Fuori da quella cartella: `financial-theory/instruments/transaction-types/adjustment` e
+  `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
+  `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
+  J, §10 «J-24».
 
 ## Z · Sospensione e risveglio (fase 01)
 
