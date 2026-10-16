@@ -6,7 +6,7 @@ probe is *in flight* until the app has finished with it: the last chunk of a str
 the response included. The probes (``PROBE_PATHS``: health, readiness, the test lane's health) are not counted at all,
 so an orchestrator calling them every few seconds never keeps a machine awake. ``wake-sync`` (``WAKE_PATHS``) is in
 flight but it is not the user: a scheduled wake-up must not look like a visit. Any other request is the user, the
-frontend's polling included: the frontend stops polling in a hidden tab and after ten minutes without input.
+frontend's polling included: the frontend stops polling in a hidden tab and after two minutes without input.
 
 Work that runs outside a request says so with ``busy(reason)``; a source the process cannot wrap, such as a backup run
 by another process, is read through ``register_busy_check``. The idle monitor suspends only when ``busy_reasons()`` is

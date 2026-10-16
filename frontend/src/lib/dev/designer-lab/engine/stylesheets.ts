@@ -131,6 +131,21 @@ function restore(): void {
     saved = [];
 }
 
+/**
+ * The variables the pass rewrote, rule by rule, with their value now: a literal inside a variable's definition (every
+ * `--lf-*` role of `tokens.css` is written as one) or a variable a component defines. A chart that reads a role when it
+ * draws (`chartRoles`) meets them, so the engine compares them for contract C4.
+ */
+export function variableRewrites(): string[] {
+    const out: string[] = [];
+    for (const s of saved) {
+        if (!s.prop.startsWith('--')) continue;
+        const selector = (s.style.parentRule as CSSStyleRule | null)?.selectorText ?? '';
+        out.push(`${selector}|${s.prop}|${s.style.getPropertyValue(s.prop).trim()}`);
+    }
+    return out.sort();
+}
+
 /** The value a declaration had before the Lab rewrote it, or null when the Lab has not touched it (element picker). */
 export function originalValue(style: CSSStyleDeclaration, prop: string): string | null {
     for (const s of saved) if (s.style === style && s.prop === prop) return s.value;

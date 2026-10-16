@@ -117,6 +117,6 @@ cancelled the first plan is unchanged.
 | Per-asset beta/correlation against one benchmark | `backend/app/services/risk_plugins/asset_set_comparison/plugin.py` |
 | Still `ASSET` + `PORTFOLIO` only | `backend/app/services/risk_plugins/historical_kpi/plugin.py` |
 | Backend tests of the family | `backend/test_scripts/test_services/test_risk_asset_set.py` |
-| One request for L1° and L3° | `frontend/src/lib/components/risk/AssetSetComparisonLevels.svelte` |
-| Row assembly, no currency parameter | `frontend/src/lib/components/risk/assetSetLevels.ts` |
+| One request for L1° and L3° | `frontend/src/lib/features/risk/AssetSetComparisonLevels.svelte` |
+| Row assembly, no currency parameter | `frontend/src/lib/features/risk/assetSetLevels.ts` |
 | Clause ⓪ — why the fan-out was rejected | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/A-contratto-asset-set.md` |

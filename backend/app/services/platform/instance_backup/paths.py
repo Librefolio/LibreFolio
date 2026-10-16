@@ -7,7 +7,8 @@ themselves and the files the database writes beside itself (``-wal``, ``-shm``, 
 fixes).
 
 Backups are written under ``backups/``, the instance's own folder for them, which is never archived. The background
-jobs of the API keep their state and their work files in ``backups/.jobs/<job id>/``.
+jobs of the API keep their state and their work files in ``backups/.jobs/<job id>/``. A restore unpacks and checks an
+archive in ``.restore/stage/<stage id>/``, never archived either.
 """
 
 from __future__ import annotations
@@ -27,6 +28,19 @@ BACKUPS_FOLDER = "backups"
 JOBS_FOLDER = ".jobs"
 LOCK_FILE = ".lock"
 STATE_FILE = "state.json"
+
+#: The restore's own folder in the data directory, never archived: the copies being checked (``stage/``) and, with lot
+#: B3, the restore waiting for the next start.
+RESTORE_FOLDER = ".restore"
+STAGE_FOLDER = "stage"
+#: Inside one stage: the data directory as the archive rebuilds it, and the report of the check.
+STAGE_DATA_FOLDER = "data"
+STAGE_REPORT_FILE = "report.json"
+#: The lock that lets one archive be checked at a time.
+STAGE_LOCK_FILE = ".stage.lock"
+#: Inside ``.restore``: the archives uploaded for a check (lot B2b), and the state of each check.
+UPLOAD_FOLDER = "upload"
+CHECKS_FOLDER = "checks"
 
 _JOB_ID = re.compile(r"[0-9a-f]{32}")
 
@@ -69,6 +83,55 @@ def job_dir(data_dir: Path, job_id: str) -> Path:
     if not is_job_id(job_id):
         raise ValueError("not a backup job id")
     return jobs_dir(data_dir) / job_id
+
+
+def restore_dir(data_dir: Path) -> Path:
+    """The restore's own folder: ``<data dir>/.restore``."""
+    return data_dir / RESTORE_FOLDER
+
+
+def stages_dir(data_dir: Path) -> Path:
+    """Where archives are unpacked and checked before a restore: ``<data dir>/.restore/stage``."""
+    return restore_dir(data_dir) / STAGE_FOLDER
+
+
+def stage_dir(data_dir: Path, stage_id: str) -> Path:
+    """The folder of one checked archive. ``ValueError`` for anything that is not an id the stages make (as a job id)."""
+    if not is_job_id(stage_id):
+        raise ValueError("not a restore stage id")
+    return stages_dir(data_dir) / stage_id
+
+
+def uploads_dir(data_dir: Path) -> Path:
+    """Where archives uploaded for a check are received: ``<data dir>/.restore/upload``."""
+    return restore_dir(data_dir) / UPLOAD_FOLDER
+
+
+def upload_path(data_dir: Path, upload_id: str) -> Path:
+    """One uploaded archive. ``ValueError`` for anything that is not an id the uploads make (as a job id)."""
+    if not is_job_id(upload_id):
+        raise ValueError("not an upload id")
+    return uploads_dir(data_dir) / upload_id
+
+
+def checks_dir(data_dir: Path) -> Path:
+    """Where the state of each check is kept: ``<data dir>/.restore/checks``."""
+    return restore_dir(data_dir) / CHECKS_FOLDER
+
+
+def check_state_path(data_dir: Path, stage_id: str) -> Path:
+    """The state file of one check. ``ValueError`` for anything that is not a stage id."""
+    if not is_job_id(stage_id):
+        raise ValueError("not a restore stage id")
+    return checks_dir(data_dir) / f"{stage_id}.json"
+
+
+def is_plain_dir(path: Path) -> bool:
+    """Whether ``path`` is a folder itself: not a link to one, nor anything else."""
+    try:
+        return stat.S_ISDIR(path.lstat().st_mode)
+    except FileNotFoundError:
+        return False
 
 
 def ensure_private_dir(path: Path, data_dir: Path) -> Path:

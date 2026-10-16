@@ -468,6 +468,10 @@ BACKUP_ROUTES = [
     ("GET", "/backup/panel/jobs/{job_id}", "panel.get_panel_backup_job"),
     ("GET", "/backup/panel/jobs/{job_id}/file", "panel.download_panel_backup"),
     ("DELETE", "/backup/panel/jobs/{job_id}", "panel.delete_panel_backup_job"),
+    ("PUT", "/backup/restore/upload", "restore.upload_restore_archive"),
+    ("POST", "/backup/restore/stage", "restore.start_restore_check"),
+    ("GET", "/backup/restore/stage/{stage_id}", "restore.get_restore_check"),
+    ("DELETE", "/backup/restore/stage/{stage_id}", "restore.delete_restore_check"),
     ("GET", "/backup/asset/{asset_id}/prices", "exports.backup_asset_prices"),
     ("GET", "/backup/asset/{asset_id}/events", "exports.backup_asset_events"),
     ("GET", "/backup/fx/{base}/{quote}/rates", "exports.backup_fx_rates"),
@@ -475,11 +479,11 @@ BACKUP_ROUTES = [
 
 
 def test_the_backup_router_registers_its_routes_in_order():
-    """BACKUP-001 (C2): backup_router registers the four routes of instance.py, the four of panel.py, then the three exports of exports.py, in that order, each with its method and endpoint, under the single tag Backup & Export."""
+    """BACKUP-001 (C2): backup_router registers the four routes of instance.py, the four of panel.py, the four of restore.py, then the three exports of exports.py, in that order, each with its method and endpoint, under the single tag Backup & Export."""
     print_section("BACKUP-001: the /backup router registers its routes in order (C2)")
     contexts = list(iter_route_contexts(backup_module.backup_router.routes))
     served = [(",".join(sorted(ctx.methods or ())), ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(backup_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
-    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the four routes of instance.py, the four of panel.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
+    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the four routes of instance.py, the four of panel.py, the four of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
     tags = [(ctx.path, list(getattr(ctx, "tags", []))) for ctx in contexts]
     assert all(route_tags == ["Backup & Export"] for _path, route_tags in tags), f"each route of the /backup router must carry the single tag Backup & Export, and no other:\n  expected ['Backup & Export'] on each route\n  got      {tags}"
     print_success(f"{len(served)} routes, in their order: {[f'{method} {path}' for method, path, _endpoint in served]}")

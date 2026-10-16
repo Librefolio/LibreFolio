@@ -91,7 +91,7 @@
     {#snippet item(option)}
         <div class="flex items-center min-w-0">
             <div class="min-w-0">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={option.label}>
+                <div class="text-sm font-medium text-lf-primary truncate" title={option.label}>
                     {option.label}
                 </div>
             </div>
@@ -100,12 +100,12 @@
     {#snippet selectedItem(option)}
         {#if compact}
             <div class="flex items-center min-w-0">
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{option.label}</span>
+                <span class="text-sm font-medium text-lf-primary truncate">{option.label}</span>
             </div>
         {:else}
             <div class="flex items-center min-w-0">
                 <div class="min-w-0">
-                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={option.label}>
+                    <div class="text-sm font-medium text-lf-primary truncate" title={option.label}>
                         {option.label}
                     </div>
                 </div>
