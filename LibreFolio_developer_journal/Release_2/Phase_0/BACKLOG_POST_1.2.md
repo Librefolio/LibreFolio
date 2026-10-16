@@ -3295,6 +3295,39 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
   import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
   Dettagli: piano 04, sezione N2.
+  ✅ 16/10 (W-B31): la regola 12 chiede `cost_basis_allowed()` (`type_metadata.py`, legge `TX_TYPE_METADATA` al momento
+  della chiamata, lo stesso `cbAllowed` del frontend); il ciclo sciolto spostando i gruppi di scambio (`SWAP_GROUPS`,
+  `get_swap_group`) in `type_metadata.py` (decisione notturna, da rivedere). Rossi TX-S-092/093. Dettagli: piano 04,
+  sezione W-B31.
+- **W-B36 · Le regole 5–11 del batch sono copie scritte a mano dei metadati dei tipi** — minimo, codice; W, 16/10
+  (W-B31). `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`) scrive a mano
+  quali tipi vogliono l'asset (regola 5) e la cassa (7), la cassa vietata all'ADJUSTMENT (8), i tipi collegabili a un
+  evento (9, con `EVENT_COMPATIBLE_TYPES`), i segni di quantità (10) e di cassa (11); `TX_TYPE_METADATA` ha già
+  `asset_mode`, `cash_mode`, `quantity_sign`, `cash_sign`, `event_compatible`, che il frontend legge. Dopo W-B31 il ciclo
+  d'import non c'è più: si possono leggere dalla tabella, con un test di parità per tipo e segno come TX-S-090. Da
+  verificare prima che le semantiche coincidano (per esempio «free», l'asset facoltativo di INTEREST, FEE e TAX).
+  Dettagli: piano 04, sezione W-B31.
+  ◐ 16/10 (W-B36): la parte che coincide letta dalla tabella (regole 5, 7, 8, 9, 10, 11; `EVENT_COMPATIBLE_TYPES` tolto),
+  rossi TX-S-095…109; i quattro casi in cui la tabella è più severa restano com'è oggi, eccezioni esplicite che
+  rimandano alla decisione **P6** del developer (lista del 16/10); il caso 4 si raggiunge anche con un promote (un
+  WITHDRAWAL e un DEPOSIT a importo zero promossi). Restano due copie scritte a mano nei testi dell'API (OpenAPI, quindi
+  `api sync`): la descrizione di `TXCreateItem.asset_event_id` «(DIVIDEND/INTEREST/ADJUSTMENT only)» e quella di
+  `cost_basis_pair` (`type_metadata.py`: «qty<0» per l'indice 0, che vale ≤ 0, ed etichette italiane «Da»/«A»).
+  Dettagli: piano 04, sezione W-B36.
+- **W-B37 · Il modale dei report del broker cancella in blocco anche i file non cancellabili** — minimo, chiarezza; W,
+  16/10 (H, CP-U2, docs-writer). Dopo CP-U2 `FilesTable` nasconde «elimina» sulle righe con `can_delete: false` in
+  tutte e due le schede, quindi anche nel modale; ma `handleDeleteMultiple`
+  (`frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte:168`) manda tutti i selezionati e riporta i 403,
+  mentre la pagina File li salta con l'avviso `uploads.deleteSkipped` (evento `file.delete.skipped`). Cura: filtrare
+  `can_delete !== false` prima del ciclo, con la stessa chiave e lo stesso evento. Dopo l'ingresso di CP-U2 di H (la
+  chiave e l'evento arrivano con quello). Dettagli: messaggio di H, 16/10 00:31.
+- **W-B38 · Gli errori multipli della creazione portano i testi con `{type}` non risolto** — minimo, chiarezza; W, 16/10
+  (W-B36, test-author). Con due o più violazioni `TXCreateItem.validate_transaction_rules`
+  (`backend/app/schemas/transactions/transactions.py`, `multipleBusinessRuleErrors`) impacchetta per ciascuna
+  `e.message_template`, non `e.message()`: il testo arriva in `TXValidationIssue.error` (batch) e in
+  `BRIMValidationIssue.message` (import) come «{type} requires asset_id». Cura: `e.message()` (i parametri restano in
+  `ctx`); cambia testi visibili nelle risposte (in meglio). W-B36 tiene apposta i testi di prima (letterali per tipo dove
+  lo erano). Dettagli: piano 04, sezione W-B36.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -3811,3 +3844,15 @@ da Y il 15/10.
   - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
     o rinviata come le etichette.
   - Dettagli: piano di Y, §7 «Y8 — passo 3».
+- **Y-9 · Il layout del PAC da telefono, da rivedere sugli scatti mobile dopo Y7** — basso; Y, 15/10 (Y7), per la
+  decisione 50 del developer. Y7 fa scorrere con la tabella le colonne di selezione e azioni sotto i 768 px (D-Y17).
+  Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
+  la tabella supera i 500 px). Va giudicato sugli scatti mobile `pac-step-targets` e `pac-step-review` della galleria
+  d'ingresso di Y7, insieme alle altre note del developer. Dettagli: piano di Y, §4 «Y7».
+- **Y-10 · Su un telefono la maniglia di ridimensionamento è invisibile** — minimo, UX; `test-author` di Y, 15/10 (Y7).
+  - Dopo Y7 un dito ridimensiona una colonna (D-Y18). Ma la maniglia
+    (`table/DataTableColumnHeader.svelte`, `.resize-handle`) resta trasparente finché la cella non è in hover, e un dito
+    non fa hover: sul telefono funziona, ma non si vede.
+  - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
+    `--lf-cmp-datatable-resize-handle-bg` c'è già.
+  - Dettagli: piano di Y, §7 «Y7».
