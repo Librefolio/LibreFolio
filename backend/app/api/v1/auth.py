@@ -44,6 +44,7 @@ from backend.app.services.accounts.auth_service import (
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.accounts.global_settings_service import get_session_ttl_hours
 from backend.app.services.accounts.registration_service import RegistrationError
+from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
 
 logger = structlog.get_logger(__name__)
@@ -359,6 +360,7 @@ async def update_profile(
     request: UpdateProfileRequest,
     response: Response,
     http_request: Request,
+    background: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -370,13 +372,17 @@ async def update_profile(
 
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
-    The change ends every other session of the account; this one receives a new session cookie and carries on.
+    The change ends every other session of the account; this one receives a new session cookie and carries on. When
+    email works, the address the account had before gets a notice after the answer (workstream E), with the new one
+    masked.
     """
     # Nothing to update
     if request.username is None and request.email is None:
         return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
 
     email_changes = request.email is not None and request.email != current_user.email
+    # Read before the change: the account below is the same object, and the notice goes to this address.
+    old_email = current_user.email
     if email_changes:
         if request.current_password is None:
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})
@@ -399,6 +405,8 @@ async def update_profile(
         # update_profile ended every session of the account with the change: this one gets a new cookie.
         _issue_session_cookie(response, http_request, updated_user, await _session_ttl_hours(session))
         logger.info("Email changed, other sessions ended", user_id=updated_user.id)
+        # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
+        background.add_task(email_flows.email_changed_work, updated_user.id, old_email, updated_user.email, engine=session.bind)
 
     logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email=updated_user.email)
 

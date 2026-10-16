@@ -177,8 +177,6 @@ export function linkSendFailureMessage(translate: Translate, failure: LinkSendFa
 /** «Forgot password» was refused: what to tell whoever asked. */
 export function forgotFailureMessage(translate: Translate, failure: ForgotFailure): string {
     switch (failure.errorCode) {
-        case 'FORGOT_PASSWORD_DISABLED':
-            return translate('email.forgot.errors.FORGOT_PASSWORD_DISABLED');
         case 'EMAIL_UNAVAILABLE':
         case 'EMAIL_LINKS_UNAVAILABLE':
             return translate('email.forgot.errors.unavailable');
