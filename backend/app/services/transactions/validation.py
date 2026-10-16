@@ -45,7 +45,8 @@ class TransactionValidationMixin:
         - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op), one
           asset, and exactly opposite quantities: what leaves one broker arrives at
           the other, no unit is created or lost.
-        - FX_CONVERSION intra-broker is allowed (multi-currency account use case).
+        - FX_CONVERSION requires both legs on one broker (a multi-currency account): ``broker_id`` is ``equal`` in
+          ``TX_TYPE_METADATA``, as the form, the promotion and the imports write it (W-B17).
         - CASH_TRANSFER requires distinct brokers (same-broker is a no-op).
 
         Returns None when the pair is valid, otherwise a tuple of
@@ -80,6 +81,12 @@ class TransactionValidationMixin:
                 f"CASH_TRANSFER requires distinct brokers (both on broker {a.broker_id})",
                 "pairSameBroker",
                 {"brokerId": a.broker_id},
+            )
+        if a.type == TransactionType.FX_CONVERSION and a.broker_id != b.broker_id:
+            return (
+                f"FX_CONVERSION requires both legs on one broker (got brokers {a.broker_id} and {b.broker_id})",
+                "pairBrokerMismatch",
+                {"brokerA": a.broker_id, "brokerB": b.broker_id},
             )
         return None
 
