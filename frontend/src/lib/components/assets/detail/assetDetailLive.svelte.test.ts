@@ -8,12 +8,19 @@
  * FE5c (piece 9b). One poll of `POST /assets/prices/current` feeds the price summary and the chart's last point.
  *
  * The contract under test:
- *   - **The effect.** The constructor reads nothing from the page. The effect reads `assetInfo` (its id and currency),
- *     `displayCurrency`, `fxConversionMissing` and `isHeadToday`, and nothing else: a change to one of those re-runs it
- *     — the poller stopped, and a new one started unless the head left today or the asset is gone — while a change to
- *     anything else leaves the poller alone.
- *   - **Stopped.** With the chart ending before today, or no asset: no poller, `updatesState` `stopped`, the price and
- *     the conversion flag cleared, the flash put out with its timer, and no reference left for the next tick.
+ *   - **The effect.** The constructor reads nothing from the page: the `$derived` it declares is lazy. The effect reads
+ *     `assetInfo` (its id and currency), `displayCurrency`, `fxConversionMissing`, `isHeadToday` and, through that
+ *     `$derived`, whether `providerAssignment` has a provider code, and nothing else: a change to one of those re-runs
+ *     it — the poller stopped, and a new one started unless the head left today, the asset is gone or no provider is
+ *     assigned — while a change to anything else leaves the poller alone. A provider code that comes or goes re-runs
+ *     it; the page reloading the assignment after a sync or an edit — a new object, with the same code or another
+ *     one — does not (Z-8, N-ZA-3): the poll asks the backend, which reads the assignment of the moment.
+ *   - **Stopped.** With the chart ending before today, no asset, or no provider code — a manual asset, or an assignment
+ *     not loaded yet, which the page loads alongside the asset (Z-8: without a provider `POST /assets/prices/current`
+ *     only echoes the stored price, and every answer counts as a portfolio mutation) —: no poller, `updatesState`
+ *     `stopped`, the price and the conversion flag cleared, the flash put out with its timer, and no reference left for
+ *     the next tick. The asset and the code may land in either order: the poller starts once both are in; a code lost
+ *     while it runs stops it.
  *   - **Running.** One `startActivePolling` with `run`, `ASSET_DETAIL_LIVE_INTERVAL_MS` and `onstatechange`, which
  *     feeds `updatesState`; the page's destruction stops the poller and leaves no timer behind.
  *   - **A poll** asks for the asset's quote and hands the poller the outcome of the answer (`livePollOutcome`), or
@@ -26,8 +33,9 @@
  *     The native price when no conversion is needed (the asset's own currency, no display currency, no asset currency,
  *     the FX pair missing); otherwise the price converted for today, or the native price with `conversionFailed` when
  *     the conversion answers no amount or throws. A conversion landing after the effect re-ran writes nothing.
- *   - **The chart head.** Nothing without a provider code, while the chart loads, while the calendar view loads in
- *     calendar mode, for an answer with an error or no date, or for a close the chart already has on that date. The
+ *   - **The chart head.** Nothing while the chart loads, while the calendar view loads in calendar mode, for an answer
+ *     with an error or no date, or for a close the chart already has on that date — and without a provider code there
+ *     is no poll at all (Stopped), so no answer reaches the chart head: it has no provider check of its own. The
  *     close compared with the poll is the point's native one, `original_close ?? close` — a converted point keeps it in
  *     `original_close`, a point left native for want of a rate in `close` — so a converted chart reloads only when the
  *     native price moved. A converted chart, or the calendar mode, is reloaded — `invalidateAssetPriceStore`, then
@@ -280,7 +288,7 @@ function plain(points: readonly ChartPoint[]): ChartPoint[] {
     return points.map((point) => ({...point}));
 }
 
-/** Today as the page counts it: the UTC date, like its `isHeadToday`. */
+/** The day the conversion of a live price asks for (`#applyLiveSummary`): the UTC date. */
 function utcToday(): string {
     return new Date().toISOString().slice(0, 10);
 }
@@ -312,6 +320,9 @@ beforeEach(() => {
 
 // --- The polling effect ---------------------------------------------------------------------------------------------
 
+// An arrow of these tables that assigns an object or an array to the page has a block body: as the arrow's value, the
+// assignment is checked in dev and reads back as the proxy the page keeps, not the object (`assignment_value_stale`).
+
 /** A change of the page, applied by a case. */
 interface PageChange {
     change: string;
@@ -323,33 +334,77 @@ const POLLED_WITH: PageChange[] = [
     {change: 'the display currency', apply: (page) => (page.displayCurrency = 'EUR')},
     {change: "the asset's currency", apply: (page) => (page.assetInfo!.currency = 'CHF')},
     {change: 'the FX gap', apply: (page) => (page.fxConversionMissing = true)},
-    {change: 'the asset', apply: (page) => (page.assetInfo = {id: OTHER_ASSET_ID, currency: 'USD'})},
+    {
+        change: 'the asset',
+        apply: (page) => {
+            page.assetInfo = {id: OTHER_ASSET_ID, currency: 'USD'};
+        },
+    },
 ];
 
-/** What only a landing poll reads: a change leaves the poller alone. */
+/**
+ * What only a landing poll reads: a change leaves the poller alone. The provider is not among them: by having a code or
+ * not, it decides whether there is a poller at all (Z-8).
+ */
 const READ_ON_LANDING: PageChange[] = [
     {change: 'the asset of the route', apply: (page) => (page.pageAssetId = OTHER_ASSET_ID)},
-    {change: 'the provider', apply: (page) => (page.providerAssignment = null)},
     {change: 'the chart loading', apply: (page) => (page.loading = true)},
     {change: 'the chart mode', apply: (page) => (page.primaryMode = 'calendar-return')},
-    {change: 'the calendar view', apply: (page) => (page.calendarReturnView = {state: 'loading'})},
-    {change: 'the chart data', apply: (page) => (page.chartData = [])},
+    {
+        change: 'the calendar view',
+        apply: (page) => {
+            page.calendarReturnView = {state: 'loading'};
+        },
+    },
+    {
+        change: 'the chart data',
+        apply: (page) => {
+            page.chartData = [];
+        },
+    },
 ];
 
 /** When there is nothing to poll yet. */
 const NOT_YET: Array<{when: string; overrides: Partial<PageState>}> = [
     {when: 'the chart ends before today', overrides: {isHeadToday: false}},
     {when: 'there is no asset yet', overrides: {assetInfo: null}},
+    // Z-8: a manual asset has no assignment, and any asset has none until it has loaded. Without a provider
+    // the quote endpoint only echoes the stored price, and every answer counts as a portfolio mutation.
+    {when: 'no provider is assigned', overrides: {providerAssignment: null}},
+    {when: 'the provider assignment has no code', overrides: {providerAssignment: {provider_code: null}}},
+    {when: 'the provider code is empty', overrides: {providerAssignment: {provider_code: ''}}},
+];
+
+/** What stops a running poll and what brings it back: the page then behaves as on a range that ends in the past. */
+const LEAVES: Array<{leaves: string; leave: (page: PageState) => void; back: (page: PageState) => void}> = [
+    {leaves: 'the head leaves today', leave: (page) => (page.isHeadToday = false), back: (page) => (page.isHeadToday = true)},
+    // Z-8: an edit removing the provider, and the page's own reload, which empties the assignment before loading it.
+    {
+        leaves: 'the provider is unassigned',
+        leave: (page) => (page.providerAssignment = null),
+        back: (page) => {
+            page.providerAssignment = {provider_code: 'yfinance'};
+        },
+    },
+    {
+        leaves: 'the provider assignment loses its code',
+        leave: (page) => {
+            page.providerAssignment = {provider_code: null};
+        },
+        back: (page) => {
+            page.providerAssignment = {provider_code: 'yfinance'};
+        },
+    },
 ];
 
 describe('AssetDetailLive — the polling effect', () => {
-    it('reads nothing from the page while it is built; its effect then reads the asset, the currencies, the FX gap and the head', () => {
+    it('reads nothing from the page while it is built; its effect then reads the asset, the currencies, the FX gap, the head and the provider', () => {
         const {reads, readsWhileBuilding} = mount();
 
         // The page builds the instance in the middle of its script: a read here would reach state the page has not
         // declared yet.
         expect(readsWhileBuilding).toBe(0);
-        expect(new Set(reads)).toEqual(new Set(['assetInfo', 'displayCurrency', 'fxConversionMissing', 'isHeadToday']));
+        expect(new Set(reads)).toEqual(new Set(['assetInfo', 'displayCurrency', 'fxConversionMissing', 'isHeadToday', 'providerAssignment']));
     });
 
     it("starts one poller at the asset page's cadence, whose state becomes the page's, and whose poll asks for the asset's quote", async () => {
@@ -403,12 +458,60 @@ describe('AssetDetailLive — the polling effect', () => {
 
         page.isHeadToday = true;
         page.assetInfo = {id: ASSET_ID, currency: 'USD'};
+        page.providerAssignment = {provider_code: 'yfinance'};
         flushSync();
 
         expect(startActivePolling).toHaveBeenCalledTimes(1);
     });
 
-    it('resets when the head leaves today: the poller stopped, `stopped`, price and flag cleared, the flash out, no reference left for the next tick', async () => {
+    it('waits for the provider assignment, which may land after the asset: none, then one without a code, start nothing; the code arriving alone starts the poller', () => {
+        const {live, page} = mount({providerAssignment: null});
+        expect(startActivePolling).not.toHaveBeenCalled();
+
+        page.providerAssignment = {provider_code: null};
+        flushSync();
+        expect(startActivePolling).not.toHaveBeenCalled();
+        expect(live.updatesState).toBe('stopped');
+
+        page.providerAssignment = {provider_code: 'yfinance'};
+        flushSync();
+        expect(startActivePolling).toHaveBeenCalledTimes(1);
+        expect(startActivePolling).toHaveBeenCalledWith({run: expect.any(Function), intervalMs: ASSET_DETAIL_LIVE_INTERVAL_MS, onstatechange: expect.any(Function)});
+        lastPoller().options.onstatechange?.('running');
+        expect(live.updatesState).toBe('running');
+    });
+
+    // Z-8, N-ZA-3: the provider reaches the effect as a `$derived` boolean, whether there is a code. The page reassigns
+    // the assignment each time it reloads its metadata, after a sync or an edit — a new object, usually with the same
+    // code — and, read straight, that would restart the poller, whose start polls at once: one more write for nothing.
+    it('does not restart when the assignment is reloaded — a new object with the same code, or another code — but stops when the code goes', () => {
+        const {live, page} = mount({providerAssignment: {provider_code: 'yfinance'}});
+        const first = lastPoller();
+        first.options.onstatechange?.('running');
+
+        // The page's reload: a new object, the same code.
+        page.providerAssignment = {provider_code: 'yfinance'};
+        flushSync();
+        expect(startActivePolling).toHaveBeenCalledTimes(1);
+        expect(first.stop).not.toHaveBeenCalled();
+        expect(live.updatesState).toBe('running');
+
+        // Another provider: the poll asks the backend, which reads the assignment of the moment.
+        page.providerAssignment = {provider_code: 'justetf'};
+        flushSync();
+        expect(startActivePolling).toHaveBeenCalledTimes(1);
+        expect(first.stop).not.toHaveBeenCalled();
+        expect(live.updatesState).toBe('running');
+
+        // The control: the same kind of change, a new object, is seen once it carries no code — the effect is not deaf.
+        page.providerAssignment = {provider_code: null};
+        flushSync();
+        expect(first.stop).toHaveBeenCalledTimes(1);
+        expect(startActivePolling).toHaveBeenCalledTimes(1);
+        expect(live.updatesState).toBe('stopped');
+    });
+
+    it.each(LEAVES)('resets when $leaves: the poller stopped, `stopped`, price and flag cleared, the flash out, no reference left for the next tick', async ({leave, back}) => {
         const {live, page} = mount({displayCurrency: 'EUR'});
         const first = lastPoller();
         first.options.onstatechange?.('running');
@@ -421,7 +524,7 @@ describe('AssetDetailLive — the polling effect', () => {
         expect(summary(live)).toEqual({currentPrice: 101, conversionFailed: true, direction: 'up', flashToken: 1});
         expect(live.updatesState).toBe('running');
 
-        page.isHeadToday = false;
+        leave(page);
         flushSync();
 
         expect(first.stop).toHaveBeenCalledTimes(1);
@@ -430,7 +533,7 @@ describe('AssetDetailLive — the polling effect', () => {
         // `flashToken` only grows: it re-keys the flash, it shows nothing by itself.
         expect(summary(live)).toEqual({currentPrice: null, conversionFailed: false, direction: 'neutral', flashToken: 1});
 
-        page.isHeadToday = true;
+        back(page);
         flushSync();
         expect(startActivePolling).toHaveBeenCalledTimes(2);
         quoteNext('99');
@@ -469,6 +572,8 @@ const MOVES: Array<{move: string; apply: (mounted: Mounted) => void; shown: numb
     {move: 'the route moved to another asset', apply: ({page}) => (page.pageAssetId = OTHER_ASSET_ID), shown: 100},
     {move: 'the display currency changed', apply: ({page}) => (page.displayCurrency = 'EUR'), shown: 100},
     {move: 'the head left today', apply: ({page}) => (page.isHeadToday = false), shown: null},
+    // Z-8: the poll stops with the provider, and so does what it was still bringing.
+    {move: 'the provider was unassigned', apply: ({page}) => (page.providerAssignment = null), shown: null},
     {move: 'the page was destroyed', apply: ({stop}) => stop(), shown: 100},
 ];
 
@@ -794,7 +899,7 @@ describe('the flash of a tick (fake clock)', () => {
         expect(live.flashToken).toBe(4);
     });
 
-    it('is put out at once when the head leaves today, and its timer with it', async () => {
+    it.each(LEAVES)('is put out at once when $leaves, and its timer with it', async ({leave}) => {
         useFakeClock();
         const {live, page} = mount();
         quoteNext('100');
@@ -804,7 +909,7 @@ describe('the flash of a tick (fake clock)', () => {
         expect(live.direction).toBe('up');
         expect(vi.getTimerCount()).toBe(1);
 
-        page.isHeadToday = false;
+        leave(page);
         flushSync();
 
         expect(live.direction).toBe('neutral');
@@ -867,10 +972,11 @@ const SAME_CLOSE: Array<{mode: string; overrides: Partial<PageState>}> = [
     {mode: 'in calendar mode, which would reload otherwise', overrides: {primaryMode: 'calendar-return'}},
 ];
 
-/** What holds the chart head back. */
+/**
+ * What holds the chart head back. No provider is not among them: without a provider code there is no poller (Z-8, see
+ * `NOT_YET`), so no answer reaches the chart head, and an answer in flight when the code goes is dropped (`MOVES`).
+ */
 const HELD_BACK: Array<{when: string; overrides?: Partial<PageState>; item?: Record<string, unknown>}> = [
-    {when: 'no provider is assigned', overrides: {providerAssignment: null}},
-    {when: 'the provider assignment has no code', overrides: {providerAssignment: {provider_code: null}}},
     {when: 'the chart is loading', overrides: {loading: true}},
     {when: 'the calendar view is loading in calendar mode', overrides: {primaryMode: 'calendar-return', calendarReturnView: {state: 'loading'}}},
     {when: 'the answer carries an error', item: {error: 'provider timeout'}},

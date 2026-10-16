@@ -112,8 +112,9 @@ export function testFailureMessage(translate: Translate, failure: EmailTestFailu
     }
 }
 
-/** What the page of a verification link shows: the wait, why the link cannot be used, or a check that failed. */
-export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'missing' | 'error';
+/** What the page of a verification link shows: the wait, why the link cannot be used, a blocked instance, or a check
+ * that failed. */
+export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'blocked' | 'missing' | 'error';
 
 export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     checking: 'email.verification.page.checking',
@@ -121,6 +122,7 @@ export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     consumed: 'email.verification.page.consumed',
     revoked: 'email.verification.page.revoked',
     unknown: 'email.verification.page.unknown',
+    blocked: 'email.verification.page.blocked',
     missing: 'email.verification.page.missing',
     error: 'email.verification.page.error',
 };
@@ -168,6 +170,8 @@ export function linkSendFailureMessage(translate: Translate, failure: LinkSendFa
         case 'EMAIL_RATE_LIMITED':
             return translate('email.sendLink.errors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
         case 'EMAIL_DELIVERY_FAILED':
+            // The refused recipient is the invitee or the account here, not the administrator's own address of the test email.
+            if (failure.smtpCode === 'RECIPIENT_REFUSED') return translate('email.sendLink.errors.RECIPIENT_REFUSED');
             return translate(ownKey(SMTP_ERROR_KEYS, failure.smtpCode) ?? 'email.smtpErrors.SEND_FAILED');
         default:
             return translate('email.sendLink.errors.generic');
@@ -177,8 +181,6 @@ export function linkSendFailureMessage(translate: Translate, failure: LinkSendFa
 /** «Forgot password» was refused: what to tell whoever asked. */
 export function forgotFailureMessage(translate: Translate, failure: ForgotFailure): string {
     switch (failure.errorCode) {
-        case 'FORGOT_PASSWORD_DISABLED':
-            return translate('email.forgot.errors.FORGOT_PASSWORD_DISABLED');
         case 'EMAIL_UNAVAILABLE':
         case 'EMAIL_LINKS_UNAVAILABLE':
             return translate('email.forgot.errors.unavailable');

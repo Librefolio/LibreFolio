@@ -753,6 +753,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                         {date: '2024-03-18', drawdown: -0.032},
                     ],
                     maximum_drawdown: -0.087,
+                    // The rise from the trough back to the prior peak, which L1
+                    // reads as is: the backend's −MDD/(1+MDD), drawdown_summary 1.2.0.
+                    maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913,
                     maximum_drawdown_peak_date: '2023-11-14',
                     maximum_drawdown_trough_date: '2023-12-03',
                     maximum_drawdown_recovery_status: 'open',
@@ -1837,6 +1840,40 @@ async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<
     await page.mouse.move(edge.x + dx / 2, edge.y, {steps: 4});
     await page.mouse.move(edge.x + dx, edge.y, {steps: 4});
     await page.mouse.up();
+}
+
+/** One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: four times the Tooltip's own delay (`showDelayMs`, 500 ms). */
+const HELP_REST_MS = 2_000;
+
+/** How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a delay. */
+const HELP_OPEN_DEADLINE_MS = 10_000;
+
+/**
+ * Rest the pointer on `trigger` until the help it carries is open, and hand that help back.
+ *
+ * The project's Tooltip arms its delay on `mouseenter` and opens only if the pointer is still on the
+ * trigger when the delay ends: a `mouseleave` in between disarms it. A single hover is therefore a bet
+ * that nothing moves under the pointer for that long, and a parallel run takes the other side of it: L3's
+ * table may still be fitting its columns to their titles after the hover, or a busy main thread runs the
+ * delay late. Measured on `front-portfolio risk` at 2 workers (16/10/2026): no help in the snapshot taken
+ * when a single hover's assertion gave up, the right help open in the screenshot taken after it.
+ *
+ * So every attempt enters the trigger afresh and gives its help a few times that delay to open, and the
+ * attempts repeat until the deadline. Afresh means from the page's corner, where no Tooltip is drawn: a
+ * pointer already resting on the trigger fires no new `mouseenter`, and a hover alone would never arm
+ * the delay again. No sleep: every attempt ends on an assertion.
+ *
+ * The help is portalled to `<body>`, so it is found by its testid on the whole page: the caller starts
+ * from a pointer that left no other help open, and reads the help's text itself.
+ */
+async function hoverUntilHelpOpens(page: Page, trigger: Locator, why: string): Promise<Locator> {
+    const help = page.getByTestId('tooltip-content');
+    await expect(async () => {
+        await page.mouse.move(0, 0);
+        await trigger.hover();
+        await expect(help).toBeVisible({timeout: HELP_REST_MS});
+    }, why).toPass({timeout: HELP_OPEN_DEADLINE_MS});
+    return help;
 }
 
 /**
@@ -3470,6 +3507,28 @@ test.describe('Risk analysis functional integration', () => {
             expect(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'premise: the page is drawn in the light theme').toBe(false);
         }
 
+        /**
+         * A colour role as this page resolves it: a probe painted with the role, read and removed, the way
+         * `expectComputedBorderColor` does in `transactions-modals.spec.ts` (design system, rule 10). A row's
+         * `background-color` is read by the same `getComputedStyle` under the same `:root` properties, so the
+         * two strings agree to the digit, a `color-mix()` written out as `oklab(…)` included. A row is held to
+         * its role, never to a hex: the value is T's to tune. Call it after `expectLightTheme`, since a role
+         * changes with the theme. Premise: the role resolves — an unknown one paints transparent, like a row
+         * that lost it, and the comparison would pass on two absences.
+         */
+        async function roleBackground(page: Page, role: `--lf-${string}`): Promise<string> {
+            const resolved = await page.evaluate((name) => {
+                const probe = document.createElement('span');
+                probe.style.backgroundColor = `var(${name})`;
+                document.body.appendChild(probe);
+                const colour = getComputedStyle(probe).backgroundColor;
+                probe.remove();
+                return colour;
+            }, role);
+            expect(resolved, `premise: ${role} resolves in the page`).not.toBe('rgba(0, 0, 0, 0)');
+            return resolved;
+        }
+
         test('the portfolio and the benchmark open the table, tinted like their dots and marked by their shape, their names written like any holding’s', async ({page}) => {
             try {
                 const {panel, benchmarkId} = await openWithUnheldBenchmark(page);
@@ -3485,10 +3544,14 @@ test.describe('Risk analysis functional integration', () => {
                 await expectLightTheme(page);
                 await page.mouse.move(0, 0);
 
-                // 1. The tints, computed. Red: the rows are white again — the review-4 defect.
+                // 1. The tints, computed. Red: the references are plain again, painted like any row — the
+                //    review-4 defect. The sky and the amber are categorical and stay written out. A plain row
+                //    is the card role, no longer white since T's lot «le tabelle» (16/10): a holding row is
+                //    compared with `--lf-surface-card` as the page resolves it, never with a hex.
                 await expect.soft(portfolioRow, 'the portfolio row is not tinted like its dot (sky, at a tenth)').toHaveCSS('background-color', 'rgba(2, 132, 199, 0.1)');
                 await expect.soft(benchmarkRow, 'the benchmark row is not tinted like its dot (amber, at a tenth)').toHaveCSS('background-color', 'rgba(217, 119, 6, 0.1)');
-                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', 'rgb(255, 255, 255)');
+                const plainRowColour = await roleBackground(page, '--lf-surface-card');
+                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', plainRowColour);
 
                 // 2. The name cell scrolls with its row and paints nothing of its own, so the tint shows
                 //    once. Red: the names are pinned again — a sticky cell with an inherited background,
@@ -3570,16 +3633,19 @@ test.describe('Risk analysis functional integration', () => {
             await holdingRow.getByTestId('risk-l3-row-volatility').click();
             await expect(holdingRow).toHaveAttribute('data-selected', 'true');
             await page.mouse.move(0, 0);
-            // Red: DataTable's own selection green, the one review 4 asked to make lighter.
-            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            // Every table selects with the light role `--lf-selected` since T's lot «le tabelle» (16/10): the
+            // focus green at 12%, lighter than DataTable's old green, as review 4 asked. Compared with the role
+            // as the page resolves it, never with a hex. Red: the L3 row lost the selection role.
+            const selectionColour = await roleBackground(page, '--lf-selected');
+            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', selectionColour);
 
-            // The selection shows over a reference's tint as well.
+            // The selection shows over a reference's tint as well: the same role, in the tint's place.
             const portfolioRow = l3PortfolioRow(panel);
             await l3PortfolioCell(panel, 'volatility').click();
             await expect(portfolioRow).toHaveAttribute('data-selected', 'true');
             await expect(holdingRow).toHaveAttribute('data-selected', 'false');
             await page.mouse.move(0, 0);
-            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', selectionColour);
         });
 
         /**
@@ -3641,10 +3707,10 @@ test.describe('Risk analysis functional integration', () => {
             // As written, before the header's style writes it in capitals: the text, not its rendering.
             await expect(title, "the return's title is not the short name (review 4: «va accorciato»)").toHaveText(await catalogueSentence(page, 'risk.levels.l3.table.expectedReturnShort'));
 
-            // The tooltip opens after its own hover delay, which the retrying assertions absorb.
-            await title.hover();
-            const help = page.getByTestId('tooltip-content');
-            await expect(help, "resting on the return's title must open its help").toBeVisible();
+            // The tooltip opens after its own hover delay, and only if the title is still under the pointer
+            // when the delay ends: `hoverUntilHelpOpens` rests on the title again until the help is open,
+            // within a deadline.
+            const help = await hoverUntilHelpOpens(page, title, "resting on the return's title must open its help");
             const fullName = await catalogueSentence(page, 'risk.assetSet.levels.l3.expectedReturn');
             await expect.poll(() => help.evaluate((element) => (element.textContent ?? '').split('\n')[0].trim()), {message: "the help does not open with the return's full name, on a line of its own"}).toBe(fullName);
         });
@@ -3688,12 +3754,13 @@ test.describe('Risk analysis functional integration', () => {
                 }
 
                 // A clean slate: the pointer rests on a figure, which has no help to open, so the help that
-                // opens next is the dash's. The Tooltip opens after its own hover delay, which the retrying
-                // assertion absorbs: nothing here waits on a clock.
+                // opens next is the dash's. The Tooltip opens after its own hover delay, and only if the dash
+                // is still under the pointer when the delay ends: `hoverUntilHelpOpens` rests on the dash again
+                // until the help is open, within a deadline — nothing here waits on a clock.
                 await listed.getByTestId('risk-l3-row-beta').hover();
                 const help = page.getByTestId('tooltip-content');
                 await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
-                await leftOut.getByTestId('risk-l3-row-beta').hover();
+                await hoverUntilHelpOpens(page, leftOut.getByTestId('risk-l3-row-beta'), 'resting on the dash of a holding the comparison could not measure must open its help');
                 await expect(help, 'resting on the dash of a holding the comparison could not measure must open its explanation').toHaveText(await catalogueSentence(page, 'risk.assetSet.levels.blankNote'));
             } finally {
                 await clearRiskBenchmark(page);

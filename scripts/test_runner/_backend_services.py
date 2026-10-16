@@ -893,6 +893,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
 
 
+def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
+    print_section("Services: Lone Transfer Legs (decision 47)")
+    print_info("Testing: backend/app/services/transactions/lone_transfer_legs.py, its startup step (app_lifespan) and the offline post-migration script")
+    print_info("Tests: handed over at the leg's own broker's Auto cost, a missing conversion left a TRANSFER, receiving and linked legs untouched, dry run, second run, startup step and wrapper, script lines and exit code")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lone_transfer_legs.py", test_names)
+    return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -1119,9 +1129,9 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
 
 
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address, client_rate_key and mask_client_address (P17)."""
+    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
-    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, reset_client_address_cache, client_rate_key, mask_client_address)")
+    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, client_rate_key)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_client_address.py", test_names)
     return run_command(cmd, "Client address tests", verbose=verbose)
 
@@ -1236,6 +1246,30 @@ def services_backup_staging(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: backend/app/services/platform/instance_backup/staging.py, paths.py (the restore's folders)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_staging.py", test_names)
     return run_command(cmd, "Instance backup staging tests", verbose=verbose)
+
+
+def services_backup_apply(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a checked restore confirmed, applied at the next start, committed or rolled back; the restart."""
+    print_section("Services: Instance Backup Restore")
+    print_info("Testing: backend/app/services/platform/instance_backup/apply.py, restart.py, paths.py (the restore's state and folders), app_lifespan.py (the two steps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_apply.py", test_names)
+    return run_command(cmd, "Instance backup restore tests", verbose=verbose)
+
+
+def services_backup_outcome(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the outcome of a restore read with a one-time ticket, without a session (lot B5c)."""
+    print_section("Services: Instance Backup Restore Outcome")
+    print_info("Testing: backend/app/services/platform/instance_backup/outcome.py, paths.py (the ticket's file), schemas/backup.py (RestoreOutcome)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_outcome.py", test_names)
+    return run_command(cmd, "Instance backup restore outcome tests", verbose=verbose)
+
+
+def services_backup_totals(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the ledger's control totals of a backup: read read-only from a database file, compared at a restore's check."""
+    print_section("Services: Instance Backup Ledger Totals")
+    print_info("Testing: backend/app/services/platform/instance_backup/totals.py (ledger_totals_of, compare_totals)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_totals.py", test_names)
+    return run_command(cmd, "Instance backup ledger totals tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1696,7 +1730,7 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: held first (FORGOT_PASSWORD_DISABLED), then per address keyed by address_key (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: open as shipped (no hold since lot E4), per address keyed by H's client_rate_key, its one home (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
@@ -1706,7 +1740,7 @@ Note: No backend server required.
         "email-verification",
         services_email_verification,
         name="E-mail Verification",
-        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (H's client_rate_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
         # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
         # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
         # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
@@ -1736,7 +1770,7 @@ Note: No backend server required.
         "provider-cooldown",
         services_provider_cooldown,
         name="Provider Cooldown",
-        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on, cooldown_snapshot, reset_provider_cooldowns; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
+        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on, cooldown_snapshot; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
@@ -1933,6 +1967,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "lone-transfer-legs",
+        services_lone_transfer_legs,
+        name="Lone Transfer Legs",
+        desc="Decision 47: the lone giving TRANSFER legs a broker deletion left before 1.3, handed over at their own broker's Auto cost — a missing conversion leaves the leg, dry run, second run, the startup step after post-migration-fixes, the offline script's lines and exit code",
+        # The category default (write-scoped), although every database is a private file under tmp_path built by the
+        # real migrations: the startup wrapper's cases make such a file's engine the configured one, and a wrapper that
+        # reached the lane's engine all the same would open a session there — through a double that writes nothing.
+    )
+    add_test(
+        cat,
         "portfolio-allocation-source",
         services_portfolio_allocation_source,
         name="Portfolio Allocation Source",
@@ -2082,7 +2126,7 @@ Note: No backend server required.
         "client-address",
         services_client_address,
         name="Client Address",
-        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process until reset_client_address_cache(), which re-arms the warning; client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or '') and mask_client_address (IPv4 by its /24, IPv4-mapped as its IPv4, IPv6 by its /48, a name as written, nothing for None or '')",
+        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process, the warning once too (a test starts both over as a new process: the cache of _configured_header cleared, _warned emptied, N58); client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or ''); neither reset_client_address_cache nor mask_client_address in the module (H-22)",
         # PURE: Settings built from the environment alone (_env_file=None), or read through get_settings() in test mode with
         # a data directory under tmp_path, every variable set and removed by monkeypatch; connections are Starlette Request
         # and WebSocket objects on raw scopes; the module's logger is replaced by a recorder, and its cache is reset before
@@ -2167,10 +2211,44 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "backup-apply",
+        services_backup_apply,
+        name="Instance Backup Restore",
+        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore",
+        # PURE: every data directory, database and archive under tmp_path, with a production data directory of the test
+        # configured (which must stay absent); two alembic processes make the module's databases, two spawn children
+        # play two workers on a tmp_path instance; send_signal and os.kill replaced: no signal. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-outcome",
+        services_backup_outcome,
+        name="Instance Backup Restore Outcome",
+        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock",
+        # PURE: every data directory under tmp_path, with a production data directory of the test configured (which must
+        # stay absent) but in the one case that configures the test's own instance; the restore's state is a model built
+        # in the test. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-totals",
+        services_backup_totals,
+        name="Instance Backup Ledger Totals",
+        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text, lines not lists of objects, decided before J's from_json, never expanding 1E+999999999, and for what from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
+        # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
+        # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
+        # server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "logging-access-filter",
         services_logging_access_filter,
         name="Credentials in uvicorn's Request Lines",
-        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature, judged percent-decoded, masked in any case; a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error; H-9: configure_logging closes every handler it takes off the root, a second call's log file included",
+        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature/ticket, judged percent-decoded, masked in any case (a ticker kept); a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error; H-9: configure_logging closes every handler it takes off the root, a second call's log file included",
         # PURE: uvicorn's protocol objects get one request or handshake in memory through a fake transport, no socket
         # and no server; records go to private loggers or to the real uvicorn loggers inside a block that puts every
         # logger and structlog's configuration back (configure_logging with file logging off, except section (e), whose

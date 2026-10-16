@@ -34,9 +34,9 @@
  * on the document and `visibilitychange` dispatched, which is exactly what the page listens to.
  *
  * Offline and read-only. `POST /assets/prices/current` asks the live providers and writes today's candle; here it is
- * answered in the browser — with a schema-valid empty result, or in (g) and (h) with a failure or a provider pause — so
- * nothing reaches a third party and nothing is written. The tests create nothing, so there is nothing to clean up (the
- * routes go with the page).
+ * answered in the browser — with a schema-valid empty result, in (g) and (h) with a failure or a provider pause, in (j)
+ * with a quote — so nothing reaches a third party and nothing is written. The tests create nothing, so there is nothing
+ * to clean up (the routes go with the page).
  *
  * Reduced motion. Long asset names scroll as a marquee driven by `requestAnimationFrame`, a loop that never ends while
  * a name overflows; under the clock every frame is a timer `runFor` must fire, thousands per minute of page time.
@@ -65,6 +65,23 @@
  * (`runClockWithUserTo`). An input while running asks for nothing by itself — (a) proves it — so the moves add no
  * request. The pause in (h) is the stub's answer, never a real pause of a provider: that would be a state of the
  * lane's shared backend, seen by every other test (X6).
+ *
+ * The user's calendar (Z-3). «Today» is a day of the user's calendar, so a range is live when it ends today there,
+ * wherever the user is, and only then. A page that compares the end of its range with the UTC date is a day off for
+ * part of every day: west of Greenwich in the evening the UTC date is already tomorrow — 21:00 in New York is 01:00 UTC
+ * of the next day — and a range ending today reads as past (no live request, the summary on the chart's last close);
+ * east of Greenwich just after midnight the UTC date is still yesterday — 00:30 in Rome is 22:30 UTC of the day before —
+ * and a range that ended yesterday reads as live. Each case sets the browser's time zone and starts its clock at such an
+ * instant: `prepareLivePage` passes the instant to its one `page.clock.install`, no test installs a second clock.
+ *   (i) /assets and (j) /assets/{id}, America/New_York at 21:00 of 16 October 2026, on a range that ends `max` — which
+ *       the page resolves on its own clock, to the 16th: a live request when the page opens, and one more an interval
+ *       later; on the detail page the summary shows the quote the stub answers, not the chart's last close.
+ *   (k) /assets and (l) /assets/{id}, Europe/Rome at 00:30 of 17 October 2026, on a range that ends the 16th: no live
+ *       request over the load and 65 s more, the page `stopped`.
+ * Before any request is counted, the page's calendar is read in the page — its time zone, its local date, its UTC date
+ * —, because the two dates agree for most of the day: a premise that does not hold fails as such, instead of passing as
+ * a green that proves nothing. Then a presence barrier (the page shows the asset), so that a count of live requests is
+ * about this page.
  */
 
 import {expect, test} from '../fixtures/playwright';
@@ -101,6 +118,30 @@ const LIVE_PRICES_PATH = '/api/v1/assets/prices/current';
 const SEEDED_PRICED_ASSET = {displayName: 'Apple Inc.', providerCode: 'yfinance'};
 /** A range that ends long before today. */
 const PAST_RANGE = {start: '2024-01-02', end: '2024-06-28'};
+/**
+ * Z-3: a moment where the user's date and the UTC date differ. Written as an instant with its offset, so that the page
+ * clock starts there whatever the time zone of the machine that runs the suite.
+ */
+interface CalendarMoment {
+    timeZone: string;
+    at: string;
+    /** The date on the user's calendar. */
+    localDate: string;
+    /** The UTC date: the one `toISOString()` gives. */
+    utcDate: string;
+}
+/** West of Greenwich: 21:00 on 16 October 2026 in New York (EDT, UTC−4) is 01:00 UTC on the 17th. */
+const NEW_YORK_EVENING: CalendarMoment = {timeZone: 'America/New_York', at: '2026-10-16T21:00:00-04:00', localDate: '2026-10-16', utcDate: '2026-10-17'};
+/** East of Greenwich: 00:30 on 17 October 2026 in Rome (CEST, UTC+2) is 22:30 UTC on the 16th. */
+const ROME_AFTER_MIDNIGHT: CalendarMoment = {timeZone: 'Europe/Rome', at: '2026-10-17T00:30:00+02:00', localDate: '2026-10-17', utcDate: '2026-10-16'};
+/** In New York, a range that ends today: `max` is resolved by the page itself, on its own clock. Three months, as the default range. */
+const RANGE_ENDING_TODAY = 'start=2026-07-16&end=max';
+/** In Rome, a range that ended yesterday: the 16th, which is still today in UTC. */
+const RANGE_ENDING_YESTERDAY = 'start=2026-07-16&end=2026-10-16';
+/** (j): the quote the stub answers, in the currency of the seeded asset (Apple, USD). */
+const LIVE_QUOTE = {value: '123.45', currency: 'USD'} as const;
+/** How the summary writes it: two decimals, a dot or a comma by the interface language (`formatFixed`). */
+const LIVE_QUOTE_SHOWN = /^\s*123[.,]45\s*$/;
 
 /** What the stub has seen. */
 interface LiveTraffic {
@@ -133,7 +174,9 @@ type LiveAnswer =
     /** HTTP 500 and FastAPI's error body: every poll fails, (g). */
     | {kind: 'server-error'}
     /** HTTP 200, every asset asked about paused — its last stored price, RATE_LIMITED, the seconds of the pause — (h). */
-    | {kind: 'rate-limited'; retryAfterSeconds: number};
+    | {kind: 'rate-limited'; retryAfterSeconds: number}
+    /** HTTP 200, every asset asked about quoted `value` by its provider, dated `asOf`: (j). */
+    | {kind: 'quote'; value: string; currency: string; asOf: string};
 
 /** The asset ids a live-price request asks about: its body is a JSON array of ids. Anything else asks about none. */
 function askedIds(body: string | null): number[] {
@@ -157,6 +200,10 @@ async function stubLivePrices(page: Page, answer: LiveAnswer = {kind: 'empty'}):
             // What the backend answers for a paused provider (price_query.get_current_prices_bulk): HTTP 200, the last
             // stored price from the database, the error code and the seconds left of the pause.
             const results = asked.map((assetId) => ({asset_id: assetId, value: '100.00', currency: 'EUR', as_of_date: null, source: 'db:last_known', error: null, error_code: 'RATE_LIMITED', retry_after: answer.retryAfterSeconds}));
+            await route.fulfill({json: {results, success_count: results.length, errors: []}});
+        } else if (answer.kind === 'quote') {
+            // A provider's quote, the shape of `FACurrentPriceItem`: nothing written, nothing paused.
+            const results = asked.map((assetId) => ({asset_id: assetId, value: answer.value, currency: answer.currency, as_of_date: answer.asOf, source: 'provider:spec-stub', error: null, error_code: null, retry_after: null}));
             await route.fulfill({json: {results, success_count: results.length, errors: []}});
         } else {
             await route.fulfill({json: {results: [], success_count: 0, errors: []}});
@@ -270,15 +317,17 @@ async function runClockTo(page: Page, target: number): Promise<void> {
 
 /**
  * Everything that must be in place before the page under test opens: the stub, the page-side record, reduced motion,
- * the pointer parked, the clock installed (flowing until `pauseClock`).
+ * the pointer parked, the clock installed (flowing until `pauseClock`) — from the real time, or from `clockAt` for a test
+ * that needs another instant (Z-3). This is the test's one install: a time is passed in here, never installed twice.
  */
-async function prepareLivePage(page: Page, answer: LiveAnswer = {kind: 'empty'}): Promise<LiveTraffic> {
+async function prepareLivePage(page: Page, answer: LiveAnswer = {kind: 'empty'}, clockAt?: string): Promise<LiveTraffic> {
     const traffic = await stubLivePrices(page, answer);
     await recordLiveRequests(page);
     await page.emulateMedia({reducedMotion: 'reduce'});
     // Parked in a corner of the page being left: the page under test must hear no input but the ones a test makes.
     await page.mouse.move(1, 1);
-    await page.clock.install();
+    // Without `clockAt` no time is given, and the clock starts at the real time, as it always did.
+    await page.clock.install(clockAt === undefined ? {} : {time: clockAt});
     return traffic;
 }
 
@@ -310,6 +359,62 @@ async function seededPricedAssetId(page: Page): Promise<number> {
     const matches = ((await response.json()) as Array<{id: number; display_name: string; provider_code: string | null}>).filter((asset) => asset.display_name === SEEDED_PRICED_ASSET.displayName && asset.provider_code === SEEDED_PRICED_ASSET.providerCode);
     expect(matches, `${SEEDED_PRICED_ASSET.displayName} (${SEEDED_PRICED_ASSET.providerCode}) must be one seeded asset ${TEST_USER.username} can read — populate_mock_data.populate_assets`).toHaveLength(1);
     return matches[0].id;
+}
+
+/**
+ * The page's own calendar, read in the page off its clock: its time zone, today's date there, and the UTC date — the one
+ * a page reading `toISOString()` takes for today.
+ */
+async function pageCalendar(page: Page): Promise<{timeZone: string; localDate: string; utcDate: string}> {
+    return page.evaluate(() => {
+        const now = new Date();
+        const pad = (value: number): string => String(value).padStart(2, '0');
+        return {
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            localDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+            utcDate: now.toISOString().slice(0, 10),
+        };
+    });
+}
+
+/**
+ * Z-3: open `target` (a path with its query) with the page clock started at `moment` — passed through to
+ * `prepareLivePage`'s one install —, and wait for it to settle. Then, before any request is counted, the premise — the
+ * page's own calendar is `moment`'s, its two dates apart — and a presence barrier, `present`: a count of live requests
+ * can then be about neither the wrong day nor a page that is not there.
+ */
+async function openAtMoment(page: Page, moment: CalendarMoment, target: string, root: Locator, present: Locator, answer?: LiveAnswer): Promise<LiveTraffic> {
+    const traffic = await prepareLivePage(page, answer, moment.at);
+    await navigateTo(page, target);
+    await waitForSettled(root, 20_000);
+    expect(await pageCalendar(page), `premise: the page lives at ${moment.at}, the ${moment.localDate} in ${moment.timeZone} and the ${moment.utcDate} in UTC`).toEqual({
+        timeZone: moment.timeZone,
+        localDate: moment.localDate,
+        utcDate: moment.utcDate,
+    });
+    await expect(present, `presence barrier: ${target} shows ${SEEDED_PRICED_ASSET.displayName}`).toBeVisible();
+    return traffic;
+}
+
+/** Z-3, west: `path` on RANGE_ENDING_TODAY at NEW_YORK_EVENING asks for a live price when it opens; then frozen as `openList`/`openDetail` do. */
+async function openOnUserCalendar(page: Page, path: string, root: Locator, present: Locator, interval: number, answer?: LiveAnswer): Promise<LiveSession> {
+    const traffic = await openAtMoment(page, NEW_YORK_EVENING, `${path}?${RANGE_ENDING_TODAY}`, root, present, answer);
+    await expect
+        .poll(async () => (await liveRecord(page)).sentAt.length, {
+            message: `Z-3: the range ends ${NEW_YORK_EVENING.localDate}, today on the user's calendar though already ${NEW_YORK_EVENING.utcDate} in UTC: ${path} must ask for a live price when it opens`,
+            timeout: 15_000,
+        })
+        .toBeGreaterThan(0);
+    return freezeAfterOpening(page, traffic, interval);
+}
+
+/** Z-3, east: the page, open at ROME_AFTER_MIDNIGHT on RANGE_ENDING_YESTERDAY, asks for nothing over its load and 65 s more, and says it is stopped. */
+async function expectNoLiveRequestOnYesterday(page: Page, traffic: LiveTraffic, root: Locator): Promise<void> {
+    const pausedAt = await pauseClock(page);
+    await runClockTo(page, pausedAt + 65_000);
+    await expectLiveRequests(page, traffic, 0, `Z-3: the range ended ${ROME_AFTER_MIDNIGHT.utcDate}, yesterday on the user's calendar though still today in UTC: no live request over the load and 65 s more`, pausedAt);
+    await expect(root).toHaveAttribute('data-live-updates', 'stopped');
+    await expect(pill(root)).toBeHidden();
 }
 
 /**
@@ -546,5 +651,55 @@ test.describe('Z7c — a failing endpoint or a paused provider slows the live pr
         await expectLiveRequests(page, session.traffic, 2, `exactly one live request when the pause ends, between ${seconds(pauseEnds - SLACK_MS, session.opened)} and ${seconds(pauseEnds + SLACK_MS, session.opened)}`, session.opened);
         await expect(root).toHaveAttribute('data-live-updates', 'running');
         await expect(pill(root)).toBeHidden();
+    });
+});
+
+test.describe('Z-3 — west of Greenwich in the evening, a range that ends today is still live', () => {
+    // The whole context lives in New York: at 21:00 there the UTC date is already the next day.
+    test.use({timezoneId: NEW_YORK_EVENING.timeZone});
+
+    test('(i) /assets: at 21:00 in New York a range ending today asks for live prices when it opens, and again 60 s later', async ({page}) => {
+        const assetId = await seededPricedAssetId(page);
+        const root = listRoot(page);
+        const session = await openOnUserCalendar(page, '/assets', root, page.getByTestId(`asset-card-${assetId}`), LIST_INTERVAL_MS);
+        expect(session.traffic.askedFor[0], `the list asked about the assets it shows, ${SEEDED_PRICED_ASSET.displayName} among them`).toContain(assetId);
+
+        await expectNextTick(page, session, session.opened, LIST_INTERVAL_MS, 1);
+
+        await expect(root).toHaveAttribute('data-live-updates', 'running');
+        await expect(pill(root)).toBeHidden();
+    });
+
+    test('(j) /assets/{id}: at 21:00 in New York a range ending today asks for the live price when it opens and again 30 s later, and the summary shows it', async ({page}) => {
+        const assetId = await seededPricedAssetId(page);
+        const root = detailRoot(page);
+        const session = await openOnUserCalendar(page, `/assets/${assetId}`, root, root.getByTestId('asset-detail-info'), DETAIL_INTERVAL_MS, {kind: 'quote', ...LIVE_QUOTE, asOf: NEW_YORK_EVENING.localDate});
+        expect(session.traffic.askedFor[0], 'the detail asked about its asset').toEqual([assetId]);
+
+        await expectNextTick(page, session, session.opened, DETAIL_INTERVAL_MS, 1);
+
+        await expect(root).toHaveAttribute('data-live-updates', 'running');
+        await expect(pill(root)).toBeHidden();
+        // The quote, not the chart's last close: a page that took the range for a past one would show the close.
+        await expect(root.getByTestId('asset-detail-live-price')).toHaveText(LIVE_QUOTE_SHOWN);
+    });
+});
+
+test.describe('Z-3 — east of Greenwich after midnight, a range that ended yesterday is not live', () => {
+    // The whole context lives in Rome: at 00:30 there the UTC date is still the day before.
+    test.use({timezoneId: ROME_AFTER_MIDNIGHT.timeZone});
+
+    test('(k) /assets: at 00:30 in Rome a range that ended yesterday asks for no live price, over the load and 65 s more', async ({page}) => {
+        const assetId = await seededPricedAssetId(page);
+        const root = listRoot(page);
+        const traffic = await openAtMoment(page, ROME_AFTER_MIDNIGHT, `/assets?${RANGE_ENDING_YESTERDAY}`, root, page.getByTestId(`asset-card-${assetId}`));
+        await expectNoLiveRequestOnYesterday(page, traffic, root);
+    });
+
+    test('(l) /assets/{id}: at 00:30 in Rome a range that ended yesterday asks for no live price, over the load and 65 s more', async ({page}) => {
+        const assetId = await seededPricedAssetId(page);
+        const root = detailRoot(page);
+        const traffic = await openAtMoment(page, ROME_AFTER_MIDNIGHT, `/assets/${assetId}?${RANGE_ENDING_YESTERDAY}`, root, root.getByTestId('asset-detail-info'));
+        await expectNoLiveRequestOnYesterday(page, traffic, root);
     });
 });

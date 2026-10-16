@@ -6,7 +6,9 @@ This section explains the authentication model, user roles, and how data is segr
 
 LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server keeps no
 record of sessions, neither in memory nor in the database: its one piece of session state is a
-counter per account, `users.session_version`, that ends all of the account's sessions at once
+version per account, `users.session_version`, raised by one to end all of the account's sessions at
+once. A restore sets every account's version to the restore time in milliseconds instead: a time,
+not a counter, which the next change still raises by one
 ([Session Revocation](security.md#session-revocation)).
 
 ### 🔄 How it Works
@@ -130,8 +132,9 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
   V-3). Each staying half counts once, whatever broker it is on. What becomes of a staying half is the rule
   of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
   standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
-  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4) — except the giving leg of a `TRANSFER`,
-  which only loses its link. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
+  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4), and the giving leg of a `TRANSFER` an
+  `ADJUSTMENT` at the Auto cost of its own broker (decision 47); that leg only loses its link when its cost
+  needs a missing conversion. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
 - **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
   request.
 
