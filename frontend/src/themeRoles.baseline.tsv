@@ -28,6 +28,8 @@ lib/components/assets/PriceDataImportModal.svelte	14
 lib/components/assets/ProviderAssignmentSection.svelte	95
 lib/components/assets/ProviderComparisonModal.svelte	60
 lib/components/assets/ScheduledInvestmentEditor.svelte	107	rgb(209 213 219)	rgb(71 85 105)
+lib/components/assets/detail/AssetCalendarWindowControls.svelte	11
+lib/components/assets/detail/AssetChartModeToggle.svelte	20
 lib/components/assets/detail/AssetDetailHeader.svelte	28
 lib/components/assets/detail/AssetDetailMeasuresSection.svelte	19
 lib/components/assets/detail/AssetDetailMetadataPanel.svelte	54
@@ -260,7 +262,7 @@ lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	6
 routes/(app)/assets/+page.svelte	234
-routes/(app)/assets/[id]/+page.svelte	198
+routes/(app)/assets/[id]/+page.svelte	155
 routes/(app)/brokers/+page.svelte	38
 routes/(app)/brokers/[id]/+page.svelte	141
 routes/(app)/dashboard/+page.svelte	77
@@ -278,6 +280,7 @@ routes/+page.svelte	1
 ~split	lib/components/transactions/modals/ImportWizardModal.svelte	lib/components/transactions/wizard/UploadStep.svelte,lib/components/transactions/wizard/SelectFilesStep.svelte,lib/components/transactions/wizard/AnalyzeStep.svelte,lib/components/transactions/wizard/DuplicatesStep.svelte,lib/components/transactions/wizard/ReviewStep.svelte,lib/components/transactions/wizard/WizardFooter.svelte	595	#dc2626
 ~split	lib/components/transactions/modals/TransactionBulkModal.svelte	lib/components/transactions/bulk/TxBulkBanners.svelte,lib/components/transactions/bulk/TxBulkToolbar.svelte	190
 ~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetChartModeToggle.svelte,lib/components/assets/detail/AssetCalendarWindowControls.svelte	198
 ~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailHeader.svelte	258
 ~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte	312
 ~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailSignalsPanel.svelte,lib/components/assets/detail/AssetDetailMeasuresSection.svelte	230

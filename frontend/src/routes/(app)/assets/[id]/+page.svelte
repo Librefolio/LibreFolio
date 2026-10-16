@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {ChartLine, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
+    import {ChartLine, Pencil, RefreshCw, RotateCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -30,6 +30,8 @@
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
     import AssetDetailMeasuresSection from '$lib/components/assets/detail/AssetDetailMeasuresSection.svelte';
     import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
@@ -41,8 +43,6 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
-    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         buildBackendSignalRequestPlan,
@@ -93,16 +93,7 @@
     import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
     import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
     import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
-    import {
-        CALENDAR_RETURN_PRESETS,
-        CALENDAR_RETURN_UNIT_LABEL_KEYS,
-        DEFAULT_CALENDAR_RETURN_WINDOW,
-        calendarReturnRangeDays,
-        calendarReturnWindowDays,
-        type CalendarReturnPresetKey,
-        type CalendarReturnWindowSelection,
-        type CalendarReturnWindowUnit,
-    } from '$lib/components/charts/calendarReturnWindow';
+    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -210,7 +201,6 @@
     let viewMode: ViewMode = $state('percentage');
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
-    type AssetChartPrimaryMode = 'price' | 'calendar-return';
     let primaryMode = $state<AssetChartPrimaryMode>('price');
     let calendarWindowSelection: CalendarReturnWindowSelection = $state({
         ...DEFAULT_CALENDAR_RETURN_WINDOW,
@@ -273,21 +263,6 @@
         calendarCustomUnit = settings.calendarReturnWindow.customUnit;
         calendarWindowHydratedScope = scope;
     });
-    let calendarDurationOptions = $derived([
-        {
-            value: 'weeks',
-            label: $t('datePicker.granularity.weeksShort').toUpperCase(),
-        },
-        {
-            value: 'months',
-            label: $t('datePicker.granularity.monthsShort').toUpperCase(),
-        },
-        {
-            value: 'years',
-            label: $t('datePicker.granularity.yearsShort').toUpperCase(),
-        },
-    ]);
-
     // Measure panel
     let measureMode = $state(false);
     let measureSignals: RenderedSignal[] = $state([]);
@@ -2569,71 +2544,9 @@
                 </div>
             {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
-                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            data-testid="asset-chart-primary-price"
-                            aria-pressed={primaryMode === 'price'}
-                            onclick={() => setPrimaryMode('price')}
-                        >
-                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
-                            {$t('assetDetail.pricesTab')}
-                        </button>
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return'
-                                ? 'bg-libre-green text-white'
-                                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                            data-testid="asset-chart-primary-calendar-return"
-                            aria-pressed={primaryMode === 'calendar-return'}
-                            onclick={() => setPrimaryMode('calendar-return')}
-                        >
-                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
-                            {$t('signals.riskRollingReturn.name')}
-                        </button>
-                    </div>
+                    <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />
                     {#if primaryMode === 'calendar-return'}
-                        <div class="flex flex-wrap items-center gap-1.5" data-testid="asset-calendar-window-controls">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.params.window')}</span>
-                            {#each CALENDAR_RETURN_PRESETS as preset}
-                                <button
-                                    class="min-w-10 px-2 py-1 rounded-md border text-xs font-medium transition-colors {calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key
-                                        ? 'border-libre-green bg-libre-green text-white'
-                                        : 'border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                                    data-testid={`asset-calendar-window-${preset.key}`}
-                                    aria-pressed={calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset.key}
-                                    title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}
-                                    onclick={() => setCalendarPreset(preset.key)}
-                                >
-                                    {$t(CALENDAR_RETURN_UNIT_LABEL_KEYS[preset.unit], {values: {n: preset.count}})}
-                                </button>
-                            {/each}
-                            <CompactDurationBadge
-                                bind:amount={calendarCustomAmount}
-                                bind:unit={calendarCustomUnit}
-                                bind:editing={calendarCustomEditing}
-                                active={calendarWindowSelection.kind === 'custom'}
-                                options={calendarDurationOptions}
-                                customLabel={$t('common.custom')}
-                                min={1}
-                                buttonTestId="asset-calendar-window-custom"
-                                amountTestId="asset-calendar-custom-amount"
-                                unitTestId="asset-calendar-custom-unit"
-                                isAllowed={(amount, unit) =>
-                                    unit !== 'days' &&
-                                    calendarReturnWindowDays({
-                                        ...calendarWindowSelection,
-                                        kind: 'custom',
-                                        customAmount: amount,
-                                        customUnit: unit,
-                                    }) !== null}
-                                onapply={(amount, unit) => {
-                                    if (unit !== 'days') {
-                                        setCalendarCustom(amount, unit);
-                                    }
-                                }}
-                            />
-                            <DocsLink path="user/assets/detail/chart/#rolling-return" label={$t('signals.riskRollingReturn.description')} size={14} testId="asset-calendar-return-docs" />
-                        </div>
+                        <AssetCalendarWindowControls selection={calendarWindowSelection} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} />
                     {/if}
                 </div>
 
@@ -2807,21 +2720,7 @@
                 {/if}
             {:else}
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="asset-chart-primary-controls">
-                    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-                        <button class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors bg-libre-green text-white" data-testid="asset-chart-primary-price" aria-pressed="true" onclick={() => setPrimaryMode('price')}>
-                            <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
-                            {$t('assetDetail.pricesTab')}
-                        </button>
-                        <button
-                            class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-gray-200 dark:border-slate-600 transition-colors bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
-                            data-testid="asset-chart-primary-calendar-return"
-                            aria-pressed="false"
-                            onclick={() => setPrimaryMode('calendar-return')}
-                        >
-                            <Percent size={14} data-testid="asset-chart-primary-calendar-return-icon" />
-                            {$t('signals.riskRollingReturn.name')}
-                        </button>
-                    </div>
+                    <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />
                 </div>
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
