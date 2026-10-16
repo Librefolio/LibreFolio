@@ -160,6 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: when a transaction breaks two or more rules at once, each message of the validation and import responses names the transaction type ("BUY requires asset_id") instead of a literal `{type}`.
 - Borsa Italiana ETCs and ETNs are now typed as commodity ETFs (an asset already saved changes type when you refresh its metadata); the justETF and CSS scraper settings show translated labels.
 - A refused **Split pair** or **Promote pair** on the Transactions page now says why in an error message, and the confirmation stays open: until now nothing was shown.
+- A broker's **Uploaded Reports** no longer lists the reports an older version stored without a broker: they stay on the Files page.
 
 #### 🔒 Security
 
