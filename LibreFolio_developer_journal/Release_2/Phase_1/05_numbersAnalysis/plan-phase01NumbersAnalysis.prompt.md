@@ -3935,3 +3935,109 @@ Via del coordinatore all'analisi (20:32), dopo l'ingresso di J-24 (merge `31a59b
   > **Backlog**: J-28 chiusa; nuove J-33 (performance dei lotti), J-34 (traduzioni), J-35 (rettifica senza costo),
   > J-36 (due messaggi del riferimento). DevWiki: nota datata in `decisions/adjustment-is-never-a-price.md` e voce in
   > `log.md`.
+
+#### Checkpoint CP-7b ✅ (2026-10-16) — committato dal coordinatore (`0bd9ecd82`, journal `4416623a7`), entrato (merge `48da9bf3c`, treno 145)
+
+Il testo del catalogo in `_backend_services.py` diventa **J-37**: A ha il file aperto (A7b), quindi lo scrivo dopo
+l'ingresso di A. Notte (coordinatore, 22:22): una domanda che solo il developer può sciogliere va nel piano e al
+coordinatore, poi si passa alla voce seguente.
+
+#### J-26 — la sonda reale dell'AI Export (analisi, 16/10 ~22:30)
+
+P26 del developer (16/10 11:37): la sonda gira su una copia dei suoi dati demo (utente `alfy`, skill `real-data-copy`,
+copia mia, porta 6195, password solo nella variabile della sonda), su slot. Prova tre cose: le versioni di J-17 rese
+compatte, la sorgente nuova nei prompt, e che nient'altro sia cambiato. Le gambe in valuta di CP-7a non si possono
+verificare su dati solo in EUR.
+- **Copia di lavoro** `/tmp/librefolio-r2-j-realdata`: presa alle 22:27 dalla copia di riferimento, che nessun
+  processo teneva aperta. 31 MB, `integrity_check` ok, Alembic 008, come la mia HEAD.
+- **Cosa c'è nei dati** (solo conteggi, `files/j/j26_counts.py` della sessione):
+  - un utente, 2 broker, 216 righe: BUY, SELL, DEPOSIT, WITHDRAWAL, INTEREST, TAX, FEE;
+  - **nessuna** ADJUSTMENT o TRANSFER;
+  - solo EUR, nessun cambio;
+  - 10 asset in posizione, nessuno al costo; 3 hanno scambi ma nessuna quotazione (valutati all'ultimo scambio).
+  - Conseguenza: sui dati reali J-24, CP-7b e il valore al costo di J-17 non hanno nulla da cambiare. J-17 si vede solo
+    nelle versioni e nei testi (la gerarchia di valutazione che nomina `ESTIMATED_AT_COST`, la frase della
+    provenienza). L'avviso dei lotti di J-28 non entra nell'AI Export.
+  - Non verificabili sui dati reali, coperti dai test funzionali: CP-7a (cambi), J-24 (rettifiche in uscita), CP-7b
+    (riferimenti delle rettifiche, giorni al costo), J-17 (posizioni al costo), J-35.
+- **Base per «nient'altro di cambiato»**: `dev_release2` subito prima dell'ingresso di J-17, `4f0a5d323` (primo
+  genitore del merge `94321d7db`). Da lì alla mia HEAD l'AI Export cambia in 12 file: i miei (J-17, J-24, CP-7b) e
+  quelli di MF (ondata 1b: `portfolio.income_timeline` e `broker.cost_efficiency` v2, `fx_timing_context`,
+  `technical_shared`). Le dipendenze non cambiano (`package.json`, lock, `Pipfile`, `Pipfile.lock`).
+- **Come girare la base senza toccare git**:
+  - `git archive 4f0a5d323 backend Pipfile Pipfile.lock` in `/tmp/librefolio-j26-base`; `frontend/` è un link al
+    frontend del mio worktree.
+  - Il link basta. Fra la base e la HEAD il frontend dell'AI Export cambia solo nella mappa delle versioni compatte,
+    che tiene la v1. Gli schemi dell'API dell'AI Export (`schemas/ai_export_runtime.py`) non cambiano. Il ponte del
+    renderer legge client e cataloghi generati, ignorati da git, che un archivio non avrebbe.
+  - Così la sonda della base rende i prompt della base byte per byte, e ogni differenza viene dal backend.
+- **Casi** (le stesse 9 righe nelle due corse, utente `alfy`, 1Y):
+  - `portfolio.overview_and_history`, `standard` e `compact`, `all`;
+  - `broker.overview_and_history`, `standard`, per **ciascuno** dei due broker (`broker=<nome>`; il nome lo legge una
+    variabile dalla copia al momento del lancio e non va nel giornale);
+  - `asset.position_and_history`, `standard`, `representative`;
+  - analisi `portfolio.fiscal_lots`, `portfolio.pac_planning` e `broker.review` (`representative`), e
+    `asset.position_review` (`representative`), tutte `standard`.
+  - Coprono le posizioni e la provenienza di portafoglio, broker e asset (J-17), il dettaglio dei lotti, i lotti FIFO,
+    le sezioni di drawdown (CP-13a: invariate senza perdita totale), il calendario dei proventi e l'efficienza dei
+    costi (MF).
+- **Comandi**:
+  - prima la base, da `/tmp/librefolio-j26-base`;
+  - poi la corrente, dal worktree, con `--compare-with <base>/metrics.json`;
+  - per tutte e due: `--source-db /tmp/librefolio-r2-j-realdata/sqlite/app.db --port 6195 --output-dir
+    <sessione>/files/j/j26/{base,current} --keep-canonical`, password solo in
+    `LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD_ALFY`;
+  - nessuna corsia di test toccata.
+- **Controlli e definizione di fatto**:
+  - nessun «PAYLOAD YAML FALLBACK» nella corrente;
+  - le intestazioni portano le versioni nuove (J-17: le 6; MF: le 2);
+  - la gerarchia di valutazione nomina `ESTIMATED_AT_COST`;
+  - i 3 asset senza quotazione sono all'ultimo scambio;
+  - ogni differenza fra le due corse è attribuita (J-17, J-24, MF o altro); una non attribuita è un reperto e va al
+    coordinatore;
+  - equivalenza UI/sonda e scansione dei segreti della sonda;
+  - hash della sorgente invariato;
+  - leggo ogni diff fino in fondo, e la struttura di ogni prompt corrente.
+- **Igiene**:
+  - uscite e copie restano nella cartella della sessione finché il developer non ha letto il resoconto;
+  - poi si cancellano la copia di lavoro, l'albero della base e le uscite (`lsof +D`, `rm -rf`, `ls` come prova);
+  - nel giornale solo conteggi e riferimenti A#/B#.
+- Peso: piccolo, una ventina di minuti di slot. Nessun codice previsto: un reperto diventa una voce del backlog.
+- **Preparazione (22:33, sola lettura per git)**:
+  - `files/j/j26/base_tree.sh` ha creato `/tmp/librefolio-j26-base`: 52 MB, 992 file Python. La sonda e la sua app
+    sono identiche a quelle della HEAD. `frontend/` e `scripts/` sono link al mio worktree.
+  - `scripts/` serve perché la sonda importa `scripts.i18n_catalog`, che rigenera i cataloghi i18n del frontend (file
+    ignorati). Con il link, tutte e due le corse usano i cataloghi della HEAD.
+  - Pronti anche `probe.sh` e `analyze.py`. `analyze.py` confronta l'hash canonico per componente, conta il fallback
+    YAML e le sorgenti di valutazione, e scrive i diff dei prompt nella cartella della sessione.
+  - Coordinatore (22:40): piano approvato; slot 2 verso le 22:50, 25 minuti, con conferma.
+
+#### J-27 — `_as_amount` limita l'importo che legge (analisi, 16/10 ~22:45, sola lettura)
+
+- **Stato reale**:
+  - `financial_math/ledger_totals.py::_as_amount` accetta qualunque testo decimale finito, e `_canonical` lo scrive per
+    esteso (`format(value, "f")`): `"1E+50000000"` costa 121 MB.
+  - B-13 (in dev con `c374313c0`, **non ancora nella mia base**) si protegge da sé:
+    `instance_backup/totals.py::_PLAIN_AMOUNT = -?[0-9]{1,60}(\.[0-9]{1,60})?`, controllato prima di
+    `ControlTotals.from_json`. Un `ValueError` diventa «absent»: un avviso, nessun confronto.
+- **Proposta**: la regola nella casa, per ogni chiamante. `_as_amount` accetta solo testo decimale semplice: un `-`
+  facoltativo, al più 60 cifre ASCII prima del punto e 60 dopo, il limite di `_EXACT.prec` e di B-13. Tutto il resto è
+  `ValueError` «not plain decimal text»: esponente, `+`, spazi, `_`, cifre non ASCII, oltre il limite.
+  - Il ciclo `from_json(to_json(t))` non cambia: `to_json` scrive solo testo semplice.
+  - I totali reali sono lontanissimi dal limite: importi `Numeric(18, 6)`, quantità `RealDecimal(22, 10)`, circa 30
+    cifre.
+  - `CANONICAL_TEXT` dei test serve solo a `to_json` e resta verde.
+- **Con lo stesso lotto**:
+  - la frase di `developer/backend/financial_math.md` (`#ledger-totals`, «after a restore, compares them with the totals
+    recomputed on the restored database»). Il codice di B li ricalcola sulla copia della prova del ripristino, una volta
+    aggiornata, e li confronta prima della conferma; una differenza è un avviso del rapporto, mai un rifiuto;
+  - la stessa frase nella docstring del modulo.
+- **Per B**, via il coordinatore: dopo J-27 `_plain` / `_PLAIN_AMOUNT` ripete il controllo di `from_json`. Può toglierlo
+  (una regola, una casa) o tenerlo come difesa innocua: decide B.
+- **Prove**:
+  - rossi del test-author in `test_ledger_totals.py`, `services financial-math`: `"1E+100"`, `"1e5"`, 61 cifre per
+    parte, `"+5"`, `" 5"`, `"1_000"`, cifre arabo-indiane → `ValueError`; il limite di 60 per parte accettato;
+  - verdi `financial-math` e le unità di B sui totali (`test_backup_totals.py`, `test_backup_staging.py`) sulla
+    revisione combinata; `mkdocs build` e `check-links`.
+- **Dipendenza**: prima l'aggiornamento della mia base con `dev_release2`, perché B3 deve stare nel mio albero per la
+  doc e per le prove di B. Peso: piccolo.
