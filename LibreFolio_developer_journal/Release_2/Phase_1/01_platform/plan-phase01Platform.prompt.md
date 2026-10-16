@@ -2945,3 +2945,100 @@ Via del coordinatore alle 03:48 del 16/10. Il lotto più delicato: ogni campo ha
 >
 > Ho guardato anche i punti ciechi di G3: classi composte in script, passate a componenti figli o alle props delle
 > colonne.
+
+> **Ingresso**: CP7b-2 è in `dev_release2` (treno 92, merge `d8549c69a`), con le righe 🔒 e 🔄 nel CHANGELOG. Il rosso
+> di `config-package` l'ha curato Z (treno 93). Il ramo è stato portato avanti con fast-forward a `34405dfbb`.
+
+### Le note di X: H-14, H-15, H-16 (2026-10-16, notte) — in corso
+
+Approvate con l'analisi di CP7b. Fino alle 05:25 solo prove leggere, poi pausa fino alle 06:45. A7 aggiunge una riga
+ciascuno in `app_lifespan.py` (il passo `admin-bootstrap` dopo `global-settings`), `config_audit.py` e `instance_block.py`:
+all'aggiornamento di base si tengono entrambe le parti. La cura sta in `/tmp/librefolio-r13-h-xnotes/` (`apply_xnotes.py`,
+provato a secco su copie; ruff e black puliti), da applicare dopo il giro dei rossi.
+
+**Disegno**:
+
+- **H-14**: `derive_key_from(key, purpose, length=32)` in `instance_key.py`, con lo stesso HKDF di `derive_key`, che ora
+  la usa tramite `_derive`. L'ordine dei controlli: scopo e lunghezza (`ValueError`), poi il tipo della chiave
+  (`TypeError`), poi la lunghezza della chiave (`InstanceKeyError`, senza la chiave nel messaggio). Non legge né
+  l'ambiente né la cartella dei dati, e non crea il file della chiave. B legge la chiave del backup con
+  `read_secret_file()`, come il modulo legge la sua. Tre vettori noti, calcolati col `derive_key` di oggi, fissano la
+  derivazione.
+- **H-15**: un modulo nuovo, `platform/plugin_secrets_check.py`:
+  - `check_plugin_secrets(session)` restituisce un `ConfigCheck` `platform.plugin_secrets`: `ok` senza segreti di
+    sistema illeggibili, `error` con `{"count": system}` quando ce ne sono;
+  - `log_plugin_secrets_check()` è il passo d'avvio `plugin-secrets-check`, dopo `global-settings`. Non solleva mai: un
+    errore del controllo diventa un avviso col solo nome della classe;
+  - le chiavi i18n `instance.checks.pluginSecrets.ok` e `.unreadable` (plurale ICU), in 4 lingue.
+- **H-16**: le due frasi di `security.md`, con la doc di H-14 e H-15 (docs-writer, dopo le prove).
+
+**Decisioni notturne, da rivedere**:
+
+- solo il conteggio `system`, anche nel log: è la regola del piano di X («mostra all'admin solo il conteggio di
+  sistema»). Resta un buco: se sono illeggibili solo segreti di utenti, il controllo dice `ok` e all'avvio l'operatore
+  non sa che la chiave è cambiata. Da rivedere con X;
+- nessuna voce nell'interfaccia: la scheda «Sicurezza» non esiste ancora (`config_audit.py` dice «will evaluate»). Il
+  controllo restituisce già un `ConfigCheck`, con le sue chiavi i18n, pronto per il registro di A.
+
+#### Passo 1 — i rossi ✅ (2026-10-16, notte)
+
+> **Note implementazione** (test-author, 66 casi nuovi, ruff e black puliti):
+>
+> - `test_instance_key.py`, sezione (g), da 98 a 151 casi. Tre risposte note, l'equivalenza con `derive_key` (chiave
+>   configurata e generata), la chiave data che vince su quella dell'istanza, nessun file della chiave creato,
+>   l'ambiente e la cartella dei dati mai letti, le sorgenti guaste ignorate, 32 richieste non valide, il `TypeError`, le
+>   chiavi corte, quelle da 32 caratteri;
+> - `test_plugin_secrets_check.py`, nuovo, 11 casi: `ok`, `error` col solo conteggio `system`, il log, le eccezioni
+>   ridotte a un avviso, due casi su un DB SQLite vero. Senza segreti il passo non crea il file della chiave;
+> - `test_app_lifecycle.py`, 2 casi: il passo dopo `global-settings` e prima di `scheduler`, in ordine relativo perché
+>   A7 aggiunge `admin-bootstrap` nello stesso punto; il suo `run()` restituisce un awaitable;
+> - il runner: `services plugin-secrets-check`, `isolation="pure"`.
+>
+> **Prova dei rossi** (05:10–05:12, uno alla volta, `nice`): `plugin-secrets-check` 11 rossi (`ModuleNotFoundError`),
+> `config-instance-key` 53 rossi («derive_key_from is missing»), 98 verdi, `app-lifecycle` 2 rossi (il passo che
+> manca), 42 verdi. Ognuno sulla sua barriera.
+
+#### Passo 2 — la cura ✅ (2026-10-16, notte)
+
+> **Note implementazione**: applicato `apply_xnotes.py`: `instance_key.py` (`derive_key_from`, `_check_purpose_and_length`,
+> `_derive`), `plugin_secrets_check.py` nuovo, il passo in `app_lifespan.py`, le chiavi i18n nelle sorgenti
+> `instance/{en,it,fr,es}.json`. Ruff e black puliti.
+>
+> **Prove** (05:12–05:13): `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44; `i18n check`
+> rigoroso, verde. `config-package`: 694 verdi, compreso il caso del modulo nuovo, e 1 rosso, quello noto di Z2b
+> (`sleep_wake/suspend.py`). È curato nel treno 93, che il mio ramo `34405dfbb` non ha ancora. Porta 6181 libera.
+
+#### Passo 3 — la doc (2026-10-16, notte) — scritta, build dopo le 06:45
+
+> **Note implementazione** (docs-writer, solo inglese, nessun comando):
+>
+> - `developer/architecture/security.md`:
+>   - H-16, l'elenco di `env_secret()`: i sei segreti, `LIBREFOLIO_WAKE_TOKEN` compreso, poi «ogni variabile delle
+>     impostazioni dei plugin». Due frasi su cosa succede quando il token del risveglio o un `_FILE` di un plugin non
+>     si possono usare;
+>   - `derive_key_from()`: una riga nella tabella e un paragrafo sui due helper comuni e sull'uso previsto per B;
+>   - H-16, la «Known limitation» riscritta: ora un cambio di chiave si vede, grazie al `key_id` e al passo d'avvio;
+>   - la riga `i18n_key`, che diceva 13 messaggi, ora ne conta 15;
+>   - la sottosezione nuova `#plugin-secrets-check`.
+> - `developer/architecture/patterns/plugin_settings.md`: «No startup check calls it yet» sostituita, più una riga nella
+>   tabella dei test.
+> - `developer/architecture/overview.md`: il passo 12 `plugin-secrets-check`, i seguenti rinumerati fino a 16.
+> - `admin/configuration.en.md`: una riga ❌ nella tabella «Startup Checks» e una frase in «Saved Secrets and the
+>   Instance Key». È il debito di traduzione (it/fr/es), pagina non marcata.
+>
+> Verificati da me: `require_wake_token` e `wake_unavailable` (`api/v1/system/wake.py`), le ancore `#secrets`,
+> `#environment`, `#startup-checks`, `#plugin-secrets`.
+>
+> **⚠️ Fuori pista**:
+>
+> - il docs-writer ha lanciato `python3` due volte, una per leggere `instance/en.json` e una per spostare una riga della
+>   tabella. È roba leggera, ma la regola della pausa diceva nessun comando; `git diff --check` pulito;
+> - i messaggi i18n `unreadable` rimandavano a «Plugin settings», il titolo della scheda. Li ho corretti col percorso
+>   della scheda nello stile della UI: «Settings → Plugins», «Impostazioni → Plugin», «Paramètres → Plugins»,
+>   «Configuración → Plugins»;
+> - dalla doc: `check_plugin_secrets()` può sollevare su un errore del DB, e la cattura solo il passo d'avvio. Quando A
+>   la userà nella scheda «Sicurezza», dovrà gestirlo.
+>
+> **Da fare dopo le 06:45**: `i18n check` (dopo il ritocco dei messaggi), `mkdocs build --strict`, `check-links`,
+> `translate-validate --file admin/configuration.en.md`, poi lo slot pesante di `all-backend` (il passo nuovo gira a
+> ogni avvio del server di prova).
