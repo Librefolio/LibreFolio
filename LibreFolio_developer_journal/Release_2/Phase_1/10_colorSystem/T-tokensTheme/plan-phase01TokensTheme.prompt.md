@@ -616,9 +616,10 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
 | 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
 | 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `d39728347`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
-| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `77bfa6a39`, base merge `9a02a02c7`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); ingresso dopo il fermo di FE8b |
-| 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ⏳ CHECKPOINT READY (23:3x): `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
-| 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ⏳ CHECKPOINT READY (23:3x): Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
+| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `77bfa6a39`, base merge `9a02a02c7`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); entrato in `9016f47c3` (23:46) |
+| 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ✅ commit `3c810cd04`, entrato in `9016f47c3`: `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
+| 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `a092cda38`, entrato in `9016f47c3`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
+| 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ⏳ CHECKPOINT READY (00:4x): Vitest 179/179, `front check` 0 e 0, E2E 44/45 (FM6 rosso anche senza il lotto: TC-18); la riga 59 dello skill |
 
 ## Avanzamento
 
@@ -2991,7 +2992,10 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > bastano, a carico ~45 il test intero dura 7 s. Non è un difetto del prodotto né del lotto, che cambia solo gli stili.
 > La spec è delle transazioni, fuori perimetro: la cura va al suo proprietario, ed è nell'indice come **TC-17**.
 
-> 🔄 **5 · Il checkpoint, solo test:** la spec più TC-17.
+> ✅ **5 · Il checkpoint, solo test:** la spec più TC-17; committato dal coordinatore come `3c810cd04` (23:37), base
+> merge con la punta `e221a0544` (FE8b e il resto) → `be2f93abf`, il conflitto previsto sul TSV risolto con `--resolve`;
+> **entrato** con le tabelle e i 23 come `9016f47c3` (23:46): gate 119/119, `front check` 0 e 0 (dopo un `api sync` del
+> client del worktree, vecchio rispetto a B).
 
 ### I 27 «ruolo-mancante» — 🔄 16/10/2026 notte (coda della notte, D-T27/D-T28)
 
@@ -3058,4 +3062,80 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `front-utility support-copy-and-go` **16/16** (`SocialShareModal`, desktop e mobile) e `front-asset
 > asset-event-editor-save` **4/4** (la modale d'import).
 
-> 🔄 **7 · Il checkpoint**.
+> ✅ **7 · Il checkpoint:** committato come `a092cda38` (23:37); entrato con la merge `9016f47c3` (23:46). Il target
+> scende a **m1 674**; i token di componente letterali da 583 a 352 (a 18 con l'ingresso di AF).
+
+### `CompactCashCell` — mini-lotto sul percorso nuovo — 🔄 16/10/2026 notte
+
+> **Avvio** (coordinatore, 23:37): i due checkpoint della notte committati (`a092cda38` i 23, `3c810cd04` la spec), base
+> merge con la punta `e221a0544` (FE8b e il resto) → `be2f93abf`; il conflitto previsto sul TSV risolto con `--resolve`.
+> Le bozze di `CompactCashCell` su copie subito, FROZEN sull'albero fino al via; dopo l'ingresso il fast-forward del
+> ramo.
+
+> ✅ **1 · La mappa** (lettura; bozze in `files/T-r2/ccc/drafts/`, trasformazione `ccc/transform.py`, che si ferma se una
+> sostituzione non trova esattamente un riscontro): i 12 token di `table.css` letti da
+> `features/transactions/form/CompactCashCell.svelte`, il campo dell'importo.
+
+> - il fondo `input-bg` (bianco / slate-800) → `--lf-surface-field`; il bordo `input-border` (gray-200 / slate-600) →
+> `--lf-border-input`; il testo (`inherit` / slate-100) → `--lf-text-primary`;
+
+> - il passaggio `hover-border` (gray-400 / slate-500) → `--lf-border-input-hover`; il fuoco `focus-border`
+> (emerald-500) → `--lf-focus`, l'alone `focus-shadow` (emerald-500 al 25 %) → `color-mix(in oklab, var(--lf-focus) 25%,
+> transparent)`, come `DataTableCellContent`;
+
+> - il disabilitato `disabled-text` (gray-400) → `--lf-text-muted`, `disabled-bg` (gray-100 / slate-900) →
+> `--lf-surface-panel`, l'opacità 0,6 resta;
+
+> - via le tre regole `.dark`, i 12 token e la loro sezione in `table.css` (restano i 4 categoriali di
+> `RiskReturnLevel`), l'import di `table.css` nel componente; i segni (`--lf-gain`/`--lf-loss`) erano già sui ruoli.
+
+> **Due aggiunte oltre l'1:1**, per la coerenza con la select della valuta nella stessa cella (`SearchSelect`:
+> `bg-lf-field text-lf-primary border-lf-input hover:border-lf-input-hover`, disabilitata `bg-lf-panel text-lf-muted
+> opacity-60 border-lf-subtle`): il segnaposto su `--lf-text-placeholder` (oggi in scuro lo dà la regola strutturale di
+> `app.css` per i campi senza classi `-lf-`, `--theme-text-tertiary`, 3,07:1; in chiaro il browser) e il bordo del
+> disabilitato su `--lf-border-subtle`.
+
+> **Specificità:** le regole del componente (0,2,0 e oltre, con la classe di Svelte) battono già la regola strutturale
+> scura di `app.css` (`html.dark input:where(…)`, 0,1,2, senza `!important`); dopo la migrazione il fuoco vince sul
+> passaggio anche in scuro (prima `:global(.dark) .amount-input:hover`, 0,4,0, lo copriva).
+
+> **Contrasti** (`ccc/contrast.mjs`, il risolutore del gate; chiaro/scuro): testo 15,88/16,43; segnaposto 5,40/5,31
+> (prima ~4,6/3,07); bordo 3,62/3,52 (prima 1,24/1,93); passaggio 5,40/5,31 (prima 2,54/3,07); fuoco 6,40/5,66 (prima
+> 2,54/5,77); il disabilitato, esente, 4,52/4,54 prima dell'opacità, come la select. Il cambio visibile: in scuro il
+> campo passa da slate-800 al fondo dei campi, uguale alla select accanto (oggi le due metà della cella sono diverse); i
+> bordi più netti come in tutti i campi migrati («da rivedere» con quelli delle tabelle).
+
+> ✅ **2 · Il via e le due aggiunte approvate** (coordinatore, 23:46, dopo l'ingresso `9016f47c3` e il fast-forward del
+> ramo): il segnaposto su `placeholder` e il bordo del disabilitato su `subtle`. I bordi più netti e il fondo uguale
+> nelle due metà della cella vanno fra i «da rivedere» del punto 31 (li porta il coordinatore).
+
+> ✅ **3 · Applicati e provati** (23:47–23:50, carico 131–133, sotto `nice`, permesso dal coordinatore sopra 50;
+> `files/T-r2/ccc/run-light/`): `ccc/apply.sh` ha rigenerato le bozze da `9016f47c3`, identiche a quelle riviste, e le
+> ha copiate; `git diff --check` pulito. Prettier pulito sui 2 file; `theme-roles.mjs --check` pulito (il TSV non
+> cambia: il componente non aveva classi legacy); Vitest **179/179** (i quattro gate, `CompactCashCell.test.ts`,
+> `TransactionFormModal.test.ts`); `front check` **0 e 0**. Nessun riferimento ai token tolti.
+
+> ✅ **4 · Le E2E** (via del coordinatore alle 00:14, dopo l'ingresso di AF `9d3607eb6`; `ccc/run.sh` con `SKIP_LIGHT=1`,
+> 00:15–00:30, porta libera alle 00:30; `files/T-r2/ccc/run-e2e/`): `transactions-modals` **25/25** (2 worker),
+> `tx-wac-formmodal` **9/10** (1 worker, carico 83), `tx-fx-implied-rate` **3/3**, `tx-crud-full` **7/7**: 44 verdi, 1
+> rosso, FM6, che non dipende dal lotto (sotto).
+
+> ⚠️ **Fuori pista — FM6 di `tx-wac-formmodal`, triage** (`files/T-r2/ccc/fm6*/`, `ccc/ab.sh`): il test fallisce in
+> `commitBulkModal` (riga 185), `committed: false` con HTTP 200. Il riquadro del bulk dice «⛔ Save cancelled — Row 2b:
+> Cost basis override: At most 12 decimal places»: il WAC proposto al ricevente del TRANSFER (mostrato «💡 170.36 $ USD
+> per unit», riga del 17/10) parte con più di 12 decimali e lo stadio di precisione del batch lo rifiuta
+> (`transaction_batch_stages.py:117`, `decimal_limit_issue` di `backend/app/db/precision.py`, cambiato il 16/10 sera in
+> `bab52635d` e `0c3275057`; la spec è ferma dal 13/10). Ipotesi 1 (la forma della risposta) e 3 (lo stato condiviso)
+> escluse: 1 worker, la risposta spiega il rifiuto. **A/B, 00:31–00:38:** A, la spec da sola col lotto, rosso identico;
+> B, i due file del lotto riportati a HEAD `9016f47c3` e la build rifatta, rosso identico; poi i file ripristinati
+> (uguali alle bozze riviste, mtime nuovo perché la prossima run ricostruisca). **Verdetto: difetto del prodotto**, già
+> sulla base e fuori dal lotto; nell'indice come **TC-18**, per il proprietario del WAC.
+
+> ✅ **5 · La riga 59 dello skill `design-system`** (richiesta del coordinatore, nello stesso checkpoint): AF ha
+> cancellato `dialogs.css` e `files.css` e lasciato in `media.css` i 2 token dell'icona d'immagine di `FileUploader`
+> (AF-11; letto con `git show 9d3607eb6:…`, in sola lettura). La riga ora elenca `media.css` e `table.css`, gli ultimi
+> token di componente, tutti categoriali in attesa dei ruoli categoriali (2 + 4), e dice che il file d'area si cancella
+> quando non ha più token (il gate vuole che ogni file d'area ne definisca). Unica menzione dei file d'area nello skill;
+> la tabella resta a 5 colonne. Dopo questo ingresso lo skill lo tocca DV, nella sezione «Charts», per B4.
+
+> 🔄 **6 · Il checkpoint:** il componente, `table.css`, la riga 59 dello skill, TC-18 nell'indice, il piano.
