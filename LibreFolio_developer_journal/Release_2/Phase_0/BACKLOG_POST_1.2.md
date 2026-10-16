@@ -1963,7 +1963,7 @@ plugin.
 - **L-13 · Soggetti degli E2E del Lab che seguono la migrazione di T** — basso; L, 15/10, dal rapporto di `test-author` dopo il fuso con R.
   - Gli E2E del Lab ricavano a runtime come un componente scrive il colore (fuso con R). Restano però legati ad alcuni elementi dell'app, che le ondate di T cambieranno:
     - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso. ✅ **Pronto con L-10 (15/10):** `colourSourceOf()` di `lab-helpers.ts` legge la classe, che sia di palette o di ruolo; per un'utility di ruolo ricava il ruolo dal CSSOM della pagina. Il test L1, la sospensione, l'export e la scorciatoia lo usano già, con chip = alias e bersaglio = ruolo; quando W4 entra non serve toccarli. `textPaletteClassOf` è stato tolto.
-    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento.
+    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento. → Con **L-20** (16/10) il test cerca da solo un override P1 rimasto e, se non ne trova, si salta con un messaggio.
     - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione. ✅ **Coperto da L-10 (15/10):** i candidati `class-use` passano dal ruolo, verificati dal test unitario in `pickView.test.ts` e dall'E2E del selettore sul `login-modal`.
     - **W5**, ponte sRGB per ECharts: se i colori dei grafici smettono di essere letterali, il test L3 e forse il motore L3 vanno rivisti.
   - Ogni rottura è esplicita: il test cade con un messaggio che nomina il presupposto mancante.
@@ -2026,6 +2026,14 @@ plugin.
   - **Cosa serve:** una cattura nuova dal Lab, con export e selettore, non solo un numero di riga. La storia dell'esempio («una regola con un colore scritto») va scelta su un caso che esiste ancora. `TransactionsTable.svelte:993` (`tx-table`) è ancora giusto.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-18», fuori pista dell'esempio JSON.
+
+- **L-20 · Il test del selettore in tema scuro non dipende più dal sottotitolo di `/transactions`** — basso; coordinatore, 16/10, per la migrazione di TR.
+  - Il test «dark-theme pick» usava il sottotitolo di `/transactions` (`text-gray-500`, sovrascritto in scuro da `app.css`), che TR migra ai ruoli.
+  - Ora inietta un `<p>` proprio sulla pagina `/` del visitatore, con la classe di un override `html.dark .<classe> { color: var(--…) !important }` che cerca nel CSSOM, e controlla che compaia esattamente la variabile letta dalla regola.
+  - Senza nessun override di quel tipo, cioè dopo B6, il test si salta con un messaggio esplicito.
+  - ✅ 16/10: `picker` 4/4 ed e2e del Lab 17/17 a 4 worker, alle 13:18. Il test nuovo passa senza saltare; nel checkpoint L-20 (il commit è del coordinatore).
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-20».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2899,7 +2907,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `features/settings/**`, `routes/(app)/settings/**`, `features/support/**`, `features/update-check/**`.
 > Il piano: `../Phase_1/10_colorSystem/IM-settingsColors/`. Gli ID di questa sezione sono `IM-n`.
 
-- (nessuna voce ancora)
+- ✅ **IM-1 · `DonationPopupModal` sui ruoli** — basso (28 classi, `#ffffff`); origine IM, 16/10. Chiusa il 16/10 con
+  l'OK di A, nel checkpoint IM 2: 28 → 0, e via da `app.css` le regole morte `html.dark .bg-libre-beige` e
+  `html.dark .text-libre-dark` (C4). Commit `8636a368f`.
+  Dettagli: [piano IM](../Phase_1/10_colorSystem/IM-settingsColors/plan-phase00SettingsColors.prompt.md), «A7».
+- ✅ **IM-2 · Icona della fotocamera sul fondale dell'avatar** — minimo (`ProfileTab`, `text-white`); origine IM, 16/10.
+  Chiusa il 16/10, commit `8636a368f`: `text-lf-on-overlay`, ruolo di T da `f043c1b58`. Dettagli: piano IM, «A7».
+- **IM-3 · Famiglie di plugin di «Informazioni»** — basso (`AboutTab`: 4 card e 4 badge, 20 classi); origine IM, 16/10.
+  Accenti categoriali (asset verde, cambi blu, import ambra, segnali viola) e i neutri delle loro card restano legacy
+  (G3) finché non ci sono i ruoli categoriali; in scuro le card restano blu notte. Dettagli: piano IM, §5 «IM-5».
+- **IM-4 · Cuore di «Fatto con ❤»** — minimo (`AboutTab`, `text-red-500` decorativo); origine IM, 16/10. Nessun ruolo:
+  `text-lf-danger` sarebbe un uso improprio. Da chiedere a T o alla designer. Dettagli: piano IM, §5 «IM-5».
+- **IM-5 · Marchi dei social** — basso (`supportLinks.ts`, 14 classi; anello scuro del bottone «copia» di
+  `SocialShareModal`); origine IM, 16/10. X e TikTok usano neutri Tailwind come nero del marchio, gli altri `text-white`
+  su colori di terzi: manca un ruolo, o un'eccezione dichiarata. Dettagli: piano IM, §5 «IM-6».
+- **IM-6 · Badge del provider nel log dello scheduler** — minimo; origine IM, 16/10. Le classi vengono da
+  `PROVIDER_COLORS` di `lib/utils/providerHelpers.ts` (categoriali, fuori area): lo span segue la tabella quando migra.
+  Dettagli: piano IM, §2.
 
 ---
 
