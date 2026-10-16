@@ -324,6 +324,8 @@ async def change_password(
 @router.put("/profile", response_model=UpdateProfileResponse)
 async def update_profile(
     request: UpdateProfileRequest,
+    response: Response,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -332,10 +334,22 @@ async def update_profile(
 
     Allows changing username and/or email.
     Validates uniqueness constraints before committing.
+
+    Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
+    the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
+    The change ends every other session of the account; this one receives a new session cookie and carries on.
     """
     # Nothing to update
     if request.username is None and request.email is None:
         return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
+
+    email_changes = request.email is not None and request.email != current_user.email
+    if email_changes:
+        if request.current_password is None:
+            raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})
+        if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
+            logger.warning("Email change refused: wrong current password", user_id=current_user.id)
+            raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_INVALID", "message": "Current password is incorrect"})
 
     # Update profile
     updated_user, error = await user_service.update_profile(
@@ -347,6 +361,11 @@ async def update_profile(
 
     if error:
         raise HTTPException(status_code=400, detail=error)
+
+    if email_changes:
+        # update_profile ended every session of the account with the change: this one gets a new cookie.
+        _issue_session_cookie(response, http_request, updated_user, await _session_ttl_hours(session))
+        logger.info("Email changed, other sessions ended", user_id=updated_user.id)
 
     logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email=updated_user.email)
 
