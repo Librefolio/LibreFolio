@@ -1085,3 +1085,83 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
    >
    > Il coordinatore credeva la run morta col turno della sessione, caduto per la rete fra le 11:53 e le 11:57. In
    > realtà era già finita da sola alle 11:55:24, e lo script ha raccolto i record.
+
+## Dopo G-18: lavori chiesti dal coordinatore (16/10)
+
+- **Verifica in galleria di FE5c (X) ✅, 16/10 pomeriggio.** X ha diviso la pagina di dettaglio dell'asset (da 3.603 a
+  2.757 righe), senza cambiare classi né `data-testid`.
+  - Due snapshot filtrati sui 15 test che aprono il dettaglio, `-f "Asset (detail|chart settings|distribution)"`, a 6
+    worker nella corsia 6153:
+    - A `d69e14a6e`: la testa di X con i 27 file di FE5c riportati a dev;
+    - B `668d27837`: la testa di X.
+  - Kit di sessione, `files/fe5c/`: `fe5c_verify.sh` (preflight, prebuild, snap, fill, compare) e `fe5c_check.py`
+    (lockcheck, select, paths, merge, verdict).
+  - I rossi di carico (carico 80–166) li hanno recuperati dei fill sullo stesso SHA e nello stesso giorno: 6 su A, 5 su B.
+  - Verdetto: **identiche entro il rumore.**
+    - 288 immagini contro 288: 223 identiche, 40 dentro il rumore, 10 trascurabili, 13 su scatti instabili, 0
+      strutturali.
+    - 2 «oltre il rumore»: l'antialiasing di un'icona SVG, in 1 variante su 16.
+    - Pixel oltre 12 livelli: 6 immagini, ognuna allo 0,002 % al massimo.
+    - Misti a runtime: 0 e 0.
+
+  > **⚠️ Fuori pista**:
+  > - «rolling return» desktop si è ripetuto rosso nel fill di B. `test-triage`: verdetto ambiente.
+  >   - Richieste ferme per 25 s.
+  >   - Lo stesso percorso di codice in A e in B.
+  >   - Verde da solo a carico normale.
+  >   - Resta una debolezza della spec: G-19 nel backlog.
+  > - Su mobile `detail-events` tre icone SVG cambiano a due stati, con lo stesso schema esatto fra r1 e r2, che sono
+  >   dello stesso commit: rumore noto.
+  > - Durante `snap a` ho modificato lo script che stava girando: errore di sintassi a fine run, dopo il salvataggio dei
+  >   risultati. Nessun dato perso. Non si modifica uno script mentre gira.
+- **Pacchetto per la designer, giro 3 ⏳.** Chiesto dal developer (testuale, via coordinatore): rifare il lavoro
+  comparativo dall'output della galleria e preparare uno zip con:
+  - le schermate;
+  - il prima e dopo;
+  - i colori residui;
+  - le domande aperte;
+  - ogni pagina anche in Markdown.
+
+  Piano approvato con D1 (WebP lossless) e D2 (checkpoint del builder prima della galleria).
+  - Nuovo `scripts/visual_review/build_designer_round.py`.
+    - I colori residui da `color_inventory.py`, tenuti solo dove li conta il gate: codice di produzione, fuori dai
+      commenti. Su HEAD dà gli stessi 185 file del baseline del gate.
+    - Durante lo sviluppo, la regex dei vecchi token prendeva anche i ruoli (`text-lf-primary`): 100 file di troppo,
+      corretto.
+  - Prova a secco: diff `baseline-r2` → `g-cand16a`, inventario di HEAD.
+  - Poi la galleria completa `designer-16b` sul target con il lotto di T, i fill dei rossi, il diff con `sheet` e il
+    pacchetto `LibreFolio_review_colori_giro3_2026-10-16`.
+
+  > **Note implementazione**: builder committato dal coordinatore in `390aa3b11` (README §3b).
+  > - Prova a secco su `baseline-r2` → `g-cand16a`: zip da 133 MB in 630 s.
+  > - Link controllati: 6.543, tutti presenti nel pacchetto, tranne `SKILL.md` nella palette copiata così com'è.
+
+  > **⚠️ Fuori pista — pacchetto rimandato dal developer (16/10, 17:55)**: oggi la designer non ha tempo. Lo zip si
+  > farà quando sarà disponibile, su una galleria nuova, perché nel frattempo entreranno altri lotti.
+  > - La galleria `designer-16b` è finita; i fill non servono più e `package` non è stato lanciato.
+  > - Il builder resta pronto: `files/g16b/g16b.sh package` della sessione rifà inventario, diff, `sheet` e zip.
+- **Riferimento della sera del 16/10: lo snapshot `designer-16b`** (lasciato così com'è, su richiesta del coordinatore).
+  - Commit `fa374e41d`: il target con il lotto di T, più il builder.
+  - Cattura 16:53–17:52, 6 worker, carico 60–170: in parallelo W e Y della 1.3 e un vitest di B.
+  - 2.862 PNG; 249 test verdi, 1 saltato (`mobile menu open`, solo mobile), **10 rossi di carico, non recuperati**:
+    - desktop: dashboard empty state, data-quality banner, profile tab, transaction form modal e le varianti es/dark
+      e fr/light;
+    - import wizard conditional steps, image edit modal crop view, FX add pair direct routes, Asset detail signals RSI.
+  - Le loro immagini mancano dallo snapshot: sono in `stale_not_regenerated.txt`, 42 file.
+  - `live_price_check` pulito.
+  - **G-18, primo conto su una galleria completa:** 2.862 scatti scansionati, nessuno senza record, 0 errori.
+    - Per scatto, di mediana: 506 elementi con classi, 173 con un ruolo, 7 con una classe legacy.
+    - **72 elementi misti, 2 distinti**, tutti e due composti a runtime: il gate statico non li vede.
+      - `pac-planner-timing-segment` (`BackendTimingBar.svelte`): `border-white dark:border-gray-800` insieme a
+        `bg-lf-neutral`. 4 scatti PAC, 40 varianti.
+      - `lot-custody-modal > div` (`LotCustodyModal.svelte`): `border-lf-raised text-lf-primary` del modale insieme
+        a `bg-white dark:bg-slate-800`, probabilmente da una prop del chiamante. 2 scatti, 32 varianti; motivo
+        «attesa-1.3». In scuro lo sfondo resta il vecchio slate.
+- **`settings/plugins` per la 1.3 ✅, 16/10 18:27–18:34.** Commit `ccfabfd6d`: la punta, con X-R27 e X-R28. Due run
+  identiche, `g-plugins-a` e `g-plugins-b`, sullo stesso build, filtro `-f "Settings plugins"`, 2 worker, carico 23–28.
+  - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito.
+  - **a↔b: 16 immagini identiche su 16**: lo scatto è `stable`.
+  - Misti a runtime (G-18): 0.
+  - Le impronte sono uguali in tutte le varianti: desktop `dh` 761, schermo allungato a 745 per un blocco di 656 px;
+    mobile `dh` 887.
+  - Guardate a occhio es/light desktop e it/dark mobile: rese corrette, nessun trabocco della barra delle schede.

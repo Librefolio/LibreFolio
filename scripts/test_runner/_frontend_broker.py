@@ -11,7 +11,8 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
     """Run Broker unit tests (Vitest) — brokerHelpers (getBrokerIconUrl fallback chain),
     brokerIconChain (the reactive icon chain, jsdom), BrokerIcon (which <img> it draws and the URL an
     <img> event belongs to, jsdom), assetPanelUrl (broker panel deep-link parsing),
-    tabUrl (tab query-param sync, shared with dashboard)."""
+    tabUrl (tab query-param sync, shared with dashboard), LotCustodyModal (the opening value read
+    from the backend's original_cost, not computed as quantity × price, jsdom)."""
     print_section("Frontend Broker Unit Tests (Vitest)")
     cmd = [
         "npx",
@@ -22,6 +23,7 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "src/lib/components/ui/display/BrokerIcon.test.ts",
         "src/lib/utils/broker/__tests__/assetPanelUrl.test.ts",
         "src/lib/utils/url/__tests__/tabUrl.test.ts",
+        "src/lib/features/brokers/lots/LotCustodyModal.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -97,7 +99,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend broker tests: unit (brokerHelpers) + E2E (list, CRUD, detail page)",
         description="""Frontend Broker Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "broker-unit", front_broker_unit, test_names=False, name="Broker Unit Tests (Vitest)", desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync", tests="vitest")
+    add_test(cat, "broker-unit", front_broker_unit, test_names=False, name="Broker Unit Tests (Vitest)", desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom)", tests="vitest")
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")
     add_test(cat, "detail", front_broker_detail, name="Broker Detail Tests", desc="Detail page sections, edit/import modals", prereq="Login working, brokers exist", tests="brokers/brokers-detail.spec.ts")
     add_test(cat, "broker-recovery", front_broker_recovery, name="Broker Recovery Tests", desc="Owned empty/cascade deletion success, failure notifications and preserved recovery dialog", tests="brokers/broker-recovery.spec.ts")

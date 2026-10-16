@@ -86,7 +86,7 @@ from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.scenario_catalog import (
     get_loaded_risk_scenario_catalog,
 )
-from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.services.series_preparation import observed_annualization, prepare_asset_series_set
 
 logger = get_logger(__name__)
 
@@ -1151,7 +1151,7 @@ def _portfolio_twrr_returns(
     return_dates = tuple(point.date for point in points[1:])
     baseline = points[0].date
     calendar_days = (return_dates[-1] - baseline).days
-    annualization_factor = len(returns) * 365 / calendar_days if calendar_days > 0 else None
+    annualization_factor = observed_annualization(len(returns), baseline, return_dates[-1])[1] if calendar_days > 0 else None
     if observation_dates:
         candidates = sum(1 for quote_date in observation_dates if baseline < quote_date <= return_dates[-1])
         coverage = min(1.0, len(returns) / candidates) if candidates else 0.0

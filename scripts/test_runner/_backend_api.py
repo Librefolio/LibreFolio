@@ -2,6 +2,11 @@
 Backend API endpoint tests and E2E tests.
 """
 
+import sqlite3
+from contextlib import closing
+
+from backend.test_scripts.test_db_config import get_test_db_path
+
 from . import _common
 from ._backend_db import db_populate
 from ._common import (
@@ -255,6 +260,17 @@ def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing: LIBREFOLIO_WAKE_TOKEN(_FILE) → 404 off, 503 unusable, 401 without it; with it, one run at a time (409), a streamed 200 (spaces, then the run's report), a run left to end when its client goes (in-process app, run_due_jobs replaced)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_wake.py", test_names)
     return run_command(cmd, "System API wake-up tests", verbose=verbose)
+
+
+def api_system_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…» (GET /system/price-refresh): 401 and a valid answer on the lane, the chosen states in-process (lot Z5)."""
+    print_section("System API: the price refresh status")
+    print_info(
+        "Testing: GET /system/price-refresh → 401 without a session; any signed-in user 200 with state, reason, job, since, last_finished_at, last_refreshed; idle, starting, running, idle after a refreshed catch-up (in-process app, PRICE_REFRESH driven by the test); PriceRefreshResponse; OpenAPI"
+    )
+    print_info("Tests: PRAPI-001..008")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_price_refresh.py", test_names)
+    return run_command(cmd, "System API price refresh tests", verbose=verbose)
 
 
 def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
@@ -763,6 +779,36 @@ def _api_setup() -> bool:
     return False
 
 
+#: The users the API units sign in as, seeded by ``db populate`` (``test_user_defs`` in
+#: ``backend/test_scripts/test_db/populate_mock_data.py``).
+API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+
+
+def _api_fixture_users_missing() -> str | None:
+    """Why one ``api`` action must reseed first: the lane's test database lacks a fixture user. None when it has them.
+
+    The category's ``setup_needed`` (H-21, W-B54). It never writes the database file: opened ``mode=ro``, never
+    created. On a WAL database SQLite may create the empty ``-wal``/``-shm`` companions, as any reader does; while
+    the shared backend runs they exist already. A database that cannot be read counts as one to reseed.
+    """
+    db = get_test_db_path()
+    if not db.is_file():
+        return f"no test database at {db}"
+    placeholders = ", ".join("?" * len(API_FIXTURE_USERS))
+    try:
+        with closing(sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)) as conn:
+            rows = conn.execute(f"SELECT username FROM users WHERE username IN ({placeholders})", API_FIXTURE_USERS).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            return f"the test database {db} cannot be read ({exc})"
+        rows = []
+    except sqlite3.Error as exc:
+        return f"the test database {db} cannot be read ({exc})"
+    found = {username for (username,) in rows}
+    missing = [username for username in API_FIXTURE_USERS if username not in found]
+    return f"the test database {db} has no fixture user {', '.join(missing)}" if missing else None
+
+
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
     if _common.nothing_left_to_run("api"):
@@ -823,6 +869,8 @@ Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
         setup=_api_setup,
+        # One action alone reseeds only when the fixture users are missing (H-21).
+        setup_needed=_api_fixture_users_missing,
         # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
         # backend across two full runs with 4 workers — 579 tests, zero reds —
         # before this line was written. They are scoped because each creates its
@@ -871,6 +919,17 @@ Tests for REST API endpoints (server auto-started):
         # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or
         # network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
+    )
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the status, as
+    # e2e_test_user, whose login counters (which no unit asserts) are the one write; the chosen states (starting, running,
+    # idle after a refreshed catch-up) run in-process, an app of the test holding the system router, get_current_user
+    # overridden and this pytest process's own PRICE_REFRESH driven and reset by the test, never the lane server's.
+    add_test(
+        api,
+        "system-price-refresh",
+        api_system_price_refresh,
+        name="System API Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…»: GET /system/price-refresh → 401 without a session; any signed-in user (e2e_test_user) 200, exactly state/reason/job/since/last_finished_at/last_refreshed with a valid state, whatever the lane's scheduler does; in-process: idle (all null, not refreshed), starting for wake with since, running for return with its job, idle after a refreshed catch-up with last_finished_at, datetimes ISO 8601 UTC; PriceRefreshResponse six fields, literals enforced (tick refused); OpenAPI, tag System, the 200 schema",
     )
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.

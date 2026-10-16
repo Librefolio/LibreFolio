@@ -65,7 +65,7 @@
 
 <div class="space-y-4" data-testid="import-wizard-step1" data-busy={brokersLoading || uploading}>
     <!-- Info hint -->
-    <p class="text-xs text-gray-500 dark:text-gray-400 italic">{$t('importWizard.step1Optional')}</p>
+    <p class="text-xs text-lf-muted italic">{$t('importWizard.step1Optional')}</p>
 
     <!-- Upload error banner -->
     {#if uploadError}
@@ -74,7 +74,7 @@
 
     <!-- A report set this upload left incomplete: the missing export dropped here joins the same set -->
     {#each step1SetWarnings as warning (warning.key)}
-        <div class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="import-wizard-step1-set-warning" data-plugin-code={warning.pluginCode} data-role={warning.roleCode}>
+        <div class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="import-wizard-step1-set-warning" data-plugin-code={warning.pluginCode} data-role={warning.roleCode}>
             <AlertTriangle size={16} class="mt-0.5 shrink-0" />
             <div class="space-y-1">
                 <p>{$t('importWizard.reportSet.step1Missing', {values: {plugin: warning.pluginName, role: warning.roleLabel, ext: warning.extensions}})}</p>
@@ -84,7 +84,7 @@
                 <p class="text-xs">
                     {$t('importWizard.reportSet.step1MissingHint')}
                     {#if warning.docsUrl}
-                        <a class="ml-1 text-libre-green hover:underline" href={warning.docsUrl} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExport')}</a>
+                        <a class="ml-1 text-lf-link hover:underline" href={warning.docsUrl} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExport')}</a>
                     {/if}
                 </p>
             </div>
@@ -99,7 +99,7 @@
     {:else}
         <button
             type="button"
-            class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-libre-green hover:text-libre-green dark:hover:text-libre-green transition-colors"
+            class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-dashed border-lf-input text-sm text-lf-muted hover:border-lf-focus hover:text-lf-link transition-colors"
             onclick={() => (dropZoneExpanded = true)}
             data-testid="import-wizard-upload-more"
         >
@@ -112,8 +112,8 @@
     {#if pendingFiles.length > 0}
         <div class="space-y-3">
             <!-- "Assign all" global broker -->
-            <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
+            <div class="flex items-center gap-3 p-3 bg-lf-panel rounded-lg">
+                <span class="text-sm font-medium text-lf-secondary whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
                 <div class="flex-1 max-w-xs" data-testid="import-wizard-step1-broker-select">
                     <BrokerSearchSelect
                         {brokers}

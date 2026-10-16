@@ -382,6 +382,14 @@ def services_provider_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Provider contract tests", verbose=verbose)
 
 
+def services_provider_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test where the asset providers stand in the asset search (F21): tier, priority and search order."""
+    print_section("Services: Asset Provider Policy")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER, provider_policy (tier, priority, search order), AssetSourceProvider declarations, AssetSearchService.search order (offline, no DB)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_policy.py", test_names)
+    return run_command(cmd, "Asset provider policy tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -419,6 +427,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
+def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
+    """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
+    print_section("Services: Transaction Decimal Places")
+    print_info("Testing: transaction_batch_stages.py (check_decimal_limits) + transactions/balances.py + assets/crud.py (held) + BRIMProvider._create_transaction")
+    print_info("Tests: quantities read back to 10 decimals; over the limit refused at /validate and /commit on its row, never rounded; exact balances; held set; BRIM parse does not refuse (D2)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_decimal_places.py", test_names)
+    return run_command(cmd, "Transaction decimal places tests", verbose=verbose)
 
 
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
@@ -895,6 +913,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
+def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
+    print_section("Services: Asset Digit Limits")
+    print_info("Testing: backend/app/services/assets/price_store.py, event_store.py, backend/app/api/v1/assets/events.py")
+    print_info("Tests: manual prices (12 decimals) and events (6) beyond the limit or 15 significant digits refused with nothing written, provider prices truncated, what fits read back exactly")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_digit_limits.py", test_names)
+    return run_command(cmd, "Asset digit limit tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -979,6 +1006,17 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
 
 
+def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…»: the catch-up tracker PRICE_REFRESH, its wiring in run_due_jobs and scheduler_loop (lot Z5)."""
+    print_section("Services: Scheduler Price Refresh")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (PriceRefreshTracker, PRICE_REFRESH, run_due_jobs, scheduler_loop), with sleep_wake/activity.py's response headers")
+    print_info(
+        "Tests: SPR-001..032 — names and types, idle/starting/running, announce and runs (first reason kept, overlap, no-op end, reset), jobs ran/refreshed, tick never shown; run_due_jobs: an unknown reason counts nothing, run_started before the settle, finished on raise and cancel, job_finished(None) on cancel; the loop: startup announced, header published then removed and reset, return announced on the request, the answers' header"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_price_refresh.py", test_names)
+    return run_command(cmd, "Scheduler price refresh tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -1050,6 +1088,14 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY; ENVIRONMENT_PROFILE_DEFAULTS and profile_default(), H-17)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
+
+
+def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address, client_rate_key and mask_client_address (P17)."""
+    print_section("Services: Client Address")
+    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, reset_client_address_cache, client_rate_key, mask_client_address)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_client_address.py", test_names)
+    return run_command(cmd, "Client address tests", verbose=verbose)
 
 
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
@@ -1501,6 +1547,16 @@ Note: No backend server required.
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
+    add_test(
+        cat,
+        "provider-policy",
+        services_provider_policy,
+        name="Provider Policy",
+        desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
+        # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
+        # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
@@ -1510,6 +1566,13 @@ Note: No backend server required.
         services_transaction_cost_basis_rule,
         name="Transaction Cost Basis Rule",
         desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
+    add_test(
+        cat,
+        "transaction-decimal-places",
+        services_transaction_decimal_places,
+        name="Transaction Decimal Places",
+        desc="C-97a: quantities keep 10 decimals; over a limit (quantity 10, cash and cost basis 6, 15 significant digits) refused at /validate and /commit on its row, never rounded; balances summed exactly; held set; BRIM parse does not refuse (D2)",
     )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
@@ -1860,6 +1923,16 @@ Note: No backend server required.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
     )
+    add_test(
+        cat,
+        "asset-digit-limits",
+        services_asset_digit_limits,
+        name="Asset Digit Limits",
+        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the -1 sentinel, trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
+        # WRITE-SCOPED, the category default, as asset-source: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices and events, written, read and wiped by asset id.
+        # Nothing here counts or reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -1900,6 +1973,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-price-refresh",
+        services_scheduler_price_refresh,
+        name="Scheduler Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…» (N-Z5-1…5). PriceRefreshTracker on an injected clock: idle (all None, not refreshed, no header); announce(reason) idle → starting with reason and since, first reason and since kept while pending; tick or unknown reasons refused for announce and run_started, nothing counted; run_started counts overlapping runs, run_finished ends the catch-up with the last one (no-op without a counted run): last_finished_at and last_refreshed (a job with items_ok > 0) only if a job finished while pending, else kept; a cancelled job (None) ran, not refreshed; a job while idle invisible; running with the current job (a tick's job at once on an announced return), starting without; header_value; reset forgets the count and the job. run_due_jobs: catch-up reasons run_started before the settle and run_finished in a finally (raise, cancel), a tick never; job_started/job_finished around each job. scheduler_loop: startup announced, X-LibreFolio-Price-Refresh registered on current_activity(), the return listener announces on the request's thread, removed and reset at the end; the answers through ActivityMiddleware say starting, running, then nothing",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs past PRICE_REFRESH (switches,
+        # leader, settings, state store, due functions, jobs, settle_clock) is a fake set with monkeypatch; the process's
+        # PRICE_REFRESH is reset before and after each test, and its ACTIVITY replaced only through monkeypatch by an
+        # Activity on a fake clock. The loop runs as a task of the test's own event loop and is stopped and awaited within
+        # a deadline; the FastAPI app of the header case is served in this process by httpx.ASGITransport (no socket).
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
@@ -1935,6 +2021,18 @@ Note: No backend server required.
         desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "client-address",
+        services_client_address,
+        name="Client Address",
+        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process until reset_client_address_cache(), which re-arms the warning; client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or '') and mask_client_address (IPv4 by its /24, IPv4-mapped as its IPv4, IPv6 by its /48, a name as written, nothing for None or '')",
+        # PURE: Settings built from the environment alone (_env_file=None), or read through get_settings() in test mode with
+        # a data directory under tmp_path, every variable set and removed by monkeypatch; connections are Starlette Request
+        # and WebSocket objects on raw scopes; the module's logger is replaced by a recorder, and its cache is reset before
+        # and after each test. No DB, no server, no network.
         isolation="pure",
     )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
