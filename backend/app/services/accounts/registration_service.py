@@ -5,7 +5,8 @@ global setting (``invite`` on a new install). A value of that variable that is n
 instead of opening it, and says so in the log; so does a stored value that is not a mode. Whatever the mode, the first
 account of an instance without accounts can be created, and is an administrator: ``first_account_open`` tells the
 login page. The limit is ``LIBREFOLIO_MAX_USERS``: active accounts and live invitations count against it, so an
-invitation keeps its place until it is used, revoked or expired. An invalid limit closes too, as a limit of 0.
+invitation keeps its place until it is used, revoked or expired, and so does an account waiting for its email
+verification while its link is live (workstream E). An invalid limit closes too, as a limit of 0.
 
 ``register_user`` holds the whole rule of ``POST /auth/register`` and owns its transaction: the account, the invitation
 it spends and the check of the limit are committed together, or not at all. ``create_invite`` and ``revoke_invite``
@@ -18,7 +19,7 @@ from datetime import datetime
 from typing import Literal, Optional, cast
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config.accounts import REGISTRATION_MODES, billing_url, public_url, registration_mode_override
@@ -53,7 +54,8 @@ class RegistrationModeState:
 
 @dataclass(frozen=True)
 class UserUsage:
-    """Places taken (active accounts plus live invitations) against the limit, None when there is no limit."""
+    """Places taken (active accounts, live invitations, accounts waiting for a live verification link) against the limit,
+    None when there is no limit."""
 
     used: int
     max_users: Optional[int]
@@ -140,12 +142,27 @@ def _live_invites(now: datetime):
     )
 
 
+def _live_verifications(now: datetime):
+    """The conditions of an email-verification link that still holds its account's place: not used, not revoked, not
+    expired (workstream E, developer decision 44)."""
+    return (
+        AccountToken.purpose == AccountTokenPurpose.EMAIL_VERIFICATION,
+        AccountToken.consumed_at.is_(None),  # type: ignore[union-attr]
+        AccountToken.revoked_at.is_(None),  # type: ignore[union-attr]
+        AccountToken.expires_at > now,
+    )
+
+
 async def user_usage(session: AsyncSession, *, now: Optional[datetime] = None) -> UserUsage:
-    """How many places are taken: active accounts, live invitations and the administrator waiting for its setup (F02)."""
+    """How many places are taken: active accounts, live invitations, and the inactive accounts that wait: for their email
+    verification while a link of theirs is live (workstream E), or for their setup (the F02 administrator). An account is
+    counted once, whichever it waits for."""
     moment = now or utcnow()
     active = (await session.execute(select(func.count()).select_from(User).where(User.is_active.is_(True)))).scalar() or 0  # type: ignore[attr-defined]
     invites = (await session.execute(select(func.count()).select_from(AccountToken).where(*_live_invites(moment)))).scalar() or 0
-    waiting = (await session.execute(select(func.count()).select_from(User).where(*pending_admin_filter()))).scalar() or 0  # type: ignore[arg-type]
+    live_verification = select(AccountToken.id).where(AccountToken.user_id == User.id, *_live_verifications(moment)).exists()
+    waiting_statement = select(func.count()).select_from(User).where(User.is_active.is_(False), or_(live_verification, and_(*pending_admin_filter())))  # type: ignore[attr-defined]
+    waiting = (await session.execute(waiting_statement)).scalar() or 0
     return UserUsage(used=active + invites + waiting, max_users=_max_users())
 
 
@@ -228,6 +245,11 @@ async def register_user(
     valid when given. A valid invitation sets the role and already holds its place; without one, the limit is checked
     after the account is written, in the same transaction, so two registrations racing for the last place cannot both
     take it: the first to write holds SQLite's write lock until it commits.
+
+    With email verification required (workstream E), every account but the first waits for its link: it is created
+    inactive, with a token that holds its place, and the caller schedules the email (``verification_required`` in the
+    answer). With the option on and no email with a link able to go, the registration is refused with
+    ``EMAIL_VERIFICATION_UNAVAILABLE``.
     """
     moment = now or utcnow()
     first, invited, grants_admin = await _admission(session, invite_token, moment)
@@ -239,6 +261,14 @@ async def register_user(
     if invited and await token_service.consume_token(session, invite_token or "", AccountTokenPurpose.INVITE, consumed_by_user_id=user.id, now=moment) is None:
         await session.rollback()
         raise RegistrationError("INVITE_INVALID", "This invitation is not valid")
+    # Workstream E: email imports this module (``public_link``), so the import waits for the call.
+    from backend.app.services.email.verification import hold_for_verification  # noqa: PLC0415
+
+    try:
+        await hold_for_verification(session, user, first=first, now=moment)
+    except RegistrationError:
+        await session.rollback()
+        raise
     if not invited and not first:
         usage = await user_usage(session, now=moment)
         if usage.max_users is not None and usage.used > usage.max_users:
@@ -246,7 +276,7 @@ async def register_user(
             raise RegistrationError("USER_LIMIT_REACHED", "The instance has reached its maximum number of users")
     await session.commit()
     await session.refresh(user)
-    logger.info("User registered", user_id=user.id, username=user.username, is_superuser=user.is_superuser, invited=invited, first_user=first)
+    logger.info("User registered", user_id=user.id, username=user.username, is_superuser=user.is_superuser, invited=invited, first_user=first, waits_for_email=not user.is_active)
     return user
 
 

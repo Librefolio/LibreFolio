@@ -96,7 +96,9 @@ _TIPO_TO_ASSET_TYPE: dict[str, AssetType] = {
     "obbligazione": AssetType.BOND,
     "obbligazione eurotlx": AssetType.BOND,
     "etf": AssetType.ETF,
-    "etc/etn": AssetType.ETF,
+    # ETC/ETN: one label for exchange-traded commodities and notes. Both map to ETF_COMMODITY (D-X7), an
+    # approximation for an ETN on an index or a currency, which the label does not tell apart.
+    "etc/etn": AssetType.ETF_COMMODITY,
     "fondi comuni": AssetType.FUND,
     "fondo chiuso": AssetType.FUND,
     # English labels (lingua="en")

@@ -354,8 +354,7 @@ test.describe('BulkModal promote execution', () => {
         await page.getByTestId('promote-toolbar-confirm').click();
 
         // Divergence → the merge modal must appear; confirming it runs onBulkPromoteMergeConfirm.
-        // `promote-merge-modal` is stamped on two nested nodes (ModalBase + inner div), so key
-        // the open/closed state off the unambiguous confirm button instead.
+        // Key the open/closed state off the confirm button: it exists only while the merge modal is open.
         const mergeConfirm = page.getByTestId('promote-merge-confirm');
         await expect(mergeConfirm).toBeVisible({timeout: 5_000});
         await mergeConfirm.click();

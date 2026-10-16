@@ -50,18 +50,45 @@ An administrator can invite you with a link of your own.
 
 - ⏱️ An invitation link works once, for 7 days. If the page says the link has expired, has already
   been used, has been withdrawn or is not valid, ask your administrator for a new one.
+- 📬 If the instance asks you to confirm your email address, open the link it emails you before you
+  log in: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
 - 🔒 As soon as the page opens, the address bar loses the secret part of the link: keep the message
   you received in case you need to open the link again. If the page says the link is incomplete,
   open it again from that message.
 - 🚪 If the page says that registration is disabled, the administrator has closed sign-ups for now:
   ask them.
 
+### 📬 If LibreFolio Asks You to Confirm Your Email {: #verify-email }
+
+Some instances ask every new account to confirm its email address before the first sign-in. Then,
+after **Register**:
+
+1. The login page says: *Account created. We sent you an email with a link to activate it: open it
+   within 24 hours, then sign in.* You cannot sign in yet.
+2. Open the email *Confirm your email address* and click **Confirm my email address**. If the
+   button does not work, copy into your browser the address written under it.
+3. LibreFolio confirms your address and brings you back to the login page, with a confirmation:
+   log in with your username and password.
+
+- ⏱️ The link works once, for 24 hours.
+- 📭 No email? Look in the spam folder. Then, on the login page, sign in with your username and
+  password: LibreFolio says that your address is not verified yet, and offers **Send the link
+  again**. A new link replaces the older ones. If you ask too often, the page tells you in how many
+  minutes you can ask again.
+- ⌛ If the page says that the link has expired, sign in the same way: you are offered a new link.
+  If the instance has no free place left meanwhile, ask your administrator.
+- ✅ If the page says that the link has already been used, your account is probably active already:
+  sign in.
+- 🔒 As with an invitation, the address bar loses the secret part of the link as soon as the page
+  opens: keep the email until your account is active.
+
 ---
 
 ## 🔐 2. Log In
 
 After registering, you are back on the login page. Log in with your username (or email) and your
-password.
+password. If LibreFolio asked you to confirm your email address, open the link it emailed you
+first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
