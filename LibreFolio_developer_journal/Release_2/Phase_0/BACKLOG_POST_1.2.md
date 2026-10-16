@@ -3414,6 +3414,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     cartella, e non si può escludere senza perdere quel rilevamento.
 
   Dettagli: piano H, §14, lotto «H-23», passo 4.
+  - Cura fatta il 16/10 (lotto «H-24», piano H §14): `_counts_for_the_build()` in `scripts/cli_base.py` salta i
+    percorsi nascosti, i file `.test.`/`.spec.` e le cartelle `__tests__`/`__mocks__` (33 file di supporto ai test, che
+    nessun codice dell'app importa). Prova reale: con il solo `.DS_Store` più recente della build, la risposta passa
+    da True a False.
 - **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
   basso, runner; H (analisi di H-23), 16/10.
   - `_run_parallel_prepass()` → `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, non l'azione
