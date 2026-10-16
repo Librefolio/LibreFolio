@@ -2965,7 +2965,8 @@ con lo stesso codice, o con un altro, non riavvia il poller».
    file, coi cancelli dei colori); `mkdocs build` senza avvisi; `check-links` 97 validi. Porta 6186 libera.
    > **Osservazione**: vulture mette fra le «Referenced only by tests» altre quattro funzioni di Z
    > (`cooldown_snapshot()`, `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()`, `ActivityTracker.is_busy`):
-   > Z-20 nel backlog, fuori dal lotto per tenerlo corto. `_local_times_to_utc` (scheduler) non è di Z.
+   > Z-21 nel backlog (nata Z-20, rinominata il 16/10), fuori dal lotto per tenerlo corto. `_local_times_to_utc`
+   > (scheduler) non è di Z.
 5. ✅ 16/10 22:57–23:25 — Slot 2 (coordinatore: «Slot 2 is free (J finished at 22:55): lot A E2E go»), soglia 70,
    `files/za_slot.sh`; i controlli leggeri fermi per tutto lo slot (`files/za_pause`, nessun passo in corso):
    - A, Z-3 tolto (`apply_za.py revert-z3`, le due pagine identiche a HEAD; Z-8 e Z-19 restano), una ricostruzione
@@ -2976,7 +2977,38 @@ con lo stesso codice, o con un altro, non riavvia il poller».
      «Live price direction flash» e «C-66» 5/5 (i quattro del lampo e il caso di C-66); `front-portfolio
      dashboard-cache` 6/6; `front-portfolio page-busy` 12/12 (il lotto B sulla revisione combinata, come chiesto da Y).
      Porta 6186 libera.
-6. ✅ 16/10 23:55 — Backlog: Z-3, Z-8, Z-19 ✅, Z-20 nuova. Checkpoint FROZEN inviato al coordinatore: 19 file
+6. ✅ 16/10 23:55 — Backlog: Z-3, Z-8, Z-19 ✅, Z-21 nuova (nata Z-20). Checkpoint FROZEN inviato al coordinatore: 19 file
    tracciati, nessuno nuovo; le due pagine sono nell'area AF, solo `<script>`: lo SHA va ai colori; il commento di
    C-66 in `asset-detail.spec.ts` (riga ~8672, «by its UTC reckoning…») è di X, da girargli. Due righe di CHANGELOG
    proposte (🐛 Z-3, 🐛 Z-8).
+
+### Wiki-file di Z-3 e Z-20/Z-21 (16/10, sola devWiki e journal)
+
+> **Via** (coordinatore, 16/10 ~23:55): «Lot A committed (`a43502298` fix, `f8c47fc3d` journal) and entered: dev
+> `0f55265a1`, with the 2 CHANGELOG lines in `ac9671fd3`. 1. ID collision: J's line J-26 in dev already cites «Z-20»
+> for the probe bridge broken on 16/10 11:18 (the decoupling of `zodios-client` from `instanceNotices`, which I had
+> assigned to you). At your next journal touch, then: Z-20 = the decoupling of `zodios-client` from
+> `instanceNotices`, so that the probe bridge doesn't need the Svelte plugin; your new item (the 4 N58 functions)
+> becomes Z-21. 2. Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14. Z-21 after that, if
+> there's time.» Base: ff a `ac9671fd3` (coordinatore, 16/10 ~23:57), albero pulito.
+
+1. ✅ 16/10 23:40–23:58 — `wiki-file` su `LibreFolio_devWiki/wiki/problems/utc-today-vs-user-calendar.md`: sezione
+   nuova «2026-10-16 — a comparison is one site, not two (Z-3)», cinque righe in «Source files», `updated:` e
+   `concepts/prices-current-side-effect` fra i `related:`; la riga dell'indice; una voce in `log.md`. Storia provata
+   in git, non dedotta:
+   - `2e104b919` (30/08, il commit dell'audit dei 18 punti) ha portato `defaultRange().end` e
+     `resolveDateSentinel('max')` a `todayIso()`; le due righe di `isHeadToday`, con lo stesso idioma UTC nel padre
+     del commit, sono rimaste com'erano. Prima entrambi i lati erano UTC: il confronto era coerente.
+   - Quindi la faccia ovest (la sera un periodo che finisce oggi sembra passato, la vista di default) nasce il 30/08;
+     quella est (dopo mezzanotte un periodo finito ieri interroga, e ogni poll scrive) è più vecchia.
+   - La regola aggiunta: un confronto fra date è un punto solo; chi sposta un lato al calendario dell'utente cerca
+     ogni confronto che lo legge. La data della conversione resta UTC, «corretta così» (ricerca all'indietro).
+   - I sei punti di prodotto che hanno ancora l'idioma a `ac9671fd3` sono elencati, non riclassificati.
+   `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti; la pagina 0 su 8.
+   > **⚠️ Fuori pista**: il passo 6 della skill (graphify `--update`) punta al checkout principale e il grafo non c'è
+   > nel worktree: non eseguito, come le altre voci del `log.md` di questa fase.
+2. ✅ 16/10 23:59 — Numerazione: Z-20 → Z-21 (le quattro funzioni N58) nel backlog e nel lotto A di questo piano; Z-20
+   nuova, il disaccoppiamento. Nota per Z-20, letta nel codice e non provata: la sonda importa `$lib/api`, quindi
+   `zodios-client.ts`, che importa `priceRefresh.ts` (Z5) e, sulla riga dopo, `instanceBlock.svelte.ts` di H, con
+   `$state` al primo livello dal 15/10 (`cb34327e9`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
+   detto al coordinatore.
