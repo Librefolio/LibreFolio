@@ -262,8 +262,7 @@ html.dark .text-libre-green {
 }
 
 /* Dark mode: Cards and modals */
-html.dark .bg-white\/90,
-html.dark .bg-white\/95 {
+html.dark .bg-white\/90 {
     background-color: rgba(30, 41, 59, 0.95) !important;
 }
 

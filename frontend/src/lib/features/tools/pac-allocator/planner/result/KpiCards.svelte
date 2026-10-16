@@ -146,12 +146,12 @@
         {#if solution}
             <dl class="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {#each tiles as tile (tile.kpi)}
-                    <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-kpi-item" data-kpi={tile.kpi} data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}>
+                    <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-kpi-item" data-kpi={tile.kpi} data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}>
                         <dt class="{HINT} flex items-center gap-1">
                             <span>{tile.label}</span>
                             <HelpTip label={tile.label} help={tile.help} testid="pac-planner-kpi-help" />
                         </dt>
-                        <dd class="mt-1 text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{tile.value}</dd>
+                        <dd class="mt-1 text-lg font-semibold tabular-nums text-lf-primary">{tile.value}</dd>
                         {#if tile.chips.length > 0}
                             <dd class="mt-2">
                                 <ul class="flex flex-wrap gap-1">
@@ -168,7 +168,7 @@
                 {/each}
             </dl>
         {/if}
-        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40" data-testid="pac-planner-kpi-compute">
+        <div class="rounded-lg bg-lf-panel p-3" data-testid="pac-planner-kpi-compute">
             <div class="flex items-center gap-1">
                 <svelte:element this={solution ? 'h4' : 'h3'} class={SECTION_TITLE}>{computeTitle}</svelte:element>
                 <HelpTip label={computeTitle} help={text('compute.help', 'How long the optimizer worked on this plan and how far it got within the time it was given. The details are in «Proof and solver».')} testid="pac-planner-kpi-compute-help" />
@@ -183,7 +183,7 @@
                             testid="pac-planner-kpi-compute-row-help"
                         />
                     </dt>
-                    <dd class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                    <dd class="font-semibold tabular-nums text-lf-primary">
                         {duration(metrics.compute_ms)}
                         {#if metrics.total_ms !== null}
                             <span class="{HINT} font-normal">{$t(`${KEY}.compute.total`, {default: 'total {value}', values: {value: duration(metrics.total_ms)}})}</span>
@@ -200,7 +200,7 @@
                                 testid="pac-planner-kpi-compute-row-help"
                             />
                         </dt>
-                        <dd class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{settingNumber(budget, formats.budget)}</dd>
+                        <dd class="font-semibold tabular-nums text-lf-primary">{settingNumber(budget, formats.budget)}</dd>
                     </div>
                 {/if}
                 {#if !infeasible}
@@ -213,7 +213,7 @@
                                 testid="pac-planner-kpi-compute-row-help"
                             />
                         </dt>
-                        <dd class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                        <dd class="font-semibold tabular-nums text-lf-primary">
                             {$t(`${KEY}.compute.objectivesValue`, {default: '{closed} of {total}', values: {closed, total: stages.length}})}
                         </dd>
                     </div>
@@ -221,12 +221,12 @@
                 {#if nodeLimit !== null}
                     <div data-testid="pac-planner-kpi-compute-row" data-row="node_limit">
                         <dt class={HINT}>{text('compute.nodeLimit', 'Node limit')}</dt>
-                        <dd class="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{settingNumber(nodeLimit, formats.integer)}</dd>
+                        <dd class="font-semibold tabular-nums text-lf-primary">{settingNumber(nodeLimit, formats.integer)}</dd>
                     </div>
                 {/if}
                 <div data-testid="pac-planner-kpi-compute-row" data-row="engine">
                     <dt class={HINT}>{text('compute.engine', 'Engine')}</dt>
-                    <dd class="text-gray-900 dark:text-gray-100">{engines}</dd>
+                    <dd class="text-lf-primary">{engines}</dd>
                 </div>
             </dl>
         </div>
