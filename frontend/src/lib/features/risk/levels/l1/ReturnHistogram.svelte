@@ -37,20 +37,20 @@
     let {histogram, height = '120px'}: Props = $props();
 
     function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
-        if (bin.holdsCut) return 'bg-amber-500 dark:bg-amber-400';
-        if (bin.belowCut) return 'bg-red-400/80 dark:bg-red-500/80';
-        return 'bg-gray-300 dark:bg-slate-600';
+        if (bin.holdsCut) return 'bg-lf-warning';
+        if (bin.belowCut) return 'bg-lf-loss/80';
+        return 'bg-lf-neutral';
     }
 </script>
 
 <section class="space-y-1" data-testid="risk-l1-histogram">
     <div class="flex items-center gap-1">
-        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">{$t('risk.levels.l1.histogram.title')}</h4>
+        <h4 class="text-sm font-medium text-lf-secondary">{$t('risk.levels.l1.histogram.title')}</h4>
         <DocsLink path="financial-theory/technical-analysis/risk-metrics/value-at-risk/" label={$t('risk.levels.l1.histogram.title')} testId="risk-l1-histogram-docs" />
     </div>
 
     {#if !histogram}
-        <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l1-histogram-empty">{$t('risk.levels.l1.histogram.empty')}</p>
+        <p class="text-xs text-lf-muted" data-testid="risk-l1-histogram-empty">{$t('risk.levels.l1.histogram.empty')}</p>
     {:else}
         <div class="flex items-end gap-px" style="height: {height};" data-testid="risk-l1-histogram-bars" data-bin-count={histogram.bins.length}>
             {#each histogram.bins as bin, index (index)}
@@ -73,12 +73,12 @@
             {/each}
         </div>
 
-        <div class="flex justify-between text-[10px] text-gray-400 tabular-nums dark:text-gray-500">
+        <div class="flex justify-between text-[10px] text-lf-muted tabular-nums">
             <span>{axisPercent(histogram.bins[0].lowerBound)}</span>
             <span>{axisPercent(histogram.bins[histogram.bins.length - 1].upperBound)}</span>
         </div>
 
-        <p class="text-xs text-gray-500 dark:text-gray-400">
+        <p class="text-xs text-lf-muted">
             <span data-testid="risk-l1-histogram-observations">{$t('risk.levels.l1.histogram.observations', {values: {count: histogram.observations}})}</span>
             <!-- `=== null`, never a falsy test: a threshold of exactly zero sits at
                  break-even and is a real answer, not a missing one. -->
@@ -86,7 +86,7 @@
                 <span class="ml-1" data-testid="risk-l1-histogram-nocut">— {$t('risk.levels.l1.histogram.noCut')}</span>
             {:else}
                 <!-- A figure, not a position: a threshold of −0.04% keeps its sign (D380). -->
-                <span class="ml-1 font-medium text-amber-600 dark:text-amber-400" data-testid="risk-l1-histogram-cut">— {$t('risk.levels.l1.histogram.cut', {values: {value: figurePercent(histogram.cut / 100)}})}</span>
+                <span class="ml-1 font-medium text-lf-warning" data-testid="risk-l1-histogram-cut">— {$t('risk.levels.l1.histogram.cut', {values: {value: figurePercent(histogram.cut / 100)}})}</span>
             {/if}
         </p>
     {/if}

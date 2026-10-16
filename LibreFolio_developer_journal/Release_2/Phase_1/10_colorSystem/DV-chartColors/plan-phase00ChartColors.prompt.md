@@ -1095,7 +1095,69 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > **⚠️ Fuori pista: rilettura dello skill `design-system`** (coordinatore, 11:1x): sezione «Charts» e righe dei
   > grafici della mappa di `lib/theme/`, controllate sul codice; correzioni mandate al coordinatore per T. Fra queste,
   > un difetto mio: `growthBrokerColor` ripete gli 8 colori dal nono broker, senza la sfumatura di GR5 (DV-8).
-- [ ] W6-a: idem.
+- [x] ✅ (16/10/2026) W6-a: conversione, ritocchi, `--update`/`--check`; checkpoint consegnato al coordinatore (11:3x)
+  senza le Vitest.
+  > **⚠️ Fuori pista: le Vitest di W6-a rimandate.** Dalle 11:21 il carico è salito a 85–144, sopra la soglia di 50.
+  > Il coordinatore (11:3x) ha chiesto il checkpoint senza: le 55 Vitest collegate girano insieme a quelle di W6-b
+  > appena il carico scende. I test sono per componente, quindi un rosso resta attribuibile; lo slot unico copre tutto.
+  >
+  > **Regola 7, seguito** (coordinatore, 11:3x): T aggiunge `SIGN_TEXT.riskTable` (gain/loss) e `SIGN_BAR.histogram`
+  > (gain e loss a `/80`) nel suo lotto dei ruoli, con `SIGN_BADGE`. Le adotto dopo il suo ingresso (DV-9); fino ad
+  > allora restano `text-lf-loss` e `bg-lf-loss/80`.
+  > **Note implementazione** (16/10, 11:14–11:21), sulla base `b5fafb1ad` (W6-c `5d2c1ce62` più lo skill
+  > `design-system`). Da qui la ricetta è lo skill `design-system` (coordinatore, 11:1x).
+  >
+  > - Il convertitore ha cambiato 276 stringhe in 30 file. Ne ha lasciate 5: le 4 previste a mano più la legenda di
+  >   `RiskReturnLevel`, esclusa.
+  > - **Catene di classi** (regola 3): portano solo layout. `panelClass="w-64"`, `wrapperClass="ml-auto"` e
+  >   `boxClass="w-full"` in `AssetSetRiskPanel` e `L3Benchmark`; `triggerClass`/`fieldsClass` `h-8` in `L4Replay`.
+  >   `getRowClass` di `RiskReturnLevel` dà nomi propri (`risk-return-row-*`).
+  > - **Tooltip** (regola 6): tutti con `text=`, nessun testo colorato dentro la superficie invertita.
+  > - **Superfici galleggianti** (regola 9): nessuna nei file del rischio, i menu sono `SelectPopover`, già migrato.
+  >
+  > **Ritocchi a mano:**
+  > - **Campi:** sono **12**, non 10 come nell'elenco: l4 `L4Shock`:170, `L4Simulation`:181, 185 e 209;
+  >   `RiskAnalysisPanel`:633, 770, 795, 900, 904, 1003, 1023 e 1036.
+  >   - Il convertitore li aveva presi per scatole (`border-lf-subtle`, e `bg-lf-card text-lf-secondary` nel pannello),
+  >     perché non avevano un anello di focus.
+  >   - Ora hanno la convenzione di T: `border-lf-input bg-lf-field text-lf-primary hover:border-lf-input-hover
+  >     focus:border-lf-focus focus:ring-1 focus:ring-lf-focus` (regola 8).
+  >   - Le caselle e il radio non hanno classi di colore e restano col colore del browser.
+  > - **Segni** (regola 7):
+  >   - `LOSS_CLASS` di `AssetSetLossComparisonSection` → `text-lf-loss`, non `danger`;
+  >   - barre dell'istogramma sotto il taglio → `bg-lf-loss/80`, come `SIGN_BAR.tornado`;
+  >   - la barra e l'etichetta del taglio restano `warning`.
+  >   - Lo skill vuole i segni presi da `SIGN_TEXT`/`SIGN_BAR`, ma nessuna voce esistente ha questo significato (una
+  >     tabella del rischio, un istogramma). Ho messo i ruoli diretti approvati alle 10:58, da rivedere: due voci per T
+  >     (`SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`?).
+  > - **Preset di `L4Shock`:** pieni, `border-lf-checked bg-lf-checked text-lf-on-checked` (D-T16). Le card dei modi di
+  >   `L4Simulation` → `border-lf-checked bg-lf-selected`.
+  > - **Suggerimento di `L4Replay`:318** → `border-lf-link text-lf-link hover:bg-lf-selected`.
+  > - **Bottoni d'azione** di `RiskAnalysisPanel` (5): prendono `hover:bg-lf-action-hover`, come i bottoni L4 (che lo
+  >   avevano da `hover:bg-primary-600`) e come vuole lo skill per il bottone principale.
+  > - **Resti del convertitore:** barrato di `AssetChip` → `decoration-lf-input`; sottolineatura dell'ordinamento di
+  >   `CorrelationHeatmap` → `decoration-lf-link`; sfumatura di bordo → `from-lf-card`; linea di 1 px di
+  >   `RiskAnalysisPanel` → `bg-lf-input`.
+  > - **Regola 3:** `text-lf-primary` sulle radici montate dalle pagine: `RiskLevelsPanel` (dashboard, broker),
+  >   `AssetSetRiskPanel` (asset), `AssetRiskScenariosView` (dettaglio asset), `RiskAnalysisPanel`.
+  >
+  > **Da rivedere (D-T27):**
+  > - la «x» dei chip degli asset (`AssetSetRiskPanel`:691): `hover:bg-lf-hover` su un chip `bg-lf-neutral`, più
+  >   chiaro in chiaro e più scuro in scuro, ma visibile;
+  > - i bottoni «aggiorna» bordati di `RiskAnalysisPanel` e `RiskPanelHeader`: `border-lf-subtle bg-lf-card`, senza
+  >   hover, fedeli all'originale.
+  >
+  > **⚠️ Fuori pista: i `dark:` senza metà chiara.** Il convertitore toglie ogni `dark:`. Se un elemento aveva solo
+  > `dark:bg-*`, senza un fondo chiaro, il fondo scuro spariva.
+  > - Ho scritto un controllo sulle versioni originali, `files/dv_dark_only_check.py`.
+  > - In W6-a i soli casi sono i 4 campi l4 (`dark:bg-slate-700`), già sistemati con `bg-lf-field`.
+  > - Sugli originali di W6-c (`8f2824046`), W5-PAC (`74e332076`) e W5-charts (`4743b1542`): **0 casi**.
+  >
+  > - Regola 4 (il mio controllo): 0 casi nel rischio.
+  > - Prettier ha riscritto 7 file, puliti a `HEAD`, solo negli elementi toccati. Compilatore Svelte 29 file, 0 avvisi;
+  >   `git diff --check` pulito.
+  > - `--update`: m1 7.901 → 7.142 (−759 = 763 − 4), m2 54 invariato. 29 file escono a zero, `RiskReturnLevel` resta a 4
+  >   (la legenda, punto 2.5); poi `--check` pulito.
 - [ ] W6-b: idem.
 - [ ] Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i gate Vitest
   `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility

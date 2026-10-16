@@ -142,7 +142,7 @@
         {#each options as option (option.value)}
             <button
                 type="button"
-                class="rounded-full border px-3 py-1 text-xs {presetId === option.value ? 'border-libre-green bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-green-400' : 'border-gray-300 text-gray-700 dark:border-slate-600 dark:text-gray-200'}"
+                class="rounded-full border px-3 py-1 text-xs {presetId === option.value ? 'border-lf-checked bg-lf-checked text-lf-on-checked' : 'border-lf-input text-lf-secondary'}"
                 onclick={() => choose(option.value)}
                 disabled={controller.stressLoading}
                 data-testid="risk-shock-preset"
@@ -155,7 +155,7 @@
     </div>
 
     {#if buckets.length > 0}
-        <button type="button" class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400" onclick={() => (showDetail = !showDetail)} data-testid="risk-shock-detail-toggle" aria-expanded={showDetail}>
+        <button type="button" class="flex items-center gap-1.5 text-xs text-lf-muted hover:text-lf-secondary" onclick={() => (showDetail = !showDetail)} data-testid="risk-shock-detail-toggle" aria-expanded={showDetail}>
             <SlidersHorizontal size={13} />
             {$t(showDetail ? 'risk.levels.l4.shockHideDetail' : 'risk.levels.l4.shockShowDetail')}
         </button>
@@ -166,28 +166,28 @@
             {#each buckets as bucket (bucket)}
                 {@const name = bucketName(bucket, dimension)}
                 <div class="flex items-center gap-1.5 text-xs">
-                    <span class="min-w-0 flex-1 truncate text-gray-600 dark:text-gray-300" title={name}>{name}</span>
+                    <span class="min-w-0 flex-1 truncate text-lf-secondary" title={name}>{name}</span>
                     <input
                         type="number"
                         step="1"
                         value={(bucketShocks[bucket] * 100).toFixed(0)}
-                        class="w-16 rounded border border-gray-200 px-1 py-0.5 text-right dark:border-slate-600 dark:bg-slate-700"
+                        class="w-16 rounded border border-lf-input bg-lf-field px-1 py-0.5 text-right text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                         onchange={(event) => editBucket(bucket, Number(event.currentTarget.value))}
                         aria-label={name}
                         data-testid="risk-shock-bucket"
                         data-bucket-id={bucket}
                     />
-                    <span class="text-gray-400">%</span>
+                    <span class="text-lf-muted">%</span>
                 </div>
             {/each}
-            <button type="button" class="col-span-full justify-self-start rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.stressLoading} data-testid="risk-shock-run">
+            <button type="button" class="col-span-full justify-self-start rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.stressLoading} data-testid="risk-shock-run">
                 {$t('risk.actions.runScenario')}
             </button>
         </div>
     {/if}
 
     {#if output}
-        <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-shock-total">
+        <p class="text-sm text-lf-secondary" data-testid="risk-shock-total">
             {$t('risk.levels.l4.shockTotal', {
                 values: {
                     percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${formatPercent(Math.abs(output.portfolio_return), {scale: 100, signed: false})}`,
@@ -200,7 +200,7 @@
             <!-- Coverage below one means some holdings had no bucket to fall in.
                  Unstated, the total would silently speak for less than the whole
                  portfolio while looking as if it spoke for all of it. -->
-            <p class="text-xs text-amber-700 dark:text-amber-300" data-testid="risk-shock-coverage">
+            <p class="text-xs text-lf-warning" data-testid="risk-shock-coverage">
                 {$t('risk.levels.l4.shockCoverage', {values: {percent: formatPercent(output.classification_coverage, {scale: 100, signed: false, digits: 0})}})}
             </p>
         {/if}
