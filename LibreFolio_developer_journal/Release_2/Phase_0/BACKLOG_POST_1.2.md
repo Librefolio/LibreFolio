@@ -2835,7 +2835,43 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: il resto di `components/transactions/**` e `routes/(app)/transactions/**`.
 > Il piano: `../Phase_1/10_colorSystem/TR-transactionColors/`. Gli ID di questa sezione sono `TR-n`.
 
-- (nessuna voce ancora)
+- ✅ **TR-1 · Il sottotitolo di `/transactions` è ancora legacy** — minimo; TR, 16/10. `routes/(app)/transactions/+page.svelte:738`
+  (`text-gray-500 dark:text-gray-400`) resta com'è, perché il test «dark-theme pick of a text-gray-500 element» di
+  `e2e/designer-lab/designer-lab-picker.spec.ts` lo usa come elemento rimappato da `app.css`. Migra a `text-lf-muted`
+  quando L sposta il soggetto del test: si sblocca con l'ingresso di L-20 (coordinatore, 16/10 12:12). Dettagli: [piano di TR](../Phase_1/10_colorSystem/TR-transactionColors/plan-phase00TransactionColors.prompt.md),
+  sezione «Cosa resta, e perché».
+  ✅ 16/10, `546204732` (lotto 6 di TR): L-20 (`d2e4ae947`, in `dev_release2` con `460529690`) toglie il sottotitolo
+  dal test; il `<p>` passa a `text-lf-muted`.
+- ✅ **TR-2 · Due conferme verdi piene senza ruolo per l'hover** — basso; TR, 16/10. `PromoteMergeModal.svelte:262`
+  (`bg-green-600 hover:bg-green-700`) e `TransactionActionModal.svelte:387` (lo stesso verde, col ramo ambra dello split
+  nello stesso ternario) restano legacy e interi: manca un `success-hover`. Serve un ruolo di T, oppure una decisione:
+  `bg-lf-action`, o il ramo ambra su `bg-lf-warning hover:bg-lf-warning-hover text-lf-on-status`. Dettagli: piano di
+  TR, sezione «Cosa resta, e perché».
+  ✅ 16/10, `70bae91b4` (lotto 5 di TR, secondo checkpoint): con i ruoli nuovi di T (`f043c1b58`), le due conferme passano a
+  `bg-lf-success hover:bg-lf-success-hover text-lf-on-status`, e il ramo dello split a `bg-lf-warning
+  hover:bg-lf-warning-hover`, nello stesso ternario (OK del coordinatore, 12:12).
+- **TR-3 · Lo `<style>` di `TransactionsTable` tiene 13 letterali** — basso; TR, 16/10. Sono:
+  - la base della tinta del broker, `white`/`#0f0f18`: la stessa ricetta di `UnifiedLotsTable` di BK. **Passa a T**, nel
+    lotto dei component tokens (coordinatore, 16/10 12:12);
+  - l'hover traslucido dell'icona del tipo, `rgb(0 0 0/.05)`/`rgb(255 255 255/.08)`: nessun ruolo traslucido;
+  - il pallino evento viola: categoria;
+  - l'impulso indaco di riga: nessun ruolo d'evidenza.
+
+  Dettagli: piano di TR, sezione «Cosa resta, e perché».
+- **TR-4 · Le categorie lasciate nelle transazioni** — basso; TR, 16/10. 120 classi aspettano i ruoli categoriali:
+  - i tipi d'evento di `AssetEventPicker`;
+  - la codifica A/B/«unisci» di `PromoteMergeModal`;
+  - il chip FX viola;
+  - la promozione indaco;
+  - lo split viola;
+  - la riga «in attesa» e i badge d'effetto del WAC.
+
+  Con loro va portato a un `data-*` il selettore `span.text-indigo-500` di `e2e/transactions/tx-wac-bulk.spec.ts:676`.
+  Dettagli: piano di TR, sezione «Cosa resta, e perché».
+- **TR-5 · `scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600` sulla tabella WAC** — minimo; TR, 16/10.
+  `WacPreviewSection.svelte`, tabella delle transazioni qualificanti: colori di palette che il gate non conta (il
+  prefisso `scrollbar-thumb` non è nella lista) e che non hanno un ruolo. Funzionano, col loro `dark:` esplicito.
+  Probabile anche altrove: da aggiungere ai prefissi del gate quando esisterà un ruolo. Dettagli: piano di TR, passo 2.
 
 ---
 
