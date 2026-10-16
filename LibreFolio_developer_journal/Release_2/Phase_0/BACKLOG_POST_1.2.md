@@ -3338,6 +3338,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     provata il 16/10. Resta il testo del selettore in `_backend_services.py` (MF e A): patch pronta, dal coordinatore.
 
   Dettagli: piano H, §14 «Revisioni della sera», punto 4, e lotto «H-22».
+- **H-23 · Un'azione `services` da sola ricrea il DB della corsia anche per un test `pure`** — basso, runner; H
+  (mini-lotto della docstring), 16/10.
+  - `_run_exclusive_setups()` (`scripts/test_runner/_cli.py`) gira per ogni invocazione. `_categories_in_scope()`
+    restituisce la categoria qualunque sia l'azione, quindi `dev.py test … services client-address`, un test `pure`
+    che non apre nessun DB, esegue il setup esclusivo di `services`: «Removing existing test database», poi
+    `db create`. Lo hanno fatto tutte e tre le mie corse di H-22 il 16/10, e così la corsia perde gli utenti di
+    fixture. Era anche la causa iniziale delle corse perse da W e da J: H-21 ripara il lato `api` (rifà il seed),
+    non il lato `services`.
+  - Cura proposta: per una singola azione, il setup esclusivo gira solo se l'azione non è `pure` (la classe
+    d'isolamento è nel catalogo, `add_test(…, isolation=…)` / `default_isolation`). Oppure con un `setup_needed` di
+    `services`, come H-21. Un caso di test puro per ciascun ramo.
+  - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
+
+  Dettagli: piano H, §14, mini-lotto «La docstring di `instance_block.py`».
 
 ## A · Account e accessi (fase 01)
 
