@@ -147,6 +147,17 @@ $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
 
+A position's start and end values are the portfolio's own valuation of it at the end of $t_0$ and of $t_1$, the two states of $\Delta\mathrm{UGL}$ ([Portfolio Engine — §3](index.md#3-position-state)):
+
+- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price, a trade price being restated through any later split;
+- its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
+- converted at the exchange rate of the boundary day itself.
+
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference.
+
+- **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
+- **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
+
 Annualized period return clamps its window start to the later of the requested start and the oldest open lot date. It uses $|\mathrm{StartValue}|$ as annualization base, falling back to end cost basis for positions opened mid-period. See [Net Annualized Return](net-annualized-return.md).
 
 🔗 See **[Portfolio Engine — §7 Period Contribution](index.md#7-period-contribution)** for details.

@@ -26,9 +26,9 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.metrics import underwater_drawdown
-from backend.app.services.risk.signal_helpers import build_line_computation
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.risk_adapters import build_line_computation
 
 
 class DrawdownParams(BaseModel):

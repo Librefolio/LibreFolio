@@ -2761,6 +2761,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   nessun difetto del prodotto né del lotto, che cambia solo gli stili. Cura per il proprietario della spec delle
   transazioni: togliere i budget brevi espliciti e lasciare il timeout di `expect` della configurazione. Dettagli: piano
   di T, «Sesto slot» e «La spec del rischio sui ruoli», passo 3.
+- **TC-18 · Il commit rifiuta il costo del ricevente di un TRANSFER con più di 12 decimali (FM6 di `tx-wac-formmodal`)**
+  — alto; T, 17/10, mini-lotto `CompactCashCell`. Nel bulk, un BUY di 10 Apple su Interactive Brokers a 1000 e un
+  TRANSFER di 5 verso Directa: il commit risponde 200 con `committed: false`, «Row 2b: Cost basis override: At most 12
+  decimal places». Il WAC proposto al ricevente si vede arrotondato («💡 170.36 $ USD per unit») ma parte intero, e lo
+  stadio di precisione del batch lo rifiuta (`transaction_batch_stages.py:117`, `decimal_limit_issue` di
+  `backend/app/db/precision.py`). Riproducibile: lo stesso rosso tre volte, due col lotto e una con i due file del lotto
+  riportati a HEAD (`9016f47c3`, build rifatta); il lotto cambia solo lo `<style>` e l'import, quindi non c'entra. Il
+  modulo di precisione è cambiato il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della
+  triage: difetto del prodotto. Cura per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna
+  prima del commit, o quantizzarlo nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
 
 ---
 
@@ -3006,7 +3016,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) è entrato dopo X FE5c, con il lotto 9.
 > **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
 > solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
-> chiudere AF-8 (conferma) e AF-10 (ruolo di T).
+> chiudere AF-8 (conferma) e AF-10 (ruolo di T). La sera del 16/10 il lotto dei component tokens di file, media e menu
+> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13.
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -3057,6 +3068,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   `bg-lf-panel` sparirebbe: ha preso `bg-lf-neutral hover:bg-lf-input/30`, il ruolo più vicino. È la domanda aperta 3
   dello skill `design-system` (`panel` = `hover`): serve un neutro «sopra panel» con il suo hover (T). Dettagli: piano
   AF, passo 6, lotto 6.
+- **AF-11 · L'icona immagine di `FileUploader` resta sui component tokens** — minimo; AF, 16/10. Nel lotto dei
+  component tokens di file, media e menu contestuale (8 componenti sui ruoli, `dialogs.css` e `files.css` cancellati)
+  il blu dell'icona delle immagini resta legacy: è una categoria (un colore per tipo di file), non uno stato. Restano i
+  suoi 2 token in `media.css`, con la regola `.dark` e l'import di `FileUploader`; vanno via con i ruoli categoriali.
+  Dettagli: piano AF, passo 16.
+- **AF-12 · `image-crop.spec.ts` F1 cerca il tema scuro nelle classi** — basso; AF, 16/10 (slot E). Il `beforeEach` di
+  «Dark Mode - Image Crop Components» decide se cliccare il toggle con `isVisible()` istantanei e col primo elemento
+  `[class*="dark"]` della pagina, e F1 accetta lo stesso ripiego come prova del tema scuro. La migrazione toglie le classi
+  `dark:`: F1 rosso alle 22:30, con la pagina in chiaro (verdetto del triage: assunzione). La correzione: aspettare il
+  toggle e asserire `html.dark`; la scrive test-author, con l'OK del coordinatore (la spec non è di AF). Dettagli: piano
+  AF, passo 16.4. 16/10, 23:00: correzione scritta (piano AF, passo 16.5). ✅ per F1, 16/10: commit `f2f13184b`, verde
+  nello slot di recupero (`image-crop` 42/42, piano AF passo 16.6). Resta aperto il seguito su F2 e F3, che decidono
+  con `isVisible()` istantanei se aprire le modali e non verificano il tema.
+- **AF-13 · Il runner rifà la build del frontend per un `.DS_Store`** — basso; AF, 16/10 (slot E).
+  `check_frontend_needs_build` (`scripts/cli_base.py`) confronta l'mtime di ogni file sotto `frontend/src`, file nascosti
+  compresi: un `.DS_Store` toccato da macOS ha fatto rifare la build a metà di uno slot (circa 7 minuti col carico a
+  160). Va escluso, insieme agli altri file nascosti; tocca al proprietario del runner. Dettagli: piano AF, passo 16.4.
+  Si è ripetuto nello slot di recupero (23:52, una build in più all'avvio di `asset-list`; piano AF, passo 16.6).
 
 ---
 
@@ -3434,6 +3463,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: il pre-passaggio parallelo solo per la categoria intera, come i consolidati. Con un test.
 
   Dettagli: piano H, §14, lotto «H-23», passo 1.
+  - Cura fatta il 16-17/10 (lotto «H-25», piano H §14): `_parallel_prepass_applies()` in `_cli.py`, la regola dei
+    pre-passaggi consolidati. Niente pre-passaggio parallelo con un'azione singola o con dei nomi di test.
+- **H-26 · I nomi di test dopo `all` vengono scartati in silenzio** — basso, runner; H (dal test-author di H-25),
+  17/10.
+  - Il parser accetta `test_names` dopo qualsiasi azione (`_cli.py` ~331, `nargs="*"`), ma le 16 azioni `all` sono
+    tutte registrate con `test_names=False`. `run_test_from_registry()` chiama allora la funzione senza nomi
+    (`accepts_test_names`, ~95): `./dev.py test services all foo` fa girare tutta la categoria, senza dirlo.
+  - Cura proposta: rifiutare i nomi su un'azione che non li prende, con exit 2 e un messaggio che dice di nominare
+    l'azione, oppure applicarli a tutta la categoria (`-k` su ogni unità). La seconda è più utile ma più larga: va
+    decisa col coordinatore. Con un test.
+
+  Dettagli: piano H, §14, lotto «H-25», passo 2.
 
 ## A · Account e accessi (fase 01)
 
@@ -3576,8 +3617,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `setting-save`/`setting-undo`, prova della sola lettura (nuovo `settings-readonly-indicator`), il segnaposto in
     `SettingControls.test.ts`; `front-utility settings` 46 ✅. Commit al checkpoint A6b; dettagli in «A6b.2».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
-- **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
-  A (15/10, dal merge di H CP6; accettato dal coordinatore).
+- ✅ **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo; chiusa
+  il 16/10 in A7b (commit del coordinatore); A (15/10, dal merge di H CP6; accettato dal coordinatore).
+  - Cura (decisione del coordinatore, A7b): l'intercettore del client non porta più al login su un 401 dalle pagine
+    anonime dei link (`/setup`, `/invite`, `/reset-password`, `/verify-email`, `isLinkPage`; revisione di H), e
+    `describeRegistrationError` legge il 401, o il 423 `instance_blocked`, come `auth.instanceBlocked`. Per
+    `/verify-email` il 401 di `confirm` resta da riconoscere nella pagina: H lo passa a E.
   - Contesto: per non perdere l'accesso, `auth.inspect_link_token` e `auth.reset_password_with_link` entrano in
     `ALLOWED_WHEN_BLOCKED` (lotto piccolo di H dopo A5); `auth.register` resta fuori.
   - Effetto: `tokens/inspect` risponde anche per gli inviti, quindi `/invite` mostra il modulo. La registrazione
@@ -3721,6 +3766,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     scheda.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
+- **A-29 · Sotto `vite dev` le pagine dei link portano al login** — minimo; da H, revisione di A7b (16/10).
+  `frontend/src/hooks.server.ts` ha `PUBLIC_ROUTES` = `/` e `/api`: con il server di sviluppo (5173) chi apre un link
+  senza sessione viene mandato a `/?redirect=…` e il token nel frammento si perde. In produzione e nelle corsie di test
+  il frontend è statico e non passa di lì. Cura possibile: le quattro pagine dei link (`isLinkPage`) fra le pubbliche.
+  Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b.5».
+- **A-30 · Un nuovo link di setup dall'API e dalla scheda Utenti** — basso; deciso dal coordinatore (A7b, 16/10).
+  Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
+  la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4091,6 +4145,43 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
   - Cura: una chiave `assets.search.failed` in 4 lingue. L'errore tecnico resta nel log (`console.error`).
   - Il timeout ha già la sua chiave (`assets.search.timeout`).
+- **X-R32 · Galleria: uno scatto della ricerca con le sezioni premium** — basso; X, 17/10 (DoD del piano 03, §10).
+  - Serve un provider premium instradato, come fa l'E2E `asset-modal.spec.ts` («Asset search — premium first…»).
+  - Si concorda con G; nel frattempo gli scatti degli import mostrano già la riga «Can't find it? Let us know».
+- **X-R33 · E2E `asset-modal.spec.ts`: la rotta «Bug G» su `/settings/user` è fragile** — basso; X, 17/10 (trovato
+  dal test-author di F21/P20).
+  - Fa `route.fulfill({response, json})` e così tiene `content-encoding: gzip` della risposta vera. Se quella risposta
+    arrivasse a 1 KB, il browser proverebbe a decomprimere un JSON in chiaro.
+  - Cura: togliere `content-encoding` e `content-length`, come fanno `fixtures/instance-config.ts` e il blocco F21/P20.
+- **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
+  (trovato dal docs-writer).
+  - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
+- **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** — piccolo, **prima del rilascio**; da E (piano 08,
+  revisione di sicurezza «R13-SEC2»), assegnata a X dal coordinatore il 17/10.
+  - Un indirizzo con utente e password passa il validatore e finisce sull'anonimo `GET /system/instance`.
+  - Cura: il validatore della configurazione rifiuta utente e password. Copre anche `LIBREFOLIO_PUBLIC_URL` e
+    `LIBREFOLIO_BILLING_URL`, che passano dallo stesso helper.
+- **X-R36 · Chiave di cache: l'impronta dei parametri è un MD5 tagliato a 32 bit** — nota; da E («R13-SEC3»), 17/10.
+  - `services/assets/core.py:81`. Oggi è innocuo: i prezzi sono condivisi e una collisione mescola solo due asset con
+    parametri diversi.
+  - Diventa **MEDIO** il giorno in cui gli asset avranno un proprietario: allora serve un'impronta piena.
+- **X-R37 · P20 nell'interfaccia: le 4 note di E** — piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
+  1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, così `https:host` passa e, come `href`, si
+     risolve sull'istanza. Usare `url.href`.
+  2. **N61** (decisione notturna del coordinatore): su `managed`, senza un `support_url` valido, o con
+     `/system/instance` fallito, niente ripiego sulla issue pubblica di GitHub: pubblicherebbe `managed`, i codici dei
+     provider e gli identificativi. La riga si nasconde, oppure resta senza azione: la soluzione più pulita.
+  3. Un `support_url` con `user:pass@` (`url.username` o `url.password`) conta come mancante.
+  4. `create-edit.en.md`: in modifica il rapporto porta anche gli identificativi dell'asset (ISIN, ticker…). Dirlo.
+  - Se il punto 2 cambia quello che vede un utente `managed`, va ritoccata la riga del CHANGELOG.
+- **X-R38 · Cambi: un tasso enorme si salva come infinito, e il suo inverso come zero** — medio, **dopo X-R35**; il lato
+  FX dello stesso buco di W-B58 (W lo chiude per transazioni e prezzi). W l'ha annotato come **W-B61**; girato a X dal
+  coordinatore il 17/10.
+  - Un tasso manuale `1E+400` si salva come `inf`, e il suo inverso come `0`; `truncate_fx_rate` solleva un'eccezione
+    già da `1E+50`.
+  - **Direzione** (la stessa di W-B58): un limite alle cifre intere in ogni scrittura dei cambi (manuale, provider,
+    inverso), una lettura che non solleva mai, un 4xx e mai un 500.
+  - Riusare l'helper di W `max_integer_digits(model, column)` in `db/precision.py`, che entra con W-B58.
 
 ## W · Import e transazioni (fase 01)
 
@@ -5420,7 +5511,8 @@ da Y il 15/10.
   famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
   corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
 - **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
-  di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
+  di Y, 15/10 (Y2). ✅ 16/10: ora il commento dice che il tooltip sta sull'etichetta dell'intestazione e che l'icona
+  compare solo con `headerTooltipUrl`; svelte-check 0/0. Nel checkpoint di Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
   il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
 - ✅ **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
@@ -5544,13 +5636,42 @@ da Y il 15/10.
     - `riskAnalysisHelpers.ts`.
   - La tabella con i valori di oggi è nel piano di Y, «Y12b».
 - **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
-  decisione del coordinatore delle 21:20).
+  decisione del coordinatore delle 21:20). ✅ 17/10: D377 è verde nelle due corse, in 11,7 s e in 22,2 s, con le
+  scadenze vere (`L4_OFFER_DEADLINE_MS`, 10 s) sui suoi quattro `poll`. Il budget di 90 s per tutto il blocco
+  «functional integration» (opzione A del coordinatore) rende verdi D378 e il benchmark condiviso, rossi alle 23:25
+  per la stessa causa. Prova sulla revisione combinata `a49a86a7b`; commit `92e04271d`. Due rossi d'altro tipo, sotto
+  carico 100+, vanno in Y-22.
   - In `risk-analysis.spec.ts:2812`, alla riga 2828, `expect.poll(offered)` usa il limite predefinito di 3 s.
   - Il 16/10 alle 21:17, con il carico fra 72 e 83, il predicato (`evaluateAll`) non è nemmeno tornato: subito dopo
     l'apertura del replay storico il thread principale è rimasto occupato per più di 3 s. Alla fine il DOM era giusto.
     Alle 20:45, con il carico a 35, era verde.
   - Rimedio: una scadenza vera per i `poll` di quel test, oppure un'apertura del replay che costi meno.
   - Prove in `files/logs/y12b_l4_*` della sessione di Y. Dettagli: piano di Y, «Y12b · E2E».
+- **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
+  corsa di Y-21 sulla revisione combinata `a49a86a7b`, carico 94–115). Tutti e due i test erano verdi nelle tre corse
+  precedenti. ✅ 17/10: `:3736` ha una scadenza più larga (20 s, con 3 s per tentativo), e da solo ×4 è verde.
+  `:2871` ha la sua traccia: ×4 verde, il clic è subito eseguibile. Il verdetto è ambiente, non riprodotto; il test
+  resta com'è. Nel checkpoint successivo a Y-21.
+  - `:3736`, la tabella di L3 («each holding's beta and correlation are their own…»). `hoverUntilHelpOpens` non apre
+    l'aiuto del «—» entro `HELP_OPEN_DEADLINE_MS`, 10 s.
+    - La fotografia mostra la tabella completa: è un'assunzione sull'orologio.
+    - Rimedio: una scadenza più larga, per esempio 20 s.
+  - `:2871` («a benchmark chosen on the Dashboard is the benchmark in force on Broker Detail»). In `chooseBenchmark`
+    (`:1476`), `option.click()` aspetta fino alla fine dei 90 s che l'opzione diventi «visible, enabled and stable»;
+    un attimo prima era visibile.
+    - Mancano fotografia e traccia, quindi nessun verdetto.
+    - Primo passo: quel test da solo con `--trace on`, in uno slot tranquillo.
+    - Da guardare anche il `.first()` su tutta la pagina (`search-select-option-*`).
+    - Se ricompare, serve la traccia del caso rosso: la configurazione traccia solo `on-first-retry`, e in locale
+      non ci sono tentativi ripetuti.
+  - Prove in `files/logs/y21_reds_rerun/` e `files/logs/y22_*` della sessione di Y. Dettagli: piano di Y, «Y-21 ·
+    seconda corsa» e «Y-22».
+- ✅ **Y-23 · I mock di `$app/navigation` nei test del layout non esportano `onNavigate`** — minimo; difetto di Y
+  (`ec018afdf`, Y11 passo 2), trovato da A in dev il 17/10.
+  - `layout.gate.test.ts` e `layout.authGate.test.ts` (di H) avevano 20 rossi su `front-utility
+    onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
+  - Allora quell'azione non era fra le mie prove leggere.
+  - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
 
 ## MF · Matematica finanziaria (fase 01)
 

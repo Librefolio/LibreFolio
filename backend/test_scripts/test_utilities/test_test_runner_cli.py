@@ -73,6 +73,27 @@ throwaway categories through ``monkeypatch.setitem``, a private ``_SETUP_DONE``,
 ``collect_launches`` stubbed; on the real ``services`` entry ``run_category_setup``
 only records, and ``_services_setup``, ``db_create`` and ``subprocess.run`` fail the
 test if reached.
+
+The H-25 regressions pin which invocations the parallel pre-pass serves. With
+``--workers`` above 1, ``_cli._run_parallel_prepass`` handed the whole category to
+``_parallel_for_scope`` whatever the action and the test names:
+``--workers 2 services client-address`` ran every parallel-safe ``services`` unit,
+behind the category's setup (``db create``, which empties the lane's database), and
+``--workers 4 services all -k foo`` ran them all, ignoring ``-k``.
+``_cli._parallel_prepass_applies(args)`` is the consolidated pre-passes' rule
+(``_backend_consolidation_scope``) for the parallel one: False when ``test_names`` is
+non-empty, else True for an ``action`` that is None, absent or ``all``, else False;
+``test_names`` absent (the ``all`` / ``all-backend`` parsers declare none), None or
+``[]`` all mean no test names. ``_run_parallel_prepass`` asks it, looked up on ``_cli``
+when it runs, and on False returns ``(True, set())`` calling nothing; otherwise it is
+unchanged: one ``_parallel_for_scope(args, category, workers, verbose)`` for a backend
+registry category, its verdict passed back; none for a frontend category or
+``all-frontend``; one per ``CONSOLIDATABLE`` category, in order, for ``all`` /
+``all-backend``. Through ``_apply_parallel`` with ``--workers 2``, one action or a
+``-k`` filter reaches neither the parallel pass nor a setup, and leaves the serial pass
+nothing to skip. Pure: ``_parallel_for_scope`` and both consolidated pre-passes are
+recorders; ``run_category_setup``, ``plan``, ``run_groups`` and ``subprocess.run``
+fail the test if reached.
 """
 
 from __future__ import annotations
@@ -91,8 +112,8 @@ from scripts.test_runner import _backend_db as backend_db
 from scripts.test_runner import _backend_services as backend_services
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
-from scripts.test_runner import _common, _frontend_common, _inventory
-from scripts.test_runner._consolidate_backend import _junit_results
+from scripts.test_runner import _common, _executor, _frontend_common, _inventory, _scheduler
+from scripts.test_runner._consolidate_backend import CONSOLIDATABLE, _junit_results
 from scripts.test_runner._registry import TEST_REGISTRY
 
 PROJECT_ROOT = _common.PROJECT_ROOT
@@ -1383,6 +1404,374 @@ class TestServicesClientAddressKeepsTheLaneDatabase:
         assert services_setup_unreachable == ["services"], f"the setup must run once, through _common.run_category_setup (asked for: {services_setup_unreachable})"
         assert result is True
         assert runner_lines.info == [], f"the setup ran: no line may say the lane's database was left as it is ({runner_lines.info})"
+
+
+# ── H-25: the parallel pre-pass serves a whole category or a whole suite, as the consolidated pre-passes do ────────────
+# ``_cli._parallel_prepass_applies`` is looked up at call time: while it is missing, its own cases fail on the named
+# "H-25: _parallel_prepass_applies is missing" barrier and leave the cases above alone. ``_parallel_for_scope`` is a
+# recorder in every case, and what a real pass reaches behind it (the category's setup, the plan, the workers, a
+# subprocess) fails the test if reached. Every case expecting no parallel pass first proves, on the same recorder, that
+# the whole category or suite does run one (a presence barrier). Today's code runs it whatever the action and the test
+# names: each case naming one action or test names fails on the "H-25: the parallel pre-pass ran for …" barrier, and the
+# case whose stand-in rule says yes fails on the rule never being asked.
+
+#: ``test_names`` absent from ``args``, as the ``all`` / ``all-backend`` parsers build them: they declare no test names.
+NO_TEST_NAMES_ATTRIBUTE = object()
+#: What the recorded ``_parallel_for_scope`` reports covered for each scope it is asked for: ``(scope, H25_COVERED_ACTION)``.
+H25_COVERED_ACTION = "h25-covered-action"
+#: The workers handed to ``_run_parallel_prepass`` directly: not 2, so a count fixed in the code would show.
+H25_WORKERS = 3
+#: ``--workers 2`` as argparse hands it to ``_apply_parallel``: a string, which ``_scheduler.resolve_workers`` reads as 2.
+H25_APPLY_WORKERS = "2"
+#: Positional test names after the action: the runner turns them into a pytest ``-k`` filter.
+H25_TEST_NAMES = ("foo",)
+#: An existing ``utils`` action: this file's own, pinned by ``TestSelfRegistrationInTheCatalogue``.
+H25_UTILS_ACTION = "test-runner-cli"
+#: A frontend registry category, which the parallel pre-pass never serves.
+H25_FRONTEND_CATEGORY = "front-utility"
+#: A whole registry category, or a whole suite, as ``(category, action)``: the suites' parsers declare no ``action``.
+H25_WHOLE = [
+    pytest.param("services", "all", id="action-all"),
+    pytest.param("services", None, id="action-none"),
+    pytest.param("all-backend", NO_ACTION_ATTRIBUTE, id="action-missing"),
+]
+#: No test names: the attribute absent, None, or the empty list a registry category's parser gives without names.
+H25_NO_TEST_NAMES = [
+    pytest.param(NO_TEST_NAMES_ATTRIBUTE, id="names-missing"),
+    pytest.param(None, id="names-none"),
+    pytest.param([], id="names-empty"),
+]
+
+
+def _parallel_prepass_applies():
+    """``_cli._parallel_prepass_applies``, looked up at call time, or the H-25 barrier while it is missing."""
+    applies = getattr(runner_cli, "_parallel_prepass_applies", None)
+    if applies is None:
+        pytest.fail("H-25: _parallel_prepass_applies is missing")
+    return applies
+
+
+def _prepass_args(category: str, action=NO_ACTION_ATTRIBUTE, test_names=NO_TEST_NAMES_ATTRIBUTE, **extra) -> SimpleNamespace:
+    """The ``args`` of ``dev.py test [--workers N] <category> [<action> [<test name>…]]``; a sentinel leaves its attribute absent.
+
+    A registry category's parser always sets ``action`` and ``test_names`` (``[]`` without names); the ``all`` /
+    ``all-backend`` parsers set neither. ``test_names`` is copied: no two cases share a list.
+    """
+    fields = {"category": category, **extra}
+    if action is not NO_ACTION_ATTRIBUTE:
+        fields["action"] = action
+    if test_names is not NO_TEST_NAMES_ATTRIBUTE:
+        fields["test_names"] = None if test_names is None else list(test_names)
+    return SimpleNamespace(**fields)
+
+
+def _whole(category: str) -> SimpleNamespace:
+    """The ``args`` of the whole ``category`` (``<category> all``, no test names), or of the whole suite it names."""
+    if category in TEST_REGISTRY:
+        return _prepass_args(category, "all", [])
+    return _prepass_args(category)
+
+
+def _invocation(args) -> str:
+    """``args`` as the command line reads, for a barrier message: ``services client-address``, ``all-backend -k foo``."""
+    words = [f"--workers {args.workers}"] if hasattr(args, "workers") else []
+    words.append(args.category)
+    action = getattr(args, "action", None)
+    if action:
+        words.append(action)
+    names = getattr(args, "test_names", None)
+    if names:
+        words += ["-k", " or ".join(names)]
+    return " ".join(words)
+
+
+def _scopes(recorder) -> list:
+    """The scopes the recorded ``_parallel_for_scope`` was asked for, in order."""
+    return [scope for _args, scope, _workers, _verbose in recorder.calls]
+
+
+def _unreachable(what: str):
+    """A stand-in for ``what`` that fails the test the moment anything calls it."""
+
+    def fail_if_reached(*call_args, **_kwargs):
+        pytest.fail(f"{what} was reached past the _parallel_for_scope recorder (called with {call_args}): a real parallel pass ran its setup, its plan or its workers against the lane; for services the setup is db create, which empties the lane's database")
+
+    return fail_if_reached
+
+
+@pytest.fixture
+def parallel_pass(monkeypatch):
+    """``_cli._parallel_for_scope`` behind a recorder; what a real parallel pass reaches behind it fails the test if reached.
+
+    ``_run_parallel_prepass`` looks ``_parallel_for_scope`` up among ``_cli``'s globals when it runs, so the recorder is
+    what it calls. Each call is recorded as ``(args, scope, workers, verbose)`` and answered
+    ``(parallel_pass.ok, {(scope, H25_COVERED_ACTION)})``. A real pass runs the category's setup through
+    ``_common.run_category_setup``, plans through ``_scheduler.plan`` and spawns its workers through
+    ``_executor.run_groups``: all three, and ``subprocess.run``, are replaced where the runner looks them up.
+    """
+    recorder = SimpleNamespace(calls=[], ok=True)
+
+    def record(args, scope, workers, verbose):
+        recorder.calls.append((args, scope, workers, verbose))
+        return recorder.ok, {(scope, H25_COVERED_ACTION)}
+
+    monkeypatch.setattr(runner_cli, "_parallel_for_scope", record)
+    monkeypatch.setattr(_common, "run_category_setup", _unreachable("_common.run_category_setup"))
+    monkeypatch.setattr(_scheduler, "plan", _unreachable("_scheduler.plan"))
+    monkeypatch.setattr(_executor, "run_groups", _unreachable("_executor.run_groups"))
+    monkeypatch.setattr(_common.subprocess, "run", _unreachable("subprocess.run"))
+    return recorder
+
+
+@pytest.fixture
+def consolidation_passes(monkeypatch):
+    """Both consolidated pre-passes behind recorders answering ``(True, set())``, and the runner's process-wide sets kept.
+
+    ``_apply_parallel`` runs them after the parallel pre-pass: the backend one would launch a whole category's pytest, the
+    frontend one Playwright. The backend one is recorded with what it was told to skip. ``_apply_parallel`` also writes
+    ``_common._E2E_WORKERS`` and ``_common._SKIP_ACTIONS``: monkeypatch puts them back.
+    """
+    passes = SimpleNamespace(backend=[], frontend=[])
+
+    def backend(args, verbose, skip):
+        passes.backend.append(set(skip))
+        return True, set()
+
+    def frontend(args, verbose):
+        passes.frontend.append(args)
+        return True, set()
+
+    monkeypatch.setattr(runner_cli, "_run_backend_consolidation_prepass", backend)
+    monkeypatch.setattr(runner_cli, "_run_consolidation_prepass", frontend)
+    monkeypatch.setattr(_common, "_E2E_WORKERS", _common._E2E_WORKERS)
+    monkeypatch.setattr(_common, "_SKIP_ACTIONS", set())
+    monkeypatch.setattr(_common, "_FAILED_ACTIONS", set())
+    return passes
+
+
+def _assert_the_whole_runs_a_parallel_pass(category: str, recorder) -> None:
+    """Presence barrier: the whole ``category``, or the whole suite, reaches the recorder, so a case expecting no pass has teeth.
+
+    The recorder is emptied afterwards: the case starts as if nothing had run.
+    """
+    whole = _whole(category)
+
+    runner_cli._run_parallel_prepass(whole, H25_WORKERS, False)
+
+    assert recorder.calls, f"precondition: the parallel pre-pass for {_invocation(whole)} must reach the _parallel_for_scope recorder, or a case expecting none proves nothing"
+    recorder.calls.clear()
+
+
+def _assert_no_parallel_pass(args, recorder, result) -> None:
+    """The H-25 barrier: one action, or test names, and the pre-pass runs nothing and covers nothing."""
+    assert recorder.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} (scopes: {_scopes(recorder)}); it serves a whole category or a whole suite only, as the consolidated pre-passes do"
+    assert result == (True, set()), f"no parallel pass ran for {_invocation(args)}: nothing failed and nothing is covered (got {result!r})"
+
+
+def _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, recorder, passes) -> None:
+    """``--workers 2 services all`` through ``_apply_parallel``: one pass for ``services``, whose coverage both later passes skip.
+
+    Also the presence barrier of the cases expecting no pass: the recorders and ``_SKIP_ACTIONS`` are emptied afterwards.
+    """
+    args = _prepass_args("services", "all", [], workers=H25_APPLY_WORKERS)
+    covered = {("services", H25_COVERED_ACTION)}
+
+    result = runner_cli._apply_parallel(args, False)
+
+    assert recorder.calls == [(args, "services", 2, False)], f"one parallel pass for services, with the 2 workers --workers 2 asks for (calls: {recorder.calls})"
+    assert result == (True, True)
+    assert passes.backend == [covered], f"the consolidated backend pre-pass skips what the parallel pass covered (asked with: {passes.backend})"
+    assert _common._SKIP_ACTIONS == covered, f"and so does the serial pass (skips: {_common._SKIP_ACTIONS})"
+    recorder.calls.clear()
+    passes.backend.clear()
+    passes.frontend.clear()
+    monkeypatch.setattr(_common, "_SKIP_ACTIONS", set())
+
+
+class TestParallelPrepassApplies:
+    """Contract point 1: ``_cli._parallel_prepass_applies(args)``, the consolidated pre-passes' rule for the parallel one.
+
+    A whole category or a whole suite applies: ``action`` None, absent or ``all``, and no test names (``test_names``
+    absent, None or ``[]``). One named action does not; any test name does not, whatever the action.
+    """
+
+    @pytest.mark.parametrize("test_names", H25_NO_TEST_NAMES)
+    @pytest.mark.parametrize(("category", "action"), H25_WHOLE)
+    def test_the_whole_category_or_suite_without_test_names_applies(self, category, action, test_names):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args(category, action, test_names)) is True
+
+    @pytest.mark.parametrize("test_names", H25_NO_TEST_NAMES)
+    def test_one_named_action_does_not_apply(self, test_names):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args("services", SERVICES_PURE_ACTION, test_names)) is False
+
+    @pytest.mark.parametrize(("category", "action"), [*H25_WHOLE, pytest.param("services", SERVICES_PURE_ACTION, id="named-action")])
+    def test_test_names_never_apply(self, category, action):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args(category, action, H25_TEST_NAMES)) is False
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunParallelPrepassRunsNothingForOneActionOrTestNames:
+    """Contract point 2: when the rule says no, ``_run_parallel_prepass`` returns ``(True, set())`` and calls nothing.
+
+    No ``_parallel_for_scope``, so no plan of the whole category, no setup (``services``: ``db create``) and no worker.
+    """
+
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("services", SERVICES_PURE_ACTION, id="services-pure-action"),
+            pytest.param("services", SERVICES_DEFAULT_ACTION, id="services-write-scoped-action"),
+            pytest.param("utils", H25_UTILS_ACTION, id="utils-action"),
+        ],
+    )
+    def test_one_action_runs_no_parallel_pass(self, parallel_pass, category, action):
+        """Whatever the class the catalogue declares for the action: the rule reads the invocation, not the catalogue."""
+        assert action in TEST_REGISTRY[category], f"precondition: {category} {action} is an action of the catalogue"
+        _assert_the_whole_runs_a_parallel_pass(category, parallel_pass)
+        args = _prepass_args(category, action, [])
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        _assert_no_parallel_pass(args, parallel_pass, result)
+
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("services", "all", id="services-all"),
+            pytest.param("all-backend", NO_ACTION_ATTRIBUTE, id="all-backend"),
+            pytest.param("all", NO_ACTION_ATTRIBUTE, id="all"),
+        ],
+    )
+    def test_test_names_run_no_parallel_pass_even_for_the_whole(self, parallel_pass, category, action):
+        """The parallel pass knows nothing of ``-k``: it would run every parallel-safe unit of the scope instead."""
+        _assert_the_whole_runs_a_parallel_pass(category, parallel_pass)
+        args = _prepass_args(category, action, H25_TEST_NAMES)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        _assert_no_parallel_pass(args, parallel_pass, result)
+
+    def test_the_rule_is_asked_when_the_prepass_runs_and_a_no_stops_even_the_whole_category(self, monkeypatch, parallel_pass):
+        """One rule, looked up on ``_cli`` when the pre-pass runs: a stand-in answering False stops ``services all`` too."""
+        _assert_the_whole_runs_a_parallel_pass("services", parallel_pass)
+        args = _whole("services")
+        asked = []
+
+        def say_no(prepass_args):
+            asked.append(prepass_args)
+            return False
+
+        monkeypatch.setattr(runner_cli, "_parallel_prepass_applies", say_no, raising=False)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} although _cli._parallel_prepass_applies, looked up when it runs, answers False (asked: {asked}; scopes: {_scopes(parallel_pass)})"
+        assert asked == [args], f"the rule is asked once, with the invocation's args (asked: {asked})"
+        assert result == (True, set())
+
+    def test_a_yes_from_the_rule_leaves_the_prepass_as_it_was_for_one_action(self, monkeypatch, parallel_pass):
+        """Nothing but the rule decides: a stand-in answering True for one action gets today's pass, unchanged."""
+        args = _prepass_args("services", SERVICES_PURE_ACTION, [])
+        asked = []
+
+        def say_yes(prepass_args):
+            asked.append(prepass_args)
+            return True
+
+        monkeypatch.setattr(runner_cli, "_parallel_prepass_applies", say_yes, raising=False)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert asked == [args], f"H-25: the parallel pre-pass for {_invocation(args)} did not ask _cli._parallel_prepass_applies when it ran (asked: {asked})"
+        assert parallel_pass.calls == [(args, "services", H25_WORKERS, False)], f"the rule said yes: today's one pass for the category (calls: {parallel_pass.calls})"
+        assert result == (True, {("services", H25_COVERED_ACTION)})
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunParallelPrepassStillServesTheWholeCategoryOrSuite:
+    """Contract point 2, unchanged: the whole category or suite gets the parallel pass it gets today (green before and after)."""
+
+    @pytest.mark.parametrize("ok", [True, False], ids=["green-pass", "red-pass"])
+    @pytest.mark.parametrize(
+        ("action", "test_names"),
+        [
+            pytest.param("all", [], id="action-all"),
+            pytest.param(None, None, id="action-none"),
+        ],
+    )
+    def test_a_whole_backend_category_runs_one_pass_and_gets_its_verdict_back(self, parallel_pass, action, test_names, ok):
+        parallel_pass.ok = ok
+        args = _prepass_args("services", action, test_names)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, True)
+
+        assert parallel_pass.calls == [(args, "services", H25_WORKERS, True)], f"one pass, for the category, with the workers and the verbosity given (calls: {parallel_pass.calls})"
+        assert result == (ok, {("services", H25_COVERED_ACTION)}), f"the pass's own verdict and coverage come back as they are (got {result!r})"
+
+    @pytest.mark.parametrize("suite", ["all-backend", "all"])
+    def test_a_whole_suite_runs_one_pass_per_consolidatable_category_in_order(self, parallel_pass, suite):
+        assert suite not in TEST_REGISTRY, f"precondition: {suite} is a suite, not a registry category"
+        args = _whole(suite)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [(args, category, H25_WORKERS, False) for category in CONSOLIDATABLE], f"one pass per CONSOLIDATABLE category, in the suite's order (scopes: {_scopes(parallel_pass)})"
+        assert result == (True, {(category, H25_COVERED_ACTION) for category in CONSOLIDATABLE})
+
+    @pytest.mark.parametrize(
+        ("category", "in_registry"),
+        [
+            pytest.param(H25_FRONTEND_CATEGORY, True, id="frontend-category"),
+            pytest.param("all-frontend", False, id="all-frontend"),
+        ],
+    )
+    def test_a_frontend_scope_runs_no_pass(self, parallel_pass, category, in_registry):
+        """A frontend category or ``all-frontend``, whole: the rule lets it through, and the pre-pass serves neither, as today."""
+        assert (category in TEST_REGISTRY) is in_registry, f"precondition: {category} is {'a' if in_registry else 'no'} registry category"
+        _assert_the_whole_runs_a_parallel_pass("services", parallel_pass)
+        args = _whole(category)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [], f"the parallel pre-pass never serves {_invocation(args)} (scopes: {_scopes(parallel_pass)})"
+        assert result == (True, set())
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestApplyParallelLeavesOneActionToTheSerialPass:
+    """Through ``_apply_parallel`` with ``--workers 2``: one action or test names reach no parallel pass and no setup.
+
+    ``--workers`` is a string there, which ``_scheduler.resolve_workers`` reads as 2. ``parallel_pass`` fails the case if
+    ``run_category_setup`` is reached; ``consolidation_passes`` keeps both consolidated pre-passes from running anything.
+    """
+
+    def test_the_whole_category_runs_one_parallel_pass(self, monkeypatch, parallel_pass, consolidation_passes):
+        """Guard, green today and after: ``--workers 2 services all`` keeps its parallel pass."""
+        _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, parallel_pass, consolidation_passes)
+
+    @pytest.mark.parametrize(
+        ("action", "test_names"),
+        [
+            pytest.param(SERVICES_PURE_ACTION, [], id="one-action"),
+            pytest.param("all", H25_TEST_NAMES, id="test-names"),
+        ],
+    )
+    def test_one_action_or_test_names_reach_no_parallel_pass_and_no_setup(self, monkeypatch, parallel_pass, consolidation_passes, action, test_names):
+        _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, parallel_pass, consolidation_passes)
+        args = _prepass_args("services", action, test_names, workers=H25_APPLY_WORKERS)
+
+        result = runner_cli._apply_parallel(args, False)
+
+        assert parallel_pass.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} through _apply_parallel (scopes: {_scopes(parallel_pass)}): behind it, a real pass runs the category's setup and every parallel-safe unit of the category"
+        assert result == (True, True), f"nothing failed: the serial pass goes on (got {result!r})"
+        assert consolidation_passes.backend == [set()], f"the consolidated backend pre-pass is still asked, with nothing to skip (asked with: {consolidation_passes.backend})"
+        assert _common._SKIP_ACTIONS == set(), f"nothing was covered: the serial pass has nothing to skip (skips: {_common._SKIP_ACTIONS})"
 
 
 if __name__ == "__main__":
