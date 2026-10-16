@@ -3943,8 +3943,8 @@ da Y il 15/10.
   - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
     `--lf-cmp-datatable-resize-handle-bg` c'è già.
   - Dettagli: piano di Y, §7 «Y7».
-- **Y-11 · Il corpus golden di `timeSeriesAggregation` è rosso dall'ingresso di Y8** — medio, test rosso sul target; Y,
-  16/10 (trovato nelle prove di Y3).
+- ✅ **Y-11 · Il corpus golden di `timeSeriesAggregation` è rosso dall'ingresso di Y8** — medio, test rosso sul target;
+  Y, 16/10 (trovato nelle prove di Y3). Chiuso il 16/10: corpus ricatturato dopo I-01 (checkpoint Y-11).
   - I-01 (Y8, `a25d09a69`) ha cambiato di proposito `aggregateSumSeries`: i punti mancanti non entrano nella somma, e un
     secchio senza valori diventa un vuoto. Il corpus di `components/charts/__tests__/timeSeriesAggregationGolden.test.ts`
     registra invece il comportamento di prima (caso `all-missing-values|weekly`, e il digest).

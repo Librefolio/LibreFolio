@@ -2240,3 +2240,39 @@ scrivono qui quando partono.
 >   in `chartFlagFont.test.ts`;
 > - i 2 rossi di Y10, ora in `features/dashboard/`;
 > - il piano e il backlog, che vanno nel commit del journal.
+> - **Salvato**: `ce828e9c1` (67 file: 35 rinomine e 32 modifiche) e `0eefb51df` (journal). Poi il merge di
+>   `dev_release2` (`d0efca910`, con CP7b-1 e CP-6), pulito: HEAD `ee8b4edad`, `theme-roles --check` pulito. La riga
+>   `~split` l'ha girata il coordinatore ai colori. Le E2E di Y3 vanno nello slot 2, dopo quelle di A, verso le 04:30.
+
+### Y-11 — il corpus golden dopo I-01 ⏳ (2026-10-16, dalle 03:56; via del coordinatore)
+
+> **Note implementazione**: `api sync` sulla base nuova non cambia file tracciati.
+> - Il corpus si accetta con la procedura scritta nel file: lo script di rigenerazione mostra la deriva, `--accept`
+>   riscrive il JSON, e `GOLDEN_DIGEST` si aggiorna a mano.
+> - `test-author` deve prima controllare che cambino solo voci di `aggregateSumSeries` con punti mancanti, e solo come
+>   vuole I-01. Una deriva diversa sarebbe un altro difetto: in quel caso si ferma.
+
+### Y9-3 — i test di `test-author` e la guardia ⏳ (2026-10-16, dalle 03:57)
+
+> **Note implementazione**:
+> - la registrazione di `chartFont.load.test.ts` è rimessa con `git apply` della patch salvata, che si applica pulita;
+> - in `chartFont.ts` una guardia `try` su `document.fonts.load` (un'eccezione sincrona all'import romperebbe tutti i
+>   grafici) e su `check`, che nella passata di stabilità restituisce true. I test di queste guardie li aggiunge
+>   `test-author` in `chartFont.load.test.ts`.
+>
+> **Fatto** (`test-author`, 03:57–04:02):
+> - lo script senza flag mostra 4 voci cambiate su 276, nessuna aggiunta o tolta. Le voci sono
+>   `aggregateSumSeries|{all-missing-values,partial-missing-bucket}|{weekly,monthly}`, cioè 6 secchi;
+> - cambiano solo `sourcePointCount` (contano i punti presenti) e `missing`, che non viene più copiato dall'ultimo punto
+>   del secchio. Nessuna somma cambia, perché nel corpus i punti mancanti valgono 0;
+> - i 6 secchi sono stati confrontati con un calcolo I-01 indipendente, fatto sugli input dei casi, e coincidono;
+> - poi `--accept`, il nuovo `GOLDEN_DIGEST` (`sha256:007e69d21f…`) e il commento che registra I-01 e le chiavi
+>   cambiate.
+>
+> **Prove**: il golden 10 su 10 e `timeSeriesAggregation.test.ts` 47 su 47, ciascuno da solo; `front-asset asset-unit`
+> dal runner, 20 file e 876 test verdi (prima 2 rossi); `git diff --check` pulito. Il golden non vede la regressione
+> «la somma salta i mancanti», perché i suoi mancanti valgono 0. La coprono i test di I-01 in
+> `timeSeriesAggregation.test.ts`, con segnaposto come 999.
+>
+> **Checkpoint Y-11**: il JSON del corpus e `timeSeriesAggregationGolden.test.ts`; il backlog (Y-11 ✅) e il piano
+> vanno nel journal.
