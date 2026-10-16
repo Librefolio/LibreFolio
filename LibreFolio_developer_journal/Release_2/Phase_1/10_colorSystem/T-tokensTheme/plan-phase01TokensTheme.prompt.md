@@ -605,7 +605,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
-| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d e W1-f2 applicati su `769921bb0`, prove leggere verdi, checkpoint; slot 4 al via; la nota wiki committata (`0d5cebce7`) |
+| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
 
 ## Avanzamento
 
@@ -2212,3 +2212,14 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > dell'interruttore. Prettier verde; Vitest dei due gate e `DataEditor.test.ts` 153/153; `--check` pulito. L'interruttore
 > entra nell'inventario del lotto degli interruttori (sopra, dopo la tabella dei lotti), con gli altri 12 trovati nel
 > codice. Le note di W1-f2 al passo 6 sull'interruttore sono superate.
+
+### Quarto slot — ✅ 16/10/2026 (W2-d, W1-f2)
+
+> **Via** del coordinatore: commit `b338a442d` (W2-d) ed `eb2adb37b` (W1-f2, con l'interruttore rimasto legacy); valida
+> `e1ae55a6c`, la base merge col target `e5ef4fe4d` (il CHANGELOG aggiornato); corsia 6155, carico 46–51 (le due corsie
+> della 1.3 attive); `slot4.sh`, stop a 65 minuti.
+
+> ✅ **Esito** (08:13–08:42, 28 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; Vitest dei due gate
+> 65/65; `front check` 0 e 0; `core-unit` 6.233/6.233; `component-unit` 4.006/4.006; `front-ai-export unit` 547/547;
+> E2E a 1 worker: `asset-data-editor` 26 (le righe 287, 346 e 384 sugli agganci), `fx-editor` 4, `fx-csv-import` 21 (53
+> e 56), `front-ai-export panel` 6 e `catalog` 4. Nessun rosso. Porta libera.
