@@ -32,13 +32,8 @@
     let {open = $bindable(), shortDescription, providerExternalUrl, classificationLoaded, sectorDistribution, geographicDistribution, identifiersList, providerAssignment, providerIconUrl, assignmentProviderName, onedit}: Props = $props();
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-    <button
-        class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-        data-testid="asset-detail-metadata-toggle"
-        use:guideAnchor={'asset.detail.metadata'}
-        onclick={() => (open = !open)}
-    >
+<div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
+    <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary hover:bg-lf-hover transition-colors rounded-xl" data-testid="asset-detail-metadata-toggle" use:guideAnchor={'asset.detail.metadata'} onclick={() => (open = !open)}>
         <span class="flex items-center gap-2">
             <Info class="text-sky-500" size={15} />
             {$t('assetDetail.metadata')}
@@ -46,93 +41,93 @@
         <ChevronDown class="transition-transform {open ? 'rotate-180' : ''}" size={15} />
     </button>
     {#if open}
-        <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
+        <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-lf-subtle pt-3 space-y-4">
             <!-- Description (from classification_params.short_description) — always first if set -->
             {#if shortDescription}
                 <div>
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
-                    <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">{$t('common.description')}</h4>
+                    <p class="text-sm text-lf-secondary whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
                 </div>
             {/if}
 
             <!-- External URLs (provider URL only — user URL is in header) -->
             {#if providerExternalUrl}
                 <div>
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
-                    <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
+                    <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-lf-link hover:underline break-all">{providerExternalUrl}</a>
                 </div>
             {/if}
 
             <!-- Classification Charts -->
             {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
                 <div class="space-y-3">
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase">{$t('common.classification')}</h4>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
-                            <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
+                            <div class="bg-lf-panel rounded-lg p-3">
+                                <h5 class="text-xs font-medium text-lf-muted mb-2">{$t('common.geoDistribution')}</h5>
                                 <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage} />
                             </div>
                         {/if}
 
                         {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
-                            <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
+                            <div class="bg-lf-panel rounded-lg p-3">
+                                <h5 class="text-xs font-medium text-lf-muted mb-2">{$t('common.sectorDistribution')}</h5>
                                 <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0}))} height="280px" />
                             </div>
                         {/if}
                     </div>
                 </div>
             {:else if !classificationLoaded}
-                <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+                <div class="text-sm text-lf-muted italic">
                     {$t('common.classification')} — {$t('common.loading')}...
                 </div>
             {:else}
-                <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
+                <p class="text-sm text-lf-muted">{$t('assetDetail.noClassification')}</p>
             {/if}
 
             <!-- Identifiers -->
             {#if identifiersList.length > 0}
                 <div>
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">{$t('common.identifiers')}</h4>
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {#each identifiersList as [label, value]}
-                            <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                                <span class="text-[10px] uppercase text-gray-400 dark:text-gray-500">{label}</span>
-                                <p class="text-sm font-mono text-gray-700 dark:text-gray-200">{value}</p>
+                            <div class="bg-lf-panel rounded-lg px-3 py-2">
+                                <span class="text-[10px] uppercase text-lf-muted">{label}</span>
+                                <p class="text-sm font-mono text-lf-secondary">{value}</p>
                             </div>
                         {/each}
                     </div>
                 </div>
             {:else}
-                <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
+                <p class="text-sm text-lf-muted">{$t('assetDetail.noIdentifiers')}</p>
             {/if}
 
             {#if providerAssignment}
                 <div>
-                    <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">Provider</h4>
                     <div class="flex items-center gap-3 text-sm flex-wrap">
-                        <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
+                        <span class="inline-flex items-center gap-1.5 font-medium text-lf-secondary">
                             {#if providerIconUrl}
                                 <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
                             {/if}
                             {assignmentProviderName}
                         </span>
-                        <span class="text-gray-400">→</span>
-                        <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
+                        <span class="text-lf-muted">→</span>
+                        <span class="font-mono text-lf-muted">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
                         {#if providerAssignment.last_fetch_at}
-                            <span class="text-xs text-gray-400 dark:text-gray-500">
+                            <span class="text-xs text-lf-muted">
                                 {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
                             </span>
                         {:else}
-                            <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
+                            <span class="text-xs text-lf-muted">{$t('assets.provider.neverFetched')}</span>
                         {/if}
                     </div>
                 </div>
             {/if}
 
-            <button class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed" onclick={onedit}>
+            <button class="text-xs text-lf-link hover:underline disabled:opacity-50 disabled:cursor-not-allowed" onclick={onedit}>
                 {$t('assetDetail.editViaModal')} →
             </button>
         </div>
