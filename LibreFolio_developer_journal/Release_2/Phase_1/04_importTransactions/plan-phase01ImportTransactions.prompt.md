@@ -4423,3 +4423,25 @@ Dashboard lo legge): coperto in due metà, W scrive la riga (in EUR, più i casi
 **CHANGELOG** (proposta, 🐛 Fixed, dopo la riga di N1b sulla metà che riceve): vedi il messaggio al coordinatore delle 21:0x.
 Prossimi: `all-backend` nello slot del coordinatore (~21:30–21:40), l'ingresso della 47 per fusione del mio ramo (47 e journal,
 43 file senza conflitti, verificato dal coordinatore), poi FE8b.
+
+**FE8b, inventario sulla base nuova** ✅ (21:0x, HEAD `6162dfc0f`, sola lettura): stessi 125 file (42 103 righe: −233 dai
+lotti dei colori di dev), stessi 17 moduli e 31 righe d'import da fuori, stessi 7 `vi.mock`; mappa **identica** (124
+spostamenti, 2 barili). Dry run di `files/scripts/fe8b_move.py`: 191 file riscritti, 575 riferimenti (356 menzioni di percorso),
+0 import irrisolti, 0 nomi di cartelle vecchie, 0 relativi sconosciuti, ogni file spostato ≥ 95 % simile. Corretti nello
+strumento prima di applicarlo: la baseline scritta come `formatBaseline` (intestazione al suo posto, righe in ordine di code
+point, dichiarazioni com'erano), il controllo degli import sui file su disco (il client generato e il catalogo i18n contano;
+segnalato solo ciò che risolveva prima e non dopo), il barile usato dentro la cartella (`ImportWizardModal`, un `import type`),
+le menzioni di cartella senza barra e i percorsi `../` della devWiki, `frontend/design/REPORT.md` storia (un rapporto datato
+24/07), e la frase di `transaction-form.md` che nomina la cartella del Form (→ `form/`). Restano 2 voci da leggere, percorsi
+già morti in due pagine della devWiki (`CashTransactionModal`, `TransactionStagingModal`), che FE8b non tocca. Vitest sceglie
+l'ambiente file per file (`// @vitest-environment`), non per percorso: lo spostamento non cambia ambiente a nessun test. Pronto
+ad applicarlo dopo l'ingresso della 47.
+
+**Decisione 47, `all-backend`** ✅ (slot 2, 21:19:54–21:52:38, 32 min 39 s, carico 50–119; HEAD `6162dfc0f`, la 47 con J-24;
+`files/scripts/allb_47.sh`, `dev.py test --test-port 6184 --data-dir /tmp/librefolio-r13-w --workers 2 --log-dir … all-backend`):
+**7/7 categorie verdi** (External, DB, Services, Utils, Schema, API, E2E), «ALL BACKEND TESTS PASSED», **0 falliti**. Passaggi
+paralleli a 2 worker: 171 unità 12 584 passati e 5 saltati; 49 unità 3 091; 12 unità 1 833; 70 unità 1 914 passati e 2
+saltati; unità da sole 2 255 passati e 25 saltati (28 sessioni pytest); DB 20/20 script. In tutto ~21 677 passati, 32 saltati.
+Le righe «❌» del log sono i messaggi attesi dei test negativi dei fornitori FX (`MOCKFX_FAIL`, valuta non supportata).
+Porta libera dopo; DB di test archiviato dal runner (`00_archive/test-db_20261016_215237.tar.xz`); log per unità in
+`files/logs/allb_47_units_2119/`. Pronta per l'ingresso (fusione del mio ramo in dev, 47 e journal).
