@@ -198,8 +198,12 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
 - **On a selected row, option or chip** (`bg-lf-selected`), the text is `text-lf-primary`, `text-lf-secondary` or
   `text-lf-link`, and `link` never on a `selected` that lies on a `panel` (4.09:1 in dark). **The muted text, the
   statuses and the signs fail there** (3.84–4.48:1 on most surfaces; a lighter tint would not cure it): a muted caption
-  of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). A selected chip under the
-  pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to 3.99:1.
+  of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). The selects of `ui/select` do
+  it for every option, a caller's snippet included, with one rule in their `<style>`:
+  `[data-highlighted='true'] :global(.text-lf-muted) { color: var(--lf-text-secondary) }` (`TreeSelect`: its active and
+  hovered options). A new list that tints its rows does the same, and publishes the state it keys on. A selected chip
+  under the pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to
+  3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
   as the backdrop is).
 - **What no pair can hold:** the switch turned off is recognised by the edge of its knob, and a translucent colour that

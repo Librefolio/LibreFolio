@@ -461,3 +461,13 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the active option,
+       and inside an option under the pointer, which takes the tint too (`hover:bg-lf-selected`), a muted caption, this
+       component's own or a caller's snippet's, turns secondary. */
+    [aria-selected='true'] :global(.text-lf-muted),
+    [aria-selected]:hover :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>
