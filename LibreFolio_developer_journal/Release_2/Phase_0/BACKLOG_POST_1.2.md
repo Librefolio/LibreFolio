@@ -2623,6 +2623,29 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
     - il mirror di `L4Shock.test.ts` è allineato, 22.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
+- **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
+  16/10 (W5-PAC, W5-charts).
+  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
+    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
+      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
+    - Serve un ruolo per la traccia (T) o una scelta della designer.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
+    `DistributionDialog`:102.
+    - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
+      scuro è spento sulla traccia.
+    - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **I 4 interruttori di `ChartAestheticsSection`** (W5-charts), 16 classi: traccia e manopola alle righe 111/119,
+    133/141, 155/162 e 176/184.
+    - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
+      della skill), così in scuro non ce n'è uno diverso dagli altri.
+  - **Non di DV**, annotati per non perderli:
+    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
+    - i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi) vanno anche loro col lotto di T
+      sull'input: `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237, `SignalParamControl`:79 e 93;
+    - `ExposureMaps` (4) aspetta Y9.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
+    «W5-PAC» e «W5-charts».
 
 ---
 

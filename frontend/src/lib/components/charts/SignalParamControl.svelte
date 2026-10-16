@@ -51,16 +51,16 @@
 </script>
 
 <div class="flex flex-wrap items-center gap-1.5" data-testid="signal-param-{descriptor.key}">
-    <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
+    <span class="text-[10px] text-lf-muted uppercase">
         {translatedLabel()}
     </span>
     {#if descriptor.tooltip}
         <Tooltip text={$t(descriptor.tooltip)} math position="top">
-            <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+            <Info size={12} class="text-lf-muted hover:text-lf-link cursor-help transition-colors" />
         </Tooltip>
     {/if}
     {#if affectsLabel}
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] normal-case text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+        <span class="rounded bg-lf-panel px-1.5 py-0.5 text-[9px] normal-case text-lf-muted">
             {$t('signals.visual.affects')}: {affectsLabel}
         </span>
     {/if}
@@ -80,11 +80,11 @@
                 oninput={(event) => handleNumberInput(event.currentTarget.value)}
             />
             {#if descriptor.suffix}
-                <span class="text-[10px] text-gray-400">{translatedSuffix()}</span>
+                <span class="text-[10px] text-lf-muted">{translatedSuffix()}</span>
             {/if}
         </div>
     {:else if descriptor.type === 'boolean'}
-        <input type="checkbox" checked={value === true} class="h-4 w-4 accent-libre-green" onchange={(event) => onchange(event.currentTarget.checked)} />
+        <input type="checkbox" checked={value === true} class="h-4 w-4 accent-lf-checked" onchange={(event) => onchange(event.currentTarget.checked)} />
     {:else if descriptor.type === 'select'}
         <div class="w-36">
             <SimpleSelect value={stringValue()} options={descriptor.options ?? []} dropdownPosition="auto" onchange={(selected) => onchange(selected)} />
