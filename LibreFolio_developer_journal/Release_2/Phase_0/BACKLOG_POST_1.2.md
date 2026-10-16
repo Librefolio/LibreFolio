@@ -3309,6 +3309,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - scaldare il grafo una volta sola, in un `beforeAll` con un timeout ampio, prima dei `resetModules`;
     - dare a ogni caso il suo mock, così un timeout non si propaga.
   - Mio, perché è nell'area del FE4. Dettagli: piano 03, sezione «CP13».
+- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+  testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
+  - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
+    la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
+  - La doc di H (`481a93f1c`, su `admin/configuration.md#plugin-secrets`, non ancora in `dev_release2` il 16/10 alle
+    10:35) ora dice: «If you still have the old key, put it back before anyone enters them again».
+  - **I miei due testi** dicono solo «enter it again», senza l'ordine:
+    - il suggerimento dell'interfaccia, `frontend/src/lib/i18n/pluginSettings/en.json:31` (4 lingue);
+    - la riga della tabella in `mkdocs_src/docs/user/settings/plugins.en.md:117`.
+  - **Attenzione**: la pagina di H **cita alla lettera** il testo dell'interfaccia («The tab says so under each one:
+    *Saved, but this instance's key cannot read it: enter it again.*»). Cambiando la chiave i18n va cambiata nello
+    stesso commit anche la citazione nella sua pagina, con l'ok di H.
+  - **Cura**: dopo che `481a93f1c` è nella mia base, un lotto piccolo dopo FE5c e CP13, che allinea:
+    - la chiave in 4 lingue;
+    - la riga della mia pagina utente, con il link alla sezione di H;
+    - la citazione nella pagina di H.
+- **X-R23 · Il caricamento dei dati della pagina dell'asset resta nella pagina** — medio, refactor; X, 16/10 (FE5c,
+  pezzo 9, decisione del coordinatore). Il FE5c ha tolto alla pagina `routes/(app)/assets/[id]/+page.svelte` gli
+  helper, i pannelli, la barra e il polling; restano `loadChartData` (~310 righe) e il caricamento dei confronti.
+  - **Perché non nel FE5c**: leggono e scrivono una trentina dei ~80 `$state` della pagina. Spostarli vuol dire
+    ridisegnare lo stato della pagina (una classe o uno store `.svelte.ts` con le richieste e le loro generazioni), con
+    rischio alto e conflitti con J, Y e Z.
+  - **Cura**: un lotto dopo la 1.3, con le E2E della pagina come rete. Dettagli: piano 03, sezione «FE5c», pezzo 9.
 
 ## W · Import e transazioni (fase 01)
 
