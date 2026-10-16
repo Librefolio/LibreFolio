@@ -1963,7 +1963,7 @@ plugin.
 - **L-13 · Soggetti degli E2E del Lab che seguono la migrazione di T** — basso; L, 15/10, dal rapporto di `test-author` dopo il fuso con R.
   - Gli E2E del Lab ricavano a runtime come un componente scrive il colore (fuso con R). Restano però legati ad alcuni elementi dell'app, che le ondate di T cambieranno:
     - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso. ✅ **Pronto con L-10 (15/10):** `colourSourceOf()` di `lab-helpers.ts` legge la classe, che sia di palette o di ruolo; per un'utility di ruolo ricava il ruolo dal CSSOM della pagina. Il test L1, la sospensione, l'export e la scorciatoia lo usano già, con chip = alias e bersaglio = ruolo; quando W4 entra non serve toccarli. `textPaletteClassOf` è stato tolto.
-    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento.
+    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento. → Con **L-20** (16/10) il test cerca da solo un override P1 rimasto e, se non ne trova, si salta con un messaggio.
     - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione. ✅ **Coperto da L-10 (15/10):** i candidati `class-use` passano dal ruolo, verificati dal test unitario in `pickView.test.ts` e dall'E2E del selettore sul `login-modal`.
     - **W5**, ponte sRGB per ECharts: se i colori dei grafici smettono di essere letterali, il test L3 e forse il motore L3 vanno rivisti.
   - Ogni rottura è esplicita: il test cade con un messaggio che nomina il presupposto mancante.
@@ -2026,6 +2026,14 @@ plugin.
   - **Cosa serve:** una cattura nuova dal Lab, con export e selettore, non solo un numero di riga. La storia dell'esempio («una regola con un colore scritto») va scelta su un caso che esiste ancora. `TransactionsTable.svelte:993` (`tx-table`) è ancora giusto.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-18», fuori pista dell'esempio JSON.
+
+- **L-20 · Il test del selettore in tema scuro non dipende più dal sottotitolo di `/transactions`** — basso; coordinatore, 16/10, per la migrazione di TR.
+  - Il test «dark-theme pick» usava il sottotitolo di `/transactions` (`text-gray-500`, sovrascritto in scuro da `app.css`), che TR migra ai ruoli.
+  - Ora inietta un `<p>` proprio sulla pagina `/` del visitatore, con la classe di un override `html.dark .<classe> { color: var(--…) !important }` che cerca nel CSSOM, e controlla che compaia esattamente la variabile letta dalla regola.
+  - Senza nessun override di quel tipo, cioè dopo B6, il test si salta con un messaggio esplicito.
+  - ✅ 16/10: `picker` 4/4 ed e2e del Lab 17/17 a 4 worker, alle 13:18. Il test nuovo passa senza saltare; nel checkpoint L-20 (il commit è del coordinatore).
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-20».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
