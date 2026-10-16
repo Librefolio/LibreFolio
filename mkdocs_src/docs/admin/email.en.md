@@ -394,12 +394,22 @@ The limits:
 | 10 requests every 15 minutes from the same address; an IPv6 address counts by its /64, the block one subscriber usually holds | The request is refused until the oldest of them is 15 minutes old. |
 | 3 requests an hour for the same username or email address, whether an account matches or not | The request is refused until the oldest of them is an hour old. |
 | The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
-| 3 emails an hour to the same mailbox, in capitals or not, whatever account they are for | Nothing is sent, and the answer stays the same. |
+| 3 emails an hour to the same mailbox, whatever account they are for and however its address is written | Nothing is sent, and the answer stays the same. |
 | 1 email every 5 minutes, and 3 an hour, for the same account, the reset links an administrator created included | Nothing is sent, and the answer stays the same. Two requests at the same moment cannot both send. |
 
 The limit per account counts the account's reset links in the database. The others are kept in the
 memory of each server process: with several processes, each keeps its own count, and a restart
 forgets them. A reset email that did not go out still counts, for the account and for the mailbox.
+
+**One mailbox, however its address is written.** The limit per mailbox counts the aliases of an
+address as one mailbox: capitals do not count, nor a `+tag` on any domain (`name+news@example.com`
+is `name@example.com`), nor the dots of a Gmail address, where `googlemail.com` is `gmail.com`
+(`first.last@googlemail.com` is `firstlast@gmail.com`). The limits of the
+[verification emails](#verification-limits) and of the
+[notices of an email change](#email-change-notice) count the same way. Each email still goes to the
+address exactly as the account has it. A mailbox that takes mail under any name, such as a catch-all
+domain or Fastmail's `anything@user.fastmail.com`, counts each name apart: only the hourly limit of
+the instance holds those back.
 
 **Behind a reverse proxy**, the address that counts is the visitor's, as LibreFolio reads it (see
 *The Visitor's Address* in [Checking Connection Security](connection_checks.md)):
@@ -495,7 +505,7 @@ apart from an account an administrator deactivated.
 | The emails of 10 registrations an hour from the same address; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: their owners ask for the link again from the login page, under the limits below. |
 | 10 requests of **Send the link again** every 15 minutes from the same address, counted before the password is checked; an IPv6 address counts by its /64 | The request is refused until the oldest of them is 15 minutes old. |
 | 1 email every 5 minutes, and 3 an hour, for the same account, the email of the registration included | The request is refused: the page says in how many minutes to try again. |
-| 3 emails an hour to the same mailbox, in capitals or not, whatever account they are for: the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves: its owner asks for the link again later. |
+| 3 emails an hour to the same mailbox, whatever account they are for and however its address is written ([Forgotten Passwords](#forgot-password)): the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves: its owner asks for the link again later. |
 | The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
 | A free place, once the account's link has expired | The request is refused: its owner is told to ask you. |
 
@@ -514,7 +524,9 @@ When someone changes the email address of their account, in [Profile](../user/se
 LibreFolio writes to the address the account had **before**:
 
 - **Only to the old address**: the new one gets nothing.
-- **The new address masked**: the email shows only its domain, such as `***@example.com`.
+- **Nothing of the new address, and no username**: the email says only that the address changed,
+  without any part of the new one, not even its domain, and it opens with a plain «Hello,»
+  ([Security Notes](#security)).
 - **No link.** It tells the owner that, if they did not make the change, someone may be using their
   account: change the password at once if they still can, and tell you.
 - **In the account's language.** It names your instance by the host of `LIBREFOLIO_PUBLIC_URL`, with
@@ -523,9 +535,10 @@ LibreFolio writes to the address the account had **before**:
 - **After the change**: the email leaves after the answer, and the change never waits for it. With
   email off, nothing is sent, and the log says so in an information line, not a warning. The notice
   counts against the hourly limit like any email.
-- **At most 3 an hour for an account, and 3 an hour to the same mailbox**, in capitals or not. Past
-  either, the change still goes through and the notice is skipped. Without these limits, an account
-  could point its email at any address and change it again, to make your instance write there.
+- **At most 3 an hour for an account, and 3 an hour to the same mailbox**, however its address is
+  written ([Forgotten Passwords](#forgot-password)). Past either, the change still goes through and
+  the notice is skipped. Without these limits, an account could point its email at any address and
+  change it again, to make your instance write there.
 - **Not for capitals alone.** Changing only the capitals of the letters A to Z, such as
   `Anna@example.com` for `anna@example.com`, is no change of address, so no notice goes. Accented
   letters count as different: `Émile@example.com` for `émile@example.com` is a change, with its
@@ -681,11 +694,17 @@ notice of an email change names neither the old address nor the new one.
 - **A verification link goes only to the account's own address**, and nobody sees it, an
   administrator included. **Send the link again** asks for the account's password, as the login
   does, and a new link stops the older ones.
-- **Names stay on one line.** A username, the name of whoever invites, the name of the instance or
-  the domain shown in an email change notice is written into an email on one line: control
-  characters and line breaks become spaces, and the characters that reorder text (bidirectional
-  controls) are removed. A crafted username can neither add lines of its own to an email nor
-  disguise its text.
+- **Names stay on one line.** A username, the name of whoever invites or the name of the instance
+  is written into an email on one line: control characters and line breaks become spaces, and the
+  characters that reorder text (bidirectional controls) are removed. A crafted username can neither
+  add lines of its own to an email nor disguise its text.
+- **No stranger's words in an email.** A password reset, an email verification and the notice of an
+  email change can be sent, by someone who is not an administrator, to an address of their choice.
+  These emails open with a plain «Hello,», without the username, and the notice shows no part of the
+  new address: LibreFolio does not look domains up, so even the end of one is chosen freely. A reset
+  link you send by email is written the same way. The username still shows once the link is opened.
+  Only the test email and the setup link of the initial administrator greet by name: you, or
+  whoever runs the server, send those.
 - **Forgotten passwords tell nobody which accounts exist**: the same answer for everyone, the
   search after the answer, and limits per address, per username or email address, per mailbox and
   per account ([Forgotten Passwords](#forgot-password)).
