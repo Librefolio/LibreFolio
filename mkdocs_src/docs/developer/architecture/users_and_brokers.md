@@ -130,8 +130,9 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
   V-3). Each staying half counts once, whatever broker it is on. What becomes of a staying half is the rule
   of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
   standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
-  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4) — except the giving leg of a `TRANSFER`,
-  which only loses its link. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
+  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4), and the giving leg of a `TRANSFER` an
+  `ADJUSTMENT` at the Auto cost of its own broker (decision 47); that leg only loses its link when its cost
+  needs a missing conversion. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
 - **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
   request.
 

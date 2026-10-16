@@ -256,7 +256,7 @@ Fix autoincrement: would_apply
 Orphan broker folder: broker_reports/uploaded/broker_7
 ```
 
-Each fix is `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`; a kept backup and any error are listed as well. The exit code is `0` when nothing failed, a dry run included, and `1` when a fix or the integrity check failed.
+Each fix is `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`; a kept backup and any error are listed as well, and so is each transfer of securities sent to a deleted broker, with the cost it takes or the reason it stays as it is ([details](cli_tools.md#post-migration-fixes)). The exit code is `0` when nothing failed, a dry run included, and `1` when a fix, the integrity check or the conversion of those transfers failed.
 
 ## 🧪 Test Mode
 

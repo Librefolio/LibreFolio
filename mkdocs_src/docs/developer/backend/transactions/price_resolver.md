@@ -98,7 +98,12 @@ composes one synthetic P&L candle per day:
   optional intraday range from `ohlc_by_date`, TRADE observations from BUY/SELL
   (`|amount| / |quantity|` in the transaction currency) and priced ADJUSTMENT carryovers
   (`cost_basis_override`). Split-linked rows and pure quantity adjustments carry no price and
-  are skipped.
+  are skipped. Any other `ADJUSTMENT` with a non-zero `cost_basis_override` counts, whatever its
+  sign: so does one taking units out at the Auto cost of its own broker, as a broker deletion, a
+  split of a `TRANSFER` pair or the
+  [lone giving legs step](../../architecture/database/index.md#lone-transfer-legs) writes it
+  (decision 47) — the average cost the units leave with, read as an observed trade price. Whether
+  it should be is an open point, J-17, awaiting the developer's decision.
 
 ## 🔌 Who consumes it
 

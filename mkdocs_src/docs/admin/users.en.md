@@ -193,8 +193,10 @@ first. The deletion follows the same rule as deleting one's own account
     - **Shared brokers that stay (only the access goes)**: the other brokers the account can open,
       with its role on each;
     - a warning when transactions on other brokers are halves of transfers with the brokers that
-      go: they stay, without their other half (a received transfer becomes an adjustment at its
-      cost).
+      go: they stay, without their other half. A received transfer becomes an adjustment at its
+      cost, and a transfer sent to one of those brokers an adjustment that takes the assets out at
+      their average cost on the broker that sent them (see
+      [Edit or delete a broker](../user/brokers/index.md)).
 3. Type the account's username, then click **Delete Permanently**.
 
 !!! danger "Deleting an account cannot be undone"

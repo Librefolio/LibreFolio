@@ -47,7 +47,7 @@ Each of these opens the bulk workspace, and nothing changes before **Save All**.
 Some operations are two linked transactions — see [Paired transactions](form.md#composite-transactions).
 
 - **Link** — tick two single rows that belong together and click **🔗 Promote pair**. Two **Adjustments** become an **Asset Transfer**; a **Withdrawal** and a **Deposit** become a **Currency Exchange** (same broker, two currencies) or a **Cash Transfer** (two brokers, same currency and amount). If the rows disagree on date, description, tags or cost basis, you choose what to keep.
-- **Unlink** — **Split pair** on a linked row turns it back into two single rows.
+- **Unlink** — **Split pair** on a linked row turns it back into two single rows. An **Asset Transfer** becomes two **Adjustments**: the receiving one keeps its cost, and the sending one takes the units out at their average cost on its broker. If that cost needs an exchange rate LibreFolio does not have, the pair stays linked.
 
 Both ask for confirmation, then save at once, without the workspace.
 
