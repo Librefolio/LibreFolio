@@ -66,7 +66,7 @@ An image picker's **Existing** tab lists the shared images and your own personal
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Broker Reports Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-These are the statements exported by your brokers, waiting to be imported or already imported. You see the reports of every broker you can access, as Owner, Editor or Viewer.
+These are the statements exported by your brokers, waiting to be imported or already imported. You see the reports of every broker you can access, as Owner, Editor or Viewer. The reports an older version of LibreFolio stored without a broker appear only here: to the administrators, and to the person who uploaded them when LibreFolio recorded who did.
 
 The **Status** column tells you where each file stands:
 

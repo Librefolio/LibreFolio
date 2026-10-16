@@ -8,7 +8,7 @@ import asyncio
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
@@ -44,6 +44,7 @@ from backend.app.services.accounts.auth_service import (
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.accounts.global_settings_service import get_session_ttl_hours
 from backend.app.services.accounts.registration_service import RegistrationError
+from backend.app.services.email import verification as email_verification
 
 logger = structlog.get_logger(__name__)
 
@@ -163,6 +164,10 @@ async def login(
 
     # Only the right password learns that the account is disabled.
     if not user.is_active:
+        # An account waiting for its email verification (workstream E) is told so: the sign-in offers a new link.
+        if await email_verification.awaiting_verification(session, user):
+            logger.info("Login refused: email not verified", user_id=user.id)
+            raise HTTPException(status_code=403, detail={"error_code": "EMAIL_NOT_VERIFIED", "message": "Verify your email address first"})
         logger.warning("Login failed: user inactive", username=request.username)
         raise HTTPException(status_code=403, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"})
 
@@ -223,6 +228,9 @@ _REGISTRATION_REFUSALS: dict[str, int] = {
     "INVITE_REQUIRED": 403,
     "INVITE_INVALID": 400,
     "USER_LIMIT_REACHED": 409,
+    # Email verification is required and no email with a link can go now (workstream E): nobody gets an account they
+    # cannot activate.
+    "EMAIL_VERIFICATION_UNAVAILABLE": 409,
 }
 
 
@@ -234,13 +242,18 @@ def _refuse_weak_password(password: str) -> None:
 
 
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
-async def register(request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)):
+async def register(request: AuthRegisterRequest, background: BackgroundTasks, http_request: Request, session: AsyncSession = Depends(get_session_generator)):
     """
     Register a new user, under the registration mode and the limit of the instance.
 
     The first account of an empty instance becomes an administrator, whatever the mode. Otherwise ``disabled`` refuses
     everyone, ``invite`` requires ``invite_token``, and ``open`` accepts anyone; a valid invitation sets the role.
     A refusal for the limit tells nothing about how many accounts exist: whoever asks is not signed in.
+
+    With email verification required (workstream E), the new account waits for its link: ``verification_required`` is
+    true and the email goes after the answer, unless this client address sent 10 of them in the hour: the account then
+    waits without it, and its owner asks for the link again from the sign-in page. 409
+    ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email with a link can go out now.
     """
     _refuse_weak_password(request.password)
     try:
@@ -256,9 +269,18 @@ async def register(request: AuthRegisterRequest, session: AsyncSession = Depends
             raise HTTPException(status_code=400, detail=exc.message) from None
         raise HTTPException(status_code=_REGISTRATION_REFUSALS[exc.code], detail={"error_code": exc.code, "message": exc.message}) from None
 
+    verification_required = not user.is_active
+    if verification_required:
+        if email_verification.registration_email_allowed(http_request.client.host if http_request.client else None):
+            # The session of this request ends with it: the work opens its own, on the same database.
+            background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
+        else:
+            # Too many registration emails from this client address: the account waits without its email (workstream E).
+            logger.info("Verification email held: too many registrations from this address", user_id=user.id)
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
-        message="Registration successful" + (" (Admin)" if user.is_superuser else ""),
+        message="Registration successful" + (": check your email to activate the account" if verification_required else "") + (" (Admin)" if user.is_superuser else ""),
+        verification_required=verification_required,
     )
 
 

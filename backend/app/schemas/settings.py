@@ -308,7 +308,8 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "str",
         "description": "Who may create an account: open, invite or disabled",
     },
-    # placeholder — email verification not implemented (see TODO_FUTURI email server)
+    # Read by services/email/verification.py (workstream E, developer decision 44): every account but the first waits for
+    # an emailed link before it can sign in. It turns on only while an email with a link can go out.
     "require_email_verification": {
         "value": "false",
         "type": "bool",

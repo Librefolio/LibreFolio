@@ -8,7 +8,7 @@
     import {_ as t} from '$lib/i18n';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
     import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';
@@ -182,7 +182,7 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
+                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />
@@ -230,7 +230,7 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
+                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />
