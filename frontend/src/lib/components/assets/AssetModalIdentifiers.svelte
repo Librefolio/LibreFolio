@@ -118,7 +118,7 @@
 <!-- Sub-section: Identifiers -->
 <div class="space-y-2">
     <div class="flex items-center justify-between">
-        <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+        <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
             {$t('common.identifiers')}
         </div>
         <div class="flex items-center gap-1.5">
@@ -139,20 +139,14 @@
                     }}
                 />
             {/if}
-            <button
-                type="button"
-                onclick={addIdentifierRow}
-                data-testid="asset-modal-add-identifier"
-                class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                title={$t('assets.identifiers.addIdentifier')}
-            >
+            <button type="button" onclick={addIdentifierRow} data-testid="asset-modal-add-identifier" class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors" title={$t('assets.identifiers.addIdentifier')}>
                 <Plus size={10} /> <span class="hidden sm:inline">{$t('assets.identifiers.addIdentifier')}</span>
             </button>
             <button
                 type="button"
                 onclick={onaskprovider}
                 disabled={!hasProvider || askingProvider}
-                class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-lf-muted hover:text-lf-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title={$t('assets.identifiers.askProvider')}
             >
                 {#if askingProvider}<Loader2 size={10} class="animate-spin" />{:else}<RefreshCw size={10} />{/if}
@@ -181,15 +175,15 @@
             tableLayout="auto"
         />
     {:else}
-        <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
+        <div class="text-xs text-lf-muted italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
     {/if}
 
     <!-- OTHER / soft identifiers as removable tag badges -->
     <div class="space-y-1 pt-1">
         <div class="flex items-center gap-1">
-            <div class="text-[10px] font-medium text-gray-400">{$t('assets.identifiers.otherLabel')}</div>
+            <div class="text-[10px] font-medium text-lf-muted">{$t('assets.identifiers.otherLabel')}</div>
             <Tooltip text={$t('assets.identifiers.otherSeparatorsHint')} position="top" maxWidth="320px">
-                <Info size={12} class="text-gray-400 cursor-help" />
+                <Info size={12} class="text-lf-muted cursor-help" />
             </Tooltip>
         </div>
         <TagInput value={otherIdentifiers} onchange={setOtherIdentifiers} placeholder={$t('assets.identifiers.otherPlaceholder')} />

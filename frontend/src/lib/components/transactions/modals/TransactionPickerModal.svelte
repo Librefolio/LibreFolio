@@ -136,12 +136,12 @@
 <ModalBase {open} maxWidth="5xl" onRequestClose={handleClose} testId="tx-picker-modal">
     <div class="flex flex-col max-h-[80vh]" data-testid="tx-picker-content">
         <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
+            <h3 class="text-lg font-semibold text-lf-primary flex items-center gap-2">
                 <Search size={20} />
                 {$t('transactions.picker.title') || 'Select transactions to add'}
             </h3>
-            <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onclick={handleClose} data-testid="tx-picker-close">
+            <button class="text-lf-muted hover:text-lf-secondary" onclick={handleClose} data-testid="tx-picker-close">
                 <X size={20} />
             </button>
         </div>
@@ -171,22 +171,17 @@
         </div>
 
         <!-- Info + Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="px-6 py-4 border-t border-lf-subtle flex items-center justify-between gap-4">
+            <p class="text-xs text-lf-muted">
                 {$t('transactions.picker.pairedNote') || 'Selecting a paired transaction auto-adds its partner.'}
             </p>
             <div class="flex gap-3">
-                <button
-                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5"
-                    onclick={handleClose}
-                    data-testid="tx-picker-cancel"
-                    title={$t('common.cancel') || 'Cancel'}
-                >
+                <button class="px-4 py-2 text-sm text-lf-secondary bg-lf-panel rounded-lg hover:bg-lf-neutral transition inline-flex items-center gap-1.5" onclick={handleClose} data-testid="tx-picker-cancel" title={$t('common.cancel') || 'Cancel'}>
                     <X size={15} />
                     <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
                 </button>
                 <button
-                    class="px-4 py-2 text-sm text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition flex items-center gap-1.5 disabled:opacity-50"
+                    class="px-4 py-2 text-sm text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition flex items-center gap-1.5 disabled:opacity-50"
                     disabled={selectedRows.length === 0}
                     onclick={handleAdd}
                     data-testid="tx-picker-add"

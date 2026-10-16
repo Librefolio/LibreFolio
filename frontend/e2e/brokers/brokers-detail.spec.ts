@@ -389,10 +389,10 @@ test.describe('Broker Detail Page', () => {
             expect(lotId).toBeTruthy();
 
             const tableRow = page.locator(`[data-row-id="${lotId}"]`);
-            await expect(tableRow).not.toHaveClass(/selected/);
+            await expect(tableRow).toHaveAttribute('data-selected', 'false');
 
             await segmentOverlay.click();
-            await expect(tableRow).toHaveClass(/selected/, {timeout: 5000});
+            await expect(tableRow).toHaveAttribute('data-selected', 'true', {timeout: 5000});
         });
 
         test('clicking the Custody cell opens the modal without changing row selection', async ({page}) => {
@@ -409,14 +409,14 @@ test.describe('Broker Detail Page', () => {
             const testid = await custodyCell.getAttribute('data-testid');
             const lotId = testid?.replace('unified-lots-custody-', '');
             const tableRow = page.locator(`[data-row-id="${lotId}"]`);
-            await expect(tableRow).not.toHaveClass(/selected/);
+            await expect(tableRow).toHaveAttribute('data-selected', 'false');
 
             await custodyCell.click();
 
             // Modal opens...
             await expect(page.getByTestId('lot-custody-modal-title')).toBeVisible({timeout: 5000});
             // ...but the row's selection state is untouched by the custody click.
-            await expect(tableRow).not.toHaveClass(/selected/);
+            await expect(tableRow).toHaveAttribute('data-selected', 'false');
         });
 
         test('row context menu "View lot detail" opens the modal for any lot, including one with no transfer', async ({page}) => {

@@ -38,35 +38,35 @@
 </script>
 
 <ModalBase maxWidth="max-w-md" onRequestClose={onCancel} {open} {zIndex} testId="promote-all-modal">
-    <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
-        <Link2 class="text-libre-green dark:text-green-400 shrink-0" size={20} />
-        <h2 class="flex-1 text-lg font-semibold text-gray-900 dark:text-gray-100">{$t('transactions.promoteSuggest.mergeAllTitle')}</h2>
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-lf-subtle">
+        <Link2 class="text-lf-link shrink-0" size={20} />
+        <h2 class="flex-1 text-lg font-semibold text-lf-primary">{$t('transactions.promoteSuggest.mergeAllTitle')}</h2>
     </div>
 
     <div class="px-5 py-4 space-y-3">
-        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{$t('transactions.promoteSuggest.mergeAllIntro', {values: {n: count}})}</p>
+        <p class="text-sm text-lf-secondary leading-relaxed">{$t('transactions.promoteSuggest.mergeAllIntro', {values: {n: count}})}</p>
         <div class="space-y-2" role="radiogroup" data-testid="promote-all-choices">
             {#each choices as choice (choice.value)}
                 <label
                     class="flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors
-                           {strategy === choice.value ? 'border-libre-green bg-green-50 dark:border-green-400 dark:bg-green-900/20' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/40'}"
+                           {strategy === choice.value ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle hover:bg-lf-hover'}"
                     data-testid="promote-all-choice-{choice.value}"
                 >
-                    <input type="radio" class="mt-1 accent-libre-green" name="promote-all-strategy" value={choice.value} checked={strategy === choice.value} onchange={() => (strategy = choice.value)} />
+                    <input type="radio" class="mt-1 accent-lf-checked" name="promote-all-strategy" value={choice.value} checked={strategy === choice.value} onchange={() => (strategy = choice.value)} />
                     <span class="min-w-0">
-                        <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">{choice.label}</span>
-                        <span class="block text-xs text-gray-500 dark:text-gray-400">{choice.hint}</span>
+                        <span class="block text-sm font-medium text-lf-primary">{choice.label}</span>
+                        <span class="block text-xs text-lf-muted">{choice.hint}</span>
                     </span>
                 </label>
             {/each}
         </div>
     </div>
 
-    <div class="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-slate-700">
-        <button type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600" onclick={onCancel} data-testid="promote-all-cancel">
+    <div class="flex items-center justify-end gap-3 px-5 py-4 border-t border-lf-subtle">
+        <button type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-lf-panel text-lf-secondary hover:bg-lf-neutral" onclick={onCancel} data-testid="promote-all-cancel">
             {$t('common.cancel')}
         </button>
-        <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={() => onConfirm(strategy)} data-testid="promote-all-confirm">
+        <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-lf-action text-lf-on-action hover:bg-lf-action-hover" onclick={() => onConfirm(strategy)} data-testid="promote-all-confirm">
             <Link2 size={14} />
             {$t('transactions.promoteSuggest.mergeAllConfirm', {values: {n: count}})}
         </button>

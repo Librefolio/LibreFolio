@@ -53,6 +53,15 @@ presence except the probes and ``wake-sync``. The contract pinned here:
 (n) ``MIDDLEWARE_STACK`` starts with ``activity``, ``ActivityMiddleware`` without options — the outermost entry, which
     sees every request first and counts the compression of a response as in flight —; ``install_middleware`` makes it
     ``app.user_middleware[0]``.
+(o) Response headers (lot Z5, «Aggiornamento prezzi…», N-Z5-5): ``register_response_header(name, provider)`` replaces a
+    provider of the same name, the name's case ignored; ``remove_response_header(name)`` removes it, and is a no-op for
+    a name never registered; ``response_headers()`` is a tuple of ``(name, value)``, one for each provider whose answer
+    *now* is a non-empty str, in registration order — None, "" or a non-str gives nothing, and a provider that raises is
+    skipped and logged while the others still answer. ``ActivityMiddleware`` adds them to the answer of every HTTP
+    request whose path starts with ``/api/`` and that is not a probe, on ``http.response.start`` — read then, not at the
+    request's start —, the name lower-cased and the value in latin-1, unless the answer already has a header of that
+    name (the app's value wins); a streaming answer gets them once, on its single start message. A probe, and any path
+    outside ``/api/`` (the site, the docs), get none.
 
 Pure: no database, no server, no lane port, no network. Every ``Activity`` under test is the test's own, on a fake clock
 that moves only when the test sets it; an autouse fixture puts a decoy in place of the process's ``ACTIVITY``, which is
@@ -66,7 +75,9 @@ capture, or "nothing was logged" would prove nothing.
 
 Red until ``backend/app/services/platform/sleep_wake/activity.py`` exists: the module does not import. Then (n) stays
 red until ``MIDDLEWARE_STACK`` starts with the activity entry. The removal of (f), SWA-038…040, stays red until
-``Activity.remove_return_listener`` exists (lot Z3).
+``Activity.remove_return_listener`` exists (lot Z3). The response headers of (o), SWA-041…050, stay red until
+``Activity.register_response_header`` exists and ``ActivityMiddleware`` adds them (lot Z5): an ``AttributeError`` per
+case, then a missing header on the answers.
 """
 
 from __future__ import annotations
@@ -1324,3 +1335,240 @@ def test_a_blank_name_to_remove_is_refused_and_nothing_is_removed(name: str) -> 
     _user_request(activity)
     assert calls == [300.0]
     print_success("ValueError; nothing removed")
+
+
+# =============================================================================
+# (o) RESPONSE HEADERS (lot Z5)
+# =============================================================================
+
+#: A header of the tests, and a second one; never the scheduler's own, so that a case does not depend on lot Z5's names.
+TEST_HEADER = "X-LibreFolio-Test-Refresh"
+OTHER_HEADER = "X-LibreFolio-Test-Other"
+#: The routes of the header app: two under the API prefix, one answering with the test header of its own, a streaming one.
+API_PLAIN = f"{API_V1_PREFIX}/z5-headers/plain"
+API_OWN_HEADER = f"{API_V1_PREFIX}/z5-headers/own-header"
+API_STREAM = f"{API_V1_PREFIX}/z5-headers/stream"
+API_UNKNOWN = f"{API_V1_PREFIX}/z5-headers/no-route-here"
+#: Paths outside ``/api/``: the site, the docs, the user's route of the other apps.
+NON_API_PATHS = ("/", "/docs-z5", USER_ROUTE)
+
+
+class Box:
+    """A provider answering what the test puts in ``value``; ``calls`` counts its readings."""
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+        self.calls = 0
+
+    def __call__(self) -> object:
+        self.calls += 1
+        if isinstance(self.value, BaseException):
+            raise self.value
+        return self.value
+
+
+def _named(pairs: Any) -> list[tuple[str, str]]:
+    """``response_headers()`` as ``[(name lower-cased, value)]``, in order: the case the names come back in is not part of the contract."""
+    assert isinstance(pairs, tuple), f"response_headers() must be a tuple, got {pairs!r}"
+    return [(name.lower(), value) for name, value in pairs]
+
+
+def _header_app(activity: Activity | None, box: Box | None = None) -> FastAPI:
+    """Routes under ``/api/`` and outside it, the probes, behind ``ActivityMiddleware`` — on ``activity``, or without it.
+
+    ``API_PLAIN`` answers 200; when ``box`` is given, its handler sets ``box.value = "late"`` first, so the value at the
+    answer's start differs from the value at the request's start. ``API_OWN_HEADER`` answers with ``TEST_HEADER: app``.
+    ``API_STREAM`` streams three chunks. Any other path is answered 404 by the router.
+    """
+    app = FastAPI()
+
+    async def plain() -> PlainTextResponse:
+        if box is not None:
+            box.value = "late"
+        return PlainTextResponse("ok")
+
+    async def own_header() -> PlainTextResponse:
+        return PlainTextResponse("ok", headers={TEST_HEADER: "app"})
+
+    async def chunks() -> AsyncIterator[str]:
+        for index in range(STREAM_CHUNKS):
+            yield f"chunk-{index}\n"
+
+    async def stream() -> StreamingResponse:
+        return StreamingResponse(chunks(), media_type="text/plain")
+
+    async def site() -> PlainTextResponse:
+        return PlainTextResponse("site")
+
+    app.add_api_route(API_PLAIN, plain, methods=["GET"])
+    app.add_api_route(API_OWN_HEADER, own_header, methods=["GET"])
+    app.add_api_route(API_STREAM, stream, methods=["GET"])
+    for path in (HEALTH, READY, LANE_HEALTH, WAKE_SYNC, *NON_API_PATHS):
+        app.add_api_route(path, site, methods=["GET"])
+    if activity is None:
+        app.add_middleware(ActivityMiddleware)
+    else:
+        app.add_middleware(ActivityMiddleware, activity=activity)
+    return app
+
+
+def test_response_headers_are_the_providers_with_a_value_now_in_registration_order() -> None:
+    """SWA-041 — contract (o): a new record gives ``()``; two providers give their pairs in registration order; each answer is read at the call; None, "" or a non-str gives nothing."""
+    print_section("SWA-041: register_response_header and response_headers()")
+    activity, _ = _activity()
+    assert activity.response_headers() == ()
+
+    first, second = Box("starting"), Box("b")
+    activity.register_response_header(TEST_HEADER, first)
+    activity.register_response_header(OTHER_HEADER, second)
+    assert _named(activity.response_headers()) == [(TEST_HEADER.lower(), "starting"), (OTHER_HEADER.lower(), "b")]
+
+    first.value = "running"
+    assert _named(activity.response_headers()) == [(TEST_HEADER.lower(), "running"), (OTHER_HEADER.lower(), "b")], "read at each call, never cached"
+
+    for nothing in (None, "", 42):
+        first.value = nothing
+        assert _named(activity.response_headers()) == [(OTHER_HEADER.lower(), "b")], f"a provider answering {nothing!r} gives no header"
+    print_success("in order, read now, only non-empty strings")
+
+
+def test_a_header_registered_again_in_another_case_replaces_the_provider() -> None:
+    """SWA-042 — contract (o): "X-LibreFolio-Test-Refresh" then "x-librefolio-test-refresh": one pair, the second provider's value."""
+    print_section("SWA-042: a provider replaced")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box("first"))
+    activity.register_response_header(OTHER_HEADER, Box("other"))
+
+    activity.register_response_header(TEST_HEADER.lower(), Box("second"))
+
+    named = _named(activity.response_headers())
+    assert [value for name, value in named if name == TEST_HEADER.lower()] == ["second"]
+    assert sorted(named) == sorted([(TEST_HEADER.lower(), "second"), (OTHER_HEADER.lower(), "other")])
+    print_success("one provider per name, whatever its case")
+
+
+def test_removing_a_header_stops_it_and_an_unknown_name_is_no_error() -> None:
+    """SWA-043 — contract (o): removed, the provider is no longer read and gives nothing, the other still answers; removing it again, or a name never registered, raises nothing and returns None."""
+    print_section("SWA-043: remove_response_header")
+    activity, _ = _activity()
+    removed, kept = Box("starting"), Box("b")
+    activity.register_response_header(TEST_HEADER, removed)
+    activity.register_response_header(OTHER_HEADER, kept)
+
+    assert activity.remove_response_header(TEST_HEADER) is None
+    calls = removed.calls
+    assert _named(activity.response_headers()) == [(OTHER_HEADER.lower(), "b")]
+    assert removed.calls == calls, "a removed provider must not be read"
+    assert activity.remove_response_header(TEST_HEADER) is None
+    assert activity.remove_response_header("X-Never-Registered") is None
+    assert _named(activity.response_headers()) == [(OTHER_HEADER.lower(), "b")]
+    print_success("removed; no-op for an unknown name")
+
+
+def test_a_provider_that_raises_is_skipped_and_logged_and_the_others_still_answer() -> None:
+    """SWA-044 — contract (o): the first provider raises: no exception reaches the caller, the second still answers, and something is logged about it."""
+    print_section("SWA-044: a provider that raises")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box(RuntimeError("provoked: the provider fails")))
+    activity.register_response_header(OTHER_HEADER, Box("b"))
+
+    with _activity_log() as events:
+        pairs = activity.response_headers()
+
+    assert _named(pairs) == [(OTHER_HEADER.lower(), "b")]
+    assert [event for event in events if event.get("event") != LOG_CANARY], "the provider's failure must be logged"
+    print_success("skipped, logged; the other answers")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [API_PLAIN, WAKE_SYNC, API_UNKNOWN], ids=["an-api-route", "wake-sync", "an-api-path-answered-404"])
+async def test_an_api_answer_carries_the_headers_lower_cased_in_latin_1(path: str) -> None:
+    """SWA-045 — contract (o): ``GET path`` under ``/api/``, not a probe — a route, ``wake-sync``, a path answered 404 —: the answer's raw headers hold each pair once, the name lower-cased, the value in latin-1."""
+    print_section(f"SWA-045: GET {path}")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box("café"))
+    activity.register_response_header(OTHER_HEADER, Box("running"))
+
+    async with _client(_header_app(activity)) as client:
+        response = await client.get(path)
+
+    raw = [(name, value) for name, value in response.headers.raw if name.lower() in (TEST_HEADER.lower().encode(), OTHER_HEADER.lower().encode())]
+    assert raw == [(TEST_HEADER.lower().encode("latin-1"), "café".encode("latin-1")), (OTHER_HEADER.lower().encode("latin-1"), b"running")], f"{response.status_code}: {response.headers.raw}"
+    print_success(f"{response.status_code}: both headers, lower-cased, latin-1")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [HEALTH, READY, LANE_HEALTH, *NON_API_PATHS], ids=["health", "ready", "test-lane-health", "the-site-root", "a-site-page", "the-user-route"])
+async def test_a_probe_or_a_path_outside_the_api_gets_no_header(path: str) -> None:
+    """SWA-046 — contract (o): a probe, or a path outside ``/api/``, is answered without the headers, and the providers are not needed for it."""
+    print_section(f"SWA-046: GET {path}")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box("starting"))
+
+    async with _client(_header_app(activity)) as client:
+        response = await client.get(path)
+
+    assert response.status_code == 200
+    assert TEST_HEADER.lower() not in response.headers, f"{path} must not get the header: {response.headers.raw}"
+    print_success("no header")
+
+
+@pytest.mark.asyncio
+async def test_the_app_header_of_the_same_name_wins() -> None:
+    """SWA-047 — contract (o): the route answers ``X-LibreFolio-Test-Refresh: app``, the provider "middleware": the answer holds one value, the app's; the other header is still added."""
+    print_section("SWA-047: the app's own header")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box("middleware"))
+    activity.register_response_header(OTHER_HEADER, Box("b"))
+
+    async with _client(_header_app(activity)) as client:
+        response = await client.get(API_OWN_HEADER)
+
+    assert response.headers.get_list(TEST_HEADER) == ["app"]
+    assert response.headers.get_list(OTHER_HEADER) == ["b"]
+    print_success("the app's value, once")
+
+
+@pytest.mark.asyncio
+async def test_the_values_are_read_when_the_answer_starts_not_when_the_request_starts() -> None:
+    """SWA-048 — contract (o): the provider answers None when the request starts and the handler sets it to "late": the answer says "late"."""
+    print_section("SWA-048: read at http.response.start")
+    activity, _ = _activity()
+    box = Box(None)
+    activity.register_response_header(TEST_HEADER, box)
+
+    async with _client(_header_app(activity, box)) as client:
+        response = await client.get(API_PLAIN)
+
+    assert response.status_code == 200
+    assert response.headers.get_list(TEST_HEADER) == ["late"]
+    print_success("the value of the answer's start")
+
+
+@pytest.mark.asyncio
+async def test_a_streaming_answer_gets_the_headers_once_and_its_body_intact() -> None:
+    """SWA-049 — contract (o): a streaming answer under ``/api/`` holds the header once, and its three chunks in order."""
+    print_section("SWA-049: a streaming answer")
+    activity, _ = _activity()
+    activity.register_response_header(TEST_HEADER, Box("running"))
+
+    async with _client(_header_app(activity)) as client:
+        response = await client.get(API_STREAM)
+
+    assert response.status_code == 200
+    assert response.headers.get_list(TEST_HEADER) == ["running"]
+    assert response.text == "".join(f"chunk-{index}\n" for index in range(STREAM_CHUNKS))
+    print_success("once, on the start; the body intact")
+
+
+@pytest.mark.asyncio
+async def test_without_its_own_activity_the_middleware_reads_the_providers_of_current_activity(decoy: Activity) -> None:
+    """SWA-050 — contract (o), (m): a provider registered on the record ``current_activity()`` answers (the decoy), with a middleware given no ``activity``: the answer carries it."""
+    print_section("SWA-050: the providers of current_activity()")
+    decoy.register_response_header(TEST_HEADER, Box("starting"))
+
+    async with _client(_header_app(None)) as client:
+        response = await client.get(API_PLAIN)
+
+    assert response.headers.get_list(TEST_HEADER) == ["starting"]
+    print_success("the process's record")

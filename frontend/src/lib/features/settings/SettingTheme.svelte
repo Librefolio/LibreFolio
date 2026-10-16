@@ -36,17 +36,17 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 {embedded ? '' : 'py-4 border-b border-gray-100 dark:border-slate-700 last:border-0'}">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 text-lf-primary {embedded ? '' : 'py-4 border-b border-lf-subtle last:border-0'}">
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
-        <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+        <div class="flex items-center text-sm font-medium text-lf-secondary">
             {#if icon}
-                <svelte:component this={icon} size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                <svelte:component this={icon} size={16} class="mr-2 text-lf-muted" />
             {/if}
             {label}
         </div>
         {#if hint}
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p>
+            <p class="text-xs text-lf-muted mt-1">{hint}</p>
         {/if}
     </div>
 
@@ -64,7 +64,7 @@
                     on:click={() => selectTheme(option.value)}
                     disabled={isLocked}
                     class="px-3 sm:px-4 py-2 text-sm border rounded-lg transition-all
-                        {value === option.value ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20 text-libre-green dark:text-green-400' : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500'}
+                        {value === option.value ? 'border-lf-checked bg-lf-selected text-lf-link' : 'border-lf-input text-lf-secondary hover:border-lf-input-hover'}
                         {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
                 >
                     {$_(option.labelKey)}

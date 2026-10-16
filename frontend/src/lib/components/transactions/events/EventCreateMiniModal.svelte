@@ -209,15 +209,15 @@
 <ModalBase {open} maxWidth="sm" onRequestClose={requestClose} {zIndex} testId="event-create-mini-modal">
     <div class="flex flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {#if editingId === null}
                     ✨ {$t('transactions.form.eventCreateTitle', {values: {asset: assetName}})}
                 {:else}
                     ✏️ {$t('transactions.form.eventEditTitle', {values: {asset: assetName}})}
                 {/if}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={requestClose} type="button">
+            <button class="p-2 text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={requestClose} type="button">
                 <X size={20} />
             </button>
         </div>
@@ -234,7 +234,7 @@
             {:else}
                 <!-- Type -->
                 <div class="space-y-1.5">
-                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <span class="block text-xs font-medium text-lf-muted">
                         {$t('common.type')}
                     </span>
                     <SimpleSelect
@@ -251,11 +251,11 @@
                 <!-- Date -->
                 <div class="space-y-1.5">
                     <div class="flex items-center justify-between">
-                        <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <span class="block text-xs font-medium text-lf-muted">
                             {$t('common.date')}
                         </span>
                         {#if deltaDays != null && deltaDays !== 0}
-                            <span class="text-xs font-mono text-amber-500">Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d</span>
+                            <span class="text-xs font-mono text-lf-warning">Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d</span>
                         {/if}
                     </div>
                     <SingleDatePicker
@@ -272,7 +272,7 @@
 
                 <!-- Amount -->
                 <div class="space-y-1.5">
-                    <label for="event-amount" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <label for="event-amount" class="block text-xs font-medium text-lf-muted">
                         {$t('transactions.fields.amount')}
                     </label>
                     <div class="flex items-center gap-2">
@@ -280,7 +280,7 @@
                             id="event-amount"
                             type="text"
                             inputmode="decimal"
-                            class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            class="flex-1 rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-lf-focus/30 focus:border-lf-focus [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                             bind:value={eventAmount}
                             oninput={() => (userTouched = true)}
                             onkeydown={(e) => {
@@ -293,7 +293,7 @@
                             placeholder="0.00"
                             data-testid="event-create-amount"
                         />
-                        <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        <span class="text-sm text-lf-muted whitespace-nowrap">
                             {currencyInfo.symbol}
                             {currencyInfo.flag_emoji}
                             {assetCurrency}
@@ -303,13 +303,13 @@
 
                 <!-- Notes -->
                 <div class="space-y-1.5">
-                    <label for="event-notes" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <label for="event-notes" class="block text-xs font-medium text-lf-muted">
                         {$t('common.notes')}
                     </label>
                     <input
                         id="event-notes"
                         type="text"
-                        class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green"
+                        class="w-full rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder px-3 py-2 text-sm focus:ring-2 focus:ring-lf-focus/30 focus:border-lf-focus"
                         bind:value={eventNotes}
                         oninput={() => (userTouched = true)}
                         placeholder={$t('common.optional')}
@@ -320,13 +320,13 @@
         </div>
 
         <!-- Footer -->
-        <div class="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
-            <button type="button" class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving} onclick={requestClose}>
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-lf-subtle shrink-0">
+            <button type="button" class="px-3 py-1.5 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" disabled={saving} onclick={requestClose}>
                 {$t('common.cancel')}
             </button>
             <button
                 type="button"
-                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-1.5 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={saving || !eventAmount || existing !== null}
                 onclick={handleSubmit}
                 data-testid="event-create-submit"

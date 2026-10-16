@@ -12,8 +12,10 @@
  * dropdown body have never been executed by anything. Those are the subject.
  *
  * The highlighted option is tracked through `aria-activedescendant`, which is
- * both the accessibility contract and the only non-cosmetic expression of the
- * highlight — the alternative would be asserting on a Tailwind class.
+ * the accessibility contract — the alternative would be asserting on a Tailwind
+ * class. The option also publishes the highlight itself, as `data-highlighted`,
+ * because the component's stylesheet reads it (TC-15): the last block pins that
+ * the attribute follows the highlight, read as data like SearchSelect's.
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
@@ -58,6 +60,33 @@ function option(value: string): HTMLElement {
 /** Asserts which option the roving highlight currently points at. */
 function expectHighlighted(trigger: HTMLElement, value: string) {
     expect(trigger).toHaveAttribute('aria-activedescendant', option(value).id);
+}
+
+/** The value an option element stands for, read back from the test id `mount` gives it. */
+function optionValue(element: HTMLElement): string {
+    return (element.getAttribute('data-testid') ?? '').replace(/^fruit-opt-/, '');
+}
+
+/**
+ * What the open list publishes on each of its options: `data-highlighted` as rendered, keyed by value.
+ * Read off every `role="option"` the list draws rather than off the fixture, so an option that lost
+ * the attribute reads `null` instead of being skipped.
+ */
+function publishedHighlights(): Record<string, string | null> {
+    const rendered = within(screen.getByTestId('fruit-dropdown')).getAllByRole('option');
+    return Object.fromEntries(rendered.map((element) => [optionValue(element), element.getAttribute('data-highlighted')]));
+}
+
+/**
+ * Asserts the highlight is on `value` and that the list publishes it there and nowhere else: `"true"`
+ * on that option, `"false"` on every other `FRUITS` option, disabled ones included. Where the highlight
+ * is comes from `aria-activedescendant`, as everywhere in this file; the attribute is what the
+ * stylesheet reads, so the two must agree.
+ */
+function expectPublishedHighlight(trigger: HTMLElement, value: string) {
+    expectHighlighted(trigger, value);
+    const expected = Object.fromEntries(FRUITS.map((fruit) => [fruit.value, fruit.value === value ? 'true' : 'false']));
+    expect(publishedHighlights(), `data-highlighted is not "true" on ${value} and "false" on every other option`).toEqual(expected);
 }
 
 /** The k5a contract (D376): one more class for the trigger box, typed here so this file compiles before the prop exists. */
@@ -526,5 +555,86 @@ describe('SimpleSelect — the caller’s trigger class (k5a)', () => {
             tokens.filter((token) => CLOSED_BORDERS.includes(token)),
             'the open trigger keeps a closed border beside the focus one, and Tailwind emits it later: that is the border drawn',
         ).toEqual([]);
+    });
+});
+
+/**
+ * TC-15: the highlight, published on the option as `data-highlighted`.
+ *
+ * On the selection tint, `bg-lf-selected`, the muted text role falls under 4.5:1, so the component's
+ * stylesheet turns a muted caption inside the highlighted option secondary — its own markup's and a
+ * caller's `item` snippet's alike. The rule selects `[data-highlighted='true']`: it holds only while
+ * every option carries the attribute and the attribute follows the highlight. Should either stop,
+ * the rule stops matching without a sound.
+ *
+ * jsdom does not apply component styles reliably, so no colour is read here: the attribute is the
+ * contract. Each check reads every option of the open list (`expectPublishedHighlight`), so the
+ * option the highlight left is held to `"false"` as firmly as the one it reached is held to `"true"`.
+ */
+describe('SimpleSelect — the highlight published on the option as data-highlighted (TC-15)', () => {
+    it.each([
+        // `acai` is first in the list but disabled: with nothing selected, the list opens on the first option it can land on.
+        {opening: 'with nothing selected', value: '', highlighted: 'apple'},
+        // A selection the keyboard could land on is where the list opens.
+        {opening: 'on the selection', value: 'elderberry', highlighted: 'elderberry'},
+    ])('publishes the opening highlight as "true" on one option and "false" on all the others: $opening', async ({value, highlighted}) => {
+        await setupI18n();
+        const {trigger} = mount({value});
+
+        await fireEvent.click(trigger);
+
+        expectPublishedHighlight(trigger, highlighted);
+    });
+
+    it('moves "true" with the arrow keys and sets the option it left back to "false"', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+        expectPublishedHighlight(trigger, 'apple');
+
+        // `banana` and `date` are disabled: the presses step over them, and they stay "false" throughout.
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+        expectPublishedHighlight(trigger, 'cherry');
+
+        await fireEvent.keyDown(trigger, {key: 'ArrowDown'});
+        expectPublishedHighlight(trigger, 'elderberry');
+
+        await fireEvent.keyDown(trigger, {key: 'ArrowUp'});
+        expectPublishedHighlight(trigger, 'cherry');
+    });
+
+    it('moves "true" to the option under the pointer and sets the option it left back to "false"', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+        expectPublishedHighlight(trigger, 'apple');
+
+        await fireEvent.mouseEnter(option('elderberry'));
+        expectPublishedHighlight(trigger, 'elderberry');
+
+        await fireEvent.mouseEnter(option('cherry'));
+        expectPublishedHighlight(trigger, 'cherry');
+    });
+
+    it('never publishes "true" on a disabled option under the pointer', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: 'apple'});
+        await fireEvent.click(trigger);
+
+        // Presence first: the pointer does move the highlight, so what holds it below is the guard, not a dead handler.
+        await fireEvent.mouseEnter(option('cherry'));
+        expectPublishedHighlight(trigger, 'cherry');
+
+        // Every disabled option, both ends of the list included.
+        for (const {value} of FRUITS.filter((fruit) => fruit.disabled)) {
+            // The event must reach the disabled option, or its staying "false" would prove nothing.
+            const reached = vi.fn();
+            option(value).addEventListener('mouseenter', reached);
+
+            await fireEvent.mouseEnter(option(value));
+
+            expect(reached, `the pointer never reached ${value}: nothing was refused`).toHaveBeenCalledOnce();
+            expectPublishedHighlight(trigger, 'cherry');
+        }
     });
 });

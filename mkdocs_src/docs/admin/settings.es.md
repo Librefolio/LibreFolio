@@ -68,11 +68,14 @@ El planificador mantiene actualizados por sí solo los precios y los tipos de ca
 - 💰 **Actualización de Precios Actuales** — cada pocos minutos, el último precio de cada activo que tenga
   un proveedor de precios.
 - 📊 **Sincronización Histórica** — en los días y horas que elijas, los precios diarios de esos activos y los
-  tipos de cada par FX con un proveedor, durante el **Horizonte de recuperación**, para rellenar cualquier hueco. Los pares
-  que solo tienen tipos manuales se omiten.
+  tipos de cada par FX con un proveedor, durante al menos el **Horizonte de recuperación**, para rellenar cualquier
+  hueco. Para un activo o un par cuyo último precio o tipo guardado es más antiguo, se remonta hasta ese día, como
+  máximo un año; un activo sin ningún precio guardado solo recibe el horizonte, porque el planificador nunca descarga
+  un historial completo. Los pares que solo tienen tipos manuales se omiten.
 
 Si el servidor está apagado o en suspensión a una hora de sincronización, la sincronización histórica
-que se ha perdido se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora de sincronización.
+que se ha perdido se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora de sincronización: un
+servidor apagado durante semanas rellena todo su hueco.
 
 ### ⚙️ Configurar la programación
 
@@ -89,7 +92,7 @@ El diálogo tiene su propio botón **Guardar**.
 | **Actualizar cada** | 10 minutos | Con qué frecuencia se actualizan los precios actuales, de 1 a 1440 minutos. |
 | **Horarios de sincronización** | `06:00`, `23:00` | Cuándo se ejecuta la sincronización del historial; **Agregar horario** añade una franja. |
 | **Días de sincronización** | Lun a Sáb | Los días de la sincronización del historial. |
-| **Horizonte de recuperación** | 14 días | Cuántos días pasados comprueba cada sincronización del historial, de 1 a 365. |
+| **Horizonte de recuperación** | 14 días | Cuántos días pasados comprueba como mínimo cada sincronización del historial, de 1 a 365. Se remonta más atrás, hasta un año, cuando el último precio o tipo guardado de un activo o de un par es más antiguo. |
 
 Mantén al menos una hora y un día. Consejo: una sincronización del historial después del cierre de los mercados (por ejemplo,
 `22:00`) obtiene los datos más completos.
