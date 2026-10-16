@@ -17,7 +17,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play, SlidersHorizontal} from 'lucide-svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -31,6 +31,8 @@
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
     import {safeScalar, safeString} from '$lib/types/common';
     import {extractErrorMessage} from '$lib/utils/trySave';
+    import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
+    import {fetchPluginEntry, type PluginSettingsEntry} from '$lib/features/plugin-settings/pluginSettingsApi';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -124,6 +126,32 @@
     }
 
     onDestroy(() => localProbe.dispose());
+
+    /** The selected provider's settings for the signed-in user (CP11): null when it declares none, or until read. */
+    let settingsEntry = $state<PluginSettingsEntry | null>(null);
+    let configureOpen = $state(false);
+    // The dialog's plugin as plain strings: a save replaces `settingsEntry` with the same plugin, and the dialog must not
+    // read it again (a derived string changes only when its value does).
+    const settingsCode = $derived(settingsEntry?.plugin_code ?? '');
+    const settingsName = $derived(settingsEntry?.plugin_name ?? '');
+    /** Only the latest read writes: the provider may change while one is on its way. */
+    let settingsGeneration = 0;
+
+    $effect(() => {
+        const code = noProvider ? '' : providerCode;
+        const generation = ++settingsGeneration;
+        settingsEntry = null;
+        configureOpen = false;
+        if (!code) return;
+        fetchPluginEntry('asset', code).then(
+            (entry) => {
+                if (generation === settingsGeneration) settingsEntry = entry;
+            },
+            () => {
+                // Not known: no «Configure», as for a provider without settings. The probe still says NOT_CONFIGURED.
+            },
+        );
+    });
 
     /**
      * Localized provider-param text. The backend ships labels/descriptions in English
@@ -427,6 +455,26 @@
                             <CircleHelp size={18} />
                         </a>
                     {/if}
+                    {#if settingsEntry && !settingsEntry.configured}
+                        <span class="shrink-0 inline-flex items-center rounded-full bg-lf-warning-soft px-2 py-0.5 text-xs font-semibold text-lf-warning-on-soft" data-configured="false" data-testid="provider-settings-status">
+                            {$t('pluginSettings.status.notConfigured')}
+                        </span>
+                    {/if}
+                    {#if settingsEntry && !readonly}
+                        <button
+                            aria-label={$t('pluginSettings.configure')}
+                            class="shrink-0 inline-flex items-center gap-1 rounded-md border border-lf-input bg-lf-card px-2 py-1 text-xs text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50"
+                            data-configured={settingsEntry.configured ? 'true' : 'false'}
+                            data-testid="provider-configure"
+                            {disabled}
+                            onclick={() => (configureOpen = true)}
+                            title={$t('pluginSettings.configure')}
+                            type="button"
+                        >
+                            <SlidersHorizontal aria-hidden="true" size={14} />
+                            <span class="hidden sm:inline">{$t('pluginSettings.configure')}</span>
+                        </button>
+                    {/if}
                 </div>
             </div>
         </div>
@@ -676,3 +724,8 @@
         </div>
     {/if}
 </div>
+
+{#if settingsEntry}
+    <!-- «Configure» (CP11): the provider's settings over the asset dialog; a save refreshes the badge. -->
+    <PluginSettingsModal family="asset" onClose={() => (configureOpen = false)} onSaved={(fresh) => (settingsEntry = fresh)} open={configureOpen} pluginCode={settingsCode} pluginName={settingsName} />
+{/if}

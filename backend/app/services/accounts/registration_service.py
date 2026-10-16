@@ -1,10 +1,11 @@
 """Who may create an account, and how many accounts an instance may hold.
 
 The registration mode is ``LIBREFOLIO_REGISTRATION`` when the operator sets it, otherwise the ``registration_mode``
-global setting (``open`` by default). A value of that variable that is not a mode closes the registration instead of
-opening it, and says so in the log; so does a stored value that is not a mode. The limit is ``LIBREFOLIO_MAX_USERS``:
-active accounts and live invitations count against it, so an invitation keeps its place until it is used, revoked or
-expired. An invalid limit closes too, as a limit of 0.
+global setting (``invite`` on a new install). A value of that variable that is not a mode closes the registration
+instead of opening it, and says so in the log; so does a stored value that is not a mode. Whatever the mode, the first
+account of an instance without accounts can be created, and is an administrator: ``first_account_open`` tells the
+login page. The limit is ``LIBREFOLIO_MAX_USERS``: active accounts and live invitations count against it, so an
+invitation keeps its place until it is used, revoked or expired. An invalid limit closes too, as a limit of 0.
 
 ``register_user`` holds the whole rule of ``POST /auth/register`` and owns its transaction: the account, the invitation
 it spends and the check of the limit are committed together, or not at all. ``create_invite`` and ``revoke_invite``
@@ -84,11 +85,21 @@ async def effective_registration_mode(session: AsyncSession) -> RegistrationMode
         return RegistrationModeState(mode="disabled", locked=True)
     if pinned is not None:
         return RegistrationModeState(mode=cast(RegistrationMode, pinned), locked=True)
-    stored = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key, "open")
+    # Without a row, get_setting_value answers the default of GLOBAL_SETTINGS_DEFAULTS: one default, in schemas/settings.py.
+    stored = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key)
     if stored not in REGISTRATION_MODES:
         _report_invalid(f"registration_mode={stored!r}: expected one of {', '.join(REGISTRATION_MODES)}", _CLOSED)
         return RegistrationModeState(mode="disabled", locked=False)
     return RegistrationModeState(mode=cast(RegistrationMode, stored), locked=False)
+
+
+async def first_account_open(session: AsyncSession) -> bool:
+    """No account yet, active or not: the next registration creates the first account, an administrator, in any mode.
+
+    Public through ``GET /system/instance``, so the login page offers to register while the instance is empty. It tells
+    nothing a registration attempt would not: an empty instance takes its first account anyway.
+    """
+    return await user_service.count_users(session) == 0
 
 
 def _max_users() -> Optional[int]:
@@ -185,7 +196,7 @@ async def _admission(session: AsyncSession, invite_token: Optional[str], now: da
 
     Raises ``RegistrationError`` when the mode or the invitation refuses it.
     """
-    first = await user_service.count_users(session) == 0
+    first = await first_account_open(session)
     if not first:
         mode = (await effective_registration_mode(session)).mode
         if mode == "disabled":
