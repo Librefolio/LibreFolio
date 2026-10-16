@@ -13,7 +13,6 @@ lib/components/assets/PriceDataImportModal.svelte	6
 lib/components/assets/ScheduledInvestmentEditor.svelte	4
 lib/components/charts/ChartAestheticsSection.svelte	16
 lib/components/table/DataTableCellContent.svelte	4
-lib/components/transactions/TransactionsTable.svelte	0	#0f0f18×2	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
 lib/components/transactions/bulk/TxBulkBanners.svelte	2
 lib/components/transactions/bulk/TxBulkToolbar.svelte	4
 lib/components/transactions/events/AssetEventPicker.svelte	12
