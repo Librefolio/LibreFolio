@@ -31,7 +31,7 @@ Rules:
 from __future__ import annotations
 
 import bisect
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import timedelta
@@ -178,7 +178,9 @@ class NativeCash:
         object.__setattr__(self, "_first_counted", _first_dates(counted))
         object.__setattr__(self, "_rate_days", rate_days)
         object.__setattr__(self, "_rate_values", rate_values)
-        object.__setattr__(self, "_change_days", _change_days(rate_days, rate_values, {movement.currency for movement in foreign}))
+        held = {movement.currency for movement in foreign}
+        calendar = sorted({day for currency in held for day in rate_days.get(currency, ())})
+        object.__setattr__(self, "_change_days", change_days(self._rate_at, held, calendar))
         object.__setattr__(self, "_foreign_brokers", frozenset(movement.broker_id for movement in foreign))
 
     def _is_counted(self, movement: CashMovement, value: Decimal | None) -> bool:
@@ -405,20 +407,23 @@ def _rate_series(unit_rates: Mapping[tuple[str, date_type], Decimal]) -> tuple[d
     return rate_days, rate_values
 
 
-def _change_days(
-    rate_days: Mapping[str, tuple[date_type, ...]],
-    rate_values: Mapping[str, tuple[Decimal, ...]],
-    currencies: set[str],
-) -> tuple[date_type, ...]:
-    """Days a rate of ``currencies`` differs from its previous known rate; a series' first day counts."""
-    days: set[date_type] = set()
-    for currency in currencies:
-        previous: Decimal | None = None
-        for day, rate in zip(rate_days.get(currency, ()), rate_values.get(currency, ()), strict=True):
-            if previous is None or rate != previous:
-                days.add(day)
-            previous = rate
-    return tuple(sorted(days))
+def change_days(read: Callable[[str, date_type], Decimal | None], currencies: Iterable[str], days: Iterable[date_type]) -> tuple[date_type, ...]:
+    """The days of the calendar ``days``, in its order, on which ``read`` gives a currency of ``currencies`` another
+    rate than on the calendar's previous day — the one home of «the day a rate changes».
+
+    The caller chooses the reading and the calendar: the native cash reads the last rate known on or before the day,
+    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on every day of its
+    frame. A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
+    """
+    watched = tuple(sorted(set(currencies)))
+    changed: list[date_type] = []
+    previous: dict[str, Decimal | None] = dict.fromkeys(watched)
+    for day in days:
+        rates = {currency: read(currency, day) for currency in watched}
+        if rates != previous:
+            changed.append(day)
+        previous = rates
+    return tuple(changed)
 
 
 def native_balances(movements: Iterable[CashMovement], as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
