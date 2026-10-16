@@ -7,7 +7,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
-import {lotIsOpenish, type LotOpenish} from '../../src/lib/components/brokers/lots/lotsAnalysisHelpers';
+import {lotIsOpenish, type LotOpenish} from '../../src/lib/features/brokers/lots/lotsAnalysisHelpers';
 
 /**
  * Ensure at least one broker exists for the test user.
