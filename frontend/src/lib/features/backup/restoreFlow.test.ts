@@ -1,0 +1,2094 @@
+// @vitest-environment jsdom
+/**
+ * RestoreFlowController — restoring the instance from an archive, from the file chosen to the server started again
+ * (restoreFlow.svelte.ts, workstream B, lot B5b). Written red first, against `b5b-contract.md` §0 (the developer's P8 and
+ * P7 decisions, which override the rest), §1, §2, §2b and §2c: the module does not exist yet.
+ *
+ * The contract under test:
+ *   - the words of the confirmation (§0.4): `confirmationWords(text)` keeps the words of the list matching
+ *     `^[a-z]{6,10}$`, in order, without duplicates; `pickConfirmationWord(words, random = Math.random)` is
+ *     `words[Math.floor(random() * words.length)]`, and an empty list falls back to the translated
+ *     `backup.restore.confirm.word`; `confirmationMatches(typed, word)`: equal once both are trimmed and lower-cased,
+ *     nothing else (no accent folding, inner spaces kept), and the empty string never matches;
+ *   - `restoreNavigation.toSignIn()` is how a success leaves the page (§0.2); `AFTER_RESTORE_PATH` is gone (§0.6);
+ *   - `load()`: `loading` (busy) while `GET /restore/status` is out; then what the status says — `pending` (its `waiting`,
+ *     `instance_blocked` included, in `status`), `in_progress`, or `idle` with the status kept (the card decides what to
+ *     show of a last result); nothing else read, nothing announced; `limitMb` is the status's `upload_limit_mb` (0: no
+ *     limit, null: unknown); a status read with no usable answer → `failed`, failure `status`; `retry()`, from `failed`
+ *     only, reads it again with the error cleared, and announces a failure;
+ *   - the pick-up: a check this tab followed (`sessionStorage`, `librefolio.backup.restore.stage`) is read after the
+ *     status — still running: `checking`, polled, its end announced (`staged`: a check seen running here); done:
+ *     `report`, the stage still remembered; gone (404): forgotten silently — `idle`, no error, no event; failed:
+ *     `failed` with its `error_code`, failure `check`, forgotten; no answer: `failed`, `network`, failure `check`, the
+ *     stage kept;
+ *   - `upload(file)`: any file name; a file larger than `limitMb` megabytes — 1024 × 1024 bytes each, as the server counts
+ *     — is refused at once when the limit is above 0: `failed`, `backup_too_large`, `errorLimitMb` the limit, failure
+ *     `upload`, nothing sent, announced; a limit of 0 or null sends it, and so does a file of exactly the limit; a second
+ *     `upload()` while one is out is ignored;
+ *   - the PUT: `uploading` (busy), `uploadedBytes`/`totalBytes` following its `onProgress`, an AbortSignal handed to it;
+ *     `abortUpload()` aborts it and comes back to `idle` with nothing announced, an answer that comes after is dropped,
+ *     and outside an upload it does nothing; a refusal → `failed` (`upload`) with its code, and `backup_too_large` takes
+ *     the server's `limit_mb` as `errorLimitMb`; then `uploaded {upload_id, size}` and `POST /stage` with the upload id,
+ *     whose refusal is `failed` (`check`);
+ *   - `checking` (busy): the stage, remembered in the storage, read every `pollMs` and not before, its phase and bytes in
+ *     `stage`, `report` null; done → `report`, not busy, `report` the stage's report, the stage still remembered,
+ *     `staged {stage_id, restorable, action}` once, never read again — an archive that cannot be restored included;
+ *     failed → `failed` (`check`) with its `error_code`, forgotten, announced; gone (404) → `failed` (`check`) with
+ *     `restore_stage_not_found`, forgotten, announced; reads with no answer → in the end `failed` (`check`) with
+ *     `network`, announced, the stage kept, no timer left;
+ *   - `dropCheck()`: from `report`, `DELETE /stage/{id}`, then `idle` with nothing followed and `cancelled {what:
+ *     'check'}`; a check already gone (404) ends the same way; while the check runs, the `409 restore_stage_running` keeps
+ *     the polling going and the check is dropped by a second DELETE once it has ended — never shown as a report, no
+ *     `staged`, no failure; any other refusal → `failed` (`cancel`), the stage still remembered, announced;
+ *   - `confirm()` (§0.1), from a restorable `report` only: `confirming` (busy) while `POST …/confirm` is out, then at once
+ *     `POST /restore/restart`: `restarting` (busy), and once accepted `outcome` `waiting`; `confirmed {stage_id}` then
+ *     `restart.requested {}`; the stage forgotten, the confirm's answer kept as `status`. A refused confirm → `failed`
+ *     (`confirm`), nothing restarted. A restart refused with `409 restore_not_pending` — the restore no longer exists,
+ *     cancelled from the command line meanwhile — → `failed` (`restart`), the error announced, `outcome` null, nothing
+ *     probed, the status read again only by `retry()` (the developer's decision of 11:47); any other refusal →
+ *     `pending` with the error (`failure` `restart`): the restore stays confirmed, and nothing is probed;
+ *   - a restore found pending at load: `restartNow()` does the same restart, and a refusal ends the same two ways;
+ *     `cancelPending()` is `cancelling` (busy) while `DELETE /pending` is out; once it is accepted, the checked copy goes
+ *     with the restore, as the command line's `backup pending --cancel` does: `DELETE /stage/{stage_id}` of the status the
+ *     controller holds (read at load, or the answer of the confirmation), before the status is read again; a refusal of
+ *     that drop (404, 409, no answer) is ignored — no failure, nothing more announced —, and a status without a
+ *     `stage_id` drops nothing; then the status read again, `cancelled {what: 'pending'}` once. A `404
+ *     restore_not_pending` (the restore became something else, a start applying it maybe) drops no copy and reads the
+ *     status again without failing; another refusal drops no copy → `failed` (`cancel`);
+ *   - the probe: `probeServer()` every `pollMs` once the restart is accepted; seen `down` then `up` → `restoreOutcome()`
+ *     once: `signed_out`, or a `committed` status → `restored`, `restored {}`, `restoreNavigation.toSignIn()` once (no
+ *     message, §0.2); a `rolled_back` status → `rolled_back`, `outcomeStatus`, `rolled_back {reason}`; a `pending`
+ *     status → `still_pending`, `outcomeStatus` with its `waiting`, nothing announced (§0.3); `blocked` — the hosting
+ *     provider blocked the instance, and the status route answers 423 with every restore route — → `still_pending` as
+ *     well (P8: the failure on the same screen, with the reason), `outcomeStatus` exactly `{state: 'pending', waiting:
+ *     'instance_blocked'}`, built by the page because the server cannot be read (a blocked instance leaves the restore
+ *     waiting for the unblock, P7), nothing announced, no sign-in. Up all along → the outcome is not read before
+ *     `fastRestartMs`, then read anyway: `signed_out` → `restored`, `pending` → keep waiting and probing, `rolled_back`
+ *     → `rolled_back`, `blocked` → `still_pending` at once (no start applies a restore while the instance is blocked).
+ *     Down all along → `slow` only after `slowAfterMs`, and the probing goes on. Once the outcome is known nothing is
+ *     probed again and no timer is left; `load()` (back to the tab) clears `outcome` and `slow`;
+ *   - `busy` holds in `loading`, `uploading`, `checking`, `confirming`, `cancelling` and `restarting` only;
+ *   - `dispose()` drops every answer still on its way and stops every timer; an answer of an older generation never
+ *     changes the state;
+ *   - a storage that throws, or none (`storage: null`), never breaks the flow; the default storage is `sessionStorage`,
+ *     the default api the functions of backupApi.ts, the default `pollMs` 1000.
+ *
+ * Choices of this file where the contract is silent, each one place to change: the check is first read `pollMs` after it
+ * started, as backupJob.svelte.ts does; `staged` is announced for a check seen running here (B5a's decision 2); a refused
+ * drop is `failed` with failure `cancel`; the polling that gets no answer gives up within thirty pauses; a refused
+ * `restartNow()` is `pending` with the error, like the restart after a confirm (§0.1: «a restart that failed» shows the
+ * pending block), `restore_not_pending` aside, as decided since; the fast read maps a rolled-back status to
+ * `rolled_back`; `load()` ends a restart episode; while the copy of a cancelled restore is dropped the state stays
+ * `cancelling`: the cancel is not over before the status is read again. Left open
+ * on purpose: whether the pick-up of a check already done is announced, whether a status read that fails at mount is
+ * announced (B5a's pick-up is silent; a `retry()` that fails must be), the state while the DELETE of `dropCheck()` is
+ * out, whether the status is read again after an aborted upload, `outcome` while the restart request is still out, and
+ * the state once the outcome is known.
+ *
+ * The outcome `blocked` and the copy dropped by `cancelPending()` came after the first green, decided by the workstream
+ * to honour P7 and P8, and were written red first in their turn.
+ *
+ * Every test injects a fake api — a call it does not expect rejects, naming the call — and an in-memory storage, and runs
+ * on fake timers; `pollMs`, `fastRestartMs` and `slowAfterMs` are not the defaults, so a controller that ignored them
+ * would be seen, and the defaults have their own cases. The one exception to that net: the controller ignores a refused
+ * drop of a cancelled restore's copy, so a `dropCheck()` it should not send would reject unseen; the cases where nothing
+ * may be dropped say so with `not.toHaveBeenCalled()`. The server of a restart is a box the test flips between `up` and
+ * `down`: `probeServer()` answers what it holds whenever it is asked, so no case depends on when the first probe goes
+ * out. `restoreNavigation.toSignIn` is replaced by a spy before every controller is built, so nothing navigates.
+ * `$lib/i18n` is a translator that answers `⟦key⟧`, so the fallback word is proven to be the translation of its key
+ * without naming a language. `$lib/api` is mocked with the five aliases the default api reaches here, which only the
+ * last group (no `api` option) uses.
+ *
+ * The module is loaded through `import.meta.glob`, not imported: while it does not exist each case fails on its own and
+ * names it, instead of the whole file failing at collection, and the type check does not wait for it. The types below
+ * are the contract's (§2b), written out for the same reason.
+ *
+ * jsdom, not node: `busy`, `report` and `limitMb` are `$derived`, which the node environment leaves stale (see
+ * `$test/runes.svelte`); `assertEffectsRun()` fails the whole file loudly if the docblock above is ever lost.
+ */
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
+import type {z} from 'zod';
+import type {schemas} from '$lib/api';
+import {assertEffectsRun} from '$test/runes.svelte';
+
+const zodios = vi.hoisted(() => ({
+    get_restore_status_api_v1_backup_restore_status_get: vi.fn(),
+    upload_restore_archive_api_v1_backup_restore_upload_put: vi.fn(),
+    start_restore_check_api_v1_backup_restore_stage_post: vi.fn(),
+    get_restore_check_api_v1_backup_restore_stage__stage_id__get: vi.fn(),
+    delete_restore_check_api_v1_backup_restore_stage__stage_id__delete: vi.fn(),
+}));
+vi.mock('$lib/api', () => ({zodiosApi: zodios, schemas: {}}));
+
+// The translator answers `⟦key⟧`: the fallback word of an empty list is proven to be the translation of its key.
+vi.mock('$lib/i18n', async () => {
+    const {readable, writable} = await import('svelte/store');
+    const translate = (key: string) => `⟦${key}⟧`;
+    return {
+        _: readable(translate),
+        t: readable(translate),
+        locale: writable('en'),
+        i18nLoading: readable(false),
+        SUPPORTED_LOCALES: ['en', 'it', 'fr', 'es'],
+        DEFAULT_LOCALE: 'en',
+        LOCALE_NAMES: {en: 'English', it: 'Italiano', fr: 'Français', es: 'Español'},
+        LOCALE_FLAGS: {en: 'EN', it: 'IT', fr: 'FR', es: 'ES'},
+        LANGUAGE_OPTIONS: [{code: 'en', name: 'English', flag: 'EN'}],
+        initI18n: () => undefined,
+        saveLocalePreference: () => undefined,
+    };
+});
+
+// --- The contract (§0, §2b), written out ------------------------------------------------------------------------------
+
+type RestoreStatus = z.infer<typeof schemas.RestoreStatus>;
+type RestoreStage = z.infer<typeof schemas.RestoreStage>;
+type RestoreStageReport = z.infer<typeof schemas.RestoreStageReport>;
+type RestoreUpload = z.infer<typeof schemas.RestoreUpload>;
+type RollbackReason = NonNullable<RestoreStatus['reason']>;
+/** The waiting reasons of §0.5: the generated client does not know `instance_blocked` yet (P7). */
+type WaitingReason = NonNullable<RestoreStatus['waiting']> | 'instance_blocked';
+
+type RestoreFlowState = 'loading' | 'idle' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
+type RestoreFailure = 'status' | 'upload' | 'check' | 'confirm' | 'cancel' | 'restart';
+type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
+type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
+
+interface RestoreApi {
+    status(): Promise<RestoreStatus>;
+    upload(file: File, options?: UploadOptions): Promise<RestoreUpload>;
+    startCheck(uploadId: string): Promise<RestoreStage>;
+    getCheck(stageId: string): Promise<RestoreStage>;
+    dropCheck(stageId: string): Promise<void>;
+    confirm(stageId: string): Promise<RestoreStatus>;
+    cancelPending(): Promise<void>;
+    restart(): Promise<RestoreStatus>;
+    probeServer(): Promise<'up' | 'down'>;
+    restoreOutcome(): Promise<RestoreOutcomeAnswer>;
+}
+
+interface RestoreFlowOptions {
+    api?: RestoreApi;
+    storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
+    pollMs?: number;
+    fastRestartMs?: number;
+    slowAfterMs?: number;
+    onEvent?: (name: string, detail: Record<string, unknown>) => void;
+}
+
+interface RestoreFlowController {
+    readonly state: RestoreFlowState;
+    readonly status: RestoreStatus | null;
+    readonly stage: RestoreStage | null;
+    readonly report: RestoreStageReport | null;
+    readonly errorCode: string | null;
+    readonly failure: RestoreFailure | null;
+    readonly errorLimitMb: number | null;
+    readonly uploadedBytes: number;
+    readonly totalBytes: number;
+    readonly limitMb: number | null;
+    readonly busy: boolean;
+    readonly outcome: RestartOutcome | null;
+    readonly slow: boolean;
+    readonly outcomeStatus: RestoreStatus | null;
+    load(): Promise<void>;
+    upload(file: File): Promise<void>;
+    abortUpload(): void;
+    dropCheck(): Promise<void>;
+    confirm(): Promise<void>;
+    cancelPending(): Promise<void>;
+    restartNow(): Promise<void>;
+    retry(): Promise<void>;
+    dispose(): void;
+}
+
+interface RestoreFlowModule {
+    RestoreFlowController: new (options?: RestoreFlowOptions) => RestoreFlowController;
+    RESTORE_STAGE_STORAGE_KEY: string;
+    restoreNavigation: {toSignIn(): void};
+    confirmationWords: (text: string) => string[];
+    pickConfirmationWord: (words: string[], random?: () => number) => string;
+    confirmationMatches: (typed: string, word: string) => boolean;
+}
+
+const FLOW_MODULES = import.meta.glob<Partial<RestoreFlowModule>>('./restoreFlow.svelte.ts');
+
+/** restoreFlow.svelte.ts, or a failure that names what is missing. */
+async function loadFlow(): Promise<RestoreFlowModule> {
+    const load = FLOW_MODULES['./restoreFlow.svelte.ts'];
+    if (!load) throw new Error('src/lib/features/backup/restoreFlow.svelte.ts does not exist yet: the restore card has no controller (B5b contract §2b)');
+    const module = await load();
+    for (const name of ['RestoreFlowController', 'confirmationWords', 'pickConfirmationWord', 'confirmationMatches'] as const) {
+        expect(typeof module[name], `restoreFlow.svelte.ts exports no ${name}`).toBe('function');
+    }
+    expect(typeof module.RESTORE_STAGE_STORAGE_KEY, 'restoreFlow.svelte.ts exports no RESTORE_STAGE_STORAGE_KEY').toBe('string');
+    expect(typeof module.restoreNavigation?.toSignIn, 'restoreFlow.svelte.ts exports no restoreNavigation.toSignIn() (§0.2)').toBe('function');
+    return module as RestoreFlowModule;
+}
+
+// --- Fixtures ---------------------------------------------------------------------------------------------------------
+
+const UPLOAD_ID = '0123456789abcdef0123456789abcdef';
+const STAGE_ID = 'fedcba9876543210fedcba9876543210';
+const OTHER_STAGE_ID = '00112233445566778899aabbccddeeff';
+/** The key of §2b, written out: the storage is checked against the contract, not against the export. */
+const KEY = 'librefolio.backup.restore.stage';
+/** A megabyte as the server counts it (`_MEGABYTE` in backend/app/api/v1/backup/restore.py). */
+const MIB = 1024 * 1024;
+/** Not the default pause (1000 ms): a controller that ignored the option would be seen. */
+const POLL_MS = 200;
+/** Not the defaults (30 000 and 60 000 ms), in the same proportion. */
+const FAST_MS = 3_000;
+const SLOW_MS = 6_000;
+
+const REASONS: RollbackReason[] = ['first_start_failed', 'swap_interrupted', 'swap_failed', 'stage_missing'];
+const WAITINGS: WaitingReason[] = ['backup_running', 'other_data_directory', 'server_running', 'instance_blocked'];
+
+type StatusFields = Omit<Partial<RestoreStatus>, 'waiting'> & {waiting?: WaitingReason | null};
+
+function restoreStatus(overrides: StatusFields = {}): RestoreStatus {
+    return {state: 'none', stage_id: null, confirmed_at: null, confirmed_by: null, backup_created_at: null, backup_app_version: null, action: null, finished_at: null, reason: null, waiting: null, upload_limit_mb: 500, ...overrides} as RestoreStatus;
+}
+
+const none = (overrides: StatusFields = {}) => restoreStatus({state: 'none', ...overrides});
+
+const confirmedFields: StatusFields = {stage_id: STAGE_ID, confirmed_at: '2026-10-16T11:20:00Z', confirmed_by: 'admin', backup_created_at: '2026-10-15T12:00:00Z', backup_app_version: '0.9.0', action: 'same'};
+
+const pending = (overrides: StatusFields = {}) => restoreStatus({state: 'pending', ...confirmedFields, ...overrides});
+
+const inProgress = () => restoreStatus({state: 'in_progress', ...confirmedFields});
+
+const committed = () => restoreStatus({state: 'committed', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z'});
+
+const rolledBack = (reason: RollbackReason) => restoreStatus({state: 'rolled_back', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z', reason});
+
+function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
+    return {
+        backup_created_at: '2026-10-15T12:00:00Z',
+        backup_app_version: '0.9.0',
+        backup_origin: 'ui',
+        backup_revision: 'c0ffee000001',
+        app_version: '0.9.0',
+        head_revision: 'c0ffee000001',
+        action: 'same',
+        migrations: [],
+        post_migration_fixes: [],
+        tables: {asset: {before: 12, after: 12}},
+        foreign_key_violations_before: 0,
+        foreign_key_violations_after: 0,
+        files: 3,
+        files_size: 2048,
+        database_size: MIB,
+        instance_key_included: false,
+        administrators: ['admin'],
+        warnings: [],
+        blockers: [],
+        control_totals: 'same',
+        control_totals_differences: [],
+        control_totals_differences_count: 0,
+        restorable: true,
+        expires_at: '2026-10-16T12:00:00Z',
+        ...overrides,
+    };
+}
+
+function stage(overrides: Partial<RestoreStage> = {}): RestoreStage {
+    return {stage_id: STAGE_ID, status: 'running', phase: 'checking', done_bytes: 0, total_bytes: 0, created_at: '2026-10-16T09:00:00Z', finished_at: null, error_code: null, report: null, ...overrides};
+}
+
+const runningStage = (overrides: Partial<RestoreStage> = {}) => stage({status: 'running', ...overrides});
+
+const doneStage = (answer: RestoreStageReport = report(), overrides: Partial<RestoreStage> = {}) => stage({status: 'done', phase: null, done_bytes: 4096, total_bytes: 4096, finished_at: '2026-10-16T09:01:00Z', report: answer, ...overrides});
+
+const failedStage = (code: string) => stage({status: 'failed', phase: null, finished_at: '2026-10-16T09:01:00Z', error_code: code as RestoreStage['error_code']});
+
+const uploaded = (overrides: Partial<RestoreUpload> = {}): RestoreUpload => ({upload_id: UPLOAD_ID, size: 4096, ...overrides});
+
+/** An archive of `size` bytes: the size is set on the File, so a large one costs no memory. */
+function archive(size = 4096, name = 'librefolio-backup-20261015-120000.zip'): File {
+    const file = new File(['PK\u0003\u0004'], name, {type: 'application/zip'});
+    Object.defineProperty(file, 'size', {value: size});
+    return file;
+}
+
+/** A refusal as the backup routes word it, raised by axios: `detail: {code, message, …}`. */
+function refusal(status: number, code: string, extra: Record<string, unknown> = {}) {
+    return {isAxiosError: true, message: `Request failed with status code ${status}`, response: {status, data: {detail: {code, message: `refused: ${code}`, ...extra}}}};
+}
+
+/** No answer came (down, unreachable, timed out): axios rejects with no `response`. */
+const noAnswer = () => ({isAxiosError: true, message: 'Network Error', code: 'ERR_NETWORK', response: undefined});
+
+/** An answer without a code: FastAPI's default 500. */
+const codelessAnswer = () => ({isAxiosError: true, message: 'Request failed with status code 500', response: {status: 500, data: {detail: 'Internal Server Error'}}});
+
+/** What axios rejects with when the request's AbortSignal fires. */
+const canceled = () => ({isAxiosError: true, name: 'CanceledError', message: 'canceled', code: 'ERR_CANCELED', __CANCEL__: true, response: undefined});
+
+interface Deferred<T> {
+    promise: Promise<T>;
+    resolve: (value: T) => void;
+    reject: (reason: unknown) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return {promise, resolve, reject};
+}
+
+/** A sessionStorage stand-in the test can read back. */
+function memoryStorage(initial: Record<string, string> = {}) {
+    const items = new Map<string, string>(Object.entries(initial));
+    return {
+        items,
+        getItem: vi.fn((key: string) => items.get(key) ?? null),
+        setItem: vi.fn((key: string, value: string) => {
+            items.set(key, String(value));
+        }),
+        removeItem: vi.fn((key: string) => {
+            items.delete(key);
+        }),
+    };
+}
+
+/** Every call of the api rejects, naming itself, unless the test answered it. */
+function fakeApi() {
+    const unexpected = (name: string) => (): Promise<never> => Promise.reject(new Error(`api.${name}(): a call this test did not expect`));
+    return {
+        status: vi.fn<RestoreApi['status']>(unexpected('status')),
+        upload: vi.fn<RestoreApi['upload']>(unexpected('upload')),
+        startCheck: vi.fn<RestoreApi['startCheck']>(unexpected('startCheck')),
+        getCheck: vi.fn<RestoreApi['getCheck']>(unexpected('getCheck')),
+        dropCheck: vi.fn<RestoreApi['dropCheck']>(unexpected('dropCheck')),
+        confirm: vi.fn<RestoreApi['confirm']>(unexpected('confirm')),
+        cancelPending: vi.fn<RestoreApi['cancelPending']>(unexpected('cancelPending')),
+        restart: vi.fn<RestoreApi['restart']>(unexpected('restart')),
+        probeServer: vi.fn<RestoreApi['probeServer']>(unexpected('probeServer')),
+        restoreOutcome: vi.fn<RestoreApi['restoreOutcome']>(unexpected('restoreOutcome')),
+    };
+}
+
+const controllers: RestoreFlowController[] = [];
+
+/** A controller over a fake api and an in-memory storage; `stored` is the stage id a previous page left in it. */
+async function setup(options: RestoreFlowOptions & {stored?: string} = {}) {
+    const {RestoreFlowController, restoreNavigation} = await loadFlow();
+    const {stored, ...overrides} = options;
+    const api = fakeApi();
+    const storage = memoryStorage(stored === undefined ? {} : {[KEY]: stored});
+    const onEvent = vi.fn<NonNullable<RestoreFlowOptions['onEvent']>>();
+    // Before the controller exists, so that one keeping a reference at construction holds the spy too; nothing navigates.
+    const toSignIn: MockInstance<() => void> = vi.isMockFunction(restoreNavigation.toSignIn) ? vi.mocked(restoreNavigation.toSignIn) : vi.spyOn(restoreNavigation, 'toSignIn').mockImplementation(() => undefined);
+    const controller = new RestoreFlowController({api, storage, pollMs: POLL_MS, fastRestartMs: FAST_MS, slowAfterMs: SLOW_MS, onEvent, ...overrides});
+    controllers.push(controller);
+    /** What the controller announced, in order, as [name, detail]. */
+    const events = () => onEvent.mock.calls.map(([name, detail]) => [name, detail]);
+    /** The names it announced, in order. */
+    const names = () => onEvent.mock.calls.map(([name]) => name);
+    return {controller, api, storage, onEvent, events, names, toSignIn};
+}
+
+type Context = Awaited<ReturnType<typeof setup>>;
+
+/**
+ * Let every answer already given reach the controller (no time passes). The cases that leave a polling running never
+ * await the action that started it: the contract does not say whether `load()`, `upload()`, `dropCheck()`, `confirm()`
+ * or `restartNow()` settle before the polling they start, or after it.
+ */
+const flush = () => vi.advanceTimersByTimeAsync(0);
+
+/** `load()`, its status read answered with `answer`. */
+async function loaded(context: Context, answer: RestoreStatus = none()): Promise<void> {
+    context.api.status.mockResolvedValueOnce(answer);
+    void context.controller.load();
+    await flush();
+}
+
+/** A controller in `idle`, its status read (`none` with these fields), nothing followed. */
+async function idle(overrides: StatusFields = {}, options: RestoreFlowOptions = {}) {
+    const context = await setup(options);
+    await loaded(context, none(overrides));
+    expect(context.controller.state, 'precondition: idle').toBe('idle');
+    return context;
+}
+
+/** An archive uploaded and its check started: `checking`, its first read due in `pollMs`, nothing announced so far. */
+async function checking() {
+    const context = await idle();
+    context.api.upload.mockResolvedValueOnce(uploaded());
+    context.api.startCheck.mockResolvedValueOnce(runningStage());
+    void context.controller.upload(archive());
+    await flush();
+    expect(context.controller.state, 'precondition: the check runs').toBe('checking');
+    context.onEvent.mockClear();
+    return context;
+}
+
+/** The check ended with `answer`: `report`, nothing announced so far. */
+async function reportShown(answer: RestoreStageReport = report()) {
+    const context = await checking();
+    context.api.getCheck.mockResolvedValueOnce(doneStage(answer));
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(context.controller.state, 'precondition: the report is shown').toBe('report');
+    context.onEvent.mockClear();
+    return context;
+}
+
+/** A restore found pending at load. */
+async function pendingRestore(overrides: StatusFields = {}, options: RestoreFlowOptions = {}) {
+    const context = await setup(options);
+    await loaded(context, pending(overrides));
+    expect(context.controller.state, 'precondition: a restore is pending').toBe('pending');
+    return context;
+}
+
+type Server = {state: 'up' | 'down'};
+
+/** `probeServer()` answers what `server.state` holds, whenever it is asked. */
+function serve(context: Context, initial: 'up' | 'down'): Server {
+    const server: Server = {state: initial};
+    context.api.probeServer.mockImplementation(() => Promise.resolve(server.state));
+    return server;
+}
+
+/** A restore pending, its restart asked and accepted: `outcome` waiting over a server the test flips, nothing announced so far. */
+async function restartAccepted(initial: 'up' | 'down', options: RestoreFlowOptions = {}) {
+    const context = await pendingRestore({}, options);
+    const server = serve(context, initial);
+    context.api.restart.mockResolvedValueOnce(pending());
+    void context.controller.restartNow();
+    await flush();
+    expect(context.controller.outcome, 'precondition: the restart was accepted').toBe('waiting');
+    context.onEvent.mockClear();
+    return {...context, server};
+}
+
+/** The restart seen happening: down for three pauses, then up for two. */
+async function serverRestarts(server: Server): Promise<void> {
+    server.state = 'down';
+    await vi.advanceTimersByTimeAsync(3 * POLL_MS);
+    server.state = 'up';
+    await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+}
+
+beforeAll(() => {
+    assertEffectsRun();
+});
+
+beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    for (const fn of Object.values(zodios)) fn.mockReset();
+});
+
+afterEach(() => {
+    for (const controller of controllers.splice(0)) controller.dispose();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    sessionStorage.clear();
+});
+
+// =====================================================================================================================
+describe('the exports of §0 and §2b', () => {
+    it('RESTORE_STAGE_STORAGE_KEY is librefolio.backup.restore.stage', async () => {
+        const {RESTORE_STAGE_STORAGE_KEY} = await loadFlow();
+        expect(RESTORE_STAGE_STORAGE_KEY).toBe(KEY);
+    });
+
+    it('AFTER_RESTORE_PATH is gone: a success leaves through restoreNavigation, to the plain sign-in page (§0.2, §0.6)', async () => {
+        const module = (await loadFlow()) as unknown as Record<string, unknown>;
+        expect(module).not.toHaveProperty('AFTER_RESTORE_PATH');
+    });
+});
+
+describe('confirmationMatches — trimmed and lower-cased, nothing else (§0.4)', () => {
+    it.each<[string, string, string]>([
+        ['the word as shown', 'garden', 'garden'],
+        ['spaces around it', '  garden ', 'garden'],
+        ['a tab and a newline around it', '\tgarden\n', 'garden'],
+        ['upper case', 'GARDEN', 'garden'],
+        ['mixed case', 'GaRdEn', 'garden'],
+        ['the word itself with spaces and capitals: both sides are normalized', 'garden', ' Garden '],
+    ])('%s: %j matches %j', async (_case, typed, word) => {
+        const {confirmationMatches} = await loadFlow();
+        expect(confirmationMatches(typed, word)).toBe(true);
+    });
+
+    it.each<[string, string, string]>([
+        ['nothing typed', '', 'garden'],
+        ['only spaces typed', '   ', 'garden'],
+        ['an empty word, nothing typed: the empty string never matches', '', ''],
+        ['an empty word, spaces typed', '  ', ''],
+        ['a word of spaces, nothing typed', '', '   '],
+        ['an empty word, something typed', 'garden', ''],
+        ['an accent the word does not have: no accent folding', 'gardén', 'garden'],
+        ['the word without an accent it has', 'jardin', 'jardín'],
+        ['a space inside the word: only the ends are trimmed', 'gar den', 'garden'],
+        ['part of the word', 'garde', 'garden'],
+        ['more than the word', 'gardens', 'garden'],
+        ['another word', 'ribbon', 'garden'],
+    ])('%s: %j does not match %j', async (_case, typed, word) => {
+        const {confirmationMatches} = await loadFlow();
+        expect(confirmationMatches(typed, word)).toBe(false);
+    });
+});
+
+describe('confirmationWords — the words of the list a user can type (§0.4)', () => {
+    it.each<[string, string, string[]]>([
+        ['words separated by spaces, in their order', 'garden ribbon violet', ['garden', 'ribbon', 'violet']],
+        ['spaces around and between them', '  garden   ribbon  ', ['garden', 'ribbon']],
+        ['six and ten letters are kept', 'ribbon playground', ['ribbon', 'playground']],
+        ['five and eleven letters are dropped', 'apple garden backgrounds', ['garden']],
+        ['a capital is dropped, not lowered', 'Garden GARDENS ribbon', ['ribbon']],
+        ['an accent is dropped', 'jardín ribbon cañada', ['ribbon']],
+        ['a digit, a hyphen, an apostrophe or a comma is dropped', "garden1 well-being l'orange garden, ribbon", ['ribbon']],
+        ['a duplicate is kept once, where it first came', 'garden ribbon garden violet ribbon', ['garden', 'ribbon', 'violet']],
+        ['nothing', '', []],
+        ['only spaces', '    ', []],
+        ['nothing a user can type', 'Garden apple jardín', []],
+    ])('%s', async (_case, text, expected) => {
+        const {confirmationWords} = await loadFlow();
+        expect(confirmationWords(text)).toEqual(expected);
+    });
+});
+
+describe('pickConfirmationWord — words[Math.floor(random() × length)] (§0.4)', () => {
+    const WORDS = ['garden', 'ribbon', 'violet', 'window'];
+
+    it.each<[number, string]>([
+        [0, 'garden'],
+        [0.24, 'garden'],
+        [0.25, 'ribbon'],
+        [0.5, 'violet'],
+        [0.74, 'violet'],
+        [0.999, 'window'],
+    ])('random() = %s → %s, random() asked once', async (value, expected) => {
+        const {pickConfirmationWord} = await loadFlow();
+        const random = vi.fn(() => value);
+        expect(pickConfirmationWord(WORDS, random)).toBe(expected);
+        expect(random).toHaveBeenCalledTimes(1);
+    });
+
+    it('random defaults to Math.random', async () => {
+        const {pickConfirmationWord} = await loadFlow();
+        const random = vi.spyOn(Math, 'random').mockReturnValue(0.8);
+        expect(pickConfirmationWord(WORDS)).toBe('window');
+        expect(random).toHaveBeenCalledTimes(1);
+    });
+
+    it('a list of one word: that word, whatever random() says', async () => {
+        const {pickConfirmationWord} = await loadFlow();
+        expect(pickConfirmationWord(['violet'], () => 0)).toBe('violet');
+        expect(pickConfirmationWord(['violet'], () => 0.999)).toBe('violet');
+    });
+
+    it('an empty list falls back to the translation of backup.restore.confirm.word', async () => {
+        const {pickConfirmationWord} = await loadFlow();
+        expect(pickConfirmationWord([], () => 0.5)).toBe('⟦backup.restore.confirm.word⟧');
+    });
+});
+
+// =====================================================================================================================
+describe('load(): the status, then what it says', () => {
+    it('loading and busy while the status is read; then idle, the status kept, nothing else read, nothing announced', async () => {
+        const {controller, api, events} = await setup();
+        const answer = deferred<RestoreStatus>();
+        api.status.mockReturnValueOnce(answer.promise);
+
+        const loading = controller.load();
+        expect(controller.state).toBe('loading');
+        expect(controller.busy).toBe(true);
+        await flush();
+        expect(api.status).toHaveBeenCalledTimes(1);
+
+        answer.resolve(none());
+        await loading;
+        await flush();
+
+        expect(controller.state).toBe('idle');
+        expect(controller.busy).toBe(false);
+        expect(controller.status).toEqual(none());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(controller.stage).toBeNull();
+        expect(controller.report).toBeNull();
+        expect(controller.outcome).toBeNull();
+        expect(controller.slow).toBe(false);
+        expect(api.getCheck, 'no check was followed: none to read').not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+        expect(vi.getTimerCount(), 'idle reads nothing again').toBe(0);
+    });
+
+    it.each<[string, number | null]>([
+        ['a limit', 500],
+        ['no limit', 0],
+        ['a limit that cannot be read', null],
+    ])('limitMb is the upload_limit_mb of the status — %s: %s', async (_case, limit) => {
+        const {controller} = await idle({upload_limit_mb: limit});
+        expect(controller.limitMb).toBe(limit);
+    });
+
+    it.each<[string, RestoreStatus]>([['committed', committed()], ...REASONS.map((reason): [string, RestoreStatus] => [`rolled back, ${reason}`, rolledBack(reason)])])('the last restore %s: idle, its status kept for the card to read', async (_case, answer) => {
+        const context = await setup();
+        await loaded(context, answer);
+        expect(context.controller.state).toBe('idle');
+        expect(context.controller.busy).toBe(false);
+        expect(context.controller.status).toEqual(answer);
+        expect(context.controller.outcome, 'a last result read at load is not the outcome of a restart').toBeNull();
+        expect(context.events()).toEqual([]);
+    });
+
+    it.each<[string, WaitingReason | null]>([['nothing', null], ...WAITINGS.map((waiting): [string, WaitingReason] => [waiting, waiting])])('a restore pending, waiting for %s: pending, not busy, the stored check not read (§0.5)', async (_case, waiting) => {
+        const context = await setup({stored: OTHER_STAGE_ID});
+        await loaded(context, pending({waiting}));
+        expect(context.controller.state).toBe('pending');
+        expect(context.controller.busy).toBe(false);
+        expect(context.controller.status?.waiting ?? null).toBe(waiting);
+        expect(context.controller.errorCode).toBeNull();
+        expect(context.controller.outcome).toBeNull();
+        expect(context.api.getCheck, 'a pending restore comes first: the check this tab followed is not read').not.toHaveBeenCalled();
+        expect(context.events()).toEqual([]);
+    });
+
+    it('a restore being applied: in_progress, not busy, the stored check not read', async () => {
+        const context = await setup({stored: OTHER_STAGE_ID});
+        await loaded(context, inProgress());
+        expect(context.controller.state).toBe('in_progress');
+        expect(context.controller.busy).toBe(false);
+        expect(context.api.getCheck).not.toHaveBeenCalled();
+        expect(context.events()).toEqual([]);
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['no answer', noAnswer, 'network'],
+        ['an answer without a code', codelessAnswer, 'unexpected'],
+    ])('a status read with %s: failed, failure status, not busy, the stored check kept and not read', async (_case, refused, code) => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.status.mockRejectedValueOnce(refused());
+        await context.controller.load();
+        await flush();
+        expect(context.controller.state).toBe('failed');
+        expect(context.controller.errorCode).toBe(code);
+        expect(context.controller.failure).toBe('status');
+        expect(context.controller.busy).toBe(false);
+        expect(context.api.getCheck).not.toHaveBeenCalled();
+        expect(context.storage.items.get(KEY)).toBe(STAGE_ID);
+    });
+});
+
+describe('retry(): from failed, the status read again', () => {
+    it('loading with the error cleared while it reads; a failure the user retried is announced; then what the status says', async () => {
+        const context = await setup();
+        context.api.status.mockRejectedValueOnce(noAnswer());
+        await context.controller.load();
+        await flush();
+        expect(context.controller.state, 'precondition: failed').toBe('failed');
+        context.onEvent.mockClear();
+
+        const answer = deferred<RestoreStatus>();
+        context.api.status.mockReturnValueOnce(answer.promise);
+        const retrying = context.controller.retry();
+        await flush();
+        expect(context.controller.state).toBe('loading');
+        expect(context.controller.errorCode).toBeNull();
+        expect(context.controller.failure).toBeNull();
+        answer.reject(codelessAnswer());
+        await retrying;
+        await flush();
+        expect(context.controller.state).toBe('failed');
+        expect(context.controller.errorCode).toBe('unexpected');
+        expect(context.events()).toEqual([['backup.restore.failed', {code: 'unexpected', what: 'status'}]]);
+
+        context.api.status.mockResolvedValueOnce(none());
+        await context.controller.retry();
+        await flush();
+        expect(context.controller.state).toBe('idle');
+        expect(context.controller.errorCode).toBeNull();
+        expect(context.api.status).toHaveBeenCalledTimes(3);
+    });
+
+    it.each<[string, () => Promise<Context>]>([
+        ['idle', () => idle()],
+        ['pending', () => pendingRestore()],
+    ])('outside failed (%s) it reads nothing', async (_case, arrive) => {
+        const context = await arrive();
+        await context.controller.retry();
+        await flush();
+        expect(context.api.status).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =====================================================================================================================
+describe('the check this tab followed, picked up after a reload (sessionStorage)', () => {
+    it('still running: checking, read every pollMs, and its end shown as the report and announced (seen running here)', async () => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.getCheck.mockResolvedValueOnce(runningStage({phase: 'unpacking', done_bytes: 1024, total_bytes: 4096})).mockResolvedValueOnce(doneStage());
+
+        await loaded(context);
+
+        expect(context.api.getCheck.mock.calls).toEqual([[STAGE_ID]]);
+        expect(context.controller.state).toBe('checking');
+        expect(context.controller.busy).toBe(true);
+        expect(context.controller.stage?.phase).toBe('unpacking');
+        expect(context.storage.items.get(KEY)).toBe(STAGE_ID);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS - 1);
+        expect(context.api.getCheck, 'read again before pollMs').toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(context.api.getCheck).toHaveBeenCalledTimes(2);
+        expect(context.controller.state).toBe('report');
+        expect(context.controller.report).toEqual(report());
+        expect(context.events()).toEqual([['backup.restore.staged', {stage_id: STAGE_ID, restorable: true, action: 'same'}]]);
+    });
+
+    it('already done: the report at once, the stage still remembered, never read again', async () => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.getCheck.mockResolvedValueOnce(doneStage(report({action: 'upgrade'})));
+
+        await loaded(context);
+
+        expect(context.api.getCheck.mock.calls).toEqual([[STAGE_ID]]);
+        expect(context.controller.state).toBe('report');
+        expect(context.controller.busy).toBe(false);
+        expect(context.controller.report).toEqual(report({action: 'upgrade'}));
+        expect(context.storage.items.get(KEY), 'the report must survive another reload').toBe(STAGE_ID);
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(context.api.getCheck).toHaveBeenCalledTimes(1);
+        expect(context.names()).not.toContain('backup.restore.failed');
+    });
+
+    it('gone from the server (404): forgotten silently — idle, no error, no event, the status kept', async () => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.getCheck.mockRejectedValueOnce(refusal(404, 'restore_stage_not_found'));
+
+        await loaded(context, rolledBack('swap_failed'));
+
+        expect(context.controller.state).toBe('idle');
+        expect(context.controller.errorCode).toBeNull();
+        expect(context.controller.failure).toBeNull();
+        expect(context.controller.stage).toBeNull();
+        expect(context.controller.status).toEqual(rolledBack('swap_failed'));
+        expect(context.storage.items.has(KEY)).toBe(false);
+        expect(context.events()).toEqual([]);
+    });
+
+    it.each(['not_a_backup', 'archive_damaged', 'restore_interrupted'])('ended in failure (%s): failed with its code, failure check, forgotten', async (code) => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.getCheck.mockResolvedValueOnce(failedStage(code));
+
+        await loaded(context);
+
+        expect(context.controller.state).toBe('failed');
+        expect(context.controller.errorCode).toBe(code);
+        expect(context.controller.failure).toBe('check');
+        expect(context.controller.busy).toBe(false);
+        expect(context.storage.items.has(KEY)).toBe(false);
+    });
+
+    it('no answer: failed, network, failure check, the stage kept; retry() picks it up again', async () => {
+        const context = await setup({stored: STAGE_ID});
+        context.api.getCheck.mockRejectedValueOnce(noAnswer()).mockResolvedValueOnce(doneStage());
+
+        await loaded(context);
+
+        expect(context.controller.state).toBe('failed');
+        expect(context.controller.errorCode).toBe('network');
+        expect(context.controller.failure).toBe('check');
+        expect(context.storage.items.get(KEY), 'the check may still be there: kept for a retry').toBe(STAGE_ID);
+
+        context.api.status.mockResolvedValueOnce(none());
+        await context.controller.retry();
+        await flush();
+
+        expect(context.api.getCheck.mock.calls).toEqual([[STAGE_ID], [STAGE_ID]]);
+        expect(context.controller.state).toBe('report');
+    });
+});
+
+// =====================================================================================================================
+describe('upload(): the size checked against upload_limit_mb before anything is sent', () => {
+    it.each<[string, number, number]>([
+        ['one byte over a limit of 1 MB (1024 × 1024 bytes, as the server counts)', 1, MIB + 1],
+        ['600 MB over a limit of 500 MB', 500, 600 * MIB],
+    ])('%s: refused at once as backup_too_large with the limit, nothing sent, announced', async (_case, limit, size) => {
+        const {controller, api, storage, events} = await idle({upload_limit_mb: limit});
+
+        await controller.upload(archive(size));
+        await flush();
+
+        expect(api.upload, 'a file over the limit was sent').not.toHaveBeenCalled();
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_too_large');
+        expect(controller.errorLimitMb).toBe(limit);
+        expect(controller.failure).toBe('upload');
+        expect(controller.busy).toBe(false);
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code: 'backup_too_large', what: 'upload'}]]);
+    });
+
+    it.each<[string, number | null, number]>([
+        ['exactly the limit: the server refuses only what is larger', 1, MIB],
+        ['no limit (0), an archive of 5 GB', 0, 5 * 1024 * MIB],
+        ['a limit that cannot be read (null), an archive of 5 GB: the server decides', null, 5 * 1024 * MIB],
+    ])('%s: sent', async (_case, limit, size) => {
+        const {controller, api} = await idle({upload_limit_mb: limit});
+        const file = archive(size);
+        api.upload.mockResolvedValueOnce(uploaded({size}));
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void controller.upload(file);
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(api.upload.mock.calls[0][0], 'the File itself is sent').toBe(file);
+        expect(controller.errorCode).toBeNull();
+        expect(controller.errorLimitMb).toBeNull();
+        expect(controller.state).toBe('checking');
+    });
+
+    it.each(['archive.tar', 'backup', 'BACKUP.ZIP', 'librefolio.zip.part'])('any file name is sent, the server recognises the archive: %s', async (name) => {
+        const {controller, api} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void controller.upload(archive(4096, name));
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('checking');
+    });
+
+    it('a second upload() while the first is out is ignored: one PUT', async () => {
+        const {controller, api} = await idle();
+        const answer = deferred<RestoreUpload>();
+        api.upload.mockReturnValueOnce(answer.promise);
+        void controller.upload(archive());
+        await flush();
+        expect(controller.state, 'precondition: the upload is out').toBe('uploading');
+
+        await controller.upload(archive(1024, 'another.zip'));
+        await flush();
+
+        expect(api.upload).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('uploading');
+    });
+});
+
+describe('upload(): the PUT, its progress, abortUpload()', () => {
+    it('uploading and busy while the PUT is out; onProgress moves uploadedBytes and totalBytes; then the check, started with the upload id', async () => {
+        const {controller, api, events} = await idle();
+        const answer = deferred<RestoreUpload>();
+        let options: UploadOptions | undefined;
+        api.upload.mockImplementationOnce((_file, given) => {
+            options = given;
+            return answer.promise;
+        });
+        api.startCheck.mockResolvedValueOnce(runningStage());
+
+        void controller.upload(archive(2048));
+        await flush();
+
+        expect(controller.state).toBe('uploading');
+        expect(controller.busy).toBe(true);
+        expect(controller.uploadedBytes).toBe(0);
+        expect(options?.onProgress, 'the PUT was given no onProgress').toBeTypeOf('function');
+        expect(options?.signal?.aborted, 'the PUT was given no AbortSignal: it could not be cancelled').toBe(false);
+
+        options?.onProgress?.(512, 2048);
+        expect(controller.uploadedBytes).toBe(512);
+        expect(controller.totalBytes).toBe(2048);
+        options?.onProgress?.(2048, 2048);
+        expect(controller.uploadedBytes).toBe(2048);
+        expect(controller.state, 'every byte sent is not the answer yet').toBe('uploading');
+        expect(api.startCheck).not.toHaveBeenCalled();
+
+        answer.resolve(uploaded({size: 2048}));
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('checking');
+        expect(events()).toEqual([['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 2048}]]);
+    });
+
+    it('abortUpload(): the PUT aborted, back to idle, nothing announced, no check started, nothing remembered', async () => {
+        const {controller, api, storage, events} = await idle();
+        api.status.mockResolvedValue(none());
+        let signal: AbortSignal | undefined;
+        api.upload.mockImplementationOnce((_file, options) => {
+            signal = options?.signal;
+            return new Promise<RestoreUpload>((_resolve, reject) => {
+                signal?.addEventListener('abort', () => reject(canceled()));
+            });
+        });
+        void controller.upload(archive());
+        await flush();
+        expect(controller.state, 'precondition: the upload is out').toBe('uploading');
+
+        controller.abortUpload();
+        await flush();
+
+        expect(signal?.aborted, 'the PUT was not aborted').toBe(true);
+        expect(controller.state).toBe('idle');
+        expect(controller.busy).toBe(false);
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(events(), 'a cancel the user asked for is neither news nor a failure').toEqual([]);
+    });
+
+    it('an upload answered after abortUpload() is dropped: no check started, nothing announced', async () => {
+        const {controller, api, events} = await idle();
+        api.status.mockResolvedValue(none());
+        const answer = deferred<RestoreUpload>();
+        api.upload.mockReturnValueOnce(answer.promise);
+        void controller.upload(archive());
+        await flush();
+
+        controller.abortUpload();
+        answer.resolve(uploaded());
+        await flush();
+
+        expect(controller.state).toBe('idle');
+        expect(api.startCheck, 'an upload the user cancelled was checked').not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+    });
+
+    it('abortUpload() outside an upload does nothing: the check goes on', async () => {
+        const {controller, api} = await checking();
+        api.getCheck.mockResolvedValueOnce(runningStage({phase: 'verifying'}));
+
+        controller.abortUpload();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state).toBe('checking');
+        expect(api.dropCheck).not.toHaveBeenCalled();
+        expect(api.getCheck).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('upload(): a refused PUT, or a check that cannot start', () => {
+    it.each<[string, () => unknown, string, number | null]>([
+        ['400 backup_upload_empty', () => refusal(400, 'backup_upload_empty'), 'backup_upload_empty', null],
+        ['400 backup_upload_incomplete', () => refusal(400, 'backup_upload_incomplete'), 'backup_upload_incomplete', null],
+        ['413 backup_too_large, with the limit the server names', () => refusal(413, 'backup_too_large', {limit_mb: 250}), 'backup_too_large', 250],
+        ['500 restore_folder_unusable', () => refusal(500, 'restore_folder_unusable'), 'restore_folder_unusable', null],
+        ['500 backup_upload_failed', () => refusal(500, 'backup_upload_failed'), 'backup_upload_failed', null],
+        ['503 backup_upload_unavailable', () => refusal(503, 'backup_upload_unavailable'), 'backup_upload_unavailable', null],
+        ['507 backup_no_space', () => refusal(507, 'backup_no_space'), 'backup_no_space', null],
+        ['no answer', noAnswer, 'network', null],
+        ['an answer without a code', codelessAnswer, 'unexpected', null],
+    ])('%s: failed (upload) with its code, announced once, no check started, nothing remembered', async (_case, refused, code, limit) => {
+        const {controller, api, storage, events} = await idle({upload_limit_mb: null});
+        api.upload.mockRejectedValueOnce(refused());
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('upload');
+        expect(controller.errorLimitMb).toBe(limit);
+        expect(controller.busy).toBe(false);
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(storage.setItem).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'upload'}]]);
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['404 backup_upload_not_found', () => refusal(404, 'backup_upload_not_found'), 'backup_upload_not_found'],
+        ['409 restore_busy: another archive is being checked', () => refusal(409, 'restore_busy'), 'restore_busy'],
+        ['500 restore_folder_unusable', () => refusal(500, 'restore_folder_unusable'), 'restore_folder_unusable'],
+        ['no answer', noAnswer, 'network'],
+    ])('the check refused to start, %s: failed (check), the upload announced first, then the failure', async (_case, refused, code) => {
+        const {controller, api, storage, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockRejectedValueOnce(refused());
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('check');
+        expect(storage.setItem, 'no check exists to remember').not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.failed', {code, what: 'check'}],
+        ]);
+    });
+});
+
+// =====================================================================================================================
+describe('checking: the stage read every pollMs until it ends', () => {
+    it('remembered, read every pollMs and not before, through its phases and bytes; done → the report, announced once, never read again', async () => {
+        const {controller, api, storage, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockResolvedValueOnce(runningStage({phase: 'checking'}));
+        api.getCheck.mockResolvedValueOnce(runningStage({phase: 'unpacking', done_bytes: 1024, total_bytes: 4096}));
+        api.getCheck.mockResolvedValueOnce(runningStage({phase: 'upgrading', done_bytes: 4096, total_bytes: 4096}));
+        api.getCheck.mockResolvedValueOnce(runningStage({phase: 'verifying', done_bytes: 4096, total_bytes: 4096}));
+        api.getCheck.mockResolvedValueOnce(doneStage(report({action: 'upgrade'})));
+
+        void controller.upload(archive());
+        await flush();
+
+        expect(controller.state).toBe('checking');
+        expect(controller.busy).toBe(true);
+        expect(controller.stage?.phase).toBe('checking');
+        expect(controller.report, 'no report while the check runs').toBeNull();
+        expect(storage.items.get(KEY), 'a reload must find the check again').toBe(STAGE_ID);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS - 1);
+        expect(api.getCheck, 'the check was read before pollMs').not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(api.getCheck.mock.calls).toEqual([[STAGE_ID]]);
+        expect(controller.stage?.phase).toBe('unpacking');
+        expect(controller.stage?.done_bytes).toBe(1024);
+        expect(controller.stage?.total_bytes).toBe(4096);
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(controller.stage?.phase).toBe('upgrading');
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(controller.stage?.phase).toBe('verifying');
+        expect(controller.state).toBe('checking');
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(api.getCheck).toHaveBeenCalledTimes(4);
+        expect(controller.state).toBe('report');
+        expect(controller.busy).toBe(false);
+        expect(controller.report).toEqual(report({action: 'upgrade'}));
+        expect(controller.errorCode).toBeNull();
+        expect(storage.items.get(KEY), 'the report must survive a reload').toBe(STAGE_ID);
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.staged', {stage_id: STAGE_ID, restorable: true, action: 'upgrade'}],
+        ]);
+
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.getCheck, 'an ended check was read again').toHaveBeenCalledTimes(4);
+    });
+
+    it('an archive that cannot be restored still ends in the report: staged with restorable false', async () => {
+        const {controller, api, events} = await checking();
+        api.getCheck.mockResolvedValueOnce(doneStage(report({restorable: false, blockers: ['no_administrator']})));
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state).toBe('report');
+        expect(controller.report?.restorable).toBe(false);
+        expect(events()).toEqual([['backup.restore.staged', {stage_id: STAGE_ID, restorable: false, action: 'same'}]]);
+    });
+
+    it.each(['not_a_backup', 'manifest_newer_format', 'checksum_mismatch', 'no_space', 'upgrade_failed', 'post_migration_failed'])('a check that fails (%s): failed (check) with its code, forgotten, announced once, never read again', async (code) => {
+        const {controller, api, storage, events} = await checking();
+        api.getCheck.mockResolvedValueOnce(failedStage(code));
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('check');
+        expect(controller.busy).toBe(false);
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'check'}]]);
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.getCheck).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('a check the server lost while it ran (404): failed (check) with restore_stage_not_found, forgotten, announced', async () => {
+        const {controller, api, storage, events} = await checking();
+        api.getCheck.mockRejectedValueOnce(refusal(404, 'restore_stage_not_found'));
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('restore_stage_not_found');
+        expect(controller.failure).toBe('check');
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events()).toEqual([['backup.restore.failed', {code: 'restore_stage_not_found', what: 'check'}]]);
+    });
+
+    it('reads that get no answer: in the end failed (check) with network, announced once, the stage kept for a retry, no timer left', async () => {
+        const {controller, api, storage, events} = await checking();
+        api.getCheck.mockRejectedValue(noAnswer());
+
+        await vi.advanceTimersByTimeAsync(30 * POLL_MS);
+
+        expect(api.getCheck).toHaveBeenCalled();
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('network');
+        expect(controller.failure).toBe('check');
+        expect(storage.items.get(KEY)).toBe(STAGE_ID);
+        expect(events()).toEqual([['backup.restore.failed', {code: 'network', what: 'check'}]]);
+        expect(vi.getTimerCount(), 'the polling went on after it gave up').toBe(0);
+    });
+});
+
+describe('dropCheck(): the check dropped from the server (§2c)', () => {
+    it('from the report: DELETE /stage/{id}, then idle, nothing followed, cancelled {what: check}', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValue(none());
+
+        await controller.dropCheck();
+        await flush();
+
+        expect(api.dropCheck.mock.calls).toEqual([[STAGE_ID]]);
+        expect(controller.state).toBe('idle');
+        expect(controller.busy).toBe(false);
+        expect(controller.stage).toBeNull();
+        expect(controller.report).toBeNull();
+        expect(controller.errorCode).toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'check'}]]);
+    });
+
+    it('from the report, a check already gone (404): dropped all the same', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        api.dropCheck.mockRejectedValueOnce(refusal(404, 'restore_stage_not_found'));
+        api.status.mockResolvedValue(none());
+
+        await controller.dropCheck();
+        await flush();
+
+        expect(controller.state).toBe('idle');
+        expect(controller.errorCode).toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'check'}]]);
+    });
+
+    it.each<[string, () => RestoreStage]>([
+        ['done', () => doneStage()],
+        ['failed', () => failedStage('upgrade_failed')],
+    ])('while the check runs: the 409 restore_stage_running keeps the polling going, and the check, once %s, is dropped by a second DELETE — no report, no failure', async (_case, ended) => {
+        const {controller, api, storage, events} = await checking();
+        api.dropCheck.mockRejectedValueOnce(refusal(409, 'restore_stage_running')).mockResolvedValueOnce(undefined);
+        api.getCheck.mockResolvedValueOnce(runningStage({phase: 'verifying', done_bytes: 4096, total_bytes: 4096})).mockResolvedValueOnce(ended());
+        api.status.mockResolvedValue(none());
+
+        void controller.dropCheck();
+        await flush();
+
+        expect(api.dropCheck.mock.calls, 'the cancel sends its DELETE at once').toEqual([[STAGE_ID]]);
+        expect(controller.state, 'a check that still runs is no failure').not.toBe('failed');
+        expect(controller.busy, 'the check still runs: nothing else may start').toBe(true);
+        expect(controller.errorCode).toBeNull();
+
+        await vi.advanceTimersByTimeAsync(4 * POLL_MS);
+
+        expect(api.getCheck, 'the polling went on until the check ended').toHaveBeenCalledTimes(2);
+        expect(api.dropCheck.mock.calls, 'the ended check is dropped').toEqual([[STAGE_ID], [STAGE_ID]]);
+        expect(controller.state).toBe('idle');
+        expect(controller.stage).toBeNull();
+        expect(controller.report).toBeNull();
+        expect(controller.errorCode).toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events(), 'a check marked to drop opens no report and fails nothing').toEqual([['backup.restore.cancelled', {what: 'check'}]]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('while the check runs, a DELETE accepted at once (the check had just ended): idle, never read again', async () => {
+        const {controller, api, storage, events} = await checking();
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValue(none());
+
+        await controller.dropCheck();
+        await flush();
+
+        expect(controller.state).toBe('idle');
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'check'}]]);
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+        expect(api.getCheck, 'a dropped check was read again').not.toHaveBeenCalled();
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['no answer', noAnswer, 'network'],
+        ['409 restore_pending: a restore waits to apply this copy', () => refusal(409, 'restore_pending'), 'restore_pending'],
+    ])('from the report, a DELETE refused — %s: failed (cancel), announced', async (_case, refused, code) => {
+        const {controller, api, events} = await reportShown();
+        api.dropCheck.mockRejectedValueOnce(refused());
+
+        await controller.dropCheck();
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('cancel');
+        expect(controller.busy).toBe(false);
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'cancel'}]]);
+    });
+
+    it('from the report, a DELETE with no answer keeps the stage remembered: the check may still be there', async () => {
+        const {controller, api, storage} = await reportShown();
+        api.dropCheck.mockRejectedValueOnce(noAnswer());
+
+        await controller.dropCheck();
+        await flush();
+
+        expect(storage.items.get(KEY)).toBe(STAGE_ID);
+    });
+});
+
+// =====================================================================================================================
+describe('confirm(): the restore confirmed, then the server restarted at once (§0.1)', () => {
+    it('confirming while POST confirm is out; then POST restart at once, restarting; accepted: outcome waiting, confirmed then restart.requested', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        const confirmation = deferred<RestoreStatus>();
+        const restart = deferred<RestoreStatus>();
+        api.confirm.mockReturnValueOnce(confirmation.promise);
+        api.restart.mockReturnValueOnce(restart.promise);
+        api.probeServer.mockResolvedValue('down');
+
+        void controller.confirm();
+        await flush();
+
+        expect(api.confirm.mock.calls).toEqual([[STAGE_ID]]);
+        expect(controller.state).toBe('confirming');
+        expect(controller.busy).toBe(true);
+        expect(api.restart, 'the restart waits for the confirmation').not.toHaveBeenCalled();
+
+        confirmation.resolve(pending());
+        await flush();
+
+        expect(api.restart, 'no «Restart now» step: the restart follows the confirmation at once').toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('restarting');
+        expect(controller.busy).toBe(true);
+        expect(controller.status, 'the answer of the confirmation is the status').toEqual(pending());
+        expect(storage.items.has(KEY), 'a confirmed check is no longer followed').toBe(false);
+        expect(api.probeServer, 'the server is probed only once the restart is accepted').not.toHaveBeenCalled();
+
+        restart.resolve(pending());
+        await flush();
+
+        expect(controller.state).toBe('restarting');
+        expect(controller.busy).toBe(true);
+        expect(controller.outcome).toBe('waiting');
+        expect(controller.slow).toBe(false);
+        expect(controller.errorCode).toBeNull();
+        expect(events()).toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.restart.requested', {}],
+        ]);
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['404 restore_stage_not_found', () => refusal(404, 'restore_stage_not_found'), 'restore_stage_not_found'],
+        ['409 restore_stage_running', () => refusal(409, 'restore_stage_running'), 'restore_stage_running'],
+        ['409 restore_not_restorable', () => refusal(409, 'restore_not_restorable'), 'restore_not_restorable'],
+        ['409 restore_stage_outdated: LibreFolio was updated since the check', () => refusal(409, 'restore_stage_outdated'), 'restore_stage_outdated'],
+        ['409 restore_already_pending', () => refusal(409, 'restore_already_pending'), 'restore_already_pending'],
+        ['410 restore_stage_expired', () => refusal(410, 'restore_stage_expired'), 'restore_stage_expired'],
+        ['500 restore_folder_unusable', () => refusal(500, 'restore_folder_unusable'), 'restore_folder_unusable'],
+        ['no answer', noAnswer, 'network'],
+    ])('a confirmation refused — %s: failed (confirm), announced, nothing restarted', async (_case, refused, code) => {
+        const {controller, api, events} = await reportShown();
+        api.confirm.mockRejectedValueOnce(refused());
+
+        await controller.confirm();
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('confirm');
+        expect(controller.busy).toBe(false);
+        expect(controller.outcome).toBeNull();
+        expect(api.restart, 'a restore that was not confirmed is not restarted').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'confirm'}]]);
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['no answer', noAnswer, 'network'],
+        ['an answer without a code', codelessAnswer, 'unexpected'],
+    ])('the restart refused after the confirmation — %s: pending with the error (failure restart), the restore still confirmed, nothing probed', async (_case, refused, code) => {
+        const {controller, api, storage, events} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(refused());
+
+        await controller.confirm();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+
+        expect(controller.state).toBe('pending');
+        expect(controller.busy).toBe(false);
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('restart');
+        expect(controller.status, 'the restore stays confirmed').toEqual(pending());
+        expect(controller.outcome, 'no overlay for a restart that was refused').toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.failed', {code, what: 'restart'}],
+        ]);
+    });
+
+    it('the restart refused after the confirmation with 409 restore_not_pending — the restore no longer exists: failed (restart), announced, outcome null, nothing probed (the decision of 11:47)', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(refusal(409, 'restore_not_pending'));
+
+        await controller.confirm();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+
+        expect(api.status, 'the status is read again only when the user tries again (retry())').toHaveBeenCalledTimes(1);
+        expect(controller.state, 'a restore that no longer exists must not be shown as pending').toBe('failed');
+        expect(controller.busy).toBe(false);
+        expect(controller.errorCode).toBe('restore_not_pending');
+        expect(controller.failure).toBe('restart');
+        expect(controller.outcome, 'no overlay for a restart that was refused').toBeNull();
+        expect(storage.items.has(KEY), 'the confirmed check is no longer followed').toBe(false);
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.failed', {code: 'restore_not_pending', what: 'restart'}],
+        ]);
+    });
+
+    it('after a refused restart, restartNow() tries again: restarting with the error cleared, then waiting', async () => {
+        const {controller, api} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(noAnswer());
+        await controller.confirm();
+        await flush();
+        expect(controller.failure, 'precondition: the restart was refused').toBe('restart');
+        const restart = deferred<RestoreStatus>();
+        api.restart.mockReturnValueOnce(restart.promise);
+        api.probeServer.mockResolvedValue('down');
+
+        void controller.restartNow();
+        await flush();
+
+        expect(api.restart).toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('restarting');
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        restart.resolve(pending());
+        await flush();
+        expect(controller.outcome).toBe('waiting');
+    });
+
+    it('after a refused restart, cancelPending() cancels the restore just confirmed and drops its checked copy: DELETE /pending, then DELETE /stage/{id} of the status the confirmation answered, then idle', async () => {
+        const {controller, api, events} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(noAnswer());
+        await controller.confirm();
+        await flush();
+        expect(controller.state, 'precondition: the restore stays confirmed after the refused restart').toBe('pending');
+        api.cancelPending.mockResolvedValueOnce(undefined);
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValueOnce(none());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(api.cancelPending).toHaveBeenCalledTimes(1);
+        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
+        expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('idle');
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(events()).toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.failed', {code: 'network', what: 'restart'}],
+            ['backup.restore.cancelled', {what: 'pending'}],
+        ]);
+    });
+
+    it.each<[string, () => Promise<Context>]>([
+        ['an archive that cannot be restored', () => reportShown(report({restorable: false, blockers: ['no_administrator']}))],
+        ['a check that still runs', () => checking()],
+        ['nothing checked', () => idle()],
+    ])('confirm() sends nothing for %s', async (_case, arrive) => {
+        const context = await arrive();
+        const state = context.controller.state;
+
+        await context.controller.confirm();
+        await flush();
+
+        expect(context.api.confirm).not.toHaveBeenCalled();
+        expect(context.api.restart).not.toHaveBeenCalled();
+        expect(context.controller.state).toBe(state);
+    });
+});
+
+describe('a restore found pending at load: restartNow() and cancelPending()', () => {
+    it('restartNow(): restarting and busy while the POST is out; accepted: outcome waiting, restart.requested, the server probed every pollMs', async () => {
+        const {controller, api, events} = await pendingRestore({waiting: 'server_running'});
+        api.probeServer.mockResolvedValue('down');
+        const answer = deferred<RestoreStatus>();
+        api.restart.mockReturnValueOnce(answer.promise);
+
+        void controller.restartNow();
+        await flush();
+
+        expect(api.restart).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('restarting');
+        expect(controller.busy).toBe(true);
+        expect(api.probeServer, 'the server is probed only once the restart is accepted').not.toHaveBeenCalled();
+
+        answer.resolve(pending());
+        await flush();
+
+        expect(controller.state).toBe('restarting');
+        expect(controller.outcome).toBe('waiting');
+        expect(events()).toEqual([['backup.restore.restart.requested', {}]]);
+
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer.mock.calls.length - probes, 'probed once per pollMs').toBe(5);
+        expect(api.restoreOutcome, 'the server is down: nothing to read yet').not.toHaveBeenCalled();
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['no answer', noAnswer, 'network'],
+        ['an answer without a code', codelessAnswer, 'unexpected'],
+    ])('restartNow() refused — %s: pending again with the error (failure restart), announced, nothing probed', async (_case, refused, code) => {
+        const {controller, api, events} = await pendingRestore();
+        api.restart.mockRejectedValueOnce(refused());
+
+        await controller.restartNow();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+
+        expect(controller.state).toBe('pending');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('restart');
+        expect(controller.busy).toBe(false);
+        expect(controller.outcome).toBeNull();
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'restart'}]]);
+    });
+
+    it('restartNow() refused with 409 restore_not_pending — cancelled from the command line meanwhile: failed (restart), announced, outcome null, nothing probed (the decision of 11:47)', async () => {
+        const {controller, api, events} = await pendingRestore();
+        api.restart.mockRejectedValueOnce(refusal(409, 'restore_not_pending'));
+
+        await controller.restartNow();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+
+        expect(api.status, 'the status is read again only when the user tries again (retry())').toHaveBeenCalledTimes(1);
+        expect(controller.state, 'a restore that no longer exists must not be shown as pending').toBe('failed');
+        expect(controller.errorCode).toBe('restore_not_pending');
+        expect(controller.failure).toBe('restart');
+        expect(controller.busy).toBe(false);
+        expect(controller.outcome).toBeNull();
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code: 'restore_not_pending', what: 'restart'}]]);
+    });
+
+    it('cancelPending(): cancelling and busy while DELETE /pending is out; accepted, the checked copy dropped too (DELETE /stage/{stage_id}, as backup pending --cancel does), still cancelling; then the status read again: idle, cancelled {what: pending}', async () => {
+        const {controller, api, events} = await pendingRestore();
+        const answer = deferred<void>();
+        const drop = deferred<void>();
+        api.cancelPending.mockReturnValueOnce(answer.promise);
+        api.dropCheck.mockReturnValueOnce(drop.promise);
+        api.status.mockResolvedValueOnce(none());
+
+        void controller.cancelPending();
+        await flush();
+
+        expect(api.cancelPending).toHaveBeenCalledTimes(1);
+        expect(api.dropCheck, 'the copy is dropped only once the restore is cancelled').not.toHaveBeenCalled();
+        expect(controller.state).toBe('cancelling');
+        expect(controller.busy).toBe(true);
+
+        answer.resolve();
+        await flush();
+
+        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
+        expect(api.status, 'the status is read again only once the copy is dropped').toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('cancelling');
+        expect(controller.busy).toBe(true);
+
+        drop.resolve();
+        await flush();
+
+        expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
+        expect(api.dropCheck).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('idle');
+        expect(controller.busy).toBe(false);
+        expect(controller.status).toEqual(none());
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+    });
+
+    it.each<[string, () => unknown]>([
+        ['404 restore_stage_not_found: the copy already gone', () => refusal(404, 'restore_stage_not_found')],
+        ['409 restore_pending: a restore waits to apply it', () => refusal(409, 'restore_pending')],
+        ['no answer', noAnswer],
+        ['an answer without a code', codelessAnswer],
+    ])('cancelPending(): the drop of the copy refused — %s — is ignored: no failure, the status read again, cancelled {what: pending} once', async (_case, refused) => {
+        const {controller, api, events} = await pendingRestore();
+        api.cancelPending.mockResolvedValueOnce(undefined);
+        api.dropCheck.mockRejectedValueOnce(refused());
+        api.status.mockResolvedValueOnce(none());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
+        expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('idle');
+        expect(controller.busy).toBe(false);
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+    });
+
+    it.each<[string, () => RestoreStatus]>([
+        ['null', () => pending({stage_id: null})],
+        [
+            'absent',
+            () => {
+                const status = pending();
+                delete status.stage_id;
+                return status;
+            },
+        ],
+    ])('cancelPending(): a pending status whose stage_id is %s has no copy to drop — DELETE /pending only, then the status read again, cancelled {what: pending}', async (_case, held) => {
+        const context = await setup();
+        await loaded(context, held());
+        const {controller, api, events} = context;
+        expect(controller.state, 'precondition: a restore is pending').toBe('pending');
+        api.cancelPending.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValueOnce(none());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(api.cancelPending).toHaveBeenCalledTimes(1);
+        expect(api.dropCheck, 'a copy was dropped for a status without a stage_id').not.toHaveBeenCalled();
+        expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('idle');
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+    });
+
+    it('cancelPending(): a restore no longer pending (404 restore_not_pending) is no failure: no copy dropped, the status read again shows what it became', async () => {
+        const {controller, api, names} = await pendingRestore();
+        api.cancelPending.mockRejectedValueOnce(refusal(404, 'restore_not_pending'));
+        api.status.mockResolvedValueOnce(inProgress());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(api.dropCheck, 'the copy of a restore a start may be applying was dropped').not.toHaveBeenCalled();
+        expect(api.status).toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('in_progress');
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(names()).not.toContain('backup.restore.failed');
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['no answer', noAnswer, 'network'],
+        ['an answer without a code', codelessAnswer, 'unexpected'],
+    ])('cancelPending() refused — %s: failed (cancel), announced, no copy dropped', async (_case, refused, code) => {
+        const {controller, api, events} = await pendingRestore();
+        api.cancelPending.mockRejectedValueOnce(refused());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('cancel');
+        expect(controller.busy).toBe(false);
+        expect(api.dropCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'cancel'}]]);
+    });
+});
+
+// =====================================================================================================================
+describe('the restart: the server probed until the outcome is known (§0.2, §0.3)', () => {
+    it('seen down, then up: the outcome read once — signed out is restored: no message, toSignIn() once, restored announced, nothing probed after', async () => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer).toHaveBeenCalled();
+        expect(api.restoreOutcome, 'the server is down: nothing to read yet').not.toHaveBeenCalled();
+        expect(controller.outcome).toBe('waiting');
+        expect(toSignIn).not.toHaveBeenCalled();
+
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome).toBe('restored');
+        expect(controller.outcomeStatus).toBeNull();
+        expect(toSignIn, 'a success goes straight to the sign-in page').toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([['backup.restore.restored', {}]]);
+
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the server was probed after the outcome').toBe(probes);
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount(), 'a timer outlived the outcome').toBe(0);
+    });
+
+    it('seen down, then up, the status committed: restored as well — toSignIn() once', async () => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: committed()});
+
+        await serverRestarts(server);
+
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([['backup.restore.restored', {}]]);
+    });
+
+    it.each(REASONS)('seen down, then up, the restore rolled back (%s): rolled_back, its status kept, announced with the reason, no sign-in', async (reason) => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: rolledBack(reason)});
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome).toBe('rolled_back');
+        expect(controller.outcomeStatus).toEqual(rolledBack(reason));
+        expect(toSignIn, 'a restore that did not go through stays on the same screen').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.rolled_back', {reason}]]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each(WAITINGS)('seen down, then up, the restore still pending (%s): still_pending with its waiting, nothing announced, no sign-in', async (waiting) => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: pending({waiting})});
+
+        await serverRestarts(server);
+
+        expect(controller.outcome).toBe('still_pending');
+        expect(controller.outcomeStatus?.waiting).toBe(waiting);
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('seen down, then up, the status refused because the hosting provider blocked the instance (blocked, P8): still_pending, waiting for the unblock (P7), nothing announced, no sign-in, nothing probed after', async () => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'blocked'});
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome, 'a restart that came back on a blocked instance is a failure on the same screen').toBe('still_pending');
+        expect(controller.outcomeStatus, 'the status route is refused too: the page builds the status, and only that').toStrictEqual({state: 'pending', waiting: 'instance_blocked'});
+        expect(toSignIn, 'a restore that did not go through stays on the same screen').not.toHaveBeenCalled();
+        expect(events(), 'still_pending is announced by nobody (§0.3)').toEqual([]);
+
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the server was probed after the outcome').toBe(probes);
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount(), 'a timer outlived the outcome').toBe(0);
+    });
+
+    it('up all along: the outcome is not read before fastRestartMs, then read anyway — signed out: restored', async () => {
+        const {controller, api, toSignIn} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS - 1);
+        expect(api.probeServer).toHaveBeenCalled();
+        expect(api.restoreOutcome, 'read before fastRestartMs').not.toHaveBeenCalled();
+        expect(controller.outcome).toBe('waiting');
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+    });
+
+    it('up all along, the restore still pending at the fast read: keep waiting and probing; a later down then up gives the outcome', async () => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: pending()});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS + 2 * POLL_MS);
+        expect(api.restoreOutcome, 'precondition: the outcome was read anyway').toHaveBeenCalled();
+        expect(controller.outcome, 'pending at a fast read is not still_pending: the start may not have happened yet').toBe('waiting');
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the probing stopped').toBeGreaterThan(probes);
+        expect(controller.outcome).toBe('waiting');
+
+        api.restoreOutcome.mockResolvedValue({kind: 'signed_out'});
+        await serverRestarts(server);
+
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([['backup.restore.restored', {}]]);
+    });
+
+    it('up all along, the restore rolled back meanwhile: rolled_back with its reason at the fast read', async () => {
+        const {controller, api, toSignIn} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: rolledBack('first_start_failed')});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS + 2 * POLL_MS);
+
+        expect(controller.outcome).toBe('rolled_back');
+        expect(controller.outcomeStatus?.reason).toBe('first_start_failed');
+        expect(toSignIn).not.toHaveBeenCalled();
+    });
+
+    it('up all along, the status refused at the fast read because the hosting provider blocked the instance (blocked): still_pending at once, waiting for the unblock, nothing announced, no sign-in, nothing probed after', async () => {
+        const {controller, api, events, toSignIn} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'blocked'});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS - 1);
+        expect(api.restoreOutcome, 'read before fastRestartMs').not.toHaveBeenCalled();
+        expect(controller.outcome).toBe('waiting');
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome, 'blocked at the fast read is already the outcome: no start applies a restore while the instance is blocked (P7)').toBe('still_pending');
+        expect(controller.outcomeStatus).toStrictEqual({state: 'pending', waiting: 'instance_blocked'});
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the server was probed after the outcome').toBe(probes);
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount(), 'a timer outlived the outcome').toBe(0);
+    });
+
+    it('down all along: slow only after slowAfterMs, the probing goes on, and the outcome still comes when the server is back', async () => {
+        const {controller, api, server} = await restartAccepted('down');
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS - 1);
+        expect(controller.slow).toBe(false);
+        expect(controller.outcome).toBe('waiting');
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+        expect(controller.slow).toBe(true);
+        expect(controller.outcome).toBe('waiting');
+
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the probing stopped once slow').toBeGreaterThan(probes);
+        expect(api.restoreOutcome).not.toHaveBeenCalled();
+
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+        expect(controller.outcome).toBe('restored');
+    });
+
+    it.each<[string, RestoreOutcomeAnswer, RestartOutcome, RestoreStatus]>([
+        ['rolled_back', {kind: 'status', status: rolledBack('swap_interrupted')}, 'rolled_back', rolledBack('swap_interrupted')],
+        ['still_pending', {kind: 'status', status: pending({waiting: 'instance_blocked'})}, 'still_pending', pending({waiting: 'instance_blocked'})],
+        ['still_pending, the status refused on a blocked instance (blocked)', {kind: 'blocked'}, 'still_pending', pending({waiting: 'instance_blocked'})],
+    ])('back to the tab after %s: load() clears the outcome and slow, and shows what the status says', async (_case, answer, outcome, status) => {
+        const {controller, api, server} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce(answer);
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 2 * POLL_MS);
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+        expect(controller.outcome, 'precondition: the outcome is known').toBe(outcome);
+
+        api.status.mockResolvedValueOnce(status);
+        await controller.load();
+        await flush();
+
+        expect(controller.outcome).toBeNull();
+        expect(controller.slow).toBe(false);
+        expect(controller.state).toBe(status.state === 'pending' ? 'pending' : 'idle');
+    });
+});
+
+// =====================================================================================================================
+describe('the events of the whole flow', () => {
+    it('upload, check, confirm, restart, restored: each step announced once, in order, with the details of §2b', async () => {
+        const context = await idle();
+        const {controller, api, events, toSignIn} = context;
+        const server = serve(context, 'down');
+        api.upload.mockResolvedValueOnce(uploaded({size: 8192}));
+        api.startCheck.mockResolvedValueOnce(runningStage());
+        api.getCheck.mockResolvedValueOnce(doneStage(report({action: 'upgrade'})));
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockResolvedValueOnce(pending());
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+
+        void controller.upload(archive(8192));
+        await flush();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(controller.state, 'precondition: the report').toBe('report');
+        void controller.confirm();
+        await flush();
+        expect(controller.outcome, 'precondition: the restart was accepted').toBe('waiting');
+        await serverRestarts(server);
+
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 8192}],
+            ['backup.restore.staged', {stage_id: STAGE_ID, restorable: true, action: 'upgrade'}],
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.restart.requested', {}],
+            ['backup.restore.restored', {}],
+        ]);
+    });
+});
+
+describe('dispose() and stale answers: an answer of an older generation changes nothing', () => {
+    it('dispose() during load(): the status answered after it changes nothing, no check read', async () => {
+        const context = await setup({stored: STAGE_ID});
+        const answer = deferred<RestoreStatus>();
+        context.api.status.mockReturnValueOnce(answer.promise);
+
+        void context.controller.load();
+        context.controller.dispose();
+        answer.resolve(none());
+        await flush();
+
+        expect(context.controller.state).toBe('loading');
+        expect(context.api.getCheck).not.toHaveBeenCalled();
+        expect(context.events()).toEqual([]);
+    });
+
+    it('dispose() while uploading: the answer of the PUT changes nothing, no check started', async () => {
+        const {controller, api, events} = await idle();
+        const answer = deferred<RestoreUpload>();
+        api.upload.mockReturnValueOnce(answer.promise);
+        void controller.upload(archive());
+        await flush();
+
+        controller.dispose();
+        answer.resolve(uploaded());
+        await flush();
+
+        expect(controller.state).toBe('uploading');
+        expect(api.startCheck).not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+    });
+
+    it('dispose() while checking: no more reads, no timer left', async () => {
+        const {controller, api} = await checking();
+
+        controller.dispose();
+
+        expect(vi.getTimerCount()).toBe(0);
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.getCheck).not.toHaveBeenCalled();
+        expect(controller.state).toBe('checking');
+    });
+
+    it.each<[string, (read: Deferred<RestoreStage>) => void]>([
+        ['the check done', (read) => read.resolve(doneStage())],
+        ['the check failed', (read) => read.resolve(failedStage('not_a_backup'))],
+        ['the check gone', (read) => read.reject(refusal(404, 'restore_stage_not_found'))],
+    ])('dispose() with a read out, answered after it — %s: no state change, nothing announced, nothing forgotten', async (_case, answer) => {
+        const {controller, api, storage, events} = await checking();
+        const read = deferred<RestoreStage>();
+        api.getCheck.mockReturnValueOnce(read.promise);
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(api.getCheck, 'precondition: a read is out').toHaveBeenCalledTimes(1);
+
+        controller.dispose();
+        answer(read);
+        await flush();
+
+        expect(controller.state).toBe('checking');
+        expect(controller.report).toBeNull();
+        expect(storage.items.get(KEY)).toBe(STAGE_ID);
+        expect(events()).toEqual([]);
+    });
+
+    it('a read of the check answered after dropCheck() dropped it: no report, no staged', async () => {
+        const {controller, api, storage, names} = await checking();
+        const read = deferred<RestoreStage>();
+        api.getCheck.mockReturnValueOnce(read.promise);
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(api.getCheck, 'precondition: a read is out').toHaveBeenCalledTimes(1);
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValue(none());
+        void controller.dropCheck();
+        await flush();
+        expect(controller.state, 'precondition: dropped').toBe('idle');
+
+        read.resolve(doneStage());
+        await flush();
+
+        expect(controller.state).toBe('idle');
+        expect(controller.report).toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(names()).not.toContain('backup.restore.staged');
+    });
+
+    it('dispose() while confirming: its answer changes nothing, nothing restarted', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        const answer = deferred<RestoreStatus>();
+        api.confirm.mockReturnValueOnce(answer.promise);
+        void controller.confirm();
+        await flush();
+
+        controller.dispose();
+        answer.resolve(pending());
+        await flush();
+
+        expect(controller.state).toBe('confirming');
+        expect(api.restart).not.toHaveBeenCalled();
+        expect(storage.items.get(KEY)).toBe(STAGE_ID);
+        expect(events()).toEqual([]);
+    });
+
+    it('dispose() while the server is probed: no more probes, a probe answered after it changes nothing, no timer left', async () => {
+        const {controller, api, toSignIn} = await restartAccepted('down');
+        const probe = deferred<'up' | 'down'>();
+        api.probeServer.mockReturnValueOnce(probe.promise);
+        api.restoreOutcome.mockResolvedValue({kind: 'signed_out'});
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        controller.dispose();
+        const probes = api.probeServer.mock.calls.length;
+        probe.resolve('up');
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+
+        expect(api.probeServer.mock.calls.length, 'probed after dispose()').toBe(probes);
+        expect(api.restoreOutcome).not.toHaveBeenCalled();
+        expect(controller.outcome).toBe('waiting');
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe('the storage', () => {
+    /** Upload, check, report, drop: the whole life of a followed check. */
+    async function wholeCheck(context: Context): Promise<void> {
+        const {controller, api} = context;
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockResolvedValueOnce(runningStage());
+        api.getCheck.mockResolvedValueOnce(doneStage());
+        api.dropCheck.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValue(none());
+
+        void controller.upload(archive());
+        await flush();
+        expect(controller.state).toBe('checking');
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(controller.state).toBe('report');
+        await controller.dropCheck();
+        await flush();
+        expect(controller.state).toBe('idle');
+    }
+
+    it('a storage that throws on every call never breaks the flow', async () => {
+        const insecure = () => new DOMException('The operation is insecure.', 'SecurityError');
+        const storage = {
+            getItem: vi.fn((_key: string): string | null => {
+                throw insecure();
+            }),
+            setItem: vi.fn((_key: string, _value: string): void => {
+                throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+            }),
+            removeItem: vi.fn((_key: string): void => {
+                throw insecure();
+            }),
+        };
+        const context = await setup({storage});
+        await loaded(context);
+        expect(context.controller.state).toBe('idle');
+
+        await wholeCheck(context);
+
+        expect(storage.getItem).toHaveBeenCalledWith(KEY);
+        expect(storage.setItem).toHaveBeenCalled();
+        expect(storage.removeItem).toHaveBeenCalled();
+    });
+
+    it('storage: null keeps the check in memory only and leaves sessionStorage alone', async () => {
+        sessionStorage.setItem(KEY, OTHER_STAGE_ID);
+        const context = await setup({storage: null});
+        await loaded(context);
+        expect(context.api.getCheck, 'storage: null must not read sessionStorage').not.toHaveBeenCalled();
+
+        await wholeCheck(context);
+
+        expect(sessionStorage.getItem(KEY)).toBe(OTHER_STAGE_ID);
+    });
+
+    it('without a storage option the check goes to sessionStorage, where the next page picks it up', async () => {
+        const first = await setup({storage: undefined});
+        await loaded(first);
+        first.api.upload.mockResolvedValueOnce(uploaded());
+        first.api.startCheck.mockResolvedValueOnce(runningStage());
+        void first.controller.upload(archive());
+        await flush();
+        expect(sessionStorage.getItem(KEY)).toBe(STAGE_ID);
+        first.controller.dispose();
+
+        const reloaded = await setup({storage: undefined});
+        reloaded.api.getCheck.mockResolvedValueOnce(runningStage({phase: 'verifying'}));
+        await loaded(reloaded);
+
+        expect(reloaded.api.getCheck.mock.calls).toEqual([[STAGE_ID]]);
+        expect(reloaded.controller.state).toBe('checking');
+    });
+});
+
+describe('the defaults', () => {
+    it('without an api option: the status, the upload and the check through the backup aliases; the check read every second', async () => {
+        const {RestoreFlowController} = await loadFlow();
+        zodios.get_restore_status_api_v1_backup_restore_status_get.mockResolvedValue(none());
+        zodios.upload_restore_archive_api_v1_backup_restore_upload_put.mockResolvedValue(uploaded());
+        zodios.start_restore_check_api_v1_backup_restore_stage_post.mockResolvedValue(runningStage());
+        zodios.get_restore_check_api_v1_backup_restore_stage__stage_id__get.mockResolvedValue(doneStage());
+        const controller = new RestoreFlowController({storage: null});
+        controllers.push(controller);
+        const file = archive();
+
+        void controller.load();
+        await flush();
+        expect(zodios.get_restore_status_api_v1_backup_restore_status_get).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('idle');
+
+        void controller.upload(file);
+        await flush();
+        expect(zodios.upload_restore_archive_api_v1_backup_restore_upload_put.mock.calls[0][0], 'the archive is the raw body').toBe(file);
+        expect(zodios.start_restore_check_api_v1_backup_restore_stage_post.mock.calls[0][0]).toEqual({upload_id: UPLOAD_ID});
+        expect(controller.state).toBe('checking');
+
+        await vi.advanceTimersByTimeAsync(999);
+        expect(zodios.get_restore_check_api_v1_backup_restore_stage__stage_id__get, 'the default pause is one second').not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(zodios.get_restore_check_api_v1_backup_restore_stage__stage_id__get.mock.calls).toEqual([[{params: {stage_id: STAGE_ID}}]]);
+        expect(controller.state).toBe('report');
+    });
+
+    it('fastRestartMs 30 s: up all along, the outcome is read only after half a minute', async () => {
+        const {controller, api} = await restartAccepted('up', {pollMs: undefined, fastRestartMs: undefined, slowAfterMs: undefined});
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+
+        await vi.advanceTimersByTimeAsync(30_000 - 1);
+        expect(api.restoreOutcome).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2_001);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome).toBe('restored');
+    });
+
+    it('pollMs 1 s and slowAfterMs 60 s: down all along, probed once a second, slow only after a minute', async () => {
+        const {controller, api} = await restartAccepted('down', {pollMs: undefined, fastRestartMs: undefined, slowAfterMs: undefined});
+        const probes = api.probeServer.mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(api.probeServer.mock.calls.length - probes, 'probed once a second').toBe(10);
+        await vi.advanceTimersByTimeAsync(60_000 - 10_000 - 1);
+        expect(controller.slow).toBe(false);
+        await vi.advanceTimersByTimeAsync(2_001);
+
+        expect(controller.slow).toBe(true);
+    });
+});

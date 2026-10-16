@@ -1,0 +1,976 @@
+// @vitest-environment jsdom
+/**
+ * RestoreCard — the restore card of Settings › Backup, under the download card (component test, Vitest + jsdom;
+ * workstream B, lot B5b). Written red first against `b5b-contract.md` §0 (P8 and P7, which override the rest), §2, §2b,
+ * §2c, §3 and §4: the card does not exist yet.
+ *
+ * The card is the face of `RestoreFlowController` (pinned on its own in restoreFlow.test.ts). What it adds, and what this
+ * file pins, is what the user sees and what the machine reads:
+ *   - its root `restore-card` publishes `data-state`, `data-error-code` (empty when none), `data-busy` and `aria-busy`;
+ *   - `loading`: busy, nothing offered; `idle`: `restore-file-input` (a picker suggesting `.zip`, one file),
+ *     `restore-choose` (it opens the picker), `restore-limit` with the limit when there is one (not for 0 or an unknown
+ *     limit); the last result only for a restore that rolled back — `restore-last-result` with `data-result` and
+ *     `data-reason` —, never for one that was applied (§0.2); `in_progress`: nothing offered;
+ *   - `uploading`: `restore-upload-progress` with a progress bar, `restore-cancel-check` aborting the PUT; `checking`:
+ *     `restore-check-progress` with `data-phase`, `restore-cancel-check` sending the DELETE; `report`: the modal
+ *     `restore-report`, whose `restore-drop` drops the check and whose `restore-confirm` confirms;
+ *   - the confirmation restarts at once (§0.1): the modal closes and `restart-overlay` waits; a refused restart leaves the
+ *     pending block with the error; a restore found pending at load shows `restore-pending` with `data-waiting` (and
+ *     `restore-waiting`, worded by `backup.restore.waiting.<waiting>`, `instance_blocked` included, §0.5),
+ *     `restore-restart` and `restore-cancel-pending`; the cancel drops the checked copy too, as the command line's
+ *     `backup pending --cancel` does: `deleteRestoreCheck(stage_id)` once the restore is cancelled, before the status is
+ *     read again;
+ *   - a success shows no message (§0.2): the overlay keeps waiting as `restored` and `restoreNavigation.toSignIn()` is
+ *     called once; a failure shows on the overlay (§0.3), whose `restart-back` reads the status again; `restart-sign-in`
+ *     never exists. A restart that comes back on an instance its hosting provider blocked — `restoreOutcome()` answers
+ *     `blocked`, the status route itself refused with 423 — is such a failure too (P8, `instance_blocked` included): the
+ *     overlay `still_pending` with `data-waiting="instance_blocked"` and `restart-back`, no sign-in, nothing told;
+ *   - `failed`: `restore-error` with `data-error-code`; `backup_too_large` refused before anything is sent;
+ *   - every event of the controller becomes one `notify()` with its name and detail: `backup.restore.failed` with an
+ *     error toast, the others silent (§4);
+ *   - the polling stops, and late answers are dropped, once the card is unmounted; BackupTab shows it under the
+ *     download card.
+ *
+ * Additions to §3 this file pins, each one test id or attribute, each one place to rename: the button of `failed` that
+ * tries again is `restore-retry` (§2 offers «try again», §3 gives it no test id); `restore-cancel-check` also aborts an
+ * upload (§2 offers a cancel while uploading, §3 lists one cancel id); `restore-upload-progress` holds a
+ * `role="progressbar"` with `aria-valuenow` in percent, as the backup card's bar does.
+ *
+ * The seams. `$lib/i18n` renders every key as itself (with its values, when it has any), answers the word list of the
+ * confirmation with one word, so any pick is that word, and records every key asked. `./backupApi` keeps its real
+ * helpers and swaps the ten restore functions for `vi.fn`, each rejecting a call the case did not expect — except where
+ * the card ignores a refusal by design (the drop of a cancelled restore's copy): there the case asserts the call it
+ * expects. `$lib/api` is a client that throws on any request. `notify` is a spy; `restoreNavigation.toSignIn` is a spy on
+ * the exported object, so nothing navigates. The clock is fake: the card's controller uses its defaults (`pollMs` 1000,
+ * `fastRestartMs` 30 000, `slowAfterMs` 60 000). `sessionStorage` is the real jsdom one, emptied around every case.
+ *
+ * The components are loaded through `import.meta.glob` in a hook: while the card does not exist, every case fails on its
+ * own and names it.
+ */
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
+import {readable, writable} from 'svelte/store';
+import {tick, type Component} from 'svelte';
+import type {z} from 'zod';
+import type {schemas} from '$lib/api';
+import {cleanup, fireEvent, render, screen, within} from '$test/component';
+
+const i18n = vi.hoisted(() => ({asked: [] as string[]}));
+
+vi.mock('$lib/i18n', () => {
+    const translate = (key: string, options?: {values?: Record<string, unknown>}) => {
+        i18n.asked.push(key);
+        // One word in the list: whatever the modal picks, the word to type is this one.
+        if (key === 'backup.restore.confirm.words') return 'violet';
+        if (key === 'backup.restore.confirm.word') return 'violet';
+        return options?.values ? `${key} ${JSON.stringify(options.values)}` : key;
+    };
+    const translator = readable(translate);
+    return {
+        _: translator,
+        t: translator,
+        locale: writable('en'),
+        date: readable((value: unknown) => String(value)),
+        time: readable((value: unknown) => String(value)),
+        number: readable((value: unknown) => String(value)),
+        i18nLoading: readable(false),
+        SUPPORTED_LOCALES: ['en', 'it', 'fr', 'es'],
+        DEFAULT_LOCALE: 'en',
+        LOCALE_NAMES: {en: 'English', it: 'Italiano', fr: 'Français', es: 'Español'},
+        LOCALE_FLAGS: {en: 'EN', it: 'IT', fr: 'FR', es: 'ES'},
+        LANGUAGE_OPTIONS: [{code: 'en', name: 'English', flag: 'EN'}],
+        initI18n: () => undefined,
+        saveLocalePreference: () => undefined,
+    };
+});
+
+// The card reaches the server only through the restore functions of ./backupApi, mocked below. Any other request would
+// come through this client, and fails the case instead of leaving the page.
+vi.mock('$lib/api', () => {
+    const zodiosApi = new Proxy(
+        {},
+        {
+            get: (_target, alias) =>
+                typeof alias !== 'string' || alias === 'then'
+                    ? undefined
+                    : () => {
+                          throw new Error(`RestoreCard.test: a request went through zodiosApi.${alias}`);
+                      },
+        },
+    );
+    return {zodiosApi, schemas: {}, axiosInstance: {}, ApiError: class ApiError extends Error {}};
+});
+
+vi.mock('./backupApi', async () => {
+    const actual = await vi.importActual<Record<string, unknown>>('./backupApi');
+    return {
+        ...actual,
+        getRestoreStatus: vi.fn(),
+        uploadRestoreArchive: vi.fn(),
+        startRestoreCheck: vi.fn(),
+        getRestoreCheck: vi.fn(),
+        deleteRestoreCheck: vi.fn(),
+        confirmRestore: vi.fn(),
+        cancelPendingRestore: vi.fn(),
+        requestRestart: vi.fn(),
+        probeServer: vi.fn(),
+        restoreOutcome: vi.fn(),
+    };
+});
+
+vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
+
+import * as backupApi from './backupApi';
+import {notify} from '$lib/stores/app/notify.svelte';
+
+// --- The contract, as this file uses it -------------------------------------------------------------------------------
+
+type RestoreStatus = z.infer<typeof schemas.RestoreStatus>;
+type RestoreStage = z.infer<typeof schemas.RestoreStage>;
+type RestoreStageReport = z.infer<typeof schemas.RestoreStageReport>;
+type RestoreUpload = z.infer<typeof schemas.RestoreUpload>;
+type RollbackReason = NonNullable<RestoreStatus['reason']>;
+/** The waiting reasons of §0.5: the generated client does not know `instance_blocked` yet (P7). */
+type WaitingReason = NonNullable<RestoreStatus['waiting']> | 'instance_blocked';
+type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
+type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+
+interface RestoreRequests {
+    getRestoreStatus: () => Promise<RestoreStatus>;
+    uploadRestoreArchive: (file: File, options?: UploadOptions) => Promise<RestoreUpload>;
+    startRestoreCheck: (uploadId: string) => Promise<RestoreStage>;
+    getRestoreCheck: (stageId: string) => Promise<RestoreStage>;
+    deleteRestoreCheck: (stageId: string) => Promise<void>;
+    confirmRestore: (stageId: string) => Promise<RestoreStatus>;
+    cancelPendingRestore: () => Promise<void>;
+    requestRestart: () => Promise<RestoreStatus>;
+    probeServer: () => Promise<'up' | 'down'>;
+    restoreOutcome: () => Promise<RestoreOutcomeAnswer>;
+}
+
+const RESTORE_FUNCTIONS = ['getRestoreStatus', 'uploadRestoreArchive', 'startRestoreCheck', 'getRestoreCheck', 'deleteRestoreCheck', 'confirmRestore', 'cancelPendingRestore', 'requestRestart', 'probeServer', 'restoreOutcome'] as const;
+
+/** The ten restore functions of ./backupApi, as the mock above made them. */
+const api = backupApi as unknown as {[K in keyof RestoreRequests]: Mock<RestoreRequests[K]>};
+
+// --- The components ---------------------------------------------------------------------------------------------------
+
+type Loaded = {RestoreCard: Component<Record<string, unknown>>; BackupTab: Component<Record<string, unknown>>; navigation: {toSignIn(): void} | undefined};
+
+const CARD_MODULES = import.meta.glob<{default: Component<Record<string, unknown>>}>('./RestoreCard.svelte');
+const TAB_MODULES = import.meta.glob<{default: Component<Record<string, unknown>>}>('./BackupTab.svelte');
+const FLOW_MODULES = import.meta.glob<{restoreNavigation?: {toSignIn(): void}}>('./restoreFlow.svelte.ts');
+
+let loaded: Loaded | {error: unknown} | undefined;
+
+beforeAll(async () => {
+    try {
+        const loadCard = CARD_MODULES['./RestoreCard.svelte'];
+        if (!loadCard) throw new Error('src/lib/features/backup/RestoreCard.svelte does not exist yet: Settings › Backup has no restore card (B5b contract §3)');
+        const {default: RestoreCard} = await loadCard();
+        const {default: BackupTab} = await TAB_MODULES['./BackupTab.svelte']!();
+        const loadFlow = FLOW_MODULES['./restoreFlow.svelte.ts'];
+        const navigation = loadFlow ? (await loadFlow()).restoreNavigation : undefined;
+        loaded = {RestoreCard, BackupTab, navigation};
+    } catch (error) {
+        loaded = {error};
+    }
+}, 60_000);
+
+function pieces(): Loaded {
+    if (loaded === undefined) throw new Error('the components under test were never loaded: their beforeAll did not run');
+    if ('error' in loaded) {
+        const {error} = loaded;
+        throw new Error(error instanceof Error ? error.message : String(error), {cause: error});
+    }
+    return loaded;
+}
+
+// --- Fixtures ---------------------------------------------------------------------------------------------------------
+
+const UPLOAD_ID = '0123456789abcdef0123456789abcdef';
+const STAGE_ID = 'fedcba9876543210fedcba9876543210';
+const KEY = 'librefolio.backup.restore.stage';
+const MIB = 1024 * 1024;
+/** The pause of the card's controller (its default). */
+const POLL_MS = 1000;
+const WORD = 'violet';
+
+const REASONS: RollbackReason[] = ['first_start_failed', 'swap_interrupted', 'swap_failed', 'stage_missing'];
+const WAITINGS: WaitingReason[] = ['backup_running', 'other_data_directory', 'server_running', 'instance_blocked'];
+
+type StatusFields = Omit<Partial<RestoreStatus>, 'waiting'> & {waiting?: WaitingReason | null};
+
+function restoreStatus(overrides: StatusFields = {}): RestoreStatus {
+    return {state: 'none', stage_id: null, confirmed_at: null, confirmed_by: null, backup_created_at: null, backup_app_version: null, action: null, finished_at: null, reason: null, waiting: null, upload_limit_mb: 500, ...overrides} as RestoreStatus;
+}
+
+const none = (overrides: StatusFields = {}) => restoreStatus({state: 'none', ...overrides});
+const confirmedFields: StatusFields = {stage_id: STAGE_ID, confirmed_at: '2026-10-16T11:20:00Z', confirmed_by: 'admin', backup_created_at: '2026-10-15T12:00:00Z', backup_app_version: '0.9.0', action: 'same'};
+const pending = (overrides: StatusFields = {}) => restoreStatus({state: 'pending', ...confirmedFields, ...overrides});
+const committed = () => restoreStatus({state: 'committed', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z'});
+const rolledBack = (reason: RollbackReason) => restoreStatus({state: 'rolled_back', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z', reason});
+
+function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
+    return {
+        backup_created_at: '2026-10-15T12:00:00Z',
+        backup_app_version: '0.9.0',
+        backup_origin: 'ui',
+        backup_revision: 'c0ffee000001',
+        app_version: '0.9.0',
+        head_revision: 'c0ffee000001',
+        action: 'same',
+        migrations: [],
+        post_migration_fixes: [],
+        tables: {asset: {before: 12, after: 12}},
+        foreign_key_violations_before: 0,
+        foreign_key_violations_after: 0,
+        files: 3,
+        files_size: 2048,
+        database_size: MIB,
+        instance_key_included: false,
+        administrators: ['giulia.bianchi'],
+        warnings: [],
+        blockers: [],
+        control_totals: 'same',
+        control_totals_differences: [],
+        control_totals_differences_count: 0,
+        restorable: true,
+        expires_at: '2026-10-16T12:00:00Z',
+        ...overrides,
+    };
+}
+
+function stage(overrides: Partial<RestoreStage> = {}): RestoreStage {
+    return {stage_id: STAGE_ID, status: 'running', phase: 'checking', done_bytes: 0, total_bytes: 0, created_at: '2026-10-16T09:00:00Z', finished_at: null, error_code: null, report: null, ...overrides};
+}
+
+const runningStage = (overrides: Partial<RestoreStage> = {}) => stage({status: 'running', ...overrides});
+const doneStage = (answer: RestoreStageReport = report()) => stage({status: 'done', phase: null, done_bytes: 4096, total_bytes: 4096, finished_at: '2026-10-16T09:01:00Z', report: answer});
+const uploaded = (overrides: Partial<RestoreUpload> = {}): RestoreUpload => ({upload_id: UPLOAD_ID, size: 4096, ...overrides});
+
+/** An archive of `size` bytes: the size is set on the File, so a large one costs no memory. */
+function archive(size = 4096, name = 'librefolio-backup-20261015-120000.zip'): File {
+    const file = new File(['PK\u0003\u0004'], name, {type: 'application/zip'});
+    Object.defineProperty(file, 'size', {value: size});
+    return file;
+}
+
+/** A refusal as the backup routes word it, raised by axios: `detail: {code, message, …}`. */
+function refusal(status: number, code: string, extra: Record<string, unknown> = {}) {
+    return {isAxiosError: true, message: `Request failed with status code ${status}`, response: {status, data: {detail: {code, message: `refused: ${code}`, ...extra}}}};
+}
+
+const noAnswer = () => ({isAxiosError: true, message: 'Network Error', code: 'ERR_NETWORK', response: undefined});
+const canceled = () => ({isAxiosError: true, name: 'CanceledError', message: 'canceled', code: 'ERR_CANCELED', __CANCEL__: true, response: undefined});
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return {promise, resolve, reject};
+}
+
+// --- Helpers ----------------------------------------------------------------------------------------------------------
+
+const card = () => screen.getByTestId('restore-card');
+
+/** What the card recorded through `notify()`, in order; only the events called `name` when it is given. */
+function events(name?: string) {
+    return vi
+        .mocked(notify)
+        .mock.calls.map(([options]) => options)
+        .filter((options) => name === undefined || options.name === name);
+}
+
+/** Let every answer already given reach the card: a real macrotask drains the promise chains, a tick flushes Svelte. */
+async function settle(): Promise<void> {
+    await vi.advanceTimersByTimeAsync(0);
+    await tick();
+}
+
+/** Move the clock by `ms`, firing what is due on the way, and let the answers reach the card. */
+async function elapse(ms: number): Promise<void> {
+    await vi.advanceTimersByTimeAsync(ms);
+    await tick();
+}
+
+/** The progress bar of a progress block: the block itself when it is the bar. */
+function progressbar(block: HTMLElement): HTMLElement {
+    return block.getAttribute('role') === 'progressbar' ? block : within(block).getByRole('progressbar');
+}
+
+/** The card mounted, its status read with `status`. */
+async function mount(status: RestoreStatus = none()) {
+    api.getRestoreStatus.mockResolvedValueOnce(status);
+    const view = render(pieces().RestoreCard);
+    await settle();
+    return view;
+}
+
+/** A file chosen in the picker. */
+async function choose(file: File): Promise<void> {
+    await fireEvent.change(screen.getByTestId('restore-file-input'), {target: {files: [file]}});
+    await settle();
+}
+
+/** An archive uploaded and its check started: `checking`, its first read due in a second. */
+async function checkingCard() {
+    const view = await mount();
+    api.uploadRestoreArchive.mockResolvedValueOnce(uploaded());
+    api.startRestoreCheck.mockResolvedValueOnce(runningStage({phase: 'checking'}));
+    await choose(archive());
+    expect(card(), 'precondition: the check runs').toHaveAttribute('data-state', 'checking');
+    return view;
+}
+
+/** The check done: the report open. */
+async function reportCard(answer: RestoreStageReport = report()) {
+    const view = await checkingCard();
+    api.getRestoreCheck.mockResolvedValueOnce(doneStage(answer));
+    await elapse(POLL_MS);
+    expect(card(), 'precondition: the report is shown').toHaveAttribute('data-state', 'report');
+    return view;
+}
+
+/** The word typed in the modal and the restore confirmed. */
+async function typeAndConfirm(): Promise<void> {
+    await fireEvent.input(screen.getByTestId('restore-confirm-input'), {target: {value: WORD}});
+    await fireEvent.click(screen.getByTestId('restore-confirm'));
+    await settle();
+}
+
+/** `probeServer()` answers what `server.state` holds, whenever it is asked. */
+function serve(initial: 'up' | 'down') {
+    const server = {state: initial};
+    api.probeServer.mockImplementation(() => Promise.resolve(server.state));
+    return server;
+}
+
+/** A restore found pending, its restart asked from the pending block and accepted: the overlay waits. */
+async function restartFromPending(initial: 'up' | 'down') {
+    const view = await mount(pending());
+    const server = serve(initial);
+    api.requestRestart.mockResolvedValueOnce(pending());
+    await fireEvent.click(screen.getByTestId('restore-restart'));
+    await settle();
+    expect(screen.getByTestId('restart-overlay'), 'precondition: the overlay waits').toHaveAttribute('data-outcome', 'waiting');
+    return {...view, server};
+}
+
+/** The restart seen happening: down for three seconds, then up for two. */
+async function serverRestarts(server: {state: 'up' | 'down'}): Promise<void> {
+    server.state = 'down';
+    await elapse(3 * POLL_MS);
+    server.state = 'up';
+    await elapse(2 * POLL_MS);
+}
+
+let toSignIn: Mock<() => void> | undefined;
+
+beforeEach(() => {
+    vi.useFakeTimers();
+    sessionStorage.clear();
+    i18n.asked.length = 0;
+    vi.mocked(notify).mockReset();
+    for (const name of RESTORE_FUNCTIONS) {
+        const fn = api[name] as unknown as Mock<(...args: unknown[]) => Promise<unknown>>;
+        fn.mockReset();
+        fn.mockImplementation(() => Promise.reject(new Error(`${name}(): a request this case did not expect`)));
+    }
+    const navigation = loaded && !('error' in loaded) ? loaded.navigation : undefined;
+    toSignIn = navigation && typeof navigation.toSignIn === 'function' ? (vi.spyOn(navigation, 'toSignIn').mockImplementation(() => undefined) as unknown as Mock<() => void>) : undefined;
+});
+
+afterEach(() => {
+    // Unmount on the fake clock that scheduled the card's timers, then hand the real one back.
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    sessionStorage.clear();
+});
+
+/** An action is not offered: its control is absent, or there and disabled. */
+function notOffered(testId: string, why: string): void {
+    const control = screen.queryByTestId(testId);
+    expect(control === null || control.hasAttribute('disabled'), `${testId} is offered ${why}`).toBe(true);
+}
+
+// =====================================================================================================================
+describe('RestoreCard — loading and idle', () => {
+    it('loading: busy, nothing offered, until the status answers', async () => {
+        const answer = deferred<RestoreStatus>();
+        api.getRestoreStatus.mockReturnValueOnce(answer.promise);
+
+        render(pieces().RestoreCard);
+        await tick();
+
+        expect(api.getRestoreStatus).toHaveBeenCalledTimes(1);
+        expect(card()).toHaveAttribute('data-state', 'loading');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        expect(card()).toHaveAttribute('aria-busy', 'true');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        notOffered('restore-choose', 'before the status is known');
+        notOffered('restore-file-input', 'before the status is known');
+        for (const absent of ['restore-pending', 'restore-error', 'restore-last-result', 'restore-report', 'restart-overlay']) {
+            expect(screen.queryByTestId(absent), `${absent} while the status is read`).toBeNull();
+        }
+
+        answer.resolve(none());
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+    });
+
+    it('idle: the picker of one file suggesting .zip, restore-choose, the limit; no request but the status, nothing told', async () => {
+        await mount(none({upload_limit_mb: 500}));
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(card()).toHaveAttribute('aria-busy', 'false');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        const input = screen.getByTestId('restore-file-input');
+        expect(input).toHaveAttribute('type', 'file');
+        expect(input.getAttribute('accept') ?? '', 'the picker suggests .zip').toContain('.zip');
+        expect(input, 'one archive at a time').not.toHaveAttribute('multiple');
+        expect(input).not.toBeDisabled();
+        expect(screen.getByTestId('restore-choose')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-limit').textContent, 'the limit is not shown').toContain('500');
+        for (const absent of ['restore-last-result', 'restore-pending', 'restore-error', 'restore-upload-progress', 'restore-check-progress', 'restore-report', 'restart-overlay']) {
+            expect(screen.queryByTestId(absent), `${absent} on an idle card`).toBeNull();
+        }
+        expect(api.getRestoreStatus).toHaveBeenCalledTimes(1);
+        expect(api.getRestoreCheck).not.toHaveBeenCalled();
+        expect(notify).not.toHaveBeenCalled();
+    });
+
+    it.each<[string, number | null]>([
+        ['no limit (0)', 0],
+        ['a limit that cannot be read', null],
+    ])('%s: no restore-limit, the picker still offered', async (_case, limit) => {
+        await mount(none({upload_limit_mb: limit}));
+
+        expect(screen.queryByTestId('restore-limit')).toBeNull();
+        expect(screen.getByTestId('restore-file-input')).not.toBeDisabled();
+        expect(screen.getByTestId('restore-choose')).toBeInTheDocument();
+    });
+
+    it('restore-choose opens the picker', async () => {
+        await mount();
+        const opened = vi.fn((event: Event) => event.preventDefault());
+        screen.getByTestId('restore-file-input').addEventListener('click', opened);
+
+        await fireEvent.click(screen.getByTestId('restore-choose'));
+
+        expect(opened).toHaveBeenCalledTimes(1);
+    });
+
+    it('after a restore that was applied: no last result — a success shows no message (§0.2)', async () => {
+        await mount(committed());
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.queryByTestId('restore-last-result')).toBeNull();
+        expect(i18n.asked.filter((key) => key.startsWith('backup.restore.last.committed'))).toEqual([]);
+    });
+
+    it.each(REASONS)('after a restore that rolled back (%s): restore-last-result with data-result and data-reason, and the picker', async (reason) => {
+        await mount(rolledBack(reason));
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        const last = screen.getByTestId('restore-last-result');
+        expect(last).toHaveAttribute('data-result', 'rolled_back');
+        expect(last).toHaveAttribute('data-reason', reason);
+        expect(screen.getByTestId('restore-choose')).toBeInTheDocument();
+    });
+
+    it('a restore being applied: in_progress, not busy, nothing offered', async () => {
+        await mount(restoreStatus({state: 'in_progress', ...confirmedFields}));
+
+        expect(card()).toHaveAttribute('data-state', 'in_progress');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        for (const action of ['restore-choose', 'restore-file-input', 'restore-restart', 'restore-cancel-pending', 'restore-retry', 'restore-cancel-check']) {
+            notOffered(action, 'while a start applies the restore');
+        }
+    });
+});
+
+describe('RestoreCard — the upload and the check', () => {
+    it('a file chosen: uploading with its progress and the cancel; then checking through the phases; then the report', async () => {
+        await mount();
+        const upload = deferred<RestoreUpload>();
+        let options: UploadOptions | undefined;
+        api.uploadRestoreArchive.mockImplementationOnce((_file, given) => {
+            options = given;
+            return upload.promise;
+        });
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage({phase: 'checking'}));
+        api.getRestoreCheck.mockResolvedValueOnce(runningStage({phase: 'unpacking', done_bytes: 1024, total_bytes: 4096}));
+        api.getRestoreCheck.mockResolvedValueOnce(runningStage({phase: 'upgrading'}));
+        api.getRestoreCheck.mockResolvedValueOnce(runningStage({phase: 'verifying'}));
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+        const file = archive(1024);
+
+        await choose(file);
+
+        expect(api.uploadRestoreArchive).toHaveBeenCalledTimes(1);
+        expect(api.uploadRestoreArchive.mock.calls[0][0], 'the chosen File is sent').toBe(file);
+        expect(card()).toHaveAttribute('data-state', 'uploading');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        expect(screen.getByTestId('restore-cancel-check')).toBeInTheDocument();
+        notOffered('restore-choose', 'during an upload');
+
+        options?.onProgress?.(256, 1024);
+        await settle();
+        expect(progressbar(screen.getByTestId('restore-upload-progress'))).toHaveAttribute('aria-valuenow', '25');
+
+        upload.resolve(uploaded({size: 1024}));
+        await settle();
+
+        expect(api.startRestoreCheck).toHaveBeenCalledWith(UPLOAD_ID);
+        expect(card()).toHaveAttribute('data-state', 'checking');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        expect(screen.queryByTestId('restore-upload-progress')).toBeNull();
+        expect(screen.getByTestId('restore-check-progress')).toHaveAttribute('data-phase', 'checking');
+        expect(screen.getByTestId('restore-cancel-check')).toBeInTheDocument();
+        for (const phase of ['unpacking', 'upgrading', 'verifying']) {
+            await elapse(POLL_MS);
+            expect(screen.getByTestId('restore-check-progress')).toHaveAttribute('data-phase', phase);
+        }
+
+        await elapse(POLL_MS);
+
+        expect(card()).toHaveAttribute('data-state', 'report');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-check-progress')).toBeNull();
+        expect(sessionStorage.getItem(KEY), 'the report must survive a reload').toBe(STAGE_ID);
+    });
+
+    it('restore-cancel-check while uploading: the PUT aborted, back to idle, no failure told', async () => {
+        await mount();
+        api.getRestoreStatus.mockResolvedValue(none());
+        let signal: AbortSignal | undefined;
+        api.uploadRestoreArchive.mockImplementationOnce((_file, options) => {
+            signal = options?.signal;
+            return new Promise<RestoreUpload>((_resolve, reject) => {
+                signal?.addEventListener('abort', () => reject(canceled()));
+            });
+        });
+        await choose(archive());
+        expect(card(), 'precondition: the upload is out').toHaveAttribute('data-state', 'uploading');
+
+        await fireEvent.click(screen.getByTestId('restore-cancel-check'));
+        await settle();
+
+        expect(signal?.aborted, 'the PUT was not aborted').toBe(true);
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.getByTestId('restore-choose')).toBeInTheDocument();
+        expect(api.startRestoreCheck).not.toHaveBeenCalled();
+        expect(events('backup.restore.failed')).toEqual([]);
+    });
+
+    it('restore-cancel-check while checking: the DELETE of the check, then idle; cancelled told silently', async () => {
+        await checkingCard();
+        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
+        api.getRestoreStatus.mockResolvedValue(none());
+
+        await fireEvent.click(screen.getByTestId('restore-cancel-check'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(sessionStorage.getItem(KEY)).toBeNull();
+        expect(events('backup.restore.cancelled')).toEqual([{name: 'backup.restore.cancelled', detail: {what: 'check'}}]);
+    });
+
+    it('a file over the limit: failed with backup_too_large before anything is sent', async () => {
+        await mount(none({upload_limit_mb: 1}));
+
+        await choose(archive(MIB + 1));
+
+        expect(api.uploadRestoreArchive, 'a file over the limit was sent').not.toHaveBeenCalled();
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'backup_too_large');
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', 'backup_too_large');
+    });
+
+    it('the server refuses the archive as too large (413): restore-error with backup_too_large and the limit it named', async () => {
+        await mount(none({upload_limit_mb: null}));
+        api.uploadRestoreArchive.mockRejectedValueOnce(refusal(413, 'backup_too_large', {limit_mb: 250}));
+
+        await choose(archive());
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        const error = screen.getByTestId('restore-error');
+        expect(error).toHaveAttribute('data-error-code', 'backup_too_large');
+        expect(error.textContent, 'the limit the server named is not shown').toContain('250');
+    });
+});
+
+// =====================================================================================================================
+describe('RestoreCard — the report and the confirmation (§0.1)', () => {
+    it('restore-drop: the DELETE of the check, then idle, the report closed; cancelled told silently', async () => {
+        await reportCard();
+        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
+        api.getRestoreStatus.mockResolvedValue(none());
+
+        await fireEvent.click(screen.getByTestId('restore-drop'));
+        await settle();
+
+        expect(api.deleteRestoreCheck).toHaveBeenCalledWith(STAGE_ID);
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.queryByTestId('restore-report')).toBeNull();
+        expect(sessionStorage.getItem(KEY)).toBeNull();
+        expect(events('backup.restore.cancelled')).toEqual([{name: 'backup.restore.cancelled', detail: {what: 'check'}}]);
+    });
+
+    it('restore-confirm with the word typed: confirmed, then restarted at once — the report closed, the overlay waiting; both told silently', async () => {
+        await reportCard();
+        const confirmation = deferred<RestoreStatus>();
+        api.confirmRestore.mockReturnValueOnce(confirmation.promise);
+        api.requestRestart.mockResolvedValueOnce(pending());
+        serve('down');
+
+        await typeAndConfirm();
+
+        expect(api.confirmRestore).toHaveBeenCalledWith(STAGE_ID);
+        expect(card()).toHaveAttribute('data-state', 'confirming');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        notOffered('restore-confirm', 'while the confirmation is out');
+
+        confirmation.resolve(pending());
+        await settle();
+
+        expect(api.requestRestart, 'no «Restart now» step after a confirmation').toHaveBeenCalledTimes(1);
+        expect(card()).toHaveAttribute('data-state', 'restarting');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        expect(screen.queryByTestId('restore-report')).toBeNull();
+        expect(screen.getByTestId('restart-overlay')).toHaveAttribute('data-outcome', 'waiting');
+        expect(events('backup.restore.confirmed')).toEqual([{name: 'backup.restore.confirmed', detail: {stage_id: STAGE_ID}}]);
+        expect(events('backup.restore.restart.requested')).toEqual([{name: 'backup.restore.restart.requested', detail: {}}]);
+        expect(
+            events().filter(({toast}) => toast !== undefined),
+            'a step of a restore that goes on was toasted',
+        ).toEqual([]);
+    });
+
+    it('the restart refused after the confirmation: the pending block with the error, restore-restart and restore-cancel-pending, no overlay', async () => {
+        await reportCard();
+        api.confirmRestore.mockResolvedValueOnce(pending());
+        api.requestRestart.mockRejectedValueOnce(noAnswer());
+
+        await typeAndConfirm();
+
+        expect(card()).toHaveAttribute('data-state', 'pending');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(card()).toHaveAttribute('data-error-code', 'network');
+        expect(screen.getByTestId('restore-pending')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', 'network');
+        expect(screen.getByTestId('restore-restart')).toBeEnabled();
+        expect(screen.getByTestId('restore-cancel-pending')).toBeEnabled();
+        expect(screen.queryByTestId('restart-overlay')).toBeNull();
+        expect(screen.queryByTestId('restore-report')).toBeNull();
+    });
+});
+
+describe('RestoreCard — a restore found pending (§0.1, §0.5)', () => {
+    it('waiting for nothing: restore-pending with an empty data-waiting and no restore-waiting; restart and cancel offered, no picker', async () => {
+        await mount(pending());
+
+        expect(card()).toHaveAttribute('data-state', 'pending');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        const block = screen.getByTestId('restore-pending');
+        expect(block).toHaveAttribute('data-waiting', '');
+        expect(within(block).queryByTestId('restore-waiting')).toBeNull();
+        expect(screen.getByTestId('restore-restart')).toBeEnabled();
+        expect(screen.getByTestId('restore-cancel-pending')).toBeEnabled();
+        notOffered('restore-choose', 'while a restore waits for the next start');
+    });
+
+    it.each(WAITINGS)('waiting for %s: data-waiting, and restore-waiting worded by backup.restore.waiting.<waiting>', async (waiting) => {
+        await mount(pending({waiting}));
+
+        const block = screen.getByTestId('restore-pending');
+        expect(block).toHaveAttribute('data-waiting', waiting);
+        expect(within(block).getByTestId('restore-waiting')).toHaveTextContent(`backup.restore.waiting.${waiting}`);
+        expect(screen.getByTestId('restore-restart')).toBeEnabled();
+        expect(screen.getByTestId('restore-cancel-pending')).toBeEnabled();
+    });
+
+    it('restore-cancel-pending: cancelling, busy, nothing offered while the DELETE is out; then the checked copy dropped too (deleteRestoreCheck), and the status read again: idle; cancelled told silently', async () => {
+        await mount(pending());
+        const answer = deferred<void>();
+        api.cancelPendingRestore.mockReturnValueOnce(answer.promise);
+        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+
+        await fireEvent.click(screen.getByTestId('restore-cancel-pending'));
+        await settle();
+
+        expect(api.cancelPendingRestore).toHaveBeenCalledTimes(1);
+        expect(api.deleteRestoreCheck, 'the copy is dropped only once the restore is cancelled').not.toHaveBeenCalled();
+        expect(card()).toHaveAttribute('data-state', 'cancelling');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        notOffered('restore-restart', 'while the cancel is out');
+        notOffered('restore-cancel-pending', 'while the cancel is out');
+
+        answer.resolve();
+        await settle();
+
+        expect(api.deleteRestoreCheck.mock.calls, 'the copy of the cancelled restore was left on disk (backup pending --cancel drops it)').toEqual([[STAGE_ID]]);
+        expect(api.getRestoreStatus).toHaveBeenCalledTimes(2);
+        expect(api.deleteRestoreCheck.mock.invocationCallOrder[0], 'the status was read again before the copy was dropped').toBeLessThan(api.getRestoreStatus.mock.invocationCallOrder[1]);
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(screen.queryByTestId('restore-pending')).toBeNull();
+        expect(events('backup.restore.cancelled')).toEqual([{name: 'backup.restore.cancelled', detail: {what: 'pending'}}]);
+        expect(events('backup.restore.failed')).toEqual([]);
+    });
+});
+
+describe('RestoreCard — the restart and its outcome (§0.2, §0.3)', () => {
+    it('restore-restart: restarting, busy, the overlay waiting; restart.requested told silently', async () => {
+        await restartFromPending('down');
+
+        expect(api.requestRestart).toHaveBeenCalledTimes(1);
+        expect(card()).toHaveAttribute('data-state', 'restarting');
+        expect(card()).toHaveAttribute('data-busy', 'true');
+        expect(screen.getByTestId('restart-overlay')).toHaveAttribute('data-slow', 'false');
+        expect(events('backup.restore.restart.requested')).toEqual([{name: 'backup.restore.restart.requested', detail: {}}]);
+    });
+
+    it('a success: no message — the overlay keeps waiting as restored, restoreNavigation.toSignIn() once, no sign-in link', async () => {
+        const {server} = await restartFromPending('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+        expect(toSignIn, 'restoreFlow.svelte.ts exports no restoreNavigation.toSignIn() (§0.2)').toBeDefined();
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('restart-overlay')).toHaveAttribute('data-outcome', 'restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('restart-sign-in'), 'restart-sign-in no longer exists (§0.6)').toBeNull();
+        expect(screen.queryByTestId('restart-back')).toBeNull();
+        expect(events('backup.restore.restored')).toEqual([{name: 'backup.restore.restored', detail: {}}]);
+        expect(
+            events().filter(({toast}) => toast !== undefined),
+            'a success was toasted',
+        ).toEqual([]);
+    });
+
+    it.each(REASONS)('rolled back (%s): the overlay tells it; restart-back reads the status again, and the card shows the last result', async (reason) => {
+        const {server} = await restartFromPending('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: rolledBack(reason)});
+
+        await serverRestarts(server);
+
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay).toHaveAttribute('data-outcome', 'rolled_back');
+        expect(overlay).toHaveAttribute('data-reason', reason);
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(events('backup.restore.rolled_back')).toEqual([{name: 'backup.restore.rolled_back', detail: {reason}}]);
+
+        api.getRestoreStatus.mockResolvedValueOnce(rolledBack(reason));
+        await fireEvent.click(screen.getByTestId('restart-back'));
+        await settle();
+
+        expect(api.getRestoreStatus, 'back to the tab reads the status again').toHaveBeenCalledTimes(2);
+        expect(screen.queryByTestId('restart-overlay')).toBeNull();
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        const last = screen.getByTestId('restore-last-result');
+        expect(last).toHaveAttribute('data-result', 'rolled_back');
+        expect(last).toHaveAttribute('data-reason', reason);
+    });
+
+    it('still pending, waiting for the unblock of the instance (P7): the overlay tells it; restart-back shows the pending block again', async () => {
+        const {server} = await restartFromPending('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: pending({waiting: 'instance_blocked'})});
+
+        await serverRestarts(server);
+
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay).toHaveAttribute('data-outcome', 'still_pending');
+        expect(overlay).toHaveAttribute('data-waiting', 'instance_blocked');
+        expect(toSignIn).not.toHaveBeenCalled();
+
+        api.getRestoreStatus.mockResolvedValueOnce(pending({waiting: 'instance_blocked'}));
+        await fireEvent.click(screen.getByTestId('restart-back'));
+        await settle();
+
+        expect(screen.queryByTestId('restart-overlay')).toBeNull();
+        expect(card()).toHaveAttribute('data-state', 'pending');
+        expect(screen.getByTestId('restore-pending')).toHaveAttribute('data-waiting', 'instance_blocked');
+    });
+
+    it('confirmed, restarted, and the restarted server refuses the status because its hosting provider blocked it (blocked, P8): the failure on the same screen — the overlay still_pending, waiting for the unblock, with restart-back; no sign-in, nothing told', async () => {
+        await reportCard();
+        const server = serve('down');
+        api.confirmRestore.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(pending());
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'blocked'});
+
+        await typeAndConfirm();
+        expect(screen.getByTestId('restart-overlay'), 'precondition: the restart was accepted, the overlay waits').toHaveAttribute('data-outcome', 'waiting');
+        vi.mocked(notify).mockClear();
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay, 'a restart that came back on a blocked instance is a failure on the same screen').toHaveAttribute('data-outcome', 'still_pending');
+        expect(overlay).toHaveAttribute('data-waiting', 'instance_blocked');
+        expect(screen.getByTestId('restart-back')).toBeInTheDocument();
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(notify, 'a restore not applied is told by the overlay alone: no failure, no toast').not.toHaveBeenCalled();
+    });
+
+    it('a minute without the server: data-slow true, still waiting', async () => {
+        await restartFromPending('down');
+
+        await elapse(62 * POLL_MS);
+
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay).toHaveAttribute('data-outcome', 'waiting');
+        expect(overlay).toHaveAttribute('data-slow', 'true');
+    });
+});
+
+// =====================================================================================================================
+describe('RestoreCard — a failure, and trying again', () => {
+    it('a status read with no answer: failed with network, restore-error; restore-retry reads the status again', async () => {
+        api.getRestoreStatus.mockRejectedValueOnce(noAnswer());
+        render(pieces().RestoreCard);
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'network');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', 'network');
+
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        await fireEvent.click(screen.getByTestId('restore-retry'));
+        await settle();
+
+        expect(api.getRestoreStatus).toHaveBeenCalledTimes(2);
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        expect(screen.queryByTestId('restore-error')).toBeNull();
+    });
+});
+
+describe('RestoreCard — notify(): every event of the controller, the failures toasted (§4)', () => {
+    it('a whole success, from the upload to restored: each event once, in order, with its detail, none toasted', async () => {
+        await mount();
+        const server = serve('down');
+        api.uploadRestoreArchive.mockResolvedValueOnce(uploaded());
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage());
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage());
+        api.confirmRestore.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(pending());
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+
+        await choose(archive());
+        await elapse(POLL_MS);
+        await typeAndConfirm();
+        await serverRestarts(server);
+
+        expect(events().map(({name, detail}) => [name, detail])).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.staged', {stage_id: STAGE_ID, restorable: true, action: 'same'}],
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.restart.requested', {}],
+            ['backup.restore.restored', {}],
+        ]);
+        expect(
+            events().filter(({toast}) => toast !== undefined),
+            'a step of a success was toasted',
+        ).toEqual([]);
+    });
+
+    async function overTheLimit(): Promise<void> {
+        await mount(none({upload_limit_mb: 1}));
+        await choose(archive(MIB + 1));
+    }
+
+    async function checkRefused(): Promise<void> {
+        await mount();
+        api.uploadRestoreArchive.mockResolvedValueOnce(uploaded());
+        api.startRestoreCheck.mockRejectedValueOnce(refusal(409, 'restore_busy'));
+        await choose(archive());
+    }
+
+    async function confirmationRefused(): Promise<void> {
+        await reportCard();
+        api.confirmRestore.mockRejectedValueOnce(refusal(410, 'restore_stage_expired'));
+        await typeAndConfirm();
+    }
+
+    async function restartRefused(): Promise<void> {
+        await mount(pending());
+        api.requestRestart.mockRejectedValueOnce(noAnswer());
+        await fireEvent.click(screen.getByTestId('restore-restart'));
+        await settle();
+    }
+
+    it.each<[string, () => Promise<void>, string, string]>([
+        ['a file over the limit', overTheLimit, 'backup_too_large', 'upload'],
+        ['a check that cannot start', checkRefused, 'restore_busy', 'check'],
+        ['a confirmation refused', confirmationRefused, 'restore_stage_expired', 'confirm'],
+        ['a restart refused', restartRefused, 'network', 'restart'],
+    ])('%s: backup.restore.failed {code, what}, with an error toast', async (_case, arrive, code, what) => {
+        await arrive();
+
+        const failed = events('backup.restore.failed');
+        expect(failed).toHaveLength(1);
+        expect(failed[0].detail).toEqual({code, what});
+        expect(failed[0].toast?.variant).toBe('error');
+        expect(typeof failed[0].toast?.message, 'the toast has no message').toBe('string');
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', code);
+    });
+});
+
+describe('RestoreCard — unmounted', () => {
+    it('stops the polling: no read after unmount, no timer left, nothing told', async () => {
+        const {unmount} = await checkingCard();
+        vi.mocked(notify).mockClear();
+
+        unmount();
+
+        expect(vi.getTimerCount()).toBe(0);
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.getRestoreCheck).not.toHaveBeenCalled();
+        expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('drops a read that answers after unmount', async () => {
+        const {unmount} = await checkingCard();
+        const read = deferred<RestoreStage>();
+        api.getRestoreCheck.mockReturnValueOnce(read.promise);
+        await elapse(POLL_MS);
+        expect(api.getRestoreCheck, 'precondition: a read is out').toHaveBeenCalledTimes(1);
+        vi.mocked(notify).mockClear();
+
+        unmount();
+        read.resolve(doneStage());
+        await settle();
+
+        expect(notify, 'a card that is gone told the end of a check').not.toHaveBeenCalled();
+    });
+});
+
+describe('BackupTab', () => {
+    it('shows the restore card under the download card', async () => {
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+
+        render(pieces().BackupTab);
+        await settle();
+
+        const tab = screen.getByTestId('backup-tab');
+        const download = within(tab).getByTestId('backup-download-card');
+        const restoreCard = within(tab).getByTestId('restore-card');
+        expect(download.compareDocumentPosition(restoreCard) & Node.DOCUMENT_POSITION_FOLLOWING, 'the restore card is not under the download card').toBeTruthy();
+        expect(restoreCard).toHaveAttribute('data-state', 'idle');
+    });
+});
