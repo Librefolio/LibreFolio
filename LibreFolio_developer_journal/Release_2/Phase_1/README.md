@@ -222,3 +222,9 @@ Sono tutti locali: la push la fa il developer.
 | 133 | 16/10 20:33 | W: W-B53 (riscaldamento facoltativo del pool di analisi BRIM, `LIBREFOLIO_BRIM_PREWARM`, spento in produzione e acceso in test; N56), cherry-pick con 3 risoluzioni di W | `618d7208e` |
 | 134 | 16/10 20:58 | J: J-24 (P21: un ADJUSTMENT in uscita con prezzo esce al valore dichiarato al cambio del giorno; differenza dal costo medio realizzata); all-backend su J-24 + MF 1b 6/7 (solo i 2 rossi CA già curati) | `31a59bdb1` |
 | 135 | 16/10 20:59 | MF: lotto C (pesi e HHI in `financial_math/weights.py`; peso su NAV «—» con patrimonio ≤ 0; D-MF7) | `0eb85aa9b` |
+| 136 | 16/10 21:00 | MF: I2 (un solo lettore dei frazionamenti per i ricalcoli del costo medio, `split_linked_ids`; nessun numero cambia) | `3741b95b0` |
+| — | 16/10 21:05 | Z: journal Z-18, Z-19 (N58) | `27994759a` |
+| 137 | 16/10 21:20 | H: H-22 (tolte le funzioni di `client_address` usate solo dai test; N58: nessun record scritto da LibreFolio contiene l'indirizzo di un client) | `fa16ce787` |
+| 138 | 16/10 21:30 | X: C-66 (l'avviso nella finestra di sincronizzazione quando l'intervallo ha già dati, modifiche manuali comprese); E2E combinata con Y11: asset-list 30, page-busy 12 | `4b2e0df80` |
+| 139 | 16/10 21:40 | E: E4b (password dimenticata per email, invio dei link per email, avviso di cambio email), E6, E6.8, E4c-H, E6.9 (revisione di sicurezza: nessuna vulnerabilità), E4c (`same_email`); all-backend 21 506/0; `log.md` della devWiki per unione | `56759b2c8` |
+| 140 | 16/10 21:42 | Y: Y12b (P19: la riga del recupero di L1 legge il campo del backend) + spec dei tooltip di L3 resa robusta; L4 lento sotto carico → Y-21 | `23f71e739` |

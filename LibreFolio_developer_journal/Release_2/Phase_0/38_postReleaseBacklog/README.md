@@ -158,7 +158,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-19 · Catene FX: chiave `leg_rates` senza provider ed estremi invertiti** — da misurare.
   `backend/app/services/fx.py:820`, `:893`, `:680-716`: la chiave non ha il provider e gli estremi possono essere
   invertiti; serve un test di caratterizzazione. Origine: 11, §9.
-- **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** — basso. `AssetModal.svelte:1451-1462` più
+- ✅ **O-20 · Doppia sync alla creazione di un asset dalla pagina Asset** (chiusa 16/10: X `2b0be1d05`, entrata `967ddbda4`) — basso. `AssetModal.svelte:1451-1462` più
   `assets/+page.svelte:1828-1833`. Origine: 11, Round 1 §2.
 
 ## L · Import e upload
