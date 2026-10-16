@@ -3456,6 +3456,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     percorsi nascosti, i file `.test.`/`.spec.` e le cartelle `__tests__`/`__mocks__` (33 file di supporto ai test, che
     nessun codice dell'app importa). Prova reale: con il solo `.DS_Store` più recente della build, la risposta passa
     da True a False.
+  - Residuo chiuso il 17/10 (lotto «Residuo di H-24 e H-28», piano H §14). `cmd_fe_build` registra in
+    `frontend/build/.tool-contract-inputs` l'impronta dell'elenco degli ingressi, solo se la build riesce. Il
+    controllo la confronta: un file aggiunto, tolto o rinominato fa ricostruire; un `.DS_Store`, un file nascosto o
+    `__pycache__/` no. Senza la registrazione vale la regola vecchia, con le mtime delle cartelle.
+    - Prova reale sul vero albero dopo una build vera: con un `.DS_Store` in `backend/app/schemas` la build resta
+      fresca, dove la regola vecchia l'avrebbe data stale.
 - **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
   basso, runner; H (analisi di H-23), 16/10.
   - `_run_parallel_prepass()` → `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, non l'azione
@@ -3477,6 +3483,57 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     decisa col coordinatore. Con un test.
 
   Dettagli: piano H, §14, lotto «H-25», passo 2.
+  - Cura fatta il 17/10 (lotto «H-26», piano H §14), con la regola unica scelta dal coordinatore.
+    - `_refused_test_names()` in `_cli.py`: i nomi dati a una qualunque delle 36 azioni registrate senza nomi (le 16
+      `all`, `db create`/`populate`, 18 unità Vitest) danno exit 2 e un messaggio: «name the action» dopo `all`, «takes
+      no test names» dopo le altre.
+    - Il controllo avviene prima di ogni effetto collaterale, in `_dispatch_test_command` e in `main()`, `--list`
+      compreso.
+    - Prova reale: 6 comandi rifiutati, nulla cambiato.
+- **H-27 · `profile_default` non controlla il tipo del valore del profilo** — basso, configurazione; E (R13-SEC3), via
+  coordinatore, 17/10.
+  - `profile_default(name, fallback)` (`backend/app/config/__init__.py` ~579) restituisce con un `cast` il valore di
+    `ENVIRONMENT_PROFILE_DEFAULTS[<profilo>]`, senza controllarne il tipo. Oggi l'unica voce è `managed`:
+    `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` = 500, letta da `backup_max_upload_mb()` (`config/backup.py` ~78) con ripiego `0`,
+    che vuol dire «nessun limite».
+  - Se la voce sparisce, il profilo gestito si comporta come il self-hosted e non mette limiti alla dimensione di un
+    restore, senza avviso. Se vale `None`, quel valore passa e viene trattato anche lui come «nessun limite».
+  - Cura proposta: il tipo del valore deve essere quello del ripiego (`bool` a parte), altrimenti un errore chiaro
+    all'avvio; più un test che fissa le voci di `managed` insieme ai loro lettori. Dopo il lotto H-26 / residuo di H-24
+    / H-28.
+
+  Dettagli: piano H, §14, «Residuo di H-24».
+- **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
+  (analisi del residuo di H-24), 17/10.
+  - `frontend_catchall()` (`backend/app/services/platform/static_site.py` ~130) serve qualunque file che
+    `confined_path` trova dentro la build, dotfile compresi. Rispondono `GET /.build-debug` (dice se la build è di
+    debug) e `GET /.build-version` (la versione, già pubblica), anche dall'immagine. Risponde anche
+    `/fonts/noto-color-emoji/.cache_manifest.json`, che l'app non chiede mai: lo legge solo `update_js_cache.py`, dal
+    disco.
+  - Cura, nel lotto H-26 / residuo di H-24: un file con una parte nascosta nel percorso risolto dentro la build va al
+    fallback della SPA, come un percorso fuori dalla build. `/assets/../favicon.png` resta servito. Con un test.
+
+  Dettagli: piano H, §14, «Residuo di H-24».
+  - Cura fatta il 17/10: `_hidden_in_build()` in `static_site.py`.
+    - Prova reale su un server della corsia: i quattro percorsi nascosti danno `200.html`; `robots.txt` e
+      `manifest.json` restano serviti.
+- **H-29 · Il mount di `/_app` e `/mkdocs` servono ancora i file nascosti** — basso, sicurezza (informazione); H
+  (residuo di H-28), 17/10.
+  - H-28 ha chiuso il catch-all della SPA. `ImmutableStaticFiles` (`/_app`) e `mkdocs_static` (`/mkdocs`) non filtrano
+    i nomi che iniziano con `.`.
+  - Oggi non ce ne sono: SvelteKit e MkDocs non ne producono, e l'immagine non ne contiene. Su un Mac di sviluppo, però,
+    un `.DS_Store` del Finder dentro `frontend/build/_app/` o `mkdocs_src/site/` sarebbe servito.
+  - Cura proposta: la stessa regola di `_hidden_in_build()` nei due percorsi, con un test ciascuno.
+
+  Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+- **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
+  runner; H (test-author di H-26), 17/10.
+  - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
+    `_timed_run(...)` senza `try/finally`, a differenza di `_dispatch_test_command` (il percorso di `dev.py test`).
+  - Effetto: un crash del corpo lascia i log senza la copia del DB. Riguarda solo l'ingresso `python -m`.
+  - Cura proposta: lo stesso `try/finally`, con un test.
+
+  Dettagli: piano H, §14, «Residuo di H-24 e H-28».
 
 ## A · Account e accessi (fase 01)
 

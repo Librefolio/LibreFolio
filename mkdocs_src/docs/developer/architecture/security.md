@@ -1576,7 +1576,8 @@ CORS preflight or a 500; the policy read directive by directive, each directive 
 route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`mime.types` file; a hidden file of the build outside `_app/` is not sampled, since the SPA catch-all never serves it,
+see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 ## 🌐 HTTPS & Deployment Architecture
