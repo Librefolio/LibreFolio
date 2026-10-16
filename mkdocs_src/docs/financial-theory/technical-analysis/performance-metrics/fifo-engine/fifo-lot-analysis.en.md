@@ -42,19 +42,27 @@ $$
 \text{RelativeReturn} = \frac{\text{MarketPrice}}{\text{ReferenceUnitPrice}} - 1
 $$
 
-In practice:
+$\text{MarketPrice}$ is the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): on the end date for the lot summary, on each day for the return history. The reference depends on what opened the lot:
 
-- if a market quote exists at the lot's opening date, that opening quote becomes `reference_unit_price`
-- if the lot opened before the first available market quote, the system falls back to the lot's own opening cost, scaled to market quote units
-- `reference_price_source` records whether the reference was `exact`, `fallback`, or `unavailable`
+- **A trade** — a BUY, or a SELL that opens a short lot: the lot's own unit price, even when the asset has a market quote that day. A trade is a price.
+- **An adjustment** — an opening position, a succession, a transfer from an untracked broker: its cost basis is a cost, not a price, so the reference is the asset's mark on the opening day. That is the price of the last day on or before it that has one — its market quote or, without a quote, the average price of its BUY and SELL trades, never an adjustment — carried forward.
+- **An adjustment before any price** — no quote, BUY or SELL on or before its opening day: the lot's own unit price, its per-unit cost basis. Without a cost basis that price is zero, and the lot has no Open Return.
+
+`reference_price_source` is `exact` for a market quote of the opening day itself and for the lot's own price, and `fallback` for a quote carried from an earlier day or a price derived from trades. The data-quality banner reports such a fallback (`REFERENCE_PRICE_FALLBACK`), and an adjustment with no price on or before its opening day (`REFERENCE_PRICE_UNAVAILABLE`).
+
+Each price converts into the target currency at the rate of its own day: $\text{MarketPrice}$ at the rate of the day it values, the reference at the rate of the opening date, even when it was carried from an earlier quote or trade. For a price in another currency than the target, Open Return therefore includes the exchange-rate move since the opening.
 
 This metric excludes dividends, interest, and realized sale proceeds. It answers: _"How much has market price moved since this lot was opened?"_
 
-!!! tip "Reference price fallback"
+!!! example "A lot received by succession"
 
-    When no opening-day market quote exists, LibreFolio uses the lot's acquisition price as the reference base, scaled to the asset's quote convention. This avoids misleading percentage returns on instruments quoted per 100 nominal units.
+    An asset is quoted at 50 on 7 March and bought at 52 on 9 March, with no quote since. A lot received by succession on 10 March has a reference of **52**: the BUY is the asset's most recent price on or before that day, carried forward. Its `reference_price_source` is `fallback`, since 52 is not a quote of 10 March; a quote on 10 March itself would be the reference, with `exact`.
 
-    The fallback is $\text{OpeningUnitPrice}\times qbq$. For `qbq = 100`, a bond bought at `0.992` compares against the market quote axis as `99.20`, not `0.992`.
+!!! tip "The lot's own price, on the quote axis"
+
+    When the reference is the lot's own price, LibreFolio scales it to the asset's quote convention. This avoids misleading percentage returns on instruments quoted per 100 nominal units. A mark from the resolver is already on that axis.
+
+    The reference is then $\text{OpeningUnitPrice}\times qbq$. For `qbq = 100`, a bond bought at `0.992` compares against the market quote axis as `99.20`, not `0.992`.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="WAC / Market Price chart — one bubble per lot, colored by opening broker, sized by opening value, plotted against the market price line">
@@ -219,20 +227,22 @@ Without this scaling, bond returns and valuations can be off by orders of magnit
 
 ## 🛟 Estimated-at-Cost {: #estimated-at-cost }
 
-Each day, a lot is valued at the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): a market quote, or the price of a BUY or SELL, carried forward. An adjustment is never a price, with or without a cost basis. When the asset has **no market quote at all** on or before the end date, LibreFolio does **not** fail the analysis: on each day it cannot value from a mark — no BUY or SELL on or before that day, or a trade mark whose exchange rate is missing — it values the still-open portion of a LONG lot at cost:
+Each day, a lot is valued at the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): a market quote, or the average price of a day's BUY and SELL trades, carried forward. An adjustment is never a price, with or without a cost basis. A day with **no price at all** — no market quote and no BUY or SELL on or before it — does **not** fail the analysis: LibreFolio values the still-open portion of a LONG lot at cost that day, the day-by-day rule the Dashboard applies to a holding with no price:
 
 $$
-\text{OpenValue} = \text{OpeningValue}\cdot \frac{\text{OpenQuantity}}{\text{OriginalQuantity}}
+\text{OpenValue}(t) = \text{OpeningValue}\cdot \frac{\text{OpenQuantity}(t)}{\text{OriginalQuantity}}
 $$
 
 $$
-\text{MarketPnL} = 0
+\text{MarketPnL}(t) = 0
 $$
 
-with $\text{OpeningValue}$ the lot's original cost converted at its opening date. The cost stands in only where the asset has no price at all:
+with $\text{OpeningValue}$ the lot's original cost converted at its opening date. The choice is made day by day, with no look-ahead. A price, once observed, is carried forward, so these days all come before the asset's first quote, BUY or SELL: they run from the first transaction of the analysis to the day before that first price, or to the end date when the asset has none — and there are none when the asset already has a price on the day of the first transaction.
 
-- **Trades, no quote.** On the days a BUY or SELL marks the asset, its lots are valued at that trade price, not at cost. When the end date has such a mark, the lot summary reports `value_source = MARKET_PRICE`, the label of any mark, quote or trade.
-- **A quote later on.** An asset with a market quote on or before the end date gets no cost estimate at all: a lot opened before the asset's first quote, BUY or SELL — by an adjustment, for example — has no value on those days, and its value and return lines start at the first price.
+- **Before the first price.** A lot opened before the asset's first price — by an adjustment, for example — is valued at cost from its opening to the day before that price, even when the asset is priced later: its value line stays flat at cost, with no market gain or loss, then follows the price.
+- **No price at all.** An asset with no quote, BUY or SELL up to the end date — one held only through adjustments or transfers — is valued at cost on every day, and the lot summary reports `value_source = ESTIMATED_AT_COST`. With a price on or before the end date, the summary values the lot at that price instead: `value_source = MARKET_PRICE`, the label of any mark, quote or trade.
+- **A price without a rate.** A day whose mark has no exchange rate into the target currency is not valued at cost: a still-open lot has no value that day, and on the end date the lot summary has no value and no `value_source`.
+- **An adjustment without a cost basis.** Its lot opens at zero cost, so it counts at zero on those days, while the Dashboard's average cost treats that cost as unknown and leaves the holding unvalued. Such a row is rare: a positive [adjustment](../../../instruments/transaction-types/adjustment.md) can be saved without a cost basis only while it is linked to a split, and then opens no lot, so it comes from an older version, or from one whose split event was later changed to a price adjustment.
 
 Practical implication, on the days valued at cost:
 
@@ -240,14 +250,14 @@ Practical implication, on the days valued at cost:
 - already realized proceeds still remain visible
 - allocated dividends or interest still remain visible
 - **unrealized volatility is temporarily understated**
-- `value_source = ESTIMATED_AT_COST` in the lot summary, when the end date itself is valued at cost
-- `market_pnl = 0`
+- `market_pnl = 0`, and no Open Return: there is no market price to compare with the reference
+- no ROI or TWRR in the lots performance history, which reads only days with a price
 
 !!! info "Interpretation"
 
     Estimated-at-cost is conservative operational fallback. It means: _"We know what you paid, but we do not currently know what market would pay."_
 
-The data-quality warning `CURRENT_PRICE_ASSUMED_AT_COST` — *"No market price available between {first transaction} and {end date} — open value estimated at cost, market P&L excluded"* — follows a broader condition than the valuation. It is raised whenever the asset has no market quote on or before the end date, for the lot summary and the value, return, price and performance histories alike, even when BUY or SELL trades price the lots: those lots are then valued at their trade prices, not at cost, despite what the message says. A single market quote on or before the end date removes it.
+The data-quality warning `CURRENT_PRICE_ASSUMED_AT_COST` — *"No market price available between {date_from} and {date_to} — open value estimated at cost, market P&L excluded"* — names exactly those days: from the first transaction to the day before the asset's first price, or to the end date when the asset has none. It is raised whenever such days exist and the lot summary or the value, return, price or performance history is requested.
 
 ---
 
@@ -458,7 +468,7 @@ This lot-level view helps explain **where** return came from. Higher-level metri
 - **TWRR** neutralizes external cash-flow timing
 - FIFO lot analysis explains contribution and path **inside** a position
 
-Price lookup is deliberately outside the FIFO engine itself. The engine produces lots and closures; `LotsAnalysisService` applies the unified resolver ([Price Resolution](../portfolio-engine/price-resolution.md)) and estimated-at-cost fallback when deriving valuation metrics.
+Price lookup is deliberately outside the FIFO engine itself. The engine produces lots and closures, and asks for a price only to give a lot opened by an adjustment its reference; `LotsAnalysisService` answers from the unified resolver ([Price Resolution](../portfolio-engine/price-resolution.md)), then applies the same resolver and the estimated-at-cost fallback when deriving valuation metrics.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-table" alt="Unified Lots Table — one row per lot with opening date, total return, current value, custody and status, the exact per-lot rows the aggregate formulas above sum over">
