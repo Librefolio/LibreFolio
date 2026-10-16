@@ -3039,6 +3039,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     nei comandi documentati. Nessuna fretta: il run non ne soffre.
 
   Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
+- **H-21 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** (W-B54) — basso, runner; W (C-97a, slot
+  API), 16/10. Assegnata ad H dal coordinatore alle 18:39.
+  - Il setup della categoria `api` (`_api_setup` in `scripts/test_runner/_backend_api.py`, `db_populate(force=True)`)
+    parte da `run_category_setup("api")` solo con la categoria intera (`api_test`) o nel passaggio consolidato. Per
+    un'azione singola, `dispatch_to_category` lo salta e usa il DB della corsia così com'è.
+  - Dopo un run che ricrea il DB vuoto (`services`, `db create`), i test che entrano come `e2e_test_admin` o
+    `e2e_test_user` cadono con 401: 6 rossi su 118 per W il 16/10, verdetto «ambiente». Oggi si evita a mano,
+    lanciando prima `db populate --force`.
+  - Cura proposta: prima di un'azione `api` singola, una lettura del DB della corsia controlla che ci siano gli utenti
+    di fixture. Se mancano, il runner chiama `run_category_setup("api")`, oppure lo dice prima di partire con il
+    comando da lanciare. Un caso di test puro per ciascun ramo: «mancano → seed» e «ci sono → niente».
+  - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
+
+  Dettagli: piano 04 di W, sezione C-97a; piano H, §14 «Lotto «H-12, il resto»», passo 14.
 
 ## A · Account e accessi (fase 01)
 
