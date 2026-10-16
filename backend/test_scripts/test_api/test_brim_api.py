@@ -77,7 +77,7 @@ async def create_test_user(client: httpx.AsyncClient) -> int:
     """Register and login a test user, return user_id."""
     username = unique_username()
     email = f"{username}@example.com"
-    password = "testpass123"
+    password = "TestPass123!"  # meets the password rules (decision 37), which POST /auth/register applies
 
     # Register
     resp = await client.post(

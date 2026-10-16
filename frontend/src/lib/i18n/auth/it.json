@@ -37,7 +37,7 @@
       "veryStrong": "Molto Forte",
       "requirements": "Requisiti password:",
       "rules": {
-        "minLength": "Almeno 8 caratteri",
+        "minLength": "Almeno {value} caratteri",
         "hasUppercase": "Una lettera maiuscola",
         "hasLowercase": "Una lettera minuscola",
         "hasNumber": "Un numero",

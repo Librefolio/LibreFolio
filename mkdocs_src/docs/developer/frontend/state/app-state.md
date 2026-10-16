@@ -97,7 +97,8 @@ and readable without a session (backend side:
   reload outruns an older request.
 - **The default**: a self-hosted instance where anyone may register,
   `{profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}}`, without
-  the optional `first_account_open`: `LoginCard` treats anything but `true` as false. So until the
+  the optional `first_account_open` and `password_rules`: `LoginCard` treats anything but `true` as
+  false, and `PasswordStrength` checks `DEFAULT_PASSWORD_RULES`, the five rules of release 1.3. So until the
   answer, and when there is none, the login page offers **Register here**; a registration the server
   refuses gets its own message. On an instance that registers by invitation, the link shows for a
   moment, until the answer withdraws it (backlog A-19).
@@ -106,8 +107,15 @@ and readable without a session (backend side:
 - **Type**: `InstanceConfig` is `z.infer<typeof schemas.InstanceConfigResponse>` from the generated
   client, so a field added to the backend response appears after `./dev.py api sync`.
 - **Readers of `accounts`**: `LoginCard` (**Register here** while `registration_mode` is `open` or
-  `first_account_open` is true), the `/invite` page (`closed` while it is `disabled`) and
-  `GlobalSettingsTab` (the select locked, showing the mode in force, while `registration_locked`).
+  `first_account_open` is true), the `/invite` page (`closed` while it is `disabled`),
+  `GlobalSettingsTab` (the select locked, showing the mode in force, while `registration_locked`),
+  `UsersTab` (no invitation while `registration_mode` is `disabled`, and a reason that names the
+  variable while `registration_locked`), and [`PasswordStrength`](../components/features/auth.md#passwordstrength)
+  under every new-password field (the checklist and its `valid` from `password_rules`,
+  `DEFAULT_PASSWORD_RULES` while the list is absent or empty). `PasswordStrength` does not load the
+  configuration itself: the page around it does. The `/reset-password` page asks for it on mount
+  without waiting for it, so the checklist switches to the server's rules when they arrive and a slow
+  request never delays the form.
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -117,6 +125,7 @@ instanceConfig.config.profile; // 'selfhosted' | 'managed'
 instanceConfig.config.accounts.registration_mode; // 'open' | 'invite' | 'disabled'
 instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REGISTRATION pins it
 instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)
+instanceConfig.config.accounts.password_rules; // [{code, value}]: the password rules (optional: absent or empty, PasswordStrength assumes DEFAULT_PASSWORD_RULES)
 ```
 
 ## 📢 Instance notices {: #instance-notices }
