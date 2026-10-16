@@ -3217,3 +3217,286 @@ La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un 
 > | `mkdocs build` stretto | 0 ✅ (alle 23:00: il carico tra 70 e 200 l'ha fatta aspettare 25 minuti) |
 > | `check-links` | 97 ✅ |
 > | `git diff --check` | pulito ✅ |
+>
+> **E-10 committato** in tre commit, ed entrato in dev (`476da8470`). E-11 va ad H come proposta: un codice proprio nel
+> rifiuto anonimo del blocco, così il frontend non legge `detail`.
+> - Sulla nota incrociata del coordinatore (riusare `auth.instanceBlocked`, come fa `registrationErrors.ts` di A): quella
+>   chiave non c'è né in dev né nel ramo di A che vedo, quindi è ancora in A7b. E-10 usa la sua chiave,
+>   `email.verification.page.blocked`; dopo A7b si possono unire, se lo si vuole.
+
+### R13-SEC — Revisione di sicurezza dei lotti della sera su auth e dati (2026-10-16, 23:05–)
+> **Il compito del coordinatore** (23:05): una revisione `security-review` in sola lettura, fatta sui diff di
+> `dev_release2`. I lotti:
+> - il ripristino di B: B3 (`22c116679`, caricamento e controllo), B5b (`5f1543e81`, applicato al prossimo avvio) e
+>   B5c (`9137e1ef8`, l'esito con un biglietto monouso);
+> - P18 (`1fdeabaa4`) e A-27 (`cf6b03b8f`) di A;
+> - A7a (`a39b67944`), l'amministratore iniziale.
+>
+> Solo i reperti, con la gravità, al coordinatore, senza correzioni. Se non c'è niente sopra la soglia, lo scrivo qui e
+> basta.
+>
+> **La base**: `dev_release2` a `476da8470`, letto dagli oggetti git. Il mio ramo (`f788cc2eb`) non ha B5b e B5c.
+>
+> **⚠️ Fuori pista: la prima revisione, unica, ha superato il budget** («Request exceeds the model's prompt budget»: 280
+> mila token contro 128 mila), perché i lotti di B portano file di test da quasi 3 000 righe.
+> - Divisa in tre revisioni più strette, in parallelo: B3; B5b e B5c; A (P18, A-27, A7a).
+> - Ognuna legge solo il codice di produzione, a pezzi di al più 250 righe.
+>
+> **B3, caricamento e controllo del ripristino** (`security-review`, 23:07–23:18): **nessun reperto sopra la soglia.**
+> dev era già passato a `a621bf89e`. Nel perimetro è cambiato solo `config/backup.py`, dove il default dei 500 MB del
+> profilo `managed` si è spostato in `ENVIRONMENT_PROFILE_DEFAULTS`, con lo stesso comportamento.
+>
+> Note sotto la soglia:
+> 1. **Disco**: l'archivio spacchettato è limitato solo dallo spazio libero meno 64 MB (`staging.py:356-364`), non da
+>    `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`. I caricamenti contemporanei non si sommano, e ogni controllo finito tiene una
+>    copia per 24 ore: un DoS, fuori perimetro.
+> 2. **I trigger non fidati** del DB caricato girano nel processo del server, senza un limite di tempo, quando i fix
+>    post-migrazione aprono la copia in scrittura (`staging.py:464`, `post_migration/__init__.py:211`). Un CTE
+>    ricorsivo terrebbe `.stage.lock` fino al riavvio, e su `managed` l'istanza resterebbe sveglia. La direzione:
+>    `set_progress_handler` o un sottoprocesso con un limite.
+> 3. **Difesa in profondità**: nessuna connessione alla copia imposta `trusted_schema=OFF` né
+>    `SQLITE_DBCONFIG_DEFENSIVE`. Oggi non si sfrutta: nessuna funzione SQL dell'app, nessun `PickleType`, nessuna
+>    estensione.
+> 4. Il fix dell'autoincremento riesegue SQL di `sqlite_master`, e `_row_counts` cita i nomi senza raddoppiare le
+>    virgolette. Resta tutto dentro la copia dell'attaccante: SQLite carica solo DDL che comincia con `CREATE`, e
+>    `execute` rifiuta una seconda istruzione.
+> 5. **Memoria**: la directory centrale dello zip viene letta prima del limite `MAX_ENTRIES`, e il manifest può
+>    arrivare a 64 MB (DoS).
+> 6. Un descrittore riusato dopo una cancellazione forzata (`restore.py:91-92`), che un attaccante non può provocare.
+> 7. Fuori lotto: i POST senza corpo `/restore/stage/{id}/confirm` e `/restore/restart` contano solo su SameSite=Lax
+>    contro il CSRF.
+>
+> Sani: zip-slip e percorsi, solo `app.db` sotto `sqlite/`, niente link, device o FIFO, i duplicati (maiuscole e NFC
+> compresi), le bombe di decompressione (dimensione e SHA-256 per voce), il DB sempre una copia (integrità prima,
+> alembic in un sottoprocesso), il caricamento autenticato prima di leggere un byte, gli id uuid4 controllati, un
+> controllo alla volta, la pulizia, solo admin, CSRF (CORS chiuso, PUT e DELETE con preflight), nessun dettaglio negli
+> errori, il blocco.
+
+> **B5b e B5c, applicazione e biglietto** (`security-review`, 23:07–23:19): **nessun reperto sopra la soglia.**
+> I file del perimetro sono uguali in `476da8470` e in `a621bf89e`.
+>
+> Note sotto la soglia:
+> - **CSRF su `restart`** da un sottodominio fratello di un dominio condiviso, fuori dalla Public Suffix List: solo con
+>   un ripristino già confermato, impatto basso, e lo stesso schema vale per tutta l'app. `*.fly.dev` è nella lista. La
+>   direzione: un header proprio o il controllo di `Origin` sulle rotte che cambiano lo stato.
+> - **All'applicazione** si ricontrolla solo la struttura della copia, non il contenuto. Servirebbe poter scrivere in
+>   `.restore` (0700, solo l'utente del server).
+> - **Il DB ripristinato è dell'admin che conferma**: i suoi trigger potrebbero annullare `_close_the_way_in`
+>   (`apply.py:772-775`). Ma un admin può già creare un link di reset per ogni account: niente di nuovo.
+> - Corse benigne: cancellazione contro conferma, che fa un rollback sicuro; il biglietto scaduto tolto fuori dal
+>   lock.
+> - `_largest_session_version` vale 0 se il DB vecchio non si legge, e con un orologio tornato indietro la versione
+>   potrebbe coincidere: teorico.
+> - Scadenza e versione si controllano solo alla conferma; DoS, fuori perimetro.
+>
+> Sani: solo `confirm_restore` può innescare l'applicazione; si scambiano solo le quattro cartelle della copia;
+> symlink e permessi; il lock fra processi; il rollback dal giornale; la versione di sessione che rifiuta ogni
+> sessione di prima; ogni link monouso revocato; `secrets/` mai scambiato; il blocco; solo admin; il biglietto
+> (256 bit, SHA-256, confronto a tempo costante, un'ora, legato alla copia, solo in un header, mascherato nel log,
+> solo in memoria nel client); la CLI.
+
+> **A, cioè P18, A-27 e A7a** (`security-review`, 23:07–23:20): **nessun reperto sopra la soglia.** I file del
+> perimetro sono uguali in `476da8470` e in `a621bf89e`.
+>
+> Note sotto la soglia:
+> 1. **MEDIUM, confidenza 5/10 (A7a): un amministratore iniziale disattivato si riattiva con il suo vecchio link di
+>    setup.**
+>    - `complete_admin_setup` rifiuta il link solo se l'account è attivo (`bootstrap_admin_service.py:277`).
+>    - Le altre attivazioni non revocano i link `admin_setup`: il PATCH dell'admin (`user_service.py:351-354`),
+>      `user activate` (`:403-406`) e `user reset` (`:286`).
+>    - Lo scenario: l'admin in attesa viene attivato in un altro modo e poi disattivato entro le 72 ore. Chi ha il
+>      link, anche chi ha letto il log, lo riattiva con una password sua e da amministratore.
+>    - `pending_admin_filter` lo considera ancora «in attesa», quindi un token nuovo o `setup-link` lo riarmano.
+>    - La direzione: revocare `ADMIN_SETUP` a ogni attivazione o password impostata.
+> 2. **LOW, 5/10 (A7a)**: cambiare l'indirizzo dell'admin dalla variabile (`_follow_variables`, `:148-153`) non revoca il
+>    link già mandato al vecchio indirizzo, che resta valido per 72 ore.
+> 3. Il setup revoca solo i link `admin_setup`, non i `password_reset` vivi; su un account inattivo può crearli solo un
+>    admin o la CLI.
+> 4. **P18**: il cambio di sole maiuscole, che non chiede la password, scrive l'indirizzo letto all'accesso. Una
+>    richiesta in volo con un cookie che sta per chiudersi può riportare l'indirizzo vecchio sopra un cambio vero
+>    (aggiornamento perso). Non dà niente senza la vecchia casella. La direzione: un UPDATE condizionato.
+> 5. **`end_sessions`** incrementa una copia in memoria (`user_service.py:89`): due incrementi contemporanei ne fanno
+>    uno, e un cookie emesso nel mezzo sopravvive. La finestra è sotto il secondo. La direzione: l'incremento in SQL.
+> 6. **Nel mio dominio**, il «password dimenticata» (`email/flows.py:251→293`) manda il link all'indirizzo letto prima
+>    di creare il link: se un cambio d'indirizzo si chiude in quei millisecondi, il link va alla casella vecchia. Con 3
+>    all'ora, teorico.
+> 7. Mentre un admin aspetta, le variabili si applicano anche con altri account, contro la docstring
+>    (`bootstrap_admin_service.py:188-202`); può farlo solo il pannello o la CLI.
+> 8. Il token della variabile ha un minimo di lunghezza, non di entropia, e `/auth/setup` non ha un limite di
+>    frequenza: in pratica non conta, perché il token è del pannello e quelli generati sono di 256 bit.
+>
+> Sani:
+> - P18: una regola sola di piegatura (`same_email`, `lower()` delle ricerche, l'indice, `_FOLD` della migrazione), le
+>   corse che finiscono in un `IntegrityError`, la migrazione che si ferma senza fondere niente;
+> - A-27: completo su tutti i percorsi, con il consumo condizionato;
+> - A7a: i token, `/auth/setup` (prima le regole della password, poi le sessioni chiuse e il cookie nuovo), nessuna
+>   finestra per una registrazione pubblica, nessuna divulgazione, nessun riarmo di un admin attivo.
+>
+> **Esito della revisione**: in nessuno dei tre perimetri c'è un reperto sopra la soglia. Come chiesto dal
+> coordinatore, è scritto qui. Al coordinatore mando solo le note che chiedono un'azione (1, 2 e 5 per A, la 2 di B3
+> per B), come per la nota 3 di E6.9 che è diventata A-27.
+
+### R13-SEC2 — Revisione di sicurezza del resto di `ebe9eb346..dev_release2` (2026-10-16, 23:40–00:2x)
+> **Il compito del coordinatore** (23:3x): una revisione `security-review` in sola lettura, fatta sui diff, di ciò che è
+> entrato dall'ultimo push, fuori dai tre perimetri di R13-SEC. Senza correzioni; i reperti con gravità e confidenza a
+> lui; se non c'è niente, una riga qui. I lotti: C-97a/`RealDecimal` di W e il suo fix del costo automatico (input,
+> limiti, rifiuti); W-B53 (forkserver e precaricamento del pool BRIM); X-R28 (chiave della cache), C-66 e P20 (`mailto:`
+> in `LIBREFOLIO_SUPPORT_URL`) di X; H-21 e H-23 (runner, priorità bassa); J-27 (`ledger_totals`).
+>
+> **Mappa** (294 commit non di merge nell'intervallo):
+> - C-97a `5c4426e75` (= `bab52635d`, la stessa patch due volte) e D6 `0c3275057` (= `761786c9e`);
+> - il «fix del costo automatico» è **W-B30** `949da55f8`: un `null` esplicito toglie il costo manuale, ignorato in modo
+>   Auto (dal piano 04 di W);
+> - W-B53 `193412cdf`, più il cherry-pick `618d7208e` coi conflitti risolti da W: rivisto lo stato finale;
+> - X-R28 `8f3632d45`, C-66 `32c64bbd9`, P20 `62933bf46`, più il contesto CP13 sullo stesso percorso, non ancora rivisto
+>   (`25d4c75c7`, `9c1161ff2`, `7d80a1098`);
+> - H-21 `74b420db8`, H-23 `9541c0667`;
+> - J-27 `7336722ad`, coi suoi chiamanti di B-13 (`c374313c0`, `instance_backup/totals.py`).
+>
+> **Quattro revisioni in parallelo** (la lezione di R13-SEC), solo codice di produzione, a pezzi di al più 250 righe:
+> W-1 (C-97a sulle transazioni, D6, W-B30), W-2 (C-97a su prezzi, eventi e somme), X, e J-27 con W-B53 e H. Durante
+> la revisione dev è passato a `4bf824362`: i file del perimetro sono identici.
+
+> **Reperto 1 — MEDIUM, confidenza 8/10, C-97a (W)**: trovato **da tutte e due** le revisioni di W, ognuna per conto suo.
+> - **La lettura**: `RealDecimal.process_result_value` (`db/real_decimal.py:53-62`) solleva un'eccezione per un REAL salvato
+>   ±inf (`TypeError`: l'esponente `'F'` confrontato con un intero) e per ogni valore da 1e54 in su (`InvalidOperation`:
+>   completa a 6 decimali in un contesto di 60 cifre). Il vecchio `Numeric(18,6)` li leggeva senza errore.
+> - **Il limite**: nessuno ne limita la grandezza. `decimal_limit_issue` (`db/precision.py:157-170`) conta solo i decimali e le
+>   cifre significative: `1E+60` ha 1 cifra e 0 decimali, e passa.
+> - **(a) Transazioni, un utente qualsiasi**:
+>   - crea un suo broker con `allow_cash_overdraft` e `allow_asset_shorting`; con i due flag la validazione dei saldi
+>     esce prima della sua unica rilettura (`balances.py:49-50`);
+>   - salva con `POST /api/v1/transactions/commit` un BUY con quantità `"1E+60"`;
+>   - da lì `GET /api/v1/assets/all` e `/assets/query` danno 500 a **tutti gli utenti** dell'istanza, perché
+>     `assets/crud.py:284-285` legge le quantità di tutti;
+>   - dall'API la riga non si cancella (le cancellazioni la caricano): serve un intervento a mano sul DB;
+>   - lo stesso vale per un EDITOR di un broker condiviso coi due flag, e per un report BRIM preparato e confermato in un
+>     broker così.
+> - **(b) Prezzi correnti**:
+>   - il salvataggio del prezzo corrente (`assets/price_query.py:846-904`) scrive i valori del provider nelle colonne
+>     `RealDecimal` **senza** `truncate_priceHistory` e senza limite (`Decimal(str(item.value))`, `:861`), contro il
+>     punto 2 del contratto;
+>   - un provider che risponde `1e400` (salvato come REAL inf) o un numero di 60 cifre basta: per esempio lo scraper CSS,
+>     che ogni utente può puntare su una pagina sua (cambiare il provider di un asset condiviso è aperto a tutti,
+>     `providers.py:227-231`, già prima);
+>   - un qualsiasi `POST /assets/prices/current` salva la riga di oggi, e ogni lettura di quella riga fallisce per
+>     tutti i possessori: grafici, portafoglio, dashboard, AI Export;
+>   - resta così fino a `DELETE /assets/prices`;
+>   - il revisore l'ha riprodotto con sqlite3 della libreria standard e la stessa logica di lettura.
+> - **La direzione**:
+>   - una lettura che non solleva mai (un valore non finito o troppo grande diventa un errore controllato, o None, nel
+>     log; `quantize` solo se serve, con un contesto abbastanza preciso);
+>   - un limite di grandezza a ogni scrittore: cifre intere ≤ precisione − scala in `decimal_limit_issue`, un float che
+>     deve restare finito, il prezzo corrente attraverso `truncate_priceHistory`, e i `resolved_fields` della promozione.
+
+> **Note sotto la soglia**
+>
+> W, C-97a e W-B30:
+> 1. `1E+1000000` → `decimal.Overflow` in `normalize` (`precision.py:165`); da `1E+48` in su `InvalidOperation` nel
+>    troncamento (`:130`): un 500 al posto del rifiuto 4xx. I prezzi si salvano a blocchi, quindi una parte della
+>    richiesta può essere già scritta.
+> 2. La promozione: `resolved_fields.cost_basis_override` salta `check_decimal_limits` (`transaction_batch_stages.py:116`,
+>    `batch_creates.py:272,291`). Il REAL arrotonda in silenzio, contro «si rifiuta, mai arrotondare», e senza limite di
+>    grandezza (la stessa classe del reperto 1).
+> 3. Sui broker che validano i saldi il valore enorme si ferma solo perché la rilettura si rompe: torna come testo grezzo
+>    `Balance validation error: …InvalidOperation`, non come codice (`transaction_batch_stages.py:311`).
+> 4. `1E-2000000` va a 0 in `normalize`, passa il controllo e si salva come chiusura 0, contro la regola `close > 0`
+>    (`price_store.py:92`, `:208`). Prima di C-97a ogni valore sotto 1e-6 diventava già 0.
+> 5. **La stessa classe, già prima, fra utenti**: un evento con valore `"1E+400"` (`event_store.py:331-356`) e un `volume`
+>    `1E+400` (`price_store.py:27`, `:209`) si salvano come REAL inf e rompono ogni risposta di eventi o prezzi di
+>    quell'asset per tutti. I controlli nuovi sono il posto naturale per il limite.
+> 6. Già prima, la classe di J-27: il serializzatore JSON `format(v, "f")` (`schemas/common.py:47`) scrive per intero un
+>    valore del provider come `1E+50000000`: ~50 MB per ogni risposta di `/prices/current`, che la cache di 2 minuti
+>    riserve.
+> 7. **Voluto, confermato**: ogni utente collegato può scrivere o cancellare i prezzi e gli eventi manuali di qualunque
+>    asset, e cambiarne il provider (gli asset sono globali, `models.py:727`). C-97a non lo cambia; è la domanda D-SEC2-1
+>    qui sotto.
+> 8. Basso, già prima: `resolveValidationMessage.ts:254` mette davanti al messaggio di pydantic un'etichetta non escapata,
+>    che può essere una chiave in più mandata dall'utente. DOMPurify la contiene, e la vede solo lui.
+>
+> X:
+> 9. L'hash dei parametri nella chiave della cache è MD5 tagliato a 32 bit (`assets/core.py:81`, `:143-151`).
+>    - Una collisione costa secondi su una GPU, e la docstring «chiavi uguali, risposte uguali» non regge con
+>      parametri scelti apposta.
+>    - Oggi non dà niente in più: ogni utente cambia già provider e prezzi.
+>    - Diventa MEDIUM il giorno in cui gli asset hanno un proprietario.
+>    - La direzione: SHA-256 intero, o il JSON canonico come chiave.
+> 10. `env_url` accetta le credenziali nell'URL (`config/__init__.py:195`): `https://user:pass@host` uscirebbe com'è
+>     sull'anonimo `GET /system/instance`. Solo l'operatore può farlo. Rifiutare `username` e `password` copre anche
+>     `PUBLIC_URL` e `BILLING_URL`; il log di un valore non valido (`instance_links.py:19-22`, `!r`, una volta) le
+>     scriverebbe nel log dell'operatore.
+> 11. P20 lascia passare `&` e `=` in un `mailto:`, e i domini Unicode tornano in Unicode (omografi, solo via
+>     operatore). I valori http(s) non sono ri-serializzati. Per la UI di P20, non ancora in dev:
+>     - `href={url}`, mai `{@html}`;
+>     - protocollo fra https, http e mailto, altrimenti GitHub;
+>     - `target="_blank" rel="noopener noreferrer"` sugli http(s);
+>     - oggetto e corpo solo come `?` più `encodeURIComponent`;
+>     - niente aggiunto all'URL http(s) dell'operatore.
+>
+> J-27, W-B53, H:
+> 12. **W-B53, disponibilità con la configurazione di default** (difetto, non sicurezza, confidenza 9/10).
+>     - Il precaricamento si imposta anche con il prewarm spento (`brim_parse_pool.py:88`).
+>     - Su 3.13 il primo `run_in_executor` avvia il worker sul thread del loop e aspetta il suo pid
+>       (`popen_forkserver.py:59`), che il forkserver manda solo dopo il precaricamento.
+>     - Il primo parse dopo ogni avvio blocca quindi ogni richiesta per tutto l'import di BRIM e dei 33 plugin: ~4 s a
+>       riposo, 30–50 s sotto carico. Prima quell'import girava dentro il worker.
+>     - Va contro la regola della specifica: «il default lascia invariato il self-hosted».
+>     - **Provato** (00:2x, carico 45,7): `files/sec2/wb53_stall.py` con `files/sec2/run_wb53.sh` (libreria standard,
+>       nessun import dell'app, venv del progetto, Python 3.13.16). Un modulo che dorme 3 s all'import:
+>       - senza precaricamento: primo parse 3,14 s, **stallo massimo del loop 0,18 s**;
+>       - col precaricamento e il prewarm spento: primo parse 3,15 s, **stallo massimo del loop 3,14 s**.
+>     - La direzione: il precaricamento solo col prewarm acceso, oppure il primo `submit` fuori dal thread del loop.
+> 13. J-27 e B-13: i totali correnti si leggono fuori dal `try` (`totals.py:127`). Un archivio preparato (un importo REAL
+>     ±Inf, o una somma oltre 60 cifre intere) chiude il controllo con `stage_failed` invece di `unreadable`. Il lock e
+>     la copia si liberano lo stesso; la CLI mostra un traceback. Solo admin: robustezza.
+> 14. H-21: ogni fallimento del controllo del riseme (eccezione, «illeggibile», lock oltre 5 s) lancia
+>     `db populate --force` sul DB della corsia (`_common.py:672-679`, `_backend_api.py:829-838`). Sbaglia verso il
+>     setup distruttivo, ma solo sulla corsia di test validata.
+
+> **Sani, in breve**:
+> - **W:**
+>   - NaN, Inf e sNaN rifiutati da pydantic (422); gli esponenti minuscoli rifiutati;
+>   - ogni scrittura di transazioni passa per `check_decimal_limits`, salvo la promozione (nota 2);
+>   - le divisioni di D6 restano limitate dai plugin;
+>   - i messaggi di rifiuto portano solo costanti;
+>   - W-B30 è dietro l'autorizzazione EDITOR del broker e lascia i costi scritti dal sistema;
+>   - le somme in Python hanno gli stessi filtri.
+> - **X:**
+>   - la chiave di X-R28 è esattamente l'input della chiamata: JSON canonico, una tupla, le impostazioni come impronta
+>     HMAC, nessuna chiave nei log;
+>   - C-66 è solo visualizzazione;
+>   - P20 rifiuta `?`, `#`, `%`, `,`, `;`, `<>`, `"`, `/`, gli spazi e gli schemi pericolosi, e pubblica `mailto:` più
+>     l'indirizzo normalizzato.
+> - **J-27:** limite su ogni input non fidato (regex, 60 cifre per lato); un rifiuto diventa `absent`; il controllo gira
+>   in un thread di fondo.
+> - **W-B53:**
+>   - default spento; un valore non valido diventa spento, con un avviso;
+>   - BRIM è l'unico utente del forkserver, e gli import non hanno effetti collaterali;
+>   - socket privato: cartella 0700, socket 0600;
+>   - il passo viene dopo i controlli di configurazione e non può sollevare.
+> - **H-21 e H-23:** la corsia è fissata e controllata contro la produzione; apertura `mode=ro`; le azioni non dichiarate
+>   sono `write-scoped`.
+
+> **Nell'intervallo ma fuori dalla lista, non rivisti** (al coordinatore, se li vuole):
+> - `77fbc8687` di W, l'elenco dei report senza broker (visibilità);
+> - `7ad5a8849` di W, gli update seguono la tabella dei tipi;
+> - `8f7e086e9`, H-17, il default del limite di caricamento;
+> - `465c27939` di H, l'esito del ripristino su un'istanza bloccata (`instance_block.py`);
+> - `aaff7df04` di X, le icone dei plugin nella scheda Plugin;
+> - `c85b7d8eb`, A-25, il cambio di sole maiuscole senza password (solo frontend, `emailCase.ts`).
+>
+> L'SSRF dello scraper CSS lo copre già F05 di X (piano 03, riga 657).
+
+> **Domanda per il developer** (regola della notte: scritta qui, mandata al coordinatore, e avanti):
+> - **D-SEC2-1**: in un'istanza con più utenti, ognuno può cambiare il provider, i prezzi e gli eventi di un asset che
+>   vedono tutti (nota 7).
+>   - È voluto anche per il profilo managed, dove un'istanza può essere una famiglia o un piccolo team?
+>   - Se no: ci vuole un permesso, admin o proprietario, prima di toccare dati condivisi, e la nota 9 diventa MEDIUM.
+
+> **Esito**: **un reperto sopra la soglia**, il reperto 1 (MEDIUM 8/10, C-97a, di W), mandato al coordinatore con:
+> - per W, le note 1–5 e 12 (con la prova);
+> - per X, le note 9–11;
+> - la 13 per J, la 14 per H;
+> - la domanda D-SEC2-1.
+>
+> Nessuna correzione da parte mia.
