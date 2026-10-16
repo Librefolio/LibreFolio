@@ -661,6 +661,398 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
 >   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
 >   (un caso C4 in `GrowthChart.test.ts`).
 
+### W5-PAC — Ruoli di colore nel PAC ⏳ (dal 16/10/2026)
+
+**Mandato.** Proposta del coordinatore, alle 02:16, approvata alle 02:20, con l'OK di J (stanotte lavora solo sul
+backend). Rientra nel mandato del developer delle 22:20: «mergia il lavoro fatto, correggi gli aspetti tecnici e
+avanza sulle altre wave».
+
+**Perimetro: 39 file di `features/tools/pac-allocator/`,** più `frontend/src/themeRoles.baseline.tsv` (`--update` sul
+ramo di DV; i conflitti con T li risolve il coordinatore con `--resolve`) e il piano. Si migrano i neutri, il marchio
+e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore (02:36), anche 2 righe di
+`frontend/src/app.css`, che è di T: il selettore morto `html.dark .bg-white\/95`, chiesto dal gate C4.
+
+**Esclusi:**
+- `ExposureMaps.svelte` ed `ExposureBars.svelte`, perché Y9 tocca i loro `echarts.init`.
+- Le costanti `INPUT` e `TITLE_INPUT` di `ui.ts`, e ogni elemento che le usa.
+  - `INPUT` va come `className` a `ExactDecimalInput`, ancora legacy, in `TargetInputCell`, `AssetsStep`,
+    `AssetEditor`, `BrokerEditor` (×7), `RoutingStep` (×2), `FxStep` e `ManualAccountDialog` (×2). Va anche su
+    `<input>` semplici, in `AssetEditor` (182, 193) e in `BrokerEditor` (397).
+  - `TITLE_INPUT` sta su `<input>` semplici (`BrokerEditor`:149, `LiquidityStep`:207).
+  - Restano col lotto di T sull'input: due stili di campo diversi fino ad allora sarebbero peggio (coordinatore).
+- Le 6 fasi colorate di `BackendTimingBar`: categorie, in attesa dei punti 2.1 e 2.5. Ogni segmento ha solo quella
+  classe, quindi non resta un elemento misto.
+- **La traccia della barra di `TargetsStep`** (`bg-gray-100 dark:bg-slate-700`). La barra «sconosciuta» che ci corre
+  sopra diventa `bg-lf-neutral` nel lotto di T delle 03:25. Misure sui ruoli di T-8b:
+
+  | Traccia | Sulla card | Contro `bg-lf-neutral` | Contro gli stati |
+  |---|---|---|---|
+  | `bg-lf-neutral` o `border-lf-subtle` | 1.30 / 1.21 | ΔE00 0, la barra sparisce | — |
+  | `bg-lf-panel` o `bg-lf-hover` | 1.15 / 1.10 | ΔE00 3.4 / 2.5, quasi invisibile | ≥ 4.5:1 |
+  | **palette, invariata** | 1.06 / 1.69 | **ΔE00 6.9 / 15.3** (1.22:1 / 1.39:1) | — |
+
+  Nessun ruolo distingue la traccia dalla barra «sconosciuta», quindi la traccia resta in palette, come dice il
+  commento di T in `toneClasses.ts`.
+
+**Regole:**
+- Si converte per significato e per gradino, non per famiglia di colore.
+- Un elemento migra intero.
+- Niente `dark:` sui ruoli.
+- Ogni `border` nomina il suo ruolo.
+- La radice del componente prende `text-lf-primary`.
+- Convenzioni già usate da T:
+  - un bottone secondario è `bg-lf-card` + `border-lf-input` + `hover:bg-lf-hover`;
+  - uno pieno è `bg-lf-action text-lf-on-action`, o `bg-lf-<stato> text-lf-on-status`;
+  - un segmento attivo o un preset scelto prendono `bg-lf-checked text-lf-on-checked` (D-T16).
+
+**Passi:**
+- [x] ✅ (16/10/2026) Costanti di `ui.ts`, tranne `INPUT` e `TITLE_INPUT`.
+  > **Note implementazione**: 26 costanti convertite a mano; m1 di `ui.ts` da 118 a 15, che sono `INPUT` e
+  > `TITLE_INPUT`. `BADGE` e `NOTICE` usano già `STATUS_TONES` di T e non li ho toccati.
+- [x] ✅ (16/10/2026) I file, uno per volta. Gli elementi che non si possono convertire sono annotati.
+  > **Note implementazione**: i 38 file li converte uno script riga per riga, `/tmp/libreFolio_dv_w5pac_convert.py`,
+  > fuori dal repo. 204 pezzi convertiti. Lo script:
+  > - divide la riga in pezzi a virgolette, graffe, backtick e `$`;
+  > - converte un pezzo solo se ogni sua classe di colore ha un ruolo, quindi nessun elemento resta misto;
+  > - toglie i `dark:`;
+  > - salta le righe con `INPUT`, `TITLE_INPUT` o `className=`, e i frammenti esclusi.
+  >
+  > Gradini usati:
+  >
+  > | Cosa | Gradino | Ruolo |
+  > |---|---|---|
+  > | Testo neutro | 800+ / 600–700 / 300–500 | `text-lf-primary` / `-secondary` / `-muted` |
+  > | Fondo neutro | 50–100 / 200–300 | `bg-lf-panel` / `bg-lf-neutral` |
+  > | `hover:bg` neutro | ≤ 200 | `hover:bg-lf-hover` |
+  > | Bordo neutro | ≤ 200 / ≤ 400 | `-subtle` / `-input` |
+  > | Stati | testo ≥ 800 / fondo ≤ 100 / fondo ≥ 400 / bordo ≤ 400 | `-on-soft` / `-soft` / pieno / `-line` |
+  > | `bg-white` | con anello o bordo di fuoco / altrimenti | `bg-lf-field` / `bg-lf-card` |
+  > | `text-white` | solo accanto a `bg-libre-green` / a uno stato pieno | `text-lf-on-action` / `text-lf-on-status` |
+  >
+  > **Ritocchi a mano:**
+  > - `AssetTable`:148, il quadratino della legenda «quota obiettivo», e `ResultCell`:78, la barra dell'obiettivo,
+  >   prendono `bg-lf-secondary` (`--lf-text-secondary`): lo stesso neutro di «ideale» in TD-1.
+  > - `StepNav`:100, il riempimento dell'avanzamento, prende `bg-lf-checked`: `bg-lf-action` in scuro è spento sulla
+  >   traccia.
+  > - `StepNav`:69, il passo corrente, prende `bg-lf-selected`.
+  > - Regola 3: `text-lf-primary` sulla radice di `PacPlannerTool` (299) e sul pannello di `PlannerDialog` (26).
+  >
+  > **Residuo m1 del PAC: 42 (prima 581).**
+  > - `ui.ts`, 15: `INPUT` e `TITLE_INPUT`.
+  > - `BackendTimingBar`, 16: le 6 fasi, l'attesa in coda e il `border-white` dei segmenti (punti 2.1 e 2.5).
+  > - `ExposureMaps`, 4: escluso (Y9).
+  > - `TargetsStep`, 2: la traccia (tabella sopra).
+  > - `DistributionDialog`, 3: la stessa traccia e la barra del peso.
+  > - `AssetTable`, 1, e `ResultCell`, 1: la barra e il quadratino «quota dopo il piano», `bg-libre-green`.
+  >
+  > **⚠️ Fuori pista:** le barre «dopo il piano» restano `bg-libre-green`. Lì il verde è un colore di dato accanto
+  > al neutro dell'obiettivo, non il marchio. `bg-lf-action` in scuro è spento sulla traccia, e la scelta tocca alla
+  > designer (punto 2.7) o ai colori di tipo di GR1. Backlog DV-7.
+  >
+  > **⚠️ Fuori pista:** la traccia di `DistributionDialog`:102 è la stessa di `TargetsStep`, sotto la barra verde del
+  > peso. Resta in palette anche lei, così le due tracce non divergono finché non c'è un ruolo per la traccia.
+- [x] ✅ (16/10/2026) `theme-roles.mjs --update`, poi `--check`; il gate `themeRoles.gate.test.ts`, cioè G1–G4,
+  compreso «nessun elemento misto».
+  > **Note implementazione:**
+  > - `--update`: m1 10980 → 10441 (−539, cioè il PAC da 581 a 42), m2 83 → 83.
+  > - Il diff del baseline tocca solo righe del PAC: 33 file escono a zero e 6 restano col residuo.
+  > - `--check` pulito; `themeRoles.gate.test.ts` 47/47, prima e dopo `--update`.
+  >
+  > **⚠️ Fuori pista: `app.css`.** Il gate C4 di `themeTokens.gate.test.ts` era rosso, 15/16. La barra fissa in
+  > fondo a `PacPlannerTool` era l'ultimo uso di `bg-white/95` (ora `bg-lf-card/95`), e il gate vuole la regola
+  > tolta da `app.css` nella stessa modifica.
+  > - Con l'OK del coordinatore (16/10, 02:36), dal gruppo «Dark mode: Cards and modals» ho tolto solo il selettore
+  >   `html.dark .bg-white\/95`.
+  > - Resta `bg-white\/90`, che ha ancora degli usi.
+  > - Poi 16/16. Il lotto di T delle 03:25 tocca `app.css` più in basso (righe ~310–340).
+- [x] ✅ (16/10/2026) Prove leggere: Prettier, compilatore Svelte, i test del PAC uno per volta.
+  > **Note implementazione:**
+  > - Prettier ha riscritto 4 file (`ui.ts`, `PlannerDialog`, `BrokerScopeCopyDialog`, `OwnedAssetsDialog`); poi tutti
+  >   puliti, `app.css` compreso.
+  > - Compilatore Svelte: 37 file, 0 avvisi. `git diff --check` pulito.
+  > - Vitest, un file per volta:
+  >   - 12 test del PAC, 487 in tutto: `categoryLabels` 9, `decimal` 150, `format` 107, `modeText` 13,
+  >     `pluralCountSites` 19, `request` 34, `ExposureBars` 12, `ResultCell` 7, `StateNotice` 6,
+  >     `exposureBarColours` 24, `model` 11, `text` 95;
+  >   - 7 gate, 201 in tutto: `themeRoles` 47, `themeTokens` 16, `themeComponentTokens` 18, `themeColorMeta` 15,
+  >     `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54;
+  >   - 4 test che importano il PAC da fuori, 21 in tutto: `ToolsHub` 3, `ToolHost` 4, `registry` 8,
+  >     `moneyRenderSites` 6.
+  > - Nessun test asserisce classi del PAC, E2E compreso: test-author non serve.
+- [x] ✅ (16/10/2026) Checkpoint: commit `4743b1542` del coordinatore (02:41), 43 file. Le merge simulate con il
+  target `db384eaf5` e con il ramo di T (`abc4c84de`) sono pulite, compreso il baseline.
+- [ ] Prove pesanti nello slot delle 06:45 circa, insieme a W5-charts: `front check`, `core-unit`, `component-unit`,
+  E2E `pac-allocator-real`.
+
+**Dove guardarlo, per il developer:**
+- Strumenti › PAC, in chiaro e in scuro: tutti i passi, cioè scenario, strategia, asset, obiettivi, broker, liquidità,
+  cambi, instradamento e revisione, con i loro dialoghi, poi il risultato (testata, KPI, tabella degli asset,
+  piano operativo, prova, barra dei tempi).
+- I campi di testo restano com'erano fino al lotto di T sull'input. Le barre verdi «dopo il piano» e la traccia
+  degli obiettivi restano anche loro come prima.
+
+### W5-charts — Ruoli di colore nei componenti di `components/charts/` ⏳ (dal 16/10/2026)
+
+**Mandato.**
+- Proposta del coordinatore alle 02:41, dopo il commit di W5-PAC (`4743b1542`): «i file di `components/charts/` che
+  Y9 e K-15 non toccano». Stesse regole di W5-PAC: niente catene di classi, solo neutri, marchio e stati.
+- Elenco approvato alle 02:50; via libera della 1.3 alle 02:5x: stanotte nessuna sessione tocca quei file, e Y4a
+  (FE2a), che ne sposta 8 in `features/signals/`, parte dopo l'ingresso di DV.
+- Checkpoint in un commit separato da W5-PAC, entro le 06:30, per entrare nello slot delle 06:45.
+
+**Perimetro: 11 file**, più `frontend/src/themeRoles.baseline.tsv` (`--update`), questo piano e la riga DV-7 del
+backlog.
+
+| File | m1 → resto atteso | Con Y4a |
+|---|---|---|
+| `ChartSignalsSection.svelte` | 95 → 14 (2 campi) | `features/signals` |
+| `ChartAestheticsSection.svelte` | 78 → 30 (2 campi, 4 interruttori) | resta |
+| `ChartSettingsModal.svelte` | 47 → 0 | `features/signals` (D-Y14) |
+| `SignalStyleEditor.svelte` | 42 → 0 | `features/signals` |
+| `ChartToolbar.svelte` | 38 → 0 | resta |
+| `MeasurePanel.svelte` | 34 → 0 | `features/signals` (D-Y14) |
+| `SignalParamControl.svelte` | 24 → 14 (2 campi) | `features/signals` |
+| `SignalVisualLegend.svelte` | 16 → 0 | `features/signals` |
+| `ResolutionBadge.svelte` | 6 → 0 | resta |
+| `SignalOptionContent.svelte` | 6 → 0 | `features/signals` |
+| `SignalAssetParamControl.svelte` | 1 → 0 | `features/signals` |
+
+Nessuno ha `echarts.init`. Ho simulato C4 prima di cominciare: nessuna regola del rimappaggio di `app.css` muore.
+
+**Esclusi:**
+- I file di Y9 e K-15: `ScatterChart`, `CandlestickChart`, `SemiDonutChart`, `AllocationPieChart`, `LineChart`,
+  `PriceChartFull`, `GeographyMap`.
+- **I 6 campi di testo e numerici, 42 classi:** `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237,
+  `SignalParamControl`:79 e 93.
+  - Stanno accanto a `SimpleSelect` e `SearchSelect`, ancora legacy (40 e 63), quindi vanno col lotto di T sull'input,
+    come `INPUT` nel PAC.
+- **I 4 interruttori di `ChartAestheticsSection`, 16 classi:** traccia e manopola, alle righe 111/119, 133/141, 155/162
+  e 176/184.
+  - Nell'app nessun interruttore usa ancora i ruoli Q2. Il coordinatore (02:50) li vuole tutti insieme in un lotto di
+    T, così in scuro non ce n'è uno diverso dagli altri. Annotati in DV-7.
+
+**Catene di classi: nessuna.**
+- Le prop di classe vanno solo alle icone lucide, dove la classe finisce sull'svg e ha una fonte sola.
+- `itemTone` di `OrderableList` passa un tono (`default`, `warning`, `error`), non classi: le classi le sceglie
+  `OrderableList`.
+- `ModalBase` è già migrato; `InfoBanner`, `OrderableList`, `SimpleSelect` e `SearchSelect` sono legacy, ma da questi
+  file non ricevono classi.
+
+**Scelte approvate dal coordinatore (02:50), coerenti con il PAC:**
+- segmenti attivi (7) → `bg-lf-checked text-lf-on-checked` (D-T16);
+- opzioni scelte di `SignalStyleEditor` (4) → `border-lf-checked bg-lf-selected`;
+- «Salva» → `bg-lf-action text-lf-on-action hover:bg-lf-action-hover`;
+- «Annulla» (`bg-gray-100 hover:bg-gray-200`) → `bg-lf-panel hover:bg-lf-neutral`;
+- icona di sincronizzazione (`hover:text-blue-500`) → `hover:text-lf-link`, come le altre icone della riga;
+- bottoni d'avviso del cambio (`text-amber-500 hover:text-amber-600`) → `text-lf-warning hover:text-lf-warning-hover`,
+  che scurisce al passaggio in entrambi i temi come oggi;
+- banner e note ambra → terna warning; elimina ed errori → `danger`;
+- selettori di colore: solo il bordo; casella → `accent-lf-checked`.
+
+**⚠️ Punto aperto per la designer** (coordinatore, 02:50): `--lf-surface-panel` e `--lf-surface-hover` coincidono in
+entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
+- Un `hover:bg-lf-hover` su un fondo `bg-lf-panel` non si vede.
+- Per ora, su un fondo panel l'hover è `hover:bg-lf-neutral`: «Annulla» di `ChartSettingsModal` e le righe di
+  `MeasurePanel`.
+- Domanda: l'hover deve distinguersi dal panel, o è voluto che un fondo panel non abbia hover?
+
+**Passi:**
+- [x] ✅ (16/10/2026) Conversione: il convertitore di W5-PAC, adattato, poi i ritocchi a mano.
+  > **Note implementazione**: `/tmp/libreFolio_dv_w5charts_convert.py`, fuori dal repo, ricavato da quello di W5-PAC.
+  >
+  > | Novità | Effetto |
+  > |---|---|
+  > | Esclusioni per frammento | `focus:ring-libre-green`, cioè i 6 campi; la traccia `'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'`; la manopola `transform rounded-full bg-white`. Nessun'altra riga le contiene. |
+  > | Contesto «segmento» | una stringa fatta solo di `bg-libre-green text-white` diventa `bg-lf-checked text-lf-on-checked` |
+  > | Contesto «su panel» | un `hover:bg` accanto a un fondo `gray-50/100` diventa `hover:bg-lf-neutral` |
+  > | Contesto «tenue» | il testo di stato accanto a un fondo di stato tenue diventa `-on-soft` (terna dell'avviso) |
+  > | Mappe fisse | `hover:text-blue-500` → `hover:text-lf-link`; `hover:text-amber-600` → `hover:text-lf-warning-hover` |
+  >
+  > - 135 stringhe convertite. Restano solo i 6 campi, le 4 tracce e le 4 manopole, come previsto.
+  > - **Ritocchi a mano:**
+  >   - `MeasurePanel`:544, la riga della misura: `bg-lf-panel` con `hover:bg-lf-neutral`, perché la classe sta su
+  >     due righe e il convertitore non vede il fondo;
+  >   - `SignalStyleEditor`:94–95, il popover che galleggia: `border-lf-raised` e `shadow-lf-shadow`, come
+  >     `HelpMenu`;
+  >   - `ChartToolbar`:42, il divisore di 1 px: `bg-lf-subtle`, che è un divisore, non un riempimento. Oggi `subtle` e
+  >     `neutral` hanno gli stessi valori;
+  >   - regola 3, `text-lf-primary` sulla radice di `ChartSettingsModal` (il contenuto dentro `ModalBase`),
+  >     `ChartSignalsSection` e `ChartAestheticsSection` (usati anche dalle pagine di asset e cambi), `MeasurePanel` e
+  >     `ChartToolbar`. Gli altri sei stanno dentro questi, o hanno già il testo esplicito (`SignalOptionContent`,
+  >     `ResolutionBadge`).
+  > - **Scelte per significato:**
+  >   - le etichette `bg-gray-100` vanno su `bg-lf-panel` per gradino: il testo `muted` sopra fa 4,52/4,54:1, contro
+  >     4,01/4,11:1 su `neutral`;
+  >   - la nota ambra di `MeasurePanel`:530 prende la terna con `-on-soft`: 6,37:1, contro 4,85:1 di `text-lf-warning`.
+  > - Altri contrasti, chiaro/scuro:
+  >   - segmento attivo `on-checked` su `checked`: 6,17/5,32;
+  >   - segmento spento `secondary` su `card`: 7,48/7,08;
+  >   - `warning-hover` su `card`: 6,83/5,48.
+  >
+  > **⚠️ Fuori pista: indentazione.** Il convertitore comprimeva l'indentazione delle righe di continuazione di una
+  > classe su più righe. Qui sono `MeasurePanel`:544 e `SignalStyleEditor`:94; le ho ripristinate da `HEAD`, e il PAC
+  > non ne ha. Corretto anche il convertitore: l'indentazione iniziale ora resta.
+  >
+  > **⚠️ Fuori pista: Prettier.** Ha riscritto 3 file (`ChartSettingsModal`, `ChartSignalsSection`, `ChartToolbar`),
+  > che a `HEAD` erano puliti: le classi più corte fanno stare gli elementi su meno righe. Tocca solo elementi
+  > convertiti.
+  >
+  > **Nota per la domanda alla designer:** il bottone di `SignalStyleEditor`:75 ha `hover:bg-lf-hover`.
+  > - Si vede dove l'editor sta sulla card (`ChartSignalsSection`).
+  > - Non si vede dove sta su un panel: le scatole di `SignalVisualLegend` e le righe di `MeasurePanel`.
+  > - È così anche oggi, in chiaro: `gray-50` su `gray-50`. Il componente non conosce il suo ospite, quindi resta.
+- [x] ✅ (16/10/2026) `theme-roles.mjs --update`, poi `--check`; i gate `themeRoles` (G1–G4) e `themeTokens` (C4).
+  > **Note implementazione:**
+  > - Prima di `--update`: `--check` pulito (11 file sotto il loro record), `themeRoles` 47/47, `themeTokens` 16/16.
+  >   Nessuna regola di `app.css` muore.
+  > - `--update`: m1 10441 → 10112 (−329 = 387 − 58), m2 83 → 83.
+  > - Il diff del baseline tocca solo righe di `components/charts/`: 8 file escono a zero, mentre
+  >   `ChartAestheticsSection` resta a 30, `ChartSignalsSection` a 14 e `SignalParamControl` a 14.
+  > - Poi `--check` pulito.
+- [x] ✅ (16/10/2026) Prove leggere: Prettier, compilatore Svelte, i test dei componenti e i gate, uno per volta.
+  > **Note implementazione:**
+  > - Prettier pulito e compilatore Svelte 11 file, 0 avvisi; `git diff --check` pulito.
+  > - Vitest, un file per volta, 14 file che importano o nominano i componenti: 762/762.
+  >   - `ChartSignalsSection` 21, `MeasurePanel` 23, `SignalTreeSelect` 28, `PriceChartFull` 36, `LineChart` 5,
+  >     `BenchmarkSelect` 73;
+  >   - `chartCoreHelpers` 287, `priceChartHelpers` 148, `echartsTooltipHelpers` 47, `measureSignal` 31,
+  >     `signalLabel` 16, `colors` 34;
+  >   - `htmlSink` 7, `moneyRenderSites` 6.
+  > - 7 gate, 201/201: `themeRoles` 47, `themeTokens` 16, `themeComponentTokens` 18, `themeColorMeta` 15,
+  >   `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54.
+  > - Nessun test asserisce colori di questi file: le classi asserite sono `animate-spin`, `lf-compact-number-input` e
+  >   `hidden`, quindi test-author non serve.
+- [ ] Checkpoint, entro le 06:30. Le prove pesanti nello slot delle 06:45: `front check`, `core-unit`,
+  `component-unit`, E2E `pac-allocator-real` e `front-fx fx-settings`.
+
+**Dove guardarlo, per il developer:**
+- Dettaglio di un asset e di un cambio, in chiaro e in scuro:
+  - la barra del grafico, cioè linea o candele e assoluto o %;
+  - le misure sul grafico (pannello sotto il grafico);
+  - il badge della risoluzione.
+- ⚙️ Impostazioni del grafico (`assets/chart-settings` e `fx/chart-settings` in galleria): indicatori con le loro
+  icone, avvisi e stili, il popover dello stile, l'estetica con la scala dell'asse, l'anteprima, «Annulla» e «Salva».
+- Restano come prima i campi numerici e di testo (lotto di T sull'input) e i 4 interruttori dell'estetica (lotto di T
+  sugli interruttori).
+
+### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
+
+**Richiesta del coordinatore** (16/10 alle 02:06): per ciascun file dei grafici, cosa resta in m1 (classi colore
+legacy) e in m2 (letterali), con il conteggio, la destinazione (un ruolo o una categoria) e se dipende da una risposta
+della designer (grafici giro 3, punti 2.1–2.9). Nessun codice toccato.
+
+**Base:** `20558ead5`, uguale al target `57802d827`. I percorsi sono quelli di oggi: Y3, Y4b e Y5 spostano dashboard,
+rischio e broker. Per uno spostamento puro il baseline non va toccato, perché il gate accoppia i file per nome.
+
+**Metodo:** le regole stesse del gate (`theme-roles.mjs`: `listSources`, `codeOf`, `LEGACY_CLASS_RE`,
+`measureSource`), in uno script in sola lettura.
+- Le classi neutre (`slate`, `gray`, `zinc`, `neutral`, `stone`, `white`, `black`) e quelle del marchio (`libre-*`,
+  `primary-*`, `surface-*`) vanno ai ruoli diretti della skill `theme-roles`.
+- Le classi colorate le ho classificate a mano, riga per riga.
+
+**Totale: 103 file, m1 2628, m2 0.** I letterali stanno già nelle tabelle di `lib/theme/`.
+- **Neutri, 2081:** `text-lf-primary`/`secondary`/`muted`, `bg-lf-card`/`panel`/`field`/`hover`/`neutral`,
+  `border-lf-subtle`/`input`, `ring-lf-focus`.
+- **Marchio, 154:** `bg-lf-action`, `text-lf-link`, `bg-lf-selected`, `bg-lf-checked`.
+- **Colorati, 393:**
+  - gli stati (warning, danger, info, success) → `lf-<stato>`, `-soft`, `-line`, `-on-soft`, senza dipendenze;
+  - i numeri con segno → `text-lf-gain`/`text-lf-loss`, che dipendono dal punto 2.8;
+  - le categorie vere sono poche.
+
+**Dipendono dalla designer 9 file, uno di T.**
+- **2.8, numeri con segno:** `LotCustodyModal`, `OtherPeriodEffectsTable`, `AssetSetLossComparisonSection`,
+  `ReturnHistogram`, e `KpiSection` (TD-2, di T).
+- **2.1 e 2.5:** `BackendTimingBar` e `RiskReturnLevel`.
+- **Giro dei badge:** `UnifiedLotsTable` e `LotGanttChart`.
+
+Tutto il resto si può convertire già.
+
+**Ordine consigliato del lotto,** per area e dopo gli spostamenti:
+1. i file con soli neutri e marchio, che sono il grosso e non chiedono decisioni;
+2. gli stati;
+3. infine i file che aspettano la designer.
+
+**`lib/components/charts/`**: 14 file, m1 431, di cui neutri 368 e marchio 39; colorati 24. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `ChartSignalsSection.svelte` | 95 | 73 / 7 | 15 | banner ambra, icone d'errore e d'avviso, elimina → ruoli warning e danger | — |
+| `MeasurePanel.svelte` | 34 | 26 / 0 | 8 | nota ambra → warning-soft; elimina → `hover:text-lf-danger` | — |
+| `SignalAssetParamControl.svelte` | 1 | 0 / 0 | 1 | errore → `text-lf-danger` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `ChartAestheticsSection.svelte` 78, `ChartSettingsModal.svelte` 47, `SignalStyleEditor.svelte` 42, `ChartToolbar.svelte` 38, `PriceChartFull.svelte` 36, `SignalParamControl.svelte` 24, `SignalVisualLegend.svelte` 16, `ResolutionBadge.svelte` 6, `SignalOptionContent.svelte` 6, `GeographyMap.svelte` 4, `ScatterChart.svelte` 4.
+
+**`lib/components/risk/`**: 30 file, m1 763, di cui neutri 596 e marchio 32; colorati 135. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `RiskAnalysisPanel.svelte` | 192 | 177 / 5 | 10 | riquadro d'errore → ruoli danger; note ambra → warning | — |
+| `AssetSetRiskPanel.svelte` | 71 | 48 / 3 | 20 | avvisi ambra ed errore rosso → ruoli warning e danger | — |
+| `levels/l4/L4Simulation.svelte` | 45 | 34 / 5 | 6 | avviso di deriva → warning-soft | — |
+| `RiskResultFrame.svelte` | 41 | 28 / 1 | 12 | badge e riquadro ambra → warning-soft | — |
+| `levels/RiskLevelSection.svelte` | 29 | 23 / 0 | 6 | avviso → warning-soft | — |
+| `levels/l4/L4Replay.svelte` | 29 | 9 / 4 | 16 | note ambra → warning-soft; bottone bordato → ruoli di azione | — |
+| `levels/L4WhatIf.svelte` | 27 | 19 / 2 | 6 | avviso del modello → warning-soft | — |
+| `AssetSetLossComparisonSection.svelte` | 26 | 22 / 0 | 4 | `LOSS_CLASS`, le perdite → `text-lf-loss`; errore → danger | 2.8 |
+| `levels/l4/L4Shock.svelte` | 25 | 16 / 6 | 3 | chip del preset scelto → `bg-lf-selected`/azione; nota → warning | — |
+| `AssetSetRiskReturnSection.svelte` | 22 | 20 / 0 | 2 | errore → `text-lf-danger` | — |
+| `levels/RiskPanelHeader.svelte` | 22 | 16 / 0 | 6 | riquadro d'errore → ruoli danger | — |
+| `AssetSetCorrelationSection.svelte` | 20 | 18 / 0 | 2 | errore → `text-lf-danger` | — |
+| `levels/RiskPartialNotice.svelte` | 20 | 4 / 0 | 16 | varianti info e warning → info-soft e warning-soft | — |
+| `levels/SimulationProvenance.svelte` | 20 | 14 / 0 | 6 | avviso di troncamento → warning-soft | — |
+| `levels/l1/ReturnHistogram.svelte` | 16 | 10 / 0 | 6 | barra del taglio → warning; barre sotto il taglio → `bg-lf-loss` | 2.8 |
+| `RiskReturnLevel.svelte` | 14 | 10 / 0 | 4 | legenda: punto «portafoglio» cielo e rombo «asset» ambra → categorie del grafico rischio/rendimento, coerenti con la serie ECharts | 2.5 |
+| `levels/L1HowMuchItHurts.svelte` | 11 | 10 / 0 | 1 | hover del link alla documentazione → `text-lf-link` | — |
+| `levels/RiskLevelsPanel.svelte` | 6 | 0 / 0 | 6 | avviso → warning-soft | — |
+| `BenchmarkSelect.svelte` | 3 | 0 / 0 | 3 | errore → danger; icona «misurato» → warning | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `CorrelationHeatmap.svelte` 33, `CorrelationPairsList.svelte` 25, `levels/L2Diversification.svelte` 23, `AssetRiskScenariosView.svelte` 13, `LabAssetPicker.svelte` 8, `levels/l1/UnderwaterChart.svelte` 8, `levels/L3RiskAdjusted.svelte` 4, `levels/l4/TornadoChart.svelte` 4, `AssetChip.svelte` 2, `assetSetTable.ts` 2, `levels/L3Benchmark.svelte` 2.
+
+**`lib/components/brokers/lots/`**: 7 file, m1 545, di cui neutri 399 e marchio 17; colorati 129. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `LotCustodyModal.svelte` | 219 | 173 / 4 | 42 | importi con segno, commissioni e tasse → `text-lf-gain`/`text-lf-loss`; nota ambra → `text-lf-warning`; badge → `bg-lf-success-soft`; hover → `text-lf-link` | 2.8 |
+| `UnifiedLotsTable.svelte` | 84 | 30 / 0 | 54 | badge di direzione e custodia del lotto (smeraldo, ambra, viola, cielo, rosso) → categoria «stato del lotto», da allineare a `LOT_STATE_COLORS` | giro dei badge (registro, 19:2x) |
+| `LotsAnalysisPanel.svelte` | 42 | 32 / 1 | 9 | errore → ruoli danger; hover → `text-lf-link` | — |
+| `LotGanttChart.svelte` | 36 | 32 / 0 | 4 | chip tratteggiata viola, il marcatore «altro» → categoria del marcatore | giro dei badge |
+| `LotDataQualityBanner.svelte` | 20 | 0 / 0 | 20 | banner warning e info → `bg-lf-warning-soft`/`bg-lf-info-soft` con `-line` e `-on-soft` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `LotComparisonChart.svelte` 96, `LotWacPriceChart.svelte` 48.
+
+**`lib/components/dashboard/`**: 12 file, m1 308, di cui neutri 274 e marchio 15; colorati 19. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `KpiSection.svelte` | 50 | 46 / 0 | 4 | barre dei KPI blu e smeraldo → TD-2 di T (W3/W5) | 2.8 (di T) |
+| `PositionsPanel.svelte` | 46 | 42 / 3 | 1 | link → `text-lf-link` | — |
+| `OtherPeriodEffectsTable.svelte` | 28 | 20 / 0 | 8 | badge per segno (smeraldo, rosso) → gain/loss tenui | 2.8 |
+| `ContributionTable.svelte` | 14 | 8 / 2 | 4 | badge «aperta» smeraldo → `bg-lf-success-soft text-lf-success-on-soft` | — |
+| `YieldOnCostCell.svelte` | 8 | 6 / 0 | 2 | icona ambra → `text-lf-warning` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `GrowthChart.svelte` 86, `AllocationPanel.svelte` 42, `KpiCard.svelte` 14, `ExposureTreemap.svelte` 10, `AllocationHistoryChart.svelte` 4, `PerformanceChart.svelte` 4, `ExposureTable.svelte` 2.
+
+**`lib/features/tools/pac-allocator/`**: 40 file, m1 581, di cui neutri 444 e marchio 51; colorati 86. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `planner/ui.ts` | 118 | 78 / 21 | 19 | bottoni: primario → `bg-lf-action text-lf-on-action`; pericolo bordato → `border-lf-danger-line text-lf-danger`; avviso pieno → `bg-lf-warning text-lf-on-status` | — |
+| `planner/result/BackendTimingBar.svelte` | 32 | 20 / 0 | 12 | 6 fasi colorate (cielo, viola, smeraldo, ambra, rosa, verde acqua) → sequenza di categoria (`sequenceColor`) | 2.1, 2.5 |
+| `planner/steps/BrokersStep.svelte` | 32 | 30 / 0 | 2 | problema → `text-lf-danger` | — |
+| `planner/steps/BrokerEditor.svelte` | 24 | 12 / 4 | 8 | avvisi → warning-soft | — |
+| `planner/steps/AssetsStep.svelte` | 22 | 18 / 0 | 4 | note senza prezzo → `text-lf-warning-on-soft` | — |
+| `planner/shell/StepNav.svelte` | 20 | 11 / 3 | 6 | icone → warning e success; passo corrente → `bg-lf-selected` | — |
+| `planner/shared/IssueList.svelte` | 18 | 12 / 0 | 6 | icone errore, avviso, info → danger, warning, info | — |
+| `planner/shared/ReviewCell.svelte` | 18 | 12 / 0 | 6 | icone e data vecchia → warning e success | — |
+| `planner/steps/LiquidityStep.svelte` | 16 | 14 / 0 | 2 | liquidità oltre il disponibile → `text-lf-danger` | — |
+| `planner/steps/RoutingStep.svelte` | 16 | 8 / 0 | 8 | problema e avviso → danger e warning-soft | — |
+| `planner/steps/FxStep.svelte` | 12 | 8 / 0 | 4 | cambio mancante → `text-lf-warning-on-soft` | — |
+| `planner/result/FailurePanel.svelte` | 10 | 6 / 0 | 4 | icone d'esito → warning e danger | — |
+| `planner/steps/TargetsStep.svelte` | 9 | 6 / 0 | 3 | ✅, eccesso e mancanza → success, danger, warning | — |
+| `planner/shell/SummaryPanel.svelte` | 8 | 6 / 0 | 2 | valore da controllare → `text-lf-warning` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `planner/result/OrderDetail.svelte` 28, `planner/steps/StrategyStep.svelte` 19, `planner/steps/DistributionDialog.svelte` 18, `planner/result/KpiCards.svelte` 16, `planner/steps/BrokerScopeCopyDialog.svelte` 16, `planner/shared/PlannerDialog.svelte` 15, `planner/steps/OwnedAssetsDialog.svelte` 15, `planner/result/ProofPanel.svelte` 14, `planner/result/OperationalPlan.svelte` 12, `planner/shared/AutoManualToggle.svelte` 11, `planner/PacPlannerTool.svelte` 8, `planner/shared/OwnerBrokerPicker.svelte` 8, `planner/result/ResultCell.svelte` 7, `planner/result/AssetTable.svelte` 5, `planner/result/ExposureMaps.svelte` 4, `planner/result/ExposureSection.svelte` 4, `planner/result/ResultView.svelte` 4, `planner/result/ToolErrorPanel.svelte` 4, `planner/steps/AssetEditor.svelte` 4, `planner/steps/ReviewStep.svelte` 3, `planner/result/OutcomeHeader.svelte` 2, `planner/shared/ConflictDialog.svelte` 2, `planner/shared/MarqueeName.svelte` 2, `planner/shared/columnHelp.ts` 2, `planner/steps/ScenarioStep.svelte` 2, `planner/result/ResultSection.svelte` 1.
+
 | Passo | Contenuto | File | Conflitti |
 |---|---|---|---|
 | S2 | Fondamenta in `lib/theme` e gate | `lib/theme/chartCategories.ts`, `chartShades.ts`, `roleColors.ts` (nuovi), `themeMode.ts`, `colorAlpha.ts` | nessuno |
