@@ -2843,7 +2843,37 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal`.
 > Il piano: `../Phase_1/10_colorSystem/IW-importColors/`. Gli ID di questa sezione sono `IW-n`.
 
-- (nessuna voce ancora)
+- ✅ **IW-1 · Quattro pulsanti pieni verdi e blu in attesa dei ruoli hover** — basso; IW, 16/10 (D2). Restano legacy
+  `asset-group-confirm-all`, `asset-group-confirm-{id}` (`AssetGroupStep`), `import-wizard-warning-confirm` (il ramo
+  info) e `create-primary-confirm` (`ImportWizardModal`). T ha aggiunto `hover:bg-lf-success-hover` e
+  `hover:bg-lf-info-hover` (`f043c1b58`): si convertono dopo la base merge. Dettagli: [piano IW](../Phase_1/10_colorSystem/IW-importColors/plan-phase00ImportColors.prompt.md), sezione «Restano legacy».
+  ✅ 16/10, `9c79d5b35` (checkpoint 2 di IW, passo 5 del piano): i quattro su `success`/`info` con i
+  loro hover; `create-primary-confirm` resta nei «da rivedere» (IW-7).
+- **IW-2 · Le stelle «primario» degli identificativi senza ruolo** — basso; IW, 16/10 (D6). `AssetGroupStep`,
+  `fill-amber-400 text-amber-500` su legenda e badge (6 classi): serve un ruolo «marcatore», o i categoriali.
+  Dettagli: piano IW, sezione «Restano legacy».
+- **IW-3 · Badge degli identificativi categoriali, con l'anello ambra del primario** — basso; IW, 16/10.
+  `AssetGroupStep`: classi da `KIND_TONES.identifier` più `ring-amber-400 dark:ring-offset-gray-900` sull'elemento
+  (2 classi nel file): coi categoriali di B4. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-4 · Lo `<style>` di `ImportBrokerMismatchModal` sui token `--lf-cmp-broker-mismatch-*`** — basso; IW, 16/10
+  (D3). 12 token con override `.dark` in `lib/theme/components/dialogs.css`: con W6/B5 di T, che toglie i token non
+  più letti. Dettagli: piano IW, decisione D3.
+- **IW-5 · Il chip viola del tasso implicito delle coppie** — basso; IW, 16/10. `lib/utils/transactions/pairCellHtml.ts`,
+  `text-violet-600 dark:text-violet-400`: categoriale, e rispecchia `renderDualHtml` di `TransactionBulkModal` (TR); si
+  muovono insieme. Dettagli: piano IW, sezione «Restano legacy».
+- **IW-6 · Colori passati per prop di classe ad `AssetSelect`** — basso, design; IW, 16/10. `confidenceBadgeClass`
+  (`ImportWizardModal` → `ReviewStep` → `badgeClass` di `ui/select/AssetSelect`) porta colori, ora sui ruoli; la regola 3
+  della skill comune vuole una variante (`variant="…"`). Con T. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-7 · Scelte «da rivedere» della migrazione dell'import** — basso, aspetto; IW, 16/10. Stato dei duplicati tutto
+  `warning` (D1), timeline del set, stepper e barre su `checked`, fuoco blu diventato verde, pulsanti contornati al 3:1,
+  bordi tratteggiati dei gruppi di asset sul `-line`, testi `-800` su card a `text-lf-X`, maniglia su `bg-lf-input`,
+  testo attenuato su `neutral` (~4:1), `create-primary-confirm` su `info` (è l'azione primaria del suo dialogo: forse
+  `action`). Dettagli: piano IW, «Da rivedere per il developer» e note dei lotti.
+- **IW-8 · Note di test-author su `tx-brim-import.spec.ts` e `tx-import-resolution.spec.ts`** — basso, test; IW, 16/10
+  (area W: da spostare). In T4 la guardia `if` salta l'asserzione solo quando qualcosa si rompe, e la guardia esterna usa
+  il testo tradotto `text=Resolve Assets` (c'è `import-wizard-resolve-section`); T1 non importa mai con questo campione;
+  i commenti «amber badge» di `tx-import-resolution.spec.ts` (riga 43 e IWR-001) diventano falsi dopo IW-5. Dettagli:
+  piano IW, passo 1, «Spec T4».
 
 ---
 
@@ -3089,6 +3119,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     di `filesystem` e `docker_advanced` rimanda a `cli_tools.md#backup` e `#backup-docker`, ancore che
     `cli_tools.{it,fr,es}.md` non hanno finché non si chiude B-7. Va tradotto insieme a B-7 o dopo, altrimenti la build
     rigorosa IT/FR/ES non trova le ancore. L'ancora `#what-to-back-up` c'è già nelle 4 lingue.
+  - 16/10, P17: la sottosezione nuova «🧭 The Visitor's Address» (`#client-address`) e l'ultimo paragrafo riscritto dei
+    «Limits» in `connection_checks`, e una riga in `configuration` che punta a `connection_checks.md#client-address`.
+    **Ordine**: `configuration` va tradotta insieme a `connection_checks` o dopo, che deve tenere
+    `{: #client-address }`; altrimenti la build rigorosa di quella lingua non trova l'ancora.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -4252,12 +4286,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
   nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
-- **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10 (Z5).
-  A fine recupero il frontend chiama `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio
-  (`portfolioStore.invalidate()` alza solo un contatore non reattivo): la pagina già sullo schermo mostra le cifre nuove
-  al prossimo caricamento o con «Aggiorna». Cura possibile: le pagine del portafoglio ascoltano il segnale e ricaricano
-  in background se visibili. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
-  «Z5 — codice».
+- ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
+  (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
+  successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
+  di un broker sullo schermo chiedono di nuovo il loro report in background, senza force e senza passare
+  dall'«Aggiorna» dell'utente. I pannelli di rischio e dei lotti restano a Z-15. Era: a fine recupero il frontend
+  chiamava `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio (`portfolioStore.invalidate()`
+  alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
+  con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
+  codice» e «Z-13».
+- **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
+  (Z-13). I grafici dei prezzi e dei cambi usano cache di sessione proprie (`assetPriceStoreRegistry.ts`,
+  `fxStoreRegistry.ts`) che il bus del portafoglio non tocca. Dopo un recupero, un intervallo già caricato nella
+  sessione torna dalla cache finché non si preme «Aggiorna» su quella pagina. Il problema c'era già prima di Z5, che
+  però lo rende più visibile. Cura possibile: le due cache ascoltano `{kind: 'prices'}` e segnano stale. Il dettaglio
+  di un asset è di X fino a FE5c. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-13», passo 4.
+- **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
+  16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
+  `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
+  l'icona (`pageBusy`). I pannelli di rischio e dei lotti già sullo schermo tengono le cifre vecchie, segnate stale,
+  finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
+  `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
 
 ## B · Backup e Docker (fase 01)
 

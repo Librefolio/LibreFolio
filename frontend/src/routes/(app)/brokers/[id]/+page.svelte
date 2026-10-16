@@ -65,7 +65,7 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -431,6 +431,21 @@
         await Promise.all([loadBroker(), loadOverview(true)]);
         if (txLoaded) await loadTransactions(true);
     }
+
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): the stale overview is asked again in
+     * background, without force, and the figures stay until the new ones land. `refreshVersion` and
+     * `requestPortfolioRefresh()` are the user's Refresh (Y11): the risk and lots panels keep their stale answers until
+     * they next load. Run after the dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        void loadOverview();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener(`broker-page:${data.brokerId}:prices`, (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
 
     async function handleUpdated() {
         await loadBroker();
