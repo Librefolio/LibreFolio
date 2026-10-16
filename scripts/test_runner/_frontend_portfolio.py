@@ -38,7 +38,7 @@ def front_portfolio_page_busy(verbose: bool = False, ui: bool = False, headed: b
 
 
 def front_portfolio_price_refresh(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the «Updating prices…» E2E (workstream Z, lots Z5 and Z-13): the notice while a stubbed catch-up runs, then the open page asking for its report again."""
+    """Run the «Updating prices…» E2E (workstream Z, lots Z5, Z-13 and Z-14): the notice while a stubbed catch-up runs, then the open page asking for its report again, and a price page asking for its prices again."""
     print_section("Frontend Portfolio Price Refresh Tests")
     if not _ensure_frontend_build():
         return False
@@ -523,7 +523,7 @@ def populate_registry(registry: dict) -> None:
         "price-refresh",
         front_portfolio_price_refresh,
         name="Price Refresh E2E",
-        desc="Lots Z5, Z-13 and Z-18, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated; through that reload in background neither the Dashboard's root nor a Refresh button says busy (data-busy recorded in the page), the Positions tab's contribution included, while a Refresh the user asks for does",
+        desc="Lots Z5, Z-13, Z-18 and Z-14, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated; through that reload in background neither the Dashboard's root nor a Refresh button says busy (data-busy recorded in the page), the Positions tab's contribution included, while a Refresh the user asks for does; back in-app after a catch-up that updated something, the asset detail asks again the prices of the range it had loaded and the FX detail its rates, while without a catch-up the session cache answers (Z-14)",
         tests="portfolio/price-refresh-reload.spec.ts",
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
