@@ -1113,6 +1113,38 @@ nota dev: intanto facciamo la cura generale, ho anche altre note di problemi che
 **Decisione (15/10)**: approvata la cura generale delle tabelle sul telefono (C-38, lotto Y7). Il layout da telefono
 apposta per il PAC si decide dopo, se non basta, insieme alle altre note del developer.
 
+### Le domande della notte 15→16/10 (P1–P26), decise il 16/10
+
+Le domande nate di notte dai lotti dei figli. Il testo intero di ogni domanda è nel registro notturno del coordinatore;
+qui resta la decisione.
+
+| Punto | Lotto | Decisione del developer (16/10) |
+|---|---|---|
+| P1 | E4b | Il riquadro con i comandi per l'admin resta sotto il modulo «password dimenticata», **in un pannello chiuso** |
+| P2 | J-17 | Una rettifica **non è mai un prezzo**: il prezzo dalle transazioni viene solo dagli acquisti. Un asset senza nessuna osservazione si valuta **al costo, come stima dichiarata** («valutato al costo, nessun prezzo»). *Aperto*: se anche la vendita resta una fonte di prezzo |
+| P3 | Y11, decisione 48 | Approvato. «Aggiorna» gira solo per le domande «grandi» decise nella UI: un componente tiene la lista delle richieste in volo, riceve un segnale all'inizio e uno alla fine (riuscita o no), si ferma quando sono rientrate tutte o dopo un timeout lungo. Non gira per l'aggiornamento dei prezzi |
+| P4 | W-B34 | La lista degli accessi di un broker **resta aperta**, per decisione |
+| P5 | W-B30 | Svuotare un costo manuale **lo cancella** |
+| P6 | W-B36b | Sì: in aggiornamento valgono le regole dei tipi, per i campi che cambiano |
+| P7 | B3 | Con l'istanza bloccata è bloccato anche il ripristino, nella UI e via API; un ripristino confermato prima del blocco **aspetta lo sblocco** |
+| P8 | B5b | Nessun messaggio quando il ripristino riesce; se fallisce, il motivo sulla stessa schermata. Si conferma scrivendo **una parola vera a caso di 6–10 lettere**, senza copia-incolla (controllo solo nella pagina) |
+| P9, P10, P10b, P14 | Y7, colori | Visti sul server di prova: vanno bene |
+| P11 | B3 | Al ripristino si **revocano i link monouso** (inviti, reset, verifiche), con un solo avviso |
+| P12 | B4 | scrypt **`2^15`**; password con le regole e l'indicatore della registrazione, **almeno 12 caratteri** |
+| P13 | barra delle Impostazioni | *Aperto* |
+| P15 | E5b | Sì a un pulsante **«Conferma»** nella pagina di verifica. *Da chiarire*: i testi delle email in un file a parte, modificabile, che il codice si limita a riempire |
+| P16 | A7, F02 | Nel cloud **il token lo crea il pannello di controllo** e lo passa per variabile; il self-hosted resta com'è stato costruito; senza email nulla cambia. Con l'istanza bloccata la creazione dell'admin è bloccata anche lei (coordinatore) |
+| P17 | E5b | Sì: nel profilo cloud il limite per client legge `Fly-Client-IP` (contratto ad H) |
+| P18 | A | Le email sono **uniche senza distinzione di maiuscole** (migrazione 009 di A) |
+| P19 | Y, J CP-13a | Sì: il rendimento che recupera una perdita diventa un campo del backend |
+| P20 | X CP13 | Via «Prezzo manuale / import»; «Segnalacelo» ci **manda un'email con i dati** della ricerca |
+| P21 | J-24 | Ogni importo si converte **al cambio del giorno della sua transazione**, e ogni calcolo si fa nella valuta del report. In più: verificare che tutta la matematica stia in `financial_math` e rivedere gli algoritmi troppo contorti (audit del 16/10) |
+| P22 | J CP-3 | Va bene così: **ogni broker risponde del suo tratto**, anche con una perdita dopo il trasferimento |
+| P23 | TS1 | **No** ai test speculari: i test sono già tutti nelle cartelle giuste |
+| P24 | H-3 | *Aperto*: serve più contesto (dove sta la chiave, che cosa protegge, perché nel cloud è più sicuro) |
+| P25 | Y-12 | Sì: il test del selettore «Value presentation» dei lotti si riscrive |
+| P26 | J-26 | La sonda dell'AI Export si fa su **una copia dei dati demo** del developer, utente `alfy`. Procedura nella skill `real-data-copy` |
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non

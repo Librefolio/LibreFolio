@@ -624,11 +624,11 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 
 - **T-B4 · La data del lotto più vecchio dopo uno split** — medio; T, 11/10. Va con U6. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
   «7.1 Lotti, passi, peso, quando».
-- **T-B5 · Il P&L di una chiusura FIFO mescola le valute** — peso da stimare, serve una decisione; T, 11/10. Se un lotto
+- ✅ **T-B5 · Il P&L di una chiusura FIFO mescola le valute** (chiusa 16/10 dal coordinatore: CP-7a di J, decisione 26, treno 107) — peso da stimare, serve una decisione; T, 11/10. Se un lotto
   è aperto e chiuso in valute diverse, `_close_position_piece` (`fifo_lot_engine.py:905-940`) sottrae il prezzo del
   lotto da quello di vendita senza convertirli. Limite già documentato nella pagina dev del servizio dei lotti.
   Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3a — Lotti, niente ripiego sull'importo non convertito».
-- **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** — minimo;
+- ✅ **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** (chiusa 16/10 dal coordinatore: CP-7a di J, treno 107) — minimo;
   T, 11/10, dalla sonda di B3b. Senza cambio `reference_unit_price` è `None`, ma `reference_price_source` resta
   `exact`, e l'AI Export lo copia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Sonda».
 - **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
@@ -2585,7 +2585,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     opache; nel changelog il filo del `mark` come ombra interna e la testata dei capitoli al passaggio su `bg-lf-neutral`.
   - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
-    della modale, non un `contentClass`.
+    della modale, non un `contentClass`. **Approvata** (coordinatore, 16/10): `ModalBase` prende un prop di tono,
+    `tone="danger"` → `border-2 border-lf-danger-line` al posto di `border-lf-raised`, in un ternario solo (regola 8), nel
+    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1).
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 - **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
@@ -3917,6 +3919,24 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
   del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
   «CP-7».
+- **J-25 · Debito di traduzione di CP-7a (lotti in un'altra valuta)** — basso, documentazione; J, 16/10. Pagine EN
+  cambiate di senso, senza stamp: `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`
+  (sezione nuova `#lots-in-another-currency` con l'esempio D-J1), `…/fifo-engine/index` (una frase rovesciata, un
+  paragrafo nuovo, due link) e `financial-theory/instruments/transaction-types/adjustment` (la nota sulla valuta della
+  consegna rovesciata). `index` punta all'ancora nuova: tradurla con `fifo-lot-analysis` nello stesso giro. Dettagli:
+  piano J, §10 «CP-7a».
+- **J-26 · Sonda reale dell'AI Export per CP-7a** — basso, prova; J, 16/10. Il realizzato e il «di mercato» dei lotti
+  esteri cambiano (decisione 26) attraverso builder invariati, quindi nessuna versione; i test dei componenti passano
+  (302). La sonda mirata (`ai_export_real_prompt_probe.py`) gira sugli utenti reali del developer e con le loro
+  credenziali, che una corsia coordinata non ha: da fare col developer, un Asset con un lotto USD chiuso e il suo Broker
+  (atteso: realizzato coi cambi delle due date, non realizzato 0). Dettagli: piano J, §10 «CP-7a».
+- **J-27 · `ControlTotals.from_json` espande per intero un importo con un esponente enorme** — basso, robustezza; trovata
+  dal test-author di B con una sonda, via il coordinatore, 16/10. `_as_amount` (`financial_math/ledger_totals.py:190`)
+  accetta ogni testo decimale finito e lo passa a `_canonical`, che lo scrive per esteso: `"1E+50000000"` costa 121 MB e
+  0,4 s, quindi un manifest scritto a mano può esaurire la memoria nella prova a secco del ripristino. B si protegge da
+  sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
+  oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
+  Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4241,3 +4261,13 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+
+## MF · Matematica finanziaria (fase 01)
+
+Workstream nato il 16/10 (decisione del developer su P21). Piano:
+[`Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md`](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md);
+punto di partenza, l'audit dello stesso giorno:
+[`Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md`](../Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md).
+
+- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Le voci per lotto le
+  scrive MF dopo la sua analisi.
