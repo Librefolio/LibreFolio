@@ -14,6 +14,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
@@ -833,7 +834,7 @@
         }
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'allocation-history');
             // ECharts draws to a canvas, so a colour has no DOM an E2E could read.
             // Exposing the instance is the only way a test can assert that the
