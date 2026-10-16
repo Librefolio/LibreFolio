@@ -1876,7 +1876,7 @@
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
                     if (!row.fields.description) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                    const escaped = row.fields.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const escaped = escapeHtml(row.fields.description);
                     return {
                         type: 'html',
                         html: `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block leading-tight">${escaped}</span>`,

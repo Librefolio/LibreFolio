@@ -1,7 +1,7 @@
-"""Security headers on every HTTP response: decision D5, the part that holds for every instance.
+"""Security headers on every HTTP response: decision D5.
 
-Owner: workstream H (platform), CP7b-1. ``SecurityHeadersMiddleware`` is an entry of ``MIDDLEWARE_STACK``, outside
-GZip, and adds to every HTTP response:
+Owner: workstream H (platform), CP7b-1 and CP7b-2. ``SecurityHeadersMiddleware`` is an entry of ``MIDDLEWARE_STACK``,
+outside GZip, and adds to every HTTP response:
 
 - ``X-Content-Type-Options: nosniff``: a browser uses the type the server sends and never guesses one, so an upload
   is never run as a script or a page, and a script or a style sheet sent with another type is refused.
@@ -9,6 +9,15 @@ GZip, and adds to every HTTP response:
   documentation loads goes out as ``application/octet-stream``;
 - ``Referrer-Policy: strict-origin-when-cross-origin``: another site learns at most the origin, never a page's path
   or query.
+
+Two more, read from the settings when the middleware is built, off for a self-hosted install and on for a managed
+one (``PROFILE_DEFAULTS``), each settable on its own:
+
+- ``LIBREFOLIO_FRAME_PROTECTION``: ``X-Frame-Options: SAMEORIGIN`` and ``Content-Security-Policy: frame-ancestors
+  'self'``, enforced, on every response: only the app's own pages may frame it;
+- ``LIBREFOLIO_CSP_REPORT_ONLY``: ``Content-Security-Policy-Report-Only: CSP_REPORT_ONLY_POLICY`` on the HTML pages of
+  the web app, never on ``/mkdocs`` or ``/api/``. Nothing is blocked; the browser reports each violation in its
+  console (no report endpoint).
 
 A header a route already set is kept. Starlette sends its own 500 from ``ServerErrorMiddleware``, outside every
 middleware of the stack: when a request fails before its answer started, this middleware sends the 500 itself, with
@@ -20,11 +29,39 @@ import mimetypes
 from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from backend.app.config import get_settings
+
 #: Added to every HTTP response that does not carry them already.
 ALWAYS_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-content-type-options", b"nosniff"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
 )
+
+#: Added to every response when frame protection is on: only the app's own pages may frame it (enforced).
+FRAME_HEADERS: tuple[tuple[bytes, bytes], ...] = (
+    (b"x-frame-options", b"SAMEORIGIN"),
+    (b"content-security-policy", b"frame-ancestors 'self'"),
+)
+
+#: The report-only policy of the web app's pages. Images may come from any HTTPS address (asset and broker icons set
+#: by URL); WebAssembly compiles for the PDF viewer; the inline styles of the app are allowed, its inline scripts not.
+CSP_REPORT_ONLY_POLICY = "; ".join(
+    (
+        "default-src 'self'",
+        "script-src 'self' 'wasm-unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        "connect-src 'self'",
+        "worker-src 'self' blob:",
+        "frame-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+    )
+)
+_CSP_REPORT_ONLY_HEADER = (b"content-security-policy-report-only", CSP_REPORT_ONLY_POLICY.encode())
 
 #: The types of the files the app serves (the web app, the documentation, the plugins' assets). Python's own table
 #: lacks the fonts and source maps, which without ``/etc/mime.types`` (a slim image) would go out as
@@ -53,11 +90,23 @@ def register_served_types() -> None:
         mimetypes.add_type(mime_type, extension)
 
 
+def _is_web_app_page(path: str, headers: list[tuple[bytes, bytes]]) -> bool:
+    """An HTML response of the web app: not the documentation (``/mkdocs``), not the API (``/api/``)."""
+    if path == "/mkdocs" or path.startswith("/mkdocs/") or path == "/api" or path.startswith("/api/"):
+        return False
+    content_type = next((value for name, value in headers if name.lower() == b"content-type"), b"")
+    return content_type.lower().startswith(b"text/html")
+
+
 class SecurityHeadersMiddleware:
-    """Add ``ALWAYS_HEADERS`` to every HTTP response, keeping the ones a route set; other scopes pass untouched."""
+    """Add the security headers to every HTTP response, keeping the ones a route set; other scopes pass untouched."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # Read once: the switches cannot change while the app runs
+        settings = get_settings()
+        self.headers = ALWAYS_HEADERS + (FRAME_HEADERS if settings.LIBREFOLIO_FRAME_PROTECTION else ())
+        self.csp_report_only = settings.LIBREFOLIO_CSP_REPORT_ONLY
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -72,7 +121,9 @@ class SecurityHeadersMiddleware:
                 started = True
                 headers = list(message.get("headers") or [])
                 present = {name.lower() for name, _ in headers}
-                headers.extend(header for header in ALWAYS_HEADERS if header[0] not in present)
+                headers.extend(header for header in self.headers if header[0] not in present)
+                if self.csp_report_only and _CSP_REPORT_ONLY_HEADER[0] not in present and _is_web_app_page(scope["path"], headers):
+                    headers.append(_CSP_REPORT_ONLY_HEADER)
                 message = {**message, "headers": headers}
             await send(message)
 
