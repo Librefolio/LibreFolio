@@ -315,12 +315,12 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
 
     It goes only to the old address, in the account's language, and shows the new one masked (``***@domain``). It carries
     no link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else «LibreFolio». Nothing
-    goes when the addresses are the same, email is off (an ``info`` line, not a warning: the self-hosted default), the
-    account is gone, email cannot be used now, or the account or the old mailbox had 3 notices in the hour
-    (``EMAIL_CHANGE_NOTICES_BY_ACCOUNT``, ``EMAIL_CHANGE_NOTICES_BY_MAILBOX``); a refusal or a failure is logged without
-    either address. Never raises.
+    goes when the addresses are the same (``user_service.same_email()``, the one rule of decision P18: A–Z in any case),
+    email is off (an ``info`` line, not a warning: the self-hosted default), the account is gone, email cannot be used
+    now, or the account or the old mailbox had 3 notices in the hour (``EMAIL_CHANGE_NOTICES_BY_ACCOUNT``,
+    ``EMAIL_CHANGE_NOTICES_BY_MAILBOX``); a refusal or a failure is logged without either address. Never raises.
     """
-    if old_address.strip().casefold() == new_address.strip().casefold():
+    if user_service.same_email(old_address, new_address):
         return
     try:
         # Email off is the default of a self-hosted instance, not a fault: no warning for it.

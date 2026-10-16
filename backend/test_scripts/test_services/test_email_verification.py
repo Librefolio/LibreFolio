@@ -43,10 +43,13 @@ status, the setting) are not written yet: this module calls the functions of ``v
    otherwise, a token of another purpose being ``unknown``. A link without an address — the hold, or a link whose email
    did not go out as far as LibreFolio knows — is refused as ``revoked`` but left as it is: it may be the account's
    only unspent token, and revoking it would end the wait (a lockout); the account still waits and «resend» works. A
-   link emailed to an address the account no longer has (letter case and spaces aside) is revoked and refused as
-   ``revoked``. On success the account is active, ``email_verified_at`` is the moment, the link is consumed by its
-   account, the account's other verification tokens are revoked, other purposes and other accounts untouched;
-   committed. A link spent meanwhile is ``consumed``, and nothing changes.
+   link emailed to an address the account no longer has is revoked and refused as ``revoked``: the two compared by
+   ``user_service.same_email``, A's one rule of decision P18 (lot E4c) — A–Z in any case, every other character as
+   written, nothing stripped —, so the account's own address in other capitals is the same address, and with a letter
+   beyond A–Z in another case another one, refused on the safe side. On success the account is active,
+   ``email_verified_at`` is the moment, the link is consumed by its account, the account's other verification tokens
+   are revoked, other purposes and other accounts untouched; committed. A link spent meanwhile is ``consumed``, and
+   nothing changes.
 7. ``resend_verification(session, *, identifier, password, address)``: the limit per client address first, keyed by
    H's ``client_rate_key`` and skipped without an address, before any password is checked; then the password as the
    login checks it — a dummy hash for an unknown account, one refusal ``INVALID_CREDENTIALS`` for both —; an active
@@ -1190,17 +1193,18 @@ async def test_a_token_without_an_address_verifies_nothing_and_is_left_live(engi
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("sent_to", "verifies"),
+    ("own", "sent_to", "verifies"),
     [
-        pytest.param("zq-old-alice@example.com", False, id="an-address-the-account-no-longer-has"),
-        pytest.param("  ZQ_Alice@Example.COM ", True, id="the-same-address-in-other-letters-and-spaces"),
+        pytest.param(None, "zq-old-alice@example.com", False, id="an-address-the-account-no-longer-has"),
+        pytest.param(None, "ZQ_Alice@Example.COM", True, id="the-same-address-in-other-capitals"),
+        pytest.param("zq_\u00e1lice@example.com", "zq_\u00c1lice@example.com", False, id="another-case-beyond-a-to-z-is-another-address"),
     ],
 )
-async def test_a_link_emailed_to_another_address_is_revoked(engine: AsyncEngine, sent_to: str, verifies: bool) -> None:
-    """EMV-024 — contract 6: a live link emailed to an address the account no longer has is revoked and refused as ``revoked``, the account inactive; the account's own address written in other letters and with spaces around is the same address, and the link verifies."""
+async def test_a_link_emailed_to_another_address_is_revoked(engine: AsyncEngine, own: str | None, sent_to: str, verifies: bool) -> None:
+    """EMV-024 — contract 6: the address a live link was emailed to, against the account's, by ``user_service.same_email`` (A's one rule, decision P18). An address the account no longer has: the link revoked and refused as ``revoked``, the account inactive and unverified, the log saying the link was sent to another address. The account's own address in other A–Z capitals is the same address: the link verifies. The account's ``zq_álice@example.com`` and a link emailed to ``zq_Álice@example.com``, apart in the case of ``á`` alone — a letter beyond A–Z, compared as written —: another address, refused as the first, on the safe side. No case with spaces around: both addresses come from the database, where ``EmailStr`` stripped them, and ``same_email`` strips nothing (A's contract)."""
     print_section(f"EMV-024: sent to {sent_to!r}")
     moment = utcnow()
-    alice = await _add_user(engine, ALICE, active=False)
+    alice = await _add_user(engine, ALICE, email=own, active=False)
     link = await _emailed(engine, alice, created=moment - timedelta(minutes=5), email=sent_to)
 
     if verifies:
