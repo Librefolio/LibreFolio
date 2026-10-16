@@ -14,7 +14,7 @@ Add an instrument you hold or follow, connect it to a price provider and keep it
     1. On the **Assets** page, click **+ Add Asset**.
     2. In **Search Online**, type a name, ticker or ISIN and pick a result: LibreFolio fills in the
        form, connects that provider and [checks its data](#provider-data-comparison). No result?
-       Fill in the form yourself.
+       Fill in the form yourself, and report the search with [**Let us know**](#let-us-know).
     3. Check the fields below, then click **Create Asset**.
 
 === "From a broker import"
@@ -40,6 +40,52 @@ Check these fields before saving:
 
 After saving from the **Assets** page, the confirmation links to the new asset. If the asset has a
 provider, its price history starts downloading right away.
+
+## 🔎 Search Online results {: #search-online-results }
+
+**Search Online** asks the providers all at once and sorts their results as they arrive:
+**premium** sources first (those your instance vouches for, such as licensed data), then
+**community** ones, each group by priority. None of the providers that come with LibreFolio is
+premium, and all have the same priority: the results appear as the providers answer, unless your
+administrator [changes the order](../../admin/configuration.md#provider-order).
+
+When the search included a premium source, the list has two parts:
+
+- **Premium**: the premium sources' results, or *No results from the premium sources.*
+- **Non-premium sources (community) · N results**, closed. Opening it first shows a warning: these
+  are third-party sources, LibreFolio does not vouch for their prices or data, and choosing one
+  applies to this asset only. The section is closed again the next time you open the form.
+
+### 📨 Can't find it? Let us know {: #let-us-know }
+
+Once a search has finished, whatever it found, even after an error or a timeout, the list offers
+*Can't find it?* **Let us know** (between the two parts, when there are two), as long as the app
+knows where to send the report. The report goes to whoever supports your instance. If the list has
+closed, click in the search box to bring it back; emptying the box forgets the search.
+
+Where the link leads depends on your instance's support address; its tooltip tells you which:
+
+| Support address | What **Let us know** does |
+|---|---|
+| An email address | Your email app opens a message with the subject and the details filled in |
+| A web page | The page opens in a new tab and the details are copied, ready to paste there; a message confirms the copy, or says it failed |
+| None (the default), on a self-hosted instance | A new GitHub issue opens in a new tab, filled in. It is **public**: review it before you submit it |
+
+On a managed instance, one that a hosting provider runs for you, **Let us know** needs a support
+address: without one, the list does not offer it, since a public issue would publish that the
+instance is managed, the providers it asks and the identifiers in your form. The link is also
+missing, even with a support address, when the app could not read your instance's configuration:
+reloading the page tries again.
+
+The details are in English: the text you searched; each provider asked and its outcome (how many
+results, *no answer*, or an error, with its code when it has one; never the error's message); the
+identifiers already in the form, and its currency and type unless they are still the defaults of a
+new, blank form (your base currency and Stock); your LibreFolio version, whether the instance is
+self-hosted or managed, and the language of the app. When you edit an asset, the details therefore
+include the asset's own identifiers (ISIN, ticker…), its currency and its type, as the form shows
+them. They never include who you are, an email address, your instance's address or any portfolio
+data. You send the report yourself, from your own device: it never goes through the LibreFolio
+server.
 
 ## 🗂️ Choose the asset type {: #choosing-the-asset-type }
 
@@ -67,7 +113,8 @@ Picking a **Search Online** result connects its provider for you. To set one up 
 2. Click **Test Configuration**: LibreFolio fetches a **Current Price** and a few days of
    **History**. ⚠️ means the provider does not offer that data or has none right now (CSS Scraper
    has no history, for example); the test still passes. ❌ is an error: check the identifier and
-   the settings.
+   the settings. When **History** answers, ⚠️ included, a note recalls that the test reads only
+   the last few days: a new asset gets its whole price history when it is created.
 
 ⚠️ *Paused for too many requests until …* means the provider has refused LibreFolio's requests
 because there were too many: LibreFolio leaves it alone until the time shown, in your local time,

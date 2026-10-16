@@ -27,8 +27,24 @@
  * real `isAxiosError` reads that flag, so no mock is needed. Node environment: no DOM.
  *
  * Written red-first, before `registrationErrors.ts` exists: every case fails on the import until it does.
+ *
+ * Accounts lot A7b (decided by the coordinator, 2026-10-16 21:10; closes A-13): on a blocked instance the registration
+ * is refused with a 401 — `POST /auth/register` is public and outside `ALLOWED_WHEN_BLOCKED`, so the instance block
+ * answers an anonymous caller with the 401 of `get_current_user` (`backend/app/api/v1/instance_block.py`) — or, to a
+ * browser holding a session, with H's 423 `{detail: {code: 'instance_blocked'}}` (`isInstanceBlockedError`). `/invite`
+ * opens its form there (`tokens/inspect` still answers) and showed the raw «Not authenticated». Now:
+ *   - a 401, whatever its body → `{key: 'auth.instanceBlocked'}`: the status decides before the body is read;
+ *   - a 423 `instance_blocked` → the same key; a 423 with anything else, and that code under another status, are read
+ *     as before (guards);
+ *   - `auth.instanceBlocked` is a sentence in the four catalogues — without it the form would show the key instead of
+ *     «Not authenticated», which is the same defect;
+ *   - every mapping above is unchanged: those cases are the guards, and none of them uses a 401 or a 423.
  */
 import {describe, expect, it} from 'vitest';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import {describeRegistrationError} from './registrationErrors';
 
 /** An axios-shaped refusal carrying `response.status` and `response.data.detail`. */
@@ -141,5 +157,48 @@ describe('describeRegistrationError — failures with nothing usable in them', (
         ['null', null],
     ])('reads %s as the general failure', (_label, failure) => {
         expect(describeRegistrationError(failure)).toEqual({key: 'auth.registrationFailed'});
+    });
+});
+
+describe('describeRegistrationError — a blocked instance (A7b, closes A-13)', () => {
+    const BLOCKED_KEY = 'auth.instanceBlocked';
+    /** H's refusal on a blocked instance, the `detail` of its 423 (`instance_block.py`). */
+    const INSTANCE_BLOCKED_DETAIL = {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'};
+
+    // red until A7b
+    it.each([
+        // The real one: what the instance block answers an anonymous caller (`get_current_user`).
+        ['the 401 of an anonymous caller, «Not authenticated»', refusal(401, 'Not authenticated')],
+        ['a 401 with another sentence of get_current_user', refusal(401, 'Session expired or invalid')],
+        // The status decides before the body: a 401 whose body would map to another key is still the block.
+        ['a 401 whose sentence names the username', refusal(401, 'Username already taken')],
+        ['a 401 carrying a code of the registration rule', coded(401, 'REGISTRATION_DISABLED')],
+        ['a 401 carrying a schema list', refusal(401, [{type: 'value_error', loc: ['body', 'email'], msg: 'value is not a valid email address'}])],
+        ['a 401 with no detail', refusal(401, undefined)],
+        ['a 401 with no body at all', {isAxiosError: true, response: {status: 401}}],
+    ])('reads %s as auth.instanceBlocked, never the server sentence', (_label, failure) => {
+        expect(describeRegistrationError(failure)).toEqual({key: BLOCKED_KEY});
+    });
+
+    // red until A7b
+    it("reads H's 423 instance_blocked — what a browser holding a session gets — as auth.instanceBlocked", () => {
+        expect(describeRegistrationError(refusal(423, INSTANCE_BLOCKED_DETAIL))).toEqual({key: BLOCKED_KEY});
+    });
+
+    // guard
+    it.each([
+        ['a 423 with another code', refusal(423, {code: 'locked'}), {key: 'auth.registrationFailed'}],
+        ['a 423 with a plain sentence', refusal(423, 'Locked'), {raw: 'Locked'}],
+        ['a 423 with no detail', refusal(423, undefined), {key: 'auth.registrationFailed'}],
+        ['a 403 carrying the code of a blocked instance', refusal(403, INSTANCE_BLOCKED_DETAIL), {key: 'auth.registrationFailed'}],
+    ])('reads %s as before: only a 401, or a 423 with the code of a blocked instance, is the block', (_label, failure, expected) => {
+        expect(describeRegistrationError(failure)).toEqual(expected);
+    });
+
+    // red until A7b
+    it.each(Object.entries({en, it: itCatalogue, fr, es}))('has auth.instanceBlocked as a sentence in %s, or the form would show the key', (language, catalogue) => {
+        const message = (catalogue as {auth?: {instanceBlocked?: unknown}}).auth?.instanceBlocked;
+
+        expect(typeof message === 'string' && message.trim().length > 0, `auth.instanceBlocked in ${language}`).toBe(true);
     });
 });
