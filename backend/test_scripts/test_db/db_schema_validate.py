@@ -141,9 +141,14 @@ def test_indexes():
 
     Dynamically reads indexes from SQLModel metadata and verifies they exist
     in the database.
-    """
-    inspector = inspect(get_sync_engine())
 
+    The database side is read from SQLite's own catalogue (sqlite_master), not
+    from the SQLAlchemy inspector: its SQLite get_indexes() skips every
+    expression-based index with a warning ("Skipped unsupported reflection of
+    expression-based index ..."), so an index such as
+    ux_users_email_lower ON users (lower(email)) would be reported missing
+    while the database holds it.
+    """
     # Get tables with indexes from models (dynamically discovered)
     tables_with_indexes = []
     for table_name, table in SQLModel.metadata.tables.items():
@@ -154,17 +159,19 @@ def test_indexes():
 
     # Verify indexes exist in database
     missing_indexes = []
-    for table_name, _expected_count, expected_names in sorted(tables_with_indexes):
-        db_indexes = inspector.get_indexes(table_name)
-        db_index_names = [idx["name"] for idx in db_indexes if idx.get("name")]
+    with get_sync_engine().connect() as conn:
+        for table_name, _expected_count, expected_names in sorted(tables_with_indexes):
+            # Every index created on the table, expression-based ones included. `sql IS NOT NULL` leaves out the
+            # automatic indexes of PRIMARY KEY / UNIQUE constraints (sqlite_autoindex_*), as the inspector did.
+            db_index_names = conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = :table_name AND sql IS NOT NULL"), {"table_name": table_name}).scalars().all()
 
-        print(f"  {table_name}: {len(db_indexes)} index(es)")
+            print(f"  {table_name}: {len(db_index_names)} index(es)")
 
-        # Check if expected indexes are present
-        for expected_name in expected_names:
-            if expected_name and expected_name not in db_index_names:
-                missing_indexes.append(f"{table_name}.{expected_name}")
-                print(f"    ⚠️  Missing: {expected_name}")
+            # Check if expected indexes are present
+            for expected_name in expected_names:
+                if expected_name and expected_name not in db_index_names:
+                    missing_indexes.append(f"{table_name}.{expected_name}")
+                    print(f"    ⚠️  Missing: {expected_name}")
 
     assert not missing_indexes, f"Missing indexes: {', '.join(missing_indexes)}"
 

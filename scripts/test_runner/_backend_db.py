@@ -288,6 +288,16 @@ def db_migration_008(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 008 tests", verbose=verbose)
 
 
+def db_migration_009(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 009_email_unique_ignoring_case on temporary databases: one account per address, whatever its A–Z case."""
+    print_section("DB Test: Migration 009 (email unique regardless of case)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, the index on lower(email) as the models build it, a refusal that names accounts and no address and writes nothing, the set-email remedy, downgrade, idempotence, a 1.1 install")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_009_email_case.py", test_names)
+    return run_command(cmd, "Migration 009 tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -333,7 +343,7 @@ def db_all(verbose: bool = False) -> bool:
         "post-migration-event-types",  # temporary databases only: needs none of the steps below
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
-        "migration-005", "migration-006", "migration-007", "migration-008", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "migration-005", "migration-006", "migration-007", "migration-008", "migration-009", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -424,6 +434,10 @@ Note: No backend server required. Tests operate directly on test DB.
     # PURE, as migration-005 to 007, whose in-process Alembic harness it reuses: private files under tmp_path only.
     add_test(cat, "migration-008", db_migration_008, name="Migration 008 Registration Default",
              desc="008_registration_invite_default: registration_mode open where accounts exist without the row; an existing row untouched; nothing without accounts; idempotent; downgrade a no-op",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 008: private files under tmp_path only; the set-email remedy runs in-process on them.
+    add_test(cat, "migration-009", db_migration_009, name="Migration 009 Email Unique Regardless of Case",
+             desc="009_email_unique_ignoring_case: ux_users_email_lower on lower(email); stops naming accounts by id and username, never an address, and writes nothing; set-email clears it; downgrade drops the index; idempotent",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",

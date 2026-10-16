@@ -2,9 +2,10 @@
     import {onMount} from 'svelte';
     import {browser} from '$app/environment';
     import {page} from '$app/stores';
-    import {afterNavigate, goto, preloadCode} from '$app/navigation';
+    import {afterNavigate, goto, onNavigate, preloadCode} from '$app/navigation';
     import {_, i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/app/navigationStore';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {auth, isAuthenticated, isAuthInitialized, isSignOutRequested} from '$lib/stores/app/auth';
@@ -54,6 +55,12 @@
     // language switch keeps the app mounted, so no page is rebuilt and no draft is lost.
     let i18nBooted = false;
     $: if (!$i18nLoading) i18nBooted = true;
+
+    // The Refresh button waits for the big requests of its own page only (Y11): a new route drops the old page's
+    // tokens before the new page mounts. A change of parameter on the same route (asset 1 → asset 2) keeps them.
+    onNavigate((nav) => {
+        if (nav.from?.route.id !== nav.to?.route.id) pageBusy.reset();
+    });
 
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {

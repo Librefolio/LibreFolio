@@ -225,13 +225,19 @@ Manages user profile information:
 - **Username** and **Email**: editable once the edit lock is open, each with its own save and undo
   (`PUT /api/v1/auth/profile`)
 - **The email's password** ([Changing the Email](../../../architecture/security.md#email-change)):
-  while the tab is unlocked and the email differs from the stored one, a password input appears
-  under the email's hint (`profile-email-password`, `autocomplete="current-password"`, placeholder
-  `settings.currentPassword`), described by `profile-email-password-hint`
+  while the tab is unlocked and the email is another address than the stored one, a password input
+  appears under the email's hint (`profile-email-password`, `autocomplete="current-password"`,
+  placeholder `settings.currentPassword`), described by `profile-email-password-hint`
   (`settings.emailPasswordHint`). Both email Saves and `profile-save-all` stay disabled while it is
   empty; the username's Saves do not wait for it. The email's request is
   `{email, current_password}`, the username's never carries the password. The password is emptied
-  whenever the email is back to the stored one, after a save included
+  whenever the email is back to the stored address, after a save included
+- **Only the capitals changed** (P18, A-25): «another address» is decided by `sameEmail()` of
+  `lib/features/auth/emailCase.ts`, which folds A–Z only, like the server's index on `lower(email)`
+  (`user_service.email_fold`). The stored address in other A–Z capitals is still a modification (the
+  row stays marked, the Saves are on, the new form is saved), but no password input appears and the
+  request is `{email}` alone, without a `current_password` key (the server refuses an empty one).
+  Letters outside A–Z compare as written: `émile@…` → `Émile@…` asks for the password
 - **Refusals**: `CURRENT_PASSWORD_REQUIRED` and `CURRENT_PASSWORD_INVALID` are worded by the tab
   (`settings.currentPasswordRequired`, `settings.currentPasswordIncorrect`) and published on
   `profile-error` as `data-error-code`; the typed email stays and only the password is emptied. Any

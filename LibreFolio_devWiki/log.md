@@ -3634,3 +3634,10 @@ permanent capital artifact. Two pages that stated the old rule got a dated note.
 Filed: [[decisions/adjustment-is-never-a-price]]. Updated: [[entities/portfolio-engine]],
 [[problems/stale-price-banner-never-emitted]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | J-24: an outgoing priced ADJUSTMENT leaves at the value it hands over
+The Dashboard now follows the developer's rule P21 for outgoing adjustments with a cost: the units leave the capital at
+quantity × cost basis converted at the adjustment's date, and the difference from the average cost removed is realized,
+as the lots do since CP-7a. Two pages that stated the historical-cost rule got a dated note.
+Updated: [[entities/portfolio-engine]], [[concepts/inline-wac-computation]].
+Graph: not updated; graphify is not available in this worktree.

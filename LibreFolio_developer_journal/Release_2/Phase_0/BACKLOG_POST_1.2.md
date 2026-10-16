@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: circa il 90 % delle classi sui ruoli (m1 1.185 nel target), il resto aspetta la designer o la 1.3 |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -2786,16 +2786,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 - **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
   16/10 (W5-PAC, W5-charts).
-  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
-    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
-      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
-    - Serve un ruolo per la traccia (T) o una scelta della designer.
-  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
-    `DistributionDialog`:102.
+  - ✅ (16/10, W6-e) **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100
+    dark:bg-slate-700`): tutte e due su `bg-lf-neutral`, il ruolo delle tracce.
+    - Il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` passa da `bg-lf-neutral` (ΔE00 0 dalla traccia) a
+      `bg-lf-secondary`: il colore che l'obiettivo ha già nel risultato, 5,77/5,84:1 sulla traccia (coordinatore,
+      16/10).
+    - È una scelta provvisoria: il coordinatore la porta alla designer, nella raccolta al punto 27.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149 e `ResultCell`:79.
     - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
       scuro è spento sulla traccia.
     - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
-  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **La barra della distribuzione attuale** di `DistributionDialog` (la costante `FILL`, `bg-libre-green`): il peso
+    attuale di ogni asset posseduto, cioè un colore di dato, resta legacy (W6-e).
+    - In scuro è il verde fluo `#00d681`, quello che il developer ha rifiutato nel PAC (TD-1).
+    - Per TD-1 il «reale» prende il colore della categoria della riga, accanto al neutro «ideale»: qui la riga è un
+      asset, quindi sarebbe il colore del suo tipo (GR1). È un cambio di disegno: aspetta la stessa scelta delle barre
+      «dopo il piano».
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario). Restano 14 classi, cioè le 6 fasi e
+    l'attesa in coda. Il separatore dei segmenti è sui ruoli dal 16/10 (`divide-lf-card` sul contenitore, G-18).
   - **La legenda di `RiskReturnLevel`** (W6-a), 4 classi: il punto «portafoglio» cielo e il rombo «benchmark» ambra
     (riga 170), con le tinte delle righe della tabella (`--lf-cmp-risk-return-row-*` in `theme/components/table.css`).
     Sono le categorie della serie ECharts del grafico rischio/rendimento: aspettano il punto 2.5 della designer.
@@ -3033,8 +3041,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   righe 392–419 (spec della 1.3): la regex prenderebbe anche un ruolo `bg-lf-selected` quando `DataTable` (T, W6) migra;
   meglio leggere `aria-selected`. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   sezione «Stato attuale».
-- **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
-  16/10); poi migrazione dalla versione di Y, 205 → 20. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+- ✅ **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
+  16/10); poi migrazione dalla versione di Y, 205 → 20. Chiusa il 16/10 sera nel checkpoint L4 di BK, con il misto di
+  G-18 (`contentClass` tolto); restano i 20 di BK-2. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   passo S7.
 
 ---
@@ -3280,6 +3289,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     nei comandi documentati. Nessuna fretta: il run non ne soffre.
 
   Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
+- **H-21 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** (W-B54) — basso, runner; W (C-97a, slot
+  API), 16/10. Assegnata ad H dal coordinatore alle 18:39.
+  - Il setup della categoria `api` (`_api_setup` in `scripts/test_runner/_backend_api.py`, `db_populate(force=True)`)
+    parte da `run_category_setup("api")` solo con la categoria intera (`api_test`) o nel passaggio consolidato. Per
+    un'azione singola, `dispatch_to_category` lo salta e usa il DB della corsia così com'è.
+  - Dopo un run che ricrea il DB vuoto (`services`, `db create`), i test che entrano come `e2e_test_admin` o
+    `e2e_test_user` cadono con 401: 6 rossi su 118 per W il 16/10, verdetto «ambiente». Oggi si evita a mano,
+    lanciando prima `db populate --force`.
+  - Cura proposta: prima di un'azione `api` singola, una lettura del DB della corsia controlla che ci siano gli utenti
+    di fixture. Se mancano, il runner chiama `run_category_setup("api")`, oppure lo dice prima di partire con il
+    comando da lanciare. Un caso di test puro per ciascun ramo: «mancano → seed» e «ci sono → niente».
+  - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
+
+  Dettagli: piano 04 di W, sezione C-97a; piano H, §14 «Lotto «H-12, il resto»», passo 14.
 
 ## A · Account e accessi (fase 01)
 
@@ -3392,6 +3415,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
     «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
     Your Email», «🔑 Change Password»), `admin/email`.
+  - Da A7a (16/10), nessun timbro: sezioni nuove in `admin/configuration` («The Initial Administrator») e
+    `admin/cli_tools` (`user setup-link`), con le ancore `#initial-admin` e `#setup-link` da tenere uguali in ogni lingua;
+    `admin/hosting_providers` (`#initial-admin`); una o due frasi in `admin/settings`, `admin/users`, `admin/index`,
+    `admin/host_installation`, `admin/docker_advanced`, `user/installation`, `user/getting-started`.
+  - Da P18 (16/10), nessun timbro: in `admin/cli_tools` due sezioni nuove, «Change the Email Address of an Account»
+    (`#set-email`) e «Two Accounts with the Same Email Address» (`#email-case-conflict`), con le ancore da tenere uguali
+    in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
+    `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
+    «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -3483,6 +3515,79 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
     inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
     password (decisione 37).
+  - In più (dal `test-author` di A-22, 16/10): uno username può contenere `@` e somigliare a un indirizzo, quindi un
+    evento di log che porta lo username («User logged in» e altri) può scrivere qualcosa che sembra un'email; e il login
+    cerca «username o email» con un solo campo, quindi uno username uguale all'indirizzo di un altro account è ambiguo.
+    Il carattere `@` va escluso con la stessa regola.
+  - **Allargata dal coordinatore** (16/10, con P18): gli username diventano unici senza distinzione di maiuscole, come gli
+    indirizzi (P18); username nuovi senza `@`, e un identificativo con `@` cerca solo l'email (oggi
+    `get_user_by_username_or_email` prende il primo dei due, senza ordine: il login e la «password dimenticata» per email
+    possono finire sull'account sbagliato, nota di E). Per gli username già salvati con `@` o con varianti di maiuscole,
+    prima un'analisi, nessun cambio silenzioso. Lotto dopo P18.
+- ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
+  (16/10); dal `test-author` di A7c (16/10).
+  - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
+    `username=request.username`; il login accetta anche l'email in quel campo, quindi un tentativo fallito con l'email
+    la scrive nel log, contro la regola di E (nessun indirizzo nei log).
+  - Cura proposta: `user_id` quando l'account esiste (password sbagliata, account disattivo), niente dell'identificativo
+    quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
+    Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
+  - Fatta così (16/10): LOGIN-027…033 in `test_auth_api.py`; dettagli nel piano, «A-22».
+- **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
+  H (H-19, tramite il coordinatore, 16/10).
+  - `POST /api/v1/users/address-probe` (`address_probe.issue_probe_nonce()`, firma il nonce con una chiave derivata dalla
+    chiave d'istanza) risponde 500 se la chiave non si può usare, mentre `GET /auth/address-probe`
+    (`verify_probe_nonce()`) lo tollera.
+  - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
+    A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
+- ✅ **A-24 · Tre test di E diventano impossibili con P18** — basso; chiusa il 16/10 (delta A-24 dopo il merge di base
+  `12cd3c2e0`, commit del coordinatore); A (16/10, dai verdi di P18).
+  - `test_email_flows.py` (`ONE_MAILBOX`, la riga 1356), `test_email_verification.py` EMV-043 (`MAILBOX_VARIANTS`, la
+    riga 166) e `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, la riga 122) creano quattro account sulla
+    stessa casella scritta in quattro forme ASCII: con l'indice `ux_users_email_lower` la seconda riga è rifiutata.
+  - Cura (decisa dal coordinatore, approvata da E, 16/10): varianti con lettere non ASCII in letterali NFC (`\u00e4`
+    precomposta), una casella per le chiavi `casefold` di E, quattro righe per l'indice A–Z. La scrive A con un
+    `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
+    ASCII dà `SEND_FAILED`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
+- ✅ **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; chiusa il 16/10 (lotto A-25,
+  commit del coordinatore); dal `docs-writer` di P18
+  (16/10).
+  - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
+    la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
+    P18) non chiede nulla e non chiude sessioni.
+  - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
+    `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
+    Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
+- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+  `test-author` di P18 (16/10).
+  - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
+    indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
+    indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
+  - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
+    `ux_users_email_lower` nome e SQL li fissa MIG009-003.
+- ✅ **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); chiusa il
+  16/10 (lotto A-27, commit del coordinatore); dalla revisione di E (E6.9), tramite il coordinatore (16/10).
+  - `user_service.update_profile` (cambio vero dell'indirizzo: anche `PUT /auth/profile` e `user set-email`) e la rotta
+    `POST /auth/change-password` chiudono le sessioni ma lasciano vivi i link `PASSWORD_RESET`: con la «password
+    dimenticata» aperta, chi controlla la vecchia casella chiede un link prima del cambio e lo usa dopo, entro 30 minuti.
+    Stesso buco in `user_service.reset_password` (CLI `user reset`), trovato da A.
+  - Cura: `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)` nella stessa transazione del cambio, come già fanno
+    `create_password_reset` e `complete_password_reset`; rossi prima. Lotto a sé dopo l'ingresso di P18.
+  - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
+    `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A-27».
+- **A-28 · La riga dell'email della scheda Profilo non si assesta dopo certi salvataggi** — minimo; dal `test-author` di
+  A-25 (16/10).
+  - Il server mette il dominio in minuscolo (`EmailStr`): dopo aver salvato `Alice@Example.COM`, `/auth/me` risponde
+    `Alice@example.com`, l'input tiene quanto scritto e la riga resta «modificata» (con un cambio vero scritto con il
+    dominio in maiuscolo, prima di A-25 chiedeva perfino di nuovo la password per lo stesso indirizzo).
+  - Un indirizzo cambiato altrove mentre la scheda è aperta: una variante di sole maiuscole della forma vecchia è un
+    cambio vero per il server, che risponde 400 `CURRENT_PASSWORD_REQUIRED`; la scheda tiene l'indirizzo e svuota la
+    password, ma non mostra il campo per scriverla.
+  - Cura possibile: dopo un salvataggio riuscito l'input prende la forma che il server ha conservato; sul 400
+    `CURRENT_PASSWORD_REQUIRED` la scheda rilegge l'indirizzo salvato. Da decidere con A7b/A8, che toccano la stessa
+    scheda.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
@@ -3836,6 +3941,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
          - con stesso identificativo e parametri diversi: `css_scraper`, `borsa_italiana`, `justetf`.
          - Non lo è `yahoo_finance`, che ignora i parametri.
     - Decisione: vedi sopra (developer, 17:33).
+- **X-R29 · Sync: l'avviso di C-66 con il conteggio preciso, e quanti dati manuali** — basso; X, 16/10 (opzione B di
+  C-66, decisione del coordinatore).
+  - C-66 è stato fatto con l'opzione A: il conteggio viene dai dati che la pagina mostra.
+  - La B è un endpoint che conta le righe salvate nell'intervallo e quante sono manuali (`source_plugin_key`), per
+    asset e cambi. Così l'avviso può nominare i prezzi manuali.
+- **X-R30 · La sincronizzazione degli asset deve tenere i prezzi manuali?** — ✅ chiusa il 16/10 con la risposta del
+  developer: **vince il fornitore**, i prezzi manuali non si tengono. Basta l'avviso di C-66 (opzione A), che lo dice
+  («modifiche manuali comprese»). Domanda posta dal coordinatore il 16/10 (opzione C di C-66).
+  - Oggi la sync scrive ogni data che il fornitore restituisce, e sovrascrive anche un prezzo `MANUAL`
+    (`bulk_upsert_prices`). I cambi invece saltano le coppie solo `MANUAL`.
+  - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
@@ -4462,6 +4578,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
   `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
   a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
+- **J-32 · Debito di traduzione di J-24 (la rettifica in uscita consegna al cambio del suo giorno)** — basso,
+  documentazione; J, 16/10. Pagine EN cambiate di senso, senza stamp, sotto
+  `financial-theory/technical-analysis/performance-metrics/`:
+  - `portfolio-engine/deposited-capital`: sezione nuova `#outgoing-adjustments` con esempio, più punti riscritti;
+    36 errori strutturali.
+  - `portfolio-engine/index`: §8, con l'ancora nuova `#8-realized-gain-loss`, che i titoli tradotti devono portare.
+  - `portfolio-engine/period-pnl`, `twrr`, `mwrr`, `weighted-average-cost`.
+  - `fifo-engine/index`, `fifo-engine/fifo-lot-analysis`.
+
+  Fuori da quella cartella: `financial-theory/instruments/transaction-types/adjustment` e
+  `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
+  `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
+  J, §10 «J-24».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4751,6 +4880,8 @@ da Y il 15/10.
   con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
   quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
   «Y1 — passo 4».
+  - **Nessuna attesa** (16/10, coordinatore): DV-8 (`28f4bed75`, sul ramo di DV) tocca solo `lib/theme/chartPalettes.ts`, né
+    `GrowthChart.svelte` né `growthChartSeries.ts`. Y-2 non è in calendario.
 - **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
   `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
@@ -4812,7 +4943,8 @@ da Y il 15/10.
   - Dettagli: piano di Y, §7 «Y3».
 - **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
   passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
-  developer sulla funzione**, che porta il coordinatore.
+  developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
+  è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
     delle attese) esce in anticipo a ogni corsa: `if (!(await presentationFilter.isVisible({timeout: 5_000})…)) return`.
   - I testid che cerca, `lots-value-presentation-filter` e i tre `lots-value-*-toggle`, sono entrati in `6b28d60df`
@@ -4821,6 +4953,48 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+- **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
+  (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
+  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca.
+  - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
+    fanno `toHaveClass(/selected/)` sulla riga.
+  - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
+    (`DataTable.svelte:1098-1149`).
+  - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
+- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - `brokers-refresh` rilegge solo l'elenco (`GET /brokers?include_inaccessible=true`). Le cifre delle schede vengono
+    dalla cache dei report finché questa è fresca.
+  - Nella Dashboard e nella pagina del broker, invece, «Aggiorna» ricalcola tutto (documentazione utente, «Coming back
+    and refreshing»).
+  - Da decidere: forzare il report delle schede, oppure dire nella documentazione che lì «Aggiorna» rilegge l'elenco.
+    Dettagli: piano di Y, «Passo 4 · BK e TR».
+- **Y-15 · Il `title` di `brokers-refresh` è scritto in inglese nel codice** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - Il pulsante, solo icona, ha `title="Refresh"`, che è anche il suo nome accessibile. `common.refresh` in inglese vale
+    «Reload», mentre la pagina del broker usa `dashboard.syncData`.
+  - Quindi correggerlo vuol dire anche scegliere la chiave e la parola, nelle quattro lingue. Dettagli: piano di Y,
+    «Passo 4 · BK e TR».
+  - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
+    altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
+- **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10.
+  - Il `$effect` di `GrowthChart` (976–980) chiama `onRequestPnlCandles()`. Il caricatore parte in modo sincrono,
+    sia con `join` sia, prima, con `track`.
+  - Le sue letture (`canAsk`, `pnlCandles`, la cache dei report) diventano così dipendenze di quell'effetto. È il
+    cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
+  - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
+    Y, «Passo 4b».
+- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+  prima di Y11; `test-author` di Y, 16/10.
+  - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
+    `contribution-table`. Dettagli: piano di Y, «Passo 4b».
+- **Y-18 · Le candele non hanno un indicatore di caricamento proprio** — minimo; Y, 16/10, una conseguenza di N55 da
+  rivedere con il developer.
+  - Con N55, se l'utente passa direttamente alle Candele a pagina ferma, il pulsante della pagina non gira più.
+  - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
+    indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
+  - Dettagli: piano di Y, «Passo 4b».
 
 ## MF · Matematica finanziaria (fase 01)
 
