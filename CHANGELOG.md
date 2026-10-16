@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
 - Live prices on the Assets pages: after a failed refresh the next one waits longer, up to 10 minutes, and while every provider asked about is paused after too many requests, the page waits for the pause to end instead of asking every 30–60 s. Administrators find how provider pauses work in Admin › Sleep and Wake › Provider Pauses.
 - After the server has caught up on prices, an open Dashboard or broker page shows the new figures by itself, in the background, with no need to press Refresh.
+- **An adjustment is no longer a price.** An asset's value comes from its market quotes and from the prices of its buys and sells only; an adjustment (an opening position, a succession, a transfer from a broker LibreFolio does not track) sets the cost and nothing else. A position with no price at all — no quote, no buy or sale, not even an old one — is valued at its book cost and marked «valued at cost»: an estimate, with no unrealized gain or loss, until its first price. An asset with a price provider that still has no price two weeks after it was acquired is listed in a «valued at cost» warning. The PAC planner weighs such a holding at its cost, labelled «valued at cost · no price», and the AI Export declares it the same way, with no unit price.
 
 #### 🎨 A new colour palette
 
