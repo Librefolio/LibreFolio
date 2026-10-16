@@ -616,6 +616,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
 | 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
 | 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `d39728347`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
+| 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | 🔄 prove leggere verdi (1.991/1.991); slot E2E al via |
 
 ## Avanzamento
 
@@ -2857,3 +2858,66 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > ✅ **`tx-bulk-row-order` da solo** (coordinatore, 16:47): 16:47–16:49, corsia 6155, 2 worker (carico 41): **8 verdi**,
 > porta libera. **Tutte le 16 spec dell'elenco sono verdi: 312 E2E.** Pronto per la base merge e l'ingresso.
+
+> ✅ **Ingresso** (coordinatore, 16:51): il mio ramo nel target come `4d8ae68c4` (diario `a3ff3830b`, base merge
+> `d2125d34e`, gate 119/119): resto della UI, gate G5/G6, component tokens 1–2c, TC-15. Il target scende a 1.197 classi
+> m1 e 2 letterali m2. Restano miei, in attesa della designer, il lotto degli interruttori e le categorie.
+
+### Le tabelle: i token di componente di `table.css` — 🔄 16/10/2026 (sera)
+
+> **Avvio** (coordinatore, 21:09, richiesta del developer): avviata l'app su `dev_release2`, `DataTable` e i suoi
+> componenti mostravano ancora i vecchi colori, in chiaro e in scuro: tutti i 247 token `--lf-cmp-*` di `table.css`
+> erano ancora i letterali di R-3 «a parità di aspetto», e il conteggio m1/m2 non li vedeva (lettura `var()` nei
+> componenti, valori in `lib/theme/**`). Base `fa16ce787` (fast-forward), pulita. Il metodo delle parti 1–2c: ogni
+> coppia su un ruolo, via le regole `.dark`, i token e l'import quando il file non ne legge più; l'evidenza viola
+> generica passa alla tinta di selezione (punto 22). Correzione (21:1x): `ui/display/CompactCashCell` resta fuori (lo
+> sposta FE8b stasera; mini-lotto dopo), i suoi 12 token restano. `media.css`, `files.css`, `dialogs.css` li fa AF
+> stasera.
+
+> ✅ **1 · L'analisi** (inviata, confermata dal coordinatore): **8 lettori, non 6**: anche `table/DataTableCellContent`
+> (52 letture) e `table/DataTableColumnHeader` (18) leggono i token `datatable` e importano `table.css` (nessun ramo con
+> modifiche, verificato dal coordinatore). Le regole di colore estratte per file (`files/T-r2/tbl/rules.py`, i log
+> `*.rules.txt`); le coppie fuori dal gate misurate col suo risolutore (`files/T-r2/tbl/contrast.mjs`): `link` su
+> `neutral` 4,76/**4,39**; il muted sul passaggio delle righe cliccabili (`selected` al 50 % sulla card) 4,78/4,63;
+> sulla tinta di stale (da `warning-soft` al 10 % al 100 %) il muted 5,16→4,67; la testata del periodo (card al 50 %) ≥
+> 4,77; `checked` sulla card 6,17/5,32; `border-input` sul pannello 3,04/3,01. Nessun test legge questi token o i vecchi
+> colori.
+
+> ✅ **2 · La trasformazione** (`files/T-r2/tbl/transform.py`: una mappa per file, gli scarti per selettore, le regole
+> `.dark` tolte solo se tengono soltanto colori, l'arresto su ogni token senza ruolo o letto fuori dallo `<style>`):
+> - **La mappa:** superfici della tabella, dei popover e delle tendine `surface-card` (i popover col bordo
+>   `border-raised` e l'ombra `shadow-raised`, regola 9); intestazione e piede `surface-panel`; il passaggio sulle righe
+>   `surface-hover`, sull'intestazione e sul pannello `surface-neutral`; celle e piede `text-primary`; intestazioni,
+>   etichette, icone e i «faint» (#94a3b8, 2,6:1) `text-muted`; opzioni e testo del pannello `text-secondary`; l'accento
+>   `link`, o `checked`/`on-checked` sui controlli scelti (filtro attivo, casella spuntata, cursore dello slider, pagina
+>   corrente); i campi (input dei filtri, celle modificabili, il selettore della dimensione pagina) `border-input`,
+>   `surface-field`, `focus`, e il segnaposto `text-placeholder` (prima, in scuro, quello legacy di `app.css`); i badge
+>   `X-soft`/`X-on-soft`, quello neutro `neutral`/`secondary`, quello del broker con la sua regola `.dark` tenuta (i
+>   colori dei broker sono categorie per tema), sui fallback dei ruoli; la barra degli strumenti come `SelectionBar`.
+> - **Le righe:** la selezione (blu, o verde se cliccabile), l'evidenza viola e la riga analizzata di DV (smeraldo) →
+>   `selected`, l'impulso e il passaggio su `checked` al 20 %, il bordo dell'evidenza `checked` al 20 %; il passaggio
+>   sulle righe cliccabili `selected` al 50 %; gli stati di `DataEditor` e `TransactionBulkModal` (eliminata,
+>   modificata, aggiunta, bloccante; tinte al 6–8 %) → `danger-soft`, `info-soft`, `success-soft`, `danger-soft`;
+>   `row-stale` → `color-mix(in oklab, var(--lf-warning-soft) calc(var(--stale-opacity, 0.04) * 250%), transparent)`, la
+>   tinta piena a 0,4; `row-paired` (nessun utente) tolta.
+> - **Le aggiunte per il contrasto:** l'intestazione ordinabile al passaggio col testo `secondary`; il «⋮» delle azioni
+>   di riga al passaggio `primary`; il conteggio dei valori del filtro `secondary` (era 2,4:1); **la regola di TC-15 in
+>   `DataTable`**: nelle righe scelte, evidenziate o analizzate un `.text-lf-muted` diventa `secondary`, anche quello di
+>   un `HtmlCell` (skill, regola 5, aggiornata).
+> - **I casi tenuti:** l'opacità 0,7 dell'icona «selezione non permessa» resta per i due temi (`danger` a 0,7 sulla card
+>   ≥ 3:1), via lo 0,6 solo scuro; lo 0,55 delle righe eliminate era già nella regola di base; la lista di
+>   `prefers-reduced-motion` perde la sua metà `.dark`. In `RiskReturnLevel` le tinte categoriali del portafoglio e del
+>   benchmark restano (punto 2.5), la riga scelta passa a `selected`; in `OtherPeriodEffectsTable` la testata è la card
+>   al 50 %, i bordi `border-subtle`, via le sei regole `.dark`.
+> - **I numeri:** 202 letture sui ruoli, 117 regole tolte (115 `.dark` e le 2 di `row-paired`), 7 import di `table.css`
+>   tolti (restano quelli di `RiskReturnLevel` e `CompactCashCell`), **231 token cancellati, 16 restano** (i 4
+>   categoriali e i 12 di `CompactCashCell`); l'intestazione di `table.css` riscritta.
+
+> ⚠️ **Fuori pista:** al primo giro la trasformazione si è fermata su un token di `DataTableColumnFilter`: un commento
+> dentro la regola `.enum-empty` cita `th { white-space: nowrap }`, e le sue graffe rompevano l'aggancio delle regole.
+> Corretta mascherando i commenti durante l'aggancio e rimettendoli dopo; la prova a secco poi pulita su tutti gli 8
+> file.
+
+> ✅ **3 · Prove leggere** (carico 50–55, sotto `nice`): Prettier verde (una riga vuota doppia tolta in
+> `DataTableColumnFilter`); `--check` pulito; i quattro gate dei colori e i 49 file di unità che nominano tabelle,
+> `DataEditor` e le tabelle della dashboard **1.991/1.991**. Lo slot E2E al via del coordinatore (fermo di FE8b).

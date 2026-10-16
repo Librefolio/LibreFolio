@@ -5,7 +5,6 @@
     import {t} from '$lib/i18n';
     import {ChevronDown, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
-    import '$lib/theme/components/table.css';
 
     interface Props {
         pageIndex: number;
@@ -184,17 +183,12 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 1rem;
-        background: var(--lf-cmp-datatable-pagination-surface-bg);
-        border: 1px solid var(--lf-cmp-datatable-pagination-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 1rem;
-        box-shadow: 0 4px 6px -1px var(--lf-cmp-datatable-pagination-balloon-shadow);
+        box-shadow: 0 4px 6px -1px var(--lf-shadow-card);
         pointer-events: auto;
         max-width: calc(100vw - 2rem);
-    }
-
-    :global(.dark) .pagination-balloon {
-        background: var(--lf-cmp-datatable-pagination-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-pagination-border-dark);
     }
 
     /* Row layout */
@@ -224,45 +218,29 @@
         gap: 0.25rem;
         padding: 0.25rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-pagination-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-pagination-page-size-btn-bg);
-        color: var(--lf-cmp-datatable-pagination-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .page-size-btn:hover {
-        border-color: var(--lf-cmp-datatable-pagination-page-size-btn-hover-border);
-        background: var(--lf-cmp-datatable-pagination-page-size-btn-hover-bg);
-    }
-
-    :global(.dark) .page-size-btn {
-        background: var(--lf-cmp-datatable-pagination-page-size-btn-bg-dark);
-        border-color: var(--lf-cmp-datatable-pagination-border-dark);
-        color: var(--lf-cmp-datatable-pagination-text-dark);
-    }
-
-    :global(.dark) .page-size-btn:hover {
-        border-color: var(--lf-cmp-datatable-pagination-page-size-btn-hover-border-dark);
-        background: var(--lf-cmp-datatable-pagination-page-size-btn-hover-bg-dark);
+        border-color: var(--lf-border-input-hover);
+        background: var(--lf-surface-field);
     }
 
     .page-size-dropdown {
         position: fixed;
         min-width: 60px;
-        background: var(--lf-cmp-datatable-pagination-surface-bg);
-        border: 1px solid var(--lf-cmp-datatable-pagination-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-raised);
         border-radius: 8px;
-        box-shadow: 0 4px 12px var(--lf-cmp-datatable-pagination-dropdown-shadow);
+        box-shadow: 0 4px 12px var(--lf-shadow-raised);
         max-height: calc(100vh - 1rem);
         overflow-y: auto;
         z-index: 10;
-    }
-
-    :global(.dark) .page-size-dropdown {
-        background: var(--lf-cmp-datatable-pagination-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-pagination-border-dark);
     }
 
     .dropdown-option {
@@ -273,48 +251,31 @@
         text-align: left;
         border: none;
         background: transparent;
-        color: var(--lf-cmp-datatable-pagination-text);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         transition: all 0.1s;
     }
 
     .dropdown-option:hover {
-        background: var(--lf-cmp-datatable-pagination-hover-bg);
+        background: var(--lf-surface-hover);
     }
 
     .dropdown-option.selected {
-        background: var(--lf-cmp-datatable-pagination-option-selected-bg);
-        color: var(--lf-cmp-datatable-pagination-accent-text);
+        background: var(--lf-selected);
+        color: var(--lf-link);
         font-weight: 500;
-    }
-
-    :global(.dark) .dropdown-option {
-        color: var(--lf-cmp-datatable-pagination-text-dark);
-    }
-
-    :global(.dark) .dropdown-option:hover {
-        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
-    }
-
-    :global(.dark) .dropdown-option.selected {
-        background: var(--lf-cmp-datatable-pagination-option-selected-bg-dark);
-        color: var(--lf-cmp-datatable-pagination-accent-text-dark);
     }
 
     .page-size-label {
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-pagination-faint-text);
+        color: var(--lf-text-muted);
         white-space: nowrap;
     }
 
     .divider {
         width: 1px;
         height: 1.5rem;
-        background: var(--lf-cmp-datatable-pagination-divider-bg);
-    }
-
-    :global(.dark) .divider {
-        background: var(--lf-cmp-datatable-pagination-divider-bg-dark);
+        background: var(--lf-border-subtle);
     }
 
     .nav-btn {
@@ -326,28 +287,19 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: var(--lf-cmp-datatable-pagination-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .nav-btn:hover:not(:disabled) {
-        background: var(--lf-cmp-datatable-pagination-hover-bg);
-        color: var(--lf-cmp-datatable-pagination-btn-hover-text);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .nav-btn:disabled {
         opacity: 0.4;
         cursor: not-allowed;
-    }
-
-    :global(.dark) .nav-btn {
-        color: var(--lf-cmp-datatable-pagination-btn-text-dark);
-    }
-
-    :global(.dark) .nav-btn:hover:not(:disabled) {
-        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
-        color: var(--lf-cmp-datatable-pagination-btn-hover-text-dark);
     }
 
     .page-numbers {
@@ -367,23 +319,14 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: var(--lf-cmp-datatable-pagination-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .page-btn:hover {
-        background: var(--lf-cmp-datatable-pagination-hover-bg);
-        color: var(--lf-cmp-datatable-pagination-btn-hover-text);
-    }
-
-    :global(.dark) .page-btn {
-        color: var(--lf-cmp-datatable-pagination-btn-text-dark);
-    }
-
-    :global(.dark) .page-btn:hover {
-        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
-        color: var(--lf-cmp-datatable-pagination-btn-hover-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .page-input {
@@ -392,25 +335,15 @@
         text-align: center;
         font-size: 0.8125rem;
         font-weight: 500;
-        border: 1px solid var(--lf-cmp-datatable-pagination-page-input-border);
+        border: 1px solid var(--lf-checked);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-pagination-page-input-bg);
-        color: var(--lf-cmp-datatable-pagination-accent-text);
+        background: var(--lf-selected);
+        color: var(--lf-link);
     }
 
     .page-input:focus {
         outline: none;
-        box-shadow: 0 0 0 2px var(--lf-cmp-datatable-pagination-page-input-focus-shadow);
-    }
-
-    :global(.dark) .page-input {
-        background: var(--lf-cmp-datatable-pagination-page-input-bg-dark);
-        border-color: var(--lf-cmp-datatable-pagination-page-input-border-dark);
-        color: var(--lf-cmp-datatable-pagination-accent-text-dark);
-    }
-
-    :global(.dark) .page-input:focus {
-        box-shadow: 0 0 0 2px var(--lf-cmp-datatable-pagination-page-input-focus-shadow-dark);
+        box-shadow: 0 0 0 2px color-mix(in oklab, var(--lf-focus) 20%, transparent);
     }
 
     .ellipsis {
@@ -419,7 +352,7 @@
         justify-content: center;
         width: 20px;
         height: 28px;
-        color: var(--lf-cmp-datatable-pagination-faint-text);
+        color: var(--lf-text-muted);
         font-size: 0.75rem;
     }
 
@@ -430,7 +363,7 @@
 
     .total-text {
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-pagination-faint-text);
+        color: var(--lf-text-muted);
         white-space: nowrap;
     }
 
