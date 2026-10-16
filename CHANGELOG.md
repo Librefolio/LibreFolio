@@ -225,6 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🔒 Security
 
+- Emails that can be requested without being an administrator (password reset, email verification, and the notice of an email address change) now greet the reader without the account's username, and the notice no longer shows the new address. The per-mailbox email limits count the aliases of an address (`name+tag@…`, dots in Gmail addresses) as one mailbox.
 - **Broker reports uploaded by older versions are no longer open to every user.** A report stored without a broker could be listed, read, parsed and deleted by any signed-in user. Now only the user who uploaded it and an administrator can reach it, and only an administrator when no uploader was recorded.
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
