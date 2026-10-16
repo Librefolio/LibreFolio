@@ -1065,6 +1065,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_config_brim(verbose: bool = False, test_names: list = None) -> bool:
+    """Test LIBREFOLIO_BRIM_PREWARM: unset or blank follows the test mode, the on/off words, any other value an error."""
+    print_section("Services: Config BRIM")
+    print_info("Testing: backend/app/config/brim.py (brim_prewarm_enabled, BrimConfigError)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_brim.py", test_names)
+    return run_command(cmd, "Config BRIM tests", verbose=verbose)
+
+
 def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
     """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
     print_section("Services: Profile Defaults")
@@ -1811,7 +1819,13 @@ Note: No backend server required.
     )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
-    add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
+    add_test(
+        cat,
+        "brim-parse-pool",
+        services_brim_parse_pool,
+        name="BRIM Parse Pool",
+        desc="Process-pool off-loading, pickle round-trip, thread fallback; W-B53: workers born from a forkserver preloaded with the BRIM module, its plugins and the discovery (brim_parse_preload, whose import never raises), started early by prewarm() (never raises, the pool stays lazy), importing the pool stays light",
+    )
     add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail")
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
@@ -1965,6 +1979,7 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(cat, "config-brim", services_config_brim, name="Config BRIM", desc="LIBREFOLIO_BRIM_PREWARM (N56): unset or blank follows the test mode; 1/true/yes/on, 0/false/no/off in any case, stripped; else a BrimConfigError naming it; read at each call", isolation="pure")
     add_test(
         cat,
         "profile-defaults",
