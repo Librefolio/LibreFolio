@@ -25,7 +25,7 @@ backend/data/
 └── test/     → same structure, content gitignored, structure tracked
 ```
 
-Configured via environment variable or `get_data_dir(mode)` in `backend/app/config.py`.
+Configured via environment variable or `get_data_dir(mode)` in `backend/app/config/__init__.py`.
 `./dev.py server --test` switches all paths to `test/`.
 
 ## Consequences
