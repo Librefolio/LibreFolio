@@ -626,6 +626,16 @@ def services_sleep_wake_activity(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
 
 
+def services_sleep_wake_suspend(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the idle suspension of a Fly machine: its configuration, the suspender, the idle monitor and its hooks (lot Z2b)."""
+    print_section("Services: Sleep and Wake Suspend")
+    print_info("Testing: backend/app/config/sleep_wake.py, backend/app/services/platform/sleep_wake/suspend.py and idle_monitor.py, their hooks in backend/app/api/v1/system/wake.py and backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: IDLE_SUSPEND_MODE/MINUTES, FlySuspender on a MockTransport (request, 2xx, http_<status>, connection, not_on_fly, socket, timeout), IdleMonitor.check (outcomes, backoff, a warning per streak), the loop, requested checks, start/stop, busy checks, wake hook, lifespan steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_suspend.py", test_names)
+    return run_command(cmd, "Sleep and wake suspend tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1619,6 +1629,19 @@ Note: No backend server required.
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "sleep-wake-suspend",
+        services_sleep_wake_suspend,
+        name="Sleep and Wake Suspend",
+        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check; start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
+        # PURE: no DB, no server, no lane port, no network. The Fly Machines API is an httpx.MockTransport, the socket's
+        # transport class replaced on httpx by a recorder; every Activity is the test's own on a fake clock, the process's
+        # ACTIVITY replaced through monkeypatch; the monitor runs on fake clocks with an injected sleep, its collaborators
+        # replaced on its module; the wake-up is served in this process by httpx.ASGITransport with run_due_jobs replaced.
+        # One fresh interpreter of its own, run to its end; checks held at a gate are released before each test ends.
         isolation="pure",
     )
     add_test(
