@@ -374,8 +374,7 @@ def _print_stage_report(report) -> None:
     if report.administrators:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
-        print("   The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.")
-        print("   An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.")
+        print("   Invitations and links sent before the restore will have expired: send them again if needed.")
     for code in report.warnings:
         print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
