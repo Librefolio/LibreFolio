@@ -39,6 +39,7 @@ As soon as the email in the field differs from your current one, a **Current Pas
 - **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
 - **Email refused for another reason**, for example because another account already uses it: the tab shows the reason, and your current email comes back.
 - **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again.
+- **A notice to your old address**: when your instance can send emails, LibreFolio writes to the address you had before, to tell you of the change. It shows only the domain of the new address, such as `***@example.com`, and says what to do if you did not make the change. Nothing goes to the new address.
 
 Changing only your username asks for no password and signs no device out.
 
