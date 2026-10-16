@@ -473,6 +473,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
+    print_section("Services: Password Policy")
+    print_info("Testing: backend/app/services/accounts/password_policy.py")
+    print_info("Tests: the five rules published in order, failed_rules in the policy's order, Unicode classes (Lu, Ll, Nd, symbols), length in code points")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_password_policy.py", test_names)
+    return run_command(cmd, "Password policy tests", verbose=verbose)
+
+
 def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
     """Test the SMTP configuration accessors of the optional e-mail: LIBREFOLIO_SMTP_* read at call time."""
     print_section("Services: E-mail Configuration")
@@ -624,6 +634,16 @@ def services_sleep_wake_activity(verbose: bool = False, test_names: list = None)
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_activity.py", test_names)
     return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
+
+
+def services_sleep_wake_suspend(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the idle suspension of a Fly machine: its configuration, the suspender, the idle monitor and its hooks (lot Z2b)."""
+    print_section("Services: Sleep and Wake Suspend")
+    print_info("Testing: backend/app/config/sleep_wake.py, backend/app/services/platform/sleep_wake/suspend.py and idle_monitor.py, their hooks in backend/app/api/v1/system/wake.py and backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: IDLE_SUSPEND_MODE/MINUTES, FlySuspender on a MockTransport (request, 2xx, http_<status>, connection, not_on_fly, socket, timeout), IdleMonitor.check (outcomes, backoff, a warning per streak), the loop, requested checks, start/stop, busy checks, wake hook, lifespan steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_suspend.py", test_names)
+    return run_command(cmd, "Sleep and wake suspend tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -1007,6 +1027,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
+    print_section("Services: Profile Defaults")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
+    return run_command(cmd, "Profile defaults tests", verbose=verbose)
+
+
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
     print_section("Services: Plugin Settings Contract")
@@ -1069,6 +1097,30 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
+def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cache policy of the web app's files: hashed chunks immutable, the rest of /_app and the HTML revalidated (F28)."""
+    print_section("Services: Static Cache Policy")
+    print_info("Testing: backend/app/services/platform/static_site.py (the /_app mount, the HTML documents)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_cache_policy.py", test_names)
+    return run_command(cmd, "Static cache policy tests", verbose=verbose)
+
+
+def services_security_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the security headers every response carries: nosniff and Referrer-Policy, never overwritten (F15, D5)."""
+    print_section("Services: Security Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware), middleware.py (MIDDLEWARE_STACK), the app of backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_security_headers.py", test_names)
+    return run_command(cmd, "Security headers tests", verbose=verbose)
+
+
+def services_managed_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the headers of the managed profile: frame protection and the report-only CSP, read when the middleware is built (D5)."""
+    print_section("Services: Managed Profile Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware with LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY), on fresh apps with the stack's entries and the static site")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_managed_headers.py", test_names)
+    return run_command(cmd, "Managed profile headers tests", verbose=verbose)
 
 
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
@@ -1468,6 +1520,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "password-policy",
+        services_password_policy,
+        name="Password Policy",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        # PURE: a module of plain functions; no database, no server, no environment variable.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "email-config",
         services_email_config,
         name="E-mail Configuration",
@@ -1619,6 +1680,19 @@ Note: No backend server required.
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "sleep-wake-suspend",
+        services_sleep_wake_suspend,
+        name="Sleep and Wake Suspend",
+        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check; start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
+        # PURE: no DB, no server, no lane port, no network. The Fly Machines API is an httpx.MockTransport, the socket's
+        # transport class replaced on httpx by a recorder; every Activity is the test's own on a fake clock, the process's
+        # ACTIVITY replaced through monkeypatch; the monitor runs on fake clocks with an injected sleep, its collaborators
+        # replaced on its module; the wake-up is served in this process by httpx.ASGITransport with run_due_jobs replaced.
+        # One fresh interpreter of its own, run to its end; checks held at a gate are released before each test ends.
         isolation="pure",
     )
     add_test(
@@ -1816,6 +1890,16 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(
+        cat,
+        "profile-defaults",
+        services_profile_defaults,
+        name="Profile Defaults",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed",
+        # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
+        # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
     # built with create_all, the call boundaries read their rows through a private engine put in place of
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
@@ -1828,6 +1912,39 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "static-cache-policy",
+        services_static_cache_policy,
+        name="Static Cache Policy",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
+        # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "security-headers",
+        services_security_headers,
+        name="Security Headers",
+        desc="F15 (D5, always): MIDDLEWARE_STACK holds one security_headers entry, SecurityHeadersMiddleware, outside gzip (relative order), and the app carries it outside GZip; every response has X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin exactly once (JSON, HTML, streamed, the router's 404, a CORS preflight, a gzip-compressed body, a start without headers); a route's Referrer-Policy: no-referrer is kept and its nosniff not repeated; lifespan and websocket scopes pass untouched; on the app, the health route, the SPA catch-all and the 500 of an exception (still re-raised to the server) carry both",
+        # Raw ASGI calls on fresh apps holding the stack's own entries and on the global app (its lifespan never runs);
+        # the health route's session dependency, the catch-all's build and frontend_available swapped by monkeypatch.
+        # No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "managed-headers",
+        services_managed_headers,
+        name="Managed Profile Headers",
+        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src with 'self', each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
+        # Fresh FastAPI() apps holding the stack's security_headers, gzip and cors, a few routes and the static site of a
+        # fake build and documentation under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped by monkeypatch); test mode,
+        # a data directory under tmp_path and the profile variables set by monkeypatch before an app is built; raw ASGI
+        # calls. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "backup-archive",

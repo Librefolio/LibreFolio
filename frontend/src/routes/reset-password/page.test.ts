@@ -32,6 +32,16 @@
  * components). `$lib/i18n` keeps its real exports with the identity as translator, so a message renders as its key —
  * the flash included: `auth.resetPassword.done`.
  *
+ * Accounts lot A6c (decision 37): the password rules are in one place, the server's — `accounts.password_rules` of the
+ * public `GET /system/instance`. `PasswordStrength`, the meter of `ResetPasswordCard`, reads them from `instanceConfig`
+ * and checks the built-in defaults (`DEFAULT_PASSWORD_RULES`) until the configuration is loaded. A reset link opens
+ * signed out, often in a fresh tab, outside the (app) layout that loads the configuration, so the page asks for it
+ * itself: `instanceConfig.load()` on mount, fire-and-forget — never awaited before the link check, so a slow or failing
+ * request neither delays nor blocks the form (the real `load()` handles its own failure and never rejects). The fake
+ * here carries no `password_rules`, so every case runs on the defaults. The describe «the password rules of the server»
+ * pins both halves, written red-first: its first case fails until the page calls `load()`; its second passes before
+ * and after, and fails the day the call is awaited.
+ *
  * Written red-first, before `routes/reset-password/+page.svelte` exists: the file fails on the import until it does.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -378,5 +388,36 @@ describe('/reset-password — a link pasted into the tab already on the page (ha
         await changeFragment(`/reset-password#token=${NEW_TOKEN}`);
         await waitFor(() => expect(mocks.inspect).toHaveBeenCalledTimes(2));
         expect(mocks.inspect.mock.calls[1][0]).toStrictEqual({token: NEW_TOKEN, purpose: 'password_reset'});
+    });
+});
+
+describe('/reset-password — the password rules of the server', () => {
+    it("asks for the instance configuration once the page mounts, so the meter checks the server's rules", async () => {
+        // Red before the A6c fix, and only because the page never calls `instanceConfig.load()`: the form opens, and
+        // the request that brings `accounts.password_rules` was never made. Nothing else on this page makes it — the
+        // link opens signed out, outside the (app) layout — so the meter would check the built-in defaults. Green once
+        // `onMount` calls `void instanceConfig.load()`.
+        openAt(`/reset-password#token=${TOKEN}`);
+
+        render(ResetPasswordPage);
+
+        // The barrier: the mount went all the way through (token read, link checked, form drawn), so a missing call is
+        // the page's answer, not a call still to come.
+        await formShown();
+        expect(mocks.instanceLoad, 'GET /system/instance, asked by the page itself').toHaveBeenCalled();
+    });
+
+    it('does not wait for it: a valid link opens the reset form though the configuration request never answers', async () => {
+        // Green before the fix (the page asks for nothing yet) and must stay green after it: `load()` is
+        // fire-and-forget. This is the case that turns red if the call is ever awaited before the link check — a slow
+        // or failing configuration request must never delay or block the form; the meter keeps the defaults until an
+        // answer lands. That the call is made at all is the case above.
+        mocks.instanceLoad.mockReturnValue(new Promise<void>(() => {}));
+        openAt(`/reset-password#token=${TOKEN}`);
+
+        render(ResetPasswordPage);
+
+        await formShown();
+        expect(linkStatus()).toBeNull();
     });
 });
