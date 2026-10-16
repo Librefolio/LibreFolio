@@ -87,6 +87,12 @@ your users sign in again after each restart. See
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+- A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
+  in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
+  systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
+  the server so that its next start applies it (`POST /api/v1/backup/restore/restart`): a clean
+  stop, which a policy that restarts only after a failure (`on-failure`, the default of `fly deploy`)
+  does not follow with a start.
 
 ---
 
@@ -131,6 +137,10 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
   catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
   (14 days by default).
+- A restore that an administrator confirmed before the block, and that still waits, is applied by
+  the next start all the same, the one that applies the block included. On the server,
+  `backup pending` shows it and `backup pending --cancel` drops it: see «Follow or Cancel a Restore»
+  in [CLI Admin Tools](cli_tools.md).
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -342,8 +352,10 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   with `no_space`.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
-- On a [blocked instance](#instance-block), the upload is refused like the rest of the app: the
-  block lets the data leave, never come in.
+- An administrator reads the limit in force in `upload_limit_mb` of
+  `GET /api/v1/backup/restore/status`: `0` for no limit, `null` when the value cannot be read.
+- On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
+  are the check and the restore: the block lets the data leave, never come in.
 
 ---
 
@@ -353,7 +365,7 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🔐 **[Keep Users Signed In After a Restart](index.md#session-persistence)** — Generating
   `JWT_SECRET`
 - 💾 **[CLI Admin Tools](cli_tools.md)** — «Back Up the Instance»: the same archives from the
-  command line, and a restore tried on a copy
+  command line, a restore tried on a copy, and the restore itself
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
