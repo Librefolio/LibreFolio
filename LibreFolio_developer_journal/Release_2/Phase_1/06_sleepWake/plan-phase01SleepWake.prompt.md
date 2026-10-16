@@ -2364,7 +2364,47 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    ascoltatori del bus (gli store) hanno segnato stale, senza dipendere dall'ordine di registrazione. Resa su una copia
    temporanea: `check` a secco pulito e i quattro file interi già conformi a Prettier, quindi nessun `--write` sui
    `.svelte`. I rossi li scrive test-author, fuori dal repo.
-2. Rossi: Vitest `core-unit`, i file del bus e di `priceRefresh`; l'E2E nuovo in uno slot. ⏳
-3. Codice: passo `bus`, poi `pages`; verdi; `front check`, Prettier solo `--check`, cancello dei colori. ⏳
-4. Doc (docs-writer): `admin/sleep_wake.en.md`, `live-ticker.md`, `developer/frontend/state/domain-state.md`. ⏳
-5. Checkpoint FROZEN; nell'handoff i due `.svelte` dichiarati per i colori. ⏳
+2. ✅ 16/10 12:11–12:21 — Rossi. test-author è caduto alle ~11:55 per l'errore del servizio (timeout di rete) dopo aver
+   scritto sei bozze fuori dal repo (11:45–11:49), senza README né nota per il runner. Le ho riviste: aggiunte
+   coerenti, con il contratto, ai file `portfolioMutation.test.ts`, `portfolioStore.test.ts`, `riskStore.test.ts`,
+   `lotsAnalysisStore.test.ts` e `priceRefresh.test.ts`, più lo spec nuovo `e2e/portfolio/price-refresh-reload.spec.ts`
+   (casi (a), (b), (c), completo). Applicate sui blob di HEAD. La registrazione l'ho scritta io: `front-portfolio
+   price-refresh` in `_frontend_portfolio.py`, la funzione su più righe. Il file aveva già 28 segnalazioni di ruff
+   (27 E701) e non era pulito per black: le mie righe non ne aggiungono, e black non ne tocca nessuna.
+   Rossi, tutti per il motivo giusto (`notifyPricesCaughtUp` manca, oppure `priceRefresh` non manda il segnale):
+   - `front-portfolio store-unit`: 6 rossi su 58;
+   - `front-portfolio risk-unit`: 1 su 41;
+   - `front-utility core-unit`: 2 su 6464.
+3. Codice:
+   - ✅ 16/10 12:22 — passo `bus`: `store-unit` 58/58, `risk-unit` 41/41, `core-unit` 6464/6464.
+   - ✅ 16/10 12:24–12:30 — passo `pages`. Due pezzi per pagina, tutti dentro lo `<script>`: dashboard +17 −1,
+     broker +16 −1. Prettier `--check` pulito sui due `.svelte` e sul codice; `--write` solo su due file di test
+     (`priceRefresh.test.ts` e lo spec), solo a capo. Cancello dei colori pulito; `front check` 0/0.
+   - ✅ 16/10 12:44–13:03 — Slot 2 (coordinatore, cut-off 13:15), con `files/z13_slot.sh`, dopo il `front build --debug`
+     nello stato di A (12:41–12:46, sotto carico 50) e il `mkdocs build` stretto (12:51, 0 avvisi):
+     - **A**, le pagine come a HEAD (senza ascoltatore), `front-portfolio price-refresh`: 3 rossi per il motivo giusto.
+       (a) «the Dashboard did not ask for its report again»; (b) «the broker page did not ask for its overview again»;
+       (c) le due «nessuna ricarica» passano, fallisce il controllo positivo. Nessuna ricostruzione.
+     - **B**, `apply_z13.py pages`, pagine identiche all'impronta delle 12:32: `price-refresh` 3/3 (47 s, una
+       ricostruzione), `front-portfolio dashboard-cache` 6/6 (31 s). Porta 6186 libera.
+     - Lo script stampa «A rc=0»: `$(date)` gira prima di `$?`. Gli esiti si leggono dai log (`files/logs/`).
+     Dopo lo slot: `check-links` 97 validi; il diagramma di `domain-state.md` controllato a vista, servendo il sito
+     sulla porta della corsia per un minuto (il nodo «End of a price catch-up» e l'arco `kind: prices` verso il
+     `fetchReport` del Dashboard).
+     > **Stato temporaneo**: alle 12:32 ho tolto l'ascoltatore dalle due pagine (`apply_z13.py revert-pages`, i file
+     > tornati identici a HEAD), per costruire il frontend prima dello slot nello stato di A, come chiesto dal
+     > coordinatore. Così lo slot ricostruisce una volta sola, per B. Per rimetterlo: `apply_z13.py pages`; impronta e
+     > copie dello stato applicato in `files/z13-draft/` (`pages_applied.md5`, `dashboard.applied.svelte`,
+     > `broker.applied.svelte`).
+4. ✅ 16/10 12:43 — Doc (docs-writer, nel worktree, verificata da me): `admin/sleep_wake.en.md#price-refresh` (la voce
+   «Afterwards»: il Dashboard o la pagina di un broker sullo schermo si aggiornano da soli in background; le altre
+   pagine al prossimo caricamento; la frase sul proxy), `live-ticker.md#price-refresh` e `#testing` (il segnale
+   `prices`, i due ascoltatori con `queueMicrotask`, le righe dei test e dello spec nuovo), `domain-state.md` (tabella,
+   diagramma, bus, il passo 5 del Dashboard, la pagina del broker). `scheduler.md` invariata.
+   > **⚠️ Fuori pista**: docs-writer ha segnalato che due commenti dei test (`riskStore.test.ts`,
+   > `lotsAnalysisStore.test.ts`) dicevano «asks again only what is stale». Per i pannelli è falso: con `refreshVersion`
+   > chiedono con force, come per «Aggiorna». Corretti, solo commenti. Fuori dal lotto, nel backlog come Z-14: le
+   > pagine di un asset e di un cambio hanno cache di sessione proprie (`assetPriceStoreRegistry.ts`,
+   > `fxStoreRegistry.ts`) che il bus non tocca.
+5. ✅ 16/10 13:05 — Checkpoint FROZEN inviato, con i due `.svelte` dichiarati per i colori (DV, BK) e
+   `portfolioMutation.ts` come superficie condivisa.
