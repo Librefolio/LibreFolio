@@ -41,7 +41,7 @@
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
-    import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
+    import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CompactDurationBadge from '$lib/components/ui/date/CompactDurationBadge.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
