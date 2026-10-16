@@ -63,7 +63,8 @@ const CALENDAR_RETURN_STATUSES = new Set<CalendarReturnPointStatus>(['available'
 const SIGNAL_RESULT_STATUSES = new Set(['ok', 'partial', 'unavailable', 'failed']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function emptyCalendarReturnView(state: CalendarReturnViewState, problem: SignalProblem | null = null): CalendarReturnView {
+/** A calendar view with no points and no context; `idle` unless a state is given. */
+export function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle', problem: SignalProblem | null = null): CalendarReturnView {
     return {state, points: [], contextByDate: new Map(), problem};
 }
 
