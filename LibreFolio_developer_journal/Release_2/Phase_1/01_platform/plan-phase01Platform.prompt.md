@@ -3461,3 +3461,80 @@ H-15. È decisione del developer, perché cambia il comportamento di uno stato g
 >
 > **Da girare a X**: dicono ancora «enter it again» senza l'ordine il suggerimento della UI
 > (`frontend/src/lib/i18n/pluginSettings/en.json:31`) e `user/settings/plugins.en.md:117`.
+
+> **Ingresso di H-3 B**: committato (`481a93f1c`, diario `498c5d623`).
+
+### `all-backend` di tutti i lotti aperti (2026-10-16, mattina) — in corso
+
+Lotti: note di X, card del backup, H-17, `b-doc-notes`, H-1/4/6/9, H-3 B. Il coordinatore ha aggiornato la base con il
+dev del mattino (`d5c3c3ae3`: E5b, Y, J CP-10a, W, i lotti di T), senza conflitti: HEAD `9ddecbde0`, slot 1.
+
+> **⚠️ Fuori pista — lo stop e il riavvio**:
+>
+> - il primo giro (dalle 08:34, `--workers 2`, `nice`) ha ricostruito il frontend in debug e il sito MkDocs, cambiati
+>   con la base. Alle 08:46:39 si è fermato per un SIGINT arrivato da fuori (uscita 130, `KeyboardInterrupt` nel
+>   runner), prima che partisse un solo test: nessun risultato. Porta 6181 libera, verificato dallo script;
+> - alle 08:49 lo stop chiesto dal developer: nessun comando, worktree lasciato com'era (pulito);
+> - alle 10:03 la macchina si è riavviata, e macOS svuota `/tmp` al riavvio. Sono spariti gli script, le patch già
+>   applicate, i log della notte e la cartella dati della corsia, `/tmp/librefolio-r13-h`. Non si perde niente: il
+>   lavoro è committato e le prove sono già in questo piano. Il runner ricrea la cartella da sé, come alla prima prova
+>   del 14/10;
+> - alle 10:32 il coordinatore riprende. Dopo il controllo (HEAD `9ddecbde0`, worktree pulito, porta libera, nessun
+>   processo rimasto della corsia), il secondo giro parte alle 10:33 con `--fresh-run`. Script e log ora sono in
+>   `/tmp/librefolio-r13-h-runs/`.
+
+> **Esito del secondo giro** (10:33–11:11, HEAD `9ddecbde0`, `--workers 2`, `nice`): **18 266 passati, 7 saltati, 5
+> falliti**; 5 categorie su 7 verdi. Log nella cartella della sessione (`files/runs/allbackend-1033/`). Porta 6181
+> libera.
+>
+> **Triage dei 5 rossi** (skill `test-triage`, prima le prove e poi i rilanci):
+>
+> - tutti e 5 sono `httpx.ReadTimeout` del client del test, che aspetta al massimo 30 s (`TIMEOUT` dei due file), su due
+>   rotte lente per natura:
+>   - `e2e search-to-prices`, 3 casi, `GET /assets/provider/search` («World», «Apple», «iShares Core MSCI World»);
+>   - `api brim`, 2 casi di `TestParseEndpoint`, `POST /brokers/import/files/{id}/parse`;
+> - §1, la forma della risposta: non si applica, perché non è arrivata nessuna risposta da confrontare;
+> - §2, il tempo: la ricerca dà a ogni fornitore fino a 30 s (`core.call_provider(..., timeout=30.0)` in
+>   `services/assets/search.py`), e dopo un risultato vuoto anche il link-finder. Il limite del test è uguale a quello del
+>   prodotto, senza margine. Alle 11:13 Yahoo rispondeva 429 a una prova con `curl`; JustETF e Borsa Italiana
+>   rispondevano in meno di 1 s. Il parse BRIM lavora nel pool di processi: era il primo giro dopo il riavvio, a cache
+>   fredda, e alle 10:45 il carico era a 78 per gli slot pesanti degli altri;
+> - rilanci da soli (11:13–11:18, `db populate --force` prima, carico intorno a 45): `api brim` **118 passati** (in
+>   158 s), `e2e search-to-prices` **3 passati** (in 20 s);
+> - nessuno dei due percorsi passa dal codice dei miei lotti. La ricerca è di X, il parse BRIM è di W.
+>
+> **Verdetti**:
+>
+> - ricerca: **assumption**. Il test fissa 30 s, quanto il limite di un solo fornitore nel prodotto, quindi una ricerca
+>   corretta con un fornitore lento o rallentato dal 429 lo supera. Cura per X: un limite del client sopra quello del
+>   prodotto (30 s più il link-finder, con margine). Da valutare anche se la ricerca vuole un limite complessivo, perché
+>   oggi un utente può aspettare più di 30 s quando un fornitore si blocca;
+> - parse BRIM: **slowness** sotto concorrenza, da confermare da W con i tempi del primo parse dopo l'avvio, a pool
+>   freddo. Voce sua, non da curare in un rosso.
+>
+> I 7 saltati (stanotte erano 4): i miei 3 casi di H-4 saltano solo da root, su Windows o se il permesso non si può
+> togliere, e alle 07:45, da soli, erano passati tutti (200 su 200). La conferma sulla revisione combinata è nelle prove
+> leggere che seguono.
+
+> **Esito accettato dal coordinatore** (11:2x): i 5 timeout non sono miei. La ricerca va a X e il parse BRIM a W, li gira
+> lui; nessun giro pulito in più. I lotti entrano appena le prove leggere sono verdi.
+>
+> **Prove leggere sulla revisione combinata** ✅ (HEAD `9ddecbde0`, una alla volta, `nice`, ciascuna partita col carico
+> sotto 50, 11:36–11:54; il carico era salito fino a 142 per gli slot degli altri):
+>
+> - `front check`: svelte-check 0 errori, 0 avvisi;
+> - Vitest `InstanceBlockedPage.test.ts`: 36 su 36;
+> - `utils runtime-isolation untraversable`: **3 passati**, 197 deselezionati. I casi di H-4 girano e non saltano;
+> - porta 6181 libera.
+>
+> **I 7 saltati di `all-backend`** (erano 4 a CP7b-2): i miei 3 casi di H-4 girano in questo ambiente (sopra). L'unico
+> altro punto di salto nuovo, nel delta della base `887c6dd12..9ddecbde0`, è il `pytest.skip` parametrizzato di
+> `test_provider_contracts.py` (X): uno per ogni fornitore che non traduce parametri. Molto probabilmente vengono da lì;
+> l'elenco esatto dei saltati non c'è, perché i log sono in `-q`.
+
+### I lotti pronti a entrare (2026-10-16, mattina)
+
+Diciassette commit fuori da `dev_release2`, più questo diario: note di X (H-14/15/16), card del backup sulla pagina di
+blocco, H-17 (la mia parte), `b-doc-notes` (B-4, B-5), H-1/4/6/9, H-3 opzione B. Nel backlog, all'ingresso il
+coordinatore chiude con ✅ H-1, H-4, H-6, H-9, H-14, H-15, H-16. H-17 resta aperta fino alle due righe di B. H-3 resta
+aperta per l'opzione A (P24). Restano aperte anche H-5 (traduzioni), H-18 (sezione C, la UI comune) e H-19 (ad A).
