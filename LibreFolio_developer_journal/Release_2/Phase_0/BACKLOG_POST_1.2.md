@@ -2536,11 +2536,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- **TC-12 · Dopo l'ingresso di Y5: la voce orfana del coachmark nel gate** — minimo; T, 16/10. Con W2-a il bagliore del
-  coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione `ARBITRARY_ALLOWED` di
-  `frontend/scripts/theme/theme-roles.mjs` (riga 84). La si toglie quando Y5 è entrato (Y cambia la riga 70 dello stesso
-  file), insieme ai commenti di `src/themeRoles.gate.test.ts` (righe ~218 e ~547) che descrivono ancora il vecchio
-  bagliore `rgba`. Dettagli: piano di T, «W1-c, W1-e e W2-a», passo 3.
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
+  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+  `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
+  (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
+  tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
+  è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
+  slot».
 
 ---
 
@@ -2791,6 +2793,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-17 · I default del profilo gestito passano da due meccanismi** — basso; H (CP7b-2), 16/10.
+  - `PROFILE_DEFAULTS` (`config/__init__.py`) copre solo i campi di `Settings`, con un test di guardia sulla tabella.
+  - Il limite di upload del ripristino di B decide il suo default da sé: `MANAGED_MAX_UPLOAD_MB` (500) in
+    `config/backup.py`, perché `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
+  - Cura proposta: una sola tabella, o un accessore `profile_default(name, fallback)` che anche i moduli di sezione
+    usano, così la guardia copre ogni default del profilo. Da concordare con B.
+
+  Dettagli: piano H, §14 «CP7b-2», passo 2.
 
 ## A · Account e accessi (fase 01)
 
@@ -2899,6 +2909,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
+  - Da A6d, A6e e A6c (16/10), nessun timbro: `admin/settings` (introduzione, «Who Can Sign Up», che in IT/FR/ES manca
+    del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
+    «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
+    Your Email», «🔑 Change Password»), `admin/email`.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
