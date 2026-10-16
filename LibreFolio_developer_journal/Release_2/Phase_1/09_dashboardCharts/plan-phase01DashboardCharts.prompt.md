@@ -3240,3 +3240,121 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   - prima le spec adattate: dashboard-cache, risk, risk-real, asset-detail;
 >   - poi le pagine: fx-list, fx-detail, asset-list;
 >   - poi `pac-allocator-real` (gli strumenti), `live-pause` e `ai-export memory`.
+
+### Passo 3 · checkpoint e seconda fusione (2026-10-16, 16:04–16:31)
+
+> **Note implementazione**.
+> - **I commit**: il passo 3 l'ha salvato il coordinatore, `e843be00c` (11 file) ed `ec2235b00` (journal). Poi la
+>   fusione con dev `e9b4ac6b0`, che porta C4 dei colori, Z5, Z-13 e Z-13b di Z, P17 di H, B36b di W e IW.
+> - **I due conflitti**, risolti tenendo i due lati:
+>   - `dashboard/+page.svelte`: ha litigato solo l'import (`registerPortfolioMutationListener` di Z, `pageBusy` mio).
+>     `reloadAfterPriceCatchUp()` di Z chiama `loadAll()` senza gettone, come vuole P3;
+>   - `_frontend_portfolio.py`: due funzioni intere e due `add_test` interi, `page-busy` e `price-refresh`.
+> - **Gli altri file toccati dalla fusione**: `LotsAnalysisPanel` è stato ricolorato da BK, ma il mio script è
+>   intatto; `portfolioMutation` ha ora `kind: 'prices'`, e il mio codice non lo distingue.
+> - **⚠️ Fuori pista**:
+>   - **una mia svista**: al passo 2 non avevo passato Prettier sulla Dashboard, e la riga di `PositionsPanel` era
+>     diventata troppo lunga. Corretta nel worktree, fuori dalla fusione: va col prossimo checkpoint;
+>   - `svelte-check` (`front check`) non controlla Prettier. Da ora Prettier gira su ogni file toccato.
+> - **Il test che Z ci aveva lasciato**: `page-busy.spec.ts`, scritto da `test-author`. Un aggiornamento dei prezzi
+>   simulato con il meccanismo di `price-refresh-reload.spec.ts`; mentre il report di sfondo è trattenuto, `sync-button`
+>   resta `data-busy="false"` e abilitato, e un registratore non vede mai `true`. Il controllo è il cambio di periodo a
+>   6 mesi, che invece lo fa girare.
+>   - `hold().release()` ora usa `route.fallback()`.
+> - **Prove leggere sulla revisione fusa** (16:14–16:31): `api sync`; svelte-check 0/0; `theme-roles` pulito; store 82;
+>   risk-controller 102; risk-levels 498; core **6 472/6 472** (il C4 se n'è andato con la fusione); component 4 044.
+> - **Da dire a Z**: durante il ricaricamento di sfondo la radice della Dashboard è `aria-busy="true"`. P3 riguarda solo
+>   il pulsante, e la radice è di DV: è solo una segnalazione.
+- **16:31**: commit della fusione `8268f65ec` (genitori `ec2235b00` ed `e9b4ac6b0`). La riga di Prettier e il test P3
+  restano per il prossimo checkpoint. Lo slot E2E del passo 3 è verso le 17:10–17:15.
+- **Patch pronte per le aree che entrano dopo**, provate a secco su `8268f65ec` e salvate in `files/patches/`:
+  - `y11_brokers_list.py` e `y11_broker_detail.py` (BK). Il ricaricamento di sfondo di Z-13 (`reloadAfterPriceCatchUp`)
+    e `onsynced` del rischio restano senza gettone;
+  - `y11_transactions.py` (TR). I filtri sono lato client (W28), quindi senza gettone;
+  - si applicano **solo** quando il coordinatore conferma l'ingresso dell'area. `assets/[id]` arriva dopo FE5c e il 9b
+    di X: la sua patch si scrive solo allora, perché X sta dividendo quella pagina.
+- **16:56, nota di Z per il passo 4 (BK)**: oggi l'icona di «Aggiorna» nella pagina del broker segue `reportLoading`,
+  quindi gira durante il ricaricamento di sfondo di Z-13, contro P3.
+  - La patch `y11_broker_detail.py` toglie già `loading || reportLoading` sia da `disabled` sia dalla rotazione: tutti e
+    due leggono `pageBusy.busy`.
+  - **Al passo 4**: `test-author` estende il test P3 di `page-busy.spec.ts` alla pagina del broker, con lo stesso
+    aggiornamento simulato. Durante il ricaricamento di sfondo `broker-refresh` resta `data-busy="false"`.
+
+### Passo 3 · E2E (slot 1, dalle 17:01, scadenza 17:50; HEAD `8268f65ec` più il test P3 e la riga di Prettier) — ✅ 17:44 (155/156, un rosso da sovraccarico da riconfermare)
+
+> **Note implementazione** (`files/scripts/y11s3_e2e.sh`, riepilogo in `files/logs/y11s3_e2e_summary.log`).
+> - `front-portfolio page-busy` **6/6**: il test P3 è verde alla prima corsa, cioè l'aggiornamento dei prezzi non fa
+>   girare il pulsante.
+>   - La build del primo passo, con il sito della documentazione, ha preso 15 minuti, con il carico a 100–140.
+> - **⚠️ Fuori pista: `dashboard-cache`, 5/6.** Il rosso è `:420`, «back on the Positions tab…», alla riga 431: il
+>   primo `analyzeLots` dell'aiutante (`:271`), con `lots-analysis-panel-loading` ancora presente dopo 30 s e il limite
+>   di 120 s del test superato.
+>   - **Triage** (skill `test-triage`):
+>     - §1, la forma: no. È la stessa riga, con lo stesso lotto;
+>     - §2, l'orologio o la lentezza: sì. Il test aveva già speso circa 90 s per login, assestamento della Dashboard e
+>       tabella Performance; il carico era 166–172, perché in parallelo girava la galleria completa dei colori (il
+>       coordinatore indica 130–170);
+>     - l'istantanea finale (`error-context.md`, copiata in `files/logs/`) mostra la tabella dei lotti, che sta nel ramo
+>       `{:else}` di `loading` (`LotsAnalysisPanel.svelte:482-550`): il caricamento è finito, solo dopo il tempo del
+>       test. Non si è piantato;
+>     - lo stesso test era verde al passo 2 (15:31, carico circa 124), con lo stesso pannello tracciato;
+>     - il mio cambiamento nel pannello (`track` attorno a `loadMain`) non cambia `loading` e fa partire `loadMain` in
+>       modo sincrono, come prima;
+>     - il log del backend non registra le richieste dei lotti, e non c'è traccia (nessuna ripetizione in locale).
+>   - **Verdetto**: lentezza da sovraccarico della macchina, non un difetto di Y11. **Da confermare** con una corsa di
+>     `dashboard-cache` da sola a carico normale.
+> - **Il resto è verde** (carico in discesa da 172 a 44):
+>
+>   | Spec | Esito | Note |
+>   |---|---|---|
+>   | `front-portfolio risk` | 38/38 | con `risk-analysis` adattata (senza `risk-refresh-button`) |
+>   | `front-portfolio risk-real` | 2/2 | adattata |
+>   | `front-asset asset-detail` | 34/34 | adattata |
+>   | `front-fx fx-list` | 12/12 | |
+>   | `front-fx fx-detail` | 17/17 | |
+>   | `front-asset asset-list` | 28/28 | |
+>   | `front-utility pac-allocator-real` | 1/1 | |
+>   | `front-asset live-pause` | 8/8 | |
+>   | `front-ai-export memory` | 4/4 | saltata al passo 2 dal limite d'orario, qui è entrata |
+>
+> - **Totale**: 155/156. La porta 6189 è libera alle 17:44:54 (`lsof` senza ascoltatori).
+> - **Resta**: la corsa di conferma di `dashboard-cache` da sola, in uno slot a carico normale.
+
+### Passo 4 · preparazione (17:46–17:52, sola lettura; nessun file del repo toccato)
+
+- **17:46, coordinatore**: BK è in dev (`939e4998a`), quindi il passo 4 è sbloccato da quel lato.
+  - **Ordine**: al suo via, prima `prettier --check` e CHECKPOINT READY, poi la corsa di conferma di `dashboard-cache` da
+    sola, che apre lo slot E2E del passo 4.
+- **Base**:
+  - `939e4998a` è già un antenato di `8268f65ec`, e anche TR (`e402d3b87`, 14:57, arrivato con `e9b4ac6b0`). Le patch
+    BK e TR provate a secco su `8268f65ec` valgono ancora;
+  - si applicano **dopo** il commit del checkpoint e l'eventuale aggiornamento della base, perché file del broker
+    sporchi bloccherebbero la fusione;
+  - per TR serve il via del coordinatore per `transactions/+page.svelte`, che è un'area colori.
+- **Le barriere su `broker-refresh`**: cinque spec aspettano il pulsante abilitato come segno che il report è caricato.
+  Restano valide, perché il primo caricamento è tracciato (`broker-first-load`) e si chiude dopo `loadOverview`:
+  - `yield-on-cost-real:447` e `data-quality-real:712` aprono `?tab=posizioni`. Lì il pannello dei lotti è un cassetto
+    (`open={activeAssetId != null}`), quindi non carica finché non si apre un titolo;
+  - `privacy-masking:200` e `:627`, `toolbar-width-sweep:360` e `risk-analysis:1714` aprono la scheda predefinita;
+  - `brokers.spec.ts:91` controlla solo che `brokers-refresh` sia visibile.
+- **Commenti che diventano falsi**, da far correggere a `test-author`:
+  - `risk-analysis.spec.ts:1700-1712` nomina `loading || reportLoading`;
+  - `toolbar-width-sweep.spec.ts:358-359` dice «Refresh is disabled exactly while the broker or its report loads».
+- **TR, `tx-refresh-button`**: le due spec che lo usano non dipendono dal vecchio `disabled={loading}`:
+  - `tx-broker-icon-hydration:320` aspetta il pulsante abilitato, che ora arriva dopo anche le liste di riferimento: è
+    più stretto, quindi sicuro;
+  - `transactions-table` TT20 aspetta il `data-busy` della radice, che segue ancora `loading`.
+- **Coerenza con la Dashboard**: le candele e il contributo sono tracciati allo stesso modo (`dashboard-pnl-candles`,
+  `dashboard-contribution` contro `broker-pnl-candles`, `broker-contribution`).
+- **`test-author` al passo 4**:
+  - estende `page-busy.spec.ts` alla pagina del broker: durante il ricaricamento di sfondo dopo un aggiornamento dei
+    prezzi, `broker-refresh` resta `data-busy="false"`, mentre un cambio di periodo lo fa diventare `true`;
+  - aggiunge il caso della lista dei broker (`brokers-refresh`) e, con TR, quello delle transazioni;
+  - corregge i due commenti.
+- **Script E2E**: `files/scripts/y11s4_e2e.sh`, con `DEADLINE=HHMM` e TR opzionale (`WITH_TR=1`):
+  1. `dashboard-cache` come conferma, prima: ha 6 test, quindi la guardia contro l'allargamento la legge ancora;
+  2. `page-busy`, `front-broker detail`, `front-broker list`;
+  3. con TR: `transactions-table` e `tx-broker-icon-hydration`;
+  4. `risk`, `privacy-masking`, `yield-on-cost-real`, `data-quality-real`, `toolbar-width-sweep`, `default-currency` e
+     `price-refresh`.
+  - Circa 60 minuti in tutto, 68 con TR: la guardia della scadenza salta la coda, da recuperare in uno slot successivo.
