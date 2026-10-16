@@ -3660,3 +3660,80 @@ una rotta che a `0f3b9e3db` non esiste ancora: A7 non è entrato. La scrivo quan
 > **H-5**: aggiunto il debito di traduzione di P17, `connection_checks` e `configuration`, con l'ordine.
 
 #### Checkpoint P17 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: P17 committato (`22d6dc84e` feat, `551843bdc` doc, `55a6646ff` diario) e fuso in dev (merge
+> `b1df87bd4`, pulito). L'avviso di `mkdocs` in `wac.md` è stato corretto su dev (`ed500643f`). A B5c il coordinatore
+> ha chiesto chi scrive la voce `GET /backup/restore/outcome` in `instance_block.py`: la scrive B, nello stesso commit
+> della rotta, e io rivedo il diff (ticket confrontato a tempo costante, una volta sola, senza ticket la stessa risposta
+> di una rotta che non esiste, solo `{state, reason, waiting}`).
+
+### TC-16 — `FilePreviewModal.test.ts:598`, rosso sotto carico (2026-10-16, pomeriggio) — triage
+
+Viene dai colori: due rossi in un giro con carico fra 41 e 52, verde da solo (37 su 37). Me l'ha dato il coordinatore
+come voce H, con il triage prima di tutto.
+
+> **Prove** (skill `test-triage`):
+>
+> - la riga 598 è il primo `expect` del `waitFor` di `listening()`, nel `describe` «PDF stage state (fake EmbedPDF)».
+>   Aspetta che il visore finto abbia registrato i tre ascoltatori del componente, e 14 casi la usano. Il `waitFor` non
+>   ha un budget, quindi vale quello di default di testing-library, 1 s;
+> - la catena del componente (`FilePreviewModal.svelte`, ~206–232) non ha ritardi fissi: `Promise.all` di due
+>   `import()` dinamici (`@embedpdf/snippet` e `pdfViewerAssets`), `pdfViewerAssets(document.baseURI)`,
+>   `EmbedPDF.init`, `await viewer.registry`, poi le iscrizioni;
+> - il file da solo (15:11, carico 47, `--reporter=verbose`): 37 su 37. I casi del `describe` durano fra 66 e 276 ms; i
+>   primi tre (247, 186, 276 ms) sono i più lenti, perché pagano il riscaldamento dei primi `import()` dinamici del file.
+>   Il margine di 1 s è quindi circa 4 volte la durata da solo. Nel giro dei colori, con i worker paralleli di Vitest e
+>   la macchina carica, la catena lo supera.
+>
+> **Verdetto: assumption, il tempo** (§2). La condizione aspettata è quella giusta: il test deve sincronizzarsi col
+> visore finto prima di mandargli i suoi segnali. Il budget invece è una scommessa sulla velocità della macchina. Non
+> c'è uno stato del prodotto da rendere osservabile (§6): quello che vede l'utente, `data-state`, resta `loading` sia
+> prima sia dopo le iscrizioni.
+>
+> **Cura proposta**, solo nel test:
+>
+> 1. un `beforeAll` nel `describe` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`, così il riscaldamento
+>    si paga fuori da ogni attesa (l'hook ha il suo limite);
+> 2. un budget esplicito per le attese della catena del visore nello stesso `describe` (`listening()` e i `waitFor`
+>    delle righe ~781, ~795, ~825, ~856): una costante da 3 s, oltre 10 volte il caso più lento misurato da solo, e
+>    dentro i 5 s di un test.
+>
+> Il file sta in `features/files/**`, l'area T dei colori: prima di scriverci chiedo l'OK al coordinatore. La
+> riparazione la fa il test-author.
+
+> **Via del coordinatore** (15:19): sì, solo nel test, col test-author. Avvisa lui i colori.
+>
+> **Note implementazione** (test-author, niente lanciato da lui), solo `FilePreviewModal.test.ts`, nel `describe` «PDF
+> stage state»:
+>
+> - `const VIEWER_WAIT = {timeout: 3_000}`, con il perché nel commento (66–276 ms da solo, 1 s dava un margine di circa
+>   4 volte, 3 s più di 10 volte, dentro i 5 s di un test);
+> - un `beforeAll` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`. Sono mock, il secondo parziale con
+>   `importOriginal`, e caricarli prima non cambia quello che i test vedono: `pdfViewerAssets.ts` al caricamento
+>   definisce solo costanti;
+> - `VIEWER_WAIT` su `listening()`, sulle due attese di `registryAsks`, su quella di `tiles` di lunghezza 2 (il secondo
+>   visore dopo il `rerender`) e su `findByTestId('file-preview-pdf-fallback')`. Quest'ultima non era nella mia lista,
+>   ma aspetta il ramo d'errore della stessa catena: la accetto;
+> - lasciata col default l'attesa di `onRequestClose` (~838). Il suo ascoltatore si registra nello stesso passo
+>   sincrono dei tre, quindi passa al primo controllo e il tempo non c'entra;
+> - limite noto: 3 s valgono per un'attesa, non per un caso. «Stays open when it moves to another file» ha due attese
+>   della catena; la seconda trova però i moduli già caricati.
+>
+> **Prove**: `prettier --check` pulito. Il file da solo (15:33, carico 42): 37 su 37, e i casi del visore ora durano
+> 56–135 ms (prima 66–276). Il riscaldamento è uscito dalle attese. Resta la prova a carico crescente, in una finestra
+> leggera del coordinatore.
+
+> **Prova sotto carico** (slot 2, 16:03–16:13, chiusura alle 16:15, senza aspettare il carico apposta: nello slot 1
+> girava l'`all-backend` di MF):
+>
+> - `front-utility component-unit` n. 1: **4041 su 4041**, 359 s, carico salito da 46 a circa 106;
+> - `front-utility component-unit` n. 2: **4041 su 4041**, 194 s, carico intorno a 66;
+> - `FilePreviewModal.test.ts` è nel catalogo (`_frontend_utility.py:285`), quindi i suoi 37 casi sono girati due volte
+>   coi worker paralleli e un carico oltre il doppio di quello del giro dei colori (41–52);
+> - i tre giri del file da solo non sono partiti: alle 16:13:07 il controllo dello script ha visto troppo vicina la
+>   chiusura. Restano le due prove leggere di prima (15:11 e 15:33);
+> - slot liberato alle 16:13; porta 6181 libera.
+>
+> **Verdetto confermato**: assumption, il tempo; curato nel test.
+
+#### Checkpoint TC-16 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
