@@ -129,6 +129,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un lien de réinitialisation part seulement vers l'adresse de son compte.",
         "EMAIL_RECIPIENT_INVALID": "Ce n'est pas une seule adresse e-mail valide.",
         "EMAIL_RATE_LIMITED": "La limite horaire d'e-mails est atteinte : réessayez dans {minutes} min.",
+        "RECIPIENT_REFUSED": "Le serveur SMTP a refusé l'adresse du destinataire.",
         "generic": "L'e-mail n'a pas pu être envoyé."
       }
     },
@@ -138,7 +139,6 @@
       "sending": "Envoi…",
       "accepted": "Si un compte actif correspond, son propriétaire reçoit un e-mail avec un lien pour choisir un nouveau mot de passe. Vérifiez la boîte de réception et les spams : le lien fonctionne pendant 30 minutes.",
       "errors": {
-        "FORGOT_PASSWORD_DISABLED": "La réinitialisation du mot de passe par e-mail n'est pas encore disponible sur cette instance : demandez à son administrateur.",
         "unavailable": "Cette instance ne peut pas envoyer d'e-mails pour le moment : demandez à son administrateur.",
         "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
         "generic": "La demande n'a pas pu être envoyée : réessayez."

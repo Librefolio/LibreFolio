@@ -165,3 +165,16 @@ be longer than the field.
 `PageSyncModal` reports `onsynced({accepted})`: `accepted` is true when at least one item of the
 current run came back `ok` or `partial`, so callers refresh only after a run that changed something.
 `SyncResultRow.svelte` renders one result line for the three modals.
+
+**The warning before the start (C-66).** A sync replaces the stored rows of its period with the
+provider's values, manual edits included. A section's optional `existingIds` lists the targets whose
+shown data already holds a stored row in the period. Before **Start**, `SyncModalBase` shows one
+warning per active section whose targets meet it (`data-testid="{testId}-overwrite-warning"`, with
+`data-section`, `data-existing` and `data-total`; the section title leads it only when several
+sections are active), and hides it once the run starts. The pages compute the ids from what they
+already show, with `hasStoredPointInRange()` (`utils/sync/syncHelpers.ts`): a point counts unless it
+was filled backward from an earlier date (`extractDaysBack()`, `utils/assetPriceDerived.ts`, the one
+home of that rule). `AssetSyncModal` and `FxSyncModal` take them as `withDataInRange`, `PageSyncModal`
+as `assetsWithDataInRange` and `fxPairsWithDataInRange`. The Assets and FX pages pass them, and so
+do the detail pages for their own asset or pair and their pairs. A compared asset is not counted,
+and the transaction form, the PAC planner and the risk panels pass none, so they show no warning.

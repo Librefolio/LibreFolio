@@ -600,7 +600,7 @@ row's `cost_fields()`, so the update check above refuses it with
 `costBasisRequired` (operation `update`, `field` `cost_basis_override`), and the
 stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
 `TRANSFER` keeps the cost decision 47 gives it (see
-[Split & Promote](split_promote.md)). It is ignored too when
+[Split & Promote](split_promote.md#transfer-giving-leg)). It is ignored too when
 the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
 own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
 `null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
@@ -660,6 +660,15 @@ outgoing leg would empty the pool and give 0; a partial transfer gets the same
 value with or without that leg, since a reduction does not move the unit cost;
 and purchases made on the source broker while the units are in transit stay out.
 
+Under the same condition, after the Auto rows, `compute_wac_and_fx_issues()` prices
+the giving leg of each `TRANSFER` pair the batch splits (`context.handover_rows`):
+`_handover_cost()` averages the leg's own broker, up to its date, without the leg,
+and `_write_auto_cost()` writes the result, unless an update of the batch gives the
+leg a `cost_basis_override` (decision 47; see
+[Split & Promote](split_promote.md#transfer-giving-leg)). A broker deletion writes
+the same cost on a giving leg it leaves without its partner (see
+[Broker Deletion](service.md#broker-deletion)).
+
 The create stage has already flushed new rows for generated IDs, and all of this
 work remains in the caller's session. Neither the WAC helper nor the surrounding
 batch stages commit.
@@ -678,7 +687,9 @@ If `compute_wac_iterative()` returns no WAC and reports missing FX pairs, the
 batch stage appends a `TXValidationIssue` with:
 
 - code `wacFxUnavailable`;
-- the originating create/update operation and index;
+- the originating create/update operation and index or, for the giving leg of a
+  split `TRANSFER` pair, operation `split`, the split's index and `ref_id` that
+  leg;
 - field `cost_basis_override`; and
 - pair names plus required dates in `params`.
 
@@ -692,7 +703,11 @@ performs an automatic WAC calculation. A promote-specific resolved value arrives
 as `resolved_fields.cost_basis_override` from the frontend merge flow (or another
 API client). The promote stage applies it to the positive-quantity transfer leg
 and clears it from the sender; without that key, the receiver keeps the cost basis
-it already has.
+it already has. Either way the sender ends without one: before it applies
+`resolved_fields`, `apply_promotes()` clears `cost_basis_override` and
+`cost_basis_currency` on a side whose new type takes none (`cost_basis_allowed()`),
+such as an `ADJUSTMENT` taking units out that a split left with a cost (decision
+47).
 
 Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
 because that create/update item requested an auto mode, never because of the
