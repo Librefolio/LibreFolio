@@ -6,7 +6,14 @@ never held in memory, never past the limit the hosting provider set (``LIBREFOLI
 413) or the free space (507). ``POST /backup/restore/stage`` then checks it in the background on a copy — unpacked,
 brought to this LibreFolio's schema, checked — and the client polls ``GET /backup/restore/stage/{stage_id}`` until the
 report of what a restore would do, or the code of the refusal. ``DELETE`` drops a check and its copy. One check runs at
-a time. The restore itself, from a checked copy, is lot B3.
+a time.
+
+The restore (lot B3, ``services/platform/instance_backup/apply.py``): ``POST /backup/restore/stage/{stage_id}/confirm``
+confirms the restore of a checked copy, which changes nothing yet: the next start of the server applies it, before any
+step reads the data, and ends every session. ``POST /backup/restore/restart`` stops the server for that start, once its
+answer is sent; whatever supervises the server starts it again. ``GET /backup/restore/status`` follows the restore: waiting,
+then committed, or rolled back when its first start did not complete. ``DELETE /backup/restore/pending`` drops it before
+that start.
 
 None of these routes is allowed on an instance its hosting provider blocked (``api/v1/instance_block.py``): the block
 lets the data leave (the backup routes), never come in.
@@ -14,7 +21,7 @@ lets the data leave (the backup routes), never come in.
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from starlette.requests import ClientDisconnect
 
 from backend.app.api.v1.backup.job_views import backup_error
@@ -23,8 +30,9 @@ from backend.app.config import get_data_dir
 from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import RestoreMigration, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreTableRows, RestoreUpload
-from backend.app.services.platform.instance_backup import restore_jobs
+from backend.app.schemas.backup import RestoreMigration, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreUpload
+from backend.app.services.platform.instance_backup import restart, restore_jobs
+from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, read_restore
 from backend.app.services.platform.instance_backup.paths import BackupPathError
 from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingReport, read_report
 
@@ -203,7 +211,7 @@ def get_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -> R
 @restore_router.delete(
     "/restore/stage/{stage_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={404: _STAGE_NOT_FOUND, 409: {"description": "The check still runs (code `restore_stage_running`)"}},
+    responses={404: _STAGE_NOT_FOUND, 409: {"description": "The check still runs (code `restore_stage_running`), or a restore waits to apply its copy (code `restore_pending`)"}},
 )
 def delete_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -> Response:
     """Drop an ended check and its copy: the archive is not restored."""
@@ -213,4 +221,104 @@ def delete_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
+    except restore_jobs.CheckPendingError:
+        raise backup_error(status.HTTP_409_CONFLICT, "restore_pending", "A restore waits to apply this copy: cancel it first") from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# =============================================================================
+# The restore: confirmed, applied at the next start (lot B3)
+# =============================================================================
+
+#: The answer of each refusal of a confirmation; any other ``RestoreStateError`` is a conflict.
+_CONFIRM_STATUS = {"restore_stage_not_found": status.HTTP_404_NOT_FOUND, "restore_stage_expired": status.HTTP_410_GONE}
+_NOT_PENDING = "No restore waits for the next start"
+_IN_PROGRESS = frozenset({"applying", "applied", "rolling_back"})
+
+
+def _readable_limit_mb() -> int | None:
+    """The upload limit in megabytes (0: none), or ``None`` when it cannot be read (logged, as the upload logs it)."""
+    try:
+        return backup_max_upload_mb()
+    except BackupConfigError as exc:
+        logger.error("The upload limit of a restore cannot be read", error=str(exc))
+        return None
+
+
+def _status_view(state: RestoreState | None) -> RestoreStatus:
+    limit = _readable_limit_mb()
+    if state is None:
+        return RestoreStatus(state="none", upload_limit_mb=limit)
+    return RestoreStatus(
+        state="in_progress" if state.status in _IN_PROGRESS else state.status,
+        stage_id=state.stage_id,
+        confirmed_at=state.confirmed_at,
+        confirmed_by=state.confirmed_by,
+        backup_created_at=state.backup_created_at,
+        backup_app_version=state.backup_app_version,
+        action=state.action,
+        finished_at=state.finished_at,
+        reason=state.reason,
+        waiting=state.waiting,
+        upload_limit_mb=limit,
+    )
+
+
+@restore_router.post(
+    "/restore/stage/{stage_id}/confirm",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=RestoreStatus,
+    responses={
+        404: {"description": "No check has this id, or its copy is gone (code `restore_stage_not_found`)"},
+        409: {
+            "description": "The check still runs (code `restore_stage_running`); it refused the archive, or found what forbids a restore (code `restore_not_restorable`); LibreFolio was updated since the check (code `restore_stage_outdated`); or another restore waits (code `restore_already_pending`)"
+        },
+        410: {"description": "The check expired: check the archive again (code `restore_stage_expired`)"},
+        500: _FOLDER_UNUSABLE,
+    },
+)
+def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> RestoreStatus:
+    """Confirm the restore of a checked archive. Nothing changes yet: the next start of the server applies it, and ends
+    every session; ``POST /backup/restore/restart`` stops the server for that start."""
+    try:
+        return _status_view(restore_jobs.confirm_check(stage_id, confirmed_by=admin.username, data_dir=get_data_dir()))
+    except restore_jobs.CheckNotFoundError:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
+    except restore_jobs.CheckRunningError:
+        raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
+    except RestoreStateError as exc:
+        raise backup_error(_CONFIRM_STATUS.get(exc.code, status.HTTP_409_CONFLICT), exc.code, str(exc)) from None
+    except BackupPathError:
+        raise _folder_unusable() from None
+
+
+@restore_router.get("/restore/status", response_model=RestoreStatus)
+def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
+    """The restore waiting for the next start, the one being applied, or the last one that ended; ``none`` when there was
+    none."""
+    return _status_view(read_restore(get_data_dir()))
+
+
+@restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}})
+def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
+    """Drop the restore waiting for the next start: the data stays as it is. The checked copy stays until it expires."""
+    try:
+        cancel_restore(data_dir=get_data_dir())
+    except RestoreNotPendingError:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@restore_router.post("/restore/restart", status_code=status.HTTP_202_ACCEPTED, response_model=RestoreStatus, responses={409: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}})
+def restart_for_restore(background_tasks: BackgroundTasks, _admin: User = Depends(require_admin)) -> RestoreStatus:
+    """Stop the server once this answer is sent, so that its next start applies the restore waiting. Whatever supervises
+    the server (Docker, systemd, a hosting provider) starts it again; without one it stays stopped until someone does."""
+    state = read_restore(get_data_dir())
+    if state is None or state.status != "pending":
+        raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING)
+    background_tasks.add_task(_restart)
+    return _status_view(state)
+
+
+def _restart() -> None:
+    restart.request_restart()

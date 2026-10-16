@@ -10,6 +10,8 @@ Usage:
     ./dev.py backup create [--output PATH]     Write an archive (default: <data dir>/backups/)
     ./dev.py backup inspect ARCHIVE            Check an archive and show what it holds
     ./dev.py backup restore ARCHIVE --dry-run  Check an archive for a restore, on a copy: the instance stays as it is
+    ./dev.py backup restore ARCHIVE [--yes]    The same check, then the restore at the next start of the server
+    ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
     ./dev.py backup --test-db create           Use the test data directory
 
 A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py.
@@ -41,6 +43,12 @@ def _human(size: int) -> str:
             return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
     return f"{size} B"
+
+
+def _safe(text: object) -> str:
+    """A value read from an archive or a restore's state, as the terminal may print it: control characters (escape
+    sequences included) become ``?``, so an archive cannot drive the operator's terminal."""
+    return "".join(char if char.isprintable() else "?" for char in str(text))
 
 
 def _drop_root_privileges(data_dir: Path) -> str | None:
@@ -209,7 +217,7 @@ def _print_warnings(job) -> None:
     if job.skipped:
         print(f"⚠️  Left out ({len(job.skipped)}{'+' if len(job.skipped) >= 50 else ''}): links, special files, files or folders that could not be read, or files removed during the backup:")
         for entry in job.skipped:
-            print(f"     {entry}")
+            print(f"     {_safe(entry)}")
 
 
 def _run_backup(data_dir: Path):
@@ -297,14 +305,14 @@ def cmd_inspect(args) -> int:
     manifest = check.manifest
     files = manifest.files[1:]
     print(f"📦 {path}")
-    print(f"   Made by LibreFolio {manifest.app_version} ({manifest.origin}) on {manifest.created_at:%Y-%m-%d %H:%M:%S} UTC")
-    print(f"   Database: revision {manifest.alembic_revision or 'unknown'}, {_human(manifest.files[0].size)}, integrity {manifest.database.integrity_check}")
+    print(f"   Made by LibreFolio {_safe(manifest.app_version)} ({manifest.origin}) on {manifest.created_at:%Y-%m-%d %H:%M:%S} UTC")
+    print(f"   Database: revision {_safe(manifest.alembic_revision or 'unknown')}, {_human(manifest.files[0].size)}, integrity {_safe(manifest.database.integrity_check)}")
     print(f"   Rows: {sum(manifest.database.tables.values())} in {len(manifest.database.tables)} tables")
     print(f"   Files: {len(files)}, {_human(sum(entry.size for entry in files))}")
     print(f"   Instance key: {'included' if manifest.instance_key.included else 'not included'}")
     for label, entries in (("missing", check.missing), ("different from the manifest", check.mismatched), ("not in the manifest", check.unexpected)):
         if entries:
-            print(f"❌ {len(entries)} entr{'y' if len(entries) == 1 else 'ies'} {label}: {', '.join(entries[:5])}{' …' if len(entries) > 5 else ''}")
+            print(f"❌ {len(entries)} entr{'y' if len(entries) == 1 else 'ies'} {label}: {', '.join(_safe(entry) for entry in entries[:5])}{' …' if len(entries) > 5 else ''}")
     if not check.ok:
         return 1
     print("✅ Every entry matches the manifest" if check.verified else "ℹ️  The entry names match the manifest; their contents were not read (--no-verify)")
@@ -323,16 +331,16 @@ _STAGE_BLOCKERS = {
 
 def _print_stage_report(report) -> None:
     backup = report.backup
-    print(f"📦 Made by LibreFolio {backup.app_version} ({backup.origin}) on {backup.created_at:%Y-%m-%d %H:%M:%S} UTC")
+    print(f"📦 Made by LibreFolio {_safe(backup.app_version)} ({backup.origin}) on {backup.created_at:%Y-%m-%d %H:%M:%S} UTC")
     if report.action == "same":
-        print(f"   Database: revision {backup.alembic_revision}, this LibreFolio's own: restored as it is")
+        print(f"   Database: revision {_safe(backup.alembic_revision)}, this LibreFolio's own: restored as it is")
     else:
-        print(f"   Database: revision {backup.alembic_revision}, upgraded on the copy to {report.head_revision} ({len(report.migrations)} migration{'s' if len(report.migrations) != 1 else ''}):")
+        print(f"   Database: revision {_safe(backup.alembic_revision)}, upgraded on the copy to {report.head_revision} ({len(report.migrations)} migration{'s' if len(report.migrations) != 1 else ''}):")
         for migration in report.migrations:
             print(f"     - {migration.revision}: {migration.message}")
     if report.post_migration_fixes:
         print(f"   Post-migration fixes applied to the copy: {', '.join(report.post_migration_fixes)}")
-    changed = [f"{name} ({rows.before if rows.before is not None else '—'} → {rows.after if rows.after is not None else '—'})" for name, rows in report.tables.items() if (rows.before or 0) != (rows.after or 0)]
+    changed = [f"{_safe(name)} ({rows.before if rows.before is not None else '—'} → {rows.after if rows.after is not None else '—'})" for name, rows in report.tables.items() if (rows.before or 0) != (rows.after or 0)]
     rows = sum(table.after or 0 for table in report.tables.values())
     print(f"   Rows: {rows} in {sum(1 for table in report.tables.values() if table.after is not None)} tables, {_human(report.database_size)}")
     if changed:
@@ -340,29 +348,85 @@ def _print_stage_report(report) -> None:
     print(f"   Files: {report.files}, {_human(report.files_size)}")
     print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
     if report.administrators:
-        print(f"   Administrators: {', '.join(report.administrators)}")
+        print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
+        print("   The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.")
+        print("   An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.")
     for code in report.warnings:
         print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
 
 
-def cmd_restore(args) -> int:
-    """Check an archive for a restore on a copy (``--dry-run``), and say what a restore would do."""
-    from backend.app.services.platform.instance_backup.paths import BackupPathError, stages_dir  # noqa: PLC0415
-    from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingError, remove_stage, stage_archive  # noqa: PLC0415
+_ROLLBACK_REASONS = {
+    "first_start_failed": "the first start after it did not complete",
+    "swap_interrupted": "the start that applied it was interrupted",
+    "swap_failed": "its folders could not be moved into place",
+    "stage_missing": "its checked copy was gone",
+}
 
-    if not args.dry_run:
-        print("❌ Only --dry-run is available for now: it checks the archive on a copy and leaves the instance as it is")
-        return 1
-    path = Path(args.archive).expanduser()
-    if not path.is_file():
-        print(f"❌ No file at {path}")
-        return 1
-    data_dir = _data_dir_for(args, need_database=False)
-    if data_dir is None:
-        return 1
+
+def _when(moment) -> str:
+    from datetime import UTC  # noqa: PLC0415
+
+    return f"{moment.astimezone(UTC):%Y-%m-%d %H:%M:%S} UTC" if moment is not None else "an unknown date"
+
+
+def _confirmed(args) -> bool | None:
+    """Whether the restore is confirmed: ``--yes``, or the word ``restore`` typed at the terminal. ``None`` without a
+    terminal to ask on."""
+    if args.yes:
+        return True
+    if not sys.stdin.isatty():
+        return None
+    try:
+        answer = input('   Type "restore" to restore this archive at the next start of the server: ')
+    except EOFError:
+        return False
+    return answer.strip() == "restore"
+
+
+def _confirm(args, stage_id: str, data_dir: Path) -> bool:
+    """Ask, then confirm the restore of the checked copy for the next start; whether it waits now."""
+    from backend.app.services.platform.instance_backup.apply import RestoreStateError, confirm_restore  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.paths import BackupPathError  # noqa: PLC0415
+
+    answer = _confirmed(args)
+    if answer is None:
+        print("❌ No terminal to ask on: add --yes to confirm the restore. Nothing restored: the copy was removed.")
+        return False
+    if not answer:
+        print("Nothing restored: the copy was removed.")
+        return False
+    try:
+        confirm_restore(stage_id, confirmed_by="cli", data_dir=data_dir)
+    except RestoreStateError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return False
+    except BackupPathError as exc:
+        print(f"❌ {exc.path} is not a plain folder (a link, or a file): the restore waits in a folder of the data directory")
+        return False
+    print("✅ The restore waits for the next start of the server: restart LibreFolio to apply it.")
+    print("   That start replaces the database and the files, and ends every session: sign in with an administrator of the backup.")
+    print("   ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.")
+    return True
+
+
+def _restore_already_active(data_dir: Path) -> bool:
+    """Whether a restore waits for the next start, or is being applied: then no other one is checked (said once)."""
+    from backend.app.services.platform.instance_backup.apply import ACTIVE, read_restore  # noqa: PLC0415
+
+    waiting = read_restore(data_dir)
+    if waiting is None or waiting.status not in ACTIVE:
+        return False
+    print("❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)")
+    return True
+
+
+def _check_on_a_copy(path: Path, data_dir: Path):
+    """Check the archive on a copy, printing its phases: the report, or ``None`` when it was refused (said why)."""
+    from backend.app.services.platform.instance_backup.paths import BackupPathError, stages_dir  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingError, stage_archive  # noqa: PLC0415
 
     shown: list[str] = []
 
@@ -373,23 +437,85 @@ def cmd_restore(args) -> int:
 
     print(f"🔎 Checking {path} on a copy, in {stages_dir(data_dir)}")
     try:
-        report = stage_archive(path, data_dir, progress=progress)
+        return stage_archive(path, data_dir, progress=progress)
     except StagingBusyError:
         print("❌ Another archive is being checked (from the web interface or another command): try again when it ends")
-        return 1
     except StagingError as exc:
         print(f"❌ {exc} ({exc.code})")
-        return 1
     except BackupPathError as exc:
         print(f"❌ {exc.path} is not a plain folder (a link, or a file): the copy is made in a folder of the data directory")
+    return None
+
+
+def cmd_restore(args) -> int:
+    """Check an archive for a restore on a copy and say what a restore would do; without ``--dry-run``, then confirm the
+    restore, which the next start of the server applies."""
+    from backend.app.services.platform.instance_backup.staging import remove_stage  # noqa: PLC0415
+
+    path = Path(args.archive).expanduser()
+    if not path.is_file():
+        print(f"❌ No file at {path}")
         return 1
+    data_dir = _data_dir_for(args, need_database=False)
+    if data_dir is None or (not args.dry_run and _restore_already_active(data_dir)):
+        return 1
+    report = _check_on_a_copy(path, data_dir)
+    if report is None:
+        return 1
+    keep = False
     try:
         _print_stage_report(report)
+        if not report.restorable:
+            return 1
+        if args.dry_run:
+            print("✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.")
+            return 0
+        keep = _confirm(args, report.stage_id, data_dir)
+        return 0 if keep else 1
     finally:
-        remove_stage(data_dir, report.stage_id)
-    if not report.restorable:
+        if not keep:
+            remove_stage(data_dir, report.stage_id)
+
+
+def _print_restore_state(state) -> None:
+    if state is None:
+        print("ℹ️  No restore waits for the next start")
+        return
+    backup = f"backup made by LibreFolio {_safe(state.backup_app_version)} on {_when(state.backup_created_at)}"
+    if state.status == "pending":
+        print("⏳ A restore waits for the next start of the server")
+        print(f"   {backup}; confirmed by {_safe(state.confirmed_by)} on {_when(state.confirmed_at)}")
+        if state.waiting == "backup_running":
+            print("⚠️  At the last start a backup was running: the next start applies it (backup_running)")
+        elif state.waiting == "other_data_directory":
+            print(f"⚠️  It was confirmed for another data directory ({_safe(state.data_dir)}): this one does not apply it (other_data_directory)")
+        elif state.waiting == "server_running":
+            print("⚠️  At the last start another server process was serving the data directory: restart the whole server to apply it (server_running)")
+    elif state.status == "committed":
+        print(f"✅ The last restore was applied on {_when(state.finished_at)}: {backup}")
+    elif state.status == "rolled_back":
+        reason = _ROLLBACK_REASONS.get(state.reason or "", "for a reason this LibreFolio does not know")
+        print(f"⚠️  The last restore was rolled back on {_when(state.finished_at)}, the data is as it was before: {reason} ({state.reason})")
+    else:
+        print("⏳ A restore is being applied by the server")
+
+
+def cmd_pending(args) -> int:
+    """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting."""
+    from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, cancel_restore, read_restore  # noqa: PLC0415
+
+    data_dir = _data_dir_for(args, need_database=False)
+    if data_dir is None:
         return 1
-    print("✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.")
+    if args.cancel:
+        try:
+            cancel_restore(data_dir=data_dir, drop_copy=True)
+        except RestoreNotPendingError:
+            print("❌ No restore waits for the next start: nothing to cancel (restore_not_pending)")
+            return 1
+        print("✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is")
+        return 0
+    _print_restore_state(read_restore(data_dir))
     return 0
 
 
@@ -397,7 +523,7 @@ def register_subparser(parent_subparsers):
     """Register ``backup`` as a command group of dev.py."""
     parser = parent_subparsers.add_parser(
         "backup",
-        help="💾 Instance backup (create, inspect, restore --dry-run)",
+        help="💾 Instance backup (create, inspect, restore, pending)",
         description="Backup of the whole instance: database, uploaded files, broker reports and risk scenarios",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -409,6 +535,10 @@ Examples:
   ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip --dry-run
                                                What a restore would do: unpacked, upgraded and checked
                                                on a copy, then removed
+  ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip
+                                               The same check, then, once you type "restore", the
+                                               restore at the next start of the server
+  ./dev.py backup pending --cancel             Drop the restore waiting for the next start
   ./dev.py backup --test-db create             Use the test data directory
 
 A relative path starts from the project root, like every path given to dev.py.
@@ -426,10 +556,15 @@ A relative path starts from the project root, like every path given to dev.py.
     inspect.add_argument("--no-verify", action="store_true", help="Compare the entry names with the manifest without reading the entries (faster)")
     inspect.set_defaults(backup_func=cmd_inspect)
 
-    restore = commands.add_parser("restore", help="Check an archive for a restore on a copy (--dry-run): what a restore would do")
+    restore = commands.add_parser("restore", help="Restore an archive at the next start of the server, once checked on a copy (--dry-run: only the check)")
     restore.add_argument("archive", help="The backup archive (.zip)")
     restore.add_argument("--dry-run", action="store_true", help="Unpack the archive into a copy, upgrade and check it, report, then remove the copy; the instance is left as it is")
+    restore.add_argument("--yes", "-y", action="store_true", help='Confirm the restore without typing "restore" (needed without a terminal)')
     restore.set_defaults(backup_func=cmd_restore)
+
+    pending = commands.add_parser("pending", help="Show the restore waiting for the next start of the server, or the last one")
+    pending.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
+    pending.set_defaults(backup_func=cmd_pending)
 
     parser.set_defaults(func=_dispatch)
     return parser

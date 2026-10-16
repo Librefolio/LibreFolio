@@ -309,6 +309,14 @@ def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API restore check tests", verbose=verbose)
 
 
+def api_backup_restore_apply(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the confirmed restore through the API (/backup/restore, lot B3), in an app of the test (no server reached)."""
+    print_section("Backup API: the restore confirmed")
+    print_info("Testing: POST /backup/restore/stage/{id}/confirm, GET /backup/restore/status, DELETE /backup/restore/pending, POST /backup/restore/restart (the signal recorded, never sent); the copy of an active restore kept by DELETE /stage and prune")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_restore_apply.py", test_names)
+    return run_command(cmd, "Backup API restore confirmation tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -783,6 +791,15 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the founder's acceptance of the instance backup: a populated instance backed up, restored on an empty one."""
+    print_section("E2E: Backup and Restore Round Trip")
+    print_info("Testing: jobs.run_backup, scripts/backup_cli.py restore --yes, then a start (pending-restore … restore-commit) in a fresh process")
+    print_info("Tests: the same totals after the restore; an older backup upgraded; a newer one refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip.py", test_names)
+    return run_command(cmd, "Backup round trip E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -900,6 +917,19 @@ Tests for REST API endpoints (server auto-started):
         # DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
+    add_test(
+        api,
+        "backup-restore-apply",
+        api_backup_restore_apply,
+        name="Backup API Restore Confirmation",
+        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
+        # of restore.py, restore_jobs.py and apply.py is under tmp_path and the process's own one is a folder of the
+        # test that must stay absent; restart.send_signal and os.kill as restart sees them record and never signal;
+        # real archives built under tmp_path as test_backup_staging.py builds them: no lane data directory, DB, server
+        # or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
@@ -1011,5 +1041,17 @@ Complete workflow tests via REST API:
     )
     add_test(e2e, "search-to-prices", search2prices_test, name="Search to Prices", desc="Full asset lifecycle flow", prereq="Database created", tests="Search → Create → Assign → Metadata → Prices")
     add_test(e2e, "brim-e2e", e2e_brim, name="BRIM E2E", desc="Test complete BRIM import flow", prereq="Database created", tests="Upload → Parse → Asset Mapping → Import")
+    add_test(
+        e2e,
+        "backup-roundtrip",
+        e2e_backup_roundtrip,
+        name="Backup Round Trip",
+        desc="The founder's acceptance of F01: a populated instance (populate_mock_data in a data directory of the test, files of its own, a first start) backed up with jobs.run_backup, restored on an empty instance with backup_cli.py restore --yes, then a start in a fresh process (pending-restore … restore-commit): the same rows, files and portfolio reports of the official engine for every account with a broker (computed back to back), committed; an older backup upgraded through the check and committed at the head with the report's rows; a newer one refused (revision_unknown), the target untouched",
+        tests="Populate → Backup → Restore --yes → Start → Same totals",
+        # PURE: the source, the target and the archives are data directories under tmp_path, made by child processes in
+        # test mode pointed at them (populate, alembic, the start); the lane's data directory, database and server are
+        # never read nor written (the shared conftest's session fixture aside, as for every pure unit).
+        isolation="pure",
+    )
     add_test(e2e, "all", e2e_test, test_names=False, name="All E2E Tests", desc="Run all E2E tests")
     registry["e2e"] = e2e
