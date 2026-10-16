@@ -41,7 +41,7 @@ Vous trouverez ici les **avatars** des utilisateurs, les **icônes** des courtie
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Onglet Rapports de courtiers" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Ce sont les relevés exportés par vos courtiers, en attente d’importation ou déjà importés. Vous voyez les rapports de chaque courtier auquel vous avez accès, en tant que Propriétaire, Éditeur ou Lecteur.
+Ce sont les relevés exportés par vos courtiers, en attente d’importation ou déjà importés. Vous voyez les rapports de chaque courtier auquel vous avez accès, en tant que Propriétaire, Éditeur ou Lecteur. Les rapports qu’une version précédente de LibreFolio a enregistrés sans courtier n’apparaissent qu’ici : aux administrateurs, et à la personne qui les a téléversés quand LibreFolio a enregistré qui l’a fait.
 
 La colonne **Statut** vous indique où en est chaque fichier :
 

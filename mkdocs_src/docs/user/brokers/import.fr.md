@@ -54,3 +54,5 @@ Le même assistant d'importation s'ouvre depuis **Importer** sur la page [Transa
 - **Gérer tous les fichiers** ouvre la page [Fichiers et téléversements](../files/index.md#broker-reports), filtrée sur ce courtier.
 
 Le téléversement et la suppression de rapports nécessitent un accès Propriétaire ou Éditeur au courtier.
+
+Les rapports qu’une version précédente de LibreFolio a enregistrés sans courtier ne figurent pas dans cette liste : la personne qui les a téléversés et les administrateurs les trouvent sur la page [Fichiers et téléversements](../files/index.md#broker-reports).
