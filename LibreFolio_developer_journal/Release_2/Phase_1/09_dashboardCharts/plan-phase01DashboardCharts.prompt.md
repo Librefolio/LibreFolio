@@ -2654,3 +2654,241 @@ scrivono qui quando partono.
 >   (13 s); cita invece i circa 24 s prima del primo clic, misurati oggi a carico 70.
 > - **La riprova**, Prettier pulito, poi `front-broker detail` da solo (08:15:39–08:21:11): **37/37** in 3,5 minuti, a
 >   carico 45–53. I quattro test toccati durano 7,5–11,4 s, il più lento della spec 16,0 s. Porta 6189 libera.
+
+### Ultima base prima dell'ingresso e prove leggere ✅ (2026-10-16, 08:22–08:32)
+
+> **Note implementazione**.
+> - **I commit**: il coordinatore ha salvato la correzione dello spec (`43eea2b9b`) e il journal (`c38fd7f78`).
+> - **La fusione**: dev `c94254695`, con dentro il terzo lotto di T, CP-10a di J, W-B32, B39, B44 e il CHANGELOG.
+>   - L'unico conflitto, nel baseline, l'ho risolto con `--resolve`; `--check` pulito (baseline +3/−14). Ho messo in
+>     stage solo il baseline, e il commit della fusione l'ha fatto il coordinatore: `b84903df8`, con genitori
+>     `c38fd7f78` e `c94254695`.
+>   - **Ho controllato i file fusi**: nessun riferimento nuovo alle cartelle vecchie, niente che finisca dentro di esse,
+>     nessun file mio toccato. I due runner fusi da soli compilano e tengono i miei percorsi.
+>   - `api/v1/brokers.py` cambiava l'API.
+> - **Le prove leggere sulla revisione fusa**, una alla volta con carico sotto 50 (`/tmp/libreFolio_entry_light.sh`):
+>   `api sync` senza cambiamenti tracciati; svelte-check 0/0; `theme-roles --check` pulito; `allocation-unit` 192/192;
+>   `core-unit` 6 247/6 247 in 176 file; `component-unit` 4 006/4 006 in 150 file; `git diff --check` pulito; 6189
+>   libera.
+> - **Nessuna E2E nuova**, per decisione del coordinatore: da dev arrivano classi validate dai colori, più CP-10a, già
+>   provato dalle E2E sugli asset. **Y entra così com'è.**
+
+## Y12a — U8, la parte che si fa senza campi nuovi (via del coordinatore, 2026-10-16 08:33)
+
+Base: HEAD `d5c3c3ae3`, cioè la punta di `dev_release2` dopo il treno 104, quello dell'ingresso di Y. Ordine dato dal
+coordinatore: W7, poi le dichiarazioni, poi `LotCustodyModal`, ma solo dopo un accordo con J (diff mandato prima di
+scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkpoint FROZEN.
+
+### Passo 1 · W7, il peso sul NAV in `ExposureTable` ✅ (2026-10-16)
+
+- **Oggi**: `features/dashboard/ExposureTable.svelte:181` fa
+  `nav_weight_percent ?? (currentValue/navAmount)·100`.
+  - Il backend riempie il campo solo `if h.current_value:` (`backend/app/services/portfolio_service.py:856`).
+  - Il ripiego scatta quindi solo per una posizione che vale 0, oppure con un payload senza il campo; oggi mostra
+    «0,0 %».
+  - `ExposureTreemap.svelte:408` legge già il campo senza ripiego.
+  - `navAmount` serve solo al ripiego: lo passa `PositionsPanel.svelte:203`, che lo ricava a `:123` con
+    `parseFloat(summary.net_worth.amount)`.
+- **Prima `test-author`** (`ExposureTable.test.ts`):
+  - il rosso W7: `nav_weight_percent` nullo, valore 100, `navAmount` 1000. Ci si aspetta «—»; oggi si legge «10,0 %»;
+  - il controllo: il peso del backend si mostra così com'è, anche quando valore/NAV darebbe un altro numero;
+  - la fixture dei test M-18 riceve il peso dal backend: la loro barriera sul peso finora reggeva sul ripiego;
+  - via gli argomenti `navAmount` diventati morti, tranne nel rosso W7, che resta come guardia contro un ripiego
+    reintrodotto.
+- **Poi il codice**:
+  - via il ripiego e la prop `navAmount` da `ExposureTable`;
+  - via il passaggio e il valore derivato in `PositionsPanel`.
+- **Prove**: il file da solo, poi svelte-check, `component-unit`, `allocation-unit` e `core-unit`.
+- **Due difetti del backend, da segnalare a J tramite il coordinatore** (non sono di Y):
+  - `portfolio_service.py:856`: con `if h.current_value:` una posizione che vale 0 riceve un peso nullo invece di 0;
+    dopo W7 si leggerà «—»;
+  - `:852`: con NAV ≤ 0 il denominatore diventa 1, e i pesi non hanno senso.
+
+> **Note implementazione** (2026-10-16).
+> - **Il rosso**, scritto da `test-author` (`ExposureTable.test.ts`, +72/−36):
+>   - un `describe` nuovo, «the NAV weight is the backend's (W7 / U8)», con un rosso e un controllo. Tutti e due
+>     tengono `navAmount: 1000` apposta: dopo W7 è una prop vecchia che il componente ignora, e il test fa da guardia
+>     se un ripiego tornasse;
+>   - nella fixture, l'opzione `navWeightPercent`;
+>   - `cellText` portato a livello di modulo: c'erano due copie locali;
+>   - `navAmount` tolto dagli altri 12 montaggi;
+>   - M-18 legge ora il peso del backend, `'30.94'`, invece di ricavarlo.
+>
+>   Prima corsa del file: 15 verdi e 1 rosso, quello giusto (`expected '10.0%' to be '—'`).
+> - **Il codice** (10:34, prima della regola dei colori delle 10:45; avvisato il coordinatore per DV):
+>   - `ExposureTable.svelte`: via `navAmount` da `Props` e dalla destrutturazione; `:181` diventa
+>     `navWeight: safeDecimal(holding.nav_weight_percent)`, con un commento;
+>   - `PositionsPanel.svelte`: via il derivato `navAmount` e il suo passaggio.
+>
+>   Nessuna classe toccata. Il file da solo: 16/16. Prettier pulito.
+> - **⚠️ Fuori pista**:
+>   - Lo STOP del developer (08:5x–10:32): `test-author` aveva già finito. Ripreso al via, con HEAD e worktree uguali.
+>   - Prima corsa delle prove leggere: svelte-check ha trovato 1 errore, in `features/auth/RegisterCard.svelte:100`
+>     (`verification_required`, di E). Il client generato del mio worktree era di prima del treno 103 (E5b), che ha
+>     aggiunto quel campo (`backend/app/schemas/auth.py:111`). È ambiente, non codice di Y: corsa fermata,
+>     `api sync`, poi da capo.
+>   - `/tmp` è stato svuotato dal riavvio delle 10:03, e con lui gli script di stanotte. Da ora gli script stanno nella
+>     cartella della sessione (`files/scripts/`).
+> - **Prove leggere su HEAD `d5c3c3ae3` più il lotto** (10:41–10:55, carico sotto 50; script
+>   `files/scripts/w7_light.sh`, log in `files/logs/`): `api sync` senza cambiamenti tracciati fuori dal lotto;
+>   svelte-check 0/0; `allocation-unit` 192/192; `core-unit` 6 266/6 266 in 178 file; `component-unit` 4 029/4 029 in
+>   154 file, con `ExposureTable.test.ts`; `git diff --check` pulito; 6189 libera.
+> - **Checkpoint**: tre file (`files/w7_stage_code.txt`), più il piano.
+
+### Passo 2 · le dichiarazioni delle misure interattive ✅ (2026-10-16)
+
+- **La regola**: `financial-math.instructions.md`, regola 6, e `developer/backend/financial_math.md:303-308`. Le misure
+  interattive sono le sole eccezioni, e ognuna va «dichiarata dove vive».
+  - La documentazione nomina già i quattro file.
+  - Nel codice invece la dichiarazione manca. Il piano 43, a `:1494`, lo annota così: «oggi nel codice non lo sono».
+- **La forma**, decisione di Y: un marcatore `@financial-math-exception` nel JSDoc in testa a ciascun file, con la
+  regola che vale per quel file:
+  - `MeasureSignal.ts` (R18): Δ, Δ% e annualizzato fra i due punti che l'utente sceglie col righello, calcolati nel
+    browser;
+  - `CompoundSignal.ts`, `LinearSignal.ts` e `SineSignal.ts` (R19): curve «cosa succede se», tracciate dai parametri
+    dell'utente.
+  - Si tocca solo la testa del file, non le righe di T-D9 (`MeasureSignal.ts:103,134`), che sono di J in CP-14.
+- **La guardia, scritta da `test-author`**: `lib/charts/signals/financialMathExceptions.gate.test.ts`.
+  - I quattro file portano il marcatore, e solo loro.
+  - Nessun `Math.pow(…365…)`, né `** …365…`, in `src/**/*.{ts,svelte}` fuori dai file dichiarati. Sono esclusi i test e
+    i file generati.
+  - Un controllo positivo su un sorgente finto.
+  - Oggi lo schema stretto trova solo `MeasureSignal` e `CompoundSignal`: niente falsi positivi, cioè non
+    `CellDateRange` e non le etichette di `ScheduledInvestmentEditor`.
+- **La registrazione**: in `chart-safety-unit`, nel mio `_frontend_portfolio.py`, con la descrizione allargata.
+  `_frontend_utility.py` (`core-unit`) è un file del programma colori: lo tocco solo se il coordinatore lo chiede.
+- **La documentazione, con `docs-writer`**: una frase nella regola 6 di `financial_math.md`, che nomina il marcatore e
+  la guardia.
+- **Fuori perimetro**: i tre ribasamenti in % di R19 (`chartUtils.ts:12-17`, `backendRenderer.ts:36-39`,
+  `AssetComparisonSignal.ts:66-72`). Hanno la loro voce, P2, «un helper frontend».
+- **J**: gli scrivo che tocco solo la testa di `MeasureSignal.ts`, prima del suo CP-14.
+
+> **Note implementazione** (2026-10-16).
+> - **J è avvisato** (10:40): marcatore e guardia; le sue righe `:103` e `:134` non le tocco.
+> - **La guardia**, scritta da `test-author`: `frontend/src/financialMathExceptions.gate.test.ts`, nuova, 14 test.
+>   - (A) Ogni file della lista porta il tag in una riga del JSDoc di testa, con almeno 20 caratteri di descrizione.
+>   - (B) Nessun altro sorgente porta il tag.
+>   - (C) Una potenza con 365 nell'esponente (`Math.pow`, `**`, `**=`) sta solo nei file della lista. La legge con i
+>     parser di TypeScript e di Svelte, come `clipboardSink.gate`, quindi commenti e stringhe non contano.
+>   - (D) Sette controlli positivi.
+>     - Il controllo sul vero albero si ancora solo a `CompoundSignal`: così il CP-14 di J su `MeasureSignal`
+>       (T-D9) non può farlo diventare rosso.
+>     - Lo stesso controllo verifica che `CellDateRange`, `ScheduledInvestmentEditor` e `LinearSignal` non danno
+>       risultati.
+>   - Registrata in `chart-safety-unit` (`_frontend_portfolio.py`: lista, docstring, `desc`, `tests`).
+>   - I componenti non hanno una forma per dichiararsi: un `.svelte` nella lista fa fallire (A), con un messaggio che
+>     lo spiega. Oggi nessun componente è un'eccezione.
+>   - Quello che (C) non vede (365 dentro una costante, una formula con `exp` e `log`, un file `.js`) è scritto nella
+>     testa della guardia.
+> - **Rosso prima dei tag** (11:36, carico 47): 4 rossi, tutti in (A), e 10 verdi.
+> - **I tag**, miei: in testa a `MeasureSignal.ts` (prima di `@module`), `CompoundSignal.ts`, `LinearSignal.ts` e
+>   `SineSignal.ts`. Dicono cosa calcola la misura e perché resta nel browser, e rimandano alla regola 6 di
+>   `financial_math.md`. Le righe di T-D9 non le ho toccate.
+> - **Verde dopo i tag** (11:43): la guardia più i test dei segnali (`measureSignal`, `syntheticSignals`,
+>   `localSignalRegression`), 98/98 in 4 file. Prettier pulito.
+> - **La documentazione**, da `docs-writer`: in `financial_math.md`, due frasi alla fine della regola 6 (come si
+>   dichiara un'eccezione e cosa la sorveglia), più una sottosezione nuova in «Guards and Tests».
+> - **⚠️ Fuori pista**: i due `test-author` sono stati lenti. Uno ha aspettato che il carico scendesse sotto 50 (era
+>   arrivato a 149, con le altre corsie); l'altro si è fermato per l'errore di rete già segnato nel passo 3.
+
+### Passo 3 · `LotCustodyModal`, il valore d'apertura da `original_cost` ✅ (2026-10-16)
+
+- **Il diff proposto**:
+  - `lotOpeningValue = lot ? parseNumber(lot.original_cost) : null`, al posto di
+    `multiplyOrNull(original_quantity, opening_unit_price)` (`LotCustodyModal.svelte:235-238`);
+  - un `data-testid="lot-modal-opening-value"` sul `<dd>` di `:314`;
+  - via `multiplyOrNull` (`lotCustodyModalHelpers.ts:133`), che non ha altri chiamanti, e il suo `describe`;
+  - il rosso, da `test-author`: un test jsdom che monta il modale con `original_cost` '150' e quantità × prezzo = 100.
+    I dati sono incoerenti apposta, per provare quale campo si legge; con `original_cost` nullo ci si aspetta «—».
+- **⚠️ Correzione dell'analisi di Y12a**: avevo scritto che il prodotto era «sbagliato per i lotti trasferiti o
+  rettificati e sulla valuta». Non è così.
+  - Il motore tiene l'invariante `original_quantity × opening_unit_price = original_cost` (`fifo/engine.py:513-516`).
+  - `lots_analysis_service.py:730-731` converte i due valori allo stesso cambio, alla data d'apertura.
+  - Senza bug visibili, il passo serve all'unica fonte della matematica (regola 10): cambiano solo gli arrotondamenti.
+  - La tabella (`UnifiedLotsTable:294`), il grafico WAC (`:1027`) e il Gantt (`:704`) leggono già `original_cost`.
+- **CP-16 di J è già dentro** (treno 70): ha toccato `eventDetailItems` (`:172-187`) e `closureValueLabelKey`. Le mie
+  righe sono altre.
+
+> **Note implementazione** (2026-10-16).
+> - **Il sì di J (10:40)**: nessuno scontro. CP-16 è dentro, CP-13 non tocca il modale né `original_cost`. È lo stesso
+>   numero: `|amount|` della riga d'apertura, senza le commissioni registrate come righe FEE, al cambio della data
+>   d'apertura.
+>   - I casi limite: una rettifica senza costo vale 0, non «—»; un lotto corto vale il nozionale venduto.
+>   - **Il vincolo**: il CP-7a di J (solo backend, entra presto) cambia i valori delle righe di chiusura nella
+>     cronologia del modale, quindi il test non le fissa.
+> - **Il via dei colori (10:55)**: il modale è nell'area di BK, che non lo tocca fino all'ingresso di Y12a; poi migra le
+>   classi.
+> - **Il rosso**, scritto da `test-author`: `features/brokers/lots/LotCustodyModal.test.ts`, nuovo, in jsdom, con tre
+>   test.
+>   - Il lotto passa per `schemas.LotSummarySchema.parse`; cronologia vuota.
+>   - Il valore atteso si costruisce col formattatore del modale (`formatCurrencyAmountPlain`).
+>   - Gli esiti: `original_cost` 150 con prodotto 100, mostra 150; nullo, «—»; il controllo è il caso di J, costo 0,
+>     che mostra zero e non «—».
+>   - Lo stesso `test-author` ha tolto il `describe('multiplyOrNull')` da `lotCustodyModalHelpers.test.ts` e ha
+>     registrato il file nuovo in `broker-unit` (`_frontend_broker.py`: lista, docstring e `desc`).
+> - **Il codice, mio**:
+>   - `LotCustodyModal.svelte`: `data-testid="lot-custody-modal-opening-value"` sul `<dd>`, chiamato come gli altri
+>     test id del modale, con il prefisso `lot-custody-modal-`; `lotOpeningValue = lot ? parseNumber(lot.original_cost) : null`;
+>     `multiplyOrNull` tolto dall'import;
+>   - `lotCustodyModalHelpers.ts`: via `multiplyOrNull`, che non aveva altri chiamanti.
+>
+>   Nessuna classe toccata. Nessuna pagina della documentazione o della devWiki nominava il calcolo tolto.
+> - **Prove**: prima del codice, il file nuovo fa 2 rossi e 1 verde, i rossi per la ragione giusta
+>   (`expected '100.00 EUR' to be '150.00 EUR'` e `… to be '—'`). Dopo il codice, il file nuovo e il test degli
+>   aiutanti fanno 42/42. Prettier pulito; `_frontend_broker.py` compila. I log sono in `files/logs/y12a3_*.log`.
+> - **⚠️ Fuori pista**: `test-author` si è fermato a metà della fase B per un errore di rete (DNS verso il servizio del
+>   modello). Le modifiche ai test e al runner erano già fatte e le ho controllate io; la corsa del rosso l'ho fatta io.
+
+### Decisioni del developer (2026-10-16, 11:19, tramite il coordinatore)
+
+- **P3 / Y11 (decisione 48)**: approvate le mie proposte.
+  - Un solo «Aggiorna» per pagina; `risk-refresh-button` sparisce; nessuna rotazione durante l'aggiornamento dei
+    prezzi dal vivo.
+  - **Il meccanismo, con le parole del developer**: il pulsante gira solo mentre sono in volo le richieste «grandi»,
+    quelle che la UI decide a monte. Quando partono, un segnale raggiunge il componente; quando finiscono, bene o male,
+    ne arriva un altro. Il componente tiene una lista delle richieste in volo e si ferma quando sono tornate tutte, o
+    dopo un timeout lungo, oltre il quale la richiesta si considera persa, almeno per il pulsante.
+  - Diventa `pageBusy` con gettoni `begin(label) → token` / `end(token)`, più un timeout per gettone.
+  - **Prima il contratto, poi il codice**: l'API, il valore del timeout, e cosa conta come richiesta «grande», pagina
+    per pagina.
+  - Y11 tocca file `.svelte` delle pagine, nelle aree dei colori: la lista va al coordinatore prima di scrivere.
+- **P25 / Y-12**: si **riscrive** il controllo dei bottoni di presentazione sui controlli di oggi.
+- **P19**: sì. J aggiunge nel backend il campo del guadagno che recupera una perdita, e Y12b lo usa in
+  `levelHelpers.ts`; il nome lo concordo con J.
+  - Proposta mandata a J (11:25): per il drawdown attuale il campo **esiste già**, `RiskDrawdownOutput.remaining_to_peak_ratio`
+    (`risk/metrics.py:392`, `−cd/(1+cd)`, che è proprio `1/(1−L) − 1`), e il laboratorio lo legge già
+    (`assetSetLevels.ts:194`).
+  - Per il drawdown peggiore serve un campo nuovo, per esempio `maximum_drawdown_trough_to_peak_ratio`, più una scelta
+    sul ripiego da `historical_kpi`.
+  - Caso limite segnalato a J: con una perdita totale `:392` divide per zero, e lo schema non ammette il nullo.
+  - **La decisione di J (11:30)**:
+    - nome `maximum_drawdown_trough_to_peak_ratio`, in `RiskDrawdownOutput` e in `RiskAssetSetDrawdownItem`;
+    - forma `Optional[FiniteFloat] = Field(None, ge=0)`, con valore `−MDD/(1+MDD)`; la formula ha una casa sola in
+      `financial_math/`, che dà `None` per L ≤ −1;
+    - anche `remaining_to_peak_ratio` diventa nullabile, in tutti e due i modelli: dopo `api sync` è
+      `number | null`, ma in pratica non è mai nullo, perché la preparazione delle serie rifiuta i prezzi ≤ 0
+      (`schemas/risk.py:350`);
+    - **niente ripiego dal KPI**: senza `drawdown_summary` si legge «—»;
+    - entra con **CP-13**, in un lotto piccolo dopo il J-17 che J ha in corso. J mi manda lo SHA.
+  - **In Y12b**: `requiredRecovery` di `levelHelpers.ts:356-360` sparisce; le due righe leggono i due campi.
+- **Ordine**: Y12a così com'è, poi Y-12, poi Y11. Y12b dopo, quando ci sono il campo di J e CP-13.
+
+### Prove leggere dei passi 2 e 3 ✅ (2026-10-16, 11:49–11:57; HEAD `93c39a11c` con i due passi nel worktree)
+
+> **Note implementazione**. Script `files/scripts/y12a_light.sh`, una prova alla volta, carico sotto 50; log in
+> `files/logs/y12a_*.log`.
+>
+> | Prova | Esito |
+> |---|---|
+> | `front check` | svelte-check 0/0 |
+> | `theme-roles.mjs --check` | pulito |
+> | `front-portfolio chart-safety-unit` | 8 file, 86 test (+1 file e +14 test: la guardia) |
+> | `front-broker broker-unit` | 6 file, 60 test (+1 file e +3 test: `LotCustodyModal.test.ts`) |
+> | `front-utility core-unit` | 6 261/6 261 in 178 file (−5: il `describe('multiplyOrNull')` tolto) |
+> | `check-orphans` | tutto registrato e raggiungibile |
+> | `mkdocs build` | nessun avviso; 3 076 URL relativi risolti |
+> | `mkdocs check-links` | 97 link validi |
+> | `git diff --check` | pulito; 6189 libera |
+>
+> I checkpoint sono due commit separati, con i file in `files/y12a2_stage_code.txt` (passo 2) e
+> `files/y12a3_stage_code.txt` (passo 3), più il journal (`files/y12a_stage_journal.txt`).
