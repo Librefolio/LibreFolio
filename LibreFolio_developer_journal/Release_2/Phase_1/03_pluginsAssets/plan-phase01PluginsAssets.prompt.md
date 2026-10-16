@@ -3929,3 +3929,77 @@ CP13-2 committed: `25d4c75c7` + journal `efd7b0174`.
    >   - `services registration` → 147;
    >   - `services email-links` → 74;
    >   - ruff e black puliti; `git diff --check` pulito.
+
+N48 committed: `7d80a1098` + journal `c6d29c969`.
+
+**STOP del developer** (08:46–10:32): tutto fermo, nessun controllo in corso; il test-author di F21 non aveva ancora
+toccato file. Durante lo STOP:
+- **risposto ad A** su `env_url` senza lanciare niente: vuota o fatta di spazi conta come non impostata (stessa regola di
+  `_blank_to_none`); `registration` 147, `config-package` 740 ed `email-links` 74 erano già verdi sul codice di N48;
+- **ricevuta da H, via coordinatore, X-R22** (ordine per reinserire un segreto illeggibile), aperta nel backlog alla
+  ripresa.
+
+**Ripresa (10:32)**:
+- il developer non capisce il senso di «Prezzo manuale / import» (P20), perché gli asset manuali si creano già: **quella
+  azione non si costruisce** finché non risponde. Il resto di F21 va avanti;
+- T è entrato in `SyncModalBase`, `PageSyncModal`, `SyncResultRow`, nell'AI Export e nel data editor: le mie
+  prenotazioni sono sciolte (C-66 parte dal file finale);
+- il test-author di prima non esisteva più dopo la pausa: ne ho lanciato uno nuovo con lo stesso incarico.
+
+3. ⏳ **F21 backend** (08:27–08:46, poi dalle 10:32).
+   > **Note implementazione**:
+   > - `schemas/provider.py`: `FAProviderTier` (`premium` | `community`), `DEFAULT_SEARCH_PRIORITY = 100`, e in
+   >   `FAProviderInfo` i campi `tier` e `priority` (`ge=0`), con default che lasciano il contratto di oggi.
+   > - `services/assets/base.py`: `tier: ClassVar` e `search_priority: ClassVar` sulla base dei provider, controllati
+   >   alla definizione della classe (`_validate_search_declarations`, chiamato da `__init_subclass__`). Una stringa
+   >   valida diventa l'enum; un valore sbagliato ferma l'import con un `TypeError` che nomina la classe.
+   > - `config/plugins.py` (mio): `asset_providers_premium()` e `asset_providers_order()`, liste di codici separate da
+   >   virgole, ripulite, minuscole, senza doppioni; vuota, fatta di spazi o di sole virgole conta come non impostata.
+   > - `services/assets/provider_policy.py` (nuovo): il punto unico. `provider_tier`, `provider_priority` e
+   >   `search_order`; le variabili si leggono a ogni chiamata; un codice sconosciuto si ignora e si registra una volta.
+   > - `search.py`: la ricerca non in streaming ordina i provider prima del fan-out. Lo streaming resta per arrivo.
+   > - `GET /assets/provider`: `tier` e `priority` effettivi.
+   > - **Verifica in processo**: con tutto ai default l'ordine dei 6 provider registrati è identico a oggi, tutti
+   >   `community` a 100 (D-X3).
+   > - **Doc**:
+   >   - `.env.example`, nella sezione «Plugins»;
+   >   - `admin/configuration.en.md`, una sezione «The Order of the Price Providers in the Search» prima della ricerca
+   >     web, con i codici dei provider distribuiti (verificati sul codice, perché nessuna pagina li mostra);
+   >   - `asset_plugin_guide.md`, le due righe nella tabella e la sezione «Search Order»;
+   >   - `developer/architecture/settings.md`, le due variabili e i due accessori di `plugins.py`.
+   > - **Prove finora**:
+   >   - `api sync`; `front check` → 0/0, dopo la correzione qui sotto;
+   >   - `config-env-example` → 38; `config-package` → 740;
+   >   - ruff e black puliti.
+   >
+   > **⚠️ Fuori pista**: il primo `front check` è uscito con un errore **nel client generato**,
+   > `tier: FAProviderTier.describe(` «not callable».
+   > - **La causa**: il generatore mette la docstring di più righe di un enum in un template literal JavaScript, senza
+   >   proteggere i backtick. I doppi backtick di stile RST della docstring (``AssetSourceProvider.tier``) chiudevano il
+   >   literal.
+   > - **La cura**: niente backtick nella docstring di `FAProviderTier`, con una riga che spiega perché.
+   > - Le descrizioni di una riga (`Field(description=…)`) vanno fra apici e non hanno il problema: riguarda solo le
+   >   docstring di più righe dei modelli e degli enum usati come tipo di un campo. `front check` lo vede, quindi il
+   >   cancello esistente basta; è una lezione per il wiki.
+
+> **⚠️ Fuori pista (10:34)**: la macchina è stata riavviata durante lo STOP (`uptime` 31 minuti) e `/tmp` è stato
+> svuotato:
+> - è sparita la cartella dati della corsia, `/tmp/librefolio-r13-x`: il runner la ricrea al primo test backend;
+> - sono spariti i log delle prove precedenti, già trascritti in questo piano;
+> - sono spariti lo script dei controlli e quelli degli innesti del FE5c, che non servono più (pezzi 3–8 entrati).
+>   Il wrapper `/tmp/libreFolio_x_fe5c_check.sh` è stato ricreato uguale.
+>
+> **`core-unit` rilanciato a carico basso (10:34, carico 19)**, come chiesto prima delle E2E del FE5c: **180 file,
+> 6458/6458**, `fxRoutesStore.test.ts` compreso. Conferma il triage di X-R21: il rosso delle 07:45 era il tempo sotto
+> carico, non un difetto.
+
+**Decisione sul pezzo 9 (coordinatore, 10:45)**: **9a + 9b**.
+- 9a: le azioni della barra (`actions` di `PageToolbar`) in `AssetDetailToolbarActions.svelte`;
+- 9b: il polling (con le righe di Z spostate così come sono) e la testa dal vivo del grafico in
+  `assetDetailLive.svelte.ts`;
+- `loadChartData` e il caricamento dei confronti restano nella pagina: **X-R23** nel backlog, dopo la 1.3.
+
+**Handoff intermedio del CP13-3 (10:48)**, chiesto dal coordinatore per aggiornare la base con Z7c-1 (`69c95454b`):
+- consegnati il codice, la doc e il journal, con le prove leggere verdi;
+- i test di F21 (test-author) e la riparazione di X-R21 (test-author) **non sono ancora scritti**: i due test-author sono
+  fermi («HOLD») fino a dopo il merge, perché i file che toccheranno possono cambiare. Arrivano in commit separati.
