@@ -10,11 +10,15 @@
  * of the page. Esc cancels a pick; Alt+Shift+D starts one from an app tab, but only in a browser where the Lab has
  * been opened (the neutral spec proves the converse).
  *
- * The elements are the app's own and exist whatever the data: the date header of the transactions table, which
- * DataTable styles, the subtitle of the transactions page (a Tailwind text colour, overridden by `app.css` in the
- * dark theme), and the login card a visitor who is not logged in gets at `/`, whose background is a colour-role utility
- * of workstream T (`bg-lf-*`, read from its classes and the page's CSSOM by `colourSourceOf`). Where to click is
- * computed at run time: a point of the element where the element itself is on top.
+ * The elements are the app's own and exist whatever the data — the date header of the transactions table, which
+ * DataTable styles; the subtitle of the transactions page, which the Esc / Alt+Shift+D test picks, its text colour read
+ * by `colourSourceOf` (a palette class or a colour-role utility); and the login card a visitor who is not logged in gets
+ * at `/`, whose background is a colour-role utility of workstream T (`bg-lf-*`, read from its classes and the page's
+ * CSSOM by `colourSourceOf`) — but for one. The dark-override test adds its own `<p>` at `/`, with the class of a
+ * dark-theme override of `app.css` (`html.dark .<class> { color: var(--…) !important }`) that it finds in the page's
+ * CSSOM: the app's own elements migrate away from those classes, and T's clean-up B6 will remove the overrides — the
+ * test is then skipped, and says so. Where to click is computed at run time: a point of the element where the element
+ * itself is on top.
  *
  * How DataTable writes the header colour — a literal in its `th` rule, a `:root` token that rule reads (R-3), a role
  * utility — is not this spec's subject, and it moves. The date-header test reads it from the facts the app tab reported
@@ -74,6 +78,15 @@ const SOURCE_KINDS = ['var', 'tailwind-class', 'rule-literal', 'inline', 'attrib
 const DATA_TABLE = 'lib/components/table/DataTable.svelte';
 /** The candidates that bind a colour where the code sets it; a `testid` candidate only says where the component is. */
 const BINDING_CANDIDATES = ['matched-rule', 'class-use', 'var-use'];
+/** The paragraph the dark-override test adds to the visitor's `/`: a subject of its own, which no migration takes away. */
+const DARK_OVERRIDE_SUBJECT = 'e2e-lab-dark-override-subject';
+/**
+ * The subject's stacking: above the page, below the picker's veil (`position:fixed; z-index:2147483646`,
+ * `picker/overlay.ts`), so the veil takes the click and the picker, reading what lies under it, finds the subject.
+ */
+const BELOW_THE_VEIL = 2147483000;
+/** The attribute the Lab puts on the nodes it injects in an app tab (`OWN_ATTR`, `engine/vars.ts`): their styles are not the app's. */
+const LAB_OWN_ATTR = 'data-lf-lab-own';
 
 /** The variable a declared value reads first (`var(--x, #fff)` → `--x`), or null when it reads none. */
 function varReadBy(value: string): string | null {
@@ -116,6 +129,109 @@ async function colourCensus(page: Page, selector: string, colour: string): Promi
         },
         {sel: selector, value: colour},
     );
+}
+
+/** A dark-theme override of the `app.css` kind, found in the app page's CSSOM: `html.dark .<class> { color: var(--x) !important }`. */
+interface DarkOverride {
+    /** The class the selector part names: a plain name, nothing escaped, no pseudo-class. */
+    className: string;
+    /** The variable the override's value reads: the variable chain of the Element tab must start with it. */
+    variable: string;
+    /** The rule's whole selector list, as the CSSOM serialises it. */
+    selector: string;
+    /** Tailwind also generates the class as a text utility: the override then wins over a utility, as on the app's elements. */
+    utility: boolean;
+}
+
+/**
+ * The dark-theme colour overrides of the app page, read from its CSSOM the way `colourSourceOf` walks it: every readable
+ * stylesheet but the Lab's own (`data-lf-lab-own`), into the `@media` that match, the `@supports` that hold, the
+ * `@layer` blocks (their dotted name kept) and the other grouping rules. An override is a style rule outside Tailwind's
+ * `utilities` layer whose `color` is `!important` and reads a variable, once for each part of its selector list — split
+ * on the top-level commas — that is exactly `html.dark .<class>`. In CSSOM order, with the figures of the walk for the
+ * messages: the rules walked, the stylesheets unreadable, the style rules that name `html.dark`.
+ */
+async function darkOverridesOf(page: Page): Promise<{candidates: DarkOverride[]; rules: number; unreadable: number; dark: number}> {
+    const found = await page.evaluate((ownAttr) => {
+        const UTILITIES = /(^|\.)utilities$/;
+        const NAMES_DARK = /(^|[\s,(>+~])html\.dark\b/;
+        const OVERRIDE_PART = /^html\.dark\s+\.([A-Za-z][\w-]*)$/;
+        // The parts of a selector list: split on the commas outside parentheses, brackets and strings.
+        const partsOf = (list: string): string[] => {
+            const parts: string[] = [];
+            let depth = 0;
+            let quote = '';
+            let start = 0;
+            for (let i = 0; i < list.length; i++) {
+                const ch = list[i];
+                if (ch === '\\') i++;
+                else if (quote) {
+                    if (ch === quote) quote = '';
+                } else if (ch === '"' || ch === "'") quote = ch;
+                else if (ch === '(' || ch === '[') depth++;
+                else if (ch === ')' || ch === ']') depth--;
+                else if (ch === ',' && depth === 0) {
+                    parts.push(list.slice(start, i).trim());
+                    start = i + 1;
+                }
+            }
+            parts.push(list.slice(start).trim());
+            return parts;
+        };
+        const overrides: {className: string; value: string; selector: string}[] = [];
+        const textUtilities = new Set<string>();
+        let rules = 0;
+        let unreadable = 0;
+        let dark = 0;
+        const walk = (list: CSSRuleList, layer: string | null, nested: boolean): void => {
+            for (const rule of Array.from(list)) {
+                rules++;
+                if (rule instanceof CSSStyleRule) {
+                    if (NAMES_DARK.test(rule.selectorText)) dark++;
+                    // A rule nested in a style rule stands for a longer selector than its own text.
+                    if (!nested) {
+                        if (layer !== null && UTILITIES.test(layer)) {
+                            if (rule.style.getPropertyValue('color') !== '') textUtilities.add(rule.selectorText);
+                        } else if (rule.style.getPropertyPriority('color') === 'important') {
+                            const value = rule.style.getPropertyValue('color').trim();
+                            for (const part of partsOf(rule.selectorText)) {
+                                const className = OVERRIDE_PART.exec(part)?.[1];
+                                if (className) overrides.push({className, value, selector: rule.selectorText});
+                            }
+                        }
+                    }
+                    if (rule.cssRules?.length) walk(rule.cssRules, layer, true);
+                } else if (rule instanceof CSSMediaRule) {
+                    if (window.matchMedia(rule.media.mediaText).matches) walk(rule.cssRules, layer, nested);
+                } else if (rule instanceof CSSSupportsRule) {
+                    if (CSS.supports(rule.conditionText)) walk(rule.cssRules, layer, nested);
+                } else if (rule instanceof CSSLayerBlockRule) {
+                    walk(rule.cssRules, layer ? `${layer}.${rule.name}` : rule.name, nested);
+                } else if (rule instanceof CSSGroupingRule && rule.constructor.name !== 'CSSStartingStyleRule') {
+                    walk(rule.cssRules, layer, nested);
+                }
+            }
+        };
+        for (const sheet of Array.from(document.styleSheets)) {
+            const owner = sheet.ownerNode;
+            if (owner instanceof Element && owner.hasAttribute(ownAttr)) continue;
+            let list: CSSRuleList;
+            try {
+                list = sheet.cssRules;
+            } catch {
+                unreadable++;
+                continue;
+            }
+            walk(list, null, false);
+        }
+        // The utility's selector as Tailwind writes the class and the CSSOM serialises it.
+        return {rules, unreadable, dark, overrides: overrides.map((o) => ({...o, utility: textUtilities.has(`.${CSS.escape(o.className)}`)}))};
+    }, LAB_OWN_ATTR);
+    const candidates = found.overrides.flatMap(({className, value, selector, utility}) => {
+        const variable = varReadBy(value);
+        return variable ? [{className, variable, selector, utility}] : [];
+    });
+    return {candidates, rules: found.rules, unreadable: found.unreadable, dark: found.dark};
 }
 
 test.describe('Designer Lab — the element picker', () => {
@@ -416,27 +532,69 @@ test.describe('Designer Lab — the element picker', () => {
         await expect(colour.getByTestId('lab-picked-specialise-selector'), 'a specialisation keeps the class its rule names').toContainText(`p.${source.className}`);
     });
 
-    test('a dark-theme pick of a text-gray-500 element shows the variable of the app.css override', async ({page, context}) => {
+    test('a dark-theme pick of an element under an app.css !important override shows the variable the override reads', async ({page, context}) => {
         // The Lab first: the app tab then loads in a browser that has seen the Lab, and installs the shortcut as it starts.
         const lab = await openLab(context);
-        await login(page, TEST_USER);
-        await openTransactions(page);
+        await openSignIn(page);
         await waitForLabClient(page);
         await chooseTheme(page, 'dark');
-        const subtitle = transactionsSubtitle(page);
-        await expect(subtitle, 'precondition: the subtitle is a text-gray-500 element, which app.css overrides in the dark theme').toHaveClass(/(^|\s)text-gray-500(\s|$)/);
 
-        const point = await pointOnItself(subtitle);
+        // The override is the app's, found in the page's CSSOM; the element is the test's own, which no migration moves.
+        const search = await darkOverridesOf(page);
+        expect(search.rules, `the app page's stylesheets must be read before anything is concluded from them: no rule walked, ${search.unreadable} stylesheets unreadable`).toBeGreaterThan(0);
+        // CSSOM order, first a class Tailwind also generates as a text utility: the override then wins over one, as in the app.
+        const override = search.candidates.find((c) => c.utility) ?? search.candidates[0];
+        if (!override) {
+            test.skip(
+                true,
+                `no dark-theme !important colour override that reads a variable is left in the app's stylesheets (html.dark .<class> { color: var(--…) !important }, outside the utilities layer): T's clean-up B6 removed them (backlog L-13, L-20). The dark-override badge stays covered by pickView.test.ts. Walked ${search.rules} rules, ${search.dark} of them naming html.dark; ${search.unreadable} stylesheets unreadable.`,
+            );
+            return;
+        }
+
+        // Its own paragraph, with the override's class and no colour of its own, at the bottom left: the theme toggle is at
+        // the top right.
+        await page.evaluate(
+            ({testid, className, zIndex}) => {
+                const p = document.createElement('p');
+                p.setAttribute('data-testid', testid);
+                p.className = className;
+                p.textContent = 'Designer Lab subject';
+                p.style.cssText = `position:fixed;left:16px;bottom:16px;z-index:${zIndex};margin:0;padding:4px 8px;`;
+                document.body.appendChild(p);
+            },
+            {testid: DARK_OVERRIDE_SUBJECT, className: override.className, zIndex: BELOW_THE_VEIL},
+        );
+        const subject = page.getByTestId(DARK_OVERRIDE_SUBJECT);
+        await expect(subject).toBeVisible();
+        // The override reaches an element with that class: its colour is the variable's in this theme, read on a probe
+        // that carries no class and reads the variable, removed in the same task.
+        const shown = await subject.evaluate((el, variable) => {
+            const probe = document.createElement('div');
+            probe.style.setProperty('color', `var(${variable})`);
+            document.body.appendChild(probe);
+            try {
+                const style = getComputedStyle(probe);
+                return {subject: getComputedStyle(el).color, variable: style.color, value: style.getPropertyValue(variable).trim()};
+            } finally {
+                probe.remove();
+            }
+        }, override.variable);
+        expect(shown.value, `precondition: ${override.variable}, which ${override.selector} reads, has a value in the dark theme`).not.toBe('');
+        expect(shown.subject, `precondition: ${override.selector} { color: var(${override.variable}) !important } reaches an element with the class ${override.className}, which then shows ${override.variable}`).toBe(shown.variable);
+
+        const point = await pointOnItself(subject);
         await page.keyboard.press('Alt+Shift+KeyD');
         await expect(pickVeil(page)).toBeVisible(CROSS_TAB);
         await page.mouse.click(point.x, point.y);
 
         const picked = lab.getByTestId('lab-picked');
         await expect(picked, 'the element was picked in the dark theme').toHaveAttribute('data-theme', 'dark', {timeout: 15_000});
+        await expect(picked).toHaveAttribute('data-route', '/');
         await expect(lab.getByTestId('lab-scope'), 'the Lab edits the theme the element was picked in').toHaveValue('dark');
         const colour = pickedProperty(lab, 'color');
-        await expect(colour, 'the !important override of app.css wins over the utility, and reads a variable').toHaveAttribute('data-kind', 'var');
+        await expect(colour, `${override.selector} is !important outside the utilities layer: it wins${override.utility ? ` over the utility ${override.className}` : ''}, and reads a variable`).toHaveAttribute('data-kind', 'var');
         await expect(colour.getByTestId('lab-picked-dark-override')).toBeVisible();
-        await expect(colour.getByTestId('lab-picked-var').first()).toHaveText(/^--[\w-]+$/);
+        await expect(colour.getByTestId('lab-picked-var').first(), `the variable chain starts with the variable ${override.selector} reads`).toHaveText(override.variable);
     });
 });
