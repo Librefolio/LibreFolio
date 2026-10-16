@@ -3042,3 +3042,103 @@ provato a secco su copie; ruff e black puliti), da applicare dopo il giro dei ro
 > **Da fare dopo le 06:45**: `i18n check` (dopo il ritocco dei messaggi), `mkdocs build --strict`, `check-links`,
 > `translate-validate --file admin/configuration.en.md`, poi lo slot pesante di `all-backend` (il passo nuovo gira a
 > ogni avvio del server di prova).
+
+> **Checkpoint intermedio**: commit `cb37c79cf` (feat), `3b95550e1` (doc), `dee4dc311` (diario); merge di
+> `dev_release2` `72e66d1a6` (il treno 93 con la cura di Z e il secondo lotto di T), pulito, HEAD `af24a61bb`. Restano
+> le prove leggere sulla revisione combinata e `all-backend`, dopo il «blocco finito» dei colori.
+
+### La card del backup nella pagina di blocco (2026-10-16, mattina) — preparazione fuori dal worktree
+
+Assegnato dal coordinatore dopo le note di X («then the backup card on the block page»). B ha già consegnato il campo
+`backup_available` di `GET /system/block` (vero per gli amministratori, decisione 12), e le rotte del backup completo
+sono in `ALLOWED_WHEN_BLOCKED`. Manca il bottone: la doc admin lo dice due volte, «the block page has no button for it
+yet».
+
+**Disegno**:
+
+- `InstanceBlockedPage.svelte` legge `backup_available` dalla risposta e, quando è `true`, mostra la
+  `BackupDownloadCard` di B, che è autonoma per scelta. La decisione è del server, non del ruolo letto nel client.
+- La card sta in un riquadro `bg-lf-card` (`instance-blocked-backup`) sotto l'avviso, **fuori** dalla sezione
+  `role="alert"`: un lettore di schermo annuncia il blocco, non tutta la card. Le due cose stanno in un contenitore
+  `max-w-lg`. Solo ruoli, nessuna classe di tavolozza.
+- Nessun testo nuovo: la card ha già titolo e avvertenze. Quello per gli utenti dice già «chiedi un backup
+  all'amministratore».
+
+**Superfici**: il componente; il suo Vitest con uno stub della card (`__tests__/harness/BackupDownloadCardStub.svelte`);
+la doc `admin/hosting_providers.en.md` («What Users See», «What Still Answers»), `developer/architecture/security.md`
+(la tabella delle rotte ammesse) e `developer/frontend/state/app-state.md` (la pagina di blocco e i suoi test id).
+Nessun E2E della pagina di blocco esiste: il Vitest e i test API di B coprono il resto.
+
+**Stato**: la patch `/tmp/librefolio-r13-h-blockcard/apply_blockcard.py` è provata a secco; il test-author scrive i rossi
+Vitest in `/tmp`. Si applica dopo `all-backend` delle note di X: un cambio delle sorgenti del frontend farebbe
+ricostruire il frontend al server di prova.
+
+> **⚠️ Fuori pista (note di X, dopo il checkpoint intermedio)**: la card di B dice «The logs and the instance key are not
+> included». L'archivio del backup dell'istanza non contiene `secrets/instance.key`, quindi tre frasi della mia doc
+> rimandavano a un posto dove la chiave non c'è. Corrette, non ancora committate:
+>
+> - la riga ❌ di «Startup Checks» in `admin/configuration.en.md`: ora parla della propria copia di
+>   `secrets/instance.key`, salvata con la cartella dei dati come dice «The Instance Key»;
+> - due paragrafi di `developer/architecture/security.md`: il file perso, e l'uso previsto di `derive_key_from()`. La
+>   vecchia chiave viene dalla copia dell'amministratore o dal vecchio `LIBREFOLIO_INSTANCE_KEY`;
+> - la docstring di `derive_key_from()`, solo il testo.
+>
+> **Rossi della card** (test-author, in `/tmp/librefolio-r13-h-blockcard/`, non applicati, niente lanciato):
+> `InstanceBlockedPage.test.ts` completo, con 7 casi nuovi (11 test con le righe di `it.each`), e lo stub
+> `harness/BackupDownloadCardStub.svelte`. I casi negativi montano prima la stessa pagina con `backup_available: true`
+> come controllo, così oggi sono rossi per la ragione giusta.
+>
+> **Rifiniture dalla sua revisione**, nella patch:
+>
+> - il riquadro è un `<section aria-labelledby>` con un `<h2>` (`instance.block.backupTitle`, 4 lingue), così i titoli
+>   vanno h1 → h2 → h3 della card di B e la regione ha un nome;
+> - un `ToastContainer` nella pagina di blocco: il layout lo monta solo attorno all'app, quindi i toast della card
+>   (errori, «backup parziale») non si vedevano. Sta nel mio componente, senza toccare il layout condiviso.
+>
+> **Accettati come sono**: la card dentro una card segue i ruoli (un `bg-lf-panel` dentro un `bg-lf-card`, come nella
+> scheda Backup); se `GET /system/block` fallisce, la card torna solo ricaricando la pagina; la descrizione segue il
+> ruolo nel client, la card il campo del server.
+
+#### Card del backup — passo 1, applicata (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> Il coordinatore (05:47) ha dato il via a scrivere durante la pausa. B3 (`887a24123`) non tocca il frontend: la
+> `BackupDownloadCard` resta quella di dev, e il coordinatore ricontrolla all'ingresso di B5b, il lotto UI di B.
+>
+> **Note implementazione**:
+>
+> - applicato `apply_blockcard.py`: `InstanceBlockedPage.svelte` (`backupAvailable`, la `<section>` con `<h2>`, il
+>   `ToastContainer`) e `instance.block.backupTitle` nelle 4 sorgenti i18n di `instance`;
+> - copiati il Vitest dei rossi e lo stub `__tests__/harness/BackupDownloadCardStub.svelte`;
+> - in corso, solo scrittura: il test-author aggiunge i casi per la regione con nome e per i toast; il docs-writer
+>   aggiorna `hosting_providers`, `security.md` e `app-state.md`.
+>
+> **Prove da fare**, una alla volta, dopo il «blocco finito»: `prettier` sul componente, `front check`, il Vitest del
+> file (rosso sul componente di HEAD per ragionamento, verde sul nuovo), `i18n check`, `mkdocs build`, `check-links`;
+> poi `all-backend` insieme alle note di X, che prende anche la ricostruzione del frontend.
+
+#### Card del backup — passo 2, rossi completati e doc (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> **Note implementazione**:
+>
+> - test-author: in `InstanceBlockedPage.test.ts` due casi in più, tre test con le righe di `it.each`. La sezione ha
+>   per nome il suo `<h2>`, l'unico della pagina, dopo l'`<h1>`. Un toast spinto dallo store mentre la pagina è montata
+>   si vede, per un amministratore con la card e per un utente senza. Ogni test toglie il suo toast con
+>   `onTestFinished`. Su HEAD falliscono sull'`<h2>` che manca e sul toast che non compare, per ragionamento: niente
+>   lanciato;
+> - docs-writer, senza debito di traduzione:
+>   - `admin/hosting_providers.en.md`: l'introduzione del blocco, «What Users See» (la card e la copia di
+>     `secrets/instance.key`), «What Still Answers»;
+>   - `developer/architecture/security.md`: la tabella delle rotte ammesse e `backup_available`;
+>   - `developer/frontend/state/app-state.md`: la card, il `ToastContainer`, il link «Manage subscription» che
+>     mancava, tutti e sei i test id;
+>   - `developer/api/index.md`: il riassunto di `/system/block`;
+> - corretto il commento troncato sopra `<ToastContainer />`.
+>
+> **⚠️ Fuori pista**:
+>
+> - due errori nel mio brief al docs-writer, corretti da lui. Il selettore del Vitest è `front-utility component-unit`,
+>   non `core-unit`. Un link a `configuration.md#instance-key` da una pagina solo inglese avrebbe rotto la build
+>   rigorosa delle lingue tradotte, perché `configuration.{it,fr,es}.md` non hanno quell'ancora (decisione
+>   `docs-anchors-from-the-render`): ha usato il nome della sezione;
+> - il test-author ha visto che `ToastContainer` non ha regione live: nessun toast dell'app arriva ai lettori di schermo.
+>   È fuori perimetro: **H-18** nel backlog.
