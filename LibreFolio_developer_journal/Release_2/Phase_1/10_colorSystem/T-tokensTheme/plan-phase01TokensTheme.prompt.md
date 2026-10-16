@@ -609,7 +609,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
 | 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
 | 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `be911db7e` (commit `18824449c` e `a317392d4`) |
-| 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | 🔄 prove leggere verdi (gate 71/71, unità 780/780, m1 −60, m2 −6); slot E2E proposto (`slot5.sh`) |
+| 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `e5e427f8e`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
+| 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | 🔄 checkpoint consegnato (14:2x): gate 100/101 col solo rosso dichiarato (i due G6 di DV, via con la base merge dopo DV); `front check` 0 e 0 |
 
 ## Avanzamento
 
@@ -2473,3 +2474,137 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `files-destructive`, `front-broker detail`, `broker-sharing`, `asset-data-editor`, `asset-modal`, `auth`,
 > `fx-destructive`, `tx-selection-after-bulk`, `asset-list`, `fx-list`, `risk-lab`, `tx-bulk-row-order`; stop a 70
 > minuti, log per unità in `/tmp/libreFolio_T_r2/slot5/units/`.
+
+> ✅ **Committato** dal coordinatore: `e5e427f8e` (12 file), con la correzione `hover:text-lf-primary` approvata. **Lo
+> slot:** al massimo 45 minuti, come per tutti; in coda dopo W6, BK, TR e IW, verso le 17:00. Lo script è passato nella
+> cartella di sessione (`files/T-r2/slot5.sh`, log in `files/T-r2/slot5/`), con un tetto duro: ogni passo riceve il
+> tempo che resta, e allo scadere `timeout --signal=INT`, che il runner gestisce spegnendo il suo backend
+> (`scripts/test_runner/_server.py`, `_TEARDOWN_SIGNALS`); mai SIGKILL, che lo lascerebbe sulla porta.
+
+### Il lotto del gate: G5, G6, il fondale e il ruolo `selected` — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 12:34): G5 dallo script di DV (`dv_rule4_check.mjs`, letto dalla sua cartella senza
+> modificarlo), G6 sui campi nativi, il fondale uguale nei due temi, le coppie del ruolo traslucido `selected` col
+> vincolo nello skill (`link` su `selected` mai su `panel`); prima di committare, la misura d'impatto in sola lettura
+> sul target e sui worktree.
+
+> ✅ **1 · G5 e G6 nel motore** (`frontend/scripts/theme/theme-roles.mjs`, in `grammarOfCode`, elemento per elemento
+> sui `startTags`).
+> - **G5, una proprietà, un ternario:** due ruoli sulla stessa utility di colore con le stesse varianti, almeno uno
+>   sempre acceso. «Sempre acceso»: il testo statico di `class`, un `{…}` che non sceglie, le stringhe di
+>   un'espressione che non sceglie, e ogni `${…}` di un template giudicato da solo; «a condizione»: un `{…}` o `${…}`
+>   che sceglie (`?`, `&&`, `||`, `??` fuori dalle stringhe; `?.` no) e una direttiva `class:`. Le costanti stringa
+>   MAIUSCOLE si leggono col loro valore, del file e importate (`$lib/…`, `./…`, `../…`, con `as`), un livello. Due
+>   condizioni non si confrontano fra loro: possono escludersi. Rispetto allo script di DV, in più: le direttive
+>   `class:`, i template seguiti da un metodo, due ruoli entrambi fissi, le varianti uguali (`hover:` contro `hover:`).
+> - **G6, i campi nativi:** `input` (tranne i tipi senza testo, la stessa lista del controllo del coordinatore:
+>   `FIELD_TYPES_WITHOUT_TEXT`), `textarea`, `select` con una classe `-lf-` in qualunque ramo scrivono un `text-lf-…` di
+>   base, e `placeholder:text-lf-…` se hanno un segnaposto (anche la forma `{placeholder}`).
+> - `grammarOf` prende un quarto parametro facoltativo, le sorgenti importabili, per i test sintetici; `grammarOfTree`
+>   legge le costanti dei moduli dal disco, una volta per albero.
+> - Prova sintetica (`files/T-r2/g56_probe.mjs`): 21 forme, tutte come previsto.
+
+> ⚠️ **Fuori pista:** al primo giro G5 dava un falso positivo su `ui/tabs/TabBar.svelte:131`, `` class={`…`.trim()} ``:
+> il `.trim()` dopo il template faceva leggere l'espressione intera come «non sceglie», e i due rami del ternario
+> finivano fra le classi sempre accese. Corretto in modo generale: un'espressione che non sceglie si legge letterale per
+> letterale, e i `${…}` di ogni template da soli. Nell'albero le forme a vettore (`class={[…]}`) sono una sola (la radice
+> di `TabBar`, senza conflitti), oggetti e `clsx` nessuno: un vettore che sceglie resta una condizione unica (solo falsi
+> negativi, scritto nello skill).
+
+> ✅ **2 · L'impatto, in sola lettura** (`files/T-r2/g56_impact.mjs`, motore committato contro nuovo, ciascun albero col
+> suo `tokens.css`; log `g56_impact.log`), sul target `54880598b` (estratto con `git archive`) e sui worktree di IW
+> (`9c79d5b35`), TR (`505a28289`), AF (`0ff61e8c0`), BK (`cb1fb5690`), IM (`53b6dd352`), DV (`a694d8fb2`):
+> - **G1–G4 invariati ovunque; G5 0 ovunque**, e lo script di DV dà lo stesso (0 difetti, 0 «per fortuna») su ogni albero;
+> - **G6:** `TagInput:214` e `TreeSelect:357` (corretti nel mio `e5e427f8e`, non ancora nel target);
+>   `charts/ChartAestheticsSection:217` e `:233` di DV (nel target e in tutti i worktree tranne quello di DV, che li ha
+>   corretti in `a694d8fb2`); `assets/ScheduledInvestmentEditor:1287` solo nel worktree di AF (un `<input
+>   placeholder="optional">` con `text-lf-primary` senza ruolo del segnaposto).
+> - **La sequenza** (coordinatore, 12:5x): DV entra verso le 14:20, poi la base merge del mio ramo; AF corregge il suo
+>   campo prima di entrare; il lotto del gate entra insieme al resto della UI, dopo il mio slot. Il checkpoint si
+>   consegna col solo rosso dichiarato del test dell'albero (i due casi di DV).
+
+> ✅ **3 · Il ruolo `selected`, misurato** (`files/T-r2/selected_pairs.mjs` e `selected_tint.mjs`): sulla tinta, composta
+> sopra ciascuna superficie, reggono 4,5:1 `link` (4,53–5,38, tranne `panel` 4,56/**4,09**), `primary` (11,31–14,57) e
+> `secondary` (5,45–6,69). **Muted, stati e segni no:** 3,84–4,48 quasi ovunque (passa solo il campo); una tinta più
+> leggera non basta (6 %: il peggiore 4,17). Casi reali nel codice: le righe evidenziate di `AssetPickerPanel` (tipo e
+> valuta in muted); `TabBar`, che usa `link` su `selected`, sta su card e pagine, non su un `panel`. Registrato **TC-15**
+> (backlog, sezione T); il coordinatore: è mio (`ui/select`), da correggere in un mio lotto, muted → secondary sulle
+> righe selezionate, con la regola nello skill.
+
+> ✅ **4 · Gli skill:** `design-system`, regola 1 (G5 e G6 nell'elenco del gate), regola 4 (cosa vede G5 e cosa no), il
+> punto dei campi nativi (G6), regola 5 (le righe di `selected` nella tabella delle coppie, il fondale uguale nei due
+> temi, il paragrafo «On a selected row» col chip al passaggio del mouse); `palette.md`, la riga di `--lf-selected`;
+> `theme-roles`, l'elenco della grammatica, G5 nella regola 8, la riga «Selected item». Prove: `palette.md` 102 su 102
+> contro `tokens.css`; nomi esistenti; link validi (le 9 «PATH?» sono nomi brevi di prima); larghezze ≤ 120 caratteri;
+> `git diff --check` pulito.
+
+> ⚠️ **Fuori pista — le costanti di due lettere** (trovato da test-author): `stringConstants` registrava i nomi
+> MAIUSCOLI di ogni lunghezza, ma la ricerca nelle espressioni ne voleva almeno tre (`[A-Z][A-Z0-9_]{2,}`, preso dallo
+> script di DV). Caso reale: `TH` e `TD` di `features/tools/pac-allocator/planner/ui.ts`, usati da
+> `DistributionDialog.svelte`. G5 non li leggeva, e G6 avrebbe segnalato a torto un campo con i ruoli in una costante
+> come `IN`. Corretto con `UPPER_NAME_RE = /\b[A-Z][A-Z0-9_]*\b/g`, a ogni lunghezza: una parola conta solo se il
+> modulo dichiara una costante con quel nome. Le due riproduzioni ora danno `G5 5  text-lf-muted always, text-lf-link
+> on a condition` e nessun G6. **Rimisurato** (`files/T-r2/g56_impact2.log`) sul target nuovo `1248b7908` e sui sei
+> worktree: G1–G4 invariati, **G5 0 ovunque**, e lo script di DV dà lo stesso; **G6 i 4 casi noti** (i miei due, già
+> corretti in `e5e427f8e`, e i due di DV). Il caso di AF, `ScheduledInvestmentEditor:1287`, non c'è più: AF l'ha
+> corretto nel suo worktree.
+
+> 📝 **Una scelta, non un difetto** (segnalata da test-author): G6 accetta un ruolo del testo in qualunque ramo, quindi
+> non distingue `{err ? 'text-lf-danger' : 'text-lf-primary'}` da `{err ? 'text-lf-danger' : ''}`. Chiedere un ruolo
+> sempre acceso segnalerebbe la forma giusta a ternario unico, e spingerebbe verso un ruolo fisso più uno condizionale,
+> proprio quello che G5 vieta. Scritto come limite nello skill (il punto dei campi nativi) e nell'intestazione del gate.
+> Il bordo dell'intervallo del muted su `selected` è 4,48, non 4,47 (4,4820 e 4,4808 sull'header scuro): corretto nello
+> skill, nel backlog e qui.
+
+> ✅ **5 · I test** (test-author, solo `themeRoles.gate.test.ts` e `themeTokens.gate.test.ts`, due giri):
+> - `themeRoles.gate.test.ts`, 79/80: due describe nuovi in C, «G5, one property, one ternary» (16 test, con la
+>   regressione di `TabBar` e quella delle costanti di due lettere, `TH` locale e importata come dal `ui.ts` del PAC) e
+>   «G6, a native field on roles names its text» (13 test, con `IN`); G5 e G6 nell'intestazione e in
+>   `GRAMMAR_RULES`; il limite di G6 («un ruolo del testo in qualunque ramo conta») fra «What it cannot see»; il test
+>   dell'albero rinominato G1–G6. **L'unico rosso è quello dichiarato:** il test dell'albero, sui due G6 di DV
+>   (`ChartAestheticsSection:217` e `:233`), che spariscono con la base merge dopo l'ingresso di DV (`a694d8fb2`).
+> - `themeTokens.gate.test.ts`, 21/21: il describe «the backdrop is one colour in both themes» (`backdropFindings`, con
+>   controllo positivo); le 17 coppie `pairsOver` di `selected` (34 misure); il paragrafo di `selected` (TC-15) e il chip
+>   al passaggio del mouse fra «What C3 cannot express».
+> - **Mutazione:** col motore committato falliscono esattamente i 27 test nuovi di G5 e G6 e la regressione di `TabBar`
+>   resta muta; col motore nuovo e la lettura vecchia del `.trim()` rimessa, 3 rossi (la regressione, il suo controllo,
+>   il falso positivo vero di `TabBar:131`); con le costanti di nuovo da tre lettere in su, i test di `TH` e `IN`
+>   rossi; con `link` sopra `panel` aggiunto, C3 rosso su esattamente `dark --lf-link on --lf-selected over
+>   --lf-surface-panel: 4.09:1`. SHA dei file di test uguali prima e dopo ogni scambio; motore mai toccato da test-author.
+
+> ✅ **6 · Prove leggere** (sotto `nice`, carico 48–56): i 5 file di test che importano il motore
+> (`themeRoles.gate`, `themeTokens.gate`, `themeColorMeta.gate`, `roleColors.test.ts`, `emailText.test.ts`) **406/407**,
+> l'unico rosso quello dichiarato; Prettier verde sul motore e sui due test; `--check` con soli i due G6 di DV; skill
+> (`palette.md` 102 su 102, nomi, link, larghezze) e `git diff --check` puliti.
+
+> ⏸️ **PAUSA del developer** (16/10, chiesta dal coordinatore), **qui:** finiti i passi 1–6; test-author fermo, nessun
+> comando né server in corso, porta 6155 libera, niente in stage. **Manca solo**, alla ripresa:
+> 1. `api sync` e `front check` (i tipi dei due file di test, che test-author non controlla);
+> 2. il messaggio CHECKPOINT READY al coordinatore, col rosso dichiarato, la proposta di commit
+>    `feat(theme): gate G5 one ternary, G6 native fields, selected pairs`, e in coda:
+>    - **l'elenco dei file del lotto dei component tokens:**
+>      - `ui/modals/ModalBase` con la variante `tone` e il suo test;
+>      - `ConfirmModal` e `dialogs.css` (`--lf-cmp-confirm-*`, 30 token);
+>      - `FileGrid` e `files.css` (`--lf-cmp-file-grid-*`, 42);
+>      - `ImportBrokerMismatchModal` di IW e `dialogs.css` (`--lf-cmp-broker-mismatch-*`, 49);
+>      - `BrokerImportFilesModal` di BK e `files.css` (`--lf-cmp-broker-import-files-*`, 16);
+>      - `UnifiedLotsTable` di BK e `table.css` (`--lf-cmp-lots-table-*`, 6);
+>      - `TransactionsTable` di TR, la base `white`/`#0f0f18` della tinta del broker → `var(--lf-surface-card)`;
+>      - `e2e/brokers/brokers-detail.spec.ts` (test-author): `toHaveClass(/selected/)` → `toHaveAttribute('data-selected',
+>        …)`, che `DataTable` pubblica già;
+>    - **il perimetro di TC-15:** miei `ui/select/AssetPickerPanel:613–614`, `SearchSelect:550`, `TreeSelect:445`,
+>      `features/ai-export/AiExportOptionsPanel:210` (lotto W2-d); di altri `charts/ChartSignalsSection` (righe
+>      646–716).
+> Il delta non committato: il motore, i due test del gate, gli skill `design-system` (`SKILL.md`, `palette.md`) e
+> `theme-roles`, il backlog (TC-15), questo piano.
+
+> ▶️ **Ripresa** (coordinatore, 14:14): chiudere il lotto col solo rosso dichiarato; DV entra a breve, poi la base merge
+> del mio ramo. Le domande per la designer: il developer vuole un unico riepilogo, che raccoglie il coordinatore in un
+> file solo; io le tengo anche nello skill, e gli dico quando ne aggiungo una.
+
+> ✅ **7 · Chiusura** (14:15–14:2x, carico 60–65, sotto `nice`): stato invariato dalla pausa (HEAD `e5e427f8e`, gli 8 file
+> del delta, porta libera); `api sync` rc 0, nessun file tracciato toccato; **`front check` 0 errori e 0 avvisi** (copre
+> i tipi dei due test); Vitest dei due gate **100/101**, l'unico rosso quello dichiarato; `--check` coi soli due G6 di
+> DV; **domanda aperta 6 alla designer** nello skill, la tinta di `selected` (il valore è di T, dal suo verde del
+> focus; muted, stati e segni sotto 4,5:1), segnalata al coordinatore; larghezze, nomi e link dello skill a posto;
+> `git diff --check` pulito.
