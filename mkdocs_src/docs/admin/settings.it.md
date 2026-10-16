@@ -48,7 +48,7 @@ Solo gli amministratori (superutenti) hanno il lucchetto; tutti gli altri otteng
 |---|---|---|---|
 | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Accorciala su dispositivi condivisi; un nuovo valore si applica dal login successivo di ogni utente. |
 | 🛡️ Sicurezza | **Abilita registrazione** | Attiva | Consente a nuove persone di registrarsi. Disattivala una volta che tutti hanno un account, soprattutto se l'istanza è raggiungibile da Internet. Il primo account di una nuova istanza può sempre essere creato. |
-| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | Non ancora attiva: l'invio di email è una funzionalità pianificata, quindi l'interruttore è di sola lettura e contrassegnato **In arrivo**. |
+| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | I nuovi account devono aprire un link inviato via email al loro indirizzo prima di poter accedere; il primo account non aspetta mai, e gli account esistenti non cambiano. Si attiva solo mentre l'email funziona e `LIBREFOLIO_PUBLIC_URL` è utilizzabile: fino ad allora l'interruttore resta disabilitato. Vedi *Email Verification* in [Email](email.md). |
 | 🔄 Job di aggiornamento | **Scheduler abilitato** | Attivo | Attiva o disattiva gli aggiornamenti automatici di prezzi e tassi di cambio: vedi [Scheduler dei dati di mercato](#market-data-scheduler). |
 | 🧠 Memoria | **Dimensione Max Upload** | 10 MB | Il file più grande che gli utenti possono caricare, incluso il report del broker. Aumentala se un'esportazione di grandi dimensioni viene rifiutata. |
 | 🌍 Predefiniti | **Valuta predefinita** | `EUR` | La valuta in cui i nuovi utenti registrano i propri dati. |
@@ -103,6 +103,9 @@ Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storic
 ### 📜 Leggi il log dello scheduler
 
 La riga **Stato Scheduler** mostra l'ultimo aggiornamento del prezzo corrente, con un punto per il risultato.
+Quando è previsto un nuovo tentativo, una riga in più ne indica l'ora: **Non riuscito: nuovo tentativo alle …** dopo un
+aggiornamento che non si è potuto concludere, altrimenti **Elementi in pausa ritentati alle …** per i prezzi rimandati
+perché il loro fornitore è in pausa.
 Fai clic sulla riga (o su **Dettagli…**) per aprire il **Log Esecuzione Scheduler**. Solo gli amministratori possono
 leggere lo stato e il log.
 
@@ -115,6 +118,9 @@ leggere lo stato e il log.
   🔴 **Errore**: nessuno riuscito e nessuno rimandato.
 - Fai clic su una voce per vedere ciascun asset o coppia FX, il relativo provider e i prezzi modificati (**Delta**).
   Passa il mouse su un errore per leggerlo per intero; fai doppio clic (pressione prolungata su un telefono) per copiarlo.
+- Un elemento rimandato mostra un'icona di pausa e **Rimandato: fornitore in pausa**: passa il mouse sull'etichetta per
+  leggere il messaggio del fornitore. La voce conta gli elementi rimandati con ⏸, accanto a ✓ e ✗ (per esempio
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), e **Nuovo tentativo alle …** nella sua intestazione indica l'ora fissata per ritentarli.
 - Filtra per job, stato o periodo, dall'ultima ora agli ultimi 30 giorni. Vengono conservate solo le esecuzioni più recenti.
 
 ---

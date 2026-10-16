@@ -174,6 +174,10 @@ class SchedulerJobStateInfo(BaseModel):
     last_status: Optional[str] = Field(None, description="Outcome of the last run: ok, partial, or error")
     last_items_ok: int = Field(..., description="Items processed successfully in the last run")
     last_items_err: int = Field(..., description="Items that failed in the last run")
+    last_items_deferred: int = Field(0, description="Items a provider's pause after too many requests deferred in the last run: neither ok nor failed")
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried, before the regular round; null when none")
+    consecutive_failures: int = Field(0, description="Runs in a row that raised")
+    next_attempt_at: Optional[str] = Field(None, description="ISO-8601 datetime before which the job does not run again after a run that raised; null when none")
 
 
 class SchedulerStateResponse(BaseModel):
@@ -194,6 +198,8 @@ class SchedulerLogCurrentPriceItem(BaseModel):
     ok: bool
     icon_url: Optional[str] = None
     error: Optional[str] = None
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryAssetItem(BaseModel):
@@ -208,6 +214,8 @@ class SchedulerLogHistoryAssetItem(BaseModel):
     prices_changed: Optional[int] = None
     events_changed: Optional[int] = None
     points_changed: Optional[int] = Field(None, description="Legacy field name used by log entries written before prices_changed/events_changed existed")
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryFxItem(BaseModel):
@@ -220,6 +228,8 @@ class SchedulerLogHistoryFxItem(BaseModel):
     errors: Optional[list[str]] = None
     provider: Optional[str] = None
     points_changed: int
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the pair is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogCurrentPriceSummary(BaseModel):
@@ -227,6 +237,7 @@ class SchedulerLogCurrentPriceSummary(BaseModel):
 
     ok: int
     err: int
+    deferred: int = Field(0, description="Items deferred by a provider's pause, counted in neither ok nor err")
 
 
 class SchedulerLogHistorySyncSummary(BaseModel):
@@ -236,6 +247,8 @@ class SchedulerLogHistorySyncSummary(BaseModel):
     assets_err: int
     fx_ok: int
     fx_err: int
+    assets_deferred: int = Field(0, description="Assets deferred by a provider's pause, counted in neither assets_ok nor assets_err")
+    fx_deferred: int = Field(0, description="FX pairs deferred by a provider's pause, counted in neither fx_ok nor fx_err")
 
 
 class SchedulerLogCurrentPriceEntry(BaseModel):
@@ -246,6 +259,7 @@ class SchedulerLogCurrentPriceEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogCurrentPriceSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     items: list[SchedulerLogCurrentPriceItem]
 
 
@@ -257,6 +271,7 @@ class SchedulerLogHistorySyncEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogHistorySyncSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     assets: list[SchedulerLogHistoryAssetItem]
     fx: list[SchedulerLogHistoryFxItem]
 
@@ -293,7 +308,8 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "str",
         "description": "Who may create an account: open, invite or disabled",
     },
-    # placeholder — email verification not implemented (see TODO_FUTURI email server)
+    # Read by services/email/verification.py (workstream E, developer decision 44): every account but the first waits for
+    # an emailed link before it can sign in. It turns on only while an email with a link can go out.
     "require_email_verification": {
         "value": "false",
         "type": "bool",

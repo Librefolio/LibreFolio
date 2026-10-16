@@ -26,6 +26,7 @@
     import CachePanel from '$lib/features/settings/CachePanel.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
 
     // Props
     interface Props {
@@ -70,7 +71,17 @@
     const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
 
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
-    const PLACEHOLDER_KEYS = new Set(['require_email_verification']);
+    const PLACEHOLDER_KEYS = new Set<string>();
+
+    // Email verification turns on only while an email with a link can go out (workstream E, `GET /system/instance` →
+    // `email.links`); turning it off always works. The server refuses the rest with 409 EMAIL_VERIFICATION_UNAVAILABLE.
+    const EMAIL_VERIFICATION_KEY = 'require_email_verification';
+    let emailLinksReady = $derived(instanceConfig.config.email?.links === true);
+    function verificationBlocked(key: string): boolean {
+        if (key !== EMAIL_VERIFICATION_KEY || emailLinksReady) return false;
+        // Off where it is saved: it cannot go on. Once saved on, it can go off and on again until the next save.
+        return settings.find((setting) => setting.key === key)?.value !== 'true';
+    }
 
     // LIBREFOLIO_REGISTRATION pins the registration mode on the server (`GET /system/instance`): the field then shows
     // the mode in force, read-only, and the bulk reset leaves it alone — a save would only meet 409 SETTING_LOCKED_BY_ENV.
@@ -101,6 +112,7 @@
     let showConfigModal = $state(false);
     let showLogModal = $state(false);
     let schedulerState: any = $state(null);
+    const schedulerRetry = $derived(pendingSchedulerRetry(schedulerState?.current_price, Date.now()));
     let serverTz = $state('');
 
     // Language options for dropdown
@@ -267,6 +279,9 @@
         const detail = e.response?.data?.detail;
         if (e.response?.status === 409 && detail?.error_code === 'SETTING_LOCKED_BY_ENV') {
             return $_('settings.lockedByEnv', {values: {variable: detail.variable}});
+        }
+        if (e.response?.status === 409 && detail?.error_code === 'EMAIL_VERIFICATION_UNAVAILABLE') {
+            return $_('email.verification.settingUnavailable');
         }
         return e.message;
     }
@@ -601,13 +616,13 @@
                             <SettingToggle
                                 value={editedValues[setting.key] === 'true'}
                                 label={getSettingLabel(setting.key)}
-                                hint={getSettingHint(setting.key)}
+                                hint={verificationBlocked(setting.key) ? $_('email.verification.settingNeedsEmail') : getSettingHint(setting.key)}
                                 icon={category?.icon ?? null}
                                 isModified={changedKeys.includes(setting.key)}
                                 isNonDefault={nonDefaultKeys.includes(setting.key)}
                                 {isLocked}
                                 {isSaving}
-                                disabled={PLACEHOLDER_KEYS.has(setting.key)}
+                                disabled={PLACEHOLDER_KEYS.has(setting.key) || verificationBlocked(setting.key)}
                                 badge={PLACEHOLDER_KEYS.has(setting.key) ? $_('settings.comingSoon') : ''}
                                 onsave={() => saveSetting(setting.key)}
                                 onundo={() => undoSetting(setting.key)}
@@ -798,6 +813,11 @@
                                             {$_('settings.global.scheduler.status.neverRun')}
                                         {/if}
                                     </p>
+                                    {#if schedulerRetry}
+                                        <p class="text-xs text-lf-warning mt-0.5" data-testid="scheduler-status-retry" data-kind={schedulerRetry.kind}>
+                                            {$_(schedulerRetry.kind === 'failure' ? 'settings.global.scheduler.status.nextAttemptAt' : 'settings.global.scheduler.status.retryAt', {values: {time: schedulerRetry.at.toLocaleString(uiLocale())}})}
+                                        </p>
+                                    {/if}
                                 </div>
                             </div>
                             <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button">

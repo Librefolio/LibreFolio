@@ -486,7 +486,7 @@ describe('extractCalendarReturnView', () => {
                 {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
             ],
         });
-        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_VOLATILITY'}], CALENDAR_INSTANCE_ID);
 
         expect(view.state).toBe('ready');
         expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({

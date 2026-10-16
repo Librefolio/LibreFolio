@@ -194,7 +194,8 @@
     "units": {
       "days": "days",
       "sessions": "sessions",
-      "percentPerYear": "%/yr"
+      "percentPerYear": "%/yr",
+      "observations": "observations"
     },
     "visual": {
       "components": "Components",
@@ -212,12 +213,6 @@
     "comparisonAsset": {
       "placeholder": "Select comparison asset",
       "loadError": "Assets could not be loaded."
-    },
-    "riskRollingReturn": {
-      "name": "Rolling Return",
-      "description": "Compounded price-only return over a rolling window.",
-      "output": "Return",
-      "outputDescription": "Compounded holding-period return, in percentage points."
     }
   }
 }

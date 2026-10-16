@@ -788,8 +788,8 @@ describe('TransactionFormModal — exact quantity contract', () => {
         await fireEvent.input(input, {target: {value: raw}});
         expect(input).toHaveValue(raw);
         expect(input).toHaveAttribute('aria-invalid', 'true');
-        expect(input.classList).toContain('border-red-400');
-        expect(input.classList).toContain('dark:border-red-500');
+        expect(input.classList).toContain('aria-invalid:border-lf-danger');
+        expect(input.classList, 'a base border-lf-danger would paint every state red').not.toContain('border-lf-danger');
         expectNoImportantNeutralQuantityBorder(input);
         await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeDisabled());
 
@@ -800,17 +800,17 @@ describe('TransactionFormModal — exact quantity contract', () => {
     });
 
     it.each([
-        ['BUY', '1', '163.223', true],
-        ['BUY', '-1', '25.331', false],
+        ['BUY', '1', 'success', true],
+        ['BUY', '-1', 'danger', false],
         ['BUY', '-0.000000', '', false],
-        ['SELL', '1', '163.223', true],
-        ['SELL', '-1', '25.331', false],
-        ['TRANSFER', '1', '163.223', true],
-        ['TRANSFER', '-1', '25.331', false],
-        ['ADJUSTMENT', '1', '163.223', true],
-        ['ADJUSTMENT', '-1', '163.223', true],
-        ['ADJUSTMENT', '0', '25.331', false],
-        ['ADJUSTMENT', '-0.000000', '25.331', false],
+        ['SELL', '1', 'success', true],
+        ['SELL', '-1', 'danger', false],
+        ['TRANSFER', '1', 'success', true],
+        ['TRANSFER', '-1', 'danger', false],
+        ['ADJUSTMENT', '1', 'success', true],
+        ['ADJUSTMENT', '-1', 'success', true],
+        ['ADJUSTMENT', '0', 'danger', false],
+        ['ADJUSTMENT', '-0.000000', 'danger', false],
     ] as const)('%s quantity %j publishes matching hue and Save gate', async (type, raw, expectedHue, enabled) => {
         mount({
             mode: 'create',
@@ -823,19 +823,18 @@ describe('TransactionFormModal — exact quantity contract', () => {
         await fireEvent.input(input, {target: {value: raw}});
 
         expectNoImportantNeutralQuantityBorder(input);
-        if (expectedHue) expect(input.getAttribute('style') ?? '').toContain(expectedHue);
+        if (expectedHue) expect(input.getAttribute('style') ?? '').toContain(`border-color: color-mix(in oklab, var(--lf-${expectedHue}) 70%, transparent)`);
         else {
-            expect(input.getAttribute('style') ?? '').not.toContain('163.223');
-            expect(input.getAttribute('style') ?? '').not.toContain('25.331');
+            expect(input.getAttribute('style') ?? '').not.toContain('border-color');
         }
-        const signInvalid = expectedHue === '25.331';
+        const signInvalid = expectedHue === 'danger';
         expect(input).toHaveAttribute('aria-invalid', String(signInvalid));
         if (signInvalid) {
-            expect(input.classList).toContain('border-red-400');
-            expect(input.classList).toContain('dark:border-red-500');
+            expect(input.classList).toContain('aria-invalid:border-lf-danger');
+            expect(input.classList, 'a base border-lf-danger would paint every state red').not.toContain('border-lf-danger');
         } else {
-            expect(input.classList).not.toContain('border-red-400');
-            expect(input.classList).not.toContain('dark:border-red-500');
+            expect(input).toHaveAttribute('aria-invalid', 'false');
+            expect(input.classList, 'at rest the border is not red').not.toContain('border-lf-danger');
         }
         await waitFor(() => {
             if (enabled) expect(screen.getByTestId('tx-form-save')).toBeEnabled();

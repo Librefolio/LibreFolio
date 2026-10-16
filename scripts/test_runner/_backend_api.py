@@ -619,7 +619,7 @@ def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) ->
     print_section("Scheduler API Tests")
     print_info("Testing REST API endpoints for scheduler state and log")
     print_info("Tests: GET /settings/scheduler/state, GET /settings/scheduler/log")
-    print_info("Tests: SAPI-001..008 — admin-only access, structure, since filter")
+    print_info("Tests: SAPI-001..014 — admin-only access, structure, since filter, lot Z7b's deferred/retry/backoff fields")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_scheduler_api.py", test_names)
@@ -744,6 +744,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_api.py", test_names)
     return run_command(cmd, "Email verification API tests", verbose=verbose)
+
+
+def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the email-verification hooks in A's routes (lot E5b): register, login, users, settings, in-process."""
+    print_section("Email Verification Hooks API Tests")
+    print_info("Testing POST /auth/register (verification_required, 409 EMAIL_VERIFICATION_UNAVAILABLE), POST /auth/login (403 EMAIL_NOT_VERIFIED), GET/PATCH /users (holds_place, the limit), PATCH /settings/global/bulk (off → on needs an email with a link)")
+    print_info("In-process: the real auth, users, settings and email routers on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_hooks_api.py", test_names)
+    return run_command(cmd, "Email verification hooks API tests", verbose=verbose)
 
 
 def _api_setup() -> bool:
@@ -962,7 +972,10 @@ Tests for REST API endpoints (server auto-started):
         desc="Cache status/clear endpoints",
         exclusive_because="clears the process-wide cache registry (clear-all and clear/{name}): entries other units populated and may assert on (fx_provider_responses, search_results, upload_metadata) would vanish mid-run",
     )
-    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the scheduler's
+    # state and log, with the users it registers; the cases that need a chosen scheduler_state.json or scheduler log (lot
+    # Z7c-2, SAPI-010..014) run in-process on the test's own tmp_path, never on the lane's files.
+    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth; lot Z7b's deferred items, retry_at and failure backoff passed through, files and entries written before it at the defaults")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
@@ -993,10 +1006,21 @@ Tests for REST API endpoints (server auto-started):
         "email-verification",
         api_email_verification,
         name="Email Verification API",
-        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
         # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "email-verification-hooks",
+        api_email_verification_hooks,
+        name="Email Verification Hooks API",
+        desc="With require_email_verification on: register 201 verification_required + inactive + the email from LIBREFOLIO_PUBLIC_URL, login 403 EMAIL_NOT_VERIFIED (wrong password the 401 of an unknown account), resend, click, login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link → 409 EMAIL_VERIFICATION_UNAVAILABLE, nothing created, the invitation live; option off as before. A waiting account takes a place while its link is live (GET /users usage, holds_place, a registration refused when full), none once expired; PATCH /users reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; PATCH is_active false on a waiting account ends the wait (its links revoked, its place freed, holds_place false); the PATCH answer and GET /users carry holds_place, true while the link is live and false once it expired; past 10 registration emails from one client address the account waits without its email. Settings bulk: off → on 409 without email (nothing saved), 200 with email; on again or off always saved",
+        # PURE: the real auth, users, settings and email routers run in-process on a private SQLite file under tmp_path, the
+        # option set in that file only, the SMTP, public URL and user-limit variables set with monkeypatch in this process,
+        # the limiters private on a fake clock, the fake SMTP server on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )
     add_test(

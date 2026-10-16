@@ -161,7 +161,8 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`, or the administrator API) gets `401`
-  *User account is disabled*; its login, with the right password, gets `403` `ACCOUNT_DISABLED`.
+  *User account is disabled*; its login, with the right password, gets `403` `ACCOUNT_DISABLED` — or
+  `403` `EMAIL_NOT_VERIFIED` while it waits for its email verification.
   Deactivation refuses the last active administrator, and ends every session of the account:
   `user activate` lets the user sign in again, but brings none of the old sessions back.
 - **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
@@ -234,6 +235,7 @@ it, so `PASSWORD_TOO_WEAK` comes first:
 | A token that is not a valid invitation: unknown, of another purpose, expired, used or revoked | `400` `INVITE_INVALID` |
 | A valid invitation | Created in the invitation's role (`grants_admin`; the first account is an administrator whatever it says). The account and the consumption of the invitation (`consumed_by_user_id`) are committed together. The limit is not checked: the invitation already holds its place |
 | Mode `open`, no `invite_token` | Created as a regular account, within the [user limit](#user-limit) |
+| `require_email_verification` on, any account but the first | Created inactive, with a verification token that holds its place; the answer says `verification_required: true`, and the email goes after it — unless the client address already had the emails of 10 registrations in the hour: the account then waits without it, and its owner asks for the link again from the sign-in. With no email with a link able to go out, `409` `EMAIL_VERIFICATION_UNAVAILABLE`, and nothing is created: an invitation stays unspent. See [Email Verification](../backend/email.md#verification) |
 | Username or email already taken | `400`, with the plain-string `detail` it always had |
 
 The refusals with a code answer `{"error_code": …, "message": …}` in `detail`, plus `rules` for
@@ -282,19 +284,21 @@ an invitation, or `username` for a reset or setup link.
 ### 📏 The User Limit {: #user-limit }
 
 `LIBREFOLIO_MAX_USERS` (unset or blank: no limit) bounds the places counted by `user_usage()`: the
-active accounts (`users.is_active`), the live invitations, and the administrator waiting for its
-setup ([The Initial Administrator](#initial-admin)). A deactivated or deleted account frees
-its place; an invitation holds one from its creation until it is revoked or expires, and hands it to
-the account it opens. A value that is not a whole number of at least 1 is a limit of 0, logged like
-an invalid mode (`_max_users()`).
+active accounts (`users.is_active`), the live invitations, and the inactive accounts that wait: those holding a
+live email-verification token ([Email Verification](../backend/email.md#verification)) and the administrator
+waiting for its setup ([The Initial Administrator](#initial-admin)), each account counted once. A deactivated or
+deleted account frees its place; an invitation holds one from its creation until it is revoked or expires, and
+hands it to the account it opens; an account waiting for its email verification holds one while its link is
+live. A value that is not a whole number of at least 1 is a limit of 0, logged like an invalid mode
+(`_max_users()`).
 
 | Request | When `used >= max_users` |
 |---------|--------------------------|
 | `POST /auth/register` without an invitation | The account is inserted, then counted in the same transaction: over the limit, rollback and `409` `USER_LIMIT_REACHED`, with no numbers and no link, as the caller is anonymous. The first writer holds SQLite's write lock until it commits, so two registrations racing for the last place cannot both take it |
 | `POST /auth/register` with a valid invitation, or for the first account | Not checked |
 | `POST /users/invites` | `409` `USER_LIMIT_REACHED` with `limit`, `used` and `billing_url` |
-| `PATCH /users/{user_id}` reactivating an account | The same `409`. Promotions, demotions and deactivations are not checked |
-| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead |
+| `PATCH /users/{user_id}` reactivating an account | The same `409`, except for an account waiting for its email verification whose link is live: `holds_place()` says that its place is already counted. Once the link has expired, the account needs a free place like any other. Promotions, demotions and deactivations are not checked |
+| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account waiting for its email verification whose link is live: it already holds its place (`holds_place()`) |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
 `GET /users` and `GET /users/invites`, in the `409` `USER_LIMIT_REACHED` of the administrator
@@ -312,8 +316,8 @@ or *links show the bare path until it is fixed*.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
-| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, and `protected`: see [Protected Accounts](#account-protection)), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing. A deactivation or a demotion ends every session of the account | `200` with the account; `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit |
+| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), and `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification)), with `usage: {used, max_users, billing_url}` | `200` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links | `200` with the account, `holds_place` included (`false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
 | `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
