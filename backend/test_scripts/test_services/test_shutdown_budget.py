@@ -41,34 +41,35 @@ process with exit code 1 once the whole budget is spent, whatever still holds it
     method. With it, SIGTERM's handler, and SIGINT's when it is uvicorn's too, is replaced by a wrapper that arms the
     watchdog, then calls the handler it replaced with ``(signum, frame)``; any other SIGINT handler is left alone. The
     watchdog returned is ``current_shutdown_watchdog()``.
-11. ``reset_shutdown_budget_state()`` forgets the installed watchdog, never a signal handler.
-12. ``shutdown_deadline(*, clock=time.monotonic)``, on the monotonic clock. Once a signal armed the watchdog, its
+11. ``shutdown_deadline(*, clock=time.monotonic)``, on the monotonic clock. Once a signal armed the watchdog, its
     deadline minus ``CLEANUP_MARGIN_SECONDS``, 0.75, whatever the clock passed. Otherwise — no watchdog, or one no signal
     armed —: None with a budget of 0, else ``clock() + budget - drain``, counted afresh at each call, the clock and the
     variable read again. It never arms a watchdog: a shutdown that came without a signal ends no process.
-13. ``terminate_child_processes(timeout, *, keep=None)``: every child process, recursively, except those ``keep``
+12. ``terminate_child_processes(timeout, *, keep=None)``: every child process, recursively, except those ``keep``
     accepts — by default multiprocessing's resource tracker, ``resource_tracker`` in its command line — is terminated,
     given ``timeout`` seconds, then killed; it returns the pids it had to kill.
-14. ``child_processes_step()``: a ``lifecycle.Step`` named "child-processes", the last step of the lifespan's shutdown.
+13. ``child_processes_step()``: a ``lifecycle.Step`` named "child-processes", the last step of the lifespan's shutdown.
     With no watchdog installed — in every process but a server under uvicorn — its ``run`` terminates nothing. What it
     does with one, terminating the children still alive, is pinned in a server process of its own by
     ``test_shutdown_budget_process.py`` (SDP-004), never in this one.
 
 PURE: no database, no server, no lane port. An autouse fixture removes every ``LIBREFOLIO_SHUTDOWN_*`` and ``UVICORN_*``
 the lane inherited; another puts a stand-in ``coverage`` in ``sys.modules``, so that no ``fire()`` saves the coverage
-data of the run measuring this file. The real ``os._exit`` and the default ``terminate_children`` never run in this
-process: every watchdog gets recorders instead. ``install_shutdown_watchdog`` accepts no injection, so the tests replace
-``shutdown_budget.ShutdownWatchdog`` — the name it builds through, looked up at call time — with a subclass that hands
-the recorders to the constructor, and refuse to arm any other watchdog. Every watchdog a test arms fires on its
-recorders before the test ends. uvicorn's exit handler is the ``handle_exit`` of a real ``uvicorn.Server``, never
-started, built with ``log_config=None``: uvicorn's default would reconfigure this process's logging. SIGTERM's and
-SIGINT's handlers are saved and put back around each test that touches them; a test leaves its stand-ins on the signals
-only while ``install_shutdown_watchdog`` looks at them, puts back those it found, then calls the wrappers directly. No
-signal is ever delivered; one sent to this process in that short window would reach the stand-in — uvicorn's records it
-on a server that never runs. The real children are short-lived ``python -I`` processes of the test, killed and reaped at
-its teardown; ``terminate_child_processes`` runs here with a ``keep`` that spares every process but the test's own —
-under the child-processes step, through a guard put in its place —, and with its default ``keep`` only in a fresh
-interpreter (``sys.executable``, run in ``tmp_path``) — like the once-per-process log and the watchdog's ERROR log.
+data of the run measuring this file; a third puts None in ``shutdown_budget._watchdog`` with ``monkeypatch``, which puts
+back what it found once the test is over — the module has no function that forgets its watchdog (N58). The real
+``os._exit`` and the default ``terminate_children`` never run in this process: every watchdog gets recorders instead.
+``install_shutdown_watchdog`` accepts no injection, so the tests replace ``shutdown_budget.ShutdownWatchdog`` — the name
+it builds through, looked up at call time — with a subclass that hands the recorders to the constructor, and refuse to
+arm any other watchdog. Every watchdog a test arms fires on its recorders before the test ends. uvicorn's exit handler is
+the ``handle_exit`` of a real ``uvicorn.Server``, never started, built with ``log_config=None``: uvicorn's default would
+reconfigure this process's logging. SIGTERM's and SIGINT's handlers are saved and put back around each test that touches
+them; a test leaves its stand-ins on the signals only while ``install_shutdown_watchdog`` looks at them, puts back those
+it found, then calls the wrappers directly. No signal is ever delivered; one sent to this process in that short window
+would reach the stand-in — uvicorn's records it on a server that never runs. The real children are short-lived
+``python -I`` processes of the test, killed and reaped at its teardown; ``terminate_child_processes`` runs here with a
+``keep`` that spares every process but the test's own — under the child-processes step, through a guard put in its
+place —, and with its default ``keep`` only in a fresh interpreter (``sys.executable``, run in ``tmp_path``) — like the
+once-per-process log and the watchdog's ERROR log.
 
 Red until ``config/sleep_wake.py`` has the budget and ``services/platform/shutdown_budget.py`` exists: the module does
 not import. Then the cases of ``entrypoint.sh`` stay red until it exports the drain, and the graces until the runner and
@@ -115,7 +116,6 @@ from backend.app.services.platform.shutdown_budget import (
     child_processes_step,
     current_shutdown_watchdog,
     install_shutdown_watchdog,
-    reset_shutdown_budget_state,
     shutdown_budget_seconds,
     shutdown_deadline,
     terminate_child_processes,
@@ -595,11 +595,9 @@ def _coverage_stand_in(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_budget_state() -> Iterator[None]:
-    """No installed watchdog, before and after each test; the handlers are ``signal_handlers``' business."""
-    reset_shutdown_budget_state()
-    yield
-    reset_shutdown_budget_state()
+def _fresh_budget_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No installed watchdog while each test runs: ``shutdown_budget._watchdog`` is None, put there with ``monkeypatch``, which puts back what it found once the test is over — the module has no function that forgets it (N58). The handlers are ``signal_handlers``' business."""
+    monkeypatch.setattr(shutdown_budget, "_watchdog", None)
 
 
 @pytest.fixture
@@ -1177,7 +1175,7 @@ def test_fire_logs_the_step_the_threads_and_the_children_before_terminating_them
 
 
 # =============================================================================
-# 10-11. install_shutdown_watchdog, current_shutdown_watchdog, reset_shutdown_budget_state
+# 10. install_shutdown_watchdog, current_shutdown_watchdog
 # =============================================================================
 
 
@@ -1376,37 +1374,13 @@ def test_a_subclass_of_uvicorns_server_counts_and_is_given_the_frame(signal_hand
     print_success("wrapped; each handler given its signal and frame; one thread, fired")
 
 
-def test_reset_forgets_the_watchdog_and_leaves_the_handlers(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog]) -> None:
-    """SDB-032 — contract 11: after ``reset_shutdown_budget_state()`` there is no current watchdog, and the wrappers stay where they are."""
-    print_section("SDB-032: reset_shutdown_budget_state()")
-    exit_handler = _uvicorn_server().handle_exit
-    for signum in HANDLED_SIGNALS:
-        signal.signal(signum, exit_handler)
-    try:
-        installed = install_shutdown_watchdog(budget_seconds=1)
-        wrappers = _handlers()
-        current = current_shutdown_watchdog()
-        returned = reset_shutdown_budget_state()
-        after = _handlers()
-    finally:
-        _put_back(signal_handlers)
-    watchdog = _injected(installed, injected)
-    assert current is watchdog
-    assert all(wrapper != exit_handler for wrapper in wrappers.values()), f"barrier: not both wrapped: {wrappers}"
-
-    assert returned is None
-    assert current_shutdown_watchdog() is None
-    assert after == wrappers, f"reset_shutdown_budget_state() changed a handler: {after}"
-    print_success("forgotten; the handlers untouched")
-
-
 # =============================================================================
-# 12. shutdown_deadline
+# 11. shutdown_deadline
 # =============================================================================
 
 
 def test_the_cleanup_margin() -> None:
-    """SDB-033 — contract 12: the lifespan's steps end 0.75 s before the watchdog fires, which leaves its cleanup that long."""
+    """SDB-033 — contract 11: the lifespan's steps end 0.75 s before the watchdog fires, which leaves its cleanup that long."""
     print_section("SDB-033: CLEANUP_MARGIN_SECONDS")
 
     assert CLEANUP_MARGIN_SECONDS == 0.75
@@ -1424,7 +1398,7 @@ def test_the_cleanup_margin() -> None:
     ],
 )
 def test_without_a_watchdog_the_deadline_is_the_budget_less_the_drain(monkeypatch: pytest.MonkeyPatch, value: str | None, deadline: float) -> None:
-    """SDB-034 — contract 12: with no watchdog installed, the lifespan's deadline is ``clock() + budget - drain`` — uvicorn spent the drain before the lifespan's shutdown began."""
+    """SDB-034 — contract 11: with no watchdog installed, the lifespan's deadline is ``clock() + budget - drain`` — uvicorn spent the drain before the lifespan's shutdown began."""
     print_section(f"SDB-034: shutdown_deadline() with {TIMEOUT_VARIABLE}={value!r}")
     if value is not None:
         monkeypatch.setenv(TIMEOUT_VARIABLE, value)
@@ -1434,7 +1408,7 @@ def test_without_a_watchdog_the_deadline_is_the_budget_less_the_drain(monkeypatc
 
 
 def test_without_a_watchdog_the_deadline_is_counted_afresh_at_each_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SDB-045 — contract 12: with no watchdog, each call reads the clock and the variable again — a later shutdown of the same process, as an API test server's, gets its own deadline, never one already past —: 1005 at 1000, 1009 at 1004, 1014 once the budget is 16, None once it is 0, 1009 again once unset. With no clock given, the monotonic clock plus 5 s."""
+    """SDB-045 — contract 11: with no watchdog, each call reads the clock and the variable again — a later shutdown of the same process, as an API test server's, gets its own deadline, never one already past —: 1005 at 1000, 1009 at 1004, 1014 once the budget is 16, None once it is 0, 1009 again once unset. With no clock given, the monotonic clock plus 5 s."""
     print_section("SDB-045: shutdown_deadline() counted at each call")
     clock = FakeClock()
 
@@ -1456,7 +1430,7 @@ def test_without_a_watchdog_the_deadline_is_counted_afresh_at_each_call(monkeypa
 
 
 def test_with_a_budget_of_0_there_is_no_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SDB-036 — contract 12: no limit, no deadline — at each call."""
+    """SDB-036 — contract 11: no limit, no deadline — at each call."""
     print_section("SDB-036: shutdown_deadline() without a limit")
     monkeypatch.setenv(TIMEOUT_VARIABLE, "0")
 
@@ -1471,7 +1445,7 @@ def test_with_an_armed_watchdog_the_deadline_is_its_own_less_the_cleanup_margin(
     effects: Effects,
     started_threads: list[threading.Thread],
 ) -> None:
-    """SDB-037 — contract 12: once a signal armed the watchdog — its SIGTERM wrapper called —, the deadline is the watchdog's minus 0.75 s, on the watchdog's clock — not the one passed —, and the same at each call. Asking does not arm it again: one ``arm()``, the signal's, one thread, which fires."""
+    """SDB-037 — contract 11: once a signal armed the watchdog — its SIGTERM wrapper called —, the deadline is the watchdog's minus 0.75 s, on the watchdog's clock — not the one passed —, and the same at each call. Asking does not arm it again: one ``arm()``, the signal's, one thread, which fires."""
     print_section("SDB-037: shutdown_deadline() once a signal armed the watchdog")
     result, wrappers = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit), budget_seconds=1)
     watchdog = _injected(result, injected)
@@ -1498,7 +1472,7 @@ def test_a_watchdog_no_signal_armed_stays_unarmed_and_the_deadline_counts_from_t
     effects: Effects,
     started_threads: list[threading.Thread],
 ) -> None:
-    """SDB-044 — contract 12: a watchdog installed that no signal armed — a shutdown that did not come from a signal: a test, a server at its request limit — is left as it is by ``shutdown_deadline()``: no ``arm()``, no ``armed_at``, no thread, nothing fired, still the current watchdog. The deadline is the one without a watchdog, counted at each call: 1010 at 1000 for a budget of 16, 1014 at 1004."""
+    """SDB-044 — contract 11: a watchdog installed that no signal armed — a shutdown that did not come from a signal: a test, a server at its request limit — is left as it is by ``shutdown_deadline()``: no ``arm()``, no ``armed_at``, no thread, nothing fired, still the current watchdog. The deadline is the one without a watchdog, counted at each call: 1010 at 1000 for a budget of 16, 1014 at 1004."""
     print_section("SDB-044: shutdown_deadline() with a watchdog no signal armed")
     monkeypatch.setenv(TIMEOUT_VARIABLE, "16")
     result, _ = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit))
@@ -1518,12 +1492,12 @@ def test_a_watchdog_no_signal_armed_stays_unarmed_and_the_deadline_counts_from_t
 
 
 # =============================================================================
-# 13. terminate_child_processes
+# 12. terminate_child_processes
 # =============================================================================
 
 
 def test_children_that_ignore_sigterm_are_killed_after_the_timeout_grandchildren_included(children: Children) -> None:
-    """SDB-038 — contract 13: a child that ignores SIGTERM, and its grandchild that ignores it too, are given the timeout, then killed: both gone, both pids returned.
+    """SDB-038 — contract 12: a child that ignores SIGTERM, and its grandchild that ignores it too, are given the timeout, then killed: both gone, both pids returned.
 
     ``keep`` spares every process but these two: other children of this process — a neighbour's pool, the resource
     tracker — are never touched.
@@ -1546,7 +1520,7 @@ def test_children_that_ignore_sigterm_are_killed_after_the_timeout_grandchildren
 
 
 def test_a_child_that_heeds_sigterm_ends_without_being_killed(children: Children) -> None:
-    """SDB-039 — contract 13: a child with SIGTERM's default action ends on ``terminate()``: gone, and not among the pids that had to be killed."""
+    """SDB-039 — contract 12: a child with SIGTERM's default action ends on ``terminate()``: gone, and not among the pids that had to be killed."""
     print_section("SDB-039: SIGTERM heeded")
     child = children.start(COOPERATIVE_CHILD)
     _ready(child)
@@ -1558,7 +1532,7 @@ def test_a_child_that_heeds_sigterm_ends_without_being_killed(children: Children
 
 
 def test_a_child_keep_accepts_is_left_running(children: Children) -> None:
-    """SDB-040 — contract 13: ``keep`` is asked about every child, as a ``psutil.Process``; the one it accepts still runs afterwards — the test ends it itself —, the other is gone."""
+    """SDB-040 — contract 12: ``keep`` is asked about every child, as a ``psutil.Process``; the one it accepts still runs afterwards — the test ends it itself —, the other is gone."""
     print_section("SDB-040: keep")
     kept = children.start(COOPERATIVE_CHILD)
     target = children.start(COOPERATIVE_CHILD)
@@ -1618,7 +1592,7 @@ print("RESULT_MARKER" + json.dumps({"trackers": trackers, "ready": ready, "pids"
 
 
 def test_by_default_every_child_but_the_resource_tracker_is_terminated(tmp_path: Path) -> None:
-    """SDB-041 — contract 13: with the default ``keep``, in a fresh interpreter, multiprocessing's resource tracker — which ignores SIGTERM — still runs afterwards; a child that ignores SIGTERM is killed, one that heeds it is terminated, and only the first is returned.
+    """SDB-041 — contract 12: with the default ``keep``, in a fresh interpreter, multiprocessing's resource tracker — which ignores SIGTERM — still runs afterwards; a child that ignores SIGTERM is killed, one that heeds it is terminated, and only the first is returned.
 
     A fresh interpreter, because the default ``keep`` spares nothing else: run here, it would end the children of every
     other test sharing this process.
@@ -1636,12 +1610,12 @@ def test_by_default_every_child_but_the_resource_tracker_is_terminated(tmp_path:
 
 
 # =============================================================================
-# 14. child_processes_step
+# 13. child_processes_step
 # =============================================================================
 
 
 def test_without_a_watchdog_the_child_processes_step_terminates_nothing(monkeypatch: pytest.MonkeyPatch, children: Children) -> None:
-    """SDB-046 — contract 14: ``child_processes_step()`` is a ``lifecycle.Step`` named "child-processes". With no watchdog installed — this process's case, and that of every test that runs the real lifespan — its ``run``, run as the lifespan runs it, terminates nothing: a child of this process that heeds SIGTERM still answers afterwards.
+    """SDB-046 — contract 13: ``child_processes_step()`` is a ``lifecycle.Step`` named "child-processes". With no watchdog installed — this process's case, and that of every test that runs the real lifespan — its ``run``, run as the lifespan runs it, terminates nothing: a child of this process that heeds SIGTERM still answers afterwards.
 
     ``terminate_child_processes`` is replaced by a guard that records each call and spares every process but that
     child: were the step to terminate children here, it would end the test's own, never a neighbour's. What the step

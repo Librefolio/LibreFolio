@@ -328,7 +328,20 @@
       "timeout": "Ricerca scaduta. Riprova.",
       "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile",
       "notConfigured": "{provider} va configurato prima di poter cercare",
-      "crownLegend": "👑 la valuta del fondo"
+      "crownLegend": "👑 la valuta del fondo",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Nessun risultato dalle fonti premium.",
+      "communitySection": "Fonti non premium (community) · {count, plural, one {# risultato} other {# risultati}}",
+      "communityWarning": "Fonti di terzi: LibreFolio non garantisce i loro prezzi né i loro dati. La scelta vale solo per questo asset.",
+      "reportQuestion": "Non lo trovi?",
+      "reportAction": "Segnalacelo",
+      "reportVia": {
+        "mailto": "Apre la tua app di posta con i dettagli di questa ricerca",
+        "page": "Apre la pagina di supporto e copia i dettagli di questa ricerca, da incollare lì",
+        "github": "Apre una issue pubblica su GitHub con i dettagli di questa ricerca: rileggila prima di inviarla"
+      },
+      "reportCopied": "Dettagli della ricerca copiati: incollali nella pagina di supporto.",
+      "reportCopyFailed": "Impossibile copiare i dettagli della ricerca: descrivi la tua ricerca nella pagina di supporto."
     },
     "comparison": {
       "title": "Confronto Dati Provider",

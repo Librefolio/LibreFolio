@@ -116,7 +116,7 @@ plugin's default: *The saved value will be deleted when you save: the default ap
 |---|---|---|
 | *The server variable … is invalid: the plugin stays unconfigured until it is fixed.* | The variable that sets it holds a value the setting refuses, or names a file that cannot be read. LibreFolio never falls back to a saved value or to the default. Administrators see the variable's name | An administrator fixes the variable and restarts LibreFolio |
 | *The saved value is no longer valid: the default applies.* | The plugin no longer accepts the value saved earlier, after an update for example | Choose a value again and save it, or leave it: the default applies meanwhile |
-| *Saved, but this instance's key cannot read it: enter it again.* | A saved secret can no longer be read, because the instance's encryption key has changed. LibreFolio keeps it, but never uses it | Type the secret again and save it; for a whole-instance secret, an administrator does |
+| *Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first; otherwise enter it again.* | A saved secret can no longer be read, because the instance's encryption key has changed. LibreFolio keeps it, but never uses it | If an administrator can still put the old instance key back, that comes first: a secret saved under the new key would become unreadable once the old key is back (see [Saved Secrets and the Instance Key](../../admin/configuration.md)). Otherwise, type the secret again and save it; for a whole-instance secret, an administrator does |
 
 ---
 

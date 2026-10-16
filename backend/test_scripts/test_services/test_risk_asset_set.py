@@ -97,10 +97,15 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.risk import scope as risk_scope_module
+from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
 from backend.app.services.risk.metrics import historical_var_cvar
+from backend.app.services.risk.plan import AnalyticPlan
 from backend.app.services.risk.registry import RiskAnalyticRegistry
-from backend.app.services.risk.service import RiskService, _AnalyticPlan, _ScopeInputs
+from backend.app.services.risk.results import available_observations, build_execution_context
+from backend.app.services.risk.scope import ScopeInputs
+from backend.app.services.risk.service import RiskService
 from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
 from backend.app.services.risk_plugins.asset_set_comparison.plugin import (
     AssetSetComparisonAnalytic,
@@ -262,7 +267,7 @@ def asset_set_request(
     """One ASSET_SET query over the window the prepared set actually covers.
 
     A query must carry at least one analytic, so the default names one. It is only
-    load-bearing for ``RiskService.execute``; ``_build_context`` never looks at the
+    load-bearing for ``RiskService.execute``; ``build_execution_context`` never looks at the
     list, which is why the context helper below leaves it alone.
     """
     return RiskQueryRequest(
@@ -287,23 +292,23 @@ def asset_set_context(
     scope_asset_ids: tuple[int, ...] | None = None,
     prepared: PreparedAssetSeriesSet | None = None,
 ) -> RiskExecutionContext:
-    """Build the context through ``RiskService._build_context``, not by hand.
+    """Build the context through ``build_execution_context``, not by hand.
 
     The context is the whole subject of clause ⓪, so fabricating one would let the
     tests assume exactly what they are supposed to observe. This goes through the
-    service's own builder with the scope inputs ``_load_scope_inputs`` returns for an
+    service's own builder with the scope inputs ``load_scope_inputs`` returns for an
     ``AssetSetRiskScope`` — no weights, no values, no portfolio report — which is why
     ``primary_returns`` comes back empty here rather than by decree.
 
-    ``db=None`` is safe because nothing on this path touches the session: the
-    asset-set branch of ``_load_scope_inputs`` is pure, and ``_build_context`` is a
+    No session is needed because nothing on this path touches one: the asset-set
+    branch of ``load_scope_inputs`` is pure, and ``build_execution_context`` is a
     pure function of its three arguments.
     """
     prepared = prepared if prepared is not None else make_prepared_set(returns_by_asset)
     scope_asset_ids = scope_asset_ids if scope_asset_ids is not None else tuple(returns_by_asset)
-    return RiskService(db=None)._build_context(
+    return build_execution_context(
         request=asset_set_request(scope_asset_ids, prepared),
-        scope_inputs=_ScopeInputs(
+        scope_inputs=ScopeInputs(
             requested_asset_ids=scope_asset_ids,
             weights={},
             asset_values={},
@@ -346,7 +351,7 @@ async def test_one_request_prepares_the_asset_series_exactly_once_for_all_five_c
     whether the plugins compute well, and it is not evidence that any number below
     is right. It proves one thing: a single ``RiskQueryRequest`` carrying all five
     asset-set analytics still results in exactly **one** call to
-    ``_prepare_asset_series``. That property belongs to ``RiskService.execute``,
+    ``prepare_asset_series``. That property belongs to ``RiskService.execute``,
     which prepares once before the per-analytic loop; splitting one comparison
     surface across five codes is precisely the change that could have broken it, so
     it is pinned at the level where the breakage would appear.
@@ -381,18 +386,18 @@ async def test_one_request_prepares_the_asset_series_exactly_once_for_all_five_c
     service = RiskService(db=None)
     preparation_calls: list[dict] = []
 
-    async def counting_prepare(**kwargs):
+    async def counting_prepare(_db, **kwargs):
         preparation_calls.append(kwargs)
         return prepared
 
-    async def existing_asset_ids(asset_ids):
+    async def existing_asset_ids(_db, asset_ids):
         # Pure stand-in for the only other DB read on this path. It answers "these
         # all exist", which is the case the test is about; the asset-not-found path
         # is a different question and has its own gate.
         return set(asset_ids)
 
-    monkeypatch.setattr(service, "_prepare_asset_series", counting_prepare)
-    monkeypatch.setattr(service, "_existing_asset_ids", existing_asset_ids)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", counting_prepare)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", existing_asset_ids)
 
     response = await service.execute(user_id=1, request=request)
 
@@ -472,7 +477,7 @@ def test_the_joint_calendar_is_the_intersection_and_not_each_asset_own_history()
 def test_an_asset_set_context_carries_no_aggregate_series_of_its_own():
     """The premise every asset-set plugin is written against, stated once.
 
-    ``_build_context`` fills ``primary_returns`` from a portfolio's TWRR curve, from
+    ``build_execution_context`` fills ``primary_returns`` from a portfolio's TWRR curve, from
     a weighted backtest, or from the single asset of an ``asset`` scope. A weightless
     selection is none of those, so the field is empty — not zero-length by accident
     but because there is nothing to put in it. Every helper in
@@ -497,7 +502,7 @@ def test_an_asset_set_context_carries_no_aggregate_series_of_its_own():
 def test_asset_set_family_is_gated_on_the_prepared_set_not_on_the_absent_primary_series():
     """The history gate must count what these analytics actually consume.
 
-    ``_available_observations`` decides what ``min_observations`` is compared
+    ``available_observations`` decides what ``min_observations`` is compared
     against. Left on the default branch it returns ``context.n_observations``, which
     on an asset-set scope is **structurally zero** — see the test above — so every
     one of these plugins would be refused for insufficient history before its
@@ -521,13 +526,13 @@ def test_asset_set_family_is_gated_on_the_prepared_set_not_on_the_absent_primary
 
     for analytic_class in ASSET_SET_ANALYTIC_CLASSES:
         code = analytic_class.analytic_code
-        plan = _AnalyticPlan(
+        plan = AnalyticPlan(
             request=RiskAnalyticRequest(instance_id=f"instance-{code}", analytic_code=code, parameters=ASSET_SET_PARAMETERS[code]),
             analytic_class=analytic_class,
             analytic=analytic_class(),
             params=analytic_class.validate_params(ASSET_SET_PARAMETERS[code]),
         )
-        available = RiskService._available_observations(plan, context)
+        available = available_observations(plan, context)
         assert available == context.prepared_series.n_observations, code
         assert available >= analytic_class.min_observations, code
 
@@ -1304,15 +1309,15 @@ async def test_asset_set_comparison_accepts_a_selected_reference_through_the_ser
     service = RiskService(db=None)
     preparation_calls: list[dict] = []
 
-    async def counting_prepare(**kwargs):
+    async def counting_prepare(_db, **kwargs):
         preparation_calls.append(kwargs)
         return prepared
 
-    async def existing_asset_ids(asset_ids):
+    async def existing_asset_ids(_db, asset_ids):
         return set(asset_ids)
 
-    monkeypatch.setattr(service, "_prepare_asset_series", counting_prepare)
-    monkeypatch.setattr(service, "_existing_asset_ids", existing_asset_ids)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", counting_prepare)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", existing_asset_ids)
 
     response = await service.execute(user_id=1, request=request)
 
@@ -1986,15 +1991,14 @@ async def test_a_portfolio_result_keeps_exactly_the_issues_of_the_engine(lab_ass
     async def report_of_the_portfolio(_self, *, user_id, query):
         return report
 
-    async def accessible_broker_ids(_user_id):
+    async def accessible_broker_ids(_db, _user_id):
         return (1,)
 
     monkeypatch.setattr(PortfolioService, "get_report", report_of_the_portfolio)
+    monkeypatch.setattr(risk_scope_module, "load_accessible_broker_ids", accessible_broker_ids)
     request = risk_request({"kind": "portfolio"}, LAB_WINDOW, [{"instance_id": "correlation", "analytic_code": "correlation"}], mode="current_composition")
     async with lab_session() as db:
-        service = RiskService(db)
-        monkeypatch.setattr(service, "_accessible_broker_ids", accessible_broker_ids)
-        (result,) = (await service.execute(user_id=1, request=request)).items
+        (result,) = (await RiskService(db).execute(user_id=1, request=request)).items
 
     # The premise: the per-asset report of the lab's assets did reach this result.
     assert result.output is not None, result.error

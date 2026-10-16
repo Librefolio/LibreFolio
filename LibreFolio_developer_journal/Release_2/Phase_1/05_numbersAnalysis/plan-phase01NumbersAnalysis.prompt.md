@@ -4231,3 +4231,78 @@ Base letta: la mia HEAD `e36bc3016`. Le differenze di `dev_release2` sui file de
   > `frontend/`.
   >
   > **Backlog**: J-26 e J-27 chiuse.
+
+#### Checkpoint J-27 ✅ (2026-10-16) — tre commit del coordinatore (`7336722ad` fix, `985b10cbd` ponte, `e2a956999` journal), entrato in dev
+
+#### CP-9a — il servizio del rischio diviso per tema, con T-R1 (via del coordinatore 23:3x; base `e2a956999`)
+
+- ✅ **Passo 1 — il codice (2026-10-16)**.
+  > **Note implementazione**:
+  > - Generatore AST (`files/j/cp9a/split.py`): sposta le porzioni esatte del sorgente, cioè classi, funzioni, metodi
+  >   con decoratori e commenti sopra. I metodi diventano funzioni di modulo: `self.db` → `db`; `self._x(` → la funzione
+  >   nuova, con `db` in testa quando legge il database. Poi rinomina a confine di parola. Ogni modulo riceve tutto il
+  >   blocco d'import e `ruff --fix` toglie quelli inutili.
+  > - Risultato: `risk/service.py` passa da 1 456 a 336 righe; i moduli nuovi sono `plan.py` (47), `data_quality.py`
+  >   (~225), `scope.py` (~360), `replay.py` (152) e `results.py` (~485).
+  > - Grafo d'import aciclico: `plan` ← `data_quality` ← `replay`/`results` ← `service`; `scope` non dipende da altri.
+  > - Nomi che non oscurano le variabili locali di `execute`: `load_existing_asset_ids`,
+  >   `load_never_priced_asset_ids`, `build_execution_context`, `success_result`, `result_metadata`,
+  >   `unavailable_result`, `plan_data_quality`.
+  > - Le funzioni usate fra moduli hanno nomi pubblici; gli aiuti interni di `data_quality.py` tengono il trattino
+  >   basso.
+  > - **T-R1**: `with_asset_set_quality_issues` chiama `load_configured_fx_pair_sets(db)` della casa. L'import di
+  >   `PortfolioService` sparisce dal rischio.
+  > - `api/v1/risk.py` importa i due errori da `risk.scope`. `__all__` di `service.py` = `["RiskService"]`: nessuna
+  >   riesportazione.
+  > - Commenti e istruzioni aggiornati: `risk_plugins/asset_set_comparison/plugin.py:132` e
+  >   `.github/instructions/backend-risk.instructions.md:33-34`. L'`applyTo` `services/risk/**` copre già i moduli nuovi.
+  > - ruff (tutte le regole) e black puliti; l'import dei sei moduli riesce. `RiskService` ha `catalog`, `execute`,
+  >   `asset_eligibility` e `_every_asset_eligible`.
+  >
+  > **⚠️ Fuori pista**: il generatore spostava solo funzioni e classi, e ha perso tre assegnazioni di modulo:
+  > `_COMPOSITION_WARNING_CODES` (col suo commento), `_PRICE_EXCLUSION_REASONS` e `__all__`. Le ha segnalate ruff
+  > (F821). Rimesse a mano accanto a chi le legge: `results.py`, `data_quality.py` e `service.py`. Ripristinato l'import
+  > di `DataQualityExclusionReason`.
+- Test (test-author) e doc (`developer/backend/risk/architecture.md`, docs-writer) in parallelo, senza lanciare nulla.
+- ✅ **Passo 2 — test, doc e devWiki (2026-10-16)**.
+  > **Note implementazione**:
+  > - **Test** (test-author, nessuna esecuzione): sei file migrati; valori e asserzioni identici, nessuna asserzione
+  >   tolta.
+  >   - `test_risk_service.py`: import dai moduli nuovi; 15 `load_scope_inputs(db, …)` con un `db` locale (il servizio
+  >     teneva solo la sessione); 6 `build_execution_context`; 29 patch dall'istanza al modulo che legge il nome.
+  >   - `test_risk_asset_set.py` e `test_risk_eligibility.py`: `prepare_asset_series(db, …)` da `risk.scope`. Gli spy
+  >     condivisi (`loader_calls`, `holiday_table_plumbing`) coprono **tutti e due** i lettori, `risk.service` e
+  >     `risk.replay`.
+  >   - `test_risk_api.py`: gli errori da `risk.scope`.
+  >   - `test_risk_warnings_i18n.py`: la barriera di presenza va su `risk/{data_quality,results,scope}.py`.
+  >   - `test_data_quality_thresholds.py`: `CONSUMERS` guadagna `risk/data_quality.py`.
+  >   - Le patch nuove tengono `raising=True`: un modulo sbagliato fallisce forte.
+  >   - Io: due docstring di `test_weights.py` (il chiamante di `share_of` è ora `risk/scope`).
+  >   - ruff e black puliti sui 7 file.
+  > - **Doc** (docs-writer): `developer/backend/risk/architecture.md`.
+  >   - I 7 nomi vecchi puntano alla funzione e al modulo nuovi.
+  >   - La Source Map ha una riga per modulo; una frase dice T-R1.
+  >   - Ancore e numerazione dei passi invariate, così il link di `risk-lab.md` al passo 4 regge.
+  > - **`.github`**: in `backend-risk.instructions.md` la riga «Runtime» (:15) dice la mappa dei moduli. In
+  >   `skills/risk-tools/risk-plugin/SKILL.md:61` le decisioni legate al codice puntano a `risk/results.py` e
+  >   `risk/plan.py`.
+  > - **devWiki**: T-R1 lato rischio chiusa, nota datata in `decisions/financial-math-one-home.md` ed
+  >   `entities/portfolio-service.md`. Le righe «Source files» che mandavano comportamento spostato a `risk/service.py`
+  >   puntano al modulo nuovo, in 5 pagine. `check_source_paths.py` resta a 5 percorsi mancanti, tutti preesistenti.
+  >   Voce in `log.md`.
+  > - **Al coordinatore, non miei**:
+  >   - `TODO_FUTURI.md:141,169,178` nomina `RiskService._prepare_historical_replay_context`;
+  >   - T-R1 nella sezione T: il lato rischio è chiuso da CP-9a, resta `_compute_tx_fingerprint` di `portfolio_service`;
+  >   - `developer/api/overview.md`: «40 today», che sono 56, e l'elenco della regola 3 senza `schemas/portfolio.py` e
+  >     `schemas/tools.py`; non legato a CP-9a.
+- ✅ **Passo 3 — cancelli (2026-10-17, 00:03–00:27)**, `files/j/cp9a/runs.sh green` e `checks.sh` (corsia 6185, uno alla
+  volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi: `services risk-all` **903**, `services ai-export drawdown_context` **19**, `services financial-math`
+  >   **648**, `db populate --force`, `api risk` **15**;
+  > - `api sync`: `openapi.json` **identico byte per byte** a prima, quindi il contratto dell'API non cambia;
+  > - `mkdocs build` rigoroso e `check-links`: esito 0; `git diff --check` pulito; porta 6185 libera;
+  > - **niente perso e niente aggiunto**: per ogni file di test toccato, lo stesso numero di funzioni `test_` e di
+  >   `parametrize`/`pytest.param` della HEAD (13, 7, 33, 44, 34, 59, 6);
+  > - nessun nome vecchio rimasto in `backend/`, `scripts/`, `.github/` e doc per sviluppatori;
+  > - nessun numero cambia (riordino), quindi nessuna riga di CHANGELOG.
