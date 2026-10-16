@@ -8,7 +8,7 @@
  * An unmapped value gets no emoji rather than a borrowed one. The previous fallback was
  * the ETF emoji, which drew COMMODITY, REAL_ESTATE and Unknown as if they were ETFs.
  *
- * @module components/dashboard/allocationTypeEmoji
+ * @module features/dashboard/allocationTypeEmoji
  */
 
 const ETF_EMOJI = '📊';

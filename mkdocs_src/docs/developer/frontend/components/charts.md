@@ -37,7 +37,7 @@ export function namedPoint(date: string, value: number | null) {
 }
 ```
 
-**Partial vs Full update pattern** (`lib/components/dashboard/GrowthChart.svelte`, used by the
+**Partial vs Full update pattern** (`lib/features/dashboard/GrowthChart.svelte`, used by the
 Dashboard and Broker detail):
 
 ```typescript

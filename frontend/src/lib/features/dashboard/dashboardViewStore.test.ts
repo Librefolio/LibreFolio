@@ -53,7 +53,7 @@ async function freshPage(): Promise<FreshPage> {
     try {
         module = (await import(/* @vite-ignore */ VIEW_MODULE)) as Record<string, unknown>;
     } catch (error) {
-        throw new Error(`src/lib/stores/portfolio/dashboardViewStore.ts does not exist yet: the Dashboard's currency and broker filter restart from the defaults on every return (${String(error)})`);
+        throw new Error(`src/lib/features/dashboard/dashboardViewStore.ts does not exist yet: the Dashboard's currency and broker filter restart from the defaults on every return (${String(error)})`);
     }
     for (const name of ['readDashboardView', 'writeDashboardView']) {
         expect(typeof module[name], `dashboardViewStore exports no ${name}()`).toBe('function');

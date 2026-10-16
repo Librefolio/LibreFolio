@@ -27,7 +27,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {getCountryInfo, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
-    import {getAssetTypeEmoji} from '$lib/components/dashboard/allocationTypeEmoji';
+    import {getAssetTypeEmoji} from '$lib/features/dashboard/allocationTypeEmoji';
     import {assetTypeFamily, sectorI18nKey} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {currentLanguage} from '$lib/stores/app/language';

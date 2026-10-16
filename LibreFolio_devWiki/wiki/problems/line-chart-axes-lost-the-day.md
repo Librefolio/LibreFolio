@@ -71,10 +71,10 @@ etichette» and «Sì, procedi; e sistema anche il percorso non compatto nello s
 |------|------|
 | Axis policy and formatters | `frontend/src/lib/components/charts/responsiveXAxis.ts` |
 | Tests (sequences on the real ECharts) | `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` |
-| Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Growth chart | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | Line and price charts | `frontend/src/lib/components/charts/LineChart.svelte` |
 | Zoomed category axes (47-1), with `LineChart` | `frontend/src/lib/components/charts/CandlestickChart.svelte`, `frontend/src/lib/components/charts/PriceChartFull.svelte` |
 | Lot Y8 (47-1) | `LibreFolio_developer_journal/Release_2/Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` |
-| Allocation history | `frontend/src/lib/components/dashboard/AllocationHistoryChart.svelte` |
+| Allocation history | `frontend/src/lib/features/dashboard/AllocationHistoryChart.svelte` |
 | Lots charts (formatter replaced) | `frontend/src/lib/components/brokers/lots/LotWacPriceChart.svelte` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` |

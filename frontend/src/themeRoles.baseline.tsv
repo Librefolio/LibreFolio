@@ -58,17 +58,6 @@ lib/components/charts/SignalOptionContent.svelte	6
 lib/components/charts/SignalParamControl.svelte	24
 lib/components/charts/SignalStyleEditor.svelte	42
 lib/components/charts/SignalVisualLegend.svelte	16
-lib/components/dashboard/AllocationHistoryChart.svelte	4
-lib/components/dashboard/ContributionTable.svelte	14
-lib/components/dashboard/ExposureTable.svelte	2
-lib/components/dashboard/ExposureTreemap.svelte	10
-lib/components/dashboard/GrowthChart.svelte	86
-lib/components/dashboard/KpiCard.svelte	14
-lib/components/dashboard/KpiSection.svelte	50
-lib/components/dashboard/OtherPeriodEffectsTable.svelte	28
-lib/components/dashboard/PerformanceChart.svelte	4
-lib/components/dashboard/PositionsPanel.svelte	46
-lib/components/dashboard/YieldOnCostCell.svelte	8
 lib/components/files/FileGrid.svelte	1
 lib/components/fx/FxCard.svelte	63
 lib/components/fx/FxDataEditorSection.svelte	15
@@ -146,6 +135,17 @@ lib/components/ui/tabs/TabBar.svelte	20
 lib/components/ui/toolbar/PageToolbar.svelte	4
 lib/features/ai-export/AiExportMenu.svelte	12
 lib/features/ai-export/AiExportOptionsPanel.svelte	74
+lib/features/dashboard/AllocationHistoryChart.svelte	4
+lib/features/dashboard/ContributionTable.svelte	14
+lib/features/dashboard/ExposureTable.svelte	2
+lib/features/dashboard/ExposureTreemap.svelte	10
+lib/features/dashboard/GrowthChart.svelte	86
+lib/features/dashboard/KpiCard.svelte	14
+lib/features/dashboard/KpiSection.svelte	50
+lib/features/dashboard/OtherPeriodEffectsTable.svelte	28
+lib/features/dashboard/PerformanceChart.svelte	4
+lib/features/dashboard/PositionsPanel.svelte	46
+lib/features/dashboard/YieldOnCostCell.svelte	8
 lib/features/onboarding/components/OnboardingBootstrapBanner.svelte	10
 lib/features/onboarding/components/OnboardingBootstrapBlock.svelte	16
 lib/features/onboarding/components/OnboardingCoachmark.svelte	45	rgba(52,211,153,0.4)	rgba(52,211,153,0.95)

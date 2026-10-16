@@ -15,7 +15,7 @@
     import type {AllocationHistoryDimensions, PortfolioSummary} from '$lib/stores/portfolio/portfolioStore.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
-    import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
+    import AllocationHistoryChart from '$lib/features/dashboard/AllocationHistoryChart.svelte';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
     type AllocationTab = 'type' | 'sector' | 'geo';

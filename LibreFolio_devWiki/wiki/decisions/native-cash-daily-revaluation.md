@@ -159,7 +159,7 @@ the engine (coordinator, 2026-10-12; [[decisions/ai-export-version-bump-once-per
 | Step 10c: the ledger built for the run | `backend/app/services/financial_math/portfolio/engine.py` |
 | `_revalue_foreign_cash`, rate-change days in pre-frame and frame | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Cards, histories, contributions, the «FX on cash» row | `backend/app/services/portfolio_service.py` |
-| Row mapping (table, waterfall) | `frontend/src/lib/components/dashboard/OtherPeriodEffectsTable.svelte`, `frontend/src/lib/components/dashboard/PerformanceChart.svelte` |
+| Row mapping (table, waterfall) | `frontend/src/lib/features/dashboard/OtherPeriodEffectsTable.svelte`, `frontend/src/lib/features/dashboard/PerformanceChart.svelte` |
 | Module tests | `backend/test_scripts/test_services/test_financial_math/test_native_cash.py` |
 | Engine scenarios (B1–B12, B3w, B4v) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_foreign_cash_revaluation.py` |
 | Report-currency guard and its golden | `backend/test_scripts/test_services/test_financial/test_native_cash_guard.py`, `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json` |
