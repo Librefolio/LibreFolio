@@ -77,7 +77,20 @@ def _utc_now() -> datetime:
 
 
 def _response(report: RunReport) -> WakeSyncResponse:
-    jobs = [WakeSyncJob(name=job.name, status=job.status, started_at=job.started_at, duration_s=job.duration_s, items_ok=job.items_ok, items_err=job.items_err, error=job.error) for job in report.jobs]
+    jobs = [
+        WakeSyncJob(
+            name=job.name,
+            status=job.status,
+            started_at=job.started_at,
+            duration_s=job.duration_s,
+            items_ok=job.items_ok,
+            items_err=job.items_err,
+            error=job.error,
+            items_deferred=job.items_deferred,
+            retry_at=job.retry_at,
+        )
+        for job in report.jobs
+    ]
     return WakeSyncResponse(status=report.status, started_at=report.started_at, finished_at=report.finished_at, jobs=jobs)
 
 

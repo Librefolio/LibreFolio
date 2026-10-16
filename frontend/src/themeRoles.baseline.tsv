@@ -4,7 +4,7 @@
 # Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.
 # Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).
 lib/components/assets/AssetBrowseNav.svelte	6
-lib/components/assets/AssetCard.svelte	76
+lib/components/assets/AssetCard.svelte	70
 lib/components/assets/AssetCurrencyChangeModal.svelte	79
 lib/components/assets/AssetDataEditorSection.svelte	17
 lib/components/assets/AssetIcon.svelte	4
@@ -16,9 +16,9 @@ lib/components/assets/AssetModalIdentifiers.svelte	12
 lib/components/assets/AssetModalImportNotices.svelte	10
 lib/components/assets/AssetModalProvider.svelte	20
 lib/components/assets/AssetModalSelectionPrompts.svelte	38
-lib/components/assets/AssetPriceSummary.svelte	15
+lib/components/assets/AssetPriceSummary.svelte	13
 lib/components/assets/AssetSearchAutocomplete.svelte	57
-lib/components/assets/AssetTable.svelte	27	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
+lib/components/assets/AssetTable.svelte	23	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
 lib/components/assets/BoundaryDateModal.svelte	37
 lib/components/assets/CellDateRange.svelte	49
 lib/components/assets/DistributionDataImportModal.svelte	3
@@ -28,7 +28,6 @@ lib/components/assets/PriceDataImportModal.svelte	14
 lib/components/assets/ProviderAssignmentSection.svelte	95
 lib/components/assets/ProviderComparisonModal.svelte	60
 lib/components/assets/ScheduledInvestmentEditor.svelte	107	rgb(209 213 219)	rgb(71 85 105)
-lib/components/assets/providerProbe.ts	0	rgba(255,255,255,0.2)
 lib/components/brokers/BrokerCard.svelte	64
 lib/components/brokers/BrokerDiscoveryCard.svelte	9
 lib/components/brokers/BrokerForm.svelte	72
@@ -39,7 +38,7 @@ lib/components/brokers/BrokerSharingModal.svelte	10
 lib/components/brokers/BrokerSharingPanel.svelte	223
 lib/components/brokers/DeleteBrokerDialog.svelte	30
 lib/components/brokers/lots/LotComparisonChart.svelte	96
-lib/components/brokers/lots/LotCustodyModal.svelte	219
+lib/components/brokers/lots/LotCustodyModal.svelte	205
 lib/components/brokers/lots/LotDataQualityBanner.svelte	20
 lib/components/brokers/lots/LotGanttChart.svelte	36
 lib/components/brokers/lots/LotWacPriceChart.svelte	48
@@ -60,7 +59,6 @@ lib/components/charts/SignalParamControl.svelte	24
 lib/components/charts/SignalStyleEditor.svelte	42
 lib/components/charts/SignalVisualLegend.svelte	16
 lib/components/dashboard/AllocationHistoryChart.svelte	4
-lib/components/dashboard/AllocationPanel.svelte	42
 lib/components/dashboard/ContributionTable.svelte	14
 lib/components/dashboard/ExposureTable.svelte	2
 lib/components/dashboard/ExposureTreemap.svelte	10
@@ -81,36 +79,6 @@ lib/components/fx/FxSyncModal.svelte	2
 lib/components/fx/FxTable.svelte	9
 lib/components/layout/ChangelogModal.svelte	89	#1a4031	#4ade80	#6b7280	#d1d5db	#fef08a	rgba(0,0,0,0.05)	rgba(234,179,8,0.35)	rgba(255,255,255,0.08)
 lib/components/layout/ServerUnreachable.svelte	11
-lib/components/risk/AssetChip.svelte	2
-lib/components/risk/AssetRiskScenariosView.svelte	13
-lib/components/risk/AssetSetCorrelationSection.svelte	20
-lib/components/risk/AssetSetLossComparisonSection.svelte	26
-lib/components/risk/AssetSetRiskPanel.svelte	71
-lib/components/risk/AssetSetRiskReturnSection.svelte	22
-lib/components/risk/BenchmarkSelect.svelte	3
-lib/components/risk/CorrelationHeatmap.svelte	33
-lib/components/risk/CorrelationPairsList.svelte	25
-lib/components/risk/LabAssetPicker.svelte	8
-lib/components/risk/RiskAnalysisPanel.svelte	192
-lib/components/risk/RiskResultFrame.svelte	41
-lib/components/risk/RiskReturnLevel.svelte	14
-lib/components/risk/assetSetTable.ts	2
-lib/components/risk/levels/L1HowMuchItHurts.svelte	11
-lib/components/risk/levels/L2Diversification.svelte	23
-lib/components/risk/levels/L3Benchmark.svelte	2
-lib/components/risk/levels/L3RiskAdjusted.svelte	4
-lib/components/risk/levels/L4WhatIf.svelte	27
-lib/components/risk/levels/RiskLevelSection.svelte	29
-lib/components/risk/levels/RiskLevelsPanel.svelte	6
-lib/components/risk/levels/RiskPanelHeader.svelte	22
-lib/components/risk/levels/RiskPartialNotice.svelte	20
-lib/components/risk/levels/SimulationProvenance.svelte	20
-lib/components/risk/levels/l1/ReturnHistogram.svelte	16
-lib/components/risk/levels/l1/UnderwaterChart.svelte	8
-lib/components/risk/levels/l4/L4Replay.svelte	29
-lib/components/risk/levels/l4/L4Shock.svelte	25
-lib/components/risk/levels/l4/L4Simulation.svelte	45
-lib/components/risk/levels/l4/TornadoChart.svelte	4
 lib/components/table/ColumnVisibilityToggle.svelte	27
 lib/components/table/DataTableCellContent.svelte	4
 lib/components/table/SelectionBar.svelte	23
@@ -130,7 +98,7 @@ lib/components/transactions/import/FixFlaggedStep.svelte	205
 lib/components/transactions/import/GapFixStep.svelte	95
 lib/components/transactions/import/GapFixToggle.svelte	4
 lib/components/transactions/import/ImportAssetPicker.svelte	20
-lib/components/transactions/import/ReportSetCard.svelte	79
+lib/components/transactions/import/ReportSetCard.svelte	75
 lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1
 lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
 lib/components/transactions/modals/ParseDetailModal.svelte	141
@@ -143,7 +111,7 @@ lib/components/transactions/modals/TransactionFormModal.svelte	35
 lib/components/transactions/modals/TransactionPickerModal.svelte	20
 lib/components/transactions/shared/TransactionResultBanner.svelte	18
 lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
-lib/components/transactions/wac/WacPreviewSection.svelte	96
+lib/components/transactions/wac/WacPreviewSection.svelte	94
 lib/components/transactions/wizard/AnalyzeStep.svelte	67
 lib/components/transactions/wizard/DuplicatesStep.svelte	77
 lib/components/transactions/wizard/ReviewStep.svelte	86
@@ -167,31 +135,13 @@ lib/components/ui/display/KpiMetricBar.svelte	18
 lib/components/ui/display/RiskMetricCard.svelte	16
 lib/components/ui/feedback/InfoBanner.svelte	32
 lib/components/ui/feedback/LoadingSpinner.svelte	0	#10b981	#1a4031	#374151	#6b7280	#9ca3af	#e5e7eb
-lib/components/ui/feedback/ToastContainer.svelte	3
-lib/components/ui/feedback/Tooltip.svelte	0	#1f2937	#61666f	#93c5fd	rgb(0 0 0/0.1)×2	white
-lib/components/ui/input/DistributionEditor.svelte	30
 lib/components/ui/input/ExactDecimalInput.svelte	10
 lib/components/ui/input/ExactQuantityInput.svelte	0	oklch(0.637 0.237 25.331/0.7)	oklch(0.765 0.177 163.223/0.7)
-lib/components/ui/input/TagInput.svelte	19	#334155×2	#e2e8f0×2
 lib/components/ui/modals/ConfirmModal.svelte	4
 lib/components/ui/modals/ModalBase.svelte	0	#1e293b	rgba(0,0,0,0.25)	rgba(0,0,0,0.5)×2	white
 lib/components/ui/modals/PageSyncModal.svelte	2
 lib/components/ui/modals/SyncModalBase.svelte	66
 lib/components/ui/modals/SyncResultRow.svelte	22
-lib/components/ui/select/AssetPickerPanel.svelte	107
-lib/components/ui/select/AssetSelect.svelte	28
-lib/components/ui/select/AssetTypeSelect.svelte	8
-lib/components/ui/select/CheckMenu.svelte	36
-lib/components/ui/select/CountrySearchSelect.svelte	10
-lib/components/ui/select/CurrencySearchSelect.svelte	13
-lib/components/ui/select/FxProviderSelect.svelte	148	#fbbf24
-lib/components/ui/select/ImportPluginSelect.svelte	4
-lib/components/ui/select/SearchSelect.svelte	63
-lib/components/ui/select/SectorSearchSelect.svelte	6
-lib/components/ui/select/SelectPopover.svelte	8
-lib/components/ui/select/SimpleSelect.svelte	40
-lib/components/ui/select/TreeSelect.svelte	47
-lib/components/ui/select/UserSearchSelect.svelte	10
 lib/components/ui/tabs/TabBar.svelte	20
 lib/components/ui/toolbar/PageToolbar.svelte	4
 lib/features/ai-export/AiExportMenu.svelte	12
@@ -203,6 +153,36 @@ lib/features/onboarding/components/OnboardingIntroScene.svelte	32
 lib/features/onboarding/components/OnboardingReplaySection.svelte	66
 lib/features/onboarding/components/WelcomeForm.svelte	39
 lib/features/onboarding/components/WelcomePage.svelte	28
+lib/features/risk/AssetChip.svelte	2
+lib/features/risk/AssetRiskScenariosView.svelte	13
+lib/features/risk/AssetSetCorrelationSection.svelte	20
+lib/features/risk/AssetSetLossComparisonSection.svelte	26
+lib/features/risk/AssetSetRiskPanel.svelte	71
+lib/features/risk/AssetSetRiskReturnSection.svelte	22
+lib/features/risk/BenchmarkSelect.svelte	3
+lib/features/risk/CorrelationHeatmap.svelte	33
+lib/features/risk/CorrelationPairsList.svelte	25
+lib/features/risk/LabAssetPicker.svelte	8
+lib/features/risk/RiskAnalysisPanel.svelte	192
+lib/features/risk/RiskResultFrame.svelte	41
+lib/features/risk/RiskReturnLevel.svelte	14
+lib/features/risk/assetSetTable.ts	2
+lib/features/risk/levels/L1HowMuchItHurts.svelte	11
+lib/features/risk/levels/L2Diversification.svelte	23
+lib/features/risk/levels/L3Benchmark.svelte	2
+lib/features/risk/levels/L3RiskAdjusted.svelte	4
+lib/features/risk/levels/L4WhatIf.svelte	27
+lib/features/risk/levels/RiskLevelSection.svelte	29
+lib/features/risk/levels/RiskLevelsPanel.svelte	6
+lib/features/risk/levels/RiskPanelHeader.svelte	22
+lib/features/risk/levels/RiskPartialNotice.svelte	20
+lib/features/risk/levels/SimulationProvenance.svelte	20
+lib/features/risk/levels/l1/ReturnHistogram.svelte	16
+lib/features/risk/levels/l1/UnderwaterChart.svelte	8
+lib/features/risk/levels/l4/L4Replay.svelte	29
+lib/features/risk/levels/l4/L4Shock.svelte	25
+lib/features/risk/levels/l4/L4Simulation.svelte	45
+lib/features/risk/levels/l4/TornadoChart.svelte	4
 lib/features/settings/CachePanel.svelte	34
 lib/features/settings/PasswordChangeModal.svelte	31
 lib/features/settings/SchedulerConfigModal.svelte	112
@@ -270,10 +250,9 @@ lib/features/tools/pac-allocator/planner/ui.ts	118
 lib/features/update-check/AskAdminModal.svelte	27
 lib/features/update-check/UpdateAvailableModal.svelte	25	#334155×2	#e2e8f0×2
 lib/stores/app/themeStore.ts	0	#1b4334×2
-lib/theme/toneClasses.ts	176
+lib/theme/toneClasses.ts	22
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
-lib/utils/currency/fxConversionHelper.ts	6
 lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	6
 routes/(app)/assets/+page.svelte	234

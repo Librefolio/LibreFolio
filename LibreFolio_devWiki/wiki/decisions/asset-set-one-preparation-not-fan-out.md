@@ -47,5 +47,5 @@ does not.
 |------|------|
 | `AssetSetRiskScope` | `backend/app/schemas/risk.py` |
 | One of the asset-set plugins | `backend/app/services/risk_plugins/asset_set_kpi/plugin.py` |
-| The Lab's L1° and L3° | `frontend/src/lib/components/risk/AssetSetComparisonLevels.svelte` |
+| The Lab's L1° and L3° | `frontend/src/lib/features/risk/AssetSetComparisonLevels.svelte` |
 | Journal (the contract) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/A-contratto-asset-set.md` |

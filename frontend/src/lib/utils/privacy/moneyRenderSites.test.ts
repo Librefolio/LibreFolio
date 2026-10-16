@@ -172,7 +172,7 @@ function scan(): Hit[] {
  */
 const REGISTRY: Site[] = [
     {
-        file: 'lib/components/risk/riskAnalysisHelpers.ts',
+        file: 'lib/features/risk/riskAnalysisHelpers.ts',
         snippet: "return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));",
         status: 'masked',
         why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
@@ -237,7 +237,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(hits.length).toBeGreaterThanOrEqual(REGISTRY.length);
         expect(hits.filter((h) => h.form === 'A').length).toBeGreaterThan(0);
         expect(hits.filter((h) => h.form === 'B').length).toBeGreaterThan(0);
-        expect(hits.map((h) => h.file)).toContain('lib/components/risk/riskAnalysisHelpers.ts');
+        expect(hits.map((h) => h.file)).toContain('lib/features/risk/riskAnalysisHelpers.ts');
     });
 
     it('registers every site that renders money outside the channel', () => {
