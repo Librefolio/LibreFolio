@@ -589,7 +589,7 @@ row's `cost_fields()`, so the update check above refuses it with
 `costBasisRequired` (operation `update`, `field` `cost_basis_override`), and the
 stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
 `TRANSFER` keeps the cost decision 47 gives it (see
-[Split & Promote](split_promote.md#transfer-giving-leg)). It is ignored too when
+[Split & Promote](split_promote.md)). It is ignored too when
 the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
 own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
 `null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
