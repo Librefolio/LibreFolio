@@ -1321,7 +1321,7 @@ the check's test value, and the Svelte scope class (`svelte-1utaimv`) belongs to
   "to": "#ff00aa",
   "occurrences": [
     {"file": "src/lib/components/table/DataTable.svelte", "line": 1607, "raw": "#64748b", "why": "matched-rule"},
-    {"file": "src/lib/components/transactions/TransactionsTable.svelte", "line": 993, "raw": "tx-table", "why": "testid"}
+    {"file": "src/lib/features/transactions/TransactionsTable.svelte", "line": 993, "raw": "tx-table", "why": "testid"}
   ],
   "property": "color",
   "anchor": {
@@ -1338,7 +1338,7 @@ the check's test value, and the Svelte scope class (`svelte-1utaimv`) belongs to
     "source": {"kind": "rule-literal", "selector": "th.svelte-1utaimv", "var": null, "class": null},
     "candidates": [
       {"file": "src/lib/components/table/DataTable.svelte", "line": 1607, "why": "matched-rule", "needle": "#64748b"},
-      {"file": "src/lib/components/transactions/TransactionsTable.svelte", "line": 993, "why": "testid", "needle": "tx-table"}
+      {"file": "src/lib/features/transactions/TransactionsTable.svelte", "line": 993, "why": "testid", "needle": "tx-table"}
     ]
   }
 }
@@ -1365,7 +1365,7 @@ Where to bind the new variable:
 | File | Line | Expected text | Why |
 |---|---:|---|---|
 | `src/lib/components/table/DataTable.svelte` | 1607 | `#64748b` | matched-rule |
-| `src/lib/components/transactions/TransactionsTable.svelte` | 993 | `tx-table` | testid |
+| `src/lib/features/transactions/TransactionsTable.svelte` | 993 | `tx-table` | testid |
 ```
 
 ### 📥 Import

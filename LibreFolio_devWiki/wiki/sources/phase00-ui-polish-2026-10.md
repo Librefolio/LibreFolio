@@ -53,6 +53,6 @@ and resumed at 19:24.
 | Role | Path |
 |------|------|
 | Plan 48 | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
-| The wrong-broker modal | `frontend/src/lib/components/transactions/modals/ImportBrokerMismatchModal.svelte` |
+| The wrong-broker modal | `frontend/src/lib/features/transactions/import/ImportBrokerMismatchModal.svelte` |
 | Its E2E | `frontend/e2e/transactions/tx-import-broker-mismatch.spec.ts` |
 | Backlog (48-1, C-56, C-57, C-63) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

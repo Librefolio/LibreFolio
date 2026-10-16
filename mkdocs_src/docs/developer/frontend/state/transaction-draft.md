@@ -8,7 +8,7 @@ This document describes how LibreFolio manages the transient staging state of tr
 
 The staging state acts as a local in-memory sandbox where users can add, edit, clone, split, promote, and delete transactions. Rather than immediately saving changes, the operations are staged in the `TransactionBulkModal` as a list of operations. 
 
-The workspace is `TransactionBulkModal.svelte`. It owns the staging state, the validation and the commit, and renders its banners and its toolbar through `TxBulkBanners` and `TxBulkToolbar` (`frontend/src/lib/components/transactions/bulk/`), which read that state as props, write back only what they bind, and call the modal's handlers.
+The workspace is `TransactionBulkModal.svelte`. It owns the staging state, the validation and the commit, and renders its banners and its toolbar through `TxBulkBanners` and `TxBulkToolbar` (`frontend/src/lib/features/transactions/bulk/`), which read that state as props, write back only what they bind, and call the modal's handlers.
 
 ```mermaid
 ---
@@ -38,7 +38,7 @@ graph TD
 
 ## 🏷️ The `PendingOp` Tagged Union
 
-LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union**, declared with `DraftFields` in `components/transactions/bulk/txBulkTypes.ts` and held by `TransactionBulkModal.svelte`, that separates metadata from pure transaction data fields (`DraftFields`).
+LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union**, declared with `DraftFields` in `features/transactions/bulk/txBulkTypes.ts` and held by `TransactionBulkModal.svelte`, that separates metadata from pure transaction data fields (`DraftFields`).
 
 ### State Schema
 
@@ -119,7 +119,7 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
 ### 💡 Promote suggestions {: #promote-suggestions }
 
 The workspace looks for the two halves of a transfer or an exchange and offers to promote them
-(`TransactionBulkModal.svelte`, with the pure helpers of `lib/utils/transactions/promoteSuggest.ts`):
+(`TransactionBulkModal.svelte`, with the pure helpers of `lib/features/transactions/bulk/promoteSuggest.ts`):
 
 * **The green banner** (`promote-suggest-banner`) lists `bannerSuggestions`: pairs of standalone
   rows that are both in the workspace — two new rows, two saved rows, or a new row and a saved one
@@ -277,7 +277,7 @@ Upon receiving the intent, `TransactionBulkModal` resolves the actual row data d
 When running a file import (`action: 'import'`), LibreFolio's backend BRIM parser plugins might accept a transaction but leave some fields incomplete if they cannot be computed automatically (e.g. cost basis on complex corporate mergers). These are returned to the frontend as a list of `field_todos` (`BRIMFieldTodo` schema).
 
 On the frontend, these are loaded into the bulk modal grid as an array of `ImportTodo` objects
-(`lib/utils/transactions/txPayloadHelpers.ts`) linked to the staging row:
+(`lib/features/transactions/txPayloadHelpers.ts`) linked to the staging row:
 
 ```typescript
 export interface ImportTodo {
@@ -307,7 +307,7 @@ export interface ImportTodo {
    with **Save anyway** and **Review**.
 5. **Resolution:** the user opens the row in the nested `TransactionFormModal` (double-click or the
    row action) and applies it. Applying re-checks the row's todos with `remainingTodos()`
-   (`lib/utils/transactions/bulkTodos.ts`): a todo is resolved when its field now holds a value.
+   (`lib/features/transactions/bulk/bulkTodos.ts`): a todo is resolved when its field now holds a value.
    A missing cost basis has a second answer: Auto (WAC) mode, where the backend computes the cost.
    Applying the form with **Auto** selected clears the "enter the cost" todo
    (`cost_basis_override`) even when Auto was already the mode, because `remainingTodos()` looks

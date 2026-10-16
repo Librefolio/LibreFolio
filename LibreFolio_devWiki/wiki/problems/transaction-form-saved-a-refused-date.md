@@ -62,7 +62,7 @@ user sees in red is the state, whatever the payload says.
 | Role | Path |
 |------|------|
 | The date picker (`onvaliditychange`) | `frontend/src/lib/components/ui/date/SingleDatePicker.svelte` |
-| The form (`hasLocalErrors`, `validateNow`) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| The form (`hasLocalErrors`, `validateNow`) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | E2E | `frontend/e2e/transactions/transactions-modals.spec.ts` |
 | User guide | `mkdocs_src/docs/user/transactions/form.en.md` |
 | V's lot (§12.15) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

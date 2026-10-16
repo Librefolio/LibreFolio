@@ -17,7 +17,7 @@ import {buildAnchor, classify, firstClass, keyOfColor, keysOf, pickView, ruleLit
 import type {CatalogLiteral, CatalogPaletteEntry, CatalogVar, CatalogVarDef, ColorCatalog, PickedChart, PickedDeclaration, PickedElement, PickedProperty} from './types';
 
 const DATA_TABLE = 'src/lib/components/table/DataTable.svelte';
-const TX_TABLE = 'src/lib/components/transactions/TransactionsTable.svelte';
+const TX_TABLE = 'src/lib/features/transactions/TransactionsTable.svelte';
 const APP_CSS = 'src/app.css';
 const ELSEWHERE = 'src/lib/components/other/Elsewhere.svelte';
 const GROWTH = 'src/lib/features/dashboard/GrowthChart.svelte';

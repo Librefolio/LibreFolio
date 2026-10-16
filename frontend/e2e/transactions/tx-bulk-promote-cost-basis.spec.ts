@@ -7,7 +7,7 @@
  * needs a cost basis like any other receiver, unless it is in Auto mode, and without one the
  * whole batch is refused. A promoted NEW row is checked as the create it is — `{operation:
  * 'create', index: <its create index>}` — which the editor maps onto its rows with
- * `resolveBulkIssueRows` (`$lib/utils/transactions/bulkDisplay.ts`): `create:<i>` names the new
+ * `resolveBulkIssueRows` (`$lib/features/transactions/bulk/bulkDisplay.ts`): `create:<i>` names the new
  * row, and the jump lands on the one row the pair is shown as (the other half is its hidden
  * partner). A promoted SAVED row is checked on the promote that paired it — `{operation:
  * 'promote', index: <promote index>, ref_id: <its id>}` (`_check_promoted_saved_cost_basis`) —
@@ -27,7 +27,7 @@
  *        `create` issue, and the jump lands on PC1's pair, not on the other one;
  *   PC4  (the banner, not the save) a new +5 beside a saved −3 and a saved −5 of the same asset:
  *        the banner offers one merge only, the −5's, never the crossed −3 / +5 the backend's
- *        promote rule refuses (`assetQuantitiesCancel`, `$lib/utils/transactions/promoteSuggest.ts`);
+ *        promote rule refuses (`assetQuantitiesCancel`, `$lib/features/transactions/bulk/promoteSuggest.ts`);
  *   PC5  (the selection toolbar, not the save) two new ADJUSTMENTs, −123456789012.123456 on A and
  *        +123456789012.123457 on B, opposite as doubles and not as decimals → neither the banner nor
  *        the selection toolbar offers the merge; the regression test of C-46, see «PC5» below;
@@ -59,7 +59,7 @@
  * Since lot 42 (D2) a row linked to an asset event is never promoted: no promote target —
  * TRANSFER, CASH_TRANSFER, FX_CONVERSION — accepts the link (`event_compatible: false`). The
  * editor offers no merge for it: the banner, «Merge all» and the selection toolbar all ask
- * `findPromoteMatch` (`$lib/stores/transactions/transactionTypeStore.ts`), and `buildPromoteCtx`
+ * `findPromoteMatch` (`$lib/features/transactions/transactionTypeStore.ts`), and `buildPromoteCtx`
  * hands it each row's `asset_event_id`. A promote sent anyway is refused by the backend with
  * `eventTypeIncompatible` on the promote (`apply_promotes` → `_promoted_state_issues`; backend
  * test `test_promote_split_linked_adjustment_is_rejected`) and is not applied, so the saved-row

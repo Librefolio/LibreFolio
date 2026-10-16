@@ -88,7 +88,7 @@ Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 f
 | Vitest coverage provider | `frontend/vitest.config.ts` — `provider: 'istanbul'` (V8 reports an **empty branch map** for a Svelte template; that is the whole reason for this page) |
 | Report classification | `scripts/test_runner/_coverage.py` — `coverage-report --lang js` |
 | Developer docs, «Why istanbul, and no monocart any more» | `mkdocs_src/docs/developer/test-walkthrough/coverage-model.md` |
-| Extraction precedent | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Extraction precedent | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
 > has never existed** — it was proposal B.3 of `plan-p7-js-coverage.md:227`, and the
