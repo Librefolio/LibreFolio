@@ -4,7 +4,8 @@
  * ECharts draws on a canvas from options built in TypeScript, so a role (`--lf-*`) reaches a chart only as a colour
  * string computed when the option is built. This module is that read: the GR4 shades take the card, the correlation
  * scale takes danger, panel and info, a readable text takes the primary and the inverse text (DV, the designer's round
- * 2). T widens the list of roles to every chart neutral in B4, with the parity gate below it.
+ * 2), the PAC's ideal weights take the secondary text (TD-1). T widens the list of roles to every chart neutral in B4,
+ * with the parity gate below it.
  *
  * - **Where it reads: the chart's own element.** tokens.css recomputes the roles in the `.light`/`.dark` subtrees, so a
  *   chart inside a forced subtree, or in the Lab's preview, reads its roles from its own element, not from `<html>`.
@@ -26,13 +27,14 @@ import {readableOn} from './contrast';
 import {themed, type ThemePair} from './themePair';
 
 /** The roles the charts read. */
-export type ChartRole = '--lf-surface-card' | '--lf-surface-panel' | '--lf-text-primary' | '--lf-text-on-inverse' | '--lf-danger' | '--lf-info';
+export type ChartRole = '--lf-surface-card' | '--lf-surface-panel' | '--lf-text-primary' | '--lf-text-secondary' | '--lf-text-on-inverse' | '--lf-danger' | '--lf-info';
 
 /** tokens.css, resolved per theme: what a role reads where the stylesheet is not loaded. Kept equal by the parity gate. */
 const STAND_INS: Readonly<Record<ChartRole, ThemePair>> = {
     '--lf-surface-card': {light: '#fafbfa', dark: '#151b19'},
     '--lf-surface-panel': {light: '#e8ece9', dark: '#1b2421'},
     '--lf-text-primary': {light: '#1c2420', dark: '#edf2f0'},
+    '--lf-text-secondary': {light: '#4a5550', dark: '#9ba8a2'},
     '--lf-text-on-inverse': {light: '#fafbfa', dark: '#151b19'},
     '--lf-danger': {light: '#c82838', dark: '#ff7a86'},
     '--lf-info': {light: '#155eef', dark: '#3f86fa'},

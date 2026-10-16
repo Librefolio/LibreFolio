@@ -260,6 +260,8 @@ import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
 import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {CATEGORY_SEQUENCE, categoryColor} from '$lib/theme/chartCategories';
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import GrowthChart from './GrowthChart.svelte';
 
 /**
@@ -4711,5 +4713,78 @@ describe('GrowthChart — the running period sits on its last day with data (pla
         expectSameDay(startDay, startPoint, 'window start, on the point of the week holding 2020-02-20');
         expectSameDay(endDay, endPoint, 'window end, on the point of the week holding 2024-08-07');
         expect(endPoint, 'the point of the week holding 2024-08-07 is inside the window').toBeLessThanOrEqual(endDay + 0.01);
+    });
+});
+
+// =============================================================================
+// C4 (DV, TD-1b) — a Designer Lab edit reaches the broker lines
+// =============================================================================
+
+/**
+ * With two or more brokers in scope, the P&L line draws one line per broker in the colours of the first eight asset types,
+ * by the broker's index (GR5), read through `categoryColor` at each draw (`growthBrokerColor`). A Designer Lab edit of a
+ * category colour (C3) must reach those lines when the Lab says the colours changed (C4, `notifyChartColorsChange`).
+ *
+ * WHAT BREAKS. A redraw in the same mode, theme, masking and series takes the data-only path, which keeps the line colours
+ * of the last full build: the edit would show at the next theme switch, not at the edit. So the chart answers the signal
+ * with a full rebuild.
+ *
+ * THE EDIT is published as the Lab publishes it, on `window.__lfDesignerLab`, behind the `__LF_DESIGNER_LAB__` switch, as
+ * in `chartCategories.test.ts`. Both are taken back by hand: `vi.unstubAllGlobals()` would also take back this file's
+ * `localStorage`. The colours are compared with `categoryColor` read before the edit — the table's — never copied.
+ */
+describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {timeout: 30_000}, () => {
+    /** The edited colour: this file's own, in no table. */
+    const EDITED = '#7a1f5c';
+
+    /** The broker lines of a full option, line by line: the broker each one draws, and its line and item colours. */
+    function brokerLineColours(option: FullOption): string[] {
+        const lines = option.series.slice(FRAME.pnlLine.length) as Array<{name?: string; lineStyle?: {color?: string}; itemStyle?: {color?: string}}>;
+        return lines.map((line) => `${line.name}: line ${line.lineStyle?.color}, item ${line.itemStyle?.color}`);
+    }
+
+    /** The same, as expected: the line of broker `index` in `colours[index]`. */
+    function linesIn(colours: readonly string[]): string[] {
+        return BROKER_NAMES.map((name, index) => `${name}: line ${colours[index]}, item ${colours[index]}`);
+    }
+
+    it('rebuilds the P&L line in full on notifyChartColorsChange(): the line of the edited category takes the edited colour, the other keeps the table’s', async () => {
+        expect(document.documentElement.classList.contains('dark'), 'premise: the light theme').toBe(false);
+        // The table's colours, read before any edit: line i wears the i-th of the first eight asset types.
+        const keys = BROKER_NAMES.map((_name, index) => CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length]);
+        const table = keys.map((key) => categoryColor('type', key, false));
+        const editedKey = keys[1];
+        expect(new Set([...table, EDITED]).size, 'control: the lines and the edit, all distinct colours').toBe(table.length + 1);
+
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: BROKER_PNL_HISTORY, baseCurrency: BASE_CURRENCY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        const drawn = await waitForPnlLineWithBrokers(BROKER_NAMES);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        expect(brokerLineColours(drawn), 'control: before any edit, each line in the table’s colour').toEqual(linesIn(table));
+
+        // Premise: under Vitest the switch is not defined and no hook is published, so deleting both restores what was found.
+        expect(Object.getOwnPropertyDescriptor(globalThis, '__LF_DESIGNER_LAB__'), 'premise: no define under Vitest').toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(globalThis, '__lfDesignerLab'), 'premise: no Lab hook published').toBeUndefined();
+        const hook = vi.fn((kind: string, key: string) => (kind === 'type' && key === editedKey ? EDITED : null));
+        vi.stubGlobal('__LF_DESIGNER_LAB__', true);
+        vi.stubGlobal('__lfDesignerLab', {categoryColor: hook});
+        try {
+            const before = setOptionCount();
+            // The edit alone redraws nothing: a colour is read when the option is built, and only the signal says it changed.
+            flushSync();
+            await tick();
+            expect(setOptionCount(), 'the chart redrew before the notification').toBe(before);
+            expect(brokerLineColours(latestFullOption()), 'control: before the notification, the table’s colours').toEqual(linesIn(table));
+
+            notifyChartColorsChange();
+
+            const rebuilt = await fullOptionAfter(before);
+            expect(brokerLineColours(rebuilt), 'the broker lines of the full rebuild').toEqual(linesIn(keys.map((key, index) => (key === editedKey ? EDITED : table[index]))));
+            expect(hook, 'the edit was read through the C3 hook, with the chart’s own arguments').toHaveBeenCalledWith('type', editedKey, false);
+        } finally {
+            Reflect.deleteProperty(globalThis, '__LF_DESIGNER_LAB__');
+            Reflect.deleteProperty(globalThis, '__lfDesignerLab');
+        }
     });
 });
