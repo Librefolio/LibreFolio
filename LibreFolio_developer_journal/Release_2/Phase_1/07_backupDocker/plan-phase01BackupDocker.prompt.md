@@ -2525,7 +2525,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   - lo scatto della galleria lo concorda lui con i colori quando B5b è pronto;
 >   - l'ordine resta B3, B5, B4.
 
-### B3 applicato e tolto; `all-backend` di B2 (2026-10-16, 01:33-) — in corso
+### B3 applicato e tolto; `all-backend` di B2 (2026-10-16, 01:33-02:50) ✅ — B2 entrato
 
 > - **01:33, ripresa**: «applica B3 e lancia le prove leggere; il tuo `all-backend` per B2 fra ~15 minuti». Applicato
 >   B3 (moduli nuovi, script di modifica, registrazione dei quattro file); test-author 1 ha aggiornato i due test
@@ -2561,6 +2561,236 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `restart.py`, le modifiche in `paths`, `restore_jobs`, schemi, API, CLI, `app_lifespan` con le due righe dichiarate),
 >   la registrazione dei quattro file, i due test registrati che B3 rompe, il verde mirato, `api sync`, `front check`, la
 >   doc (docs-writer).
+> - **`all-backend` di B2 su `94a95284d`** (slot pesante 1, 01:48:55-02:30:00, 41 min, `--workers 2`, `nice -n 10`,
+>   corsia 6187; log `/tmp/libreFolio_b_all_backend_94a95.log`): **verde**, 7/7 categorie, **18 359 passati, 29 saltati,
+>   0 falliti**:
+>   - 4 passate parallele (147, 47, 11 e 65 unità, 2 worker): 16 180 passati e 4 saltati;
+>   - sessioni sequenziali e consolidate: 2 179 passati e 25 saltati (26 riepiloghi pytest); il DB 18/18.
+>
+>   Dopo: porta 6187 libera, `backups/.jobs` vuota. Risultato al coordinatore alle 02:31.
+> - **B3 rimesso** (02:31, `restore_b3.sh`: 19 file uguali alla copia salvata). Nel worktree: ruff pulito sui file di B3
+>   (i 43 rilievi di `dev.py` sono già in HEAD); black segnala solo righe già in HEAD (`dev.py`, i due `print_info` dei
+>   cataloghi); `check-orphans`: tutti i 335 file del backend registrati e raggiungibili.
+> - **02:33, aggiornamento di base per l'ingresso di B2**: il coordinatore committa il piano (`e05ccd1b4`) e chiede il
+>   worktree pulito per un merge con 4 conflitti di doc (contro Z4, Z3, A6d). B3 di nuovo fuori: questa volta come
+>   **patch** dei 13 file tracciati (`files/b3-wip/b3-tracked.patch`, 885 righe) più i 6 file nuovi della copia salvata,
+>   perché dopo il merge una copia dei file sovrascriverebbe le sue modifiche. Worktree pulito su `e05ccd1b4`.
+> - **Merge di base `db384eaf5`** (aperto dal coordinatore alle 02:34; Z3, Z4, A6d e altro): 4 file di doc in
+>   conflitto, 7 blocchi, risolti spostando le righe dei due lati (`files/b3-wip`, script in Python), in stage solo quei 4:
+>   - `configuration.en.md`: le nostre due righe (`BACKUP_DOWNLOAD_TOKEN`, `BACKUP_MAX_UPLOAD_MB`) poi `WAKE_TOKEN` di Z;
+>     in «Secrets» la frase di Z senza numero (richiesta del coordinatore); nella tabella dei segreti
+>     `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` poi la riga di Z;
+>   - `hosting_providers.en.md`: i due punti di «For Each Instance» (token del pannello, poi token del risveglio);
+>   - `admin/index.en.md`: la nostra riga «Hosting for Others», più completa, più «Sleep and Wake» di Z;
+>   - `security.md`, endpoint privati: il paragrafo di Z (due tipi di rotta con un token proprio) più una frase con il
+>     nostro dettaglio sul pannello (`require_panel_token` a tempo costante, `401`, `404` senza token); elenco del
+>     blocco: il lato di `dev_release2`, che copre già backup e risveglio.
+>
+>   File fusi da soli e cambiati dai due lati, riletti: `.env.example` (il blocco del risveglio di Z, prima della nostra
+>   sezione), l'indice del backlog (solo altre sezioni), i 3 cataloghi del runner (solo voci di altri, nessun nome che
+>   scontra B2 o B3).
+> - **Prove sulla revisione combinata** (02:35-02:43, `/tmp/libreFolio_b_mergedb3.sh`, una alla volta, `nice`, carico
+>   sotto 70): `api backup-restore` 114, `services backup-staging` 118, `services config-env-example` 36, `mkdocs build`
+>   stretta con 0 avvisi, `check-links` 96 validi, `check-orphans` 342 file del backend tutti raggiungibili. Porta libera.
+> - **Merge `db384eaf5` committato dal coordinatore**: `cc439f696`. Dentro c'è anche CP-15 di J (`fd41a0996`):
+>   `financial_math/ledger_totals.py` (`CONTROL_TOTALS_VERSION = 1`, `ControlTotals` con `to_json()`/`from_json()`,
+>   `compute_control_totals(session)`), da usare quando il lotto arriva a manifest e controllo (TODO(CP-15) dell'e2e).
+> - **Secondo merge, `a2f658097`** (A6d e A6e entrati nel frattempo; aperto dal coordinatore alle 02:44, B3 ancora
+>   fuori): un conflitto, `security.md`, «Private Endpoints». Tenute la frase di A sulle impostazioni globali (lette da
+>   ogni utente con una sessione, scritte solo da un admin; la pagina di login legge `/system/instance`), quella di Z sui
+>   due tipi di rotta con un token proprio e la nostra sul pannello, presa alla lettera dal nostro lato. In stage solo
+>   quel file. Fusi da soli e cambiati dai due lati: `cli_tools`, `configuration`, `hosting_providers` (le modifiche di
+>   A), il backlog, un `print_info` di `_backend_services.py` riformattato: niente di B. `mkdocs build` stretta 0
+>   avvisi, `check-links` 96 validi (02:45-02:48).
+> - **✅ B2 entrato in `dev_release2`** (treno 82, merge `5441b96ed`), con la riga ✨ nel CHANGELOG. Il secondo merge di
+>   base è committato dal coordinatore: `62004e530`.
+> - **B3 rimesso come patch** (02:50): `git apply --reject` di `files/b3-wip/b3-tracked.patch` sui 13 file tracciati,
+>   nessun `.rej`; i 6 file nuovi dalla copia salvata. I 10 file tracciati non toccati dai merge e i 6 nuovi sono uguali
+>   alla copia salvata; nei 3 cataloghi del runner le voci di B3 sono sopra quelle portate dai merge (`system-wake`,
+>   `email-verification`, `rate-limit-*`, `scheduler-catchup`). Ruff pulito sui file di B3; black segnala solo il
+>   `print_info` già in HEAD di `_backend_utils.py`; `check-orphans`: 347 file del backend, tutti raggiungibili.
+
+### B3 — il verde (2026-10-16, 02:50-03:00) ✅
+
+> Prove mirate dal runner, una alla volta, `nice -n 10`, carico sotto 70 (`/tmp/libreFolio_b3_green.sh`, log in
+> `/tmp/libreFolio_b3_green_*.log`), tutte al primo colpo:
+>
+> | Selettore | Esito |
+> |---|---|
+> | `services backup-apply` | 169 (43 s) |
+> | `utils backup-cli-restore` | 44 |
+> | `utils backup-cli` | 88 |
+> | `services backup-staging` | 118 |
+> | `services app-lifecycle` (H, i due passi nuovi) | 42 |
+> | `api backup-restore-apply` | 75 |
+> | `api backup-restore` | 114 |
+> | `api instance-block` (H, le rotte nuove bloccate) | 62 |
+> | `e2e backup-roundtrip` | 3 (68 s) |
+>
+> - **L'accettazione del fondatore**, automatizzata (`e2e backup-roundtrip`):
+>   - un'istanza popolata, ripristinata su una vuota, dà gli stessi totali: 18 tabelle, 65 file, 8 report del motore
+>     ufficiale (populate 13 s);
+>   - un backup a `005_accounts_invites` passa alla head (`008_registration_invite_default`) con la prova e la conferma,
+>     ed è committato con le righe del report;
+>   - un backup più nuovo è rifiutato (`revision_unknown`), la destinazione invariata.
+> - **`api sync` e `front check`**: li fa il runner prima della build del server di prova (OpenAPI esportata,
+>   `generated.ts` rigenerato, `svelte-check` 0 errori e 0 avvisi), nel log di `api backup-restore-apply`.
+> - Porta 6187 libera.
+> - **Prossimo**: doc (docs-writer, con il brief `files/b3-docs-brief.md`), revisione di sicurezza di metà percorso,
+>   checkpoint FROZEN; l'`all-backend` di B3 lo chiedo al coordinatore.
+
+### B3 — revisione di sicurezza di metà percorso (2026-10-16, 03:00-04:05) ✅ — corretta
+
+> **Esito** (agente `security-review`, sola lettura sul diff di B3): nessuna vulnerabilità raggiungibile dall'API o
+> dall'archivio; due allarmi MEDIUM (7/10), finestre in cui il commit (sessioni chiuse e link revocati) può saltare
+> mentre il server serve già i dati ripristinati; quattro punti di robustezza.
+>
+> 1. **L'identità del boot segue l'orologio**: psutil, su Linux, ricava `create_time` dall'ora d'avvio del sistema, che
+>    un salto d'orologio (NTP all'avvio di un Pi senza orologio) sposta. Fra `pending-restore` e `restore-commit` il
+>    boot cambiava, il commit saltava, e il server serviva i dati ripristinati con le sessioni e i link del backup;
+>    all'avvio dopo, il ripristino veniva disfatto, con la perdita di quanto inserito nel frattempo.
+>    **Corretto**: il boot si legge una volta per processo (`_boot_of`, in cache); `finish_pending_restore` con un
+>    ripristino «applicato da un altro boot» ferma l'avvio (`RestoreInUseError`, codice `restore_in_use`) invece di
+>    proseguire.
+> 2. **Più worker**: un worker che uvicorn rilancia sotto i fratelli vivi (crash, `SIGHUP`, `SIGTTIN`), o un secondo
+>    server sulla stessa cartella, applicava un ripristino in attesa sotto chi serve. **Corretto** con il lock di «server
+>    acceso» dell'analisi approvata (§3.4, punto 2), che avevo tolto dal contratto di B3: ogni processo tiene un `flock`
+>    condiviso sulla cartella dati stessa (nessun file) dalla fine del suo avvio (passo nuovo `serving-lock`, una riga in
+>    più dichiarata in `app_lifespan.py` di H); lo scambio, e il ritorno indietro di un boot morto, solo se nessuno lo
+>    tiene. Altrimenti il ripristino aspetta (`waiting = server_running`), o l'avvio si ferma (`restore_in_use`) per un
+>    ritorno indietro sotto un server. Anche «applicato da un altro server ancora vivo» ora ferma l'avvio.
+> 3. **Robustezza**, tutto corretto: modelli stretti per `restore.json` (nomi delle cartelle scambiate,
+>    `stage_id` di 32 cifre esadecimali); `server_pid` usa il genitore solo se è vivo; la CLI stampa i valori presi
+>    da un archivio o dallo stato (versione, revisione, tabelle, admin, `confirmed_by`) con i caratteri di controllo
+>    sostituiti da `?`. Il ripristino in attesa su un'istanza poi bloccata resta la proposta nella lista di domattina.
+> - **⚠️ Fuori pista — B-12 riscritta**: in uvicorn 0.52.4 un worker che fallisce all'avvio (codice 3) ferma anche il
+>   master (`supervisors/multiprocess.py`, `keep_subprocess_alive`): il ciclo che avevo descritto non c'è. Il residuo
+>   vero è un salto d'orologio fra i worker di un server con più worker durante l'avvio (identità senza orologio su
+>   Linux: `/proc/<pid>/stat` e `boot_id`).
+> - **⚠️ Fuori pista — il lock va preso prima, rilettura mia (03:45)**: preso dopo `restore-commit`, lasciava una
+>   finestra: un secondo worker (salto d'orologio, B-12) o un secondo contenitore sulla stessa cartella poteva annullare
+>   il ripristino sotto un processo che aveva già aperto il DB ripristinato. Ora `serving-lock` sta subito dopo
+>   `data-directories`, prima di `risk-scenarios` (che legge `scenario_catalog/`) e di `default-avatars` (che scrive in
+>   `custom-uploads/`): chi non lo tiene ancora non ha letto niente, e un annullamento sotto di lui non fa danni. B-12
+>   scende a «il ripristino va rifatto», senza rischio per i dati. Riga dichiarata in `app_lifespan.py`: lo stesso passo,
+>   più un commento di una riga. **Decisione notturna, da rivedere.**
+> - **⚠️ Fuori pista — `backup inspect` stampava i valori dell'archivio senza `_safe`** (trovato da test-author 1,
+>   03:55): `app_version`, `alembic_revision`, `integrity_check` e i nomi delle voci, che arrivano dritti dallo zip, su
+>   un comando fatto per gli archivi sospetti. Corretto in `cmd_inspect`; per coerenza anche i nomi lasciati fuori da
+>   `backup create` (`_print_warnings`). I messaggi delle eccezioni stampati dalla CLI sono testo fisso o interi: nient'altro.
+> - **⚠️ Fuori pista — il lock resta esclusivo per tutte le rinomine** (nota di test-author 2, 04:00): la sonda di
+>   `_someone_serves` si prendeva e si lasciava subito, quindi un processo arrivato a `serving-lock` durante le rinomine
+>   di un annullamento (B-12, o un worker orfano di un master ucciso con SIGKILL) poteva leggere le cartelle a metà, e
+>   aprire il DB ripristinato un attimo prima che finisse in `failed/`. Ora `_exclusive_serving_lock` (gestore di
+>   contesto, al posto della sonda) tiene il lock esclusivo, senza attesa, dai controlli all'ultima rinomina: nello
+>   scambio, nell'annullamento di un boot morto e in quello di uno scambio interrotto (lì senza guardare chi serve: solo
+>   l'annullamento rimette insieme la cartella). Chi arriva a `serving-lock` aspetta che le cartelle siano ferme.
+>   Nessun blocco reciproco: l'esclusivo non aspetta mai. **Decisione notturna, da rivedere.**
+> - **Doc di B3 riletta** (docs-writer `a55a587f`; `cli_tools`, `hosting_providers`, `security.md` con la sezione nuova
+>   «💾 Restoring a Backup», `users_access`, `users_and_brokers`): le 17 frasi della CLI citate sono tutte nel codice;
+>   la sostituzione «uno alla volta» di `SIGHUP` è vera in uvicorn 0.52.4 (`restart_all`: il nuovo worker parte prima
+>   che il vecchio esca); l'uscita con `0` nell'immagine torna con il sorgente (SIGTERM rilanciato da uvicorn, ignorato
+>   dal PID 1; `os._exit(1)` quando scade il budget di Z); `on-fail` è il default di `fly launch` e `fly deploy`
+>   (docs.fly.io, letta alle 04:00): nel cloud, dopo il riavvio la Machine resta ferma finché il Proxy non la sveglia, e
+>   lo farà il sondaggio di `/system/ready` della scheda (B5). Corretto solo il paragrafo sul lock, per il gestore di
+>   contesto. `mkdocs build` stretta 0 avvisi, `check-links` 96 validi. Proposte di docs-writer per dopo:
+>   `.restore/` nell'albero di `filesystem.en.md` (H), il riavvio del ripristino fra gli arresti di
+>   `configuration.en.md` (B6), la pagina `developer/backend/backup.md` (B6).
+> - Dopo le correzioni: `services backup-apply` 166 passati e 3 rossi, proprio i tre che fissavano il vecchio «non si fa
+>   niente»; `utils backup-cli-restore` 44, `services app-lifecycle` 42. Test aggiornati e nuovi a test-author 2
+>   (servizio) e 1 (CLI, API); doc a docs-writer. Le prove le lancio io, una alla volta.
+
+### B3 — verde finale e controlli statici (2026-10-16, 04:05-04:16) ✅ — pronto per l'`all-backend`
+
+> - **Le ultime due note di test-author 2**, applicate: un errore nel log quando lo scambio interrotto si annulla sotto un
+>   server («…that server must be restarted»), e un avviso prima che `hold_serving_lock` si metta ad aspettare uno
+>   scambio in corso (prima `LOCK_SH | LOCK_NB`, poi il bloccante). Test: `test_backup_apply.py` a 194 (era 169), con le
+>   prove deterministiche del lock tenuto a ogni rinomina dello scambio e dei tre annullamenti, e libero dopo, anche
+>   quando il passo solleva; `test_backup_cli.py` 92 (era 88), `test_backup_cli_restore.py` 46 (era 44),
+>   `test_backup_restore_apply.py` 83 (era 75), di test-author 1.
+> - **Tutti i selettori di B3**, dal runner, uno alla volta, `nice -n 10`, carico sotto 70, sul codice finale
+>   (`/tmp/libreFolio_b3_green_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `services backup-apply` | 194 (69 s) |
+>   | `services backup-staging` | 118 |
+>   | `services app-lifecycle` | 42 |
+>   | `utils backup-cli-restore` | 46 |
+>   | `utils backup-cli` | 92 |
+>   | `api backup-restore-apply` | 83 (il runner rigenera il client: `svelte-check` 0 e 0) |
+>   | `api backup-restore` | 114 |
+>   | `api instance-block` | 62 |
+>   | `e2e backup-roundtrip` | 3 (43 s) |
+>
+> - **Statici** (`/tmp/libreFolio_b3_static.sh`): `git diff --check` pulito; ruff pulito sui 18 file di B3; black pulito,
+>   tranne il `print_info` del Designer Lab in `_backend_utils.py`, che fallisce già su HEAD; `check-orphans`: 347 file,
+>   tutti raggiungibili; vulture (`lint --dead-code --scope backend`): niente nei file di B3 (`backup_in_progress` di B2
+>   aspetta Z2b; `compute_control_totals` di J aspetta B-13). `mkdocs build` stretta 0 avvisi, `check-links` 96.
+>   Porta 6187 libera. Lo snapshot del DB di prova che il runner scrive va in `.testLog/00_archive/` (ignorato).
+> - **Backlog**: B-12 riscritta (il residuo vero: un salto d'orologio fra i worker, senza rischio per i dati), B-11
+>   estesa alle sezioni nuove di `cli_tools`.
+> - **04:22, coordinatore su P11** (la revoca dei link monouso, nella lista di domattina): «vai avanti con la revoca; nel
+>   report e nella doc scrivi anche l'effetto sugli account in attesa di verifica». Verificato nel codice di E
+>   (`email/verification.py`): l'attesa non ha una colonna, un account aspetta se è inattivo **e** ha un token di
+>   verifica non speso; revocati tutti i token, «hold» compreso, l'account non aspetta più. Il «rimanda» della pagina di
+>   accesso risponde 403 `ACCOUNT_DISABLED`, e nessuna rotta dell'admin rimanda il link: l'admin lo attiva
+>   (`PATCH /users/{id}`, `email_verified_at` resta `NULL`) o lo cancella perché il proprietario si iscriva di nuovo
+>   (non ha dati: non è mai entrato). Così nel report della CLI (la riga dei link ora nomina anche le verifiche, più
+>   una riga sugli account in attesa), in `cli_tools` (il report e «After the restore») e in `security.md`
+>   («🚫 Revocation»). Al coordinatore: «l'admin rimanda la verifica» oggi non esiste; le alternative (un «rimanda»
+>   per l'admin, o il ripristino che rimette un «hold») sono nel codice di E. Test: test-author 1 fissa le due righe;
+>   `utils backup-cli` 92, `utils backup-cli-restore` 46 (04:28); `mkdocs build` stretta 0 avvisi, `check-links` 96.
+> - **04:29, nota di E-5** (la guardia `schemas openapi-client-text`, entrata in `dev_release2`, non ancora nella mia
+>   base): il generatore del client copia senza escape la docstring di un modello dove il modello tipizza un campo, e
+>   un testo su più righe con i backtick rompe il client all'import (E2b). Oggi nessuno dei nostri è tipo di un campo
+>   (risposte e membri di unioni), quindi niente si rompe; ma, per non lasciare la trappola, in `schemas/backup.py`
+>   tutte le docstring dei modelli sono ora di una riga, senza backtick né virgolette (`InstanceBackupJob`,
+>   `RestoreUpload`, `RestoreStageReport`, `RestoreStage`, `RestoreStatus`, `RestoreTableRows`), con il dettaglio in un
+>   commento sopra la classe e il perché in un commento in testa al file. Verificato leggendo le docstring; la guardia,
+>   presa da `dev_release2`, non gira fuori dal repo (calcola i percorsi dalla sua posizione): gira al prossimo
+>   aggiornamento di base. Ruff e black puliti.
+> - **`all-backend` di B3** (slot pesante 1, 04:37:16-05:14:59, 37 min 44 s, `--workers 2`, `nice -n 10`, corsia 6187,
+>   HEAD `62004e530` più B3; log `/tmp/libreFolio_b_all_backend_b3.log`): **6/7 categorie verdi**. Nell'API un solo
+>   rosso, deterministico e nostro: `test_backup_api.py::test_the_backup_router_registers_its_routes_in_order`
+>   (BACKUP-001, il pin dell'ordine delle rotte `/backup` di C2), che elenca ancora le 15 rotte di prima delle 4 nuove
+>   di `restore.py`. Passate parallele: 4 809 + 5 974, 75 + 2 852, 953 + 782, 1 067 (+1 rosso) + 807; DB 19/19. Porta
+>   6187 libera.
+>   - **⚠️ Fuori pista — un selettore mancava**: fra i mirati di B3 non c'era `api backup`, l'unità del pin delle rotte.
+>     Riparazione a test-author 1 (le 4 tuple nel pin, solo statici); `api backup` dopo le 06:45 (fermo della macchina
+>     05:30-06:45, deciso dal coordinatore; slot spostato alle 05:20 su richiesta dei colori).
+>   - Il primo lancio delle 04:36:45 è caduto subito sull'ordine degli argomenti (`--workers` va prima della
+>     categoria), senza eseguire nulla.
+> - **05:17, coordinatore**: per il checkpoint bastano `api backup` verde e questo `all-backend`; dopo le 06:45
+>   `api backup`, poi l'handoff FROZEN e il commit. **Ingresso non prima di domattina**: B3 aspetta il developer su P7
+>   (istanza bloccata prima del riavvio) e P11 (revoca dei link); prima dell'ingresso la base si aggiorna (A6c, X CP11c,
+>   H CP7b-2, la correzione di Z, i lotti di T) e sulla revisione fusa serve un `all-backend` intero, in uno slot del
+>   mattino. **Regola da qui in avanti**: `api backup` fra i mirati di ogni lotto che tocca le rotte `/backup`.
+> - **Pin riparato** (test-author 1, 05:18, solo statici: ruff e black puliti, 23 test raccolti): `BACKUP_ROUTES` ha le 4
+>   rotte di B3 dopo le 4 di B2 e prima dei 3 export, nell'ordine dei decoratori di `restore.py`; «the eight of
+>   restore.py» nella docstring e nel messaggio; corretti anche la riga BACKUP-001 della docstring del modulo (era
+>   rimasta a instance e panel) e il commento sopra `BACKUP_ROUTES`. Nessun conteggio o elenco di tag da aggiornare; i
+>   segnaposto tolti (BACKUP-010) non si scontrano con i percorsi nuovi.
+> - **Prossimo**: dopo le 06:45 `api backup`, poi l'handoff FROZEN.
+
+### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
+
+> Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
+> nei file della sessione (`b4-contract.md`).
+>
+> - **In base** (`62004e530`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
+>   `rekey_plugin_secrets`). Lo scopo persistito della chiave d'istanza è uno solo, `plugins.settings.v1`: il
+>   `key_id` di ogni riga di X fa già da valore di controllo H-3, nella copia non c'è altro da scrivere.
+> - **Manca ancora in `dev_release2`** (`2c485d3d4`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
+>   pubblica della chiave generata. Quindi **B4a** (busta, creazione e ripristino con password, `decrypt`, conteggio dei
+>   segreti illeggibili nel report) non dipende da nessuno; **B4b** (la chiave nell'archivio e la ricifratura) aspetta
+>   le due funzioni di H.
+> - **Misura**: `Scrypt` di `cryptography` con `n = 2^17, r = 8` impiega 0,42 s e 128 MiB su questo Mac (carico ~30);
+>   `2^15` 0,10 s e 32 MiB. `hashlib.scrypt` rifiuta `2^17` col `maxmem` predefinito di OpenSSL: solo `cryptography`.
+>   Aggiunta al punto 1 della lista di domattina (una macchina cloud da 256 MB e il picco di 128 MiB).
+> - **Decisione notturna, da rivedere**: nell'intestazione (52 byte) un valore di verifica della password (byte 32-47
+>   dell'uscita di scrypt, lo schema di WinZip AES), così una password sbagliata (`wrong_password`) si distingue da un
+>   file rovinato (`envelope_damaged`) senza aiutare chi prova le password più del tag del primo blocco.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 

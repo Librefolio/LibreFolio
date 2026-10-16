@@ -3741,15 +3741,32 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
-- **B-11 · Debito di traduzione delle pagine admin di B2 e B8** — piccolo, doc; B, 15/10 (B2). Pagine inglesi scritte
-  da docs-writer, senza timbro. In it, fr ed es mancano:
-  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»;
+- **B-11 · Debito di traduzione delle pagine admin di B2, B3 e B8** — piccolo, doc; B, 15/10 (B2; B3 il 16/10). Pagine
+  inglesi scritte da docs-writer, senza timbro. In it, fr ed es mancano:
+  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»; da B3, le sezioni «♻️ Restore an Archive» (`#backup-restore`)
+    e «⏳ Follow or Cancel a Restore» (`#backup-pending`), più i ritocchi del consiglio iniziale, dell'introduzione di
+    «Back Up the Instance», di «Use an Archive on Another Installation» e del blocco Docker;
   - in `configuration`, le righe nuove di «Main Options» e di «Secrets»;
   - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
 
   `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
   `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
   §13, «B2b — l'API della prova su copia».
+- **B-12 · Un salto d'orologio fra i worker di un server con `--workers N`, nel primo avvio dopo un ripristino** —
+  piccolo, nessun rischio per i dati; B, 16/10 (B3, revisione di sicurezza di metà percorso). Ogni processo legge il
+  «boot» una volta (il master di uvicorn, con l'ora di creazione di psutil, che su Linux si sposta con un salto
+  d'orologio). Se il salto cade fra la lettura di due worker, il secondo vede il ripristino «applicato da un altro boot»:
+  se il primo tiene già il lock di «server acceso», l'avvio si ferma e quello dopo annulla il ripristino; se non lo tiene
+  ancora, non ha letto niente, e aspetta a `serving-lock` che l'annullamento finisca (lock esclusivo durante le
+  rinomine). Al più un `mkdir` del passo `data-directories` dentro le rinomine fa fallire l'annullamento: l'avvio si
+  ferma e il seguente lo completa. In tutti i casi il ripristino va rifatto, i dati di prima restano. Lo stesso
+  per due contenitori sulla stessa cartella dati (spazi di PID diversi). Cura: un'identità senza orologio su Linux
+  (`starttime` in tick da `/proc/<pid>/stat`, più `/proc/sys/kernel/random/boot_id`).
+  Dettagli: piano 07, §13, «B3 — revisione di sicurezza di metà percorso».
+- **B-13 · I totali di controllo di J (CP-15) nel manifest, nella prova su copia e nell'e2e** — medio; B, 16/10 (B3).
+  CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
+  il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
+  `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
 
 ## E · Email (fase 01)
 
