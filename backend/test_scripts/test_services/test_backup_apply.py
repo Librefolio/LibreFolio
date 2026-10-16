@@ -81,8 +81,9 @@ same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outco
     change (``end_sessions``) raises that account alone by one.
 (j) §7, §10 The startup steps: ``pending-restore`` between ``tool-catalog`` and ``data-directories``; ``serving-lock``
     after ``data-directories`` and before ``risk-scenarios`` and ``database`` (held before any data is read);
-    ``restore-commit`` between ``global-settings`` and ``provider-prewarm``; each reaches ``app_lifespan.<its function>``
-    when its awaitable runs, once, without arguments, off the event loop.
+    ``restore-commit`` between ``global-settings`` and ``provider-prewarm``, and after ``admin-bootstrap`` (decision N57:
+    a bootstrap that fails on the restored data still rolls the restore back at the next start); each reaches
+    ``app_lifespan.<its function>`` when its awaitable runs, once, without arguments, off the event loop.
 (k) §4 ``restart.py``: ``server_pid`` (this process without a multiprocessing parent, the parent in a spawn child; §10:
     this process when its parent no longer runs, the pid it had may be another process's);
     ``request_restart`` sends ``SIGTERM`` through ``send_signal`` (``os.kill`` by default, read when it runs) to the pid
@@ -2733,16 +2734,18 @@ async def test_a_password_change_after_the_restore_raises_that_account_alone_by_
 # =============================================================================
 
 
-def assert_in_relative_order(steps: Any, expected: tuple[str, ...]) -> None:
+def assert_in_relative_order(steps: Any, expected: tuple[str, ...], why: str = "") -> None:
     """``expected`` among the names of ``steps``, in this relative order, any other step before, between or after: what
     ``test_app_lifecycle.assert_in_relative_order`` checks. Not imported from there: that module imports
     ``backend.app.main``, whose ``configure_logging()`` writes a log in the configured data directory (here a folder that
-    must stay absent; at the top of this module, the lane's)."""
+    must stay absent; at the top of this module, the lane's). ``why``, the reason for the order, ends the message of a
+    failure."""
     names = [step.name for step in steps]
+    because = f". Why: {why}" if why else ""
     missing = [name for name in expected if name not in names]
-    assert not missing, f"[new] {missing} missing from STARTUP_STEPS: {names}"
+    assert not missing, f"[new] {missing} missing from STARTUP_STEPS: {names}{because}"
     positions = [names.index(name) for name in expected]
-    assert positions == sorted(positions), f"{list(expected)} must keep this relative order, found {[names[position] for position in sorted(positions)]} in {names}"
+    assert positions == sorted(positions), f"{list(expected)} must keep this relative order, found {[names[position] for position in sorted(positions)]} in {names}{because}"
 
 
 def test_the_restore_steps_stand_where_the_contract_puts_them():
@@ -2750,7 +2753,12 @@ def test_the_restore_steps_stand_where_the_contract_puts_them():
     right after the folders exist and before any step reads a swapped folder (``risk-scenarios`` reads
     ``scenario_catalog/``, ``default-avatars`` writes ``custom-uploads/``) or the database: a process holds it before it
     reads any data, so a start never undoes a restore under a process that read it; ``restore-commit`` once the restored
-    database is migrated and fixed, before anything runs in the background."""
+    database is migrated and fixed and ``admin-bootstrap`` has run (decision N57), before anything runs in the
+    background. The bootstrap reads and writes the restored data (it counts the accounts, may create the pending
+    administrator, sets ``registration_mode`` to invitations only) and can raise on a data error: before
+    ``restore-commit`` such a failure rolls the restore back at the next start (``first_start_failed``); after it, the
+    restore would already be kept and the server would fall at every start. Relative only: ``test_admin_bootstrap.py``
+    (STEP-001) pins ``admin-bootstrap`` right after ``global-settings``."""
     print_section("(j) The startup steps")
     from backend.app.services.platform import app_lifespan  # noqa: PLC0415 — the app's whole startup: kept out of the spawn children that import this module
 
@@ -2758,7 +2766,12 @@ def test_the_restore_steps_stand_where_the_contract_puts_them():
     assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("pending-restore", "data-directories", "serving-lock", "risk-scenarios"))
     assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("serving-lock", "database"))
     assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("global-settings", "restore-commit", "provider-prewarm"))
-    print_success("tool-catalog < pending-restore < data-directories < serving-lock < risk-scenarios; serving-lock < database; global-settings < restore-commit < provider-prewarm")
+    assert_in_relative_order(
+        app_lifespan.STARTUP_STEPS,
+        ("admin-bootstrap", "restore-commit"),
+        why="admin-bootstrap reads and writes the restored data and can raise on a data error: before restore-commit the next start rolls the restore back (first_start_failed); after it, the restore would already be kept and the server would fall at every start",
+    )
+    print_success("tool-catalog < pending-restore < data-directories < serving-lock < risk-scenarios; serving-lock < database; global-settings < restore-commit < provider-prewarm; admin-bootstrap < restore-commit")
 
 
 @pytest.mark.asyncio
