@@ -1052,6 +1052,14 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
+def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address, client_rate_key and mask_client_address (P17)."""
+    print_section("Services: Client Address")
+    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, reset_client_address_cache, client_rate_key, mask_client_address)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_client_address.py", test_names)
+    return run_command(cmd, "Client address tests", verbose=verbose)
+
+
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
     print_section("Services: Plugin Settings Contract")
@@ -1935,6 +1943,18 @@ Note: No backend server required.
         desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "client-address",
+        services_client_address,
+        name="Client Address",
+        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process until reset_client_address_cache(), which re-arms the warning; client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or '') and mask_client_address (IPv4 by its /24, IPv4-mapped as its IPv4, IPv6 by its /48, a name as written, nothing for None or '')",
+        # PURE: Settings built from the environment alone (_env_file=None), or read through get_settings() in test mode with
+        # a data directory under tmp_path, every variable set and removed by monkeypatch; connections are Starlette Request
+        # and WebSocket objects on raw scopes; the module's logger is replaced by a recorder, and its cache is reset before
+        # and after each test. No DB, no server, no network.
         isolation="pure",
     )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
