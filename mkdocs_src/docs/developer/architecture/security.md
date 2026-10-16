@@ -806,7 +806,9 @@ a single- or double-quoted attribute. The `escapeHtml` exported by `$lib/utils/i
 deliberately leaves the apostrophe alone because its output feeds KaTeX, where `f'(x)` is prime
 notation: do not use it for attribute values.
 
-Two source gates keep the rule in force; both run in `./dev.py test front-utility core-unit`:
+Three source gates keep the rule in force; the first two run in
+`./dev.py test front-utility core-unit`, the third in
+`./dev.py test front-portfolio chart-safety-unit`:
 
 - `frontend/src/htmlInterpolation.gate.test.ts` parses every non-test `.svelte` and `.ts` file
   under `frontend/src` and fails when a user or provider text field reaches an HTML template
@@ -815,8 +817,14 @@ Two source gates keep the rule in force; both run in `./dev.py test front-utilit
 - `frontend/src/htmlSink.gate.test.ts` requires every `{@html X}` in a non-test `.svelte` file
   to be a `sanitizeHtml(…)` call or an entry of its reviewed list, which records a reason for
   each sink. An entry that no longer matches a sink fails the gate.
+- `frontend/src/lib/utils/core/escapeHtml.single.test.ts` fails when a non-test `.svelte` or `.ts`
+  file under `frontend/src` holds an HTML escaper of its own (`&` mapped to `&amp;`) outside
+  `escapeHtml.ts`. Two files are exempt: `inlineMath.ts`, the KaTeX variant above, and
+  `TransactionBulkModal.svelte`, until its inline copy is replaced by `escapeHtml`. An exempt file
+  that no longer holds a copy fails the gate (see
+  [Tooltip HTML](../frontend/components/charts.md#chart-tooltip-escaping)).
 
-Neither gate sees a raw `innerHTML` assignment that involves no template: do not write one.
+No gate sees a raw `innerHTML` assignment that involves no template: do not write one.
 `./dev.py test front-asset asset-name-xss` (`frontend/e2e/assets/asset-name-xss.spec.ts`)
 creates an asset whose name and icon URL carry markup, through the API, and checks in a real
 browser that the table and card views of `/assets` show it as text and run nothing.
@@ -829,7 +837,7 @@ browser that the table and card views of `/assets` show it as text and run nothi
     of every user who opened the asset list — the administrator included. The same flaw sat in
     other `html` cells, chart tooltips, toasts, and validation messages. The 1.2 fix escapes
     user text where it enters an HTML string, sanitizes the sinks that receive mixed markup,
-    and adds the two gates above.
+    and adds the first two gates above.
 
 ## 🐳 Container Image Check
 

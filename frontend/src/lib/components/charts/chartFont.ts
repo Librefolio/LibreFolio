@@ -9,6 +9,11 @@
  * family — ECharts' own default, chosen the way ECharts chooses it (`echarts/lib/model/globalDefault.js`) — and the
  * text that is not a flag keeps the font it had.
  *
+ * A canvas paints its text once, with the faces loaded at that moment, and the browser fetches a `unicode-range` face
+ * only for text in the page that needs it — canvas text does not count. So the face is asked for here, when the first
+ * chart module loads and before any chart can paint ({@link chartFontReady}), and a chart that painted before it
+ * arrived paints again once it is in (`scheduleFirstRenderStabilityFix`).
+ *
  * The colours of the charts live in `$lib/theme/chartTheme`; this module holds no colour.
  *
  * @module lib/components/charts/chartFont
@@ -27,3 +32,38 @@ export const CHART_FONT_FAMILY = `'LF Flags', ${ECHARTS_DEFAULT_FAMILY}`;
  * again on every `setOption`, a `notMerge` one included, which an option-level `textStyle` would not survive.
  */
 export const CHART_INIT_THEME = {textStyle: {fontFamily: CHART_FONT_FAMILY}};
+
+/** The face, as a CSS `font` shorthand the font loading API accepts. */
+const FLAG_FONT = "16px 'LF Flags'";
+
+/** A flag to ask for the face with: it holds the regional indicators and nothing else, so other text would load nothing. */
+const FLAG_SAMPLE = '\u{1F1FA}\u{1F1F8}';
+
+let flagFaceRequest: Promise<void> | undefined;
+
+/**
+ * Asks the browser for the flag face, once, and resolves when the request has settled. It never rejects: a face that
+ * fails to load leaves the system's fallback, as before K-13. Where nothing can load a font — no `document.fonts`, as
+ * in a test or on a server — it resolves at once.
+ */
+export function chartFontReady(): Promise<void> {
+    if (!flagFaceRequest) {
+        const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+        flagFaceRequest = fonts?.load
+            ? fonts.load(FLAG_FONT, FLAG_SAMPLE).then(
+                  () => undefined,
+                  () => undefined,
+              )
+            : Promise.resolve();
+    }
+    return flagFaceRequest;
+}
+
+/** Whether the flag face is already in, so that a canvas painting now draws flags with it. True where fonts cannot load. */
+export function chartFontLoaded(): boolean {
+    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+    return !fonts?.check || fonts.check(FLAG_FONT, FLAG_SAMPLE);
+}
+
+// Every chart imports this module before it can paint: asking for the face here puts the request ahead of the first paint.
+void chartFontReady();

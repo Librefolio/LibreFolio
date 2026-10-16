@@ -452,6 +452,85 @@ computes it with every option it builds and on resize (`lazyUpdate`). `LotCompar
 own) only when it builds the option: a px base does not follow the width. `LotWacPriceChart` and
 `LotGanttChart` keep a fixed 18 px (`GRID_RIGHT_PX`).
 
+## Chart Text and Tooltips {: #chart-text-and-tooltips }
+
+ECharts reads none of the app's CSS: it draws legends, labels and axes on a canvas, and writes its
+tooltip as HTML with an inline `font`. Two rules follow, one for the font of that text and one for
+the tooltip's HTML.
+
+### Flags in chart text {: #chart-flag-font }
+
+The app draws flags (the regional indicator symbols U+1F1E6–1F1FF) with the `'LF Flags'` face that
+starts its CSS font stacks ([Fonts](../styling.md#fonts)). That CSS never reaches chart text:
+ECharts drew it in its own default family, and a flag in a legend, a label, an axis or a tooltip
+fell back to the system, which prints two letters where it has no flag glyphs (Windows among them).
+
+`lib/components/charts/chartFont.ts` exports the charts' font:
+
+- `CHART_FONT_FAMILY`: `'LF Flags'`, then ECharts' own default family (`sans-serif`, or
+  `'Microsoft YaHei'` on Windows, chosen the way ECharts chooses it). The face covers the flags and
+  nothing else, so every other character falls through to that default and keeps its font.
+- `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
+
+Every chart is created with that theme:
+
+```typescript
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+```
+
+A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
+it unless a component sets its own `fontFamily`. It is a theme rather than a `textStyle` in each
+option because ECharts merges the theme again on every `setOption`, a `notMerge` one included, so
+no option builder has to repeat it. A component that sets its own family uses `CHART_FONT_FAMILY`,
+as `CorrelationHeatmap` does on its axis labels, which it measures with a canvas context in that
+same font. The code that measures chart text from the chart model (`axisLabelFont`, see
+[Responsive Date Axis](#responsive-date-axis), and `GrowthChart`'s ladder labels) reads its
+`textStyle.fontFamily`, which is this family too.
+
+The chart colours stay in `lib/theme/chartTheme.ts`, and the font is kept out of it on purpose:
+that module holds colours only, and `chartTheme.test.ts` requires every string it exports to be a
+colour.
+
+**Loading the face.** A canvas paints its text once, with the faces loaded at that moment, and the
+browser fetches a `unicode-range` face only for page text that needs it: canvas text does not
+count. Two steps cover this:
+
+1. `chartFont.ts` asks for the face when the first chart module loads, before any chart can paint:
+   `chartFontReady()` calls `document.fonts.load()` once, with a flag as sample text (other text
+   would load nothing), and never rejects, so a face that fails to load leaves the system fallback.
+   Without `document.fonts`, in a test or on the server, it resolves at once.
+2. `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), which a chart calls once after
+   its first full `setOption`, checks `chartFontLoaded()`: when the face is not in yet, it repaints
+   the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
+   except `LotGanttChart`.
+
+### Tooltip HTML {: #chart-tooltip-escaping }
+
+ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
+the data or from currency metadata (names, captions, currency codes, flags, event types) goes
+through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
+is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
+through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+
+The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
+`>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
+uses; a copy that escapes fewer characters is the defect this rule removes. Two files are exempt:
+`lib/utils/inlineMath.ts`, whose KaTeX variant keeps the apostrophe on purpose (`f'(x)` is prime
+notation), and `TransactionBulkModal.svelte`, until its inline copy is replaced by `escapeHtml`. The
+rule for every hand-built HTML string, and its other gates, is in
+[Output Escaping](../../architecture/security.md#output-escaping).
+
+### Guards {: #chart-text-guards }
+
+`./dev.py test front-portfolio chart-safety-unit` runs them:
+
+| Test | Checks |
+|---|---|
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
+| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside the two exempt files; an exempt file that no longer holds one fails too, so the list cannot go stale. |
+
 ## Pie Charts (AllocationPieChart)
 
 `lib/components/charts/AllocationPieChart.svelte` draws the allocation pies of the Dashboard and
