@@ -31,7 +31,7 @@ from backend.app.schemas.signals import (
     SignalValuePoint,
     SignalWarningCode,
 )
-from backend.app.services.signal_annotations import SignalAnnotationService
+from backend.app.services.signals.annotations import SignalAnnotationService
 
 START = date(2026, 1, 1)
 

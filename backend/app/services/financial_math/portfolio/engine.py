@@ -42,7 +42,7 @@ _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  
 # =============================================================================
 
 
-def _compute_tx_fingerprint(transactions: list[Transaction]) -> str:
+def compute_tx_fingerprint(transactions: list[Transaction]) -> str:
     """Compute a hash fingerprint over transaction IDs and updated_at timestamps.
 
     Any transaction insert, update, or delete changes this fingerprint,
@@ -151,6 +151,7 @@ class PortfolioCalculationEngine:
         target_currency: str | None = None,
         include_candles: bool = False,
         include_acquisition_funding: bool = False,
+        period_start: date_type | None = None,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
@@ -166,6 +167,11 @@ class PortfolioCalculationEngine:
         the engine's existing per-BUY K/R-pool draw as a daily new-vs-reinvested output
         (see AcquisitionFundingContribution) — kept opt-in for consistency, though the
         extra cost is negligible (pure bookkeeping capture, no new data resolution).
+
+        ``period_start`` (MF-A) names the day whose end ``position_states_start`` is taken at — the start of the
+        caller's period while the replay runs from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
+        the first replayed day's. It is part of the blob-cache key, so a cached run never answers with another day's
+        snapshot.
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
@@ -245,7 +251,7 @@ class PortfolioCalculationEngine:
         actual_to = date_to or date_type.today()
 
         # ── 5b. Blob cache check (range-aware) ──
-        tx_fingerprint = _compute_tx_fingerprint(all_txs)
+        tx_fingerprint = compute_tx_fingerprint(all_txs)
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
         fx_fingerprint = await compute_portfolio_fx_cache_identity(
@@ -278,6 +284,9 @@ class PortfolioCalculationEngine:
             split_fingerprint,
             include_candles,
             include_acquisition_funding,
+            # The day of position_states_start: the named period start, else the requested start (the first replayed
+            # day); a run from t=0 never answers for a later date_from with its own first day's snapshot.
+            period_start or date_from,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -416,6 +425,7 @@ class PortfolioCalculationEngine:
             mark_series=mark_series,
             compute_candles=include_candles,
             compute_acquisition_funding=include_acquisition_funding,
+            period_start=period_start,
         )
         result = builder.build()
 

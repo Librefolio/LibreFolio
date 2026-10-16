@@ -58,7 +58,8 @@ analytic never opens a session or fetches prices.
 4. Add the i18n keys — the analytic's own `risk.analytics.<id>.*` in its `i18n/`
    (`./dev.py i18n add … --into risk_plugins/<analytic_code>`); a new `risk.warnings.*` sentence in
    the shared `risk` subsystem — the pure plugin tests and the pinned catalogue lists; review the
-   code-keyed decisions in `RiskService`.
+   code-keyed decisions of the risk service (`available_observations()` and
+   `requires_valid_composition()` in `risk/results.py`, the `stress` predicates in `risk/plan.py`).
 5. Surface it in a panel if needed, and document it (theory page, user page, analytics table).
 
 ## 📚 Where to find the technical details

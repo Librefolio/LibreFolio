@@ -353,7 +353,9 @@ def utils_test_server_preparation(verbose: bool = False, test_names: list = None
     """Test that the test server's builds run before its startup timeout, that a tree without node_modules stops before npx (C-94), and that the shared backend's output reaches a log whose tail a failed start prints (H-12)."""
     print_section("Utils: Test Server Preparation")
     print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start(), shared_backend_log_path, log_tail)")
-    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env, the backend's output in shared-backend.log (emptied, appended to on a restart) and its tail on a failed start")
+    print_info(
+        "Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env, the backend's output in shared-backend.log (emptied, appended to on a restart) and its tail on a failed start"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
     return run_command(cmd, "Test server preparation tests", verbose=verbose)
 
@@ -389,7 +391,9 @@ def utils_dev_designer_lab_banner(verbose: bool = False, test_names: list = None
     """Test that dev.py lists the Designer Lab (/designer-lab) among the server's endpoints only when the frontend build carries it, and under front dev unless LF_DESIGNER_LAB=0."""
     print_section("Utils: dev.py Designer Lab banner")
     print_info("Testing: dev.py _frontend_build_has_designer_lab, DESIGNER_LAB_MARKER (= LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs), cmd_server's «Available endpoints», cmd_fe_dev")
-    print_info("Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0")
+    print_info(
+        "Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py", test_names)
     return run_command(cmd, "dev.py Designer Lab banner tests", verbose=verbose)
 
@@ -676,7 +680,7 @@ Tests for utility modules and helper functions:
         "gate-plugin-layout",
         utils_gate_plugin_layout,
         name="Plugin Layout Gate",
-        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module (signal_plugins/base.py aside) and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
+        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases build their trees under tmp_path. No DB, no server, no network, no writes
         # outside tmp_path.
