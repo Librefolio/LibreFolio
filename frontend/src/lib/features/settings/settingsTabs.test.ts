@@ -12,11 +12,13 @@
  *     where the context is `{isSuperuser}`; `id` is both the `?tab=` value and the suffix of the
  *     `settings-tab-{id}` test id, `visible` absent means visible to everyone, `props` are spread on
  *     the body, `alignEnd` starts the right-hand group on a wide screen;
- *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, about, admin, and users, backup
- *     and email for administrators only (workstreams A, B and E; users since plan A6b.1). Admin stays visible to
- *     everyone and editable only by an administrator (`props: ctx => ({canEdit: ctx.isSuperuser})`), and `alignEnd`
- *     takes the place of the inline class; users, backup and email take no props, and follow admin in the right-hand
- *     group, in that order;
+ *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, plugins, about, admin, and users, backup
+ *     and email for administrators only (workstreams A, B, E and X; users since plan A6b.1, plugins since lot CP11b).
+ *     Plugins is everyone's: each user's own plugin settings, the instance's read-only unless an administrator (the API
+ *     says which field each caller may write, so the tab takes no props), between preferences and about. Admin stays
+ *     visible to everyone and editable only by an administrator (`props: ctx => ({canEdit: ctx.isSuperuser})`), and
+ *     `alignEnd` takes the place of the inline class; users, backup and email take no props, and follow admin in the
+ *     right-hand group, in that order;
  *   - `visibleSettingsTabs(tabs, ctx)`: the tabs whose `visible(ctx)` is not false, sorted by
  *     `order`. It takes the list explicitly, so that a test can hand it one of its own, and it leaves
  *     that list as it was.
@@ -46,7 +48,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
-import {DatabaseBackup, Info, Mail, Shield, Sliders, User, Users} from 'lucide-svelte';
+import {DatabaseBackup, Info, Mail, Puzzle, Shield, Sliders, User, Users} from 'lucide-svelte';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -64,6 +66,7 @@ const bodies = vi.hoisted(() => {
         users: body('UsersTab.svelte'),
         backup: body('BackupTab.svelte'),
         email: body('EmailSettingsTab.svelte'),
+        plugins: body('PluginSettingsTab.svelte'),
     };
 });
 
@@ -74,6 +77,7 @@ vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default:
 vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: bodies.users}));
 vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: bodies.backup}));
 vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: bodies.email}));
+vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({default: bodies.plugins}));
 
 import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
 
@@ -83,14 +87,15 @@ const USER: SettingsTabContext = {isSuperuser: false};
 const ADMIN: SettingsTabContext = {isSuperuser: true};
 /** Who is signed in, the ids of the tabs they see, left to right, and their context. */
 const CONTEXTS: [string, string[], SettingsTabContext][] = [
-    ['a user', ['profile', 'preferences', 'about', 'admin'], USER],
-    ['an administrator', ['profile', 'preferences', 'about', 'admin', 'users', 'backup', 'email'], ADMIN],
+    ['a user', ['profile', 'preferences', 'plugins', 'about', 'admin'], USER],
+    ['an administrator', ['profile', 'preferences', 'plugins', 'about', 'admin', 'users', 'backup', 'email'], ADMIN],
 ];
 
 /** Today's tabs, left to right as an administrator sees them: the id, the catalogue key of the label, the lucide icon and the tab module. */
 const TODAY = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, component: bodies.profile},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, component: bodies.preferences},
+    {id: 'plugins', labelKey: 'pluginSettings.tab.label', icon: Puzzle, component: bodies.plugins},
     {id: 'about', labelKey: 'settings.about', icon: Info, component: bodies.about},
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, component: bodies.admin},
     {id: 'users', labelKey: 'settings.users', icon: Users, component: bodies.users},
@@ -143,7 +148,7 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
     it.each(CONTEXTS)('%s sees %j, in this order', (_label, expected, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'today’s tabs, left to right: admin is visible to everyone, users, backup and email to administrators only',
+            'today’s tabs, left to right: plugins and admin are visible to everyone, users, backup and email to administrators only',
         ).toEqual(expected);
     });
 
@@ -198,6 +203,14 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(email.visible?.(USER) ?? true, 'a user does not see the email tab').toBe(false);
         expect(email.visible?.(ADMIN) ?? true, 'an administrator sees it').toBe(true);
         expect(email.props, 'the email tab is rendered with no props').toBeUndefined();
+    });
+
+    it('plugins is everyone’s, takes no props and starts no group (workstream X, CP11b)', () => {
+        const plugins = registryTab('plugins');
+
+        expect(plugins.visible, 'no visible(): every signed-in user has plugin settings of their own').toBeUndefined();
+        expect(plugins.props, 'no props: the API says which field each caller may write (D-X15)').toBeUndefined();
+        expect(plugins.alignEnd, 'plugins sits with the personal tabs, left of admin').toBeFalsy();
     });
 
     it('only admin takes props, and only admin starts the right-hand group (alignEnd)', () => {

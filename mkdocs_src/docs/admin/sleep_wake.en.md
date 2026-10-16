@@ -6,8 +6,156 @@ schedule, or by a script or a cron job of yours on a home server. While the mach
 updates the prices and the exchange rates; the
 [market data scheduler](settings.md#market-data-scheduler) catches up once it runs again.
 
-Whoever wakes the machine can also bring the data up to date at once, and know when it is done,
-with one call: the **scheduled wake-up**.
+Two features help, both off until you turn them on. With the [idle suspension](#idle-suspend), the
+instance asks Fly.io to suspend its machine after a few minutes without visitors (on any other
+host, leave it off); with the [scheduled wake-up](#wake-sync), whoever wakes the machine brings the
+data up to date at once, and knows when it is done, with one call.
+
+---
+
+## 😴 Idle Suspension {: #idle-suspend }
+
+When nobody has used LibreFolio for a few minutes, and no work is in progress, it can ask Fly.io to
+suspend the machine it runs on. Fly saves the machine's memory and CPU state, and its proxy resumes
+the machine at the next request, where it stopped: the server does not restart, and the user who
+comes back only waits for the resume.
+
+It is off by default: a self-hosted install that does not set it is unchanged. Fly.io is the only
+host LibreFolio can ask today; on any other host, leave it off.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_IDLE_SUSPEND_MODE` | `none` | `fly` turns the idle suspension on; `none` never suspends. Case and spaces around the value do not matter. |
+| `LIBREFOLIO_IDLE_SUSPEND_MINUTES` | `5` | How many minutes without a user's request before the machine is suspended: a whole number from `1` to `1440` (one day). Read only with `fly`. |
+
+LibreFolio reads both at startup: change them, then restart it ([Setting Up Fly.io](#idle-suspend-fly)
+shows where they go). A value it cannot use does not stop the server: the log has an error
+([In the Log](#idle-suspend-log)), an unknown mode counts as `none`, so that a typo never suspends
+the machine, and unusable minutes count as 5.
+
+### 👀 What Keeps the Machine Awake {: #idle-suspend-activity }
+
+LibreFolio asks for the suspension only when nobody is around **and** no work is in progress.
+
+**Nobody is around** when no request from a user has reached the server for
+`LIBREFOLIO_IDLE_SUSPEND_MINUTES` minutes. Every request counts (a page, an image, an API call),
+except:
+
+- the health checks, `/api/v1/system/health` and `/api/v1/system/ready`, which a host or an uptime
+  monitor may call every few seconds;
+- the [scheduled wake-up](#wake-sync): it is not a visit, although it keeps the machine awake while
+  its jobs run.
+
+The live prices of the Assets list and of an asset's page are requests too, so they count while
+someone uses the page. They pause while the tab is in the background and after two minutes without
+mouse, keyboard or touch: a tab left open with nobody in front of it does not keep the machine
+awake.
+
+**Work in progress** keeps the machine awake, however long nobody has been around:
+
+- a request still being answered, such as a long download;
+- a run of the [market data scheduler](settings.md#market-data-scheduler), which updates the prices
+  and the exchange rates;
+- a [Tool](../user/tools/index.md) calculation, waiting or running;
+- a backup, whoever started it, and the check of an archive uploaded for a restore.
+
+!!! tip "📡 Uptime monitors"
+
+    Point an uptime monitor at `/api/v1/system/health`: its calls never count as a visit. Each call
+    still resumes a suspended machine, as any request through Fly's proxy does, and the machine
+    sleeps again within about a minute: a monitor that calls every minute or so keeps it awake most
+    of the time.
+
+### ⏱️ When It Sleeps and Wakes {: #idle-suspend-timing }
+
+- **Going to sleep.** LibreFolio checks every 30 seconds, so the machine is suspended at most
+  30 seconds after the minutes have run out: with the default, between 5 minutes and 5 minutes
+  30 seconds after the user's last request. When work is still in progress then, it is suspended
+  within 30 seconds of the end of that work. With an Assets page left open, add the two minutes
+  its live prices keep refreshing after the last input.
+- **After a [scheduled wake-up](#wake-sync).** The wake-up is not a visit, so it does not start the
+  minutes again. A check comes 2 seconds after its jobs end: when nobody has been around for the
+  minutes, the machine goes back to sleep at once, without waiting for the next regular check. A
+  hosting panel can thus wake it, bring the prices up to date, and leave it asleep again.
+- **Waking up.** The request that reaches a suspended machine resumes it, and LibreFolio answers it
+  as usual. The first request from a user after a suspension, like any that comes after at least a
+  minute of silence, also makes the [market data scheduler](settings.md#market-data-scheduler) run
+  at once: it catches up the price and exchange-rate updates that fell due while the machine slept.
+  After asking for a suspension, LibreFolio waits a minute before its next check, so that the
+  request that woke the machine counts first.
+- **After a cold start.** A deploy discards the state Fly saved, and Fly may start a machine from
+  scratch in other cases too: the minutes then count from the start of the server.
+- **One server process.** Run a single server process, as the Docker image does: each process
+  counts only the requests it serves itself, so with several (`--workers N`) one of them could
+  suspend the machine while another serves a user.
+
+### 🪂 Setting Up Fly.io {: #idle-suspend-fly }
+
+LibreFolio decides when the machine sleeps, because it knows what work is in progress: Fly's proxy
+only wakes it. LibreFolio asks through Fly's Machines API, on the `/.fly/api` socket that Fly
+provides inside each machine: there is no token to create.
+
+The lines that matter in `fly.toml`; keep the rest of yours as it is:
+
+```toml
+kill_signal = "SIGTERM"
+kill_timeout = 10
+
+[env]
+  LIBREFOLIO_IDLE_SUSPEND_MODE = "fly"
+  LIBREFOLIO_IDLE_SUSPEND_MINUTES = "5"  # optional: 5 is the default
+
+[http_service]
+  internal_port = 6040
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 0
+```
+
+Deploy with `fly deploy`, then look for `Idle monitor started` in `fly logs`.
+
+- **`auto_stop_machines = "off"`**: Fly's proxy never stops or suspends the machine on its own.
+  With `"stop"` or `"suspend"`, it would when it sees no traffic for a few minutes, even in the
+  middle of a backup or a price update.
+- **`auto_start_machines = true`**: a request resumes the suspended machine. Fly's documentation
+  advises turning both on or both off; here LibreFolio does the suspending, so only the start is
+  left to Fly.
+- **`min_machines_running = 0`**: no machine has to stay running.
+- **`internal_port = 6040`**: the port the LibreFolio image listens on.
+- **`kill_signal` and `kill_timeout`**: a suspension sends no signal, since the server is frozen,
+  not stopped; these two matter when Fly stops the machine, at a deploy or a restart. By default
+  Fly sends SIGINT and kills the machine 5 seconds later, before LibreFolio's 8-second shutdown
+  budget runs out. SIGTERM is the signal `docker stop` sends too, and 10 seconds leave LibreFolio
+  its 8 and a margin. If you raise `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, keep `kill_timeout` at
+  least 2 seconds above it (Fly allows up to 300): see «Stopping the Server» in
+  [Environment Variables](configuration.md).
+
+Fly documents what a machine needs to be suspended: 2 GB of memory or less, no swap
+(`swap_size_mb`), no schedule, and an update since 20 June 2024:
+`fly machine update <machine-id> --yes` brings an older machine up to date. See
+[Machine Suspend and Resume](https://fly.io/docs/reference/suspend-resume/) in Fly's documentation.
+
+### 📋 In the Log {: #idle-suspend-log }
+
+| Level | The log says | When |
+| --- | --- | --- |
+| ℹ️ `info` | `Idle monitor started`, with `mode` and `minutes` | At startup, with `fly`. No such line: the idle suspension is off |
+| ℹ️ `info` | `Idle suspend requested`, with `idle_s`, the seconds without a user's request, and `minutes` | Fly accepted the suspension. Fly may suspend the machine before the line is written, which then appears after the resume |
+| ⚠️ `warning` | `Idle suspend failed`, with `reason` and `retry_in_s` | The first failure in a row: see below |
+| ❌ `error` | `Idle suspend mode cannot be used: the machine is never suspended` | At startup: `LIBREFOLIO_IDLE_SUSPEND_MODE` is neither `none` nor `fly` |
+| ❌ `error` | `Idle suspend minutes cannot be used: the default applies` | At startup, with `fly`: `LIBREFOLIO_IDLE_SUSPEND_MINUTES` is not a whole number from 1 to 1440, and 5 minutes apply |
+
+**When a suspension fails**, LibreFolio tries again later, as long as nobody comes back. It waits
+at least `retry_in_s` seconds: 30 after the first failure, twice as long after each failure in a
+row, up to 10 minutes. Only the first failure is a warning: the next ones are logged at `DEBUG`
+level, as `Idle suspend failed again`, until a suspension succeeds. `reason` says what went wrong:
+
+| `reason` | What it means |
+| --- | --- |
+| `not_on_fly` | `FLY_APP_NAME` or `FLY_MACHINE_ID` is not set, so this is not a Fly.io machine: Fly sets both on each of its machines. On any other host, set `LIBREFOLIO_IDLE_SUSPEND_MODE` back to `none` |
+| `http_<status>` | Fly's Machines API answered with that HTTP status instead of accepting the suspension: check what a machine needs in [Setting Up Fly.io](#idle-suspend-fly) |
+| `connection` | Fly's Machines API did not answer |
+| `error` | Another error: its name is in an `Idle suspend raised` line, at `DEBUG` level |
 
 ---
 
@@ -139,7 +287,9 @@ for reading:
       "duration_s": 12.48,
       "items_ok": 24,
       "items_err": 0,
-      "error": null
+      "error": null,
+      "items_deferred": 0,
+      "retry_at": null
     },
     {
       "name": "history_sync",
@@ -148,7 +298,9 @@ for reading:
       "duration_s": null,
       "items_ok": 0,
       "items_err": 0,
-      "error": null
+      "error": null,
+      "items_deferred": 0,
+      "retry_at": null
     }
   ]
 }
@@ -165,13 +317,18 @@ for reading:
 | `jobs[].started_at`, `jobs[].duration_s` | When the job started, in UTC, and how long it ran, in seconds; `null` when it was not due |
 | `jobs[].items_ok`, `jobs[].items_err` | How many assets, and for the history sync FX pairs too, were brought up to date, and how many failed |
 | `jobs[].error` | When the job stopped on an error, the name of that error; `null` otherwise |
+| `jobs[].items_deferred` | How many assets or FX pairs were put off because their provider is pausing after it answered «too many requests» (HTTP 429): they count neither as brought up to date nor as failed, and a job with deferred items is `partial` |
+| `jobs[].retry_at` | When the job will run again, in UTC, if it has deferred items to retry (when the first of their providers' pauses ends) or is waiting after an error (when the wait ends; it doubles at each error in a row). `null` otherwise. A job that is not due reports it too, and deferred items are retried at the job's regular time if that comes first |
+
+A job with deferred items, or one waiting after an error, thus says when it will run again: a hosting
+panel can use `retry_at` to plan its next wake-up.
 
 The report's `status`:
 
 | `status` | What it means |
 | --- | --- |
 | `ok` | Every job that ran went well, or no job was due |
-| `partial` | Part of the work failed: a job is `partial`, or one job is `ok` and the other `error` |
+| `partial` | Part of the work failed or was deferred: a job is `partial`, or one job is `ok` and the other `error` |
 | `error` | Every job that ran failed, or the run itself failed (see `error`) |
 | `disabled` | The scheduler is off: no job ran |
 | `not_leader` | This server process does not run the jobs, and no job ran: see [Several Workers](#wake-sync-workers) |
@@ -207,10 +364,12 @@ rates. Once the block is lifted, the next run catches up the history sync missed
 
 ## 🔗 Related
 
-- 📝 **[Environment Variables](configuration.md)** — `LIBREFOLIO_WAKE_TOKEN`, and secrets in
-  files such as Docker secrets
+- 📝 **[Environment Variables](configuration.md)** — `LIBREFOLIO_WAKE_TOKEN`, the idle suspension
+  variables, the shutdown budget, and secrets in files such as Docker secrets
 - 🏢 **[Hosting for Others](hosting_providers.md)** — The managed profile, and blocking an instance
 - 🕐 **[Global Settings](settings.md#market-data-scheduler)** — The market data scheduler: its
   schedule and its log
+- 🪂 **[Machine Suspend and Resume](https://fly.io/docs/reference/suspend-resume/)** — Fly.io's
+  documentation: how a suspension works, and what a machine needs for it
 - 🧑‍💻 For developers: **[Market Data Scheduler](../developer/backend/scheduler.md)** — How a run
   works: its checks, its lock and its report

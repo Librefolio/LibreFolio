@@ -69,6 +69,11 @@ html.light,
     --lf-warning-on-soft: #92400e;
     --lf-warning-hover: #92400e; /* Q3: a solid warning or donation button, hovered */
     --lf-warning-on-inverse: #f59e0b; /* Q10: a warning inside the dark tooltip of the light theme */
+    /* Q10 rule, extended (T, 16/10, D-T27: to review): inside the inverted tooltip, the other theme's colour. The parity
+       gate keeps each X-on-inverse equal to the other theme's X. */
+    --lf-danger-on-inverse: #ff7a86; /* the dark theme's danger: 6.34:1 on the dark tooltip */
+    --lf-info-on-inverse: #3f86fa; /* the dark theme's info (KaTeX, links): 4.54:1 */
+    --lf-text-muted-on-inverse: #7f8c87; /* the dark theme's muted text: 4.54:1 */
     --lf-danger: #c82838;
     --lf-danger-soft: #ffe5e5; /* designer #FEE2E2: the muted text on it at 4.42:1 (D-T6) */
     --lf-danger-line: #fecaca;
@@ -201,6 +206,9 @@ html.dark,
     --lf-warning-on-soft: #fcd34d;
     --lf-warning-hover: #d97706;
     --lf-warning-on-inverse: #ae4e00; /* Q10: the light theme's warning, on the light tooltip. Designer #B45309: 4.44:1 (D-T6) */
+    --lf-danger-on-inverse: #c82838; /* Q10 rule: the light theme's danger, 4.86:1 on the light tooltip */
+    --lf-info-on-inverse: #155eef; /* Q10 rule: the light theme's info, 4.78:1 */
+    --lf-text-muted-on-inverse: #616d67; /* Q10 rule: the light theme's muted text, 4.77:1 */
     --lf-danger: #ff7a86; /* D-T25 (developer, 15/10): a softer red, 6.97:1 on the card. Was #F84361 (designer #F43F5E, D-T6, N5) */
     --lf-danger-soft: #2a1417;
     --lf-danger-line: #581c24;
@@ -307,6 +315,9 @@ html.dark,
     --color-lf-warning-on-soft: var(--lf-warning-on-soft);
     --color-lf-warning-hover: var(--lf-warning-hover);
     --color-lf-warning-on-inverse: var(--lf-warning-on-inverse);
+    --color-lf-danger-on-inverse: var(--lf-danger-on-inverse);
+    --color-lf-info-on-inverse: var(--lf-info-on-inverse);
+    --color-lf-muted-on-inverse: var(--lf-text-muted-on-inverse);
     --color-lf-danger: var(--lf-danger);
     --color-lf-danger-soft: var(--lf-danger-soft);
     --color-lf-danger-line: var(--lf-danger-line);

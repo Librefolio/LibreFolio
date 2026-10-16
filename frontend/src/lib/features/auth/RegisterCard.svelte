@@ -33,14 +33,8 @@
     let passwordError = '';
     let confirmPasswordError = '';
 
-    // Password rules for validation
-    const passwordRules = {
-        minLength: (pwd: string) => pwd.length >= 8,
-        hasUppercase: (pwd: string) => /[A-Z]/.test(pwd),
-        hasLowercase: (pwd: string) => /[a-z]/.test(pwd),
-        hasNumber: (pwd: string) => /\d/.test(pwd),
-        hasSpecial: (pwd: string) => /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~;']/.test(pwd),
-    };
+    // The rules are the app's own, read from PasswordStrength (`bind:valid`, decision 37): this card keeps no copy of them.
+    let passwordRulesMet = false;
 
     function validateUsername() {
         if (username.length < 3) {
@@ -63,7 +57,7 @@
 
     function validatePassword() {
         // Check all password rules
-        const allPassed = Object.values(passwordRules).every((check) => check(password));
+        const allPassed = passwordRulesMet;
         if (!allPassed) {
             passwordError = $_('auth.validation.passwordTooWeak');
             return false;
@@ -207,7 +201,7 @@
             <div>
                 <label class="sr-only" for="register-password">{$_('auth.password')}</label>
                 <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} icon={Lock} id="register-password" name="new-password" on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
-                <PasswordStrength {password} />
+                <PasswordStrength {password} bind:valid={passwordRulesMet} />
                 {#if passwordError}
                     <p class="text-lf-danger text-xs mt-1">{passwordError}</p>
                 {/if}
