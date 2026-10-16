@@ -1,7 +1,8 @@
 """The instance key: one secret per installation, from which every encryption key of LibreFolio is derived.
 
 Owner: workstream H (platform). Consumers never handle the key itself: ``derive_key(purpose)`` gives each purpose a key
-of its own, so two uses (the secrets of the plugin settings, the backups) never share one.
+of its own, so two uses (the secrets of the plugin settings, the backups) never share one. ``derive_key_from(key,
+purpose)`` gives the same derivation from another instance's key, such as the key of a backup being restored.
 
 Where the key comes from, first match wins:
 
@@ -77,12 +78,38 @@ def derive_key(purpose: str, length: int = 32) -> bytes:
     the key file. Raises ``ValueError`` for an invalid purpose or length, before reading the key, and
     ``InstanceKeyError`` when the key cannot be used.
     """
+    _check_purpose_and_length(purpose, length)
+    return _derive(_instance_key(), purpose, length)
+
+
+def derive_key_from(key: str, purpose: str, length: int = 32) -> bytes:
+    """The key that ``derive_key(purpose, length)`` gives on an instance whose instance key is ``key``.
+
+    For a key that is not this instance's: a restore re-encrypts what the instance of a backup encrypted with its own
+    key (workstream B). The archive leaves that key out: it comes from the administrator's copy of the old
+    ``secrets/instance.key``, read with ``read_secret_file()`` as this module reads its own, or from the old
+    ``LIBREFOLIO_INSTANCE_KEY``. It reads neither the environment nor the data directory and never creates the key file.
+    ``key`` is the text of the key, at least ``INSTANCE_KEY_MIN_LENGTH`` characters. Raises ``ValueError`` for an
+    invalid purpose or length, before looking at the key, ``TypeError`` for a key that is not a text and
+    ``InstanceKeyError`` for a key too short; no message holds the key.
+    """
+    _check_purpose_and_length(purpose, length)
+    if not isinstance(key, str):
+        raise TypeError(f"An instance key is a text, not {type(key).__name__}")
+    return _derive(_checked(key, "the given key"), purpose, length)
+
+
+def _check_purpose_and_length(purpose: str, length: int) -> None:
     if not _PURPOSE.fullmatch(purpose):
         raise ValueError(f"Invalid key purpose {purpose!r}: lowercase letters, digits and . _ : - only, at most 128 characters")
     if not isinstance(length, int) or not 0 < length <= _HKDF_MAX_LENGTH:
         raise ValueError(f"A derived key has 1 to {_HKDF_MAX_LENGTH} bytes, not {length!r}")
+
+
+def _derive(key: str, purpose: str, length: int) -> bytes:
+    """HKDF-SHA256 of the key's UTF-8 bytes; the purpose and the length are both in the context, so neither can be swapped."""
     info = purpose.encode("ascii") + b"\x00" + length.to_bytes(2, "big")
-    return hkdf_sha256(_instance_key().encode("utf-8"), salt=_DERIVATION_SALT, info=info, length=length)
+    return hkdf_sha256(key.encode("utf-8"), salt=_DERIVATION_SALT, info=info, length=length)
 
 
 def hkdf_sha256(key_material: bytes, *, salt: bytes, info: bytes, length: int) -> bytes:

@@ -268,40 +268,40 @@
             {typeLabel(type)}
         </span>
     {:else}
-        <span class="text-xs text-gray-400 italic">—</span>
+        <span class="text-xs text-lf-muted italic">—</span>
     {/if}
 {/snippet}
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
+        <h2 class="text-lg font-semibold text-lf-primary">
             {$t('assets.comparison.title')}
         </h2>
-        <button type="button" onclick={handleCancel} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+        <button type="button" onclick={handleCancel} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
         </button>
     </div>
 
     <!-- Body -->
     <div class="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto" data-testid="comparison-body" data-selected-count={selectedCount} data-total-count={totalCount}>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+        <p class="text-sm text-lf-secondary">
             {$t('assets.comparison.description')}
         </p>
 
         <!-- Grouped items — uniform card layout for all types -->
         {#each groupedItems as group}
             <!-- Section header -->
-            <div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider pt-2" data-testid="comparison-group" data-section={group.sectionKey}>
+            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider pt-2" data-testid="comparison-group" data-section={group.sectionKey}>
                 {group.title}
             </div>
 
             {#each group.items as { item, index }}
-                <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3" data-testid="comparison-card" data-field={item.field}>
+                <div class="border border-lf-subtle rounded-lg p-3" data-testid="comparison-card" data-field={item.field}>
                     <!-- Checkbox + label -->
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={item.selected} onchange={() => toggleItem(index)} data-testid="comparison-checkbox-{item.field}" class="rounded border-gray-300 dark:border-slate-600 text-libre-green focus:ring-libre-green/50" />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                        <input type="checkbox" checked={item.selected} onchange={() => toggleItem(index)} data-testid="comparison-checkbox-{item.field}" class="rounded border-lf-input text-lf-link focus:ring-lf-focus/50" />
+                        <span class="text-sm font-medium text-lf-secondary">{item.label}</span>
                     </label>
 
                     {#if isIdentifierField(item.field)}
@@ -321,51 +321,51 @@
                         <!-- Values grid: Current → Provider -->
                         <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-2 items-center">
                             <!-- Current box -->
-                            <div class="bg-gray-50 dark:bg-slate-800 rounded p-2" data-testid="comparison-current-{item.field}">
-                                <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                            <div class="bg-lf-panel rounded p-2" data-testid="comparison-current-{item.field}">
+                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5">
                                     {$t('assets.comparison.currentValue')}
                                 </span>
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
                                             <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
-                                                <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
-                                                <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
+                                                <span class="text-lf-secondary">{formatDistKey(entry.key, item.field)}</span>
+                                                <span class="font-mono text-lf-secondary">{entry.pct}</span>
                                             </div>
                                         {:else}
-                                            <span class="text-gray-400 italic">—</span>
+                                            <span class="text-lf-muted italic">—</span>
                                         {/each}
                                     </div>
                                 {:else if item.field === 'asset_type'}
                                     {@render typeBadge(item.currentValue)}
                                 {:else}
-                                    <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
+                                    <div class="text-xs font-mono text-lf-secondary">{truncate(item.currentValue)}</div>
                                 {/if}
                             </div>
 
                             <!-- Arrow (perfectly centered between boxes) -->
-                            <div class="text-gray-400 dark:text-gray-500 text-lg font-light">→</div>
+                            <div class="text-lf-muted text-lg font-light">→</div>
 
                             <!-- Provider box -->
-                            <div class="bg-green-50 dark:bg-green-900/20 rounded p-2" data-testid="comparison-provider-{item.field}">
-                                <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                            <div class="bg-lf-success-soft rounded p-2" data-testid="comparison-provider-{item.field}">
+                                <span class="text-[10px] uppercase text-lf-muted block mb-0.5">
                                     {$t('assets.comparison.providerValue')}
                                 </span>
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
                                             <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
-                                                <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
-                                                <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
+                                                <span class="text-lf-secondary">{formatDistKey(entry.key, item.field)}</span>
+                                                <span class="font-mono text-lf-success-on-soft">{entry.pct}</span>
                                             </div>
                                         {:else}
-                                            <span class="text-gray-400 italic">—</span>
+                                            <span class="text-lf-muted italic">—</span>
                                         {/each}
                                     </div>
                                 {:else if item.field === 'asset_type'}
                                     {@render typeBadge(item.providerValue)}
                                 {:else}
-                                    <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
+                                    <div class="text-xs font-mono text-lf-success-on-soft">{truncate(item.providerValue)}</div>
                                 {/if}
                             </div>
                         </div>
@@ -376,21 +376,21 @@
 
         <!-- Select All / Deselect All -->
         <div class="flex items-center gap-3 pt-2">
-            <button type="button" onclick={selectAll} data-testid="comparison-select-all" class="text-xs text-libre-green hover:text-libre-green/80 font-medium transition-colors">
+            <button type="button" onclick={selectAll} data-testid="comparison-select-all" class="text-xs text-lf-link hover:text-lf-link/80 font-medium transition-colors">
                 {$t('common.selectAll')}
             </button>
-            <button type="button" onclick={deselectAll} data-testid="comparison-deselect-all" class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors">
+            <button type="button" onclick={deselectAll} data-testid="comparison-deselect-all" class="text-xs text-lf-muted hover:text-lf-secondary font-medium transition-colors">
                 {$t('common.deselectAll')}
             </button>
         </div>
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <button type="button" onclick={handleCancel} data-testid="comparison-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-lf-subtle">
+        <button type="button" onclick={handleCancel} data-testid="comparison-cancel" class="px-4 py-2 text-sm font-medium text-lf-secondary bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover transition-colors">
             {$t('common.cancel')}
         </button>
-        <button type="button" onclick={handleApply} disabled={selectedCount === 0} data-testid="comparison-apply" class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <button type="button" onclick={handleApply} disabled={selectedCount === 0} data-testid="comparison-apply" class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             ✅ {$t('assets.comparison.applySelected', {values: {count: selectedCount, total: totalCount}})}
         </button>
     </div>
