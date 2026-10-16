@@ -3074,3 +3074,104 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >   `--workers 2`, **38/38 in 3,9 minuti**, con il carico tra 80 e 168. I due test nuovi durano 15,1 s e 12,2 s. La porta
 >   6189 libera alla fine; log in `files/logs/y12_e2e_broker_detail.log`.
 > - **Checkpoint**: lo spec (`files/y12_stage_code.txt`) più il journal (`files/y12_stage_journal.txt`).
+
+## Y11 — implementazione (2026-10-16, dalle 12:45)
+
+### Passo 1 · lo store `pageBusy` ✅
+
+> **Note implementazione**.
+> - **Il rosso**, scritto da `test-author`: `frontend/src/lib/stores/app/pageBusy.test.ts`, in jsdom, con gli aiutanti
+>   `$test/runes.svelte`; 20 test sui gettoni, il timeout, `track` e la reattività. Registrato in `store-unit`, nel mio
+>   `_frontend_portfolio.py`: lista, docstring, `desc` e `tests` con tutti e cinque i file. Il rosso (12:52) si ferma
+>   all'import: `Failed to resolve import "./pageBusy.svelte"`.
+> - **Lo store**, mio: `frontend/src/lib/stores/app/pageBusy.svelte.ts`.
+>   - Una lista `$state.raw`, sostituita a ogni cambiamento; un timer per gettone, con un solo `console.warn` quando
+>     scade.
+>   - Gli id crescono e basta; `track` chiude il gettone in `finally`.
+>   - Un `timeoutMs` non valido (zero, negativo, infinito) vale il default.
+>   - `reset` è registrato anche su `registerClientSessionReset`, come gli altri store. La domanda era di
+>     `test-author`; la scelta è mia.
+>   - Verde: 20/20, Prettier pulito.
+> - **⚠️ Fuori pista, e una scelta**: le pagine chiamano `track` dentro gli `$effect` (periodo, valuta, filtro).
+>   Senza `untrack` lo store, leggendo la sua lista in `begin`, `release` e `reset`, legava l'effetto a sé, che sarebbe
+>   ripartito a ogni gettone. Così lo store la legge con `untrack`.
+>   - `test-author` ha aggiunto 4 test, fra cui una prova di presenza: l'effetto riparte quando cambia il suo periodo.
+>   - **Il rosso l'ho provato io**: rimessa per un momento la versione senza `untrack`, con una copia nella cartella
+>     della sessione, i 4 test nuovi sono rossi e gli altri 20 verdi. Poi ho rimesso la versione con `untrack`, identica
+>     (stessa checksum). In tutto 24/24.
+
+### Passo 2 · il primo cablaggio, sui file già liberi (risposta dei colori delle 12:25) — prove leggere in corso
+
+> **Note implementazione**.
+> - **`routes/(app)/+layout.svelte`**, solo lo script: un `onNavigate` chiama `pageBusy.reset()` quando cambia la route.
+>   Il layout è in sintassi vecchia (`$:`): l'aggancio sta accanto ad `afterNavigate`, e la modalità non cambia. Il mock
+>   di `$app/navigation` esporta già `onNavigate`.
+> - **`files/+page.svelte`**:
+>   - una funzione `reloadFiles(label)` avvolge `loadFiles` per chi fa partire il caricamento: Aggiorna, scheda, e i
+>     cinque ricaricamenti dopo un upload o una cancellazione. `loadFiles` resta senza gettone;
+>   - il primo caricamento è una catena sola: impostazioni, icone, broker e file;
+>   - sul pulsante, `disabled` e la rotazione leggono `pageBusy.busy`, e c'è `data-busy`.
+> - **`dashboard/+page.svelte`**:
+>   - **gettoni** su primo caricamento (dai broker e dagli asset fino al report), Aggiorna, periodo, valuta (l'`$effect`
+>     e il selettore), filtro dei broker (dopo i suoi 2 s), scheda transazioni, contributo, candele P&L, e il
+>     ricaricamento dopo la creazione di una coppia FX;
+>   - **niente gettone** sui ricaricamenti dopo una sincronizzazione (le CTA della qualità dei dati, `onsynced` del
+>     rischio, la coppia appena sincronizzata): P3;
+>   - `handleSync` tiene `syncLoading`, che alimenta il `data-busy` della radice; la radice resta di DV, non la tocco;
+>   - il pulsante legge `pageBusy.busy`.
+> - **`LotsAnalysisPanel.svelte`**, solo lo script: gettoni sui tre `$effect` che caricano (apertura e parametri,
+>   selezione, `refreshVersion`). Corretto anche il commento vecchio di `:125`, quello trovato in Y-12.
+> - **`riskPanelController.svelte.ts`**: gettoni su `applyBaseSignature` (apertura e parametri) e sull'`$effect` di
+>   `refreshVersion`.
+>   - Non su `handleSynced`, che è una sincronizzazione.
+>   - Nemmeno sulle analisi a richiesta, che hanno i loro indicatori.
+> - **Nessuna classe toccata.**
+>
+> **Prove leggere del passo 2** (13:07–13:2x, carico sotto 50; script `files/scripts/y11_light.sh`, log
+> `files/logs/y11_*.log`): svelte-check 0/0; `theme-roles` pulito; `store-unit` 76/76 in 5 file; `risk-controller-unit`
+> 102/102; `risk-levels-unit` 498/498; `allocation-unit` 192/192; `core-unit` 6 261/6 261; `component-unit`
+> 4 029/4 029; `git diff --check` pulito; 6189 libera. **`check-orphans` non è partito**: l'ho fermato mentre lo script
+> aspettava il carico, per la pausa del developer. Si rifà dopo il via, perché `page-busy.spec.ts` è registrata ma non
+> ancora verificata.
+>
+> **La E2E del passo 2**, scritta da `test-author` e non ancora lanciata: `frontend/e2e/portfolio/page-busy.spec.ts`,
+> registrata come `front-portfolio page-busy` (+20 righe in `_frontend_portfolio.py`). Cinque test:
+> 1. un cambio di periodo (`date-preset-6m`) fa girare `sync-button` senza clic;
+> 2. «Aggiorna» della Dashboard;
+> 3. «Aggiorna» dei File;
+> 4. il cambio di scheda dei File;
+> 5. l'ambito della pagina: un report della Dashboard trattenuto, poi il link `nav-files`; il pulsante dei File torna
+>    fermo mentre il report è ancora in volo.
+>
+> Le richieste si trattengono con `page.route` e si rilasciano in `finally`; si legge solo `data-busy` e `disabled`.
+> Il percorso giusto dei rapporti dei broker è `GET /api/v1/brokers/import/files`.
+> - **Le spec che possono cambiare**, segnalate da `test-author` senza toccarle:
+>   - `dashboard-cache.spec.ts` (`:474`, `:497`, `:554`): il clic su `sync-button` aspetta il pulsante abilitato;
+>   - `ai-export-memory.spec.ts:157`: `toBeEnabled()` entro 3 s;
+>   - la galleria (`galleryShot.ts`, `noLoaderOnScreen`, limite 30 s), che ora aspetta anche i caricamenti tracciati
+>     prima di ogni scatto della Dashboard e dei File. È il cambiamento più visibile: va detto ai colori.
+
+### ⏸️ Pausa del developer (2026-10-16, 13:2x) — FROZEN
+
+- **HEAD**: `3bf871f4f` (il journal di Y-12). Nessuna fusione aperta.
+- **File sporchi, tutti di Y11 e da committare insieme**:
+  - modificati: `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte`,
+    `frontend/src/lib/features/risk/riskPanelController.svelte.ts`, `frontend/src/routes/(app)/+layout.svelte`,
+    `frontend/src/routes/(app)/dashboard/+page.svelte`, `frontend/src/routes/(app)/files/+page.svelte`,
+    `scripts/test_runner/_frontend_portfolio.py`;
+  - nuovi: `frontend/src/lib/stores/app/pageBusy.svelte.ts`, `frontend/src/lib/stores/app/pageBusy.test.ts`,
+    `frontend/e2e/portfolio/page-busy.spec.ts`;
+  - il piano.
+- **Il passo dopo, al via**:
+  1. uno slot E2E per il passo 2: `page-busy`, `dashboard`, `dashboard-cache`, `files` e `front-broker detail` (il
+     pannello dei lotti), circa 30 minuti;
+  2. poi il checkpoint del passo 2;
+  3. poi gli script e i pulsanti delle altre pagine, all'ingresso di ciascuna area dei colori (AF, DV, BK, TR), e
+     `assets/[id]` per ultimo.
+- **14:14, ripresa dopo la pausa** (via del coordinatore):
+  - `check-orphans` verde: tutti i file registrati e raggiungibili, `page-busy.spec.ts` compreso;
+  - lo slot E2E 2 è verso le 15:10, per 30 minuti; lo script è `files/scripts/y11_e2e.sh`;
+  - AF è entrato (`bfd33a0f5`): i pulsanti di `fx/+page.svelte`, `fx/[pair]/+page.svelte` e `assets/+page.svelte` sono
+    liberi dopo l'allineamento della base, che il coordinatore fa al prossimo checkpoint;
+  - Z-13b non tocca più `refreshVersion`; Z-15 (il ricaricamento dei pannelli dopo un aggiornamento dei prezzi) si
+    decide dopo Y11.
