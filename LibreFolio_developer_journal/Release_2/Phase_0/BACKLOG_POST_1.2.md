@@ -2800,7 +2800,48 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) aspetta l'ingresso di X FE5c.
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
-- (nessuna voce ancora)
+- **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
+  distinguono strumenti:
+  - gli interruttori misura (viola), editor (ambra) ed estetica (smeraldo), col loro ramo a riposo;
+  - l'accento viola della sezione misure;
+  - le icone di sezione: segnali blu, metadati azzurro.
+
+  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e in `routes/(app)/assets/[id]` o, dopo FE5c, `components/assets/detail/`
+  (55). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la designer o T. Dettagli:
+  [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md), sezione «7. Restano legacy».
+- **AF-2 · Tipi distinti dalla tinta** — basso; AF, 16/10. Il badge `txScope` di `AssetTable` (proprio smeraldo, altri
+  blu, analisi grigio; 12 classi) e l'origine dell'identificativo di `IdentifierPrimaryChooser` (fornitore blu, salvato
+  verde; 7 classi) restano categoriali, come `KIND_TONES`. I test `AssetTable.test.ts:190–192, 209` e
+  `asset-list.spec.ts:782–795` li leggono ancora per classe. Dettagli: piano AF, sezione «7».
+- **AF-3 · Riquadri decorativi degli stati vuoti** — minimo; AF, 16/10. Le monete ambra di `routes/(app)/fx/+page` e il
+  grafico verde di `routes/(app)/assets/+page` sono una tinta per pagina, non uno stato: restano legacy (4 + 4 classi).
+  Dettagli: piano AF, sezione «7».
+- **AF-4 · Bordo rosso di `AssetCurrencyChangeModal` attraverso `ModalBase.contentClass`** — medio-basso; AF, 16/10.
+  Va portato con TC-10 e con la regola 9 dello skill `design-system`. Con un ruolo (`border-lf-danger-line`)
+  perderebbe contro `border-lf-raised`: serve una variante di `ModalBase` (T). Intanto la catena resta legacy (2
+  classi). Dettagli: piano AF, sezione «2. Catene», C1.
+- **AF-5 · Chip `<code>` sulle tinte dei banner** — minimo; AF, 16/10. In `PriceDataImportModal` (6 classi) ed
+  `EventDataImportModal` (12) i chip sono `bg-white/30 dark:bg-slate-700/50` dentro `InfoBanner`. Nessun ruolo dà un
+  chip su una tinta in tutti e due i temi, e `htmlSink.gate.test.ts:73` ne fissa uno alla lettera. Restano legacy fino a
+  un ruolo di T. Dettagli: piano AF, sezione «2», C5.
+- **AF-6 · Velo e icona bianca sull'immagine dell'asset** — minimo; AF, 16/10. In `AssetModalDetails:104–107`
+  (`bg-black/40`, `text-white`) manca un ruolo «testo sul velo»: restano legacy (2 classi). Dettagli: piano AF,
+  sezione «7».
+- **AF-7 · Tre interruttori dell'area** — basso; AF, 16/10. `AssetModalFooter` attivo/benchmark e l'interesse di mora
+  di `ScheduledInvestmentEditor` (12 classi) restano per il lotto unico degli interruttori di T, già nel suo
+  inventario. Dettagli: piano di T, «Il lotto degli interruttori (Q2)».
+- **AF-8 · `hover:bg-libre-green-dark` è una classe morta** — minimo, da decidere; AF, 16/10. `--color-libre-green-dark`
+  non esiste, quindi oggi i pulsanti di `BoundaryDateModal` e `ScheduledInvestmentEditor` non cambiano al passaggio. La
+  migrazione propone `hover:bg-lf-action-hover`, che aggiunge l'hover di tutti i primari: va confermato. Dettagli:
+  piano AF, sezione «6».
+- **AF-9 · Dettaglio asset in attesa di X FE5c** — medio; AF, 16/10. In `routes/(app)/assets/[id]/+page.svelte` (155
+  classi dopo FE5c) e nei 6 componenti di `components/assets/detail/` (145) la migrazione parte dopo l'ingresso di FE5c
+  (lotto 9). Dettagli: piano AF, sezione «5. Lotti».
+- **AF-10 · Un bottone secondario su una superficie `panel` non ha un ruolo** — minimo; AF, 16/10. Il piede `panel` di
+  `AssetCurrencyChangeModal` ha un «Annulla» grigio che prima era due passi sopra il piede (slate-200 su slate-50). Con
+  `bg-lf-panel` sparirebbe: ha preso `bg-lf-neutral hover:bg-lf-input/30`, il ruolo più vicino. È la domanda aperta 3
+  dello skill `design-system` (`panel` = `hover`): serve un neutro «sopra panel» con il suo hover (T). Dettagli: piano
+  AF, passo 6, lotto 6.
 
 ---
 
@@ -2848,9 +2889,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ## H · Piattaforma (fase 01)
 
+> 16/10, treno 110 (`0ecc5ed27`): chiuse dal coordinatore H-1, H-4, H-6, H-9, H-14, H-15, H-16 (lotti di H entrati). Restano aperte H-3 (opzione A, P24), H-5, H-17 (le due righe di B), H-18 (→ sezione C), H-19 (→ A).
+
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
-- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1, CP2a e CP4** — minimo; H, 14-15/10.
+- ✅ **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1, CP2a e CP4** — minimo; H, 14-15/10.
   - **CP1**: 9 menzioni in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`,
     `features/F-011.md:20`, `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
     - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
@@ -2893,7 +2936,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - una chiave configurata è casuale, non una passphrase.
 
   Dettagli: piano H, §14 «CP3 passo 2».
-- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+- ✅ **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
   minimo; H, 15/10.
   - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
   - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
@@ -2907,9 +2950,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - CP6 aggiunge la pagina nuova `admin/hosting_providers` (solo inglese, titolo di navigazione compreso), le righe delle
     variabili del blocco e dei controlli d'avvio in `configuration`, e un punto in `admin/index`.
   - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
+  - 16/10, lotto «b-doc-notes» (B-4, B-5): righe nuove in `filesystem`, `docker_advanced` e `index`.
+    `translate-validate --file` dà 27, 42 e 15 errori, compreso il debito che c'era già. **Ordine**: il testo nuovo
+    di `filesystem` e `docker_advanced` rimanda a `cli_tools.md#backup` e `#backup-docker`, ancore che
+    `cli_tools.{it,fr,es}.md` non hanno finché non si chiude B-7. Va tradotto insieme a B-7 o dopo, altrimenti la build
+    rigorosa IT/FR/ES non trova le ancore. L'ancora `#what-to-back-up` c'è già nelle 4 lingue.
 
-  Dettagli: piano H, §14 «CP5a passo 2» e «CP6 passo 4».
-- **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
+  Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
+- ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
   - «omits a provider section entirely when nothing is installed» e «shows each section only when its own list has
     something in it» cercano `settings.assetProviders` con un confronto esatto.
   - L'intestazione è però «etichetta (n)», quindi la ricerca non trova niente anche quando la sezione c'è.
@@ -2933,7 +2981,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `./dev.py docker exec`.
 
   Dettagli: piano H, §14 «CP7a passo 2».
-- **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
+- ✅ **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
   lotto del log di accesso), 15/10.
   - `logging_config.py` toglie i gestori della radice con `removeHandler` senza `close()`; poi `basicConfig(force=True)`
     non trova più niente da chiudere.
@@ -2986,7 +3034,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
 
   Dettagli: piano H, §14 «Ingresso dopo A6a».
-- **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
+- ✅ **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
   impostazioni dei plugin), 15/10.
   - Serve al ripristino di B: i segreti dei plugin di un backup sono cifrati con la chiave dell'istanza d'origine, e
     vanno cifrati di nuovo con quella dell'istanza che ripristina.
@@ -2995,14 +3043,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     con la chiave corrente. Da accordare con X e B (nome, firma).
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
-- **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
+- ✅ **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
   - `plugin_secrets_key_status` (X) dice se i segreti salvati si possono ancora decifrare con la chiave corrente, con i
     totali quando non si può, e gira in `to_thread`.
   - Cura: un controllo in `config_audit.py` che lo usa, con un avviso nei log e nella UI dell'admin, nello stile degli
     altri controlli (codice, gravità, chiave i18n).
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
-- **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
+- ✅ **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
   - L'elenco dei segreti letti con `env_secret()` non ha le variabili dei plugin (`LIBREFOLIO_PLUGIN_*`).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
@@ -3015,6 +3063,24 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     usano, così la guardia copre ogni default del profilo. Da concordare con B.
 
   Dettagli: piano H, §14 «CP7b-2», passo 2.
+- **H-18 · I toast non arrivano ai lettori di schermo** — basso; H (revisione del test-author sulla card della pagina di
+  blocco), 16/10.
+  - `ToastContainer` (`components/ui/feedback/`) non ha né `aria-live` né `role="status"`: nessun toast dell'app viene
+    annunciato. Gli errori che contano hanno di solito anche un `role="alert"` nel punto in cui avvengono, come nella
+    card del backup.
+  - Cura proposta: una regione `aria-live="polite"` sul contenitore, `assertive` per gli errori, con un caso Vitest. Il
+    componente è condiviso: va al proprietario dell'interfaccia comune, con la regola dei colori per i file condivisi.
+
+  Dettagli: piano H, §14 «La card del backup nella pagina di blocco».
+- **H-19 · `POST /users/address-probe` risponde 500 se la chiave d'istanza non si può usare** — basso; H (analisi di H-3),
+  16/10.
+  - `issue_probe_nonce()` (`services/accounts/address_probe.py`, di A) chiama `derive_key()` senza gestire
+    `InstanceKeyError`. Con un file della chiave generato e poi rovinato, il server parte con un errore nel log, e la
+    rotta dell'admin dà 500. `verify_probe_nonce()` invece lo tollera e risponde `False`.
+  - Cura proposta: 503 con un codice, per esempio `instance_key_unavailable`, e un caso di test. Il codice è di A: da
+    girare ad A.
+
+  Dettagli: piano H, §14 «H-3, il resto».
 
 ## A · Account e accessi (fase 01)
 
