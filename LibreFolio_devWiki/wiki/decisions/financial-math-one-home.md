@@ -137,7 +137,8 @@ take the common math from the layer.
   `"valuation_source": "portfolio_engine"`, `requires_lots_analysis_service` — and the historical test file names.
 - **After release 1.2**: T-R1, private names across the boundary (`risk/service.py` calls
   `PortfolioService._get_configured_fx_pair_sets()`; `portfolio_service` imports `_compute_tx_fingerprint` from the
-  engine); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
+  engine; *2026-10-16, CP-9a:* the risk half is closed, `risk/data_quality.py` reads the routes with
+  `load_configured_fx_pair_sets(db)` from the home); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
 - The same layering question for `utils/` was answered the next day: [[decisions/utils-leaf-functions-only]].
 
 ## Links
