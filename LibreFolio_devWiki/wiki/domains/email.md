@@ -136,12 +136,14 @@ the why.
   and the change notice's per-account limit — lives in each process: N uvicorn workers allow N times the limits, and a
   restart forgets them. Only the per-account limits of «forgot password» and of the verification emails, counted on
   their token rows in the database, hold across processes. The Email tab shows the budget of the process that answers.
-- **Behind a proxy.** The per-address limits key on `request.client.host`, which uvicorn takes from `X-Forwarded-For`
-  only for the proxies listed in `FORWARDED_ALLOW_IPS`. Behind a proxy it does not trust — Fly's, without that setting
-  — every client shares the proxy's address, so each per-address limit becomes instance-wide; for registration emails,
-  that means emails silently held after 10 sign-ups an hour. `client_address()`, which the connection indicator uses
-  ([[features/F-102]]), is advice only, never a limit key. The cloud pages («Hosting for Others», the `managed`
-  profile) wait for the developer; A's login limiter has the same concern (P17).
+- **Behind a proxy.** The per-address limits read workstream H's `client_address(request)` (decision P17,
+  `services/platform/client_address.py`): the header a trusted proxy sets when `LIBREFOLIO_CLIENT_IP_HEADER` names it
+  (`Fly-Client-IP` on Fly.io), otherwise the connection's address, which uvicorn takes from `X-Forwarded-For` only
+  for the proxies listed in `FORWARDED_ALLOW_IPS`. Behind a proxy LibreFolio does not trust — Fly's, without the
+  variable — every client shares the proxy's address, so each per-address limit becomes instance-wide; for
+  registration emails, that means emails silently held after 10 sign-ups an hour. The variable is safe only when every
+  request crosses that proxy. The older `client_address()` of `utils/runtime/network.py`, which the connection
+  indicator uses ([[features/F-102]]), is advice only, never a limit key.
 - **No queue, no retry.** The emails sent after an answer (forgotten password, verification at sign-up, change notice)
   are FastAPI background tasks of the answering process. A verification email that does not go leaves the account
   waiting, and «Send the link again» recovers it; a forgotten-password email that does not go revokes its new link, and
@@ -195,6 +197,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 - **IPv4 clients and the per-network key** («E3.5», self-review before any run): `address_key()` read `ipv4_mapped`
   on an `IPv4Address`, which has none — every IPv4 client would have got a 500 once the hold was lifted. Now IPv4 as
   is, an IPv4-mapped IPv6 as its IPv4 (one count for both forms), any other IPv6 by its /64, computed from the integer.
+  The rule now lives in one place, workstream H's `client_rate_key()`: lot E4c removed E's copy.
 - **Verification tokens after a failed delivery** («E5.1»): a failed email kept its token's address, so «send again»
   right after a 502 answered 429. And an email can arrive despite a timeout after `DATA`: its token, left without an
   address, was revoked at confirmation, which could leave the account inactive and no longer waiting — locked out. A
@@ -261,6 +264,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 | API routes | `backend/app/api/v1/email.py` |
 | Schemas, `EmailInstanceConfig` | `backend/app/schemas/email.py` |
 | Sliding-window limiter | `backend/app/utils/runtime/rate_window.py` |
+| The client's address and its key for a limit (workstream H, P17) | `backend/app/services/platform/client_address.py` |
 | Hooks in login, register and `update_profile` (A's file) | `backend/app/api/v1/auth.py` |
 | Hook in `register_user()` (A's file) | `backend/app/services/accounts/registration_service.py` |
 | Status changes revoke verification links (A's file) | `backend/app/services/accounts/user_service.py` |
