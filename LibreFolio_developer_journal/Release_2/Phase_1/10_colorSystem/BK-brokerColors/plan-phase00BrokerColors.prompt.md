@@ -262,7 +262,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `front-broker list|detail|broker-recovery|broker-create-feedback`, `front-user broker-sharing|multi-user`,
 `front-portfolio data-quality-legacy|data-quality-real|privacy-masking`. Server spento, porta 6158 libera.
 
-### S7 — L4 · modale di custodia ✅ (16/10/2026 sera; checkpoint inviato, FROZEN)
+### S7 — L4 · modale di custodia ✅ (16/10/2026 sera; committato in `16087f0fd`, slot verde)
 > **Nota del coordinatore (17:54, da G-18):** `lot-custody-modal > div` è un elemento misto composto a runtime:
 > `ModalBase` mette `border border-lf-raised text-lf-primary {contentClass}`, `LotCustodyModal` gli passa
 > `contentClass="bg-white dark:bg-slate-800"`. In scuro vince la regola legacy `html.dark .bg-white { … !important }`
@@ -296,6 +296,12 @@ marcatori degli eventi e le icone «in transito».
 >   `--check` pulito; Vitest dei gate `themeRoles`, `themeTokens`, `themeComponentTokens`, `moneyRenderSites` 125/125;
 >   `vitest run src/lib/features/brokers/lots/` 12 file, 554/554 (con `LotCustodyModal.test.ts` di Y); `front check`
 >   (svelte-check) 0 errori, 0 avvisi; `git diff --check` pulito.
+> - **Commit e slot:** checkpoint committato dal coordinatore in `16087f0fd`, base merge `f4eeb3b63` (record della 1.3,
+>   niente frontend). Preparazione fuori slot (20:11–20:17, nice, carico < 50): `front build --debug` 243 s, `mkdocs
+>   build` 83 s; `api sync` non ripetuto nello slot, perché un `generated.ts` nuovo avrebbe fatto rifare la build al
+>   runner (era successo nello slot L1–L3). **Slot L4 verde** (20:16:52–20:24:06, 7 min, corsia 6158, un worker, build
+>   trovate aggiornate): `front-broker detail` 38/38, `front-portfolio privacy-masking` 18/18, `front-broker list` 9/9
+>   (**65/65**), nessun flaky; alla fine nessun listener sulla 6158.
 
 ### S8 — Consegna finale ⏳
 
