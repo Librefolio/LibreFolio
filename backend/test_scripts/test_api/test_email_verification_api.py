@@ -21,8 +21,9 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
    ``{error_code, message}`` only — no ``smtp_code`` either —, after which «resend» works at once; 422
    ``EMAIL_RECIPIENT_INVALID``; 422 for a body that is not ``{username, password}``. Accounts and limits are asked
    before the configuration: an unknown account is 401 whatever email can do.
-4. The client address is ``request.client.host``, keyed by ``flows.address_key``: one IPv6 /64 is one client; a
-   request without an address (a unix socket) is not counted per address.
+4. The client address is H's ``client_address(request)`` (the connection's address while
+   ``LIBREFOLIO_CLIENT_IP_HEADER`` is unset, as here), keyed by H's ``client_rate_key`` (decision P17): one IPv6 /64 is
+   one client; a request without an address (a unix socket) is not counted per address.
 5. No log event holds a token, a password, an identifier or an address.
 
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed
@@ -62,7 +63,7 @@ from backend.app.config import API_V1_PREFIX
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User, UserSettings
 from backend.app.db.session import get_session_generator
-from backend.app.services.accounts import auth_service, token_service
+from backend.app.services.accounts import auth_service, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, smtp, verification
@@ -118,9 +119,11 @@ RATE_LIMITED_MESSAGE = "Too many requests: try again later"
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
-#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX.
-MAILBOX_VARIANTS = ("Zq-Vic@Example.com", "zq-vic@example.com", "ZQ-VIC@EXAMPLE.COM", "zQ-vIc@eXaMpLe.CoM")
-MAILBOX = "zq-vic@example.com"
+#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX. The
+#: ways differ in the case of ``ï`` and ``ç`` alone, in NFC (one code point each): since P18 an address is unique
+#: regardless of A–Z case (``ux_users_email_lower``).
+MAILBOX_VARIANTS = ("zq-v\u00cf\u00e7@example.com", "zq-v\u00ef\u00e7@example.com", "zq-v\u00cf\u00c7@example.com", "zq-v\u00ef\u00c7@example.com")
+MAILBOX = "zq-v\u00ef\u00e7@example.com"
 START = 1_000.0
 
 
@@ -825,8 +828,10 @@ async def test_no_log_event_holds_a_token_a_password_an_identifier_or_an_address
 
 @pytest.mark.asyncio
 async def test_a_mailbox_with_three_verification_emails_this_hour_answers_429_as_any_limit(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, mailbox_limit: SlidingWindowLimiter) -> None:
-    """EVA-016 — contract 3: four waiting accounts whose addresses are one mailbox written four ways (``Zq-Vic@Example.com``, ``zq-vic@…``, ``ZQ-VIC@…``, ``zQ-vIc@…``), the last with a link emailed two hours ago, still live. The first three ask «resend», a minute apart: 200 each, one email each. The fourth, a minute later, is 429 ``{"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3420, "message"}`` with ``Retry-After: 3420`` — when the oldest of the three leaves the hour —: the answer of every other limit (EVA-009), so nothing tells whoever asks that other accounts share the mailbox. Nothing is created for that account: its tokens as they were, its link of two hours ago still live; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
+    """EVA-016 — contract 3: four waiting accounts whose addresses are one mailbox written four ways (``zq-vÏç@example.com``, ``zq-vïç@…``, ``zq-vÏÇ@…``, ``zq-vïÇ@…``: the case of ``ï`` and ``ç`` alone, since P18 makes an address unique regardless of A–Z case), the last with a link emailed two hours ago, still live. The first three ask «resend», a minute apart: 200 each, one email each. The fourth, a minute later, is 429 ``{"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3420, "message"}`` with ``Retry-After: 3420`` — when the oldest of the three leaves the hour —: the answer of every other limit (EVA-009), so nothing tells whoever asks that other accounts share the mailbox. Nothing is created for that account: its tokens as they were, its link of two hours ago still live; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
     print_section("EVA-016: three verification emails per mailbox")
+    assert {written.casefold() for written in MAILBOX_VARIANTS} == {MAILBOX}, "precondition: four spellings of one mailbox"
+    assert len({user_service.email_fold(written) for written in MAILBOX_VARIANTS}) == len(MAILBOX_VARIANTS), "precondition: four accounts on one mailbox: one casefold key, four addresses for the A–Z unique index (P18)"
     moment = utcnow()
     monkeypatch.setattr(verification, "utcnow", lambda: moment)
     accounts = [await _waiting(private.engine, f"zq_vic_{index}", created=moment - timedelta(hours=3), email=written) for index, written in enumerate(MAILBOX_VARIANTS)]

@@ -44,7 +44,8 @@
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {hasStoredPointInRange, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -206,6 +207,9 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    /** The sync dialog's assets whose shown prices hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived(syncModalOpen ? syncModalAssets.filter((a) => hasStoredPointInRange(getAssetPriceStore(a.id, a.currency).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)).map((a) => a.id) : []);
 
     /** True when the date range ends today (or later) → show live prices from providers */
     let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
@@ -404,13 +408,18 @@
     }
 
     async function retryBackendSignals() {
-        await loadAssetSignalDefinitions(true);
-        await fetchAllPriceData();
+        await pageBusy.track('assets-signals-retry', async () => {
+            await loadAssetSignalDefinitions(true);
+            await fetchAllPriceData();
+        });
     }
 
     onMount(async () => {
-        await loadAssetSignalDefinitions();
-        await loadAssets();
+        // The first load holds the page's Refresh button (Y11); the live poll never does (P3).
+        await pageBusy.track('assets-first-load', async () => {
+            await loadAssetSignalDefinitions();
+            await loadAssets();
+        });
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
         onboardingGuide.maybeStartContextual('asset_page_guide');
@@ -794,7 +803,7 @@
         // resolved date) so the URL stays meaningful across reloads/shares and
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
-        fetchAllPriceData();
+        void pageBusy.track('assets-period', () => fetchAllPriceData());
     }
 
     /** Fetch live current prices for all assets (fire-and-forget, non-blocking); the outcome spaces the next poll (Z7). */
@@ -881,7 +890,9 @@
     /** A new asset is listed at once; with a provider, its card shows the one sync AssetModal runs for it (O-20). */
     async function handleAssetCreated(assetId: number, detail?: {syncing: boolean}) {
         if (detail?.syncing) syncingAssetIds = new Set([...syncingAssetIds, assetId]);
-        await loadAssets();
+        // A reload after the user's own write: it holds the page's Refresh button (Y11). The sync that follows has
+        // the card's indicator, and the reload after it (`handleCreatedAssetSynced`) does not hold the button (P3).
+        await pageBusy.track('assets-reload', () => loadAssets());
     }
 
     /** The one sync of a new asset ended (AssetModal, O-20): its toast, then the price data again. */
@@ -1004,7 +1015,7 @@
     async function handleBulkRefreshAssets() {
         for (const a of assets) invalidateAssetPriceStore(a.id);
         rearmMaxPendingBeforeReload();
-        await fetchAllPriceData();
+        await pageBusy.track('assets-bulk-refresh', () => fetchAllPriceData());
         clearAllTableSelections();
     }
 
@@ -1079,7 +1090,7 @@
             setGlobalSettings(s, 'assets');
         }
         if (shouldReloadBackend) {
-            void fetchAllPriceData();
+            void pageBusy.track('assets-settings', () => fetchAllPriceData());
         }
     }
 
@@ -1627,15 +1638,18 @@
                 </button>
                 <!-- Refresh All -->
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                    data-testid="assets-refresh-button"
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
+                    disabled={pageBusy.busy}
                     onclick={() => {
                         for (const a of assets) invalidateAssetPriceStore(a.id);
                         rearmMaxPendingBeforeReload();
-                        fetchAllPriceData();
+                        void pageBusy.track('assets-refresh', () => fetchAllPriceData());
                         refreshLivePricesNow();
                     }}
                 >
-                    <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
+                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                     {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
                 </button>
             {/if}
@@ -1857,6 +1871,7 @@
     bind:open={syncModalOpen}
     {dateEnd}
     dateStart={syncDateStart}
+    withDataInRange={syncModalWithData}
     onclose={() => {
         syncModalOpen = false;
     }}
@@ -1877,7 +1892,7 @@
     linkCreatedAsset
     oncreated={handleAssetCreated}
     onsynced={handleCreatedAssetSynced}
-    onupdated={() => loadAssets()}
+    onupdated={() => void pageBusy.track('assets-reload', () => loadAssets())}
     onclose={() => {
         assetModalOpen = false;
         assetTourPreview = false;

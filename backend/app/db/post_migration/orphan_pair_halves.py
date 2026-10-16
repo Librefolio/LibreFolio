@@ -10,9 +10,10 @@ in a database, as a split of the pair leaves them (``TransactionService.SPLIT_TY
   sender is gone, so a leg without a cost basis stays without one: the lots and the Dashboard report
   MISSING_COST_BASIS and the user enters it. (The 1.3 deletion, with the sender still there, writes its
   Auto cost instead.);
-- the giving leg of a TRANSFER is left as it is, for now: an ADJUSTMENT-out without a cost would read the
-  units it moved as destroyed, and its conversion waits for the developer (point 47 of release 1.3). It is
-  counted, not changed;
+- the giving leg of a TRANSFER is counted, not changed, here: it becomes an ADJUSTMENT-out at the Auto cost of its
+  own broker (decision 47 of release 1.3), which a ``sqlite3`` connection cannot compute. The step that runs right
+  after the fixes converts it (``backend.app.services.transactions.lone_transfer_legs``: ``lone-transfer-legs`` at
+  startup, and this package's ``__main__``, whose dry run shows the cost each leg would take);
 - a CASH_TRANSFER or an FX_CONVERSION becomes a WITHDRAWAL when its amount is negative, a DEPOSIT otherwise,
   without an asset;
 - the link goes, every other column stays, and ``updated_at`` moves to now: what is cached on it is
@@ -131,7 +132,7 @@ class OrphanPairHalfFix(PostMigrationFix):
         for half in pending:
             if half.action == "convert":
                 conversions.setdefault(f"{half.type}->{half.new_type}", []).append(half.id)
-        # A warning at every start while a giving TRANSFER leg waits for its decision: the dry run must count it anyway.
+        # Giving TRANSFER legs are counted here and converted by the step after the fixes (lone_transfer_legs).
         logger.warning(
             (
                 "Transactions found without their pair: each becomes the standalone row a split of the pair leaves"

@@ -26,8 +26,9 @@ After each change, the tab reloads its lists, so it always shows what the server
 
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
 **3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
-account [waiting for its email](#waiting) while its link is live; deactivated accounts do not. The
-limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
+account [waiting for its email](#waiting) while its link is live, and so does an
+[initial administrator](hosting_providers.md#initial-admin) still waiting for its setup link; deactivated
+accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
 [Environment Variables](configuration.md).
 
 - 💳 **Manage subscription** appears next to the count only when the server has a billing page
@@ -122,7 +123,7 @@ To invite someone:
 3. Tick **Administrator** if the new account should manage the instance.
 4. Click **Create the link**: *Share this link: it works once, for 7 days.* Check the
    [server address](#server-address), click **Copy** and send the link yourself, by message or
-   e-mail: LibreFolio does not send e-mails yet.
+   e-mail, or let LibreFolio email it: [Send by Email](#send-by-email).
 5. Click **Done**: the invitation joins **Open invitations**.
 
 The person opens the link and creates their account with the username, e-mail and password they
@@ -132,6 +133,9 @@ choose: [Getting Started](../user/getting-started.md) shows what they see.
   create a new one.
 - 📏 An invitation takes a place from the moment you create it until it is used, revoked or
   expires; the account it creates then takes that place.
+- 🔤 An e-mail address belongs to one account only, whatever its capitals (`Anna@example.com` is
+  `anna@example.com`), but only the letters A to Z are matched this way: `Émile@example.com` and
+  `émile@example.com` are two different addresses.
 
 ### 📋 Open Invitations {: #open-invitations }
 
@@ -146,14 +150,18 @@ once, and its place is freed.
 
 ## 🔑 Password-Reset Links {: #reset-links }
 
-When someone forgot their password, send them a link to choose a new one themselves:
+When someone forgot their password, send them a link to choose a new one themselves. With email,
+they can also ask for one from the login page: see [Forgotten Passwords](email.md#forgot-password).
 
 1. Open their row and click **Password-reset link**.
 2. The dialog explains: *A single-use link to set a new password, valid 30 minutes. The links
    created before for this account stop working.* Click **Create the link**.
-3. Check the [server address](#server-address), click **Copy**, send the link, then click **Done**.
+3. Check the [server address](#server-address), click **Copy** and send the link, or click
+   **Send by email** ([Send by Email](#send-by-email)); then click **Done**.
 
 - ⏱️ The link works once, for 30 minutes, and only the newest link of an account works.
+- 🔒 It also stops working as soon as the person changes their password or email address, or you
+  run `user reset` or `user set-email` on the [command line](cli_tools.md).
 - 🚪 Creating the link signs nobody out. Once the person sets the new password, their account is
   signed out of every device.
 - 🔗 The link is shown only once: if it gets lost, create a new one.
@@ -198,6 +206,29 @@ advises. Back on the filled-in address, the message goes away. How the check wor
 
 ---
 
+## 📧 Send by Email {: #send-by-email }
+
+While the instance can send emails with a link — email **Ready** and `LIBREFOLIO_PUBLIC_URL` set to
+an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — both link dialogs have
+**Send by email** under the link:
+
+- **An invitation**: **Send to** starts with the address written in the invitation, and you can
+  change it. Left empty, the email goes to the address written in the invitation; without one, the
+  dialog asks for an address.
+- **A password-reset link** has no field: the email goes to the address of the account, and only
+  while the account is active.
+- **The link in the email starts with `LIBREFOLIO_PUBLIC_URL`**, whatever the **Server address**
+  above shows: the dialog says so.
+- **The language**: an invitation goes in the instance's **Default Language**, a reset link in the
+  account's.
+- **The result** shows in the dialog: *Sent to …* with the address, or why the email did not go out
+  ([Sending Errors](email.md#sending-errors)).
+
+Without email, the button is not there: copy the link as before. The rules and the limits:
+[Links Sent by an Administrator](email.md#admin-links).
+
+---
+
 ## 🗑️ Delete an Account {: #delete }
 
 Open the account's row and click **Delete**; for an administrator, click **Remove administrator**
@@ -213,8 +244,10 @@ first. The deletion follows the same rule as deleting one's own account
     - **Shared brokers that stay (only the access goes)**: the other brokers the account can open,
       with its role on each;
     - a warning when transactions on other brokers are halves of transfers with the brokers that
-      go: they stay, without their other half (a received transfer becomes an adjustment at its
-      cost).
+      go: they stay, without their other half. A received transfer becomes an adjustment at its
+      cost, and a transfer sent to one of those brokers an adjustment that takes the assets out at
+      their average cost on the broker that sent them (see
+      [Edit or delete a broker](../user/brokers/index.md)).
 3. Type the account's username, then click **Delete Permanently**.
 
 !!! danger "Deleting an account cannot be undone"

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -67,6 +67,9 @@ class ManifestDatabase(BaseModel):
     integrity_check: str
     foreign_key_violations: int = Field(ge=0)
     tables: dict[str, int]
+    #: J's control totals of the ledger (``ControlTotals.to_json()``), read on the snapshot (lot B-13); ``None`` in an
+    #: archive made before, or when they could not be read. Any JSON: a malformed value is not compared, never refused.
+    control_totals: Any = None
 
 
 class ManifestInstanceKey(BaseModel):

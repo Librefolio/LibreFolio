@@ -105,9 +105,9 @@ erDiagram
 
 ## 📋 Tables
 
-### 👤 `USER`
+### 👤 `USER` {: #user }
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)).
+The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (migration `009_email_unique_ignoring_case`, below). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
 
 Migration `005_accounts_invites` added three columns:
 
@@ -115,8 +115,12 @@ Migration `005_accounts_invites` added three columns:
   cookie carries the version it was issued at (the JWT's `sv` claim), and `get_current_user()` refuses, on every
   request, a cookie whose version is not the account's. `user_service.end_sessions()` raises it by one on a password
   change or reset (a reset link included), an email change, a deactivation or a demotion (from the CLI or the
-  administrator API), and when an administrator signs the account out everywhere, ending every older session of the
-  account. See [Session Revocation](../security.md#session-revocation).
+  administrator API), when an administrator signs the account out everywhere, and when the initial administrator
+  spends its setup link, ending every older session of the
+  account. See [Session Revocation](../security.md#session-revocation). The first start after a
+  [restore](../security.md#backup-restore) gives every account the restore time in milliseconds instead (or one more
+  than the largest version either database held, when the clock is behind it): a time, not a counter, which a later
+  `end_sessions()` still raises by one.
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified, set by `confirm_email()`
   when an account opens its verification link ([Email Verification](../../backend/email.md#verification)). It is a
   record, not a gate: nothing reads it to let an account in. The accounts that existed before the migration stay
@@ -136,13 +140,38 @@ original fires the `ON DELETE` actions of every table that references it (the sa
 [Post-migration fixes](index.md#post-migration-fixes)). Its downgrade removes them with `DROP COLUMN`, which
 rewrites the table in place and fires no foreign-key action.
 
+Migration `009_email_unique_ignoring_case` makes the email unique regardless of case (developer decision P18):
+`alice@example.com` and `Alice@Example.com` are one address, which only one account can hold. Beside `ix_users_email`,
+unique on the address as written, it creates `ux_users_email_lower`, a unique index on `lower(email)`; the model
+declares it after the `User` class (`backend/app/db/models.py`), so `create_all` builds it too. SQLite's built-in
+`lower()` folds A–Z and nothing else, so letters outside ASCII compare as written: `Émile@example.com` and
+`émile@example.com` are two different addresses, a documented limit. `user_service.email_fold()` is the same fold in
+Python, and `same_email()` compares two addresses with it. `get_user_by_email()` and the email half of
+`get_user_by_username_or_email()` compare `lower(email)`, so sign-in, «forgot password» and the duplicate checks of
+`create_user()` and `update_profile()` find an address whatever its case; the username half stays exact. The stored
+email keeps the form last written: its owner changing its case alone is no email change
+([Changing the Email](../security.md#email-change)).
+
+Before writing anything, the upgrade groups the accounts by that fold. If two accounts share an address apart from
+case, it stops with a `RuntimeError` that names them as `#id 'username'`, never by address (workstream E's rule: no
+address in a log), and gives the remedy: `./dev.py user set-email <username> <address>` on all but one account of each
+group (what the administrator does: [Command-Line Tools](../../../admin/cli_tools.md), «Two Accounts with the Same
+Email Address»). No account is changed, and accounts are never merged. Otherwise it creates the index. On SQLite
+Alembic commits each revision on its own (no transactional DDL), so a stop leaves the revisions before 009 applied: an
+install upgraded from an earlier release stays at `008_registration_invite_default`, where `set-email` works (the 1.3
+model needs nothing 009 adds), and the next start resumes at 009. The upgrade checks before it acts, so it can
+run again; the downgrade drops the index. `./dev.py test db migration-009`
+(`backend/test_scripts/test_db/test_migration_009_email_case.py`) covers it on temporary databases, the `set-email`
+remedy included, and `./dev.py test services email-case` (`backend/test_scripts/test_services/test_email_case.py`)
+the fold, the index and the lookups.
+
 ### ⚙️ `USER_SETTINGS`
 
 One-to-one with `USER`. Stores user-specific preferences: display language, base currency (`base_currency`), theme (`light`, `dark` or `auto`), and avatar URL. When a setting is not defined here, the system falls back to the corresponding `GLOBAL_SETTING`.
 
 ### 🌍 `GLOBAL_SETTING` {: #global-setting }
 
-System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36.
+System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences. The startup seeding creates only the rows that are missing, each with its default from `GLOBAL_SETTINGS_DEFAULTS`: for `registration_mode`, `invite` since decision 36. The startup step that creates the [initial administrator](../access_control.md#initial-admin) writes `registration_mode` = `invite` too, in the same transaction, with `updated_by_user_id` `NULL`.
 
 Migration `006_registration_mode` changes data only: the row `enable_registration` (`bool`) becomes
 `registration_mode` (`value_type` `str`). The new value is `open` when the old one, lower-cased, was `true`, `1`,
@@ -302,18 +331,19 @@ The three foreign keys reference `users.id`:
 | `created_by_user_id` | `SET NULL` | It only records who issued the token: deleting that account keeps the token as it is and forgets the name |
 | `consumed_by_user_id` | `SET NULL` | It only records who spent the token, likewise |
 
-Two purposes are in use, with the rules of
-[Registration, Invitations and the Admin API](../access_control.md#registration). This is how they use the table:
+Three purposes are in use, with the rules of
+[Registration, Invitations and the Admin API](../access_control.md#registration) and of
+[The Initial Administrator](../access_control.md#initial-admin). This is how they use the table:
 
-| | `invite` | `password_reset` |
-|---|---|---|
-| `user_id` | `NULL` | The account whose password the link resets |
-| `email` | What the administrator wrote, if anything: a note, never compared with the address of the new account | `NULL` |
-| `grants_admin` | Whether the account it opens is an administrator | false |
-| `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same |
-| Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links |
-| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` |
-| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent |
+| | `invite` | `password_reset` | `admin_setup` |
+|---|---|---|---|
+| `user_id` | `NULL` | The account whose password the link resets | The administrator waiting for its setup |
+| `email` | What the administrator wrote, if anything: a note, never compared with the address of the new account | `NULL` | `NULL` |
+| `grants_admin` | Whether the account it opens is an administrator | false | false |
+| `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same | `NULL`: the startup or the command line issues it |
+| Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links | By the startup that creates the administrator, with the token of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` or a generated one; a new value of that variable and `./dev.py user setup-link` first revoke the earlier setup links |
+| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` | Set by `POST /api/v1/auth/setup`, `consumed_by_user_id` to the account, in the commit that activates it |
+| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent | Set on the earlier setup links, expired ones included, when a new one is issued; on the other ones when one is spent; on a link presented for an account already active |
 
 Two indexes: `ix_account_tokens_purpose_expires_at` on `(purpose, expires_at)`, and `ix_account_tokens_user_id`
 on `user_id`, used by the revocation of an account's tokens and by the cascade when the account is deleted. The

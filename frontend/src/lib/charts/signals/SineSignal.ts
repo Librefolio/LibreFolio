@@ -17,6 +17,10 @@
  *
  * For detailed mathematical theory, see:
  * docs/financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.en.md
+ *
+ * @financial-math-exception A what-if curve: a sine oscillation with the amplitude, period and offset the
+ * user enters, to preview the chart and to compare with the series on screen. It is a hypothetical path, not
+ * a figure of the user's holdings, so it stays in the browser (developer docs, financial_math.md, rule 6).
  */
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';

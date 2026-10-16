@@ -5,6 +5,7 @@ Business logic for user management, used by both API and CLI.
 """
 
 import asyncio
+import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -88,6 +89,23 @@ def end_sessions(user: User) -> None:
     user.session_version += 1
 
 
+_ASCII_FOLD = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+
+
+def email_fold(address: str) -> str:
+    """``address`` with A–Z folded to a–z and nothing else, as SQLite's ``lower()`` folds it (decision P18).
+
+    Email addresses are unique regardless of case: the database holds a unique index on ``lower(email)``
+    (``ux_users_email_lower``, migration 009). Letters outside ASCII compare as written: a documented limit.
+    """
+    return address.translate(_ASCII_FOLD)
+
+
+def same_email(first: str, second: str) -> bool:
+    """Whether two addresses are the same, regardless of the case of A–Z (``email_fold``)."""
+    return email_fold(first) == email_fold(second)
+
+
 async def get_user_by_username(session: AsyncSession, username: str) -> Optional[User]:
     """
     Get user by username.
@@ -106,7 +124,7 @@ async def get_user_by_username(session: AsyncSession, username: str) -> Optional
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
     """
-    Get user by email.
+    Get user by email, regardless of the case of A–Z (decision P18: the index ``ux_users_email_lower``).
 
     Args:
         session: Database session
@@ -115,14 +133,14 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
     Returns:
         User or None if not found
     """
-    stmt = select(User).where(User.email == email)
+    stmt = select(User).where(func.lower(User.email) == func.lower(email))
     result = await session.execute(stmt)
     return result.scalars().first()
 
 
 async def get_user_by_username_or_email(session: AsyncSession, identifier: str) -> Optional[User]:
     """
-    Get user by username OR email.
+    Get user by username OR email; the email regardless of the case of A–Z (decision P18).
 
     Args:
         session: Database session
@@ -131,7 +149,7 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
     Returns:
         User or None if not found
     """
-    stmt = select(User).where((User.username == identifier) | (User.email == identifier))
+    stmt = select(User).where((User.username == identifier) | (func.lower(User.email) == func.lower(identifier)))
     result = await session.execute(stmt)
     return result.scalars().first()
 
@@ -264,6 +282,8 @@ async def reset_password(
     # bcrypt is slow on purpose: it runs off the event loop.
     user.hashed_password = await asyncio.to_thread(hash_password, new_password)
     end_sessions(user)
+    # The live password-reset links of the account die with the old password (A-27), in the same commit.
+    await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -475,16 +495,22 @@ async def update_profile(
             return None, "Username already taken"
         user.username = username
 
-    # Check email uniqueness (if changing)
-    if email is not None and email != user.email:
+    # Check email uniqueness (if changing): the same address in another case is no change (decision P18)
+    email_changed = email is not None and not same_email(email, user.email)
+    if email_changed:
         existing = await get_user_by_email(session, email)
         if existing:
             return None, "Email already registered"
         user.email = email
-        # A new address is not verified (E5), and every session opened with the old one ends (A6e): committed below,
+        # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live
+        # password-reset link (A-27: whoever holds the old mailbox cannot use one asked for before): committed below,
         # together with the address.
         user.email_verified_at = None
         end_sessions(user)
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
+    elif email is not None:
+        # The same address written in another case: the stored form follows, nothing else changes.
+        user.email = email
 
     # Update timestamp
     user.updated_at = utcnow()
@@ -493,7 +519,8 @@ async def update_profile(
     await session.commit()
     await session.refresh(user)
 
-    logger.info("User profile updated", user_id=user.id, username=user.username, email=user.email)
+    # Never the address in the log (workstream E's rule): whether it changed is enough.
+    logger.info("User profile updated", user_id=user.id, username=user.username, email_changed=email_changed)
     return user, None
 
 

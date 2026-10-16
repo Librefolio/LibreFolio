@@ -48,6 +48,12 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     file cannot be created (a folder that cannot be written) is a plain 500 without a code, not ``backup_upload_failed``;
     a drop follows a link in place of ``.restore`` or ``checks/`` and removes the state of a check in the link's target;
     a check removed by another request while a poll probes its lock reads as still running instead of not found.
+(g) The ledger's control totals (lot B-13): a done check's report carries ``control_totals`` (``same`` for a backup as
+    recorded; ``changed`` with its differences, each with its six fields, and the warning ``control_totals_changed``;
+    ``absent`` and ``other_version`` without a warning; ``unreadable`` with ``control_totals_unreadable``),
+    ``control_totals_differences`` and ``control_totals_differences_count``, restorable all the same; a ``report.json``
+    written before lot B-13 still reads, its totals ``absent`` (§7.6). OpenAPI documents the three fields, the five
+    statuses, the two warnings and ``RestoreTotalsDifference``.
 
 Pure: an app of each test holds ``backup_router`` under ``/api/v1``, as ``router.py`` mounts it; ``get_current_user`` is
 overridden by an administrator or a regular user, so the real ``require_admin`` decides and no session or database is
@@ -1325,9 +1331,12 @@ async def test_a_regular_user_is_refused_403_and_nothing_happens(instance, route
 
 
 def test_no_restore_route_is_allowed_on_a_blocked_instance():
-    """(d) The block lets the data leave (the backup routes), never come in: none of the four is in ALLOWED_WHEN_BLOCKED."""
+    """(d) The block lets the data leave (the backup routes), never come in: none of the four is in ALLOWED_WHEN_BLOCKED.
+    ``restore.py`` holds lot B3's four routes too (confirm, status, cancel, restart): ``test_backup_restore_apply.py``
+    pins them."""
     endpoints = {restore.upload_restore_archive, restore.start_restore_check, restore.get_restore_check, restore.delete_restore_check}
-    assert {route.endpoint for route in restore.restore_router.routes} == endpoints, "precondition: these are the routes of restore.py"
+    missing = sorted(endpoint.__name__ for endpoint in endpoints - {route.endpoint for route in restore.restore_router.routes})
+    assert missing == [], f"precondition: these are routes of restore.py: {missing} missing"
     allowed = sorted(endpoint.__name__ for endpoint in endpoints & ALLOWED_WHEN_BLOCKED)
     assert allowed == [], f"a restore route allowed on a blocked instance: {allowed}"
 
@@ -1473,3 +1482,105 @@ async def test_a_check_dropped_while_a_poll_probes_its_lock_is_not_found(instanc
     monkeypatch.setattr(restore_jobs, "_a_check_runs", probe_as_another_request_drops_it)
     response = await poll(stage_id)
     assert code(response) == (404, "restore_stage_not_found"), f"a check dropped meanwhile is not found, not {shown(response)}"
+
+
+# =============================================================================
+# (g) The ledger's control totals in the report (lot B-13)
+# =============================================================================
+
+
+TOTALS_STATUSES = {"same", "changed", "absent", "other_version", "unreadable"}
+STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable"}
+TOTALS_DIFFERENCE_FIELDS = {"kind", "broker_id", "currency", "asset_id", "before", "after"}
+
+
+def totals_of(report: dict) -> tuple[str, list[dict], int]:
+    """What a done check's report says of the ledger's totals: the status, the differences, how many in all."""
+    missing = [field for field in cases.TOTALS_FIELDS if field not in report]
+    assert not missing, f"the report has no {', '.join(missing)}: lot B-13 is not written yet: {sorted(report)}"
+    return report["control_totals"], report["control_totals_differences"], report["control_totals_differences_count"]
+
+
+@pytest.mark.asyncio
+async def test_a_ledger_as_recorded_is_reported_the_same(instance, head_archive):
+    """(g) The module's backup, checked as it was made: ``same``, nothing listed, no warning."""
+    print_section("The ledger's control totals in the report")
+    state = await ended(head_archive.path.read_bytes())
+    report = state["report"]
+    assert state["status"] == "done" and report is not None, f"precondition: done, with its report: {state}"
+    assert totals_of(report) == ("same", [], 0), f"same: {totals_of(report)}"
+    assert (report["warnings"], report["restorable"]) == ([], True), f"no warning: {report['warnings']}"
+
+
+@pytest.mark.asyncio
+async def test_totals_that_changed_come_with_their_differences_and_a_warning(instance, head_archive, tmp_path):
+    """(g) The manifest's totals alone rewritten: a cash line and a position the backup's (empty) ledger does not hold.
+    Each difference with its six fields, in order; the warning; restorable all the same."""
+    recorded = {"version": 1, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "10"}], "quantities": [{"broker_id": 2, "asset_id": 3, "quantity": "0.5"}]}
+    archive = cases.pack(tmp_path / "changed.zip", cases.entries_of(head_archive), cases.manifest_with_totals(head_archive, recorded))
+    report = (await ended(archive.read_bytes()))["report"]
+    assert report is not None, "precondition: done, with its report"
+    expected = [
+        {"kind": "cash", "broker_id": 1, "currency": "EUR", "asset_id": None, "before": "10", "after": None},
+        {"kind": "quantity", "broker_id": 2, "currency": None, "asset_id": 3, "before": "0.5", "after": None},
+    ]
+    assert totals_of(report) == ("changed", expected, 2), f"the two lines, in order: {totals_of(report)}"
+    assert (report["warnings"], report["blockers"], report["restorable"]) == (["control_totals_changed"], [], True), f"warned, not blocked: {report['warnings']}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("drop", "recorded", "status"), [(True, None, "absent"), (False, {"version": 99}, "other_version")], ids=["absent-a-backup-made-before", "other-version"])
+async def test_totals_not_compared_are_said_without_a_warning(instance, head_archive, tmp_path, drop, recorded, status):
+    archive = cases.pack(tmp_path / "not-compared.zip", cases.entries_of(head_archive), cases.manifest_with_totals(head_archive, recorded, drop=drop))
+    report = (await ended(archive.read_bytes()))["report"]
+    assert report is not None, "precondition: done, with its report"
+    assert totals_of(report) == (status, [], 0), f"{status}: {totals_of(report)}"
+    assert (report["warnings"], report["restorable"]) == ([], True), f"{status}: no warning: {report['warnings']}"
+
+
+@pytest.mark.asyncio
+async def test_totals_the_copy_cannot_give_are_unreadable_with_a_warning(instance, head_archive, monkeypatch):
+    cases.replace_ledger_totals(monkeypatch, lambda database: None)
+    report = (await ended(head_archive.path.read_bytes()))["report"]
+    assert report is not None, "precondition: done, with its report"
+    assert totals_of(report) == ("unreadable", [], 0), f"unreadable: {totals_of(report)}"
+    assert (report["warnings"], report["blockers"], report["restorable"]) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report['warnings']}"
+
+
+@pytest.mark.asyncio
+async def test_a_check_whose_report_was_written_before_the_totals_answers_them_absent(instance, head_archive):
+    """(g) §7.6: a ``report.json`` a check of before lot B-13 wrote, without the three fields: the check still reads as
+    done with its report, the totals ``absent``."""
+    state = await ended(head_archive.path.read_bytes())
+    path = stage_dir(instance.root, state["stage_id"]) / STAGE_REPORT_FILE
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert set(cases.TOTALS_FIELDS) <= set(written), f"precondition: report.json has the totals' fields: lot B-13 is not written yet: {sorted(written)}"
+    path.write_text(json.dumps({key: value for key, value in written.items() if key not in cases.TOTALS_FIELDS}, indent=2) + "\n", encoding="utf-8")
+    response = await poll(state["stage_id"])
+    report = response.json()["report"]
+    assert response.status_code == 200 and report is not None, f"done, with its report: {shown(response)}"
+    assert totals_of(report) == ("absent", [], 0), f"a report of before: absent: {totals_of(report)}"
+    assert report["warnings"] == [] and report["restorable"] is True, f"as it was: {report['warnings']}"
+
+
+def enum_of(schema: dict, schemas: dict) -> set:
+    """The values a schema allows: its ``enum`` (or ``const``), through one ``$ref``."""
+    if "$ref" in schema:
+        schema = schemas[schema["$ref"].rsplit("/", 1)[-1]]
+    return set(schema.get("enum", [schema["const"]] if "const" in schema else []))
+
+
+def test_openapi_documents_the_totals_of_the_report():
+    """(g) The generated client reads the three fields, the five statuses, the two warnings among the five, and each
+    difference as ``RestoreTotalsDifference`` with its six fields."""
+    schemas = restore_app().openapi()["components"]["schemas"]
+    report = schemas["RestoreStageReport"]["properties"]
+    missing = [field for field in cases.TOTALS_FIELDS if field not in report]
+    assert missing == [], f"RestoreStageReport documents the totals: {missing} missing"
+    assert enum_of(report["control_totals"], schemas) == TOTALS_STATUSES, f"the five statuses: {report['control_totals']}"
+    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the warnings, the two of the totals included: {report['warnings']}"
+    assert report["control_totals_differences"].get("items") == {"$ref": "#/components/schemas/RestoreTotalsDifference"}, f"a list of RestoreTotalsDifference: {report['control_totals_differences']}"
+    assert report["control_totals_differences_count"].get("type") == "integer", f"a count: {report['control_totals_differences_count']}"
+    difference = schemas.get("RestoreTotalsDifference", {}).get("properties", {})
+    assert set(difference) == TOTALS_DIFFERENCE_FIELDS, f"the six fields of a difference: {sorted(difference)}"
+    assert enum_of(difference["kind"], schemas) == {"cash", "quantity"}, f"cash or quantity: {difference['kind']}"

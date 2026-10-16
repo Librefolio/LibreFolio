@@ -23,16 +23,32 @@ calculations left are not coming back. Three rules, approved by the developer:
     branch that still has them cannot bring a second implementation back. A ``__pycache__`` that
     git leaves behind after deleting a module does not count: a merge cannot bring it back.
 
+One rule looks the other way, from the whole backend at the layer (workstream MF, lot MF-I2):
+
+(d) «Which rows are linked to a SPLIT asset event» is asked in one place,
+    ``financial_math/splits.py`` (``load_split_links``, ``split_linked_ids``). In ``backend/app``,
+    ``AssetEventType.SPLIT`` is named only there and in ``services/transactions/event_suggestions.py``,
+    a UI mapping of event type to transaction type that loads nothing. Every shape that reaches the
+    member counts — ``AssetEventType.SPLIT``, ``models.AssetEventType.SPLIT``, an alias bound by
+    ``from ... import AssetEventType as X``, ``AssetEventType("SPLIT")``, ``AssetEventType["SPLIT"]``,
+    ``getattr(AssetEventType, "SPLIT")`` — and nothing else does: a comment, a docstring, another
+    enum's ``SPLIT`` member, the string ``"SPLIT"`` on its own. Before MF-I2 the WAC preview
+    (``portfolio_service.py``), the broker summary (``brokers/summary.py``) and the auto cost
+    (``transactions/auto_cost.py``) each wrote the join again.
+
 Pure: the sources are parsed with ``ast``, never imported — no database, no server, no network.
 Every rule asserts an absence, so each detector first proves it sees a presence: the import matcher
 flags every forbidden shape of a synthetic source and nothing allowed, the ``__init__`` check flags
-a re-export, the old-home check flags a re-created module, and the scans must reach the layer's
-known modules (an empty parametrization would be skipped, never red).
+a re-export, the old-home check flags a re-created module, the SPLIT matcher flags every shape of
+the member and nothing else, and the scans must reach the layer's known modules (an empty
+parametrization would be skipped, never red) and, for (d), the backend's known modules, with every
+allowed home still naming the member.
 """
 
 from __future__ import annotations
 
 import ast
+import functools
 from importlib.util import resolve_name
 from pathlib import Path
 
@@ -75,6 +91,23 @@ KNOWN_MODULES = (*KNOWN_PACKAGES, "average_cost.py", "native_cash.py", "returns.
 # One parametrized case per file, so a failure names the file.
 LAYER_MODULES = sorted(path.relative_to(LAYER_ROOT).as_posix() for path in LAYER_ROOT.rglob("*.py"))
 LAYER_PACKAGES = [module for module in LAYER_MODULES if Path(module).name == "__init__.py"]
+
+# (d) The whole backend, and the only files of it that may name AssetEventType.SPLIT, with the reason.
+APP_ROOT = REPO_ROOT / "backend" / "app"
+APP_MODULES = sorted(path.relative_to(APP_ROOT).as_posix() for path in APP_ROOT.rglob("*.py"))
+SPLIT_EVENT_TYPE_HOMES = {
+    "services/financial_math/splits.py": "the one loader of the rows linked to a SPLIT asset event",
+    "services/transactions/event_suggestions.py": "a UI mapping of event type to transaction type, not a loader",
+}
+# Presence barrier of (d): files the backend scan must reach — the homes, the enum's definition, and
+# the three readers that wrote the join themselves before MF-I2.
+KNOWN_APP_MODULES = (
+    *SPLIT_EVENT_TYPE_HOMES,
+    "db/models.py",
+    "services/portfolio_service.py",
+    "services/brokers/summary.py",
+    "services/transactions/auto_cost.py",
+)
 
 
 # =============================================================================
@@ -131,6 +164,49 @@ def _files_at(path: Path) -> list[Path]:
     if path.is_dir():
         return sorted(file for file in path.rglob("*") if file.is_file() and "__pycache__" not in file.relative_to(path).parts)
     return [path] if path.exists() else []
+
+
+def _is_split_text(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and node.value == "SPLIT"
+
+
+def _is_asset_event_type(node: ast.expr, names: set[str]) -> bool:
+    """``node`` is the AssetEventType enum: a bare name bound to it, or any ``<module>.AssetEventType``."""
+    return (isinstance(node, ast.Name) and node.id in names) or (isinstance(node, ast.Attribute) and node.attr == "AssetEventType")
+
+
+def _split_event_type_lines(source: str) -> list[int]:
+    """The lines of ``source`` whose code reaches the SPLIT member of AssetEventType, each line once, in order.
+
+    By attribute (``AssetEventType.SPLIT``, ``models.AssetEventType.SPLIT``, ``X.SPLIT`` where
+    ``from ... import AssetEventType as X`` bound ``X``), by value (``AssetEventType("SPLIT")``), by
+    name (``AssetEventType["SPLIT"]``, ``getattr(AssetEventType, "SPLIT")``). Comments and
+    docstrings are not code, and another enum's ``SPLIT`` is another member.
+    """
+    tree = ast.parse(source)
+    names = {"AssetEventType"} | {alias.asname for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names if alias.name == "AssetEventType" and alias.asname}
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "SPLIT" and _is_asset_event_type(node.value, names):
+            lines.add(node.lineno)
+        elif isinstance(node, ast.Subscript) and _is_asset_event_type(node.value, names) and _is_split_text(node.slice):
+            lines.add(node.lineno)
+        elif isinstance(node, ast.Call) and _is_asset_event_type(node.func, names) and node.args and _is_split_text(node.args[0]):
+            lines.add(node.lineno)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr" and len(node.args) >= 2 and _is_asset_event_type(node.args[0], names) and _is_split_text(node.args[1]):
+            lines.add(node.lineno)
+    return sorted(lines)
+
+
+@functools.cache
+def _split_event_type_uses() -> dict[str, list[int]]:
+    """Every module of ``backend/app`` that reaches ``AssetEventType.SPLIT`` → its lines; parsed once per session."""
+    found: dict[str, list[int]] = {}
+    for module in APP_MODULES:
+        lines = _split_event_type_lines((APP_ROOT / module).read_text(encoding="utf-8"))
+        if lines:
+            found[module] = lines
+    return found
 
 
 # =============================================================================
@@ -234,6 +310,65 @@ def test_the_scans_reach_the_whole_layer():
     print_success(f"{len(LAYER_MODULES)} modules scanned, {len(LAYER_PACKAGES)} of them package __init__ files")
 
 
+# Every shape (d) must flag: (source, the lines it reports).
+_SPLIT_SHAPES = (
+    ("AssetEventType.SPLIT", [1]),
+    ("stmt = stmt.where(AssetEvent.type == AssetEventType.SPLIT)", [1]),
+    ("AssetEventType.SPLIT.value", [1]),
+    ("from backend.app.db import models\n\nkind = models.AssetEventType.SPLIT\n", [3]),
+    ("import backend.app.db.models as m\nm.AssetEventType.SPLIT\n", [2]),
+    ("from backend.app.db.models import AssetEventType as AET\n\nAET.SPLIT\n", [3]),
+    ('AssetEventType("SPLIT")', [1]),
+    ('AssetEventType["SPLIT"]', [1]),
+    ('getattr(AssetEventType, "SPLIT")', [1]),
+    ("def kinds():\n    return {AssetEventType.PRICE_ADJUSTMENT, AssetEventType.SPLIT}\n", [2]),
+    ("first = AssetEventType.SPLIT\nsecond = 1\nthird = (AssetEventType.SPLIT, AssetEventType.SPLIT)\n", [1, 3]),
+    ("if TYPE_CHECKING:\n    pass\nelse:\n    split = AssetEventType.SPLIT\n", [4]),
+)
+
+# What (d) must leave alone: none of it reaches the member.
+_NOT_SPLIT_SHAPES = (
+    '"""AssetEventType.SPLIT in a docstring."""',
+    "x = 1  # AssetEventType.SPLIT in a comment",
+    "CostMovementKind.SPLIT",
+    "LotTimelineEventKind.SPLIT",
+    "TXValidationCode.TYPE_CANNOT_SPLIT",
+    "AssetEventType.PRICE_ADJUSTMENT",
+    'AssetEventType("DIVIDEND")',
+    'AssetEventType["DIVIDEND"]',
+    'event.kind == "SPLIT"',
+    'ProviderEvent(type="SPLIT")',
+    'getattr(CostMovementKind, "SPLIT")',
+    'class AssetEventType(StrEnum):\n    SPLIT = "SPLIT"\n',
+    "from backend.app.services.financial_math.average_cost import CostMovementKind as AssetKind\n\nAssetKind.SPLIT\n",
+)
+
+
+def test_the_split_matcher_flags_every_shape_of_the_member_and_nothing_else():
+    print_section("Layer boundaries: the AssetEventType.SPLIT matcher")
+    for source, lines in _SPLIT_SHAPES:
+        assert _split_event_type_lines(source) == lines, source
+    for source in _NOT_SPLIT_SHAPES:
+        assert _split_event_type_lines(source) == [], source
+    print_success(f"{len(_SPLIT_SHAPES)} shapes of the member flagged, {len(_NOT_SPLIT_SHAPES)} others left alone")
+
+
+def test_the_split_scan_reaches_the_backend_and_every_allowed_home_still_names_the_member():
+    """The presence barrier of (d): the scan reads the backend, and finds the member where it is allowed.
+
+    A home that no longer names it is a stale entry, to be removed: an allow-list that only grows
+    stops guarding anything.
+    """
+    print_section("Layer boundaries: the AssetEventType.SPLIT scan reaches the backend")
+    assert APP_ROOT.is_dir(), f"{APP_ROOT} does not exist: the repository root derived from this file is wrong"
+    missing = sorted(set(KNOWN_APP_MODULES) - set(APP_MODULES))
+    assert not missing, f"the scan of {APP_ROOT} missed backend modules: {missing}"
+    uses = _split_event_type_uses()
+    stale = sorted(home for home in SPLIT_EVENT_TYPE_HOMES if home not in uses)
+    assert not stale, "these allowed homes of AssetEventType.SPLIT no longer name it — remove them from SPLIT_EVENT_TYPE_HOMES:\n" + "\n".join(f"backend/app/{home}" for home in stale)
+    print_success(f"{len(APP_MODULES)} backend modules scanned; the member found in {', '.join(sorted(SPLIT_EVENT_TYPE_HOMES))}")
+
+
 # =============================================================================
 # The rules
 # =============================================================================
@@ -267,3 +402,14 @@ def test_an_old_home_of_the_layer_stays_gone(old_home):
     leftovers = [file.relative_to(REPO_ROOT).as_posix() for file in _files_at(path)]
     assert not leftovers, f"{old_home} was a home of the calculations now in financial_math and must stay gone:\n" + "\n".join(leftovers)
     print_success(f"{old_home}: gone")
+
+
+def test_only_the_split_loader_names_the_split_event_type():
+    """(d) The rows linked to a SPLIT asset event are read through ``financial_math.splits``, never by a join of one's own.
+
+    Before MF-I2: red, naming ``services/portfolio_service.py``, ``services/brokers/summary.py`` and
+    ``services/transactions/auto_cost.py``.
+    """
+    offenders = [f"backend/app/{module}:{line}" for module, lines in sorted(_split_event_type_uses().items()) if module not in SPLIT_EVENT_TYPE_HOMES for line in lines]
+    assert not offenders, "AssetEventType.SPLIT is named outside the split loader: read the rows linked to a SPLIT event with financial_math.splits.split_linked_ids (or load_split_links when the ratio, the event or the dates matter):\n" + "\n".join(offenders)
+    print_success(f"AssetEventType.SPLIT named only in {', '.join(sorted(SPLIT_EVENT_TYPE_HOMES))}")

@@ -144,6 +144,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.backup.panel.get_panel_backup_job": ("GET", "/api/v1/backup/panel/jobs/{job_id}"),
     "backend.app.api.v1.backup.panel.download_panel_backup": ("GET", "/api/v1/backup/panel/jobs/{job_id}/file"),
     "backend.app.api.v1.backup.panel.delete_panel_backup_job": ("DELETE", "/api/v1/backup/panel/jobs/{job_id}"),
+    "backend.app.api.v1.backup.restore.get_restore_outcome": ("GET", "/api/v1/backup/restore/outcome"),
     "backend.app.api.v1.system.block.get_instance_block": ("GET", "/api/v1/system/block"),
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
     "backend.app.api.v1.system.health.health_check": ("GET", "/api/v1/system/health"),

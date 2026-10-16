@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_settings, secrets_set_twice
+from backend.app.config.accounts import admin_bootstrap_config
 from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
 from backend.app.logging_config import get_logger
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
@@ -168,6 +169,8 @@ def log_configuration_audit() -> None:
         logger.warning("Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer", deletion_date=deletion_date.isoformat() if deletion_date else None)
     else:
         instance_deletion_date()
+    # F02 (workstream A): an unusable LIBREFOLIO_ADMIN_* variable raises AdminBootstrapConfigError, naming it
+    admin_bootstrap_config()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)
