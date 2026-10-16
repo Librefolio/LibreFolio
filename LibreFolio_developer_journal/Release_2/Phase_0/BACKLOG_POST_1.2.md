@@ -5377,7 +5377,8 @@ da Y il 15/10.
     riepilogo.
   - Y12b ha legato alla stessa fonte solo il recupero (`summaryDepth`). Dettagli: piano di Y, «Y12b».
 - **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
-  `docs-writer` di Y, 16/10.
+  `docs-writer` di Y, 16/10. ✅ 16/10: aggiornati 20 riferimenti, nelle sezioni Requests, L1 e host, più quattro
+  precisazioni di testo; `check-links` verde. Nel checkpoint di Y-20.
   - Y12b ha aggiornato solo il paragrafo di L1. Restano scaduti i riferimenti delle righe 302–310 e 119 della pagina:
     - `l1Helpers.ts` e `ReturnHistogram.svelte`;
     - `lossMoney()` e `RiskMetricCard.svelte`;
