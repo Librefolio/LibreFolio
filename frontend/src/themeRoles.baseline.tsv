@@ -44,8 +44,7 @@ lib/features/support/supportLinks.ts	14
 lib/features/tools/pac-allocator/planner/result/AssetTable.svelte	1
 lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	14
 lib/features/tools/pac-allocator/planner/result/ResultCell.svelte	1
-lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	3
-lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	2
+lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	1
 lib/stores/app/themeStore.ts	0	#1b4334×2
 lib/theme/toneClasses.ts	22
 lib/utils/assetTypes.ts	80

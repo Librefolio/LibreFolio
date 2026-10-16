@@ -30,6 +30,12 @@
     let {draft, accountGeneration, onclose}: Props = $props();
 
     const testid = 'pac-planner-distribution';
+    /**
+     * The weight bar. The track is on the role of the tracks; the fill, the asset's current weight, is a data colour
+     * and stays a palette class (DV-7). Two constants, not one template: the gate reads each script string whole (G3).
+     */
+    const TRACK = 'h-3 overflow-hidden rounded-full bg-lf-neutral';
+    const FILL = 'h-full rounded-full bg-libre-green';
     const load = new SourceLoad();
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);
@@ -99,7 +105,7 @@
                         ? ''
                         : {
                               type: 'html',
-                              html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full bg-libre-green" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
+                              html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="${TRACK}"><div class="${FILL}" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
                           },
             },
             {
