@@ -4881,3 +4881,12 @@ punto di partenza, l'audit dello stesso giorno:
   l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
   anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
   MF, sezione «Ondata 1b», K2.
+- **MF-C2 · Le fette d'allocazione su una somma che si annulla o va sotto zero** — basso, numeri (proposta, da decidere);
+  test-author di MF, 16/10 (lotto C). Le fette dei grafici d'allocazione (`derived_views.py`, `_alloc` e
+  `build_allocation_history`, ora `weights.slice_percents`) dividono per la somma con segno, e per 1 quando la somma è 0:
+  con la liquidità negativa che annulla le posizioni (`{Azioni: 500, Liquidità: −500}`) escono 50000 % / −50000 %, e
+  con una somma negativa (NAV < 0) ogni fetta cambia segno. È lo stesso difetto che D-MF7 toglie ai pesi delle
+  posizioni; il lotto C l'ha lasciato identico apposta, fissato nei test (`test_weights.py`, «net-zero» e
+  «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
+  del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
+  che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».
