@@ -942,3 +942,111 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
 
     > **⚠️ Fuori pista**: la mediana di `stability` è quella alta, e sbilancia gli scatti con viewport diversi.
     > `sheet` usa `statistics.median`: solo così le fasce tornano uguali a quelle della notte.
+
+## G-18 · Guardia G3 a runtime nella galleria (16/10)
+
+Richiesta del coordinatore alle 10:43; il developer gli aveva detto «vedi tu». Piano approvato alle 10:53. Base
+`8f2824046`.
+
+**Il problema.** Il gate G3 di `theme-roles` trova gli elementi misti solo se sono scritti così nel sorgente. Non vede
+le classi composte a runtime:
+- le prop di classe passate fra aree (`className`, `contentClass`…);
+- le costanti importate;
+- le concatenazioni.
+
+In tema scuro un elemento misto si rompe: `app.css` esenta dal rimappaggio legacy chi porta una classe `-lf-`.
+
+**La guardia.** A ogni scatto la galleria scandisce il DOM con le regex del gate, `ROLE_CLASS_RE` e `LEGACY_CLASS_RE`,
+esportate da `theme-roles.mjs` e lette, non copiate. Gli elementi misti finiscono in `mixed_elements.json`, nella
+cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
+
+**Decisioni del coordinatore**
+- **D1:** la guardia è attiva solo negli snapshot. `gallery_snapshot.sh` imposta `LF_GALLERY_MIXED_DIR`; CI e
+  `dev.py mkdocs gallery` restano come sono.
+- **D2:** il riassunto raggruppa di default per la cartella del file candidato, con `--by section` come opzione.
+  - Il testid è un indizio, non una prova: la classe può arrivare dal chiamante.
+
+**Il contratto fra la fixture e il toolkit.** Una riga JSON per scatto, in `worker-<pid>.jsonl`:
+- `shot`, `t`, `ms`;
+- i conteggi `elements`, `role`, `legacy`;
+- `mixed`: per ogni elemento distinto `tag`, `testid`, `owner`, `selector`, `legacy`, `role`, `classes`, `onScreen`,
+  `count`;
+- oppure `error`.
+
+**Passi**
+1. ✅ 16/10 — La fixture `frontend/e2e/fixtures/galleryMixed.ts` e la chiamata dentro `captureShot` (`galleryShot.ts`),
+   dopo lo scatto. Le scrive test-author.
+   - DoD: `tsc` E2E con i soli 2 errori di base;
+   - una prova Node con Chromium headless su un HTML fisso, senza server.
+
+   > **Note implementazione** (test-author):
+   > - `recordMixedElements(page, shot)` legge `LF_GALLERY_MIXED_DIR` a ogni chiamata; senza, esce subito e non
+   >   importa nemmeno il gate.
+   > - Le regex del gate arrivano con un `import()` dallo specificatore non letterale, una volta per worker, e solo il
+   >   loro `.source` entra nella pagina.
+   > - Una sola `page.evaluate` in sola lettura, al massimo 10 s, scrive una riga per scatto in `worker-<pid>.jsonl`.
+   > - Mai un `expect`, mai un'eccezione: un gate non caricato o una scrittura fallita danno un ⚠️ per worker, una
+   >   scansione fallita un record `error` e un ⚠️ per scatto.
+   > - `galleryShot.ts`: l'import, una frase nel commento, la chiamata come ultima istruzione di `captureShot`.
+   >
+   > Prove:
+   > - `tsc` E2E: i soli 2 errori di base (`/tmp/libreFolio_g18_tsc.log`);
+   > - Prettier pulito sui due file;
+   > - la sonda `/tmp/libreFolio_g18_probe.mjs`, PASS in 1 s. Copre misti con e senza testid, SVG e `foreignObject`, i
+   >   doppioni (`count` 2), gli invisibili, il selettore oltre 4 livelli, `data-[…]:`. Verifica anche che DOM, scroll e
+   >   focus restino uguali, e il record `error` a pagina chiusa;
+   > - la sonda dei guasti (`/tmp/libreFolio_g18_probe_failures.mjs`): il gate che non si carica, la scansione bloccata
+   >   a 10 s, la scrittura che fallisce.
+   >
+   > Prova congiunta: i JSONL della sonda, passati da `gallery_tool mixed --collect` e dal riassunto, danno 11 misti in
+   > 1 di 2 scatti, 1 errore e 0 PNG senza record. Non resta nessun browser aperto.
+2. ✅ 16/10 — `gallery_tool mixed`: `--collect` fonde le parti in `mixed_elements.json`; senza, stampa il riassunto per area.
+   - DoD: ruff e black puliti; JSONL sintetici con due worker, un retry e un errore.
+
+   > **Note implementazione**: sottocomando `mixed` in `scripts/visual_review/gallery_tool.py`.
+   > - `--collect` tiene una riga per scatto: su un retry vince la più recente (`t`). Conta errori, righe illeggibili e
+   >   record sostituiti, scrive `mixed_elements.json` con regola e commit, poi cancella le parti (`--keep-parts`).
+   > - Senza parti scrive niente ed esce 0: una checkout prima di G-18 non sporca lo snapshot.
+   > - Il riassunto:
+   >   - raggruppa gli elementi distinti (tag, testid, owner, classi di ruolo e legacy) per cartella del file candidato;
+   >     `--by section` per sezione della galleria; `--area`, `--on-screen`;
+   >   - conta i PNG senza un record, che è la DoD della run;
+   >   - avverte che il testid è un indizio e non una prova.
+   > - File candidati: il testid, dell'elemento o del suo antenato, scritto intero fra virgolette nei sorgenti di
+   >   produzione. Se non c'è, il prefisso più lungo composto (`global-settings-category-{cat.id}`, `` `tag-chip-${i}` ``).
+   >   I sorgenti sono quelli del gate (`isProductionSource`): niente test, mock, Designer Lab, file generati.
+   >
+   > Prova: `/tmp/libreFolio_g18_toolkit_test.py`, PASS, con due worker, un retry, un errore, una riga illeggibile, un
+   > PNG senza record e testid reali (`profile-save-all` intero, `global-settings-category-display` composto,
+   > `app-header` come antenato). ruff e black puliti.
+
+   > **⚠️ Fuori pista**: ruff C901 su `print_mixed` (complessità 14). L'ho divisa in intestazione, gruppi ed elemento.
+
+   > **⚠️ Fuori pista**: la prova congiunta ha mostrato candidati sbagliati. Il testid `pair` della sonda trovava 9 file
+   > solo perché `'pair'` è una stringa del codice. Ora la ricerca va a gradini:
+   > - prima il testid dopo una chiave di test id (`data-testid=`, `testid=`, `testId:`), intero o composto;
+   > - poi come stringa qualsiasi. Questo è un indizio debole: quegli elementi stanno in un gruppo a parte e non decidono
+   >   l'area.
+   >
+   > La ricerca si fa una volta per testid: molti elementi hanno lo stesso antenato.
+3. ✅ 16/10 — `gallery_snapshot.sh` esporta la variabile e a fine run raccoglie.
+   - DoD: `bash -n`; la raccolta provata su una cartella finta.
+
+   > **Note implementazione**:
+   > - Esporta `LF_GALLERY_MIXED_DIR=<snapshot>/mixed` solo per il comando della galleria.
+   > - Dopo `meta.json` chiama `gallery_tool.py mixed <snapshot> --collect`, quello accanto allo script. Se fallisce
+   >   stampa un WARNING e lascia le parti: il codice d'uscita resta quello della galleria.
+   > - L'intestazione, e quindi `usage`, lo dice in tre righe.
+   >
+   > Prova: `bash -n`; `usage`; lo stesso blocco eseguito su uno snapshot finto, sia il successo sia la cartella
+   > mancante, con lo script che va avanti. La variabile passa il filtro della corsia: `cli_base` toglie solo i
+   > `LIBREFOLIO_*` e i nomi documentati.
+4. ✅ 16/10 — README del toolkit, questa sezione, la voce G-18 del backlog.
+
+   > **Note implementazione**: nel README le righe della tabella (`gallery_snapshot.sh` scrive anche
+   > `mixed_elements.json`; `gallery_tool.py` ha `mixed`) e una sezione 6, «Mixed elements (the runtime twin of G3)»:
+   > perché, cosa c'è nel file, i tre comandi, l'avvertenza sul file candidato, `--collect` a mano. Backlog: G-18 ⏳.
+5. ⏳ Checkpoint al coordinatore. Poi, nello slot della coda pesante:
+   - la run filtrata `gallery_snapshot.sh g-mixed-probe … -- -f "Settings" --workers 4`;
+   - DoD: un record per PNG, 0 errori, conteggi di ruolo e legacy maggiori di 0, il riassunto per area;
+   - e quanti elementi misti ci sono oggi.
