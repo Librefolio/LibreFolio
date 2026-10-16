@@ -102,11 +102,11 @@ Each plugin has a **space**, read from the metadata its registry publishes:
 | Family | The plugin's space | What its fragment holds |
 |---|---|---|
 | BRIM | `brimPlugins.<code>`, the code being the folder's name | `name` and `description` |
-| Asset | `assets.providerParams.<provider_code>` | `label.<param>` and `description.<param>` of its `params_schema` |
+| Asset | `assets.providerParams.<provider_code>` and `pluginSettings.asset.<provider_code>` | `label.<param>` and `description.<param>` of its `params_schema`; the texts of its [settings](plugin_settings.md#translations), `label.<field>`, `description.<field>` and `option.<field>.<value>` |
 | Signal | the parent of its `display_name_key` (`signals.rsi` for `signals.rsi.name`) | its name, description, output labels, reference levels and regions |
 | Risk | the parent of its `name_i18n_key` (`risk.analytics.historicalKpi`) | `name` and `description` (`correlation` also has `help`) |
 | Tool | exactly its `name_i18n_key` and `description_i18n_key` | those two keys (`tools.pacAllocator.name`, `.description`) |
-| FX | none | — |
+| FX | `pluginSettings.fx.<code>`, the code as the registry has it (`pluginSettings.fx.ECB`) | the texts of its settings, as for an asset plugin; no shipped FX provider has any |
 
 A key several plugins share belongs to none of them: `signals.reference.zero` (seven signal plugins) and `signals.tooltips.riskWindow` (the window tooltip of the `rolling_volatility`, `rolling_sharpe` and `rolling_beta` signals) stay in the `charts` subsystem, and the `risk.warnings.*` vocabulary in the `risk` subsystem.
 
@@ -122,17 +122,17 @@ Write the keys with `dev.py i18n`, which edits the sources in the four languages
 `--into` names the plugin's folder, `<family>/<plugin>`, which must already hold its `plugin.py`, and creates the fragment with the first key. `where` names the file that holds a key, or the one `add` would write it to. Without `--into`, `add` routes a new key by its deepest existing branch:
 
 - under the branch a plugin's keys share (`brimPlugins.broker_directa`, `signals.rsi`), to that plugin: a new field of an existing plugin;
-- under a branch that only plugins share — `brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>` — nowhere: it refuses and asks for `--into <family>/<plugin>`;
+- under a branch that only plugins share — `brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>`, `pluginSettings.asset.<new>` — nowhere: it refuses and asks for `--into <family>/<plugin>`. It refuses every new key of a plugin whose keys share no branch, too: Borsa Italiana's lie under `assets.providerParams.borsa_italiana` and `pluginSettings.asset.borsa_italiana`;
 - otherwise to the subsystem with the longest declared prefix, else to `base`.
 
-The last rule is why the first key of a **new signal or Tool** needs `--into`: without it, `signals.<new>.name` lands in the `charts` subsystem and `tools.<new>.name` in `tools`, and the ownership gate below fails. Passing `--into` for every key of a plugin is never wrong. `where` shows the target before anything is written, and `./dev.py i18n move <prefix> --into <family>/<plugin>` moves keys that landed in the wrong source.
+The last rule is why the first key of a **new signal or Tool** needs `--into`: without it, `signals.<new>.name` lands in the `charts` subsystem and `tools.<new>.name` in `tools`, and the ownership gate below fails. The same holds for the first settings key of an FX provider, which would land in the `pluginSettings` subsystem. Passing `--into` for every key of a plugin is never wrong. `where` shows the target before anything is written, and `./dev.py i18n move <prefix> --into <family>/<plugin>` moves keys that landed in the wrong source.
 
 ### 🛡️ The Ownership Gate {: #plugin-i18n-gate }
 
 `./dev.py test utils gate-plugin-i18n-ownership` reads the real registries and the catalogue's sources. A space is **exclusive** when exactly one plugin has it.
 
 - **R1**: every key in a fragment lies in its plugin's space.
-- **R2**: every key a plugin declares in its exclusive space lives in its fragment. The declared keys are `display_name_key`, `description_key`, `name_i18n_key`, `description_i18n_key`, the `label_key` and `description_key` of the outputs, reference levels and value regions, the parameters' `x-i18n-key` and `x-tooltip-key`, and the BRIM `name` and `description`.
+- **R2**: every key a plugin declares in its exclusive space lives in its fragment. The declared keys are `display_name_key`, `description_key`, `name_i18n_key`, `description_i18n_key`, the `label_key` and `description_key` of the outputs, reference levels and value regions, the parameters' `x-i18n-key` and `x-tooltip-key`, the BRIM `name` and `description`, and, for an asset or FX plugin, its `settings_fields`: each field's `label_key` and `description_key` and each option's `label_key`, read from the declaration dumped to plain data (a `default` is a value, never a key).
 - **R3**: no fragment key lies in another plugin's space, or is declared by another plugin.
 - **R4**: every catalogue key under an exclusive space lives in that plugin's fragment (Tools aside: R2 already holds their two keys).
 

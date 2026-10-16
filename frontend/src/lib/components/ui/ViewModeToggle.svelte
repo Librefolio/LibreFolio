@@ -33,12 +33,12 @@
     }
 </script>
 
-<div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+<div class="flex rounded-lg border border-lf-subtle text-lf-primary overflow-hidden">
     <button
         aria-label="Grid view"
         data-testid="view-mode-grid"
         class="flex items-center justify-center px-2.5 py-1.5 transition-colors
-               {mode === 'grid' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+               {mode === 'grid' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
         onclick={() => setMode('grid')}
         title="Grid view"
     >
@@ -48,7 +48,7 @@
         aria-label="Table view"
         data-testid="view-mode-list"
         class="flex items-center justify-center px-2.5 py-1.5 transition-colors
-               {mode === 'list' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+               {mode === 'list' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
         onclick={() => setMode('list')}
         title="Table view"
     >

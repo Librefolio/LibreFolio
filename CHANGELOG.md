@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Instance backup**: an administrator downloads a zip of the whole instance from **Settings › Backup**, or writes one with `./dev.py backup create` (and checks it with `./dev.py backup inspect`); it also works when the hosting provider has blocked the instance. Documented in Admin › Command-Line Tools.
 - Hosting panels can download backups of the whole instance with a token: set `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` (or its `_FILE`) and call `/api/v1/backup/panel/jobs` with `Authorization: Bearer`, also on a blocked instance. Off by default.
 - **Users tab for administrators** (Settings → Users): see every account and the open invitations with the places taken; deactivate, reactivate, promote, demote, sign out everywhere, send a password-reset link, restart the guides, and delete an account after a preview of what goes (deactivation offered first); invite with a single-use link whose server address can be edited and is checked from the browser. Deleting your own account now shows the same preview first.
-- **Plugin settings, the foundation**: an asset or exchange-rate provider plugin can declare the settings it needs (an API key, a region, a limit). Administrators set the instance-wide ones and each user their own, through `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk` (all or nothing). Secrets are write-only and stored encrypted with a key derived from the instance key. An instance-wide field can also come from `LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>` or its `_FILE` form, which locks it. The shipped plugins declare none yet; the settings screen comes later.
+- **Plugin settings, the foundation**: an asset or exchange-rate provider plugin can declare the settings it needs (an API key, a region, a limit). Administrators set the instance-wide ones and each user their own, through `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk` (all or nothing). Secrets are write-only and stored encrypted with a key derived from the instance key. An instance-wide field can also come from `LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>` or its `_FILE` form, which locks it. justETF and Borsa Italiana declare a search preference, and **Settings › Plugins** shows every plugin's settings.
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
@@ -45,8 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
 - **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 - **Check a backup before restoring it**: `dev.py backup restore ARCHIVE --dry-run` and `/api/v1/backup/restore/*` unpack the archive into a copy, bring it to this version's schema, check it and report what a restore would do — the backup's administrators, the migrations applied, the rows — without touching the instance. Hosting providers can cap the upload with `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB by default in the managed profile).
-- **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again. A server variable can set the instance-wide ones and lock them.
+- **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again, not even in a source's error message or in the address of an asset's page. A server variable can set the instance-wide ones and lock them.
 - **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
+- **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
 
 ### 🔄 Changed
 
@@ -72,8 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
 - **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
-- On the Files page, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+- On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 - **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
+- **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
+- API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
+- **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
+- Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
 
 #### 🎨 A new colour palette
 
@@ -141,6 +146,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
 - **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
 - The image picker no longer reloads its list over and over when it has nothing to show.
+- **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
+- **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
+- A dividend or split dated today now shows up the same day, not the next one.
+- API: when a transaction breaks two or more rules at once, each message of the validation and import responses names the transaction type ("BUY requires asset_id") instead of a literal `{type}`.
+- Borsa Italiana ETCs and ETNs are now typed as commodity ETFs (an asset already saved changes type when you refresh its metadata); the justETF and CSS scraper settings show translated labels.
+- A refused **Split pair** or **Promote pair** on the Transactions page now says why in an error message, and the confirmation stays open: until now nothing was shown.
 
 #### 🔒 Security
 
@@ -148,6 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
 - **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
+- **Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.** Fonts and source maps are served with their own type, also without the system's MIME table.
+- `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`, off by default: frame protection (`X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'`) and a report-only Content-Security-Policy on the web app's pages, which blocks nothing and lists in the browser console what an enforced policy would block.
 
 ### ⚠️ Breaking changes
 
@@ -158,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A new instance registers by invitation.** Its first account signs up without one and becomes the administrator; every later account needs an invitation link, unless an administrator sets «Registration» to Open. An upgraded instance keeps the mode it had.
 - `GET /api/v1/settings/global` and `/settings/global/{key}` need a signed-in session: an API client must sign in to read them.
 - `PUT /api/v1/auth/profile` with a new `email` needs `current_password`: missing → 400 `CURRENT_PASSWORD_REQUIRED`, wrong → 400 `CURRENT_PASSWORD_INVALID`.
+- `POST /api/v1/auth/register`, `/auth/change-password` and `/auth/password-reset` refuse a password that misses a rule with 400 `PASSWORD_TOO_WEAK` and the `rules` it misses, checked before anything else; until now the API asked only for 8 characters, with a 422.
 
 ---
 

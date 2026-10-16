@@ -9,7 +9,7 @@
  */
 
 import {describe, expect, it} from 'vitest';
-import {appVars, changedVarValue, editTarget, isInlineAlias, matchesSearch, paletteFamilies, sourceVarValue, valueGroups, varImpact} from './catalogView';
+import {appVars, categoryRows, changedVarValue, editTarget, isInlineAlias, matchesSearch, paletteFamilies, sourceCategoryValue, sourceVarValue, valueGroups, varImpact} from './catalogView';
 import type {CatalogLiteral, CatalogPaletteEntry, CatalogVar, CatalogVarDef, ColorCatalog, LabChange} from './types';
 
 function catalogOf(parts: Partial<ColorCatalog>): ColorCatalog {
@@ -331,5 +331,54 @@ describe('changedVarValue', () => {
         expect(changedVarValue(changes, '--x', false)).toBeNull();
         expect(changedVarValue(changes, '--z', true)).toBeNull();
         expect(changedVarValue([], '--x', true)).toBeNull();
+    });
+});
+
+describe('categoryRows and sourceCategoryValue — the chart categories of the catalogue', () => {
+    /** A line of the category tables: a chart colour of the categories file, with its category and theme. */
+    const tableLine = (id: number, raw: string, theme: 'light' | 'dark', category: string) => literal(id, {file: 2, raw, key: raw.toLowerCase(), zone: 'ts', theme, layer: 'chart-color', chart: true, category});
+    const catalog = catalogOf({
+        files: ['src/app.css', 'src/lib/components/charts/GrowthChart.svelte', 'src/lib/theme/chartCategories.ts'],
+        literals: [
+            literal(0, {raw: '#2B4C7E', key: '#2b4c7e'}),
+            tableLine(1, '#2B4C7E', 'light', 'type:AAA'),
+            tableLine(2, '#7EA6E0', 'dark', 'type:AAA'),
+            tableLine(3, '#5A6B7C', 'light', 'bucket:Nowhere'),
+            tableLine(4, '#334455', 'dark', 'sector:Zed Sector'),
+            tableLine(5, '#0E0E0E', 'light', 'sector:Zed Sector'),
+        ],
+        // In table order; the bucket has no dark line, and one entry points at a literal the catalogue does not have.
+        categories: [
+            {target: 'type:AAA', kind: 'type', key: 'AAA', light: 1, dark: 2},
+            {target: 'sector:Zed Sector', kind: 'sector', key: 'Zed Sector', light: 5, dark: 4},
+            {target: 'bucket:Nowhere', kind: 'bucket', key: 'Nowhere', light: 3, dark: null},
+            {target: 'bucket:Lost', kind: 'bucket', key: 'Lost', light: 99, dark: 2},
+        ],
+    });
+
+    it('lists the categories in the catalogue’s order, each with the value its line writes in each theme', () => {
+        expect(categoryRows(catalog)).toEqual([
+            {target: 'type:AAA', kind: 'type', key: 'AAA', light: 1, dark: 2, lightValue: '#2B4C7E', darkValue: '#7EA6E0'},
+            {target: 'sector:Zed Sector', kind: 'sector', key: 'Zed Sector', light: 5, dark: 4, lightValue: '#0E0E0E', darkValue: '#334455'},
+            {target: 'bucket:Nowhere', kind: 'bucket', key: 'Nowhere', light: 3, dark: null, lightValue: '#5A6B7C', darkValue: null},
+            {target: 'bucket:Lost', kind: 'bucket', key: 'Lost', light: 99, dark: 2, lightValue: null, darkValue: '#7EA6E0'},
+        ]);
+    });
+
+    it('lists nothing for a catalogue built before the categories', () => {
+        expect(categoryRows(catalogOf({literals: catalog.literals}))).toEqual([]);
+        expect(categoryRows(catalogOf({categories: []}))).toEqual([]);
+    });
+
+    it('gives the value of a category in the theme asked, and an empty value where the catalogue has none', () => {
+        expect(sourceCategoryValue(catalog, 'type:AAA', false)).toBe('#2B4C7E');
+        expect(sourceCategoryValue(catalog, 'type:AAA', true)).toBe('#7EA6E0');
+        expect(sourceCategoryValue(catalog, 'sector:Zed Sector', false)).toBe('#0E0E0E');
+        expect(sourceCategoryValue(catalog, 'bucket:Nowhere', true), 'no dark line').toBe('');
+        expect(sourceCategoryValue(catalog, 'bucket:Lost', false), 'a literal the catalogue does not have').toBe('');
+        // By target, as the table writes the key: never by a key compared loosely, nor by value.
+        expect(sourceCategoryValue(catalog, 'type:aaa', false)).toBe('');
+        expect(sourceCategoryValue(catalog, 'type:Ghost', false)).toBe('');
+        expect(sourceCategoryValue(catalogOf({literals: catalog.literals}), 'type:AAA', false), 'a catalogue without categories').toBe('');
     });
 });

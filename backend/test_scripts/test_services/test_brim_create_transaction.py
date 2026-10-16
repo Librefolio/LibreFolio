@@ -140,6 +140,9 @@ class TestCreateTransaction:
         codes = {i.code for i in issues}
         assert "qtyNegative" in codes
         assert "cashSignPositive" in codes
+        # W-B38: each issue's message is what the user reads on import, rendered like a single violation's.
+        unreadable = [i.message for i in issues if "{" in i.message or "SELL" not in i.message]
+        assert unreadable == [], f"Each import issue's message must be rendered and name the type SELL (W-B38): the user would read {unreadable}"
 
     def test_context_preserved_in_issues(self, provider):
         """Context string is stored in each validation issue."""

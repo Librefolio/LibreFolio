@@ -861,3 +861,274 @@ describe('dismissing', () => {
         expect(screen.queryByTestId('scheduler-log-modal')).toBeNull();
     });
 });
+
+/**
+ * Lot Z7c-2 — what lot Z7b added to the log: the items a provider's pause deferred, and when they are retried.
+ *
+ * Z7b defers an item a provider refused with HTTP 429: the item is neither ok nor failed. Its entry marks it
+ * `deferred: true` (with `retry_after`, in seconds, when known), counts it apart in the summary (`deferred`, or
+ * `assets_deferred` and `fx_deferred`) and carries the `retry_at` of the retry. The fixtures below have the shape the log
+ * route answers once it passes these keys through (backend SAPI-012..014): every item carries `deferred` and
+ * `retry_after`, every summary its deferred counters, every entry its `retry_at` — at their defaults when nothing was
+ * deferred. An entry with none of these keys (an older backend) renders exactly as before.
+ *
+ * The handles are the product's: the `<tr>` of each item of the three detail tables is `scheduler-log-item`, with
+ * `data-deferred="true|false"`; a deferred item's status cell holds `scheduler-log-item-deferred` instead of the ok or
+ * failed mark — those two are bare icons without a handle, so they are asserted only through the deferred mark, present
+ * or absent; the header holds `scheduler-log-retry-at` when the entry has a `retry_at`; the summary is
+ * `scheduler-log-summary`, read for its `⏸` and its count — numbers and punctuation the component assembles, like
+ * `2/3 ✓`, never translated. An item's row is told apart by the item's name or pair: data, not a translation.
+ */
+const RETRY_AT = '2026-01-15T08:02:00+00:00';
+
+/** An item as the log route answers it once it passes lot Z7b's keys through: not deferred unless the fields say so. */
+const answered = (fields: Entry): Entry => ({deferred: false, retry_after: null, ...fields});
+
+/** A price run that deferred two items — Nvidia paused for 120 s, Meta with no Retry-After —, one ok and one failed beside them. */
+function deferredPriceRun(over: Entry = {}): Entry {
+    return priceRun({
+        status: 'partial',
+        summary: {ok: 1, err: 1, deferred: 2},
+        retry_at: RETRY_AT,
+        items: [
+            answered({asset_id: 1, name: 'Apple', ok: true}),
+            answered({asset_id: 2, name: 'Nvidia', ok: false, deferred: true, retry_after: 120, error: 'too many requests'}),
+            answered({asset_id: 3, name: 'Meta', ok: false, deferred: true, error: 'too many requests'}),
+            answered({asset_id: 4, name: 'Tesla', ok: false, error: 'quote unavailable'}),
+        ],
+        ...over,
+    });
+}
+
+/** A history run that deferred two assets — Bond failed, Amazon partly saved (status ok): Z7b defers whatever the status — and one pair. */
+function deferredHistoryRun(over: Entry = {}): Entry {
+    return historyRun({
+        status: 'partial',
+        summary: {assets_ok: 1, assets_err: 0, assets_deferred: 2, fx_ok: 1, fx_err: 0, fx_deferred: 1},
+        retry_at: RETRY_AT,
+        assets: [
+            answered({asset_id: 1, name: 'Microsoft', status: 'ok', provider: 'yahoo', prices_changed: 3, events_changed: 0}),
+            answered({asset_id: 2, name: 'Bond', status: 'failed', deferred: true, retry_after: 300, errors: ['too many requests'], prices_changed: 0, events_changed: 0}),
+            answered({asset_id: 3, name: 'Amazon', status: 'ok', deferred: true, provider: 'yahoo', errors: ['too many requests'], prices_changed: 2, events_changed: 0}),
+        ],
+        fx: [answered({pair: 'EUR/USD', base: 'EUR', quote: 'USD', status: 'ok', provider: 'ecb', points_changed: 4}), answered({pair: 'GBP/USD', base: 'GBP', quote: 'USD', status: 'failed', deferred: true, retry_after: 45, errors: ['too many requests'], points_changed: 0})],
+        ...over,
+    });
+}
+
+/** The single row of a job in a status, addressed by the attributes the product publishes. */
+function rowWith(job: string, status: string): HTMLElement {
+    const found = rows().filter((r) => r.getAttribute('data-job') === job && r.getAttribute('data-status') === status);
+    expect(found).toHaveLength(1);
+    return found[0];
+}
+
+/** Opens a run's detail through its header, and returns it. */
+async function openDetail(job: string): Promise<HTMLElement> {
+    await fireEvent.click(within(row(job)).getByRole('button'));
+    return within(row(job)).getByTestId('scheduler-log-entry-detail');
+}
+
+/** Every item row of an opened detail: the `<tr>` of each price item, asset and FX pair. */
+function itemRows(detail: HTMLElement): HTMLElement[] {
+    return within(detail).queryAllByTestId('scheduler-log-item');
+}
+
+/** The one item row naming `name`. */
+function itemRow(detail: HTMLElement, name: string): HTMLElement {
+    const found = itemRows(detail).filter((r) => (r.textContent ?? '').includes(name));
+    expect(found, `one item row names ${name}`).toHaveLength(1);
+    return found[0];
+}
+
+/** The deferred marks inside `element`. */
+function deferredMarks(element: HTMLElement): HTMLElement[] {
+    return within(element).queryAllByTestId('scheduler-log-item-deferred');
+}
+
+/** The summary of a run's row, its whitespace collapsed. */
+function summaryOf(entryRow: HTMLElement): string {
+    return (within(entryRow).getByTestId('scheduler-log-summary').textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** Whether `text` holds `count` as a number of its own, not inside a larger one. */
+function holdsCount(text: string, count: number): boolean {
+    return new RegExp(`(^|\\D)${count}(\\D|$)`).test(text);
+}
+
+describe('Z7c-2 — a deferred price item', () => {
+    it('gives every row of the price table its handle, and says which items were deferred', async () => {
+        await mountWith([deferredPriceRun()]);
+
+        const detail = await openDetail('current_price');
+
+        expect(itemRows(detail), 'one row per item').toHaveLength(4);
+        expect(Object.fromEntries(['Apple', 'Nvidia', 'Meta', 'Tesla'].map((name) => [name, itemRow(detail, name).getAttribute('data-deferred')]))).toEqual({Apple: 'false', Nvidia: 'true', Meta: 'true', Tesla: 'false'});
+    });
+
+    it('marks the status of a deferred item as deferred, with or without a retry_after, and of no other item', async () => {
+        await mountWith([deferredPriceRun()]);
+
+        const detail = await openDetail('current_price');
+
+        expect(deferredMarks(itemRow(detail, 'Nvidia')), 'deferred, retry_after 120').toHaveLength(1);
+        expect(deferredMarks(itemRow(detail, 'Meta')), 'deferred, no retry_after').toHaveLength(1);
+        expect(deferredMarks(itemRow(detail, 'Apple')), 'an ok item keeps its own mark').toHaveLength(0);
+        expect(deferredMarks(itemRow(detail, 'Tesla')), 'a failed item keeps its own mark').toHaveLength(0);
+        expect(deferredMarks(detail), 'two deferred items, two marks').toHaveLength(2);
+    });
+});
+
+describe('Z7c-2 — deferred history items', () => {
+    it('gives every asset and FX row its handle, and says which were deferred', async () => {
+        await mountWith([deferredHistoryRun()]);
+
+        const detail = await openDetail('history_sync');
+
+        expect(itemRows(detail), 'three assets and two pairs').toHaveLength(5);
+        expect(Object.fromEntries(['Microsoft', 'Bond', 'Amazon', 'EUR/USD', 'GBP/USD'].map((name) => [name, itemRow(detail, name).getAttribute('data-deferred')]))).toEqual({
+            Microsoft: 'false',
+            Bond: 'true',
+            Amazon: 'true',
+            'EUR/USD': 'false',
+            'GBP/USD': 'true',
+        });
+    });
+
+    it('marks the status of a deferred asset or pair as deferred, whatever its status, and of no other', async () => {
+        await mountWith([deferredHistoryRun()]);
+
+        const detail = await openDetail('history_sync');
+
+        for (const name of ['Bond', 'Amazon', 'GBP/USD']) expect(deferredMarks(itemRow(detail, name)), `${name} was deferred`).toHaveLength(1);
+        for (const name of ['Microsoft', 'EUR/USD']) expect(deferredMarks(itemRow(detail, name)), `${name} was not`).toHaveLength(0);
+    });
+});
+
+describe('Z7c-2 — when the deferred items are retried', () => {
+    const shapes: [string, Entry, string][] = [
+        ['a price run (clickable header)', deferredPriceRun(), 'true'],
+        ['a history run (clickable header)', deferredHistoryRun(), 'true'],
+        ['a run without detail (static header)', priceRun({retry_at: RETRY_AT, items: []}), 'false'],
+    ];
+
+    it.each(shapes)('shows the retry time in the header of %s, the detail closed', async (_shape, entry, hasDetail) => {
+        await mountWith([entry]);
+
+        const r = row(entry.job as string);
+        expect(r, 'premise: the shape of the header').toHaveAttribute('data-has-detail', hasDetail);
+        expect(within(r).queryByTestId('scheduler-log-entry-detail'), 'premise: only the header is drawn').toBeNull();
+        expect(within(r).getAllByTestId('scheduler-log-retry-at')).toHaveLength(1);
+    });
+
+    it('shows none in a run without a retry_at — null or absent —, beside a run that has one', async () => {
+        await mountWith([deferredPriceRun(), priceRun({ts: '2026-01-15T07:00:00Z', retry_at: null}), historyRun()]);
+
+        expect(within(rowWith('current_price', 'partial')).getAllByTestId('scheduler-log-retry-at'), 'control: the run with a retry_at shows it').toHaveLength(1);
+        expect(within(rowWith('current_price', 'ok')).queryByTestId('scheduler-log-retry-at'), 'retry_at null').toBeNull();
+        expect(within(row('history_sync')).queryByTestId('scheduler-log-retry-at'), 'no retry_at key').toBeNull();
+        expect(screen.getAllByTestId('scheduler-log-retry-at'), 'one retry time on screen, the control’s').toHaveLength(1);
+    });
+});
+
+describe('Z7c-2 — the summary counts the deferred items apart', () => {
+    it('a price run: ⏸ and how many were deferred', async () => {
+        // ok 3, err 2, deferred 4: the other numbers the summary could print — 3, 2, 5, and with the deferred 6, 7, 9 — are never a 4.
+        const items = [
+            ...['Apple', 'Nvidia', 'Intel'].map((name, i) => answered({asset_id: i + 1, name, ok: true})),
+            ...['Tesla', 'Oracle'].map((name, i) => answered({asset_id: i + 10, name, ok: false, error: 'quote unavailable'})),
+            ...['Meta', 'Amazon', 'Adobe', 'Cisco'].map((name, i) => answered({asset_id: i + 20, name, ok: false, deferred: true, retry_after: 120, error: 'too many requests'})),
+        ];
+        await mountWith([priceRun({status: 'partial', summary: {ok: 3, err: 2, deferred: 4}, retry_at: RETRY_AT, items})]);
+
+        const text = summaryOf(row('current_price'));
+
+        expect(text).toContain('⏸');
+        expect(holdsCount(text, 4), `the deferred count in «${text}»`).toBe(true);
+    });
+
+    it('a history run that deferred assets: ⏸ and how many', async () => {
+        // assets 1 ok, 1 failed, 5 deferred; FX 2 ok: every sum of the other counts is at most 4, so a 5 is the deferred count.
+        const assets = [
+            answered({asset_id: 1, name: 'Microsoft', status: 'ok'}),
+            answered({asset_id: 2, name: 'Tesla', status: 'failed', errors: ['no data']}),
+            ...['Bond', 'Amazon', 'Cisco', 'Adobe', 'Intel'].map((name, i) => answered({asset_id: i + 10, name, status: 'failed', deferred: true, errors: ['too many requests']})),
+        ];
+        const fx = ['EUR/USD', 'EUR/GBP'].map((pair) => answered({pair, status: 'ok'}));
+        await mountWith([historyRun({status: 'partial', summary: {assets_ok: 1, assets_err: 1, assets_deferred: 5, fx_ok: 2, fx_err: 0, fx_deferred: 0}, retry_at: RETRY_AT, assets, fx})]);
+
+        const text = summaryOf(row('history_sync'));
+
+        expect(text).toContain('⏸');
+        expect(holdsCount(text, 5), `the deferred count in «${text}»`).toBe(true);
+    });
+
+    it('a history run that deferred FX pairs: ⏸ and how many', async () => {
+        // assets 2 ok; FX 1 ok, 1 failed, 5 deferred: every sum of the other counts is at most 4, so a 5 is the deferred count.
+        const assets = ['Microsoft', 'Apple'].map((name, i) => answered({asset_id: i + 1, name, status: 'ok'}));
+        const fx = [
+            answered({pair: 'EUR/USD', status: 'ok'}),
+            answered({pair: 'EUR/JPY', status: 'failed', errors: ['no route']}),
+            ...['GBP/USD', 'CHF/USD', 'SEK/USD', 'NOK/USD', 'DKK/USD'].map((pair) => answered({pair, status: 'failed', deferred: true, retry_after: 45, errors: ['too many requests']})),
+        ];
+        await mountWith([historyRun({status: 'partial', summary: {assets_ok: 2, assets_err: 0, assets_deferred: 0, fx_ok: 1, fx_err: 1, fx_deferred: 5}, retry_at: RETRY_AT, assets, fx})]);
+
+        const text = summaryOf(row('history_sync'));
+
+        expect(text).toContain('⏸');
+        expect(holdsCount(text, 5), `the deferred count in «${text}»`).toBe(true);
+    });
+});
+
+describe('Z7c-2 — a run with nothing deferred renders as before', () => {
+    const priceItems = [
+        {asset_id: 1, name: 'Apple', ok: true},
+        {asset_id: 2, name: 'Nvidia', ok: true},
+        {asset_id: 3, name: 'Tesla', ok: false, error: 'quote unavailable'},
+    ];
+    const assets = [
+        {asset_id: 1, name: 'Microsoft', status: 'ok', provider: 'yahoo', prices_changed: 3},
+        {asset_id: 2, name: 'Bond', status: 'error', errors: ['no data']},
+    ];
+    const fx = [
+        {pair: 'EUR/USD', base: 'EUR', quote: 'USD', status: 'ok', provider: 'ecb', points_changed: 5},
+        {pair: 'EUR/GBP', base: 'EUR', quote: 'GBP', status: 'ok', provider: 'ecb', points_changed: 2},
+    ];
+
+    const priceRuns: [string, Entry][] = [
+        ['written before Z7b, without its keys', priceRun({status: 'partial', summary: {ok: 2, err: 1}, items: priceItems})],
+        ['answered with its keys at their defaults', priceRun({status: 'partial', summary: {ok: 2, err: 1, deferred: 0}, retry_at: null, items: priceItems.map(answered)})],
+    ];
+    const historyRuns: [string, Entry][] = [
+        ['written before Z7b, without its keys', historyRun({status: 'partial', summary: {assets_ok: 1, assets_err: 1, fx_ok: 2, fx_err: 0}, assets, fx})],
+        ['answered with its keys at their defaults', historyRun({status: 'partial', summary: {assets_ok: 1, assets_err: 1, assets_deferred: 0, fx_ok: 2, fx_err: 0, fx_deferred: 0}, retry_at: null, assets: assets.map(answered), fx: fx.map(answered)})],
+    ];
+
+    it.each(priceRuns)('a price run %s: the summary of before, no retry time, no deferred mark', async (_name, entry) => {
+        await mountWith([entry]);
+
+        expect(summaryOf(row('current_price'))).toBe('2/3 ✓ · 1 ✗');
+        expect(within(row('current_price')).queryByTestId('scheduler-log-retry-at')).toBeNull();
+        const detail = await openDetail('current_price');
+        expect(itemRows(detail).map((r) => r.getAttribute('data-deferred'))).toEqual(['false', 'false', 'false']);
+        expect(deferredMarks(detail)).toHaveLength(0);
+    });
+
+    it.each(historyRuns)('a history run %s: the summary of before, no retry time, no deferred mark', async (_name, entry) => {
+        await mountWith([entry]);
+
+        expect(summaryOf(row('history_sync'))).toBe('1/2 assets · 2/2 FX · 1 ✗');
+        expect(within(row('history_sync')).queryByTestId('scheduler-log-retry-at')).toBeNull();
+        const detail = await openDetail('history_sync');
+        expect(itemRows(detail).map((r) => r.getAttribute('data-deferred'))).toEqual(['false', 'false', 'false', 'false']);
+        expect(deferredMarks(detail)).toHaveLength(0);
+    });
+
+    it('a run without detail (static header): its summary through the same handle, as before', async () => {
+        await mountWith([priceRun({summary: {ok: 0, err: 0}, items: []})]);
+
+        expect(row('current_price'), 'premise: a static header').toHaveAttribute('data-has-detail', 'false');
+        expect(summaryOf(row('current_price'))).toBe('0/0 ✓');
+        expect(within(row('current_price')).queryByTestId('scheduler-log-retry-at')).toBeNull();
+    });
+});

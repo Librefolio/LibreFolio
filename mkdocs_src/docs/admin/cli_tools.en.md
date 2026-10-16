@@ -66,7 +66,7 @@ pipenv run ./dev.py user list
 ```
 
 - 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open** (on a new instance, also until its first account exists), or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
-- 🔒 The password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol.
+- 🔒 The password follows the same rules as in the app and the API: at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol. Letters and digits of any alphabet count, such as `É` or `é`; a symbol is any character that is neither a letter, a number nor a space, such as `!`, `_` or `€`. A password that misses a rule changes nothing: the command prints `Password does not meet security requirements:` and one line per rule missed, each starting with the rule's code, such as `digit: the password must contain a digit`, then exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `user create` warns `The instance is at its limit (LIBREFOLIO_MAX_USERS: 5 of 5 places taken): the command line creates the account anyway`, then creates it: the command line is how you go past the limit.
 
 ### ✉️ Invite Someone {: #invite }

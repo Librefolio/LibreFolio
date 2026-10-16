@@ -3,7 +3,7 @@
  */
 
 import {parseColor} from './color.js';
-import type {CatalogLiteral, CatalogPaletteEntry, CatalogVar, ColorCatalog, LabChange, Layer} from './types';
+import type {CatalogCategory, CatalogLiteral, CatalogPaletteEntry, CatalogVar, ColorCatalog, LabChange, Layer} from './types';
 
 export const SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
 
@@ -136,4 +136,22 @@ export function changedVarValue(changes: LabChange[], name: string, dark: boolea
     const own = changes.find((c) => c.layer === 'css-var' && c.target === name && c.scope === theme);
     const both = changes.find((c) => c.layer === 'css-var' && c.target === name && c.scope === 'both');
     return (own ?? both)?.to ?? null;
+}
+
+/** A chart category with the value its table writes in each theme (`null` when it writes none). */
+export interface CategoryRow extends CatalogCategory {
+    lightValue: string | null;
+    darkValue: string | null;
+}
+
+/** The chart categories of the catalogue, in the order of their tables, with their values. */
+export function categoryRows(catalog: ColorCatalog): CategoryRow[] {
+    const value = (id: number | null) => (id === null ? null : (catalog.literals[id]?.raw ?? null));
+    return (catalog.categories ?? []).map((c) => ({...c, lightValue: value(c.light), darkValue: value(c.dark)}));
+}
+
+/** The value the tables give a category in a theme; `''` when the catalogue does not know it. */
+export function sourceCategoryValue(catalog: ColorCatalog, target: string, dark: boolean): string {
+    const row = categoryRows(catalog).find((c) => c.target === target);
+    return (dark ? row?.darkValue : row?.lightValue) ?? '';
 }
