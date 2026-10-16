@@ -106,7 +106,11 @@
         "ACCOUNT_DISABLED": "This account is disabled: ask the administrator of this instance.",
         "unavailable": "The email cannot be sent right now: try again later, or ask the administrator of this instance.",
         "generic": "The link could not be sent: try again."
-      }
+      },
+      "registered": "Account created. We sent you an email with a link to activate it: open it within 24 hours, then sign in.",
+      "signUpUnavailable": "Sign-up is not possible right now: this instance cannot send the verification email. Try again later, or ask its administrator.",
+      "settingNeedsEmail": "Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL first (Settings › Email).",
+      "settingUnavailable": "Email verification needs an email with a link to go out, and none can go now: check Settings › Email."
     },
     "sendLink": {
       "button": "Send by email",

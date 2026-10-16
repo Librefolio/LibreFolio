@@ -106,7 +106,11 @@
         "ACCOUNT_DISABLED": "Questo account è disattivato: chiedi all'amministratore di questa istanza.",
         "unavailable": "Ora l'email non può partire: riprova più tardi, o chiedi all'amministratore di questa istanza.",
         "generic": "Non è stato possibile spedire il link: riprova."
-      }
+      },
+      "registered": "Account creato. Ti abbiamo mandato un'email con un link per attivarlo: aprilo entro 24 ore, poi accedi.",
+      "signUpUnavailable": "Ora non è possibile registrarsi: questa istanza non riesce a spedire l'email di verifica. Riprova più tardi, o chiedi al suo amministratore.",
+      "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Email).",
+      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Email."
     },
     "sendLink": {
       "button": "Invia per email",

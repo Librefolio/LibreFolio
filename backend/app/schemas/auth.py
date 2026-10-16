@@ -108,6 +108,7 @@ class AuthRegisterResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Registration successful"
+    verification_required: bool = Field(default=False, description="The account waits for its email verification: a link is on its way, and signing in works once it is clicked")
 
 
 class TokenInspectResponse(StrictModel):
