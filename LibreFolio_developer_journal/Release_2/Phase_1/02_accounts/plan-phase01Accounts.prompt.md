@@ -3970,3 +3970,24 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Per la revisione del mattino** (decisioni notturne): le classi Unicode; le chiavi della UI di oggi con la mappa
 >   `RULE_UI_KEYS`; `PasswordStrength` ai runes; la lista vuota vale «quelle di oggi»; la normalizzazione di `value` per il
 >   tipo generato; il reset che chiede la configurazione senza aspettarla.
+
+#### A6c.5 — Prove pesanti sulla base aggiornata (`7ec0994ed`) ✅ (2026-10-16, 03:49–04:44)
+> - **Base**: il coordinatore ha salvato A6c (`4bbc6fbf6` feat, `dc21b189a` doc, `34ae67dab` journal) e fuso
+>   `dev_release2` (`503dce683`) → `7ec0994ed`, pulito. Rilette le fusioni automatiche: `admin/cli_tools` (la sezione di
+>   B2 sul ripristino; il mio punto 🔒 intatto), `security.md` (il token del pannello dei backup nella frase degli
+>   endpoint privati), `profile.en.md` (l'avatar condiviso, separato dal cambio password), i due cataloghi del runner
+>   (Z7b, B2, Y4b, X CP11b; le mie due registrazioni intatte). Coerenti.
+> - **Slot 1**: `api sync` ✅, poi `all-backend --workers 2` (`nice`, 03:49:57–04:28:27) ✅ rc 0, **0 rossi**: 4 ondate
+>   parallele verdi (4871+5882, 85+2801, 726+1087, 862+949); consolidate `services` 246, `api` 109, `e2e` 7,
+>   `external` (28, 33, 11; gli skip sono di rete), BRIM (733, 324, 197, 151), `db` (36, 17, 3, 25, 4, 41, 47, migrazioni
+>   005–008 25/37/29/23, 17, 6, 28, 7, 12, 36). Log in `/tmp/libreFolio_a6c/logs/slots/`.
+> - Prima della prova, una scansione dei test per password letterali deboli verso le rotte che ora applicano le regole:
+>   solo `hashed_password` scritti nel DB e i miei casi deboli voluti. Nessuna nelle E2E.
+> - **Slot 2**: `core-unit` ✅ 6212/6212 (04:28–04:30); `component-unit` ✅ 3974/3974 (04:30–04:34); le E2E al via del coordinatore, dopo
+>   la galleria di X.
+> - **E2E** (`--workers 2`, `nice`, dopo `db populate --force`): `auth` ✅ 34, `auth-links` ✅ 9, `settings` ✅ 51,
+>   `theme-roles` ✅ 24 (2 saltati per progetto: l'hover del bordo solo su desktop), `header-scroll` ✅ 11 (3 saltati per
+>   progetto: mobile o desktop). 04:34–04:44; porta 6182 libera.
+> - **Fuori pista — la pausa**: il messaggio «lo slot 2 dopo la galleria di X» è arrivato con la catena già partita;
+>   `kill -STOP` sullo script dopo `core-unit`, `component-unit` lasciata finire, `kill -CONT` al via (04:33:49).
+> - **Esito**: A6c pronto per l'ingresso.
