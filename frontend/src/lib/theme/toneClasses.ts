@@ -155,14 +155,16 @@ export const STATUS_TONES = {
         success: 'border-lf-success-line bg-lf-success-soft text-lf-success-on-soft',
     },
     /**
-     * PAC asset distribution editor, bar fill by total: success at 100 %, danger above, warning below. `unknown` takes
-     * the neutral fill: its track in `TargetsStep` is still a palette class, so the two stay apart.
+     * PAC asset distribution editor, bar fill by total: success at 100 %, danger above, warning below. `unknown`, a
+     * total that cannot be read, takes the colour the target already has in the result (`ResultCell`, the legend of
+     * `AssetTable`): `secondary`, 5.8:1 on the `neutral` track of `TargetsStep`, the fill the track must stand apart
+     * from (W6-e, 16/10: provisional, for the designer's review).
      */
     pacTargetBar: {
         balanced: 'bg-lf-success',
         excess: 'bg-lf-danger',
         missing: 'bg-lf-warning',
-        unknown: 'bg-lf-neutral',
+        unknown: 'bg-lf-secondary',
     },
     /** PAC asset distribution editor, total figure. */
     pacTargetTotal: {

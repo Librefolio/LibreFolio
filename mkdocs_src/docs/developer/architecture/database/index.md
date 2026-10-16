@@ -161,13 +161,14 @@ direct `sqlite3` connection:
    gives its path and the errors. Both lines carry `seconds`.
 
 `python -m backend.app.db.post_migration [--db PATH] [--data-dir PATH] [--dry-run]`
-(`__main__.py`) runs the same function with the server stopped, which it does not check. Each fix
-reports `clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit
-code is `1` when a fix or the integrity check failed. Run that way, it also logs what the server
-logs at startup — the warnings, each fix's own lines, the closing line with `seconds` — on the
-console only (`configure_logging(LOG_LEVEL, enable_file_logging=False)`, as JSON on stdout between
-its summary lines), so it writes no log file in the data directory; `main()` called from code
-configures nothing.
+(`__main__.py`) runs the same function with the server stopped, which it does not check, then,
+as at startup, the step for the [lone giving legs](#lone-transfer-legs). Each fix reports
+`clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit code
+is `1` when a fix, the integrity check or that step failed. Run that way, it also logs what the
+server logs at startup — the warnings, each fix's own lines and the step's, the closing line with
+`seconds` — on the console only (`configure_logging(LOG_LEVEL, enable_file_logging=False)`, as
+JSON on stdout between its summary lines), so it writes no log file in the data directory;
+`main()` called from code configures nothing.
 
 The first fix, `autoincrement` (`autoincrement.py`), gives `AUTOINCREMENT` to the id of the tables
 whose ids leave the backend (`AUTOINCREMENT_TABLES`: `users`, `brokers`, `assets`, `transactions`,
@@ -208,19 +209,20 @@ fix converts, once, the halves already in a database.
   enters it (the 1.3 deletion writes the sender's Auto cost instead). A `CASH_TRANSFER` or
   `FX_CONVERSION` becomes a `WITHDRAWAL` when its amount is negative, a `DEPOSIT` otherwise, without
   asset. The link goes, `updated_at` moves to now, every other column stays.
-- It leaves the giving leg of a `TRANSFER` (negative quantity) as it is: counted, not changed, until
-  the developer answers point 47 of release 1.3, since an `ADJUSTMENT` taking units out without a
-  cost would read them as destroyed. It also leaves a row whose quantity or amount sign cannot be
-  read, and the rows of other types (an `ADJUSTMENT` can carry a link). Each of these keeps its
-  type, and loses its link only when that link names a missing row, so that the run's
-  `foreign_key_check` can pass.
+- It leaves the giving leg of a `TRANSFER` (negative quantity) to the step after the fixes:
+  counted, not changed, since it becomes an `ADJUSTMENT` only with the Auto cost of its broker,
+  which a `sqlite3` connection cannot compute (see [Lone giving legs](#lone-transfer-legs)). It
+  also leaves a row whose quantity or amount sign cannot be read, and the rows of other types (an
+  `ADJUSTMENT` can carry a link). Each of these keeps its type, and loses its link only when that
+  link names a missing row, so that the run's `foreign_key_check` can pass.
 - Its own checks, on top of the common ones: no convertible half left, and each row it changed has
   its expected type and no link.
 - Its detection logs whenever it finds such a row, dry runs included, even with nothing to change: a
   WARNING with `count` (every row found), `conversions` (the ids per `TYPE->TYPE`),
   `without_cost_basis`, `unlinked_only`, `left_giving_transfer_legs` and `left_unreadable_sign`.
-  It comes back at every start while a giving leg, or a row of unreadable sign, remains; with
-  nothing left to change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
+  It comes back at every start while a giving leg, or a row of unreadable sign, remains — a giving
+  leg remains only when the step after the fixes cannot give it a cost; with nothing left to
+  change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
   per row changed — *Transaction without its pair converted* or *… unlinked* — with
   `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
   `asset_id`, `cost_basis`, `cost_basis_currency`, `missing_cost_basis` and `former_partner_id`
@@ -258,6 +260,78 @@ repairs the rows already stored, once (decision 23 of release 1.3).
 declared row counts.
 
 The admin side (log lines, the offline run) is in [Command-Line Tools](../../../admin/cli_tools.md).
+
+#### 📤 Lone giving legs, after the fixes {: #lone-transfer-legs }
+
+Until 1.3, deleting a broker also left the giving leg of each `TRANSFER` it had received units
+through as a `TRANSFER` without its partner. Since 1.3 the deletion turns such a leg into an
+`ADJUSTMENT` taking its units out at the Auto cost of its own broker, at which the FIFO lots hand
+them over (decision 47 of release 1.3, see
+[Broker Deletion](../../backend/transactions/service.md#broker-deletion)). The legs already in a
+database get the same from `backend/app/services/transactions/lone_transfer_legs.py`, not from a
+fix: the Auto cost is the async average cost (`compute_wac_iterative()`, with its conversions and
+splits), which the `sqlite3` connection of the fixes cannot compute. So this step runs right after
+them, in two places:
+
+- **At startup**, as the `lone-transfer-legs` step of the lifespan, right after
+  `post-migration-fixes`. `convert_lone_giving_legs_at_startup()` does not read the fixes' report:
+  it opens its own session on the configured engine and first looks for one lone giving leg. With
+  none, it returns at once and checks nothing, so the common case costs one query. Otherwise the
+  database must pass `PRAGMA quick_check` first: any answer but `ok` leaves every row as it is, with
+  the WARNING *Lone transfer legs left as they are: the database failed its quick check*. Then it
+  converts and commits. It never stops the startup: a failure is logged as the WARNING *Lone
+  transfer legs could not be converted; starting normally*, every row stays as it was, and the
+  next start tries again.
+- **In `python -m backend.app.db.post_migration`**, after the fixes, only when their integrity
+  check passed and no fix failed: `run_lone_giving_legs(db_path, dry_run=...)`, on the same file
+  through an engine of its own.
+
+So neither path touches a damaged database, as the fixes never do. One difference remains: after
+a fix that failed on a database that passes the check, the startup step still runs, and the
+offline script does not.
+
+Both call `convert_lone_giving_legs(session, *, dry_run=False)`:
+
+- **Selection.** A `TRANSFER` with a negative quantity is lone when its link is NULL or names a row
+  that no longer exists: the fix clears such a link first, and a dry run, which applies no fix,
+  still sees the leg. SQLite reads the sign (`quantity < 0` in the query), so a row whose quantity
+  it cannot read as a number is never selected. A lone receiving leg (the fix's) and a linked
+  `TRANSFER` are never touched.
+- **Costs first.** Every leg's cost is computed before any row changes, by
+  `TransactionService._handover_cost()`: the leg's own broker, up to its date, without the leg.
+- **Conversion.** A leg with a cost becomes an `ADJUSTMENT` (`make_standalone()`: the same
+  quantity, asset, date, description and tags, no link, a new `updated_at`), and
+  `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`. A leg whose cost
+  needs a missing conversion, or whose cost cannot be computed (an unreadable row of its broker
+  makes the computation raise), stays a `TRANSFER` without its partner, every column as it was: an
+  `ADJUSTMENT` taking units out without a cost would read them as destroyed. The other legs are
+  converted all the same, and the next run tries the ones left again.
+- **Transaction.** The function commits nothing: its caller commits, or rolls back after a dry run,
+  which changes nothing. Outside a dry run it first calls `begin_writes(session, Transaction)`,
+  which takes the write lock: of several workers starting together, the first converts and the
+  next find nothing to convert.
+- **Answer and logs.** It returns one `LoneLeg` per lone giving leg found, converted or not (`id`,
+  `broker_id`, `date`, `quantity`, `asset_id`, `cost`, `cost_currency`, and `reason` when the
+  computation raised). Each leg gets a log line with `transaction_id`, `broker_id`, `date`,
+  `quantity` and `asset_id`: INFO *Lone transfer leg converted at its Auto cost* (on a dry run,
+  *Lone transfer leg would become an ADJUSTMENT at its Auto cost*), with `cost_basis` and
+  `cost_basis_currency`; or WARNING *Lone transfer leg left as it is: its Auto cost needs a missing
+  conversion*, or *… its Auto cost could not be computed*, with `error`.
+
+After the fixes' lines, the offline script prints one line per lone giving leg
+(`LoneLeg.describe()`), *became* instead of *would become* on a real run:
+
+```text
+Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): would become an ADJUSTMENT at <cost> <currency> per unit
+Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): stays a TRANSFER without its partner, no Auto cost (missing conversion)
+Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): stays a TRANSFER without its partner, its cost could not be computed: <error>
+```
+
+When the step itself raises, the script prints `Error: lone transfer legs: <error>` and exits with
+`1`; a leg whose cost could not be computed is no such failure.
+
+`./dev.py test services lone-transfer-legs`
+(`backend/test_scripts/test_services/test_lone_transfer_legs.py`) pins this contract.
 
 ### 📏 `asset_type` and `transactions.type` lengths {: #enum-column-length }
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * ForgotPasswordEmailForm — «forgot password» by email (workstream E, lot E4a), tested standalone: A's
- * `ForgotPasswordCard`, which hosts it on the sign-in, comes with lot E4b.
+ * ForgotPasswordEmailForm — «forgot password» by email (workstream E, lot E4a), tested standalone; its host on the
+ * sign-in, A's `ForgotPasswordCard` (lot E4b), is tested in `features/auth/ForgotPasswordCard.email.test.ts`.
  *
  * The contract under test:
  *   - the form (`forgot-email-form`) has the identifier field (`forgot-email-identifier`, labelled `email.forgot.label`)
@@ -12,8 +12,8 @@
  *   - accepted (the 202, the same for everyone): the outcome `accepted` (`email.forgot.accepted`) drawn as an info notice
  *     (`NOTICE_CLASSES.info`), and the event `email.forgot.accepted`; refused: the outcome `failed`, worded by
  *     `forgotFailureMessage($_, readForgotFailure(error))`, drawn with `OUTCOME_CLASSES.failed`, and the event
- *     `email.forgot.refused` with the failure — the hold (`FORGOT_PASSWORD_DISABLED`, what the route answers today) has
- *     its own message; the field keeps what was typed;
+ *     `email.forgot.refused` with the failure; the field keeps what was typed (the route has had no hold since lot E4b:
+ *     no `FORGOT_PASSWORD_DISABLED` to word);
  *   - a new submit clears the previous outcome; the outcome follows a change of language.
  *
  * Mocks, all owned here: `./forgotPasswordApi`'s `requestPasswordResetEmail` is a fake the test answers (deferred where
@@ -82,8 +82,8 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; rejec
     return {promise, resolve, reject};
 }
 
-/** What `POST /email/password-reset` answers today: the hold (`flows.FORGOT_PASSWORD_HELD`). */
-const HOLD = {detail: {error_code: 'FORGOT_PASSWORD_DISABLED', message: 'Password reset by email is not available yet: ask an administrator'}};
+/** A refusal of `POST /email/password-reset`: the instance cannot send emails. */
+const UNAVAILABLE = {detail: {error_code: 'EMAIL_UNAVAILABLE', message: 'This instance cannot send emails'}};
 
 const form = () => screen.getByTestId('forgot-email-form');
 const field = () => screen.getByTestId('forgot-email-identifier') as HTMLInputElement;
@@ -170,8 +170,8 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         expect(submit()).toBeEnabled();
     });
 
-    it('FPF-04: the hold, as the route answers it today — its own message, and the event; the field keeps what was typed', async () => {
-        fake.requestPasswordResetEmail.mockRejectedValueOnce(axiosRefusal(409, HOLD));
+    it('FPF-04: a refusal — the instance cannot send — its message, and the event; the field keeps what was typed, the form usable again', async () => {
+        fake.requestPasswordResetEmail.mockRejectedValueOnce(axiosRefusal(409, UNAVAILABLE));
         render(ForgotPasswordEmailForm);
         await type('zq_alice');
 
@@ -179,9 +179,9 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
         await waitFor(() => expect(outcome()).toHaveAttribute('data-outcome', 'failed'));
         await idle();
 
-        expect(outcome()).toHaveTextContent(say('email.forgot.errors.FORGOT_PASSWORD_DISABLED'));
+        expect(outcome()).toHaveTextContent(say('email.forgot.errors.unavailable'));
         expect(outcome()).toHaveAttribute('class', OUTCOME_CLASSES.failed);
-        expect(fake.notify).toHaveBeenCalledWith({name: 'email.forgot.refused', detail: {errorCode: 'FORGOT_PASSWORD_DISABLED'}});
+        expect(fake.notify).toHaveBeenCalledWith({name: 'email.forgot.refused', detail: {errorCode: 'EMAIL_UNAVAILABLE'}});
         expect(field()).toHaveValue('zq_alice');
         expect(field()).toBeEnabled();
         expect(submit()).toBeEnabled();
@@ -211,14 +211,14 @@ describe('ForgotPasswordEmailForm — asking for a link', () => {
 
     it('FPF-06: a new submit clears the previous outcome while it runs, and the outcome follows a change of language', async () => {
         const second = deferred<void>();
-        fake.requestPasswordResetEmail.mockRejectedValueOnce(axiosRefusal(409, HOLD)).mockReturnValueOnce(second.promise);
+        fake.requestPasswordResetEmail.mockRejectedValueOnce(axiosRefusal(409, UNAVAILABLE)).mockReturnValueOnce(second.promise);
         render(ForgotPasswordEmailForm);
         await type('zq_alice');
         await fireEvent.click(submit());
-        await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.FORGOT_PASSWORD_DISABLED')));
+        await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.unavailable')));
 
         translator.set(fake.translatorFor('it'));
-        await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.FORGOT_PASSWORD_DISABLED', undefined, 'it')));
+        await waitFor(() => expect(outcome()).toHaveTextContent(say('email.forgot.errors.unavailable', undefined, 'it')));
         expect(submit()).toHaveTextContent(say('email.forgot.submit', undefined, 'it'));
 
         await fireEvent.click(submit());

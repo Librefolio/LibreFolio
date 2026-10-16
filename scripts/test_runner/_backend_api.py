@@ -2,6 +2,11 @@
 Backend API endpoint tests and E2E tests.
 """
 
+import sqlite3
+from contextlib import closing
+
+from backend.test_scripts.test_db_config import get_test_db_path
+
 from . import _common
 from ._backend_db import db_populate
 from ._common import (
@@ -318,6 +323,14 @@ def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing: PUT /backup/restore/upload (limit, space, links), POST/GET/DELETE /backup/restore/stage (report, refusals, one at a time, interrupted, prune) on real archives under tmp_path")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_restore.py", test_names)
     return run_command(cmd, "Backup API restore check tests", verbose=verbose)
+
+
+def api_backup_restore_apply(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the confirmed restore through the API (/backup/restore, lot B3), in an app of the test (no server reached)."""
+    print_section("Backup API: the restore confirmed")
+    print_info("Testing: POST /backup/restore/stage/{id}/confirm, GET /backup/restore/status, DELETE /backup/restore/pending, POST /backup/restore/restart (the signal recorded, never sent); the copy of an active restore kept by DELETE /stage and prune")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_restore_apply.py", test_names)
+    return run_command(cmd, "Backup API restore confirmation tests", verbose=verbose)
 
 
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
@@ -768,6 +781,16 @@ def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | 
     return run_command(cmd, "Email verification hooks API tests", verbose=verbose)
 
 
+def api_email_change_notice(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the email-change notice that A's PUT /auth/profile schedules (lot E4b, on A6e), in-process."""
+    print_section("Email Change Notice API Tests")
+    print_info("Testing PUT /auth/profile: an accepted email change answers as before (200, a new session cookie), then emails the old address with the new one masked; nothing without a change of mailbox, on a refused change or with email off (an info line)")
+    print_info("In-process: the real auth router on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_change_notice_api.py", test_names)
+    return run_command(cmd, "Email change notice API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -784,6 +807,36 @@ def _api_setup() -> bool:
     print_error("Failed to populate test database")
     print_warning("API tests needing fixture data (risk analytics) will fail")
     return False
+
+
+#: The users the API units sign in as, seeded by ``db populate`` (``test_user_defs`` in
+#: ``backend/test_scripts/test_db/populate_mock_data.py``).
+API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+
+
+def _api_fixture_users_missing() -> str | None:
+    """Why one ``api`` action must reseed first: the lane's test database lacks a fixture user. None when it has them.
+
+    The category's ``setup_needed`` (H-21, W-B54). It never writes the database file: opened ``mode=ro``, never
+    created. On a WAL database SQLite may create the empty ``-wal``/``-shm`` companions, as any reader does; while
+    the shared backend runs they exist already. A database that cannot be read counts as one to reseed.
+    """
+    db = get_test_db_path()
+    if not db.is_file():
+        return f"no test database at {db}"
+    placeholders = ", ".join("?" * len(API_FIXTURE_USERS))
+    try:
+        with closing(sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)) as conn:
+            rows = conn.execute(f"SELECT username FROM users WHERE username IN ({placeholders})", API_FIXTURE_USERS).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            return f"the test database {db} cannot be read ({exc})"
+        rows = []
+    except sqlite3.Error as exc:
+        return f"the test database {db} cannot be read ({exc})"
+    found = {username for (username,) in rows}
+    missing = [username for username in API_FIXTURE_USERS if username not in found]
+    return f"the test database {db} has no fixture user {', '.join(missing)}" if missing else None
 
 
 def api_test(verbose: bool = False) -> bool:
@@ -816,6 +869,15 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the founder's acceptance of the instance backup: a populated instance backed up, restored on an empty one."""
+    print_section("E2E: Backup and Restore Round Trip")
+    print_info("Testing: jobs.run_backup, scripts/backup_cli.py restore --yes, then a start (pending-restore … restore-commit) in a fresh process")
+    print_info("Tests: the same totals after the restore; an older backup upgraded; a newer one refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip.py", test_names)
+    return run_command(cmd, "Backup round trip E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -846,6 +908,8 @@ Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
         setup=_api_setup,
+        # One action alone reseeds only when the fixture users are missing (H-21).
+        setup_needed=_api_fixture_users_missing,
         # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
         # backend across two full runs with 4 workers — 579 tests, zero reds —
         # before this line was written. They are scoped because each creates its
@@ -944,6 +1008,19 @@ Tests for REST API endpoints (server auto-started):
         # DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
+    add_test(
+        api,
+        "backup-restore-apply",
+        api_backup_restore_apply,
+        name="Backup API Restore Confirmation",
+        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
+        # of restore.py, restore_jobs.py and apply.py is under tmp_path and the process's own one is a folder of the
+        # test that must stay absent; restart.send_signal and os.kill as restart sees them record and never signal;
+        # real archives built under tmp_path as test_backup_staging.py builds them: no lane data directory, DB, server
+        # or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
@@ -1018,7 +1095,7 @@ Tests for REST API endpoints (server auto-started):
         "email",
         api_email,
         name="Email Administration API",
-        desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous: ships held, 409 FORGOT_PASSWORD_DISABLED with one answer for everyone and nothing scheduled; lifted: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
+        desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous, open as shipped since lot E4: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
@@ -1048,6 +1125,17 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "email-change-notice",
+        api_email_change_notice,
+        name="Email Change Notice API",
+        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, the new one masked (***@domain), one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
+        # PURE: the real auth router runs in-process on a private SQLite file under tmp_path, the SMTP variables are set with
+        # monkeypatch in this process, the hourly budget is private on a fake clock and the fake SMTP server listens on
+        # 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
         "http-compression",
         api_http_compression,
         name="HTTP Compression",
@@ -1072,5 +1160,17 @@ Complete workflow tests via REST API:
     )
     add_test(e2e, "search-to-prices", search2prices_test, name="Search to Prices", desc="Full asset lifecycle flow", prereq="Database created", tests="Search → Create → Assign → Metadata → Prices")
     add_test(e2e, "brim-e2e", e2e_brim, name="BRIM E2E", desc="Test complete BRIM import flow", prereq="Database created", tests="Upload → Parse → Asset Mapping → Import")
+    add_test(
+        e2e,
+        "backup-roundtrip",
+        e2e_backup_roundtrip,
+        name="Backup Round Trip",
+        desc="The founder's acceptance of F01: a populated instance (populate_mock_data in a data directory of the test, files of its own, a first start) backed up with jobs.run_backup, restored on an empty instance with backup_cli.py restore --yes, then a start in a fresh process (pending-restore … restore-commit): the same rows, files and portfolio reports of the official engine for every account with a broker (computed back to back), committed; an older backup upgraded through the check and committed at the head with the report's rows; a newer one refused (revision_unknown), the target untouched",
+        tests="Populate → Backup → Restore --yes → Start → Same totals",
+        # PURE: the source, the target and the archives are data directories under tmp_path, made by child processes in
+        # test mode pointed at them (populate, alembic, the start); the lane's data directory, database and server are
+        # never read nor written (the shared conftest's session fixture aside, as for every pure unit).
+        isolation="pure",
+    )
     add_test(e2e, "all", e2e_test, test_names=False, name="All E2E Tests", desc="Run all E2E tests")
     registry["e2e"] = e2e

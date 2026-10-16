@@ -3594,6 +3594,16 @@ early) and its source files.
 Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-16] update | A TRANSFER left without its other half becomes a plain ADJUSTMENT (V-3)
+Decision 47 built (workstream W, on J's CP-16 FIFO handover at cost): the giving leg of a TRANSFER whose receiver is
+deleted becomes an ADJUSTMENT-out at the Auto cost of its own broker (`_handover_cost`), without a cost it only loses its
+link; the split of a TRANSFER pair prices its giving leg in the WAC stage (refused with `WAC_FX_UNAVAILABLE` on a missing
+conversion), a promote back to TRANSFER drops the giving side's cost; the lone legs already in databases are converted by
+the `lone-transfer-legs` startup step after the post-migration fixes (the sync fix cannot compute the async WAC), with a
+dry run in the offline CLI. Entry after J-17 (price marks from adjustments). The status's stale «not in the code yet» and
+«waits for point 46/47» lines are gone.
+Updated: [[decisions/orphan-transfer-becomes-an-adjustment]].
+
 ## [2026-10-16] update | Days that only move an exchange rate, or a price's source or age, were skipped
 J CP-6 (release 1.3, decision 28) closes B11's securities half: a frame day is dirty when a rate the day reads to value
 it changes (securities, the unrealized split, cash in transit), on every market-quote day, and on the first day a
@@ -3633,4 +3643,31 @@ pitfalls: the grace counted from BUY/SELL dates never applied, and a completenes
 permanent capital artifact. Two pages that stated the old rule got a dated note.
 Filed: [[decisions/adjustment-is-never-a-price]]. Updated: [[entities/portfolio-engine]],
 [[problems/stale-price-banner-never-emitted]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | J-24: an outgoing priced ADJUSTMENT leaves at the value it hands over
+The Dashboard now follows the developer's rule P21 for outgoing adjustments with a cost: the units leave the capital at
+quantity × cost basis converted at the adjustment's date, and the difference from the average cost removed is realized,
+as the lots do since CP-7a. Two pages that stated the historical-cost rule got a dated note.
+Updated: [[entities/portfolio-engine]], [[concepts/inline-wac-computation]].
+Graph: not updated; graphify is not available in this worktree.
+## [2026-10-16] file | Domain: EMAIL — optional SMTP email of release 1.3 (workstream E, F04)
+Workstream E's lot E6 asked for the domain page of the optional email. Filed from plan 08
+(`Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`, committed at `b22747e52`, read with the uncommitted
+E6.0–E6.2 notes), the backlog section «E · Email (fase 01)», developer decisions 44 and 45, `admin/email.en.md`,
+`developer/backend/email.md` and the code at `b22747e52`. The page covers what the domain sends and why, the
+architecture, decisions D-E1…D-E14 with 44 and 45, the security decisions of E3s, E5b and E4b, P1 and the E4c rule,
+the known limits (per process, behind a proxy, no queue, E-7, E-8, F19), 16 problems solved, mostly from the plan's
+«Fuori pista» notes, and what comes next (A7a, E4c, E6, the backlog). No email feature code exists: `features: []`.
+Decisions and problems stay inside the page, as the coordinator asked. `build_admin_setup()` has no caller yet:
+pending A7a. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all pre-existing; the page cites
+50 paths, all present.
+Filed: [[domains/email]].
+Graph not rebuilt: not available in the worktree.
+
+## [2026-10-16] update | CP-7b: the lots follow the Dashboard's at-cost rule day by day
+The lots now value an open LONG lot at cost on every day with no observation on or before it, as the Dashboard does,
+and the lots warning names exactly those days, which closes J-28. A lot opened by an ADJUSTMENT takes the home's mark on
+its opening day as its reference, trades included, converted at that day's rate.
+Updated: [[decisions/adjustment-is-never-a-price]].
 Graph: not updated; graphify is not available in this worktree.

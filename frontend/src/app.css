@@ -252,11 +252,6 @@ html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
     border-color: var(--theme-border-primary);
 }
 
-/* Dark mode: Hover states */
-html.dark .hover\:bg-gray-50:hover {
-    background-color: var(--theme-bg-hover) !important;
-}
-
 /* Dark mode: Focus rings */
 html.dark .focus\:ring-libre-green:focus {
     --tw-ring-color: #4ade80;

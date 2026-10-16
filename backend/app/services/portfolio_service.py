@@ -16,7 +16,7 @@ PortfolioService uses:
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict, deque
+from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -28,8 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -79,12 +77,11 @@ from backend.app.services.financial_math.average_cost import (
     determine_target_currency,
     movement_unit_costs,
 )
+from backend.app.services.financial_math.holding_window import closed_position_window, oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
-    calculate_mwrr,
-    calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
@@ -92,10 +89,14 @@ from backend.app.services.financial_math.returns import (
     cumulative_to_annualized,
     gain_loss_ratio,
     net_holding_return,
+    period_mwrr,
+    period_mwrr_series,
     realized_gain,
     rebase_to_period,
 )
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
@@ -155,11 +156,7 @@ async def compute_wac_iterative(
 
     # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
     # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
+    split_linked_row_ids = await split_linked_ids(session, db_rows)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -350,38 +347,10 @@ def _unrealized_breakdown_rows(engine_result: Any, date_from: date_type | None, 
 # =============================================================================
 
 _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
-# Transaction types that open or consume quantity in a FIFO lot stream (used to derive the
-# oldest still-open lot's opening date per position). ADJUSTMENT/TRANSFER are signed: a
-# positive leg opens a lot, a negative leg consumes oldest-first (per-broker view: a
-# transfer-in opens a lot dated at the receiving broker's transfer date).
+# Transaction types that move a position's quantity: its holding window comes from them
+# (financial_math.holding_window; a split rescales the open lots, a transfer-in opens one
+# dated at its arrival at the receiving broker).
 _LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER}
-
-
-def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
-    """Opening date of the oldest FIFO lot still open, from one (broker, asset) holding stream.
-
-    Opens (add a lot): positive-quantity BUY / ADJUSTMENT / TRANSFER.
-    Closes (consume oldest-first): negative-quantity SELL / ADJUSTMENT / TRANSFER.
-    Returns None when no lot remains open (fully closed) or the stream is empty. This is the
-    FIFO-exact opening date, which differs from the first-ever position date once partial sells
-    have fully consumed the earliest lots.
-    """
-    open_lots: deque[tuple[date_type, Decimal]] = deque()
-    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
-        qty = tx.quantity or Decimal("0")
-        if qty > 0:
-            open_lots.append((tx.date, qty))
-        elif qty < 0:
-            remaining = -qty
-            while remaining > 0 and open_lots:
-                lot_date, lot_qty = open_lots[0]
-                if lot_qty > remaining:
-                    open_lots[0] = (lot_date, lot_qty - remaining)
-                    remaining = Decimal("0")
-                else:
-                    remaining -= lot_qty
-                    open_lots.popleft()
-    return open_lots[0][0] if open_lots else None
 
 
 # Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial
@@ -392,36 +361,9 @@ def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
 # 8×(-0.031102) + (-0.751182) against a +1 buy leaves a +0.000002 residual). This
 # is not Decimal arithmetic error — it's an artifact of the recorded transaction
 # quantities themselves — so treat anything at or below this threshold as closed.
-# The value lives in data_quality_thresholds, shared with the asset list's held-now flags.
+# The value lives in data_quality_thresholds, shared with the asset list's held-now flags
+# and the closed-position window (financial_math.holding_window).
 _QUANTITY_DUST_THRESHOLD = QUANTITY_DUST_THRESHOLD
-
-
-def _closed_position_window(txns: list[Transaction]) -> tuple[Optional[date_type], Optional[date_type]]:
-    """Realized flight time of a fully-closed holding stream: (oldest_open, last_close).
-
-    - oldest_open: date the first lot was ever opened (first positive-quantity
-      BUY / ADJUSTMENT / TRANSFER).
-    - last_close: date the running quantity last dropped to (dust-)zero, i.e. when
-      the final open lot was consumed. CROWDFUND-style dust residuals (see
-      ``_QUANTITY_DUST_THRESHOLD``) count as closed.
-
-    Returns ``(open_date, None)`` if the stream never fully closes and
-    ``(None, None)`` if it never opens. Needed because a fully-closed position has
-    no still-open lot, so ``_oldest_open_lot_date`` is ``None`` and there is no end
-    cost basis — leaving the generic annualized path without a window or a base.
-    """
-    open_date: Optional[date_type] = None
-    last_close: Optional[date_type] = None
-    running = Decimal("0")
-    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
-        qty = tx.quantity or Decimal("0")
-        prev = running
-        running += qty
-        if qty > 0 and open_date is None:
-            open_date = tx.date
-        if qty < 0 and prev > _QUANTITY_DUST_THRESHOLD and running <= _QUANTITY_DUST_THRESHOLD:
-            last_close = tx.date
-    return open_date, last_close
 
 
 class PortfolioService:
@@ -610,7 +552,6 @@ class PortfolioService:
         all_missing_pairs: list[WACMissingPairInfo] = []
         missing_price_assets: list[MissingPriceAsset] = []
         broker_names: dict[int, str] = {}
-        broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
         # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
         lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
@@ -660,7 +601,8 @@ class PortfolioService:
         # engine's average-cost pool gave up, both in base currency with the owner's share.
         _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
-        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(quantity_moves(txns, lot_split_ids)) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
         # in-kind/succession/snapshot-seeded positions get a real window start — unlike
         # first_position_dates which only tracks BUY/SELL). Anchors the net annualized window.
@@ -711,8 +653,6 @@ class PortfolioService:
             all_missing_pairs.extend(yield_on_cost_calculation.missing_fx_pairs)
 
             current_value = ps.market_value
-            if current_value is not None:
-                broker_market_values[ps.broker_id] += current_value
 
             gain_loss = ps.unrealized_pnl
             gain_loss_pct = gain_loss_ratio(gain_loss, ps.cost_basis, positive_base=False)
@@ -819,16 +759,14 @@ class PortfolioService:
 
         if include_breakdown:
             for broker_id, broker_name in broker_names.items():
-                # Capital and in-transit value come from the engine's per-broker slice, so an
-                # internal transfer moves capital on arrival instead of showing -X / +X, and
-                # the value in transit stays on the sender's card. Market value and cash keep
-                # their own valuation at valuation_date: the engine re-values a day only when
-                # something happens on it.
+                # Each card is the engine's per-broker slice of the headline on valuation_date
+                # (the cards add up to it): market value, cash at that day's rates and the value
+                # in transit, which stays on the sender's card; capital moves on arrival, so an
+                # internal transfer never shows -X / +X.
                 contribution = last_state.broker_contributions.get(broker_id) if last_state is not None else None
-                broker_in_transit = contribution.in_transit_contribution if contribution is not None else Decimal("0")
                 broker_capital = contribution.capital_contribution if contribution is not None else Decimal("0")
-                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0")) + broker_in_transit
-                broker_gain = broker_nav - broker_capital
+                broker_nav = contribution.nav_contribution if contribution is not None else Decimal("0")
+                broker_gain = contribution.pnl_contribution if contribution is not None else Decimal("0")
                 broker_gl_ratio = gain_loss_ratio(broker_gain, broker_capital, positive_base=True)
                 broker_gl_pct = broker_gl_ratio if broker_gl_ratio is not None else Decimal("0")
                 by_broker_list.append(
@@ -849,13 +787,15 @@ class PortfolioService:
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
 
-        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
-        nav_denominator = engine_nav if engine_nav > 0 else Decimal("1")
+        # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
+        total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
         for h in all_holdings:
-            if h.current_value and total_market:
-                object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
-            if h.current_value:
-                object.__setattr__(h, "nav_weight_percent", (h.current_value / nav_denominator * 100).quantize(Decimal("0.01")))
+            if not h.current_value:
+                continue
+            allocation = percent_of(h.current_value, total_market)
+            nav_weight = percent_of(h.current_value, engine_nav)
+            object.__setattr__(h, "allocation_percent", allocation.quantize(Decimal("0.01")) if allocation is not None else None)
+            object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
@@ -864,7 +804,6 @@ class PortfolioService:
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
         period_cfs = list(period.cash_flows)
         period_navs = list(period.nav_snapshots)
-        period_start_nav_perf = period.start_nav
         period_start_date_perf = period.start_date if period.start_date is not None else today
 
         # Net invested for the period (sum of deposits minus withdrawals)
@@ -879,19 +818,9 @@ class PortfolioService:
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-            if period_net_invested > 0:
-                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
-                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
-                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
-                mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    period_cfs,
-                    initial_nav_for_mwrr,
-                    engine_nav,
-                    period_start_date_perf,
-                    date_to or today,
-                )
-                mwrr_result = mwrr_point.mwrr
+        # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
+        # (D-MF5): no rate without net invested capital or with a value at or below zero.
+        mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
@@ -1163,7 +1092,8 @@ class PortfolioService:
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
+            # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
+            mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
@@ -1615,7 +1545,9 @@ class PortfolioService:
         # ── Unrealized delta: 2-point computation per position ──
         contributions: list[AssetPeriodContribution] = []
 
-        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
+        lot_moves = {key: quantity_moves(txns, lot_split_ids) for key, txns in lot_txns_by_key.items()}
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(moves) for key, moves in lot_moves.items()}
 
         for pos_key, info in position_info.items():
             broker_id, asset_id = pos_key
@@ -1734,7 +1666,7 @@ class PortfolioService:
             if is_fully_sold and period_pnl is not None:
                 deployed_cost = per_cost_sold.get(pos_key)
                 if deployed_cost and deployed_cost != 0:
-                    open_date, close_date = _closed_position_window(lot_txns_by_key.get(pos_key, []))
+                    open_date, close_date = closed_position_window(lot_moves.get(pos_key, []))
                     if open_date is not None and close_date is not None:
                         closed_start = open_date if date_from is None or open_date > date_from else date_from
                         closed_return = (period_pnl / deployed_cost).quantize(Decimal("0.0001"))
@@ -1891,7 +1823,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration
         self,
         user_id: int,
         query: PortfolioReportQuery,

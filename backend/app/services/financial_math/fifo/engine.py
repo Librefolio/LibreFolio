@@ -418,11 +418,11 @@ class FifoLotEngine:
     def _handover_currency(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> str | None:
         """The currency in which an ADJUSTMENT-out hands ``fragment`` over.
 
-        With a cost basis, every fragment leaves at the row's per-unit cost — the average cost the units leave
-        with, not the fragment's own FIFO cost — so the lots realize what the average cost does. That cost is in
-        ``cost_basis_currency``, or in the lot's when it has none. Without a cost the units leave at 0, in the
-        lot's currency. Another currency than the lot's leaves the native realized P&L unknown; the lots analysis
-        converts each leg at its own date (decision 26).
+        With a cost basis, every fragment leaves at the row's per-unit cost basis — the value the row hands over, as
+        the Dashboard reads it (J-24) — not at the fragment's own FIFO cost. That cost is in ``cost_basis_currency``,
+        or in the lot's when it has none. Without a cost the units leave at 0, in the lot's currency. Another currency
+        than the lot's leaves the native realized P&L unknown; the lots analysis converts each leg at its own date
+        (decision 26).
         """
         lot_currency = self._lots[fragment.lot_id].currency
         if tx.cost_basis_override is None:
@@ -854,7 +854,8 @@ class FifoLotEngine:
 
         Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
         (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
-        function of holdings, but the two remain distinct audit groups by economic_type. A pool is
+        function of holdings, but the two remain distinct audit groups by economic_type. A pool sums the
+        signed amounts, as the Dashboard does: a negative correction lowers the income. It is
         allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
         recorded entirely as orphan income (returned to the caller for the asset-level total).
         """
@@ -874,8 +875,8 @@ class FifoLotEngine:
                 if quantity > Decimal("0"):
                     eligible.append((lot_id, quantity))
             eligible.sort(key=lambda item: item[0])
-            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
-            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
+            target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
             source_ids = tuple(sorted(event.transaction_id for event in pool_events))
             if not eligible:
                 orphan_total += target_pool

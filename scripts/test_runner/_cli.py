@@ -113,6 +113,11 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
             print_error(f"--list not supported for category '{category}'")
             return True
 
+    # One action run on its own: its category's setup, when the action needs it (H-21). `all` runs it itself.
+    if action != "all" and not _common.ensure_category_setup(category):
+        print_error(f"{category}: its setup failed — {action} not run")
+        return False
+
     # Frontend categories (have ui, headed, debug flags + test_names)
     if category in _FRONTEND_CATEGORIES:
         ui = kwargs.get("ui", False)
@@ -611,6 +616,13 @@ def _categories_in_scope(args) -> list:
     return [category] if category in TEST_REGISTRY else []
 
 
+def _single_pure_action(category: str, action: str | None) -> bool:
+    """One action of ``category`` run on its own, which the catalogue declares ``pure``: it opens no database (H-23)."""
+    from ._inventory import PURE, declared_isolation
+
+    return action not in (None, "all") and declared_isolation(category, action) == PURE
+
+
 def _run_exclusive_setups(args) -> bool:
     """Run the setups that own the database file, before the server ever starts.
 
@@ -623,9 +635,17 @@ def _run_exclusive_setups(args) -> bool:
     with ``database_file_owned_exclusively()`` wherever it is called from. What
     this adds is the knowledge of *which* setups are destructive, declared next to
     the category instead of discovered at the moment of damage.
+
+    One action run on its own that the catalogue declares ``pure`` opens no database: its category's setup is
+    skipped, and the lane's database is left as it is (H-23). A whole category, ``all`` and any other action still
+    run it, an action with no declared class included (``declared_isolation()``: the static scan does not count).
     """
+    action = getattr(args, "action", None)
     for category in _categories_in_scope(args):
         if not _common.setup_is_exclusive(category):
+            continue
+        if _single_pure_action(category, action):
+            print_info(f"{category}: {action} is pure, it opens no database: the category's setup is skipped and the lane's database is left as it is")
             continue
         if not _common.run_category_setup(category):
             print_error(f"{category}: setup failed before the shared backend — aborting")

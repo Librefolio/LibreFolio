@@ -14,6 +14,8 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {API_BASE, goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {schemas} from '../../src/lib/api/generated';
 
 /**
  * Every asset a test saved, by the unique name it gave it: its id once the create response has
@@ -824,6 +826,181 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             }
             if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
         }
+    });
+});
+
+// ============================================================================
+// O-20: one creation, one price sync.
+//
+// Creating an asset with a provider from the list page asks for its prices TWICE: the modal fires a background
+// full-history sync as it closes (AssetModal.svelte, saveCreate), and the list page's `oncreated` reloads the
+// assets and syncs the new one again (assets/+page.svelte, handleSyncAsset). The direction is one sync, owned by
+// the modal — but this test pins the count only, never which of the two survives.
+//
+// Offline: the dropdown cannot offer `mockprov` (the backend hides test-only providers and
+// ProviderAssignmentSection filters it), so the UI path picks a live provider as Bug K does, and every
+// provider-facing call of this page — probe, sync, current prices — is answered here; cross-origin requests
+// (provider icons) are refused.
+// ============================================================================
+
+type SyncItem = {asset_id: number; date_range: {start: string; end: string}};
+type ProbeBody = {provider_code: string; identifier: string; operations?: string[]};
+type ProviderInfo = {code: string; kind?: string; accepted_identifier_types?: string[]; params_schema?: Array<{required?: boolean}>};
+
+/** A sync that reached no provider: nothing fetched, nothing written, and said so — never a fabricated success. */
+function offlineSyncAnswer(items: SyncItem[]) {
+    return {
+        results: items.map(({asset_id}) => ({asset_id, status: 'failed', provider_used: null, points_fetched: 0, points_changed: 0, inserted_count: 0, updated_count: 0, events_fetched: 0, events_changed: 0, changed_points: null, errors: ['Synthetic offline boundary: no sync performed']})),
+        success_count: 0,
+        errors: [],
+        total_points_changed: 0,
+    };
+}
+
+/** The connection test only has to open the Save gate: a passing price and history, nothing for metadata. */
+function offlineProbeAnswer(request: ProbeBody) {
+    const operations = request.operations ?? [];
+    return {
+        provider_code: request.provider_code,
+        identifier: request.identifier,
+        total_execution_time_ms: 0,
+        ...(operations.includes('current_price') ? {current_price: {success: true, execution_time_ms: 0, value: '100.00', currency: 'EUR', as_of_date: todayIso()}} : {}),
+        ...(operations.includes('history') ? {history: {success: true, execution_time_ms: 0, points_count: 2, date_range: `${daysAgoIso(1)} → ${todayIso()}`}} : {}),
+        ...(operations.includes('metadata') ? {metadata: {success: false, execution_time_ms: 0, error_code: 'NO_DATA', error: 'Synthetic offline boundary: no metadata'}} : {}),
+    };
+}
+
+/** The list's live poll: no quote, hence no write-back of today's price. */
+function offlineCurrentPricesAnswer(assetIds: number[]) {
+    return {results: assetIds.map((asset_id) => ({asset_id, value: null, currency: null, as_of_date: null, source: null, error: 'Synthetic offline boundary: no current quote requested'})), success_count: 0, errors: []};
+}
+
+test.describe('NR — One price sync per asset creation (O-20)', () => {
+    let owned: OwnedAssets = new Map();
+
+    test.beforeEach(async ({page}) => {
+        owned = new Map();
+        await login(page, TEST_USER);
+    });
+
+    // Routes first, so a callback racing the page's teardown cannot report an error of its own; then the asset, by id.
+    test.afterEach(async ({page}) => {
+        await page.unrouteAll({behavior: 'ignoreErrors'});
+        await deleteOwnedAssets(page, owned);
+    });
+
+    test('creating an asset with a provider from the list page posts exactly one price sync for it', async ({page, baseURL}) => {
+        // Two load waves of the list (before and after the save) plus the modal: more than the default 30 s under load.
+        test.setTimeout(60_000);
+        const name = `E2E O20 ${uniqueSuffix()}`;
+        // ISIN-shaped, under the user-assigned "ZZ" prefix: no real instrument carries it.
+        const identifier = `ZZ${uniqueToken(10)}`;
+
+        // Schema-checked here, once: nobody awaits a route callback, so a stub that drifted from the generated
+        // schema must fail at this line, not as a request left unanswered.
+        schemas.FABulkRefreshResponse.parse(offlineSyncAnswer([{asset_id: 1, date_range: {start: 'resume', end: todayIso()}}]));
+        schemas.FAProviderProbeResponse.parse(offlineProbeAnswer({provider_code: 'any', identifier, operations: ['current_price', 'history', 'metadata']}));
+        schemas.FACurrentPriceResponse.parse(offlineCurrentPricesAnswer([1]));
+
+        // A provider the form settles on by itself — the default TICKER, or its only identifier type — with no
+        // required parameter and no parametric series (that kind skips the sync on purpose). Today: borsa_italiana.
+        const providersResponse = await page.request.get(`${API_BASE}/assets/provider`);
+        expect(providersResponse.ok(), `GET ${API_BASE}/assets/provider answered ${providersResponse.status()}`).toBeTruthy();
+        const providers = (await providersResponse.json()) as ProviderInfo[];
+        const provider = providers.find((p) => {
+            const types = p.accepted_identifier_types ?? [];
+            return p.code !== 'mockprov' && p.kind === 'online_scraper' && (types.includes('TICKER') || (types.length === 1 && types[0] !== 'AUTO_GENERATED')) && !(p.params_schema ?? []).some((field) => field.required);
+        });
+        if (!provider) throw new Error(`no market provider the form can assign without extra parameters: ${JSON.stringify(providers.map((p) => ({code: p.code, kind: p.kind, types: p.accepted_identifier_types})))}`);
+
+        // ---- offline boundary: the catch-all first, since routes registered after it are tried before it ----
+        if (!baseURL) throw new Error('the project must set use.baseURL');
+        const origin = new URL(baseURL).origin;
+        await page.route('**/*', async (route) => {
+            const url = new URL(route.request().url());
+            if (['http:', 'https:'].includes(url.protocol) && url.origin !== origin) await route.abort('blockedbyclient');
+            else await route.fallback();
+        });
+        await page.route(`**${API_BASE}/assets/provider/probe`, async (route) => {
+            await route.fulfill({json: offlineProbeAnswer(route.request().postDataJSON() as ProbeBody)});
+        });
+        await page.route(`**${API_BASE}/assets/prices/current`, async (route) => {
+            await route.fulfill({json: offlineCurrentPricesAnswer(route.request().postDataJSON() as number[])});
+        });
+        // The subject: every sync this page posts, recorded before it is answered.
+        const syncs: SyncItem[][] = [];
+        await page.route(`**${API_BASE}/assets/prices/sync`, async (route) => {
+            const items = route.request().postDataJSON() as SyncItem[];
+            syncs.push(items);
+            await route.fulfill({json: offlineSyncAnswer(items)});
+        });
+
+        // ---- create through the modal, from the list page ----
+        await goToAssetsPage(page);
+        // Cards are the grid's: the default view, driven to rather than assumed (the view is remembered).
+        await page.getByTestId('view-mode-grid').click();
+        await openCreateAssetModal(page);
+        const form = page.getByTestId('asset-modal-form');
+        await expect(form).toHaveAttribute('data-snapshot-ready', 'true');
+
+        const nameInput = page.getByTestId('asset-modal-display-name');
+        await nameInput.fill(name);
+        await expect(nameInput).toHaveValue(name);
+
+        // A toggle: ask for its state, act only if it is not there yet.
+        const providerHeader = page.getByTestId('asset-modal-provider-header');
+        if ((await providerHeader.getAttribute('data-expanded')) !== 'true') await providerHeader.click();
+        await expect(providerHeader).toHaveAttribute('data-expanded', 'true');
+
+        const providerSelect = page.getByTestId('provider-code-select-button');
+        await providerSelect.click();
+        await page.getByTestId(`provider-option-${provider.code}`).click();
+        await expect(providerSelect).toHaveAttribute('aria-expanded', 'false');
+
+        // Choosing a provider clears the identifier, so it is typed after; the field is always drawn for a typed identifier.
+        const identifierInput = page.getByTestId('provider-identifier');
+        await expect(identifierInput).toBeVisible();
+        await identifierInput.fill(identifier);
+        await expect(identifierInput).toHaveValue(identifier);
+
+        // Save is gated on a passing connection test once a provider is set: driven, and answered offline above.
+        await page.getByTestId('provider-test-config').click();
+        await expect(page.getByTestId('asset-modal-provider-status')).toHaveAttribute('data-status', 'passed', {timeout: 10_000});
+
+        const saveBtn = page.getByTestId('asset-modal-save');
+        await expect(saveBtn).toBeEnabled();
+        const assetId = await saveAndRecordCreated(page, owned, name, () => saveBtn.click());
+        await expect(form).toBeHidden({timeout: 15_000});
+
+        // Precondition, verified rather than inferred: the provider is really assigned — without it no sync is owed.
+        const assignmentsResponse = await page.request.get(`${API_BASE}/assets/provider/assignments?asset_ids=${assetId}`);
+        expect(assignmentsResponse.ok(), `provider assignments of asset ${assetId} answered ${assignmentsResponse.status()}`).toBeTruthy();
+        const assignment = ((await assignmentsResponse.json()) as Array<{asset_id: number; provider_code: string}>).find((a) => a.asset_id === assetId);
+        expect(assignment?.provider_code, `asset ${assetId} must carry the provider chosen in the modal`).toBe(provider.code);
+
+        // ---- barrier: the page has finished what it does after a creation ----
+        // The modal's sync leaves as the modal closes; the page's, if any, only after the second wave (prices) of its
+        // reload. The end of that wave (`data-busy` false) and the page marking the asset as syncing land in one
+        // microtask run, so from here a page sync shows as the card's sync control disabled, until the sync is
+        // answered and the prices reloaded. That control has no test id: it is the card's only button that can be
+        // disabled, and with a provider assigned (checked above) disabled means "syncing".
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        await expect(card, 'the asset this test created must reach the grid').toBeVisible({timeout: 20_000});
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        // Presence barrier for the absence below: the card's footer, where the sync control lives, is drawn.
+        await expect(card.getByTestId('asset-card-merge')).toBeVisible();
+        await expect(card.getByRole('button', {disabled: true}), 'the card must stop syncing: its sync control stays disabled while the page syncs the asset').toHaveCount(0, {timeout: 20_000});
+
+        // ---- the claim ----
+        const syncsOfAsset = () => syncs.filter((items) => items.some((item) => item.asset_id === assetId));
+        // Presence first (the modal's sync is fire-and-forget), then the count, read once the page is done.
+        await expect.poll(() => syncsOfAsset().length, {message: `creating asset ${assetId} with a provider must ask for its prices`, timeout: 10_000}).toBeGreaterThanOrEqual(1);
+        const requests = syncsOfAsset();
+        expect(requests, `one creation, one POST ${API_BASE}/assets/prices/sync for asset ${assetId}; the page sent ${requests.length}: ${JSON.stringify(requests)}`).toHaveLength(1);
+        expect(
+            requests[0].map((item) => item.asset_id),
+            'the sync asks for the asset just created, and only for it',
+        ).toEqual([assetId]);
     });
 });
 

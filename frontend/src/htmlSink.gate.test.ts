@@ -64,8 +64,8 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/components/table/DataTableColumnHeader.svelte', expr: 'getColumnHeaderHtml(column)', why: COLUMN_DEFS},
     {file: 'src/lib/components/ui/display/CurrencyAmount.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
     {file: 'src/routes/(app)/dashboard/+page.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/lib/components/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/features/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/features/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/features/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},
@@ -74,10 +74,10 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
         expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})`,
         why: 'A static i18n message with a static <code> value: nothing in it comes from a user, a file or a provider.',
     },
-    {file: 'src/lib/components/transactions/cells/TxLinksCell.svelte', expr: 'eventHtml', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/cells/TxLinksCell.svelte', expr: 'linkHtml', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/cells/TxTooltipCell.svelte', expr: 'html', why: TX_CELL_BUILDERS},
-    {file: 'src/lib/components/transactions/modals/TransactionCompareModal.svelte', expr: 'cell.display', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxLinksCell.svelte', expr: 'eventHtml', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxLinksCell.svelte', expr: 'linkHtml', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/cells/TxTooltipCell.svelte', expr: 'html', why: TX_CELL_BUILDERS},
+    {file: 'src/lib/features/transactions/import/TransactionCompareModal.svelte', expr: 'cell.display', why: TX_CELL_BUILDERS},
 ];
 
 interface Sink {

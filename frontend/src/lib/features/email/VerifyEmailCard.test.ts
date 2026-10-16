@@ -4,13 +4,16 @@
  *
  * The contract under test:
  *   - the card is the `verify-email-status` card of `AuthCard`, carrying its status in `data-status`, and words each of
- *     the seven statuses of the page with `VERIFY_PAGE_KEYS[status]` (`email.verification.page.<status>`) in
+ *     the eight statuses of the page with `VERIFY_PAGE_KEYS[status]` (`email.verification.page.<status>`) in
  *     `verify-email-message`, a polite live region;
  *   - «back to the sign-in» (`verify-email-goto-login`, `auth.backToLogin`) goes to `/`, offered for every status but
  *     `checking` — a dead link is never the end: signing in offers a new one, and nothing sends anyone to an
  *     administrator;
  *   - «try again» (`verify-email-retry`, `common.retry`) only for `error`, and only when the page gave an `onretry`; a
  *     click calls it once and goes nowhere;
+ *   - a blocked instance (lot E-10): `blocked` is worded like the others, `email.verification.page.blocked`, and offers
+ *     the way back to the sign-in but no «try again», even with the `onretry` the page always gives: trying again
+ *     changes nothing while the instance is blocked;
  *   - the card follows its props and the language: a new status, or a new translator, rewords it in place.
  *
  * Mocks: `$app/navigation` (`goto`, a spy); `$lib/i18n`: `_` is a writable translator owned by this file, answering
@@ -40,7 +43,7 @@ import type {VerifyPageStatus} from './emailText';
 
 const translator = _ as unknown as Writable<(key: string) => string>;
 
-const STATUSES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error'];
+const STATUSES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
 /** Every status but the wait: the card then offers the way back to the sign-in. */
 const SETTLED = STATUSES.filter((status) => status !== 'checking');
 
@@ -112,7 +115,7 @@ describe('VerifyEmailCard — «try again», for a check that failed', () => {
         expect(backToLogin()).not.toBeNull();
     });
 
-    it.each(SETTLED.filter((status) => status !== 'error'))('VEC-06: %s — a refused link is not retried: no retry even with an onretry', (status) => {
+    it.each(SETTLED.filter((status) => status !== 'error'))('VEC-06: %s — only a check that failed is tried again: no retry even with an onretry', (status) => {
         render(VerifyEmailCard, {props: {status, onretry: vi.fn()}});
 
         expect(retry()).toBeNull();
@@ -137,5 +140,24 @@ describe('VerifyEmailCard — it follows its props and the language', () => {
 
         expect(message()).toHaveTextContent('[it] email.verification.page.expired');
         expect(backToLogin()).toHaveTextContent('[it] auth.backToLogin');
+    });
+});
+
+describe('VerifyEmailCard — a blocked instance (lot E-10)', () => {
+    it('VEC-08: blocked, with the onretry the page always gives — the block’s own words, the way back to the sign-in, and no retry', async () => {
+        const onretry = vi.fn();
+        render(VerifyEmailCard, {props: {status: 'blocked', onretry}});
+
+        expect(card()).toHaveAttribute('data-status', 'blocked');
+        expect(message()).toHaveTextContent('[en] email.verification.page.blocked');
+        expect(retry(), 'trying again changes nothing while the instance is blocked').toBeNull();
+        expect(backToLogin()).toHaveTextContent('[en] auth.backToLogin');
+        expect(within(card()).getAllByRole('button'), 'the way back is all there is to do').toHaveLength(1);
+
+        await fireEvent.click(backToLogin()!);
+
+        expect(fake.goto).toHaveBeenCalledTimes(1);
+        expect(fake.goto).toHaveBeenCalledWith('/');
+        expect(onretry).not.toHaveBeenCalled();
     });
 });

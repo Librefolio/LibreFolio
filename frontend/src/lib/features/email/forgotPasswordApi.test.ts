@@ -5,10 +5,10 @@
  *   - `requestPasswordResetEmail(identifier)` posts `{identifier}` once, through its generated alias, and resolves with
  *     nothing on the 202 — the same answer for everyone, which says nothing about the accounts; a refusal reaches the
  *     caller as raised;
- *   - `readForgotFailure(error)`: any 422 is `INVALID`; a coded refusal is its `error_code` — `FORGOT_PASSWORD_DISABLED`
- *     (the hold the route ships with), `EMAIL_UNAVAILABLE`, `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_RATE_LIMITED` with
- *     `retryAfter` when `retry_after` is a finite number —; no `detail` object (no answer, a plain-text `detail`) is
- *     `UNKNOWN`; it reads an `AxiosError` and an `ApiError` alike;
+ *   - `readForgotFailure(error)`: any 422 is `INVALID`; a coded refusal is its `error_code` — `EMAIL_UNAVAILABLE`,
+ *     `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_RATE_LIMITED` with `retryAfter` when `retry_after` is a finite number (the
+ *     route has had no hold since lot E4b: no `FORGOT_PASSWORD_DISABLED`) —; no `detail` object (no answer, a
+ *     plain-text `detail`) is `UNKNOWN`; it reads an `AxiosError` and an `ApiError` alike;
  *   - through the real client, only the transport faked: the 202 resolves, and each refusal of the route is read.
  *
  * Mocks: the alias is spied on the real generated client (restored after each test); the last block replaces
@@ -36,12 +36,6 @@ const CARRIERS: Array<{carrier: string; refuse: (status: number, body?: unknown)
 
 /** Each refusal of `POST /email/password-reset` (backend/app/api/v1/email.py), and what must be read of it. */
 const REFUSALS: Array<{label: string; status: number; body: unknown; failure: ForgotFailure}> = [
-    {
-        label: '409 FORGOT_PASSWORD_DISABLED (the hold)',
-        status: 409,
-        body: {detail: {error_code: 'FORGOT_PASSWORD_DISABLED', message: 'Password reset by email is not available yet: ask an administrator'}},
-        failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'},
-    },
     {label: '409 EMAIL_UNAVAILABLE', status: 409, body: {detail: {error_code: 'EMAIL_UNAVAILABLE', message: 'This instance cannot send emails'}}, failure: {errorCode: 'EMAIL_UNAVAILABLE'}},
     {label: '409 EMAIL_LINKS_UNAVAILABLE', status: 409, body: {detail: {error_code: 'EMAIL_LINKS_UNAVAILABLE', message: 'This instance cannot send emails with a link'}}, failure: {errorCode: 'EMAIL_LINKS_UNAVAILABLE'}},
     {label: '429 EMAIL_RATE_LIMITED', status: 429, body: {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 840, message: 'Too many requests: try again later'}}, failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}},
@@ -63,7 +57,7 @@ describe('requestPasswordResetEmail — through its alias', () => {
     });
 
     it('FPA-02: a refusal reaches the caller as raised', async () => {
-        const refusal = axiosRefusal(409, {detail: {error_code: 'FORGOT_PASSWORD_DISABLED'}});
+        const refusal = axiosRefusal(409, {detail: {error_code: 'EMAIL_UNAVAILABLE'}});
         vi.spyOn(zodiosApi, ALIAS).mockRejectedValueOnce(refusal);
 
         await expect(requestPasswordResetEmail('zq_alice')).rejects.toBe(refusal);

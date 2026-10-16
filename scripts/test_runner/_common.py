@@ -589,7 +589,7 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
 # ── Registry builder helpers ────────────────────────────────────────────
 
 
-def make_category(help_text: str, description: str, setup=None, setup_exclusive: bool = False, default_isolation: str = None) -> dict:
+def make_category(help_text: str, description: str, setup=None, setup_exclusive: bool = False, setup_needed: Callable[[], str | None] | None = None, default_isolation: str = None) -> dict:
     """Create the _meta entry for a registry category.
 
     ``setup`` is what the category must do to its environment before any of its
@@ -607,6 +607,12 @@ def make_category(help_text: str, description: str, setup=None, setup_exclusive:
     setup is hoisted to before the server starts. ``api``'s is not exclusive — it
     only inserts rows, and concurrent writers on WAL are fine.
 
+    ``setup_needed`` serves one action run on its own, which no setup precedes:
+    it returns why the setup must run first, a reason ``ensure_category_setup``
+    prints, or None. ``api`` declares it: its units sign in as the fixture users,
+    which a database recreated empty (``services``, ``db create``) no longer has,
+    and one action alone used to fail with 401 there (H-21, W-B54).
+
     ``default_isolation`` states what is true of the category as a whole, so the
     exceptions are the only thing written down. ``api`` is ``write-scoped``
     because its units create their own user and their own rows and address them
@@ -619,6 +625,8 @@ def make_category(help_text: str, description: str, setup=None, setup_exclusive:
     if setup is not None:
         meta["setup"] = setup
         meta["setup_exclusive"] = setup_exclusive
+        if setup_needed is not None:
+            meta["setup_needed"] = setup_needed
     if default_isolation:
         meta["default_isolation"] = default_isolation
     return {"_meta": meta}
@@ -647,6 +655,28 @@ def run_category_setup(category: str) -> bool:
         return True
     _SETUP_DONE.add(category)
     return bool(setup())
+
+
+def ensure_category_setup(category: str) -> bool:
+    """Before one action of ``category`` run on its own: its setup, when ``setup_needed`` gives a reason. True when fine.
+
+    A whole category runs its setup anyway; one action ran against whatever the previous run left in the lane's
+    database. The reason is printed, so the run says why it runs the setup, and on which database.
+    """
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — _registry imports this module
+
+    meta = TEST_REGISTRY.get(category, {}).get("_meta", {})
+    setup_needed = meta.get("setup_needed")
+    if meta.get("setup") is None or setup_needed is None or category in _SETUP_DONE:
+        return True
+    try:
+        reason = setup_needed()
+    except Exception as exc:  # a check that cannot tell must not skip the setup
+        reason = f"could not check whether its setup is needed ({type(exc).__name__}: {exc})"
+    if not reason:
+        return True
+    print_info(f"⚙️  {category}: {reason} — running the category setup before this action")
+    return run_category_setup(category)
 
 
 def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True, isolation: str = None, exclusive_because: str = None) -> None:

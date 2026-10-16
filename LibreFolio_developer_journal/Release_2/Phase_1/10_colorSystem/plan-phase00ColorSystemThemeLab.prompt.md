@@ -191,19 +191,19 @@
   - È citato in `.github/instructions/frontend.instructions.md`: non c'è un agente frontend in `.github/agents/`, e
     quelle istruzioni sono il file che il lavoro sul frontend segue. È citato anche nella riga dei colori di
     `.github/copilot-instructions.md`.
-- **Esito del 16/10, sera.** 14 ingressi nel target fra le 11:02 e le 18:06, ognuno con l'albero uguale alla
-  simulazione: T (skill, ruoli, scanner, resto della UI), G (G-18, builder), AF (lotti 1–8), IM, L-20, DV (W6, C4), BK,
-  TR, IW. Cronaca nel [registro](coordination/registro.md).
-  - **m1 8.249 → 1.185 nel target**, circa il 90 % delle 11.435 classi della v1.2; m2 54 → 2. Con il lotto 9 di AF, in
-    coda, m1 scende a circa 936 (92 %).
-  - **Il resto non è migrazione 1:1:**
-    - ~260 classi sono in file riservati alla 1.3 (Y, W7);
-    - ~540 sono colori di categoria;
-    - ~110 sono interruttori;
-    - ~30 non hanno ancora un ruolo.
+- **Esito del 16/10, sera.** 21 ingressi nel target fra le 11:02 e le 20:26, ognuno con l'albero uguale alla
+  simulazione: T (skill, ruoli, scanner, resto della UI), G (G-18, builder, record), AF (lotti 1–9, AF-4, AF-6), IM,
+  L-20, DV (W6, C4, TC-15, G-18 di `BackendTimingBar`, W6-e, W6-d), BK (lotto dei broker, L4), TR, IW. Cronaca nel
+  [registro](coordination/registro.md).
+  - **m1 8.249 → 697 nel target** alle 20:26: è migrato il 93,9 % delle 11.435 classi della v1.2. m2 54 → 2. Ogni ramo
+    committato è nel target, e nessun file riservato alla 1.3 ha più classi da migrare.
+  - **Il resto non è migrazione 1:1 e aspetta la designer:**
+    - 561 classi sono colori di categoria;
+    - 109 sono interruttori;
+    - 27 non hanno ancora un ruolo.
   - Il resto aspetta la designer o la 1.3. Nella cartella di sessione del coordinatore:
     - i motivi, file per file: `designer/colori-residui-motivi.csv`;
-    - le domande per lei: `designer/domande-per-la-designer.md`, 25 punti.
+    - le domande per lei: `designer/domande-per-la-designer.md`, 30 punti.
 - **Regole nuove del 16/10:**
   - **Gate prima di ogni ingresso, sul merge col target:** `--check` più i tre gate Vitest dei colori
     (`tools/pre_entry_gates.sh`, nella cartella di sessione del coordinatore).
@@ -238,15 +238,15 @@
 |---|---|---|---|---|
 | — | coordinatore | questo file | nessuna porta fissa (prove leggere); 6150 è usata dalla 1.3 per il server di review del developer (16/10) | — |
 | L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-20** (`460529690`, 16/10): il test `picker` passa davvero su un colore del rimappaggio scuro. Prima: livello delle categorie e segnale C4 (L-16, `2c485d3d4`), percorsi dei grafici dopo gli spostamenti di Y (L-18, `f96043473`). Aperte L-17 e L-19 (esempi scaduti della doc), peso basso; sessione ferma |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-18 nel target** (`005ebcbf9`, 16/10): conta nelle gallerie gli elementi misti composti a runtime. Il builder del pacchetto del giro 3 è nel target (`0ab2b6095`); la galleria `designer-16b` (`fa374e41d`) è il riferimento del 16/10 sera. Prima: G-13 (`7f58a6292`, coppia di riferimento e regola della data UTC) e `gallery_tool sheet` (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie e le run filtrate |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-18 nel target** (`005ebcbf9`, 16/10): conta nelle gallerie gli elementi misti composti a runtime. Il builder del pacchetto del giro 3 è nel target (`0ab2b6095`); la galleria `designer-16b` (`fa374e41d`) è il riferimento del 16/10 sera; run filtrata `settings/plugins` per la 1.3, stabile (`b9679a7d8`). Prima: G-13 (`7f58a6292`, coppia di riferimento e regola della data UTC) e `gallery_tool sheet` (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie e le run filtrate |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo, ma sul worktree `preview-colori` a `eb4040cd1` (16/10 mattina): da portare alla punta quando il carico lo permette |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo sulla punta `81bc305b9` (16/10, 18:53; m1 934), worktree `preview-colori`, DB nuovo (`001_initial.py` cambiato da C-97a), shell staccata `preview6160j` |
 | T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al resto della UI** (`4d8ae68c4`, 16/10): skill comune `design-system` (`6e569084a`, D-T29), ruoli (`f043c1b58`), scanner e regola dei campi nativi (`be911db7e`), gate G5/G6, token di componente 1, 2a, 2b e 2c, TC-15. Ferma: il lotto degli interruttori e i ruoli di categoria aspettano la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6** (`adbc2a4b7`, 16/10: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`) e al fix C4 (`1c7b9def2`). In coda: TC-15 e G-18 di `BackendTimingBar` (`1a1dadba2`, gate verdi). W6-d (`PositionsPanel`, `ExposureTable`) dopo W7 di Y; `DistributionDialog` libero dopo J-17. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6-d** (`3805bf2ca`, 16/10): W6 (`adbc2a4b7`: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`), fix C4 (`1c7b9def2`), TC-15 e G-18 di `BackendTimingBar` (`81bc305b9`), binari del PAC (W6-e, `e3d85fdc8`), `PositionsPanel` ed `ExposureTable` con `aria-pressed` (W6-d; `AllocationPanel` resta su `action`, TD-3). Restano categorie, TD-1 e DV-7: aspettano la designer. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
 | IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | **chiuso**, integrato (`e9b4ac6b0`, 16/10): `components/transactions/import/**`, `wizard/**` e le modali dell'import |
 | TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | **chiuso**, integrato (`e402d3b87`, 16/10). Categorie, interruttore e scrollbar aspettano la designer |
-| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **integrato fino al lotto 8** (`bfd33a0f5`, 16/10). Il lotto 9 (dettaglio asset, dopo FE5c) e AF-4 (`ModalBase` `tone="danger"` nel cambio valuta) sono in slot su `dc360b486`. AF-1 (interruttori della barra del grafico, icone per categoria) aspetta la designer |
-| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **integrato** (`939e4998a`, 16/10): `features/brokers/**`, lotti compresi. Aperta L4 (`LotCustodyModal`, con la prop mista di G-18) dopo Y |
+| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **tecnicamente completo**, tutto nel target (`c179a5144` e docs `5eaf67ff1`, 16/10): lotti 1–9, AF-4 (`ModalBase` `tone="danger"`), AF-6, `app.css` C4. Area m1 1.946 → 170, m2 6 → 0; 323 E2E verdi in 3 slot. Restano AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (punti 26 e 12 della raccolta). Revisione del developer da fare (piano AF, sezione 12) |
+| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **area chiusa** (`979d0a151`, 16/10): lotto dei broker (`939e4998a`) e L4 `LotCustodyModal` (205 → 20, con la prop mista di G-18 tolta). Area m1 1.153 → 159, tutte annotate: BK-1 69, BK-2 84, BK-3 4, BK-5 2, più i `<style>` di T (BK-6); aspettano la designer o il lotto degli interruttori di T |
 | IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | **chiuso**, integrato (`1248b7908`, 16/10) |
 
 Superfici condivise e relativi proprietari:

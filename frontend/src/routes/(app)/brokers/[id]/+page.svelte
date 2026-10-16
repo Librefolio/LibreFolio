@@ -27,9 +27,13 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {
@@ -66,6 +70,7 @@
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -101,7 +106,7 @@
     /** Bulk workspace (create / import) — same engine as /transactions, pre-populated
      *  with this page's broker (still editable, never skips a step). */
     let bulkOpen = false;
-    let bulkIntent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
+    let bulkIntent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
 
     function openImportTransactions() {
         bulkIntent = {action: 'import'};
@@ -220,7 +225,7 @@
         const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
         targetCurrency = baseCurrency;
         // Guard with !reportLoading: see brokers/+page.svelte for the race this avoids.
-        if (hadLoadedData && !reportLoading) void loadOverview(true);
+        if (hadLoadedData && !reportLoading) void pageBusy.track('broker-currency', () => loadOverview(true));
     }
 
     $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
@@ -270,7 +275,8 @@
 
     onMount(async () => {
         void loadAiExportCompatibility();
-        await Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('broker-first-load', () => Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]));
         if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
     });
 
@@ -398,7 +404,7 @@
 
     // Lazy-load the full transaction history the first time the Transazioni tab is opened.
     $: if (activeTab === 'transazioni' && broker && !txLoaded && !txLoading) {
-        void loadTransactions();
+        void pageBusy.track('broker-transactions', () => loadTransactions());
     }
 
     function resolveMaxStartFromHistory() {
@@ -422,14 +428,16 @@
         dateTo = resolveDateSentinel(to);
         displayDateFrom = isMaxPending ? 'min' : dateFrom;
         setDateRange(from, to);
-        void loadOverview();
+        void pageBusy.track('broker-period', () => loadOverview());
     }
 
     async function handleRefresh() {
         requestPortfolioRefresh();
         refreshVersion += 1;
-        await Promise.all([loadBroker(), loadOverview(true)]);
-        if (txLoaded) await loadTransactions(true);
+        await pageBusy.track('broker-refresh', async () => {
+            await Promise.all([loadBroker(), loadOverview(true)]);
+            if (txLoaded) await loadTransactions(true);
+        });
     }
 
     /**
@@ -448,11 +456,11 @@
     );
 
     async function handleUpdated() {
-        await loadBroker();
+        await pageBusy.track('broker-reload', loadBroker);
     }
 
     async function handleRequestAllocationHistory() {
-        await loadOverview();
+        await pageBusy.track('broker-allocation-history', () => loadOverview());
     }
 
     // In the interface locale (M-18): the template passes `$uiLocaleStore`, read there so it is tracked.
@@ -583,7 +591,7 @@
                                 placeholder={baseCurrency}
                                 onchange={() => {
                                     targetCurrencyManuallySet = true;
-                                    void loadOverview();
+                                    void pageBusy.track('broker-currency', () => loadOverview());
                                 }}
                             />
                         </div>
@@ -609,12 +617,13 @@
                 </button>
                 <button
                     on:click={handleRefresh}
-                    disabled={loading || reportLoading}
+                    disabled={pageBusy.busy}
+                    data-busy={pageBusy.busy ? 'true' : 'false'}
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                     title={$_('dashboard.syncData')}
                     data-testid="broker-refresh"
                 >
-                    <RefreshCw size={14} class={loading || reportLoading ? 'animate-spin' : ''} />
+                    <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
                     {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
                 </button>
 
@@ -660,7 +669,17 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <div class="lg:col-span-3">
-                        <GrowthChart history={portfolioHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
+                        <GrowthChart
+                            history={portfolioHistory}
+                            {pnlCandles}
+                            onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
+                            {incomeHistory}
+                            {costHistory}
+                            {depositHistory}
+                            {acquisitionFunding}
+                            loading={reportLoading && portfolioHistory.length === 0}
+                            baseCurrency={targetCurrency || baseCurrency}
+                        />
                     </div>
                     <AllocationPanel
                         summary={portfolioSummary}
@@ -682,7 +701,7 @@
                     {contributionLoading}
                     assetsHref="/assets"
                     brokers={panelBrokers}
-                    onRequestContribution={loadContribution}
+                    onRequestContribution={() => void pageBusy.join('broker-contribution', loadContribution)}
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                 />

@@ -10,6 +10,8 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, BrokerUserAccess, PriceHistory, Transaction
+from backend.app.services.financial_math.ledger_totals import position_quantities
+from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
 
 
 async def load_holding_rows(
@@ -17,26 +19,24 @@ async def load_holding_rows(
     *,
     accesses: dict[int, tuple[BrokerUserAccess, Broker]],
     as_of_date: date_type,
-) -> list:
-    quantity_sum = func.sum(Transaction.quantity)
+) -> list[tuple[int, int, Decimal]]:
+    """The custody quantity of every position of the accessible brokers on ``as_of_date``, without zero lines.
+
+    The rows are summed in Python by ``ledger_totals.position_quantities``, never with ``SUM`` in SQL: a Numeric on
+    SQLite goes through a float. Sorted by (broker, asset).
+    """
     if not accesses:
         return []
-    return (
+    rows = (
         await session.execute(
-            select(
-                Transaction.broker_id,
-                Transaction.asset_id,
-                quantity_sum.label("custody_quantity"),
-            )
-            .where(
+            select(Transaction.broker_id, Transaction.asset_id, Transaction.quantity, Transaction.date).where(
                 Transaction.broker_id.in_(accesses),
                 Transaction.asset_id.is_not(None),
                 Transaction.date <= as_of_date,
             )
-            .group_by(Transaction.broker_id, Transaction.asset_id)
-            .having(quantity_sum != 0)
         )
     ).all()
+    return [(broker_id, asset_id, quantity) for broker_id, by_asset in sorted(position_quantities(rows).items()) for asset_id, quantity in sorted(by_asset.items()) if quantity != 0]
 
 
 async def load_latest_prices(
@@ -82,26 +82,25 @@ async def load_cash_by_broker(
     accesses: dict[int, tuple[BrokerUserAccess, Broker]],
     as_of_date: date_type,
 ) -> dict[int, dict[str, Decimal]]:
+    """The cash of every accessible broker in each of its currencies on ``as_of_date``.
+
+    The rows are summed in Python by ``native_cash.native_balances``, never with ``SUM`` in SQL; a currency whose rows
+    cancel out keeps its line at zero.
+    """
     cash_by_broker: dict[int, dict[str, Decimal]] = defaultdict(dict)
     if not accesses:
         return cash_by_broker
 
-    cash_rows = (
+    rows = (
         await session.execute(
-            select(
-                Transaction.broker_id,
-                Transaction.currency,
-                func.sum(Transaction.amount).label("cash_amount"),
-            )
-            .where(
+            select(Transaction.id, Transaction.type, Transaction.date, Transaction.broker_id, Transaction.asset_id, Transaction.currency, Transaction.amount).where(
                 Transaction.broker_id.in_(accesses),
                 Transaction.currency.is_not(None),
                 Transaction.date <= as_of_date,
             )
-            .group_by(Transaction.broker_id, Transaction.currency)
         )
     ).all()
-    for broker_id, currency, amount in cash_rows:
-        if currency is not None:
-            cash_by_broker[broker_id][currency] = amount
+    movements = [movement for row in rows if (movement := cash_movement_from_transaction(row)) is not None]
+    for broker_id, by_currency in native_balances(movements).items():
+        cash_by_broker[broker_id].update(by_currency)
     return cash_by_broker

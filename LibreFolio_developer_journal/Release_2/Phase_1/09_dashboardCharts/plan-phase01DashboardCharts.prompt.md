@@ -2654,3 +2654,1443 @@ scrivono qui quando partono.
 >   (13 s); cita invece i circa 24 s prima del primo clic, misurati oggi a carico 70.
 > - **La riprova**, Prettier pulito, poi `front-broker detail` da solo (08:15:39–08:21:11): **37/37** in 3,5 minuti, a
 >   carico 45–53. I quattro test toccati durano 7,5–11,4 s, il più lento della spec 16,0 s. Porta 6189 libera.
+
+### Ultima base prima dell'ingresso e prove leggere ✅ (2026-10-16, 08:22–08:32)
+
+> **Note implementazione**.
+> - **I commit**: il coordinatore ha salvato la correzione dello spec (`43eea2b9b`) e il journal (`c38fd7f78`).
+> - **La fusione**: dev `c94254695`, con dentro il terzo lotto di T, CP-10a di J, W-B32, B39, B44 e il CHANGELOG.
+>   - L'unico conflitto, nel baseline, l'ho risolto con `--resolve`; `--check` pulito (baseline +3/−14). Ho messo in
+>     stage solo il baseline, e il commit della fusione l'ha fatto il coordinatore: `b84903df8`, con genitori
+>     `c38fd7f78` e `c94254695`.
+>   - **Ho controllato i file fusi**: nessun riferimento nuovo alle cartelle vecchie, niente che finisca dentro di esse,
+>     nessun file mio toccato. I due runner fusi da soli compilano e tengono i miei percorsi.
+>   - `api/v1/brokers.py` cambiava l'API.
+> - **Le prove leggere sulla revisione fusa**, una alla volta con carico sotto 50 (`/tmp/libreFolio_entry_light.sh`):
+>   `api sync` senza cambiamenti tracciati; svelte-check 0/0; `theme-roles --check` pulito; `allocation-unit` 192/192;
+>   `core-unit` 6 247/6 247 in 176 file; `component-unit` 4 006/4 006 in 150 file; `git diff --check` pulito; 6189
+>   libera.
+> - **Nessuna E2E nuova**, per decisione del coordinatore: da dev arrivano classi validate dai colori, più CP-10a, già
+>   provato dalle E2E sugli asset. **Y entra così com'è.**
+
+## Y12a — U8, la parte che si fa senza campi nuovi (via del coordinatore, 2026-10-16 08:33)
+
+Base: HEAD `d5c3c3ae3`, cioè la punta di `dev_release2` dopo il treno 104, quello dell'ingresso di Y. Ordine dato dal
+coordinatore: W7, poi le dichiarazioni, poi `LotCustodyModal`, ma solo dopo un accordo con J (diff mandato prima di
+scrivere). Prove leggere con carico sotto 50; ogni passo si chiude con un checkpoint FROZEN.
+
+### Passo 1 · W7, il peso sul NAV in `ExposureTable` ✅ (2026-10-16)
+
+- **Oggi**: `features/dashboard/ExposureTable.svelte:181` fa
+  `nav_weight_percent ?? (currentValue/navAmount)·100`.
+  - Il backend riempie il campo solo `if h.current_value:` (`backend/app/services/portfolio_service.py:856`).
+  - Il ripiego scatta quindi solo per una posizione che vale 0, oppure con un payload senza il campo; oggi mostra
+    «0,0 %».
+  - `ExposureTreemap.svelte:408` legge già il campo senza ripiego.
+  - `navAmount` serve solo al ripiego: lo passa `PositionsPanel.svelte:203`, che lo ricava a `:123` con
+    `parseFloat(summary.net_worth.amount)`.
+- **Prima `test-author`** (`ExposureTable.test.ts`):
+  - il rosso W7: `nav_weight_percent` nullo, valore 100, `navAmount` 1000. Ci si aspetta «—»; oggi si legge «10,0 %»;
+  - il controllo: il peso del backend si mostra così com'è, anche quando valore/NAV darebbe un altro numero;
+  - la fixture dei test M-18 riceve il peso dal backend: la loro barriera sul peso finora reggeva sul ripiego;
+  - via gli argomenti `navAmount` diventati morti, tranne nel rosso W7, che resta come guardia contro un ripiego
+    reintrodotto.
+- **Poi il codice**:
+  - via il ripiego e la prop `navAmount` da `ExposureTable`;
+  - via il passaggio e il valore derivato in `PositionsPanel`.
+- **Prove**: il file da solo, poi svelte-check, `component-unit`, `allocation-unit` e `core-unit`.
+- **Due difetti del backend, da segnalare a J tramite il coordinatore** (non sono di Y):
+  - `portfolio_service.py:856`: con `if h.current_value:` una posizione che vale 0 riceve un peso nullo invece di 0;
+    dopo W7 si leggerà «—»;
+  - `:852`: con NAV ≤ 0 il denominatore diventa 1, e i pesi non hanno senso.
+
+> **Note implementazione** (2026-10-16).
+> - **Il rosso**, scritto da `test-author` (`ExposureTable.test.ts`, +72/−36):
+>   - un `describe` nuovo, «the NAV weight is the backend's (W7 / U8)», con un rosso e un controllo. Tutti e due
+>     tengono `navAmount: 1000` apposta: dopo W7 è una prop vecchia che il componente ignora, e il test fa da guardia
+>     se un ripiego tornasse;
+>   - nella fixture, l'opzione `navWeightPercent`;
+>   - `cellText` portato a livello di modulo: c'erano due copie locali;
+>   - `navAmount` tolto dagli altri 12 montaggi;
+>   - M-18 legge ora il peso del backend, `'30.94'`, invece di ricavarlo.
+>
+>   Prima corsa del file: 15 verdi e 1 rosso, quello giusto (`expected '10.0%' to be '—'`).
+> - **Il codice** (10:34, prima della regola dei colori delle 10:45; avvisato il coordinatore per DV):
+>   - `ExposureTable.svelte`: via `navAmount` da `Props` e dalla destrutturazione; `:181` diventa
+>     `navWeight: safeDecimal(holding.nav_weight_percent)`, con un commento;
+>   - `PositionsPanel.svelte`: via il derivato `navAmount` e il suo passaggio.
+>
+>   Nessuna classe toccata. Il file da solo: 16/16. Prettier pulito.
+> - **⚠️ Fuori pista**:
+>   - Lo STOP del developer (08:5x–10:32): `test-author` aveva già finito. Ripreso al via, con HEAD e worktree uguali.
+>   - Prima corsa delle prove leggere: svelte-check ha trovato 1 errore, in `features/auth/RegisterCard.svelte:100`
+>     (`verification_required`, di E). Il client generato del mio worktree era di prima del treno 103 (E5b), che ha
+>     aggiunto quel campo (`backend/app/schemas/auth.py:111`). È ambiente, non codice di Y: corsa fermata,
+>     `api sync`, poi da capo.
+>   - `/tmp` è stato svuotato dal riavvio delle 10:03, e con lui gli script di stanotte. Da ora gli script stanno nella
+>     cartella della sessione (`files/scripts/`).
+> - **Prove leggere su HEAD `d5c3c3ae3` più il lotto** (10:41–10:55, carico sotto 50; script
+>   `files/scripts/w7_light.sh`, log in `files/logs/`): `api sync` senza cambiamenti tracciati fuori dal lotto;
+>   svelte-check 0/0; `allocation-unit` 192/192; `core-unit` 6 266/6 266 in 178 file; `component-unit` 4 029/4 029 in
+>   154 file, con `ExposureTable.test.ts`; `git diff --check` pulito; 6189 libera.
+> - **Checkpoint**: tre file (`files/w7_stage_code.txt`), più il piano.
+
+### Passo 2 · le dichiarazioni delle misure interattive ✅ (2026-10-16)
+
+- **La regola**: `financial-math.instructions.md`, regola 6, e `developer/backend/financial_math.md:303-308`. Le misure
+  interattive sono le sole eccezioni, e ognuna va «dichiarata dove vive».
+  - La documentazione nomina già i quattro file.
+  - Nel codice invece la dichiarazione manca. Il piano 43, a `:1494`, lo annota così: «oggi nel codice non lo sono».
+- **La forma**, decisione di Y: un marcatore `@financial-math-exception` nel JSDoc in testa a ciascun file, con la
+  regola che vale per quel file:
+  - `MeasureSignal.ts` (R18): Δ, Δ% e annualizzato fra i due punti che l'utente sceglie col righello, calcolati nel
+    browser;
+  - `CompoundSignal.ts`, `LinearSignal.ts` e `SineSignal.ts` (R19): curve «cosa succede se», tracciate dai parametri
+    dell'utente.
+  - Si tocca solo la testa del file, non le righe di T-D9 (`MeasureSignal.ts:103,134`), che sono di J in CP-14.
+- **La guardia, scritta da `test-author`**: `lib/charts/signals/financialMathExceptions.gate.test.ts`.
+  - I quattro file portano il marcatore, e solo loro.
+  - Nessun `Math.pow(…365…)`, né `** …365…`, in `src/**/*.{ts,svelte}` fuori dai file dichiarati. Sono esclusi i test e
+    i file generati.
+  - Un controllo positivo su un sorgente finto.
+  - Oggi lo schema stretto trova solo `MeasureSignal` e `CompoundSignal`: niente falsi positivi, cioè non
+    `CellDateRange` e non le etichette di `ScheduledInvestmentEditor`.
+- **La registrazione**: in `chart-safety-unit`, nel mio `_frontend_portfolio.py`, con la descrizione allargata.
+  `_frontend_utility.py` (`core-unit`) è un file del programma colori: lo tocco solo se il coordinatore lo chiede.
+- **La documentazione, con `docs-writer`**: una frase nella regola 6 di `financial_math.md`, che nomina il marcatore e
+  la guardia.
+- **Fuori perimetro**: i tre ribasamenti in % di R19 (`chartUtils.ts:12-17`, `backendRenderer.ts:36-39`,
+  `AssetComparisonSignal.ts:66-72`). Hanno la loro voce, P2, «un helper frontend».
+- **J**: gli scrivo che tocco solo la testa di `MeasureSignal.ts`, prima del suo CP-14.
+
+> **Note implementazione** (2026-10-16).
+> - **J è avvisato** (10:40): marcatore e guardia; le sue righe `:103` e `:134` non le tocco.
+> - **La guardia**, scritta da `test-author`: `frontend/src/financialMathExceptions.gate.test.ts`, nuova, 14 test.
+>   - (A) Ogni file della lista porta il tag in una riga del JSDoc di testa, con almeno 20 caratteri di descrizione.
+>   - (B) Nessun altro sorgente porta il tag.
+>   - (C) Una potenza con 365 nell'esponente (`Math.pow`, `**`, `**=`) sta solo nei file della lista. La legge con i
+>     parser di TypeScript e di Svelte, come `clipboardSink.gate`, quindi commenti e stringhe non contano.
+>   - (D) Sette controlli positivi.
+>     - Il controllo sul vero albero si ancora solo a `CompoundSignal`: così il CP-14 di J su `MeasureSignal`
+>       (T-D9) non può farlo diventare rosso.
+>     - Lo stesso controllo verifica che `CellDateRange`, `ScheduledInvestmentEditor` e `LinearSignal` non danno
+>       risultati.
+>   - Registrata in `chart-safety-unit` (`_frontend_portfolio.py`: lista, docstring, `desc`, `tests`).
+>   - I componenti non hanno una forma per dichiararsi: un `.svelte` nella lista fa fallire (A), con un messaggio che
+>     lo spiega. Oggi nessun componente è un'eccezione.
+>   - Quello che (C) non vede (365 dentro una costante, una formula con `exp` e `log`, un file `.js`) è scritto nella
+>     testa della guardia.
+> - **Rosso prima dei tag** (11:36, carico 47): 4 rossi, tutti in (A), e 10 verdi.
+> - **I tag**, miei: in testa a `MeasureSignal.ts` (prima di `@module`), `CompoundSignal.ts`, `LinearSignal.ts` e
+>   `SineSignal.ts`. Dicono cosa calcola la misura e perché resta nel browser, e rimandano alla regola 6 di
+>   `financial_math.md`. Le righe di T-D9 non le ho toccate.
+> - **Verde dopo i tag** (11:43): la guardia più i test dei segnali (`measureSignal`, `syntheticSignals`,
+>   `localSignalRegression`), 98/98 in 4 file. Prettier pulito.
+> - **La documentazione**, da `docs-writer`: in `financial_math.md`, due frasi alla fine della regola 6 (come si
+>   dichiara un'eccezione e cosa la sorveglia), più una sottosezione nuova in «Guards and Tests».
+> - **⚠️ Fuori pista**: i due `test-author` sono stati lenti. Uno ha aspettato che il carico scendesse sotto 50 (era
+>   arrivato a 149, con le altre corsie); l'altro si è fermato per l'errore di rete già segnato nel passo 3.
+
+### Passo 3 · `LotCustodyModal`, il valore d'apertura da `original_cost` ✅ (2026-10-16)
+
+- **Il diff proposto**:
+  - `lotOpeningValue = lot ? parseNumber(lot.original_cost) : null`, al posto di
+    `multiplyOrNull(original_quantity, opening_unit_price)` (`LotCustodyModal.svelte:235-238`);
+  - un `data-testid="lot-modal-opening-value"` sul `<dd>` di `:314`;
+  - via `multiplyOrNull` (`lotCustodyModalHelpers.ts:133`), che non ha altri chiamanti, e il suo `describe`;
+  - il rosso, da `test-author`: un test jsdom che monta il modale con `original_cost` '150' e quantità × prezzo = 100.
+    I dati sono incoerenti apposta, per provare quale campo si legge; con `original_cost` nullo ci si aspetta «—».
+- **⚠️ Correzione dell'analisi di Y12a**: avevo scritto che il prodotto era «sbagliato per i lotti trasferiti o
+  rettificati e sulla valuta». Non è così.
+  - Il motore tiene l'invariante `original_quantity × opening_unit_price = original_cost` (`fifo/engine.py:513-516`).
+  - `lots_analysis_service.py:730-731` converte i due valori allo stesso cambio, alla data d'apertura.
+  - Senza bug visibili, il passo serve all'unica fonte della matematica (regola 10): cambiano solo gli arrotondamenti.
+  - La tabella (`UnifiedLotsTable:294`), il grafico WAC (`:1027`) e il Gantt (`:704`) leggono già `original_cost`.
+- **CP-16 di J è già dentro** (treno 70): ha toccato `eventDetailItems` (`:172-187`) e `closureValueLabelKey`. Le mie
+  righe sono altre.
+
+> **Note implementazione** (2026-10-16).
+> - **Il sì di J (10:40)**: nessuno scontro. CP-16 è dentro, CP-13 non tocca il modale né `original_cost`. È lo stesso
+>   numero: `|amount|` della riga d'apertura, senza le commissioni registrate come righe FEE, al cambio della data
+>   d'apertura.
+>   - I casi limite: una rettifica senza costo vale 0, non «—»; un lotto corto vale il nozionale venduto.
+>   - **Il vincolo**: il CP-7a di J (solo backend, entra presto) cambia i valori delle righe di chiusura nella
+>     cronologia del modale, quindi il test non le fissa.
+> - **Il via dei colori (10:55)**: il modale è nell'area di BK, che non lo tocca fino all'ingresso di Y12a; poi migra le
+>   classi.
+> - **Il rosso**, scritto da `test-author`: `features/brokers/lots/LotCustodyModal.test.ts`, nuovo, in jsdom, con tre
+>   test.
+>   - Il lotto passa per `schemas.LotSummarySchema.parse`; cronologia vuota.
+>   - Il valore atteso si costruisce col formattatore del modale (`formatCurrencyAmountPlain`).
+>   - Gli esiti: `original_cost` 150 con prodotto 100, mostra 150; nullo, «—»; il controllo è il caso di J, costo 0,
+>     che mostra zero e non «—».
+>   - Lo stesso `test-author` ha tolto il `describe('multiplyOrNull')` da `lotCustodyModalHelpers.test.ts` e ha
+>     registrato il file nuovo in `broker-unit` (`_frontend_broker.py`: lista, docstring e `desc`).
+> - **Il codice, mio**:
+>   - `LotCustodyModal.svelte`: `data-testid="lot-custody-modal-opening-value"` sul `<dd>`, chiamato come gli altri
+>     test id del modale, con il prefisso `lot-custody-modal-`; `lotOpeningValue = lot ? parseNumber(lot.original_cost) : null`;
+>     `multiplyOrNull` tolto dall'import;
+>   - `lotCustodyModalHelpers.ts`: via `multiplyOrNull`, che non aveva altri chiamanti.
+>
+>   Nessuna classe toccata. Nessuna pagina della documentazione o della devWiki nominava il calcolo tolto.
+> - **Prove**: prima del codice, il file nuovo fa 2 rossi e 1 verde, i rossi per la ragione giusta
+>   (`expected '100.00 EUR' to be '150.00 EUR'` e `… to be '—'`). Dopo il codice, il file nuovo e il test degli
+>   aiutanti fanno 42/42. Prettier pulito; `_frontend_broker.py` compila. I log sono in `files/logs/y12a3_*.log`.
+> - **⚠️ Fuori pista**: `test-author` si è fermato a metà della fase B per un errore di rete (DNS verso il servizio del
+>   modello). Le modifiche ai test e al runner erano già fatte e le ho controllate io; la corsa del rosso l'ho fatta io.
+
+### Decisioni del developer (2026-10-16, 11:19, tramite il coordinatore)
+
+- **P3 / Y11 (decisione 48)**: approvate le mie proposte.
+  - Un solo «Aggiorna» per pagina; `risk-refresh-button` sparisce; nessuna rotazione durante l'aggiornamento dei
+    prezzi dal vivo.
+  - **Il meccanismo, con le parole del developer**: il pulsante gira solo mentre sono in volo le richieste «grandi»,
+    quelle che la UI decide a monte. Quando partono, un segnale raggiunge il componente; quando finiscono, bene o male,
+    ne arriva un altro. Il componente tiene una lista delle richieste in volo e si ferma quando sono tornate tutte, o
+    dopo un timeout lungo, oltre il quale la richiesta si considera persa, almeno per il pulsante.
+  - Diventa `pageBusy` con gettoni `begin(label) → token` / `end(token)`, più un timeout per gettone.
+  - **Prima il contratto, poi il codice**: l'API, il valore del timeout, e cosa conta come richiesta «grande», pagina
+    per pagina.
+  - Y11 tocca file `.svelte` delle pagine, nelle aree dei colori: la lista va al coordinatore prima di scrivere.
+- **P25 / Y-12**: si **riscrive** il controllo dei bottoni di presentazione sui controlli di oggi.
+- **P19**: sì. J aggiunge nel backend il campo del guadagno che recupera una perdita, e Y12b lo usa in
+  `levelHelpers.ts`; il nome lo concordo con J.
+  - Proposta mandata a J (11:25): per il drawdown attuale il campo **esiste già**, `RiskDrawdownOutput.remaining_to_peak_ratio`
+    (`risk/metrics.py:392`, `−cd/(1+cd)`, che è proprio `1/(1−L) − 1`), e il laboratorio lo legge già
+    (`assetSetLevels.ts:194`).
+  - Per il drawdown peggiore serve un campo nuovo, per esempio `maximum_drawdown_trough_to_peak_ratio`, più una scelta
+    sul ripiego da `historical_kpi`.
+  - Caso limite segnalato a J: con una perdita totale `:392` divide per zero, e lo schema non ammette il nullo.
+  - **La decisione di J (11:30)**:
+    - nome `maximum_drawdown_trough_to_peak_ratio`, in `RiskDrawdownOutput` e in `RiskAssetSetDrawdownItem`;
+    - forma `Optional[FiniteFloat] = Field(None, ge=0)`, con valore `−MDD/(1+MDD)`; la formula ha una casa sola in
+      `financial_math/`, che dà `None` per L ≤ −1;
+    - anche `remaining_to_peak_ratio` diventa nullabile, in tutti e due i modelli: dopo `api sync` è
+      `number | null`, ma in pratica non è mai nullo, perché la preparazione delle serie rifiuta i prezzi ≤ 0
+      (`schemas/risk.py:350`);
+    - **niente ripiego dal KPI**: senza `drawdown_summary` si legge «—»;
+    - entra con **CP-13**, in un lotto piccolo dopo il J-17 che J ha in corso. J mi manda lo SHA.
+  - **In Y12b**: `requiredRecovery` di `levelHelpers.ts:356-360` sparisce; le due righe leggono i due campi.
+- **Ordine**: Y12a così com'è, poi Y-12, poi Y11. Y12b dopo, quando ci sono il campo di J e CP-13.
+
+### Prove leggere dei passi 2 e 3 ✅ (2026-10-16, 11:49–11:57; HEAD `93c39a11c` con i due passi nel worktree)
+
+> **Note implementazione**. Script `files/scripts/y12a_light.sh`, una prova alla volta, carico sotto 50; log in
+> `files/logs/y12a_*.log`.
+>
+> | Prova | Esito |
+> |---|---|
+> | `front check` | svelte-check 0/0 |
+> | `theme-roles.mjs --check` | pulito |
+> | `front-portfolio chart-safety-unit` | 8 file, 86 test (+1 file e +14 test: la guardia) |
+> | `front-broker broker-unit` | 6 file, 60 test (+1 file e +3 test: `LotCustodyModal.test.ts`) |
+> | `front-utility core-unit` | 6 261/6 261 in 178 file (−5: il `describe('multiplyOrNull')` tolto) |
+> | `check-orphans` | tutto registrato e raggiungibile |
+> | `mkdocs build` | nessun avviso; 3 076 URL relativi risolti |
+> | `mkdocs check-links` | 97 link validi |
+> | `git diff --check` | pulito; 6189 libera |
+>
+> I checkpoint sono due commit separati, con i file in `files/y12a2_stage_code.txt` (passo 2) e
+> `files/y12a3_stage_code.txt` (passo 3), più il journal (`files/y12a_stage_journal.txt`).
+
+## Y11 — il contratto di `pageBusy` (P3, decisione 48) ✅ approvato (2026-10-16, 12:20 e 12:35; nessun codice)
+
+Fonti: le decisioni del developer delle 11:19, e un'indagine `explore` sul codice di oggi (HEAD `9c42584e7`). Il codice
+viene dopo Y-12. Il coordinatore chiede ai colori i file delle loro aree (T, DV, BK, AF, TR) e mi gira la risposta
+prima che io cominci.
+
+### L'API
+
+Un modulo nuovo, `frontend/src/lib/stores/app/pageBusy.svelte.ts`: solo script, nessun markup.
+
+```ts
+export interface BusyToken { readonly id: number; readonly label: string }
+/** Past it the request counts as lost, for the button only: the request itself is not cancelled. */
+export const PAGE_BUSY_TIMEOUT_MS = 120_000;
+export const pageBusy: {
+    begin(label: string, options?: {timeoutMs?: number}): BusyToken; // a «big» request starts
+    end(token: BusyToken): void;                                     // it came back, well or badly; idempotent
+    track<T>(label: string, work: () => Promise<T>, options?: {timeoutMs?: number}): Promise<T>; // begin + finally end
+    readonly busy: boolean;              // reactive: at least one token pending on this page
+    readonly labels: readonly string[];  // the pending labels, for diagnostics and tests
+    reset(): void;                       // drops every token (route change)
+};
+```
+
+- **La lista**: un `$state` con i gettoni pendenti; `busy` vale «almeno uno». `end` di un gettone sconosciuto, già
+  chiuso, scaduto o di prima di un `reset` non fa niente.
+- **Il timeout**: ogni gettone ha il suo; quando scade si toglie dalla lista e scrive un `console.warn` con l'etichetta.
+  - Il valore è **120 s**. Un gettone avvolge una funzione di caricamento, che può fare fino a tre o quattro richieste
+    in fila; ognuna ha il timeout di axios a 30 s (`zodios-client.ts:33`).
+  - Le richieste da 120 s (le sincronizzazioni di cambi e prezzi della Dashboard) sono escluse: hanno i loro modali.
+  - Si può alzare per chiamata, con `timeoutMs`.
+- **La pagina**: `reset()` lo chiama un `onNavigate` nel layout `routes/(app)/+layout.svelte` quando cambia la route
+  (`from.route.id !== to.route.id`). Il layout oggi importa solo `afterNavigate`; `onNavigate` scatta prima che la
+  pagina nuova si monti, quindi i gettoni del suo primo caricamento non si perdono.
+  - Un cambio di parametro nella stessa route (da asset 1 ad asset 2) non azzera: la pagina ricarica comunque, con
+    gettoni nuovi.
+  - Niente `$app/state` nello store: in Vitest non ha un mock, mentre `$app/navigation` sì.
+- **Il pulsante**: in ogni pagina, l'icona gira (`animate-spin`, che non è un colore) e il pulsante è `disabled` (cioè
+  grigio) quando vale `pageBusy.busy`. La pressione stessa apre un gettone.
+  - Il pulsante pubblica `data-busy="true|false"` per i test (regola 10 della skill design-system).
+  - Le radici delle pagine tengono i loro `data-busy` di oggi, su cui contano le spec.
+  - Nessuna classe di colore cambia.
+- **Le prove**: `test-author` scrive i Vitest dello store (`begin`/`end`, idempotenza, timeout con orologio finto,
+  `reset`, `track` con un errore) e adatta le E2E.
+  - In E2E si prova il cuore della decisione: sulla Dashboard, un cambio di periodo fa girare `sync-button` senza
+    clic, e il pulsante si ferma quando il report torna.
+
+### Dove va `track()`: sui punti che fanno partire, mai dentro le funzioni di caricamento (vincolo di Z-13, 12:35)
+
+- **Il caso**: Z-13 (lotto di Z) a fine aggiornamento dei prezzi ricarica Dashboard e broker **in sfondo**, con
+  `loadAll()` e `loadOverview()`. P3 dice che un aggiornamento dei prezzi non fa girare il pulsante.
+- **Quindi `track()` sta sui punti che fanno partire il caricamento**, e mai nel corpo di `loadAll`, `loadOverview`,
+  `loadBase` o `loadMain`, né negli ascoltatori del bus:
+  - la chiamata del primo caricamento in `onMount`;
+  - il gestore di «Aggiorna»;
+  - gli `$effect` di periodo, ambito, filtro e scheda;
+  - l'apertura di un pannello e il cambio dei suoi parametri;
+  - nei pannelli del rischio e dei lotti, l'`$effect` di `refreshVersion`, che solo l'«Aggiorna» della pagina fa
+    salire (`dashboard :701`, `broker :429`).
+- **Il bus** (`stores/portfolio/portfolioMutation.ts`) ha due segnali:
+  - `kind: 'mutation'`: una scrittura vista dall'intercettore. Le cache si segnano vecchie e si aggiornano in sfondo,
+    senza rotazione;
+  - `kind: 'refresh'`, cioè `requestPortfolioRefresh()`, che è l'«Aggiorna» dell'utente.
+
+  **Per Z**: un ricaricamento in sfondo non usa né `requestPortfolioRefresh()` né `refreshVersion`, altrimenti i
+  pannelli girerebbero.
+
+### Le richieste «grandi», pagina per pagina
+
+**La regola**: è grande una richiesta che la pagina fa per (ri)costruire quello che mostra perché l'utente o la
+pagina l'hanno deciso. Quindi il primo caricamento, «Aggiorna», un cambio di periodo, di ambito, di filtro o di
+scheda, e il caricamento di un pannello: quando si apre, quando cambiano i suoi parametri, e quando lo ricarica
+l'«Aggiorna» della pagina. La rivalidazione della cache conta solo dentro uno di questi.
+
+**Non lo sono**:
+- il poller dei prezzi dal vivo, per decisione del developer;
+- le azioni con un modale o un indicatore proprio: sincronizzazione di prezzi e cambi, «Calcola» del PAC, il wizard
+  d'import, i salvataggi nei modali;
+- le richieste di sfondo piccole: la compatibilità dell'AI Export, i cataloghi dei segnali, le liste per i selettori
+  non attese.
+
+| Pagina | Pulsante | Gettoni | Escluse |
+|---|---|---|---|
+| Dashboard | `sync-button` (`R/dashboard/+page.svelte:964-971`) | `loadAll` (`:559`: primo caricamento, Aggiorna, gli `$effect` di periodo e ambito, la rivalidazione), `loadContribution` (`:627`), `loadPnlCandles` (`:668`), `loadTransactions` (`:315`); il pannello del rischio, `loadBase` (`RiskAnalysisPanel.svelte:456`) | sincronizzazione cambi (`:368`) e prezzi (`:449`); `loadAiExportCompatibility` |
+| Broker, lista | `brokers-refresh` (`R/brokers/+page.svelte:371`) | `loadBrokers` (`:152`: primo, Aggiorna, cambio di valuta) | — |
+| Broker, dettaglio | `broker-refresh` (`R/brokers/[id]/+page.svelte:599-606`) | `loadBroker` (`:277`), `loadOverview` (`:302`), `loadPnlCandles` (`:353`), `loadContribution` (`:365`), `loadTransactions` (`:382`); il pannello dei lotti, `loadMain` e `loadSelectionHistories` (`LotsAnalysisPanel.svelte:220`, `:264`); il rischio, `loadBase` | AI Export |
+| FX, lista | `fx-refresh-all-button` (`R/fx/+page.svelte:1100-1105`; oggi non è mai `disabled`) | `fetchAllPairData` (`:401`: primo e Aggiorna), `loadPairSources` (`:304`) | Sync All (modale); `loadAssetList` (non atteso); l'aggiornamento di una coppia dalla sua card (da verificare: indicatore proprio) |
+| FX, dettaglio | `fx-detail-refresh-btn` (`R/fx/[pair]/+page.svelte:1317-1323`) | `loadChartData` (`:743`: primo, Aggiorna, orientamento), `ensureFxRangeLoaded` dei sovrapposti, `maybeLoadComparison` | sincronizzazione (`:1022`); AI Export |
+| Asset, lista | **senza test id** (`R/assets/+page.svelte:~1610-1619`; mai `disabled`): gli do `assets-refresh-button` | `loadAssets` (`:536`), `fetchAllPriceData` (primo e Aggiorna) | **il poller dal vivo** (`startActivePolling` `:461`, `refreshLivePricesNow`); Sync All |
+| Asset, dettaglio | `asset-detail-refresh-btn` (`R/assets/[id]/+page.svelte:2875-2881`) | `reloadPage` (primo, cambio di asset), `loadChartData` (`:1697`: Aggiorna, intervallo); il rischio, `loadBase` | **il poller dal vivo** (`:1511`); sincronizzazione (`:2198`); AI Export |
+| Transazioni | `tx-refresh-button` (`R/transactions/+page.svelte:756-770`) | `reload` (`:128`: primo, Aggiorna, filtri, il ricaricamento leggero dopo una modifica) | i modali di modifica |
+| File | `files-refresh-button` (`R/files/+page.svelte:775-776`) | `loadFiles` (`:325`: primo, Aggiorna, scheda) | l'upload e l'import BRIM (UI propria) |
+| Tools, hub e host | `tools-hub-refresh` (`features/tools/ToolsHub.svelte:153-160`), `tool-host-refresh` (`ToolHost.svelte:259-266`) | `loadCatalog`, `requestReload` | «Calcola» del PAC |
+| Pannelli del rischio | `risk-refresh-button` **tolto** (`RiskPanelHeader.svelte:95-104`, `RiskAnalysisPanel.svelte:596-605`) | — (il rischio si ricarica dall'«Aggiorna» della pagina, tramite `refreshVersion`, che c'è già) | `risk-sync-button` resta |
+
+Impostazioni: `RefreshCw` in `GlobalSettingsTab` e in `CachePanel` è un'azione dei pannelli, non un «Aggiorna» di
+pagina; resta fuori, da verificare all'inizio del lotto.
+
+### I file, per area dei colori (vanno al coordinatore prima di scrivere)
+
+- **T**: lo store nuovo (`.ts`); `routes/(app)/+layout.svelte` (solo lo script); `routes/(app)/files/+page.svelte`.
+- **DV**: `routes/(app)/dashboard/+page.svelte`, `features/risk/RiskAnalysisPanel.svelte`,
+  `features/risk/levels/RiskPanelHeader.svelte`, `features/tools/ToolsHub.svelte`, `features/tools/ToolHost.svelte`.
+- **BK**: `routes/(app)/brokers/+page.svelte`, `routes/(app)/brokers/[id]/+page.svelte`,
+  `features/brokers/lots/LotsAnalysisPanel.svelte`.
+- **AF**: `routes/(app)/fx/+page.svelte`, `routes/(app)/fx/[pair]/+page.svelte`, `routes/(app)/assets/+page.svelte`.
+- **X**, fino all'ingresso di FE5c: `routes/(app)/assets/[id]/+page.svelte`.
+- **TR**: `routes/(app)/transactions/+page.svelte`.
+
+In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di `animate-spin` e di `disabled`, più
+`data-busy`; nessuna classe di colore. Nei pannelli del rischio si toglie un pulsante.
+
+### La risposta dei colori, file per file (coordinatore, 12:25)
+
+- **Lo `<script>` di ogni file è libero subito.**
+- **Pulsanti liberi subito**: `routes/(app)/+layout.svelte`, `files/+page.svelte`, `LotsAnalysisPanel.svelte`,
+  `dashboard/+page.svelte`. Fa eccezione la radice `<div data-testid="dashboard-page" … aria-busy>` della Dashboard
+  (`:825` nella base), che aspetta l'ingresso di DV: non la tocco, il suo `data-busy` resta com'è.
+- **Pulsanti dopo l'ingresso dei colori su quel file** (il coordinatore manda lo SHA di ciascuno):
+  - AF, verso le 13:00: `fx/+page.svelte`, `fx/[pair]/+page.svelte`, `assets/+page.svelte`;
+  - DV, verso le 14:00: `RiskAnalysisPanel`, `RiskPanelHeader` (vince la mia cancellazione), `ToolsHub`, `ToolHost`;
+  - BK, verso le 14:45: `brokers/+page.svelte`, `brokers/[id]/+page.svelte`;
+  - TR, più tardi: `transactions/+page.svelte`;
+  - X: `assets/[id]` dopo FE5c e il suo 9b, come ultimo passo.
+- **Ordine di lavoro che ne viene**:
+  1. lo store, con il rosso di `test-author` (`store-unit`, nel mio `_frontend_portfolio.py`);
+  2. dopo la corsa E2E di Y-12, il layout (`onNavigate`), File e Dashboard, script e pulsanti, e lo script del pannello
+     dei lotti;
+  3. gli altri pulsanti, a ogni ingresso dei colori.
+- **Una regola nuova della skill** (`a317392d4`): `text-lf-primary` più `placeholder:text-lf-placeholder` su un input
+  `-lf-`. Y11 non tocca campi.
+
+### Le spec toccate (le adatta `test-author`)
+
+- `risk-real`, `risk-analysis`, `risk-lab`, `data-quality-real`, `yield-on-cost-real` e `privacy-masking` usano
+  `risk-refresh-button` o i pulsanti di pagina.
+- `dashboard-cache` (`data-busy`).
+- `toolbar-width-sweep` e `onboarding-tour` (i pulsanti nella barra).
+- `brokers.spec`, `fx-detail`, `fx-destructive`, `transactions-table`, `tx-broker-icon-hydration`, `asset-detail`,
+  `asset-mobile-layout`, `ai-export-panel` e `ai-export-memory`.
+- La galleria aspetta i `data-busy` di pagina, che restano.
+- Nessun Vitest di oggi usa questi test id.
+
+### Domande per il via (risposte del coordinatore, 12:35)
+
+1. `assets/[id]` è di X fino a FE5c: aspetto l'ingresso di FE5c, oppure si concorda con X una modifica piccola allo
+   script e al pulsante?
+   → **Si aspetta**: X sta dividendo la pagina, e dopo viene il suo 9b. `assets/[id]` è l'ultimo passo di Y11,
+   dopo l'ingresso di 9b.
+2. Le pagine con `disabled` mancante (lista FX, lista asset) diventano grigie anche loro mentre lavorano: è quello che
+   dice la decisione 48 («diventa grigio»).
+   → **Sì**, alla lettera della decisione 48.
+
+## Y-12 — riscritto il controllo dei bottoni del confronto dei lotti (P25) ✅ (2026-10-16)
+
+> **Note implementazione**.
+> - **Il test morto**, `brokers-detail.spec.ts:569`, l'ha sostituito `test-author` con **due test** e tre aiutanti, nello
+>   stesso `describe` FIFO (60 s); +167/−29, Prettier pulito, non ancora lanciato.
+>   - **Test A**: un lotto scelto per id; i valori di partenza (modalità Valore, asse Auto, nessun controllo di Rendimento);
+>     l'asse di Valore su «Da 0»; poi Rendimento, con i suoi controlli, Abs e il suo asse su Auto: lo «Da 0» di Valore
+>     non passa a Rendimento; si torna a Valore, dove l'asse è ancora su «Da 0».
+>   - **Test B**: senza lotti scelti, cioè tutti i lotti visibili; in Rendimento, Abs e % e poi l'asse, nei due sensi.
+>   - Ogni coppia ha un solo bottone premuto (`aria-pressed`), e dopo ogni clic il grafico si ridisegna: lo prova il
+>     contatore di rendering, `chartRenders`.
+> - **Correzione al mio brief**: in Rendimento il valore di partenza è **Abs**, non % (`LotComparisonChart.svelte:168`;
+>   `returnUnit` è nato in `01b4132bb` già su `'abs'`). Niente finisce in localStorage.
+> - **Il lotto si sceglie per stato**: `dt-row-checkbox-{rowId}` e `data-selected` di `DataTable.svelte:1098-1149`, non per
+>   classe CSS.
+> - **Non si è potuto**: leggere l'opzione di ECharts e provare che l'asse parte da 0. Questo grafico non espone
+>   `__lfChart`, quindi il test si ferma allo stato dei bottoni e ai ridisegni.
+> - **Trovato fuori perimetro**:
+>   - due test vicini (il clic su un segmento del Gantt e quello sulla cella della custodia) controllano la selezione
+>     con la classe `selected` e non con `data-selected`. È la regola 10 della skill design-system: **Y-13** nel backlog;
+>   - `LotsAnalysisPanel.svelte:125` cita ancora un interruttore «Aggregato/Per-lotto»: è un commento vecchio. Lo
+>     correggo in Y11, che tocca quel file;
+>   - il pannello non pubblica quando ha finito di caricare i lotti scelti (`selectionLoading`): lo fa Y11, col
+>     `data-busy` dei pannelli.
+> - **La corsa E2E** (slot 2 del coordinatore, 12:33–12:43, scadenza 13:00): `front-broker detail` da solo,
+>   `--workers 2`, **38/38 in 3,9 minuti**, con il carico tra 80 e 168. I due test nuovi durano 15,1 s e 12,2 s. La porta
+>   6189 libera alla fine; log in `files/logs/y12_e2e_broker_detail.log`.
+> - **Checkpoint**: lo spec (`files/y12_stage_code.txt`) più il journal (`files/y12_stage_journal.txt`).
+
+## Y11 — implementazione (2026-10-16, dalle 12:45)
+
+### Passo 1 · lo store `pageBusy` ✅
+
+> **Note implementazione**.
+> - **Il rosso**, scritto da `test-author`: `frontend/src/lib/stores/app/pageBusy.test.ts`, in jsdom, con gli aiutanti
+>   `$test/runes.svelte`; 20 test sui gettoni, il timeout, `track` e la reattività. Registrato in `store-unit`, nel mio
+>   `_frontend_portfolio.py`: lista, docstring, `desc` e `tests` con tutti e cinque i file. Il rosso (12:52) si ferma
+>   all'import: `Failed to resolve import "./pageBusy.svelte"`.
+> - **Lo store**, mio: `frontend/src/lib/stores/app/pageBusy.svelte.ts`.
+>   - Una lista `$state.raw`, sostituita a ogni cambiamento; un timer per gettone, con un solo `console.warn` quando
+>     scade.
+>   - Gli id crescono e basta; `track` chiude il gettone in `finally`.
+>   - Un `timeoutMs` non valido (zero, negativo, infinito) vale il default.
+>   - `reset` è registrato anche su `registerClientSessionReset`, come gli altri store. La domanda era di
+>     `test-author`; la scelta è mia.
+>   - Verde: 20/20, Prettier pulito.
+> - **⚠️ Fuori pista, e una scelta**: le pagine chiamano `track` dentro gli `$effect` (periodo, valuta, filtro).
+>   Senza `untrack` lo store, leggendo la sua lista in `begin`, `release` e `reset`, legava l'effetto a sé, che sarebbe
+>   ripartito a ogni gettone. Così lo store la legge con `untrack`.
+>   - `test-author` ha aggiunto 4 test, fra cui una prova di presenza: l'effetto riparte quando cambia il suo periodo.
+>   - **Il rosso l'ho provato io**: rimessa per un momento la versione senza `untrack`, con una copia nella cartella
+>     della sessione, i 4 test nuovi sono rossi e gli altri 20 verdi. Poi ho rimesso la versione con `untrack`, identica
+>     (stessa checksum). In tutto 24/24.
+
+### Passo 2 · il primo cablaggio, sui file già liberi (risposta dei colori delle 12:25) — prove leggere in corso
+
+> **Note implementazione**.
+> - **`routes/(app)/+layout.svelte`**, solo lo script: un `onNavigate` chiama `pageBusy.reset()` quando cambia la route.
+>   Il layout è in sintassi vecchia (`$:`): l'aggancio sta accanto ad `afterNavigate`, e la modalità non cambia. Il mock
+>   di `$app/navigation` esporta già `onNavigate`.
+> - **`files/+page.svelte`**:
+>   - una funzione `reloadFiles(label)` avvolge `loadFiles` per chi fa partire il caricamento: Aggiorna, scheda, e i
+>     cinque ricaricamenti dopo un upload o una cancellazione. `loadFiles` resta senza gettone;
+>   - il primo caricamento è una catena sola: impostazioni, icone, broker e file;
+>   - sul pulsante, `disabled` e la rotazione leggono `pageBusy.busy`, e c'è `data-busy`.
+> - **`dashboard/+page.svelte`**:
+>   - **gettoni** su primo caricamento (dai broker e dagli asset fino al report), Aggiorna, periodo, valuta (l'`$effect`
+>     e il selettore), filtro dei broker (dopo i suoi 2 s), scheda transazioni, contributo, candele P&L, e il
+>     ricaricamento dopo la creazione di una coppia FX;
+>   - **niente gettone** sui ricaricamenti dopo una sincronizzazione (le CTA della qualità dei dati, `onsynced` del
+>     rischio, la coppia appena sincronizzata): P3;
+>   - `handleSync` tiene `syncLoading`, che alimenta il `data-busy` della radice; la radice resta di DV, non la tocco;
+>   - il pulsante legge `pageBusy.busy`.
+> - **`LotsAnalysisPanel.svelte`**, solo lo script: gettoni sui tre `$effect` che caricano (apertura e parametri,
+>   selezione, `refreshVersion`). Corretto anche il commento vecchio di `:125`, quello trovato in Y-12.
+> - **`riskPanelController.svelte.ts`**: gettoni su `applyBaseSignature` (apertura e parametri) e sull'`$effect` di
+>   `refreshVersion`.
+>   - Non su `handleSynced`, che è una sincronizzazione.
+>   - Nemmeno sulle analisi a richiesta, che hanno i loro indicatori.
+> - **Nessuna classe toccata.**
+>
+> **Prove leggere del passo 2** (13:07–13:2x, carico sotto 50; script `files/scripts/y11_light.sh`, log
+> `files/logs/y11_*.log`): svelte-check 0/0; `theme-roles` pulito; `store-unit` 76/76 in 5 file; `risk-controller-unit`
+> 102/102; `risk-levels-unit` 498/498; `allocation-unit` 192/192; `core-unit` 6 261/6 261; `component-unit`
+> 4 029/4 029; `git diff --check` pulito; 6189 libera. **`check-orphans` non è partito**: l'ho fermato mentre lo script
+> aspettava il carico, per la pausa del developer. Si rifà dopo il via, perché `page-busy.spec.ts` è registrata ma non
+> ancora verificata.
+>
+> **La E2E del passo 2**, scritta da `test-author` e non ancora lanciata: `frontend/e2e/portfolio/page-busy.spec.ts`,
+> registrata come `front-portfolio page-busy` (+20 righe in `_frontend_portfolio.py`). Cinque test:
+> 1. un cambio di periodo (`date-preset-6m`) fa girare `sync-button` senza clic;
+> 2. «Aggiorna» della Dashboard;
+> 3. «Aggiorna» dei File;
+> 4. il cambio di scheda dei File;
+> 5. l'ambito della pagina: un report della Dashboard trattenuto, poi il link `nav-files`; il pulsante dei File torna
+>    fermo mentre il report è ancora in volo.
+>
+> Le richieste si trattengono con `page.route` e si rilasciano in `finally`; si legge solo `data-busy` e `disabled`.
+> Il percorso giusto dei rapporti dei broker è `GET /api/v1/brokers/import/files`.
+> - **Le spec che possono cambiare**, segnalate da `test-author` senza toccarle:
+>   - `dashboard-cache.spec.ts` (`:474`, `:497`, `:554`): il clic su `sync-button` aspetta il pulsante abilitato;
+>   - `ai-export-memory.spec.ts:157`: `toBeEnabled()` entro 3 s;
+>   - la galleria (`galleryShot.ts`, `noLoaderOnScreen`, limite 30 s), che ora aspetta anche i caricamenti tracciati
+>     prima di ogni scatto della Dashboard e dei File. È il cambiamento più visibile: va detto ai colori.
+
+### ⏸️ Pausa del developer (2026-10-16, 13:2x) — FROZEN
+
+- **HEAD**: `3bf871f4f` (il journal di Y-12). Nessuna fusione aperta.
+- **File sporchi, tutti di Y11 e da committare insieme**:
+  - modificati: `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte`,
+    `frontend/src/lib/features/risk/riskPanelController.svelte.ts`, `frontend/src/routes/(app)/+layout.svelte`,
+    `frontend/src/routes/(app)/dashboard/+page.svelte`, `frontend/src/routes/(app)/files/+page.svelte`,
+    `scripts/test_runner/_frontend_portfolio.py`;
+  - nuovi: `frontend/src/lib/stores/app/pageBusy.svelte.ts`, `frontend/src/lib/stores/app/pageBusy.test.ts`,
+    `frontend/e2e/portfolio/page-busy.spec.ts`;
+  - il piano.
+- **Il passo dopo, al via**:
+  1. uno slot E2E per il passo 2: `page-busy`, `dashboard`, `dashboard-cache`, `files` e `front-broker detail` (il
+     pannello dei lotti), circa 30 minuti;
+  2. poi il checkpoint del passo 2;
+  3. poi gli script e i pulsanti delle altre pagine, all'ingresso di ciascuna area dei colori (AF, DV, BK, TR), e
+     `assets/[id]` per ultimo.
+- **14:14, ripresa dopo la pausa** (via del coordinatore):
+  - `check-orphans` verde: tutti i file registrati e raggiungibili, `page-busy.spec.ts` compreso;
+  - lo slot E2E 2 è verso le 15:10, per 30 minuti; lo script è `files/scripts/y11_e2e.sh`;
+  - AF è entrato (`bfd33a0f5`): i pulsanti di `fx/+page.svelte`, `fx/[pair]/+page.svelte` e `assets/+page.svelte` sono
+    liberi dopo l'allineamento della base, che il coordinatore fa al prossimo checkpoint;
+  - Z-13b non tocca più `refreshVersion`; Z-15 (il ricaricamento dei pannelli dopo un aggiornamento dei prezzi) si
+    decide dopo Y11.
+
+### Passo 2 · E2E ✅ (2026-10-16, slot 2, 15:10–15:43; HEAD `94e5e146e`, la fusione con dev `b51bb3663`)
+
+> **Note implementazione**.
+> - **I commit**: il passo 2 l'ha salvato il coordinatore (`ec018afdf` feat, `77ae9bcd7` journal). Poi la fusione con dev
+>   `b51bb3663` (AF, IM, DV, H, W), con commit `94e5e146e`.
+>   - L'unico conflitto, nel backlog (Y-13 contro la nuova sezione MF), l'ho risolto tenendo i due lati.
+>   - `dashboard/+page.svelte` si è fuso da solo con DV: il pulsante ha i ruoli di DV e i miei attributi.
+> - **Le prove leggere sulla revisione fusa**: verdi, tranne **C4 `bg-white/90`**. Quel rosso viene da dev: le ultime
+>   occorrenze le hanno tolte IM e DV, senza togliere la regola da `app.css`. L'ho segnalato; i colori l'hanno corretto
+>   su dev in `1c7b9def2`.
+> - **La E2E**, una spec alla volta, `--workers 2`, script `files/scripts/y11_e2e.sh`, `DEADLINE=1545`:
+>   `front-portfolio page-busy` **5/5** (prima corsa); `dashboard` 27/27; `dashboard-cache` 6/6; `front-utility files`
+>   29/29; `front-broker detail` 38/38. In tutto **105/105**.
+> - **Saltata per la scadenza**: `front-ai-export memory`, da mettere nel prossimo slot.
+> - **⚠️ Fuori pista**: la build del primo passo, con il sito della documentazione, ha preso 15 minuti con il carico a
+>   80–120; il resto è stato nella norma. Porta 6189 libera alle 15:43.
+
+### Passo 3 · le pagine di AF e DV (2026-10-16, dalle 15:45) — prove leggere verdi, E2E da fare
+
+> **Note implementazione** (base `94e5e146e`, che contiene già gli ingressi di AF e DV).
+> - **AF**, con le patch preparate in `files/patches/` e provate a secco sulla stessa revisione:
+>   - **lista FX**: gettoni sul primo caricamento (catalogo, coppie e cambi), Aggiorna, periodo, impostazioni che vanno
+>     al backend, nuovo tentativo dei segnali, e il ricaricamento dopo la creazione di una coppia.
+>     **Senza gettone**: i ricaricamenti dopo una sincronizzazione (P3), l'aggiornamento della singola card (che ha il suo
+>     indicatore) e la lista degli asset, che non si aspetta;
+>   - **dettaglio FX**: gettoni su primo caricamento, cambio d'utente, orientamento, Aggiorna, periodo, segnali e
+>     confronto, nuovo tentativo dei segnali. Senza gettone: il completamento della sincronizzazione di una coppia
+>     appena creata, e le sincronizzazioni di coppie e asset (P3);
+>   - **lista asset**: gettoni su primo caricamento (catalogo, asset e prezzi), periodo, Aggiorna tutto, aggiornamento di
+>     una selezione, impostazioni, nuovo tentativo, e i ricaricamenti dopo la creazione o la modifica di un asset.
+>     Senza gettone: il poller dal vivo (`refreshLivePricesNow`), i ricaricamenti dopo una sincronizzazione,
+>     l'aggiornamento della singola riga e gli slug FX;
+>   - **i pulsanti**: `disabled`, `data-busy` e rotazione su `pageBusy.busy`, più `disabled:opacity-50`, che è
+>     un'opacità e non un colore. Il pulsante della lista asset riceve il suo primo test id: `assets-refresh-button`.
+>     Prettier ha solo rimesso a capo i miei due pulsanti delle pagine FX.
+> - **DV**:
+>   - `risk-refresh-button` tolto da `RiskPanelHeader.svelte` e `RiskAnalysisPanel.svelte`, con l'icona e, nel
+>     pannello, la funzione `loadBase` che restava senza chiamanti. Restano `risk-sync-button` e il derivato
+>     `refreshing`, che serve alle cornici dei risultati;
+>   - `ToolsHub` e `ToolHost`: gettoni su catalogo, caricamento dello strumento, Aggiorna, nuovo tentativo e
+>     ricaricamento confermato. Il pulsante gira e pubblica `data-busy` su `pageBusy.busy`; `disabled` tiene anche il
+>     `busy` locale, così i Vitest di oggi restano validi.
+> - **Le spec che cliccano `risk-refresh-button`** (`dashboard-cache`, `risk-real`, `risk-analysis`, `asset-detail`): le
+>   adatta `test-author`.
+> - **Le quattro spec**, adattate da `test-author`. Nessuna faceva clic su `risk-refresh-button`: tre lo usavano come
+>   barriera («l'ondata è arrivata», con `toBeEnabled`) e `asset-detail` controllava solo che mancasse.
+>   - `dashboard-cache`: l'aiutante `pressRefresh` aspetta che `sync-button` sia abilitato, poi prende il segno, poi
+>     clicca; la barriera diventa `sync-button` `data-busy="false"`, poi `riskSettled`.
+>   - `risk-real` (`openRiskTab`): `sync-button` `data-busy="false"`, 90 s.
+>   - `risk-analysis`: la stessa barriera, 20 s invece di 15, perché ora aspetta anche il report di 1 anno.
+>   - `asset-detail`: via il controllo di assenza di un test id che non esiste più. Prima di armare l'attesa della
+>     richiesta c'è ora una barriera: `risk-analysis-panel` `data-busy="false"`.
+>   - L'«Aggiorna» del dettaglio asset ricarica davvero il pannello del rischio (`riskRefreshVersion`).
+>   - Prettier pulito.
+> - **Prove leggere** (15:46–16:01, carico sotto 50; script `files/scripts/y11_light.sh`, log `files/logs/y11_*.log`):
+>   svelte-check 0/0; `theme-roles` pulito; store 76; risk-controller 102; risk-levels 498; allocation 192; component
+>   4 044 (i Vitest degli strumenti compresi); `check-orphans` pulito; `git diff --check` pulito; 6189 libera.
+>   - `core-unit` fa 6 412/6 413: l'unico rosso è il C4 `bg-white/90` ereditato da dev. La correzione dei colori
+>     (`1c7b9def2`) non è ancora nella mia base.
+> - **Checkpoint**: 11 file (+143/−87), elencati in `files/y11s3_stage_code.txt`, più il piano. La E2E del passo 3 è
+>   `files/scripts/y11s3_e2e.sh`, circa 45 minuti:
+>   - prima le spec adattate: dashboard-cache, risk, risk-real, asset-detail;
+>   - poi le pagine: fx-list, fx-detail, asset-list;
+>   - poi `pac-allocator-real` (gli strumenti), `live-pause` e `ai-export memory`.
+
+### Passo 3 · checkpoint e seconda fusione (2026-10-16, 16:04–16:31)
+
+> **Note implementazione**.
+> - **I commit**: il passo 3 l'ha salvato il coordinatore, `e843be00c` (11 file) ed `ec2235b00` (journal). Poi la
+>   fusione con dev `e9b4ac6b0`, che porta C4 dei colori, Z5, Z-13 e Z-13b di Z, P17 di H, B36b di W e IW.
+> - **I due conflitti**, risolti tenendo i due lati:
+>   - `dashboard/+page.svelte`: ha litigato solo l'import (`registerPortfolioMutationListener` di Z, `pageBusy` mio).
+>     `reloadAfterPriceCatchUp()` di Z chiama `loadAll()` senza gettone, come vuole P3;
+>   - `_frontend_portfolio.py`: due funzioni intere e due `add_test` interi, `page-busy` e `price-refresh`.
+> - **Gli altri file toccati dalla fusione**: `LotsAnalysisPanel` è stato ricolorato da BK, ma il mio script è
+>   intatto; `portfolioMutation` ha ora `kind: 'prices'`, e il mio codice non lo distingue.
+> - **⚠️ Fuori pista**:
+>   - **una mia svista**: al passo 2 non avevo passato Prettier sulla Dashboard, e la riga di `PositionsPanel` era
+>     diventata troppo lunga. Corretta nel worktree, fuori dalla fusione: va col prossimo checkpoint;
+>   - `svelte-check` (`front check`) non controlla Prettier. Da ora Prettier gira su ogni file toccato.
+> - **Il test che Z ci aveva lasciato**: `page-busy.spec.ts`, scritto da `test-author`. Un aggiornamento dei prezzi
+>   simulato con il meccanismo di `price-refresh-reload.spec.ts`; mentre il report di sfondo è trattenuto, `sync-button`
+>   resta `data-busy="false"` e abilitato, e un registratore non vede mai `true`. Il controllo è il cambio di periodo a
+>   6 mesi, che invece lo fa girare.
+>   - `hold().release()` ora usa `route.fallback()`.
+> - **Prove leggere sulla revisione fusa** (16:14–16:31): `api sync`; svelte-check 0/0; `theme-roles` pulito; store 82;
+>   risk-controller 102; risk-levels 498; core **6 472/6 472** (il C4 se n'è andato con la fusione); component 4 044.
+> - **Da dire a Z**: durante il ricaricamento di sfondo la radice della Dashboard è `aria-busy="true"`. P3 riguarda solo
+>   il pulsante, e la radice è di DV: è solo una segnalazione.
+- **16:31**: commit della fusione `8268f65ec` (genitori `ec2235b00` ed `e9b4ac6b0`). La riga di Prettier e il test P3
+  restano per il prossimo checkpoint. Lo slot E2E del passo 3 è verso le 17:10–17:15.
+- **Patch pronte per le aree che entrano dopo**, provate a secco su `8268f65ec` e salvate in `files/patches/`:
+  - `y11_brokers_list.py` e `y11_broker_detail.py` (BK). Il ricaricamento di sfondo di Z-13 (`reloadAfterPriceCatchUp`)
+    e `onsynced` del rischio restano senza gettone;
+  - `y11_transactions.py` (TR). I filtri sono lato client (W28), quindi senza gettone;
+  - si applicano **solo** quando il coordinatore conferma l'ingresso dell'area. `assets/[id]` arriva dopo FE5c e il 9b
+    di X: la sua patch si scrive solo allora, perché X sta dividendo quella pagina.
+- **16:56, nota di Z per il passo 4 (BK)**: oggi l'icona di «Aggiorna» nella pagina del broker segue `reportLoading`,
+  quindi gira durante il ricaricamento di sfondo di Z-13, contro P3.
+  - La patch `y11_broker_detail.py` toglie già `loading || reportLoading` sia da `disabled` sia dalla rotazione: tutti e
+    due leggono `pageBusy.busy`.
+  - **Al passo 4**: `test-author` estende il test P3 di `page-busy.spec.ts` alla pagina del broker, con lo stesso
+    aggiornamento simulato. Durante il ricaricamento di sfondo `broker-refresh` resta `data-busy="false"`.
+
+### Passo 3 · E2E (slot 1, dalle 17:01, scadenza 17:50; HEAD `8268f65ec` più il test P3 e la riga di Prettier) — ✅ 17:44 (155/156, un rosso da sovraccarico da riconfermare)
+
+> **Note implementazione** (`files/scripts/y11s3_e2e.sh`, riepilogo in `files/logs/y11s3_e2e_summary.log`).
+> - `front-portfolio page-busy` **6/6**: il test P3 è verde alla prima corsa, cioè l'aggiornamento dei prezzi non fa
+>   girare il pulsante.
+>   - La build del primo passo, con il sito della documentazione, ha preso 15 minuti, con il carico a 100–140.
+> - **⚠️ Fuori pista: `dashboard-cache`, 5/6.** Il rosso è `:420`, «back on the Positions tab…», alla riga 431: il
+>   primo `analyzeLots` dell'aiutante (`:271`), con `lots-analysis-panel-loading` ancora presente dopo 30 s e il limite
+>   di 120 s del test superato.
+>   - **Triage** (skill `test-triage`):
+>     - §1, la forma: no. È la stessa riga, con lo stesso lotto;
+>     - §2, l'orologio o la lentezza: sì. Il test aveva già speso circa 90 s per login, assestamento della Dashboard e
+>       tabella Performance; il carico era 166–172, perché in parallelo girava la galleria completa dei colori (il
+>       coordinatore indica 130–170);
+>     - l'istantanea finale (`error-context.md`, copiata in `files/logs/`) mostra la tabella dei lotti, che sta nel ramo
+>       `{:else}` di `loading` (`LotsAnalysisPanel.svelte:482-550`): il caricamento è finito, solo dopo il tempo del
+>       test. Non si è piantato;
+>     - lo stesso test era verde al passo 2 (15:31, carico circa 124), con lo stesso pannello tracciato;
+>     - il mio cambiamento nel pannello (`track` attorno a `loadMain`) non cambia `loading` e fa partire `loadMain` in
+>       modo sincrono, come prima;
+>     - il log del backend non registra le richieste dei lotti, e non c'è traccia (nessuna ripetizione in locale).
+>   - **Verdetto**: lentezza da sovraccarico della macchina, non un difetto di Y11. **Da confermare** con una corsa di
+>     `dashboard-cache` da sola a carico normale.
+> - **Il resto è verde** (carico in discesa da 172 a 44):
+>
+>   | Spec | Esito | Note |
+>   |---|---|---|
+>   | `front-portfolio risk` | 38/38 | con `risk-analysis` adattata (senza `risk-refresh-button`) |
+>   | `front-portfolio risk-real` | 2/2 | adattata |
+>   | `front-asset asset-detail` | 34/34 | adattata |
+>   | `front-fx fx-list` | 12/12 | |
+>   | `front-fx fx-detail` | 17/17 | |
+>   | `front-asset asset-list` | 28/28 | |
+>   | `front-utility pac-allocator-real` | 1/1 | |
+>   | `front-asset live-pause` | 8/8 | |
+>   | `front-ai-export memory` | 4/4 | saltata al passo 2 dal limite d'orario, qui è entrata |
+>
+> - **Totale**: 155/156. La porta 6189 è libera alle 17:44:54 (`lsof` senza ascoltatori).
+> - **Resta**: la corsa di conferma di `dashboard-cache` da sola, in uno slot a carico normale.
+
+### Passo 4 · preparazione (17:46–17:52, sola lettura; nessun file del repo toccato)
+
+- **17:46, coordinatore**: BK è in dev (`939e4998a`), quindi il passo 4 è sbloccato da quel lato.
+  - **Ordine**: al suo via, prima `prettier --check` e CHECKPOINT READY, poi la corsa di conferma di `dashboard-cache` da
+    sola, che apre lo slot E2E del passo 4.
+- **Base**:
+  - `939e4998a` è già un antenato di `8268f65ec`, e anche TR (`e402d3b87`, 14:57, arrivato con `e9b4ac6b0`). Le patch
+    BK e TR provate a secco su `8268f65ec` valgono ancora;
+  - si applicano **dopo** il commit del checkpoint e l'eventuale aggiornamento della base, perché file del broker
+    sporchi bloccherebbero la fusione;
+  - per TR serve il via del coordinatore per `transactions/+page.svelte`, che è un'area colori.
+- **Le barriere su `broker-refresh`**: cinque spec aspettano il pulsante abilitato come segno che il report è caricato.
+  Restano valide, perché il primo caricamento è tracciato (`broker-first-load`) e si chiude dopo `loadOverview`:
+  - `yield-on-cost-real:447` e `data-quality-real:712` aprono `?tab=posizioni`. Lì il pannello dei lotti è un cassetto
+    (`open={activeAssetId != null}`), quindi non carica finché non si apre un titolo;
+  - `privacy-masking:200` e `:627`, `toolbar-width-sweep:360` e `risk-analysis:1714` aprono la scheda predefinita;
+  - `brokers.spec.ts:91` controlla solo che `brokers-refresh` sia visibile.
+- **Commenti che diventano falsi**, da far correggere a `test-author`:
+  - `risk-analysis.spec.ts:1700-1712` nomina `loading || reportLoading`;
+  - `toolbar-width-sweep.spec.ts:358-359` dice «Refresh is disabled exactly while the broker or its report loads».
+- **TR, `tx-refresh-button`**: le due spec che lo usano non dipendono dal vecchio `disabled={loading}`:
+  - `tx-broker-icon-hydration:320` aspetta il pulsante abilitato, che ora arriva dopo anche le liste di riferimento: è
+    più stretto, quindi sicuro;
+  - `transactions-table` TT20 aspetta il `data-busy` della radice, che segue ancora `loading`.
+- **Coerenza con la Dashboard**: le candele e il contributo sono tracciati allo stesso modo (`dashboard-pnl-candles`,
+  `dashboard-contribution` contro `broker-pnl-candles`, `broker-contribution`).
+- **`test-author` al passo 4**:
+  - estende `page-busy.spec.ts` alla pagina del broker: durante il ricaricamento di sfondo dopo un aggiornamento dei
+    prezzi, `broker-refresh` resta `data-busy="false"`, mentre un cambio di periodo lo fa diventare `true`;
+  - aggiunge il caso della lista dei broker (`brokers-refresh`) e, con TR, quello delle transazioni;
+  - corregge i due commenti.
+- **Script E2E**: `files/scripts/y11s4_e2e.sh`, con `DEADLINE=HHMM` e TR opzionale (`WITH_TR=1`):
+  1. `dashboard-cache` come conferma, prima: ha 6 test, quindi la guardia contro l'allargamento la legge ancora;
+  2. `page-busy`, `front-broker detail`, `front-broker list`;
+  3. con TR: `transactions-table` e `tx-broker-icon-hydration`;
+  4. `risk`, `privacy-masking`, `yield-on-cost-real`, `data-quality-real`, `toolbar-width-sweep`, `default-currency` e
+     `price-refresh`.
+  - Circa 60 minuti in tutto, 68 con TR: la guardia della scadenza salta la coda, da recuperare in uno slot successivo.
+- **18:00, conferma di `dashboard-cache`**: da sola, con `--workers 2`, su `8268f65ec` più i tre file del checkpoint.
+  - **6/6 in 36 s**, con il carico da 70 a 41; `:420` è verde.
+  - Il verdetto sul rosso delle 17:21 è confermato: lentezza da sovraccarico.
+- **Checkpoint**: il coordinatore ha committato `3324a9f59` (test P3 e riflusso della Dashboard) e `d99f7987d` (journal).
+  HEAD è `d99f7987d`, con l'albero pulito.
+
+### Passo 4 · BK e TR (dalle 18:02, su `d99f7987d`) — ✅ codice e prove leggere 18:29; E2E da fare
+
+> **Note implementazione**.
+> - **Via del coordinatore**:
+>   - applicare le patch;
+>   - `transactions/+page.svelte` è libero, e lui avvisa il programma colori;
+>   - nessuna classe di palette, e `theme-roles --check` fra le prove leggere.
+> - **Patch applicate** (`files/patches/y11_brokers_list.py`, `y11_broker_detail.py`, `y11_transactions.py`): ogni
+>   ancora è stata trovata una sola volta, quindi nessuna scrittura parziale.
+>   - **Lista dei broker**:
+>     - gettoni sul primo caricamento, sul cambio di valuta, sui ricaricamenti dopo creazione, modifica e cancellazione,
+>       e sul clic di `brokers-refresh`;
+>     - il pulsante pubblica `data-busy` e legge `pageBusy.busy`;
+>     - la radice `brokers-page` tiene il suo `data-busy`, che segue `loading`.
+>   - **Pagina del broker**:
+>     - gettoni sul primo caricamento, sul periodo, su «Aggiorna», sulla valuta, sulla prima apertura della scheda
+>       Transazioni e su `handleUpdated`;
+>     - anche sullo storico dell'allocazione, chiesto quando l'utente sceglie la vista Storico o quando questa viene
+>       ripristinata al montaggio, e su candele e contributo, come nella Dashboard;
+>     - `reloadAfterPriceCatchUp` resta senza gettone (P3). Il pulsante non segue più `reportLoading`, quindi non gira
+>       più durante il ricaricamento di sfondo: è la correzione chiesta dalla nota di Z.
+>   - **Transazioni**:
+>     - gettoni sul primo caricamento (prima le liste di riferimento, poi `reload()`), sui ricaricamenti morbidi dopo le
+>       modifiche dell'utente e sul clic di `tx-refresh-button`;
+>     - la radice `transactions-page` tiene il suo `data-busy`, che segue `loading`;
+>     - la pagina non ha ascoltatori dei prezzi.
+> - **Prettier**: le tre pagine erano pulite a HEAD. `--write` ha riformattato solo le mie due righe lunghe, cioè il
+>   pulsante della lista e la riga di `GrowthChart` della pagina del broker. `--check` è pulito su tutte e tre.
+> - **`theme-roles --check`**: pulito («0 files dropped below their record»). Nessuna stringa di classe è cambiata:
+>   solo `disabled`, `data-busy`, il gestore del clic e la condizione della rotazione.
+> - **`test-author`** (dalle 18:06 alle 18:26; non ha eseguito nulla tranne Prettier):
+>   - `page-busy.spec.ts` (+269/−16): quattro test nuovi, mentre i sei vecchi restano com'erano.
+>     - **Pagina del broker, P3**: tiene fermo il ricaricamento di sfondo dopo un aggiornamento simulato dei prezzi.
+>       Intanto `broker-refresh` resta `data-busy="false"` e abilitato, e il registratore non vede mai `true`; vale
+>       anche dopo l'arrivo del ricaricamento. Il controllo è il preset 6M: il pulsante diventa occupato e il
+>       registratore vede `true`.
+>     - **Pagina del broker, «Aggiorna»**: tiene fermo l'overview richiesto di nuovo.
+>     - **Lista dei broker**: tiene fermo `GET /brokers?include_inaccessible=true`.
+>     - **Transazioni**: tiene fermo `GET /transactions` senza query.
+>     - Il broker è «Interactive Brokers» del mock, cercato per nome con `page.request`. Non si scrive nulla.
+>   - Correzioni di soli commenti in `risk-analysis.spec.ts` (`openBrokerRiskWithHoldings`) e in
+>     `toolbar-width-sweep.spec.ts` (`brokerDetailReady`); il `desc=` di `page-busy` in `_frontend_portfolio.py`.
+> - **Revisione**:
+>   - nessun `waitForTimeout`, nessun `.first()`, nessun testo tradotto; ogni richiesta trattenuta viene rilasciata
+>     nel `finally`;
+>   - **⚠️ Fuori pista, contatore nella pagina**. La radice della pagina del broker non pubblica `data-busy`. Per
+>     sapere quando il ricaricamento di sfondo è arrivato, la spec avvolge `XMLHttpRequest.open/send` con
+>     `page.evaluate` e conta i report inviati e arrivati: un report conta come arrivato un task dopo il suo
+>     `loadend`. Prima di fidarsi di un arrivo, la spec controlla di vedere il report in volo.
+>   - L'ho accettato. Aggiungere un `data-busy` alla radice scavalcherebbe la voce di Z sull'`aria-busy` della
+>     radice durante i ricaricamenti di sfondo, e P3 vuole quel ricaricamento silenzioso.
+> - **Prove leggere** (`files/scripts/y11s4_light.sh`, dalle 18:27 alle 18:29, carico 21–24):
+>   - svelte-check: 0 errori e 0 avvisi, `e2e/**` compreso;
+>   - `theme-roles`: pulito;
+>   - `core-unit`: 6 472/6 472;
+>   - Prettier: pulito sui sei file;
+>   - `py_compile` di `_frontend_portfolio.py`: superato;
+>   - `git diff --check`: pulito.
+> - **⚠️ Fuori pista, un caso di P3 rimasto** (trovato da `test-author`, verificato nel codice, segnalato alle 18:26):
+>   - il ricaricamento di sfondo azzera le candele: nella Dashboard `applyReport` alla riga 524, nel broker
+>     `applyOverview` alla 335; nel broker azzera anche il contributo, alla 331;
+>   - nella vista Candele `GrowthChart` (976–980) le richiede di nuovo, e nella vista Performance del broker
+>     `PositionsPanel` (112–116) richiede il contributo;
+>   - entrambe le callback sono tracciate, quindi il pulsante gira per tutta quella richiesta. Nella Dashboard succede
+>     dal passo 2.
+>   - **Decisione N55 del coordinatore** (da rivedere con il developer): l'opzione 1, `pageBusy.join`. Candele e
+>     contributo tengono fermo il pulsante solo se si aggiungono a un caricamento già in corso.
+>   - Va fatta come **passo 4b**, dopo il checkpoint del passo 4, con i test Vitest del metodo e il test P3 con la
+>     vista Candele salvata.
+> - **BACKLOG**:
+>   - Y-14: «Aggiorna» della lista dei broker rilegge solo l'elenco;
+>   - Y-15: il `title="Refresh"` di `brokers-refresh` è scritto in inglese nel codice. Il coordinatore chiede di
+>     proporre la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli altri pulsanti «Aggiorna»; sceglie
+>     il developer.
+> - **Conflitti previsti**: nessuno. Dev è a `5609b16d7`, 97 commit avanti, e non tocca i miei percorsi. Nel BACKLOG le
+>   sue modifiche finiscono intorno alla riga 4 297, mentre la sezione Y comincia alla 4 439.
+> - **Script E2E** `files/scripts/y11s4_e2e.sh`, rivisto: la conferma di `dashboard-cache` è già fatta e TR è applicato.
+>   L'ordine è `page-busy`, `front-broker detail` e `list`, `transactions-table`, `tx-broker-icon-hydration`,
+>   `price-refresh`, `default-currency`, `risk`, `privacy-masking`, `toolbar-width-sweep`, `yield-on-cost-real` e
+>   `data-quality-real`.
+> - **Documentazione, da fare alla chiusura di Y11** con `docs-writer`, insieme alla riga del CHANGELOG. Ricerca fatta
+>   sulle pagine inglesi di `mkdocs_src/docs`: né `risk-refresh-button` né `pageBusy` vi compaiono.
+>   - `user/dashboard/index.en.md`, sezione «Coming back and refreshing» (riga 81): oggi non dice che «Refresh» gira ed
+>     è grigio mentre la pagina carica ciò che l'utente ha chiesto, né che non lo fa durante un ricalcolo di sfondo
+>     (P3);
+>   - `user/brokers/index.en.md:86`: lo stesso, per la pagina del broker;
+>   - `user/dashboard/risk.en.md:139` («press **Refresh**») resta vero, perché dal passo 3 il «Refresh» della pagina
+>     ricarica la scheda Rischio. Basta, al più, un collegamento alla sezione della Dashboard;
+>   - lato sviluppatori manca una pagina sullo schema `pageBusy`: dove va `track`, mai dentro le funzioni di
+>     caricamento, e niente gettoni sui ricaricamenti di sfondo.
+- **Checkpoint del passo 4**: il coordinatore ha committato `fba7b036d` (feat) ed `e24ef7a2f` (journal); HEAD
+  `e24ef7a2f`, con l'albero pulito. Un'unica E2E per il passo 4 e il 4b nello slot 1, verso le 20:00, per 60 minuti. Se
+  le prove leggere del 4b non sono verdi per quell'ora, la corsa copre solo il passo 4.
+
+### Passo 4b · `pageBusy.join` (N55, dalle 18:32, su `e24ef7a2f`) — ✅ codice, test e prove leggere 18:54; E2E verso le 20:00
+
+> **Note implementazione**.
+> - **Decisione N55 del coordinatore**, da rivedere con il developer: l'opzione 1. Le richieste che un pannello fa da
+>   sé quando gli mancano i dati (candele e contributo) tengono fermo il pulsante solo se si aggiungono a un
+>   caricamento già in corso.
+> - **Store**: `join(label, work, options?)`, asincrona.
+>   - Se nella lista letta con `untrack` non c'è nessun gettone, esegue `work()` senza gettone; altrimenti fa `track`.
+>   - Decide nel momento della chiamata.
+>   - È esportata in `pageBusy`, e l'intestazione del file ha una voce che spiega dove va.
+> - **Le quattro callback** passano da `track` a `join`, con le stesse etichette: `dashboard-pnl-candles`,
+>   `dashboard-contribution`, `broker-pnl-candles` e `broker-contribution`.
+> - **Perché regge nel tempo**:
+>   - quando l'utente cambia periodo, `applyReport` o `applyOverview` scrivono lo stato prima che finisca il caricamento
+>     tracciato. Svelte svuota gli effetti in un microtask, messo in coda prima della continuazione di `track`, quindi
+>     il `$effect` di `GrowthChart` o di `PositionsPanel` trova ancora il gettone del periodo;
+>   - lo verifica in un browser vero il controllo dei nuovi test E2E.
+> - **Sfumatura da riportare**: il contributo ha un indicatore proprio (`contributionLoading`, presente in entrambe le
+>   pagine), le candele no.
+>   - `GrowthChart` ha solo lo scheletro della storia (`loading`).
+>   - Quindi, se l'utente passa direttamente alle Candele a pagina ferma, nessun indicatore lo segnala finché le
+>     candele non arrivano. Era così anche prima di Y11.
+>   - Ho tolto dall'intestazione dello store la frase «il pannello mostra il suo caricamento».
+> - **Prettier**: pulito sui tre file.
+> - **`test-author`** (in corso, dalle 18:33):
+>   - Vitest di `join` in `pageBusy.test.ts`, con tre test pensati per distinguere le varianti: sempre tracciata, mai
+>     tracciata, senza `untrack`;
+>   - due test E2E in `page-busy.spec.ts`: la Dashboard con la vista Candele salvata, e la pagina del broker con la
+>     vista Performance. Ciascuno ha un controllo: il cambio di periodo tiene il pulsante occupato finché la richiesta
+>     a cascata è trattenuta.
+> - **Consegna di `test-author`** (alle 18:47; non ha eseguito nulla tranne Prettier):
+>   - `pageBusy.test.ts` (+222/−5): da 24 a 35 casi; i 24 vecchi restano intatti.
+>     - Nove casi per `join`: pagina ferma, pagina occupata, decisione presa alla chiamata, rifiuto con e senza
+>       gettone, eccezione sincrona che diventa una promessa rifiutata, `timeoutMs`;
+>     - due casi di `join` chiamata dentro un effetto, con gli stessi aiutanti dei test di `track`.
+>   - `page-busy.spec.ts` (+291/−6): due test nuovi.
+>     - Il primo è la Dashboard con la vista Candele salvata. Il secondo è la pagina del broker con la vista Performance
+>       salvata in `?tab=posizioni`.
+>     - Ogni test tiene fermi il ricaricamento di sfondo e la richiesta a cascata (candele o contributo). Intanto il
+>       pulsante resta fermo e il registratore non vede mai `true`.
+>     - Il controllo è il cambio di periodo a 6M: la richiesta a cascata, trattenuta, tiene occupato il pulsante. Nel
+>       broker si controlla anche che il pannello mostri il proprio caricamento (`positions-panel` con
+>       `data-busy="true"`).
+>     - Le viste salvate si impostano con una prima visita, prima di installare la finta notifica di aggiornamento dei
+>       prezzi; poi la pagina viene ricaricata da zero.
+>     - Timeout di 180 s per test (`CASCADE_TEST_MS`). `openBrokerDetail` accetta ora una scheda, `panoramica` se non
+>       indicata.
+>   - Il `desc=` di `page-busy` in `_frontend_portfolio.py`.
+> - **Prova per mutazione** (`files/scripts/y11s4b_mutations.sh`, dalle 18:48 alle 18:51):
+>   - punto di partenza: `store-unit` **93/93**;
+>   - M1, `join` sempre tracciata: **3 rossi**;
+>   - M2, `join` mai tracciata: **5 rossi**;
+>   - M3, la lista letta senza `untrack`: **2 rossi**, i due test degli effetti;
+>   - file ripristinato con lo stesso SHA-256 (`f883cb88…`).
+> - **Prove leggere** (`files/scripts/y11s4b_light.sh`, dalle 18:49 alle 18:54, carico 33–39):
+>   - Prettier pulito sui cinque file; `py_compile` superato;
+>   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - `store-unit` 93/93; `core-unit` 6 472/6 472;
+>   - `git diff --check` pulito; la porta 6189 è libera.
+> - **Osservazioni di `test-author`**, verificate:
+>   - nel broker, `loadOverview` applica subito l'overview in cache, che non contiene il contributo, quindi la
+>     richiesta a cascata parte prima ancora dell'overview. È innocuo, ed è il motivo per cui i due blocchi delle
+>     richieste vengono installati prima che la finta notifica cambi stato;
+>   - il lato positivo del controllo dipende dalla tempistica di Svelte, verificata su 5.48. Se un giorno cambiasse,
+>     il controllo diventerebbe rosso: è il segnale che N55 si è rotta;
+>   - **Y-16**: una vista Candele salvata si carica su una pagina nuova solo per una dipendenza involontaria
+>     dell'effetto. Era così anche prima;
+>   - **Y-17**: i pulsanti di `PositionsPanel` non pubblicano `aria-pressed`.
+>   - Più la mia **Y-18**: le candele non hanno un indicatore di caricamento.
+>   - Tutte e tre sono nel BACKLOG.
+
+### Y-15 · proposta della parola per i pulsanti «Aggiorna» (per il developer; 16/10 18:38)
+
+Il coordinatore chiede di proporre la parola, «Refresh» o «Reload», nelle quattro lingue, per tutti i pulsanti
+«Aggiorna» delle pagine; la scelta spetta al developer. Inventario fatto in sola lettura su `e24ef7a2f`; i valori
+vengono dal catalogo generato alle 18:27.
+
+| Pagina | Pulsante (`data-testid`) | Chiave di oggi | EN | IT | FR | ES |
+|---|---|---|---|---|---|---|
+| Dashboard | `sync-button` | `dashboard.syncData` | Refresh | Aggiorna | Actualiser | Actualizar |
+| Pagina del broker | `broker-refresh` | `dashboard.syncData` | Refresh | Aggiorna | Actualiser | Actualizar |
+| Lista dei broker | `brokers-refresh` | nessuna: `title="Refresh"` scritto nel codice | Refresh | Refresh | Refresh | Refresh |
+| Transazioni | `tx-refresh-button` | `transactions.refresh` | Refresh from server | Ricarica dal server | Actualiser depuis le serveur | Recargar desde el servidor |
+| File | `files-refresh-button` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Dettaglio cambio | `fx-detail-refresh-btn` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Dettaglio asset | `asset-detail-refresh-btn` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Strumenti (hub e strumento) | `tools-hub-refresh`, `tool-host-refresh` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Lista dei cambi, lista degli asset | `fx-refresh-all-button`, `assets-refresh-button` | `sharedResource.refreshAll` | Reload All | Ricarica Tutto | Recharger Tout | Recargar Todo |
+
+- **Oggi ci sono tre parole per la stessa azione.** La documentazione utente dice «**Refresh**» (`dashboard/index.en.md`,
+  `brokers/index.en.md`).
+- `common.refresh` non serve solo a questi pulsanti: lo usano anche il ricaricamento di una singola scheda o riga
+  (`AssetCard`, `AssetTable`, `FxCard`, `FxTable`), il modale dei file del broker, i pannelli degli strumenti, il
+  prefisso di due avvisi di errore e un'etichetta delle azioni di gruppo. Se ne cambio il valore, cambiano anche tutti
+  questi.
+- **Proposta A (consigliata): «Refresh»**, con una chiave dedicata al pulsante della barra della pagina, per esempio
+  `common.refreshPage` in `i18n/base/`.
+  - Valori: EN «Refresh», IT «Aggiorna», FR «Actualiser», ES «Actualizar», cioè i valori di oggi di
+    `dashboard.syncData`.
+  - Varianti «tutto» per le liste dei cambi e degli asset: «Refresh all», «Aggiorna tutto», «Tout actualiser»,
+    «Actualizar todo».
+  - `common.refresh` («Reload») resta ai ricaricamenti di una singola scheda o riga e dei pannelli, oppure si allinea
+    anche quello: lo decide il developer.
+  - Perché:
+    - è la parola della documentazione e delle due pagine più viste;
+    - l'icona è quella di «refresh»;
+    - «Reload» fa pensare al ricaricamento della pagina nel browser, che il pulsante non fa: richiede i dati senza
+      ricaricare la pagina.
+- **Proposta B: «Reload» ovunque**, cioè EN «Reload», IT «Ricarica», FR «Recharger», ES «Recargar». Cambiano le
+  etichette della Dashboard e della pagina del broker, e la documentazione passa da «Refresh» a «Reload».
+- Dopo la scelta: un `$_()` sulla chiave scelta per gli undici pulsanti, Y-15 compreso, con le chiavi nelle quattro
+  lingue (skill `devpy-i18n`). Le spec E2E usano i `data-testid`, quindi i testi non le toccano.
+
+### Y12b · sbloccato: CP-13a di J è in dev (`0452e592c`; messaggio di J delle 18:39)
+
+- **Campo nuovo** `maximum_drawdown_trough_to_peak_ratio` (`number | null`, ≥ 0) in `RiskDrawdownOutput`
+  (`drawdown_summary`) e in `RiskAssetSetDrawdownItem` (`asset_set_drawdown`).
+  - È il guadagno che serve per tornare dal punto più basso al massimo precedente, `−MDD/(1+MDD)`.
+  - Vale 0 senza drawdown e null in caso di perdita totale.
+  - Lo calcola `financial_math/returns.py::required_recovery_return`.
+- **`remaining_to_peak_ratio`** ora è `number | null`; è null solo in caso di perdita totale e viene dalla stessa
+  funzione.
+- **Perdita totale**: il risultato porta l'avviso `total_loss_no_recovery`, con `degrades_result=false`, quindi lo stato
+  resta `ok`.
+  - Chiavi: `risk.warnings.total_loss_no_recovery`, e `risk.warnings.total_loss_no_recovery_assets` con
+    `{count}`/`{names}`, già in `i18n/risk/*`.
+  - Con i prezzi salvati in pratica non succede: serve un valore che arrotondi esattamente a −100 %.
+- **Versioni**: `drawdown_summary` 1.2.0, `asset_set_drawdown` 1.1.0.
+- **Da fare in Y12b, dopo l'aggiornamento della base**:
+  - `levelHelpers.ts` legge i due campi (la riga peggiore intorno alla 411, quella corrente intorno alla 444), senza
+    ripiego sui KPI;
+  - `requiredRecovery` (360 circa) sparisce;
+  - `api sync` per i tipi nuovi.
+- **Riferimenti scaduti, da sistemare in Y12b**:
+  - `developer/frontend/components/features/risk-lab.md:285-287` descrive `requiredRecovery()`, con righe di
+    `L1HowMuchItHurts.svelte` già sbagliate: ora sono 152-155 e 182-183;
+  - il commento in `levelHelpers.ts:137-141` dice che il ripiego per settore è «l'unico avviso» con
+    `degrades_result=false`, e non è più vero.
+- **Conflitti previsti all'aggiornamento della base**: la fusione `0452e592c` tocca solo il BACKLOG fra i miei file,
+  nella sezione di J.
+
+### Passo 4 + 4b · E2E (slot 1, dalle 18:55, scadenza 20:00; HEAD `1c3f6a432`) — ✅ 19:30, 180/180
+
+- Il coordinatore ha committato il 4b: `7f0a07b9d` (feat) e `1c3f6a432` (journal).
+  - N55 e Y-18 vanno nella revisione con il developer, e anche Y-15 con la proposta «Refresh / Aggiorna…».
+- Script: `files/scripts/y11s4_e2e.sh` con `DEADLINE=2000`. Riepilogo in `files/logs/y11s4_e2e_summary.log`.
+
+> **Note implementazione**: tutte e 12 le spec verdi alla prima corsa, **180/180**, dalle 18:55:31 alle 19:29:54,
+> con il carico fra 25 e 88. Alle 19:29:54 la porta 6189 è libera (`lsof` non trova processi in ascolto).
+>
+> | Spec | Esito | Cosa copre |
+> |---|---|---|
+> | `front-portfolio page-busy` | 12/12 | 6 vecchi, 4 del passo 4 (P3 e «Aggiorna» del broker, lista dei broker, transazioni), 2 di N55 (viste Candele e Performance salvate) |
+> | `front-broker detail` | 38/38 | la pagina del broker |
+> | `front-broker list` | 9/9 | la lista dei broker |
+> | `front-transaction transactions-table` | 25/25 | TT20, cioè «Aggiorna» con il `data-busy` della radice |
+> | `front-transaction tx-broker-icon-hydration` | 2/2 | barriera su `tx-refresh-button` |
+> | `front-portfolio price-refresh` | 3/3 | ricaricamento di sfondo di Z-13, nella Dashboard e nel broker |
+> | `front-portfolio default-currency` | 6/6 | gettoni sulla valuta, nella lista e nel broker |
+> | `front-portfolio risk` | 38/38 | barriera su `broker-refresh` in `risk-analysis` |
+> | `front-portfolio privacy-masking` | 18/18 | barriere su `broker-refresh` |
+> | `front-utility toolbar-width-sweep` | 24/24 | barriera su `broker-refresh` |
+> | `front-portfolio yield-on-cost-real` | 2/2 | barriera su `broker-refresh` |
+> | `front-portfolio data-quality-real` | 3/3 | barriera su `broker-refresh` |
+>
+> - **Cosa resta di Y11**:
+>   - `assets/[id]`, dopo FE5c e il 9b di X;
+>   - alla chiusura: la riga del CHANGELOG e la documentazione con `docs-writer`, cioè la sezione «Coming back and
+>     refreshing», la pagina dei broker e una pagina per sviluppatori su `pageBusy`.
+> - **Revisione con il developer**: N55, Y-18 e Y-15.
+
+### Aggiornamento della base: fusione con dev `967ddbda4` (aperta dal coordinatore alle 19:30; HEAD `aec08170f`)
+
+- Il journal con l'E2E dei passi 4 e 4b è committato: `aec08170f`.
+- La fusione porta CP-13a (J), C-97a, X-R28, O-20 di X, H-12/21, il lotto 9 di AF e DV.
+- **Un conflitto, `routes/(app)/assets/+page.svelte`**: il mio Y11 contro O-20 di X. Con O-20 la pagina non
+  sincronizza più da sola dopo una creazione: `AssetModal` sincronizza, e la pagina mostra lo spinner sulla scheda.
+  - Import: tenuti entrambi, `pageBusy` e `type AssetCreateSyncResult`.
+  - `AssetModal`: `oncreated={handleAssetCreated}` e `onsynced={handleCreatedAssetSynced}` di X, più il mio
+    `onupdated` tracciato (`assets-reload`).
+  - In `handleAssetCreated` di X il `loadAssets()` è tracciato (`assets-reload`), come nel mio `oncreated` inline.
+  - `handleCreatedAssetSynced` resta senza gettone e senza `join`. È il ricaricamento dopo una sincronizzazione che ha
+    il proprio indicatore, lo spinner della scheda; per il contratto e per P3 non tiene fermo il pulsante, come
+    `handleSyncAsset`.
+  - Il coordinatore suggeriva `join` se lo spinner della scheda dovesse tenere fermo il pulsante; per il contratto non
+    deve.
+  - Ho fatto `git add` solo di quel file; nessun conflitto rimasto.
+- **File automerged da entrambi i lati**, rivisti:
+  - `brokers-detail.spec.ts`: il `data-selected` di T (righe 392–419) accanto ai miei test Y-12;
+  - `financial_math.md`: la sezione del gate accanto alla riga di J su `required_recovery_return`;
+  - BACKLOG: le voci da Y-12 a Y-18 intatte.
+- **Prove leggere sulla revisione fusa** (`files/scripts/y11m3_light.sh`, dalle 19:33 alle 19:42, carico 35–45):
+  - `api sync` non ha cambiato file tracciati;
+  - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+  - store 93; risk-controller 102; risk-levels 499; asset-unit 880;
+  - core 6 830/6 830; component 4 099/4 099;
+  - `diff --cached --check` pulito.
+- **⚠️ Fuori pista, un gettone mancante del passo 3**: in `AssetMergeModal`, `onmerged` chiama `loadAssets()` senza
+  gettone, anche se è un ricaricamento dopo una scrittura dell'utente. La patch del passo 3 non l'aveva considerato.
+  Va nel prossimo lotto di Y11, insieme ad `assets/[id]`, e non nella fusione, che deve solo unire i due lati.
+- **E2E combinata** (`files/scripts/y11m3_e2e.sh`, slot 1, dalle 19:44, scadenza 20:25): `page-busy`, `asset-list`,
+  `asset-modal`, `front-broker detail`, `transactions-table`.
+  - **✅ 121/121 alla prima corsa**, dalle 19:43 alle 19:56. La prima spec comprende la ricostruzione del frontend,
+    circa 4,5 minuti con il carico a 116.
+    - `page-busy` 12/12; `asset-list` 28/28; `asset-modal` 18/18, che copre anche O-20 di X sulla revisione combinata;
+    - `front-broker detail` 38/38; `transactions-table` 25/25.
+  - Alle 19:56:28 la porta 6189 è libera.
+  - Queste note restano fuori dalla fusione, non in stage: vanno nel prossimo checkpoint.
+- **Per `assets/[id]`**: la fusione porta lo split della pagina di dettaglio fatto da X, con i componenti in
+  `components/assets/detail/` (per esempio `AssetDetailToolbarActions.svelte` e `AssetDetailHeader.svelte`). Prima di
+  scrivere la patch chiedo al coordinatore se FE5c e il 9b sono entrambi entrati.
+- **19:57**: il coordinatore ha committato la fusione (`ceb182ad4`), e **Y è entrato in dev** con `0c79932a7` (corsa
+  130: Y12a, Y-12 e Y11 dal passo 1 al 4b).
+  - `assets/[id]`: FE5c e il 9b sono entrati, ma X sta lavorando a C-66 sullo stesso file. Quindi prima Y12b; poi
+    `assets/[id]`, con `onmerged`, appena C-66 entra (me lo dice il coordinatore).
+
+### Y12b · P19, i guadagni di recupero dal backend (dalle 19:58, su `ceb182ad4`) — ✅ codice, test e prove leggere 20:12; E2E da fare
+
+> **Note implementazione**.
+> - **Ambito di oggi: solo P19**, con CP-13a di J (`0452e592c`) già nella base.
+>   - R17, W8, P4, P5 e V11 aspettano il resto di CP-13 di J, e P5 anche CP-7: nessuno di questi campi è nel client
+>     generato.
+> - **Cosa cambia** (`features/risk/levels/levelHelpers.ts`; patch `files/patches/y12b_levelHelpers.py`, provata a
+>   secco su una copia):
+>   - `requiredRecovery()` sparisce: la formula `1/(1−L) − 1` ora sta solo nel backend
+>     (`financial_math/returns.py::required_recovery_return`);
+>   - la riga «worst» di `buildHurtRows` legge `maximum_drawdown_trough_to_peak_ratio` così com'è arriva, solo da
+>     `drawdown_summary`. Senza riepilogo, quando la profondità viene dal KPI, il recupero è null: niente ripiego;
+>   - una profondità zero non ha niente da recuperare e resta null, come oggi;
+>   - `buildCurrentDrawdown` legge `remaining_to_peak_ratio` così com'è;
+>   - si corregge il commento su `degrades_result` (righe 137–141): oltre al ripiego per settore ora c'è anche
+>     `total_loss_no_recovery`.
+> - **L1** (`L1HowMuchItHurts.svelte`) non cambia: con il valore null la riga del recupero non compare, come succede in
+>   L1 per ogni sottomisura che manca, e come oggi per una perdita totale. La decisione parla di «—»: se il developer
+>   vuole un trattino, basta una riga del template.
+> - **Il laboratorio** (`assetSetLevels.ts:190-194`) legge già `remaining_to_peak_ratio` e non mostra un recupero dal
+>   punto peggiore: resta com'è.
+> - **E2E**: `risk-analysis.spec.ts:1922` controlla solo che `risk-l1-recovery-worst` sia visibile, e nessuna spec ne
+>   legge il valore. L'export per l'AI non usa il campo nuovo.
+> - **Documentazione**: `developer/frontend/components/features/risk-lab.md:285-287` descrive `requiredRecovery()` con
+>   righe sbagliate. La aggiorna `docs-writer` dopo il codice, con le righe definitive.
+> - **`test-author`** (dalle 19:59 alle 20:05):
+>   - in `levelHelpers.test.ts`, via il blocco `requiredRecovery` (3 test); i due test che usavano il valore calcolato
+>     ora hanno i campi nella fixture;
+>   - 17 casi nuovi:
+>     - il valore del backend letto così com'è, per la riga «worst» e per il drawdown corrente;
+>     - la perdita totale con valore null;
+>     - il ripiego dal KPI, che non porta recupero;
+>     - una profondità del riepilogo col segno sbagliato, quando subentra il KPI;
+>     - la profondità zero;
+>     - NaN, infinito, una stringa e un valore mancante, che si leggono come null.
+>   - **⚠️ Fuori pista**, trovato da `test-author`: la stub di `drawdown_summary` in `risk-analysis.spec.ts` (riga 755)
+>     non aveva il campo nuovo. Con il cambio, `risk-l1-recovery-worst` (riga 1922) sarebbe sparito. Ho aggiunto
+>     `maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913` (3 righe).
+>   - Una seconda scoperta, sulla durata che mescola le fonti, è fuori da P19 ed era già presente: è nel BACKLOG come
+>     Y-19.
+> - **Rifinitura della patch**: il recupero si legge solo quando la profondità viene dal riepilogo (`summaryDepth`). Così
+>   non può mai finire accanto alla profondità del KPI.
+> - **Rosso** (20:05, `risk-levels-unit`): **12 falliti** su 511, cioè esattamente i 12 attesi.
+> - **Verde** dopo la patch (20:06): **511/511**. Nel codice non resta nessuna chiamata a `requiredRecovery(`.
+> - **Prove leggere** (`files/scripts/y12b_light.sh`, dalle 20:07 alle 20:12, carico 40–46):
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - risk-levels-unit 511/511; risk-levels-component 273/273;
+>   - core 6 830/6 830, compreso il gate delle eccezioni della matematica finanziaria;
+>   - `git diff --check` pulito.
+> - **`docs-writer`** (dalle 20:07 alle 20:14): `risk-lab.md`, righe 279–301, +19/−11.
+>   - **Worst fall**: il recupero lo calcola il backend (`required_recovery_return()`, `returns.py:239`). Si legge così
+>     com'è arriva, e solo sulla profondità del riepilogo; non c'è ripiego dal KPI. Con una perdita totale c'è l'avviso,
+>     con un collegamento a «The Drawdown Episode» nella pagina dell'architettura del rischio. Con il valore null la
+>     riga non compare.
+>   - **Current drawdown**: `remaining_to_peak_ratio`.
+>   - Aggiornati tutti i numeri di riga del paragrafo, controllati uno per uno.
+>   - `check-links` verde (97 validi). Il collegamento nuovo l'ha controllato a mano: il file esiste e l'ancora è
+>     esplicita. Nessuna traduzione, perché le pagine per sviluppatori sono solo in inglese.
+>   - **Riferimenti scaduti fuori dal paragrafo**, lasciati com'erano e messi nel BACKLOG come **Y-20**:
+>
+>     | Riga della pagina | La pagina dice | Oggi |
+>     |---|---|---|
+>     | 302–303 | `l1Helpers.ts:136`, `holdsCut` l.92, `belowCut` l.101 | 138, 94, 103 |
+>     | 304–305 | `ReturnHistogram.svelte:51`, `title` l.79 | la regola sta nel commento alla riga 18 e in `barClass()` (40–43); `title` alla 68 |
+>     | 306 | `lossMoney()` `L1HowMuchItHurts.svelte:86` | 72 |
+>     | 309 | `RiskMetricCard.svelte:107` | 108 |
+>     | 310 | `DOC_PATHS` l.117, `TAIL_DOCS` l.127 | 103, 113 |
+>     | 119 | `riskAnalysisHelpers.ts:280`, «used at l.340» | 282; usato alle righe 321 e 342 |
+> - **E2E da chiedere**: `front-portfolio risk`, circa 5 minuti. Copre la stub aggiornata e la riga del recupero.
+- **20:16, checkpoint di Y12b**: il coordinatore ha committato `c3d0a7fa7` (feat) e `f1f2b9390` (journal).
+  - E2E `front-portfolio risk`, circa 5 minuti, nel primo slot libero dopo le 20:45, su sua conferma.
+  - Vanno nella revisione con il developer: «null: la riga non compare, non "—"».
+  - La domanda sul resto di CP-13 (R17, W8, P4, P5 e V11) è passata a J.
+  - **Tre file ai colori finché non entrano** (avviso delle 20:15): `features/dashboard/PositionsPanel.svelte`,
+    `features/dashboard/ExposureTable.svelte` e `features/brokers/lots/LotCustodyModal.svelte`. Se ne servisse uno,
+    prima lo dico al coordinatore. Y12b P19 non li tocca, e il resto di Y12b neppure: R17 è in `KpiSection`, W8 in
+    `ExposureTreemap`, P4 in `PerformanceChart`, P5 e V11 nei grafici dei lotti. Y-17, cioè `aria-pressed` su
+    `PositionsPanel`, invece li tocca, e aspetta l'ingresso dei colori.
+
+### Y4a · analisi aggiornata (16/10 20:17–20:22, sola lettura, nessun file toccato; HEAD `f1f2b9390`)
+
+> **Note implementazione**. L'ha chiesta il coordinatore (opzione 1). FE4 e FE5a di X **non** sono entrati: oggi non
+> esistono né `features/fx` né `features/assets`; sono entrati solo FE5b e FE5c.
+> - **Script e dati**: `files/y4a_graph.py` (grafo degli import) e `files/y4a_literals.py` (percorsi fuori dagli
+>   import). I risultati sono in `files/logs/y4a_*.log` e `files/y4a_*.json`.
+> - **Il lotto, 57 file** (erano circa 55), verso `features/signals/`. La cartella oggi non esiste e non ci sono
+>   collisioni di nomi.
+>   - 35 da `lib/charts/signals`, appiattiti, con i test in `__tests__`;
+>   - 6 dalla radice di `lib/charts`: `signalLabel`, `loadComparisonData`, `chartPageSignals` (nuovo, di X, FE5c, 06:49)
+>     e i loro tre test;
+>   - 14 da `components/charts` verso `features/signals/components/`: la UI dei segnali, più `ChartSettingsModal` e
+>     `MeasurePanel` (D-Y14);
+>   - 2 dello store, `signalCatalogStore` e il suo test.
+> - **Importatori esterni: 36** (erano 30):
+>   - 16 primitive di `components/charts`, cioè l'inversione D-Y15, accettata fino a FE9;
+>   - 3 in `features/risk`, 2 in `features/settings` (`AboutTab` e il suo test, con 2 `vi.mock`), 3
+>     `chartSettingsStore*`;
+>   - **12 di X** (erano 8):
+>     - `components/assets/AssetCard` e `AssetDataEditorSection`;
+>     - i 4 nuovi di FE5c: `components/assets/detail/assetDetailFxRequirements` e `assetDetailPriceQuery`, con i loro
+>       test;
+>     - `components/fx/FxCard` e `FxDataEditorSection`;
+>     - le pagine `assets`, `assets/[id]` (10 righe di import nel lotto), `fx` e `fx/[pair]`.
+> - **Prima di FE4 e FE5a: sì, a tre condizioni.**
+>   1. FE4 e FE5a sposteranno gli 8 file di `components/assets` e `components/fx`; le 4 pagine restano dove sono. Se
+>      Y4a entra prima, X parte da una base in cui quei file importano già `$lib/features/signals`, e i percorsi nuovi
+>      viaggiano con lo spostamento: nessun conflitto. Il rischio c'è solo se esiste già un ramo FE4 o FE5a aperto: in
+>      quel caso gli 8 blocchi di import confliggerebbero da entrambi i lati. Il coordinatore deve confermarlo.
+>   2. C-66 di X lavora oggi su `assets/[id]/+page.svelte`, che ha 10 righe di import nel lotto. Lo stesso file mi serve
+>      per Y11. L'ordine è: C-66, poi Y11 su `assets/[id]`, poi Y4a.
+>   3. `chartPageSignals.ts` è di X. Importa solo moduli dei segnali e lo usa solo `assets/[id]`. La mia proposta è che
+>      si sposti con il lotto, ma la decisione va presa con X: l'alternativa è `features/assets` con FE5a.
+> - **File condivisi**:
+>   - **Colori**:
+>     - `scripts/test_runner/_frontend_utility.py`, 16 righe (41–43, 84, 202–209 e seguenti);
+>     - `frontend/scripts/theme/theme-roles.mjs:81`, l'eccezione di `ChartSettingsModal`, che era alla riga 72 (D-Y14);
+>     - `frontend/scripts/designer-lab/scan-colors.mjs:193`: `CHART_PATH_RE` deve imparare `features/signals`,
+>       altrimenti la UI il cui nome non comincia con «chart» smette di contare come grafico;
+>     - il baseline non ha record per i file spostati, quindi `--check` non cambia.
+>   - **X**: `scripts/test_runner/_frontend_asset.py` (righe 23–25 e 29), più i 12 importatori.
+>   - **Export per l'AI**: `scripts/test_runner/_frontend_ai_export.py` (righe 24–31).
+>   - **Miei o comuni**:
+>     - il gate `financialMathExceptions` (6 percorsi) e `htmlSink.gate.test.ts:71`;
+>     - `scripts/coverage_js.py:187` e `:238`;
+>     - l'`applyTo` di `.github/instructions/frontend-signals.instructions.md:2`, e
+>       `frontend.instructions.md:197`;
+>     - la skill `devpy-i18n/SKILL.md:136`;
+>     - i `vi.mock` di `AboutTab.test` (righe 86 e 91) e l'import dinamico di `PriceChartFull.tooltipEscape.test`
+>       (righe 166 e 173);
+>     - 4 pagine MkDocs: `signal_plugin_guide.md:392`, `financial_math.md:308`, `charts.md:541` e
+>       `coverage-model.md:342`;
+>     - **21 pagine della devWiki** (64 righe, nelle tabelle dei file sorgente), da verificare con
+>       `check_source_paths.py`;
+>     - il journal storico non si tocca.
+> - **Costo stimato: 3–3,5 ore**, di cui circa un'ora sui file condivisi con tre proprietari.
+>   - Spostamento e riscrittura degli import con uno script: quattro famiglie di percorsi, più gli import relativi
+>     interni al lotto. Circa 45 minuti.
+>   - I percorsi fuori dagli import: circa 30 minuti.
+>   - Documentazione MkDocs (`docs-writer`) e devWiki (script, più `check_source_paths.py`): circa 45 minuti.
+>   - Prove leggere: svelte-check, `theme-roles`, asset-unit, core con i gate, component e i test dell'export per
+>     l'AI. Circa 20 minuti.
+>   - Uno slot E2E di circa 45 minuti: dettaglio e lista degli asset, dettaglio e lista dei cambi, segnali, export per
+>     l'AI, la scheda About.
+>   - **Rischio medio-basso**: il lavoro è meccanico. Il rischio vero sono i rami in volo sui 12 file di X e sui 3 file
+>     del runner. Si gestisce con un congelamento di circa 2 ore su quei file.
+> - **Proposta**: non nella 1.3, a meno che il developer non lo voglia. Se lo vuole, una finestra notturna dopo C-66 e
+>   dopo il mio `assets/[id]`, con quel congelamento.
+- **20:21, coordinatore**: Y4a resta **fermo**. Porta al developer la mia proposta: «non nella 1.3, oppure in una
+  finestra notturna dopo C-66 e `assets/[id]`».
+  - X non ha rami FE4 o FE5a aperti, quindi la prima condizione è soddisfatta.
+  - Alle 20:45 `front-portfolio risk` per Y12b, poi l'ingresso in dev.
+
+### Y12b · E2E `front-portfolio risk` (dalle 20:45 alle 20:51; HEAD `f1f2b9390`) — 37/38, un rosso non dovuto a Y12b
+
+> **Note implementazione** (script `files/scripts/y12b_e2e.sh`, avviato da solo alle 20:45 con il controllo del
+> carico; log in `files/logs/y12b_e2e_risk.log`).
+> - **37/38** in 2,5 minuti, compresa la ricostruzione del frontend. La porta 6189 è libera.
+> - **⚠️ Fuori pista, il rosso alla riga 3638** di `risk-analysis.spec.ts`: «L3's table … the return's title is the short
+>   name, and resting on it opens the full name first».
+>   - Dopo `title.hover()` (riga 3648), `getByTestId('tooltip-content')` non viene trovato entro i 3 s di attesa
+>     predefiniti (riga 3650).
+>   - **Prove** (copiate in `files/logs/`: `y12b_l3title_error-context.md` e `y12b_l3title_failed.png`):
+>     - nell'istantanea ARIA presa al fallimento la tabella di L3 è completa, con le righe e i dati, e il tooltip non
+>       c'è;
+>     - nello screenshot preso dopo il timeout il tooltip invece è **aperto**, con il testo giusto («Average annual
+>       return …»);
+>     - `Tooltip.svelte` non è cambiato dall'ultima corsa verde (`1c3f6a432`), e il suo `data-testid` è sempre alla
+>       riga 433.
+>   - **Di nuovo da solo, 3 volte su 3 verde** (dalle 20:53 alle 20:59, da 9 a 11 s ciascuna, con il filtro
+>     «title is the short name»).
+>   - **Triage** (skill `test-triage`):
+>     - §1, la forma: no;
+>     - §2, l'orologio: sì. Il test passa il mouse una volta sola appena il titolo mostra il testo giusto, e concede 3 s.
+>       Con due worker la tabella sistema ancora le larghezze dei titoli dopo il passaggio, oppure il thread principale
+>       ritarda il timer di apertura del tooltip: il passaggio va perso, o arriva tardi;
+>     - §3, lo stato condiviso: no, perché gli stub sono della pagina;
+>     - Y12b tocca solo L1, quindi non c'entra.
+>   - **Verdetto: un'assunzione del test.** Lo stesso schema c'è anche alla riga 3694.
+>   - **Correzione** (`test-author`, dalle 21:00): un aiuto che ripassa il mouse finché l'aiuto si apre, con `toPass` e
+>     un limite di circa 10–15 s, senza attese fisse. Si usa nei due punti.
+>   - Ho chiesto al coordinatore: una nuova corsa completa di `risk` dopo la correzione, oppure l'ingresso di Y12b
+>     subito, con la correzione come Y-21.
+- **21:01**: il coordinatore sceglie di correggere e rifare la corsa, così Y12b entra con la spec corretta e dev resta
+  verde.
+- **Correzione di `test-author`** (dalle 21:00 alle 21:10, `risk-analysis.spec.ts`, +42/−7):
+  - un aiuto nuovo, `hoverUntilHelpOpens(page, trigger, why)`: `expect(async () => {…}).toPass({timeout: 10_000})`;
+  - a ogni tentativo il puntatore va in `(0, 0)`, poi passa sul trigger, e si aspetta `tooltip-content` per 2 s, cioè
+    quattro volte il ritardo di 500 ms del Tooltip. Il tooltip si arma con `mouseenter`, quindi senza spostarsi prima
+    il passaggio non lo riarmerebbe;
+  - l'aiuto si usa ai due punti, righe 3678 e 3725;
+  - Prettier pulito; svelte-check 0 errori e 0 avvisi alle 21:15, sotto un picco di carico a 86.
+- **Nuova corsa completa** (slot 3, dalle 21:15 alle 21:18, carico 72–83; log `files/logs/y12b_e2e_risk_rerun.log`):
+  **37/38**.
+  - Il test di L3 corretto è verde.
+  - **⚠️ Fuori pista, un rosso diverso alla riga 2812**: L4, D377, «opens no tool on a first visit…», alla riga 2828.
+    - È un `expect.poll(offered).toEqual([shock, simulation])`, con il limite predefinito di 3 s.
+    - Il messaggio è «Timeout 3000ms exceeded while waiting **on the predicate**», senza nessun valore ricevuto:
+      `evaluateAll` non è tornata entro 3 s.
+    - Prove in `files/logs/y12b_l4_error-context.md` e `y12b_l4_failed.png`: alla fine il DOM è giusto (solo shock e
+      simulazione da aggiungere, il replay aperto, una sola istanza di L4).
+    - In `L4WhatIf.svelte` `addable` e `shown` derivano in modo sincrono da `openTools`, senza transizioni.
+    - Lo stesso test era verde alle 20:45, a carico 35.
+    - **Verdetto: lentezza sotto carico.** Subito dopo l'apertura del replay storico il thread principale resta
+      occupato per più di 3 s; non è un difetto di Y12b. Al coordinatore ho proposto una terza corsa sotto carico 50,
+      oppure l'ingresso subito, con Y-21.
+- **21:19, coordinatore**: il W6-d di DV è entrato (`3805bf2ca`), e `PositionsPanel.svelte` ed `ExposureTable.svelte`
+  sono di nuovo liberi.
+  - DV ha chiuso la mia **Y-17**: `aria-pressed` sui 4 pulsanti Holdings/Performance e Table/Map di `PositionsPanel`.
+    È segnata ✅ nel BACKLOG con `3805bf2ca`, e va nel prossimo checkpoint.
+  - `3805bf2ca` non è ancora nella mia base: lo porterà il prossimo aggiornamento.
+  - Il test N55 sulla vista Performance del broker legge ancora `contribution-table`. Potrà leggere `aria-pressed`
+    dopo l'aggiornamento della base, ma non serve.
+- **21:20, coordinatore**: opzione 2. Y12b è entrato con la correzione: `8acf41fdf` (test) e `684560cd3` (journal, che
+  contiene solo il piano). Y-21 va nel BACKLOG, scritta alle 21:21 e da portare nel prossimo checkpoint.
+  - Prossimo: `assets/[id]` dopo il lotto A di Z; nel frattempo Y-14, oppure un'altra voce lontana dalle pagine degli
+    asset.
+
+### Y-14 · «Aggiorna» della lista dei broker ricalcola anche le schede (dalle 21:22, su `684560cd3`) — ✅ rosso e verde 21:43, prove leggere 22:05
+
+> **Note implementazione**.
+> - **Decisione** (coordinatore, 21:2x): il rimedio è «forzare», come nella Dashboard e nella pagina del broker.
+> - **Vincolo**: il lotto B di Z ha aperto `page-busy.spec.ts` fino alle 22:10 circa, quindi il rosso va in
+>   `e2e/brokers/brokers.spec.ts` (azione `front-broker list`).
+>   - `test-author` era partito su `page-busy.spec.ts`: l'ho reindirizzato, con l'ordine di riportare quel file a
+>     HEAD.
+> - **Patch** (`files/patches/y14_brokers_refresh.py`, provata a secco su una copia):
+>   - `loadBrokers(force = false)` passa `force` a `fetchReport` (riga 177);
+>   - il clic su `brokers-refresh` va a un nuovo `handleRefresh()`, che fa `requestPortfolioRefresh()` e poi
+>     `pageBusy.track('brokers-refresh', () => loadBrokers(true))`;
+>   - il primo caricamento, la valuta e i ricaricamenti dopo una modifica restano senza `force`;
+>   - **⚠️ Fuori pista, il pulsante «riprova» dello stato d'errore** (riga 404). Passava `loadBrokers` direttamente
+>     a `on:click`, quindi con il parametro nuovo l'evento del clic sarebbe finito in `force`. Ora è una chiamata
+>     esplicita, tracciata (`brokers-retry`) come ogni ricaricamento chiesto dall'utente: nel passo 4 mi era sfuggito.
+> - La pagina non ascolta il bus del portafoglio, quindi `requestPortfolioRefresh()` qui non provoca un secondo
+>   caricamento: segna come scadute le cache delle altre viste.
+> - **Il rosso di `test-author`** (dalle 21:22 alle 21:37, `e2e/brokers/brokers.spec.ts`, +160/−2). `page-busy.spec.ts`
+>   e `_frontend_portfolio.py` non li ha mai toccati.
+>   - Titolo: «Refresh asks the report of the cards again even when its cache is fresh, and holds its button until it
+>     is back (Y-14)», in un `describe` suo, con un limite di 90 s.
+>   - **Cosa fa**:
+>     1. la lista si carica da zero e si assesta;
+>     2. come precondizione, il primo caricamento ha chiesto il report delle schede (`include_breakdown: true`) e ha
+>        avuto risposta;
+>     3. trattiene ogni report successivo e fa clic su `brokers-refresh`;
+>     4. attende fino a 30 s un report trattenuto. Il suo corpo, tolti i `broker_ids`, deve essere uguale a quello in
+>        cache, e i `broker_ids` devono essere quelli con un ruolo nella risposta stessa di «Aggiorna»;
+>     5. intanto il pulsante deve essere occupato; dopo il rilascio torna libero, e il report ha risposto.
+>   - **Perché oggi è rosso**: con `force=false` la cache ancora fresca risponde, e nessun report parte.
+>   - **Limite**: con tutto `front-broker all` altre spec cambiano i broker di TEST_USER. Allora la cache può mancare per
+>     conto suo, e il test passerebbe senza dimostrare il `force`, anche se non può fallire per questo. Quindi il rosso
+>     va provato con la sola azione `front-broker list`.
+> - Al coordinatore ho chiesto uno slot di circa 12 minuti: il rosso, la patch con le prove leggere, poi il verde.
+> - **Rosso, patch e verde** (slot 1, dalle 21:38 alle 21:43, carico 87–98; script `files/scripts/y14_red_green.sh`):
+>   - **rosso**, `front-broker list` sul codice di oggi: 1 fallito su 10, cioè solo il test Y-14, alla riga 244, perché
+>     entro 30 s non è partito nessun report;
+>   - la patch applicata;
+>   - **verde**, `front-broker list` dopo la ricostruzione: **10/10**.
+> - **⚠️ Fuori pista, ordini incrociati**: il messaggio del coordinatore «solo il rosso, il verde dopo», scritto con il
+>   carico a 142, mi è arrivato quando lo script aveva già fatto anche il verde, secondo il via dello slot «rosso,
+>   patch, verde». Gliel'ho detto subito: lo slot si è liberato alle 21:43:37 e il verde non va ripetuto.
+> - **Prettier**: dopo la patch la pagina non era formattata. `--write` ha rimesso su una riga il pulsante «Aggiorna»,
+>   che con `on:click={handleRefresh}` è più corto. È solo formattazione: il verde vale lo stesso.
+> - **Prove leggere** (`files/scripts/y14_light.sh`, dalle 21:52 alle 22:05; ognuna è partita solo con il carico sotto 50):
+>   - Prettier pulito;
+>   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - core 6 830/6 830;
+>   - `git diff --check` pulito; la porta 6189 è libera.
+> - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
+>   sul W6-d.
+- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `daa2001ea` (fix) e `7c36f2129` (journal).
+  `assets/[id]` aspetta il lotto A di Z.
+
+### MF-P · contratti dei campi per il resto di Y12b (22:06–22:12, sola lettura)
+
+> **Note implementazione**.
+> - Il coordinatore (22:06): R17, W8 e V11 arrivano con MF-P (ondata 3 di MF); P4 dopo MF-A (ondata 2, che parte
+>   ora); P5 dopo MF-E, che aspetta CP-7b di J. I contratti e le date li concordo con MF direttamente.
+> - Fonti:
+>   - il piano MF in dev, letto con `git show dev_release2:…` e copiato in `files/mf_plan_dev.md`: MF-P è alla riga
+>     328, D-MF6 alla 381;
+>   - le righe di oggi del frontend.
+> - **Mandato a MF** (session `dfb94070…`), voce per voce: cosa calcola oggi il frontend e la mia proposta.
+>   - **R17**: `pnl_change_1d`, `…_vs_total_pnl_percent`, `…_vs_nav_percent` e `timing_effect_percent` in
+>     `PortfolioSummary`. Il giorno prima è il punto precedente della serie, con il segno della variazione e null su
+>     base 0.
+>   - **W8**: un valore di G/L % per ogni nodo broker e (broker, tipo) della treemap.
+>   - **P4**: `net_percent_of_start` negli item di `positions_contribution`, dopo MF-A.
+>   - **V11**: `opening_value` negli eventi BUY.
+>   - **P5**: con D-MF6(b) il piè della tabella somma le righe visibili, quindi è un aggregato interattivo da
+>     dichiarare. Un campo serve solo per un totale fisso di tutti i lotti. Anche il ribasamento in % di
+>     `lotWacPriceChartHelpers.ts:142` è una scala da dichiarare.
+>   - Ho chiesto le date.
+
+### Y-18 · indicatore proprio per le candele (analisi per le domande del developer, 22:12)
+
+> **Note implementazione** (sola lettura).
+> - **Oggi**:
+>   - `GrowthChart` ha uno scheletro solo per la storia: `{#if loading}` disegna
+>     `absolute inset-0 z-10 bg-lf-panel rounded animate-pulse` e nasconde il contenitore del grafico (righe
+>     1467–1474);
+>   - nella vista Candele, finché `pnlCandles` è null, il grafico mostra gli assi senza candele, e nessun indicatore
+>     lo segnala;
+>   - entrambe le pagine hanno già `pnlCandlesLoading` (Dashboard alla riga 100, broker alla 92), ma non lo passano al
+>     grafico;
+>   - dopo N55, con un passaggio diretto alle Candele a pagina ferma, il pulsante della pagina non gira più.
+> - **Proposta A (consigliata)**:
+>   - una prop `candlesLoading?: boolean`, passata dalle due pagine (`{pnlCandlesLoading}`);
+>   - con vista P&L → Candele, `candlesLoading` vero e `pnlCandles == null`, lo stesso scheletro della storia
+>     (`bg-lf-panel animate-pulse`): nessun colore nuovo;
+>   - `aria-busy` sul contenitore (riga 1377) e un `data-testid="growth-candles-loading"`;
+>   - il testo per i lettori di schermo è `common.loading`, una chiave che esiste già.
+>   - Costo: circa 1–1,5 ore. Un test Vitest in `GrowthChart.test.ts` e un controllo E2E nel test N55 della Dashboard,
+>     mentre la richiesta delle candele è trattenuta: `page-busy.spec.ts` si può toccare dopo l'ingresso di Z.
+>   - `GrowthChart` è nell'area DV: prima lo annuncio al coordinatore.
+> - **Proposta B**: un piccolo `LoadingSpinner` accanto al pulsante «Candele». È meno visibile, e il grafico vuoto
+>   resta.
+> - **Domanda collegata (P3)**: durante un ricaricamento di sfondo, `applyReport` e `applyOverview` azzerano
+>   `pnlCandles`, quindi oggi le candele spariscono fino alla nuova richiesta. Con A al loro posto comparirebbe lo
+>   scheletro. Invece la documentazione utente dice che durante un ricalcolo di sfondo «le cifre restano». In
+>   alternativa si possono tenere le candele vecchie finché arrivano le nuove, ma questo tocca il ricaricamento di Z-13
+>   e le due pagine: è una decisione a parte.
+- **22:12, la risposta di MF sui contratti di MF-P**:
+  - **Unità**: frazione ovunque (0.05 = 5 %), come oggi `twrr_percent`, `gain_loss_percent` e `period_pnl_percent`;
+    SafeDecimal come stringa; null si legge «—».
+  - **R17**, in `PortfolioSummary`: `pnl_change_1d: Currency|null`, `pnl_change_1d_vs_total_pnl_percent`,
+    `pnl_change_1d_vs_nav_percent` e `timing_effect_percent`.
+    - «Il giorno prima» è **D−1 di calendario** (`state_as_of(D−1)`), non il punto precedente della serie: se il
+      report campiona, oggi il frontend confronta due punti lontani.
+    - Le percentuali sono Δ/|base|; null con base 0 o senza un D−1.
+    - Il timing è null se manca l'MWRR, che dopo D-MF5/N54 può mancare.
+  - **W8**: `summary.holding_groups: list[{broker_id, asset_type: str|null, gain_loss: Currency|null,
+    gain_loss_percent: str|null}]`, dove `asset_type` null è il livello del broker.
+    - Si contano solo i titoli con valore e G/L entrambi noti.
+    - Oggi un titolo con G/L nullo mette il suo valore nella base come se fosse costo: è un 🐛 per il CHANGELOG.
+  - **P4**: nessun campo nuovo. Si usa `period_pnl_percent` (= `period_pnl/|start_value|`) così com'è; con MF-A i
+    valori migliorano.
+  - **V11**: `opening_value: Currency|null` sui BUY, nella valuta di `unit_price`. Arriva con MF-E, dopo CP-7b di J.
+  - **P5**:
+    - il piè della tabella sulle righe visibili e il ribasamento di `lotWacPriceChartHelpers.ts:142` si dichiarano nel
+      codice;
+    - il totale fisso c'è già (`LotSummarySchema`).
+  - **Date**: R17 e W8 il 17/10 mattina; P4 subito; V11 ed eventuali totali di P5 verso il 18/10. MF mi manda lo schema
+    dopo `api sync`, per i rossi.
+  - **La sua domanda sui periodi fissi dell'asset (1G, 1S…)**: non sono in Y12b. Stanno in
+    `lib/utils/assetPriceDerived.ts:193-196` (`computePeriodDelta`, lista degli asset) e in
+    `routes/(app)/fx/+page.svelte:236-240`, area di X. Gliel'ho risposto.
+
+### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `7c36f2129`) — ✅ 22:31
+
+> **Note implementazione**.
+> - **Analisi**: nello schema le due durate sono `int` obbligatori e ≥ 0, e il riepilogo controlla la coerenza fra
+>   durata e stato del recupero.
+>   - Con dati validi la profondità e la durata vengono dalla stessa fonte.
+>   - Si mescolano solo quando c'è il riepilogo ma la sua profondità ha il segno contrario, che `lossMagnitude` legge
+>     come assente.
+> - **Correzione**, una riga (`files/patches/y19_levelHelpers.py`):
+>   `durationDays: summaryDepth !== null ? finite(summary…) : finite(kpi…)`. Lo stesso schema vale per il recupero da
+>   Y12b. Non sposta i numeri di riga citati da `risk-lab.md`.
+> - **Rosso**: `test-author` scrive un caso con la profondità del riepilogo di segno contrario e un caso di guardia in
+>   cui vince un riepilogo valido.
+> - **Ciclo**: `files/scripts/y19_cycle.sh`, cioè rosso, patch, verde, Prettier, svelte-check e core, ogni passo solo
+>   con il carico sotto 50. Niente E2E.
+> - **`test-author`** (dalle 22:13 alle 22:15, `levelHelpers.test.ts`), due casi subito dopo quello Y12b del segno
+>   contrario:
+>   - il rosso: la profondità del riepilogo ha il segno sbagliato (`0.3`, durata 99), e il KPI ha `−0.4` con durata 30.
+>     Ci si aspettano una perdita di 0.4 e una durata di 30;
+>   - la guardia: un riepilogo valido (`−0.25`, durata 12) accanto a un KPI più profondo. Profondità e durata del
+>     riepilogo vincono insieme, cioè 0.25 e 12. Copre il verso opposto del test che già c'era, dove il KPI era meno
+>     profondo.
+> - **Ciclo** (`files/scripts/y19_cycle.sh`, dalle 22:19 alle 22:31, ogni passo solo con il carico sotto 50):
+>   - **rosso**: risk-levels-unit 1 fallito su 513, cioè proprio il caso atteso («expected 99 to be 30»);
+>   - la patch di una riga;
+>   - **verde**: 513/513;
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; core 6 830/6 830; `git diff --check` pulito; la porta 6189 è
+>     libera.
+> - Nel BACKLOG Y-19 è ✅. Nessuna E2E, perché le stub sono valide e il comportamento resta quello.
+- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 1b46178bd`), sui due casi «reload in background»
+  di `page-busy.spec.ts`:
+  - durante la richiesta trattenuta la radice della Dashboard deve essere `data-busy="false"` (Z-18);
+  - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
+  - `holds` esiste nel test.
+  - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
+- **22:32**: Y-19 committato (`9fd2dcdc0` fix e `54cce7263` journal) ed entrato in dev. Il via per Y-20 è arrivato
+  mentre Z lavora al lotto A.
+
+### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `54cce7263`) — ✅ 22:47
+
+> **Note implementazione**.
+> - **`docs-writer`** (dalle 22:33) aggiorna i sei riferimenti della tabella in «Y12b» (righe 119 e 302–310 della
+>   pagina), ognuno ricontrollato sul codice di oggi.
+>   - Controlla anche gli altri riferimenti `file:riga` della sezione «How Much Can It Hurt?» e del punto «Bad month».
+>   - Il resto della pagina non lo tocca: segnala soltanto.
+>   - Verifica con `dev.py mkdocs check-links`.
+> - **Primo giro di `docs-writer`** (dalle 22:33 alle 22:40): 9 riferimenti aggiornati, ognuno controllato sul codice,
+>   e `check-links` verde (97 validi).
+>   - **Requests**: `riskAnalysisHelpers.ts:334` → 336 e l.368-371 → 370-373; `:280` → 282, con l'uso alle righe
+>     321 e 342 invece della 340.
+>   - **Istogramma**: `l1Helpers.ts:136` → 138, e `holdsCut`/`belowCut` alle righe 94 e 103 invece di 92 e 101. Per
+>     la regola del bin a cavallo, al posto di `ReturnHistogram.svelte:51` ora ci sono il commento alla riga 18 e
+>     `barClass()` alle righe 40–43; `title` passa da 79 a 68.
+>   - **Cifre in denaro**: `lossMoney()` da 86 a 72.
+>   - **Etichette**: `RiskMetricCard.svelte` da 107 a 108; `DOC_PATHS`/`TAIL_DOCS` da 117/127 a 103/113.
+> - **Secondo giro**, le quattro osservazioni del primo giro, applicate:
+>   - **Worst fall**: ora la pagina dice che la durata segue la fonte della profondità (Y-19, riga 405).
+>   - **Money**: si aggiunge Broker Detail, che usa il patrimonio netto di quel broker (riga 718). La tabella degli host
+>     lo diceva già.
+>   - **Istogramma**: «neither», che era ambiguo, diventa: il bin a cavallo è quello ambra `holdsCut` e non conta mai
+>     come coda (`belowCut` falso, `l1Helpers.ts:175-176`).
+>   - **UnderwaterChart**: il riferimento va alla didascalia, righe 65–70 con il valore alla 67, invece che al suo
+>     link alla riga 69.
+> - **⚠️ Fuori pista**: con il primo giro la pagina citava due righe diverse per lo stesso fatto (718 nel punto, 686
+>   nella tabella degli host). Ho chiesto a `docs-writer` di aggiornare anche gli 11 numeri della tabella degli host e
+>   del punto «No owned broker», già verificati. Non si va oltre.
+> - **Terzo giro** (fino alle 22:47): gli 11 numeri della tabella degli host e del punto «No owned broker».
+>   - Ciascuno è stato confrontato con la stessa riga di `eee56b42a`, quando la pagina fu scritta: punta allo stesso
+>     codice, solo spostato (di 1, 31 o 32 righe).
+>   - Ora la pagina dà una riga sola per ogni fatto (`:718` sia nel punto sia nella tabella).
+>   - `check-links` verde, 97 link validi; `brokerStore.ts:262` era già giusto.
+> - **In tutto**: 20 riferimenti aggiornati e 4 precisazioni di testo, solo in `risk-lab.md`. Pagina solo in inglese,
+>   quindi niente traduzioni né marcatura. Y-20 ✅ nel BACKLOG.

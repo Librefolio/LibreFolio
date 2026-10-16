@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -26,59 +25,27 @@ def _rates_match(left: Decimal, right: Decimal) -> bool:
     return abs(left - right) <= scale * Decimal("1e-24")
 
 
-async def _load_current_wac_fx_rows(
+async def _load_wac_fx_rows(
     session: AsyncSession,
     *,
-    windows: set[tuple[str, str, date_type, date_type]],
+    keys: set[tuple[str, str, date_type]],
 ) -> dict[tuple[str, str, date_type], FxRate]:
-    """Load latest saved rows for each TX cutoff, detecting stale WAC-cache evidence."""
+    """The saved rows at exactly the (base, quote, date) the cost conversions used, in one read.
 
-    if not windows:
+    The average cost already chose each rate (``convert_bulk``, with its backward fill): this only reads that row back,
+    for its source and to fail closed when it has changed or gone since. No window, no backward fill of its own.
+    """
+
+    if not keys:
         return {}
-
-    bounds: dict[tuple[str, str], tuple[date_type, date_type]] = {}
-    for base, quote, claimed_date, transaction_date in windows:
-        previous = bounds.get((base, quote))
-        if previous is None:
-            bounds[(base, quote)] = (claimed_date, transaction_date)
-        else:
-            bounds[(base, quote)] = (
-                min(previous[0], claimed_date),
-                max(previous[1], transaction_date),
-            )
-
     stored_rows = (
         await session.execute(
             select(FxRate).where(
-                or_(
-                    *[
-                        and_(
-                            FxRate.base == base,
-                            FxRate.quote == quote,
-                            FxRate.date >= first_claimed_date,
-                            FxRate.date <= last_transaction_date,
-                        )
-                        for (base, quote), (first_claimed_date, last_transaction_date) in sorted(bounds.items())
-                    ]
-                )
+                or_(*[and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == rate_date) for base, quote, rate_date in sorted(keys)]),
             )
         )
     ).scalars()
-    rows_by_pair: dict[tuple[str, str], list[FxRate]] = defaultdict(list)
-    for row in stored_rows:
-        rows_by_pair[(row.base, row.quote)].append(row)
-    for pair_rows in rows_by_pair.values():
-        pair_rows.sort(key=lambda row: row.date, reverse=True)
-
-    latest_rows: dict[tuple[str, str, date_type], FxRate] = {}
-    for base, quote, _claimed_date, transaction_date in sorted(windows):
-        latest_row = next(
-            (row for row in rows_by_pair.get((base, quote), []) if row.date <= transaction_date),
-            None,
-        )
-        if latest_row is not None:
-            latest_rows[(base, quote, transaction_date)] = latest_row
-    return latest_rows
+    return {key: row for row in stored_rows if (key := (row.base, row.quote, row.date)) in keys}
 
 
 async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence mapping is intentionally fail-closed
@@ -95,7 +62,7 @@ async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence 
     from backend.app.services.portfolio_service import compute_wac_iterative  # noqa: PLC0415
 
     prepared: list[tuple[int, int, object | None]] = []
-    fx_windows: set[tuple[str, str, date_type, date_type]] = set()
+    fx_keys: set[tuple[str, str, date_type]] = set()
 
     # Deliberately sequential: one AsyncSession is shared, and no provisional
     # item cap or silent truncation belongs in this domain endpoint.
@@ -138,16 +105,9 @@ async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence 
             if fx_info is None or fx_info.fx_rate_date is None or source_currency is None or qualifying_tx.fx_rate_used is None or source_currency == target_currency:
                 continue
             base, quote, _inverted = normalized_fx_pair(source_currency, target_currency)
-            fx_windows.add(
-                (
-                    base,
-                    quote,
-                    fx_info.fx_rate_date,
-                    qualifying_tx.date,
-                )
-            )
+            fx_keys.add((base, quote, fx_info.fx_rate_date))
 
-    current_fx_rows = await _load_current_wac_fx_rows(session, windows=fx_windows)
+    saved_fx_rows = await _load_wac_fx_rows(session, keys=fx_keys)
     rows: list[PortfolioPlannerWacContext] = []
     for broker_id, asset_id, result in prepared:
         holding_id = holding_key(asset_id, broker_id)
@@ -182,11 +142,11 @@ async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence 
                     evidence_incomplete = True
                     continue
                 base, quote, inverted = normalized_fx_pair(source_currency, target_currency)
-                saved_row = current_fx_rows.get((base, quote, qualifying_tx.date))
+                saved_row = saved_fx_rows.get((base, quote, fx_info.fx_rate_date))
                 saved_directed_rate: Decimal | None = None
                 if saved_row is not None and saved_row.rate > 0:
                     saved_directed_rate = Decimal("1") / saved_row.rate if inverted else saved_row.rate
-                if saved_row is None or saved_row.date != fx_info.fx_rate_date or saved_directed_rate is None or not _rates_match(saved_directed_rate, rate):
+                if saved_row is None or saved_directed_rate is None or not _rates_match(saved_directed_rate, rate):
                     evidence_incomplete = True
                     evidence = PortfolioPlannerSourceWacFxEvidence(
                         source_currency=source_currency,

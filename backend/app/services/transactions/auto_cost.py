@@ -7,12 +7,13 @@ from datetime import date as date_type
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Transaction, TransactionType
+from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.schemas.transactions.transactions import (
     TXCreateItem,
     TXUpdateItem,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.portfolio_service import compute_wac_iterative
 
 
@@ -73,10 +74,7 @@ class TransactionAutoCostMixin:
             # from a stored override. Writing "current WAC
             # before this tx" here — the normal auto-mode fallback — would double the
             # cost basis for a forward split (or halve it for a reverse split). Skip.
-            is_split_linked = False
-            if db_tx.asset_event_id is not None:
-                event_type = (await self.session.execute(select(AssetEvent.type).where(AssetEvent.id == db_tx.asset_event_id))).scalar_one_or_none()
-                is_split_linked = event_type == AssetEventType.SPLIT
+            is_split_linked = db_tx.id in await split_linked_ids(self.session, [db_tx])
 
             if is_split_linked:
                 db_tx.cost_basis_override = None
@@ -138,6 +136,16 @@ class TransactionAutoCostMixin:
             excluded_tx_ids=excluded,
             target_currency_override=ccy_hint,
         )
+
+    async def _handover_cost(self, db_tx: Transaction) -> WACPreviewResultItem:
+        """The Auto cost a giving TRANSFER leg leaves with when it becomes an ADJUSTMENT-out (decision 47).
+
+        The average cost of its own broker up to its date, without itself: not ``_auto_cost_source``, which names the
+        partner's broker for a TRANSFER still linked. The lots then hand its units over at that cost. Writes nothing
+        (``_write_auto_cost`` does). Called by ``delete_by_broker``, by the split of a TRANSFER pair
+        (``compute_wac_and_fx_issues``) and by the step for the lone legs older deletions left (``lone_transfer_legs``).
+        """
+        return await self._auto_cost(db_tx, (db_tx.broker_id, [db_tx.id], db_tx.date))
 
     @staticmethod
     def _write_auto_cost(db_tx: Transaction, wac_result: WACPreviewResultItem) -> None:

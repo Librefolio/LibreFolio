@@ -56,6 +56,6 @@ text and spotlight, instead of flickering back to *waiting*; only a target that 
 | Geometry, motion root, scroll policy | `frontend/src/lib/features/onboarding/components/OnboardingCoachmark.svelte` |
 | Modal transition and depth | `frontend/src/lib/components/ui/modals/ModalBase.svelte` |
 | Import presentation (`scrollPolicy`) | `frontend/src/lib/features/onboarding/components/OnboardingOverlayHost.svelte` |
-| Wizard scroll root | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Wizard scroll root | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 | Coachmark tests | `frontend/src/lib/features/onboarding/components/OnboardingCoachmark.test.ts` |
 | Tour and Import E2E | `frontend/e2e/onboarding-tour.spec.ts` |

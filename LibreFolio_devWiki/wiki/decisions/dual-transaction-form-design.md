@@ -76,8 +76,8 @@ The question: how should the form modal handle paired transactions — open two 
 
 | Role | Path |
 |------|------|
-| TransactionFormModal (dual-form logic) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| Transaction type store (pairFormLayout) | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
+| TransactionFormModal (dual-form logic) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| Transaction type store (pairFormLayout) | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
 | i18n EN | `frontend/src/lib/i18n/base/en.json` |
 | i18n IT | `frontend/src/lib/i18n/base/it.json` |
 | i18n FR | `frontend/src/lib/i18n/base/fr.json` |

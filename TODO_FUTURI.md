@@ -53,35 +53,6 @@ Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il
 
 ---
 
-## 📧 Server email — verifica account, inviti, recupero password (da P2-1)
-
-**Data aggiunta**: 3 Settembre 2026
-**Status**: 📋 FUTURO — non prioritario; nel frattempo l'opzione `require_email_verification` è marcata come placeholder (read-only + badge "coming soon") nella UI admin
-**Origine**: audit 08_newCleanAndDocumentation_audit (P2-1) + decisione utente 03/09/2026
-
-### Obiettivo
-
-Connettere LibreFolio a un server email (SMTP configurabile dalle impostazioni admin) e
-costruirci sopra tre funzioni:
-
-1. **Verifica email** — rende vera l'opzione `require_email_verification` (oggi placeholder:
-   la chiave esiste ma nessuna verifica avviene).
-2. **Link di invito** — un admin genera un invito via email; utile soprattutto quando la
-   registrazione libera dalla pagina di login è disattivata (l'utente si registra solo
-   tramite invito).
-3. **Recupero password via email** — reset self-service invece del reset manuale admin.
-
-### Note
-
-- Configurazione SMTP nelle impostazioni globali (host, porta, auth, mittente) con
-  test di connessione stile "Test Configuration" dei provider.
-- Il flusso invito/reset richiede token monouso a scadenza (tabella dedicata o
-  riuso del pattern dei settings con TTL).
-- Valutare dipendenza: `aiosmtplib` (async, non blocca l'event loop — regola Async I/O).
-- Fino a questo task, nessuna promessa UI sulla verifica email (P2-1 chiuso come placeholder).
-
----
-
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)
 
 **Data aggiunta**: 3 Settembre 2026
