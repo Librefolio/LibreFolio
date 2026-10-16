@@ -1099,3 +1099,262 @@ Via del coordinatore alle 21:31, con la decisione 45 e il contratto della sonda 
 > **Base**: HEAD `1d74e212e`. Delta: 20 file tracciati modificati, 2 nuovi (`features/email/emailLinks.ts`,
 > `emailLinks.test.ts`). Righe condivise: `_frontend_utility.py` (una riga), `admin/configuration.en.md` (+1 −1);
 > `addressProbe.ts` di A riusato senza modifiche. Resta di E3: l'email d'attivazione dell'admin iniziale, dopo A7.
+>
+> **Entrato** in `dev_release2` = `e54ae96bb`; CHANGELOG `2415faf33`. Ramo a `2415faf33`.
+
+### E5 — la verifica dell'email (decisione 44)
+
+Ordine del coordinatore (22:12): E4 aspetta A6e (password attuale per cambiare l'email, poi tolgo la sospensione);
+intanto E5, che non ne dipende. L'email d'attivazione dell'admin iniziale resta dopo A7.
+
+#### E5.0 — Analisi sul codice (2026-10-15, base `2415faf33`)
+> **Stato reale**:
+> - Nessuna migrazione serve: la 005 di A ha già `users.email_verified_at` (NULL per gli account esistenti, «deciso
+>   nella logica»), lo scopo `email_verification` nel CHECK, 24 h e `/verify-email` in `token_service`; il testo
+>   `build_email_verification` è già nel mio catalogo (E1).
+> - L'opzione `require_email_verification` è un segnaposto: `schemas/settings.py` («read nowhere»),
+>   `GlobalSettingsTab` la disegna disattiva con un badge (`PLACEHOLDER_KEYS`), GSET-VAL-007 e i casi di
+>   `test_settings_api.py:1592-1596` la girano sul DB di corsia perché «nessuno la legge».
+> - `register_user` (A) crea l'account attivo e fa commit; `/auth/register` risponde 201 senza sessione, e
+>   `RegisterCard` torna al login con `auth.accountCreated`. Il login risponde 403 `ACCOUNT_DISABLED` solo con la
+>   password giusta; `stores/app/auth.ts` lo traduce. `user_usage` conta attivi + inviti vivi. `update_user_status` e
+>   `set_user_active` cambiano lo stato senza toccare i token. Nessun limitatore sul login (A8 non c'è ancora).
+> - Pagine dei token di A: `routes/invite`, `routes/reset-password`, `LinkStatusCard`, `authFlash`, `linkToken.ts`
+>   (`LinkPurpose = 'invite' | 'password_reset'`).
+>
+> **Disegno proposto**:
+> - «In attesa» = account disattivo con un token di verifica non consumato né revocato (anche scaduto). Ogni cambio di
+>   stato fatto dall'admin revoca i token di verifica: un account disattivato dall'admin non torna attivo con un
+>   vecchio link, e il login gli dice `ACCOUNT_DISABLED`, non «verifica».
+> - Registrazione con l'opzione accesa (mai il primo account): account disattivo + token (24 h, con l'email
+>   dell'account), nella stessa transazione; email in background dopo il commit; la risposta dice
+>   `verification_required` e la card mostra «controlla la posta».
+> - Login di un account in attesa → 403 `EMAIL_NOT_VERIFIED` (solo con la password giusta) e «rispedisci».
+> - `POST /email/verification/confirm {token}` (anonimo): consuma il token, rifiuta se l'email dell'account è cambiata
+>   da allora, attiva l'account, `email_verified_at = now`, revoca gli altri token di verifica.
+> - `POST /email/verification/resend {username, password}` (anonimo): la stessa prova del login (hash fittizio per
+>   chi non esiste), limite per indirizzo (10/15 min, prima della password), per account 1 ogni 5 min e 3/h, budget
+>   d'istanza, posto libero; nuovo token (revoca i vecchi) e invio sincrono (502 → token revocato).
+> - Opzione: si accende solo con email pronta **e** `LIBREFOLIO_PUBLIC_URL` utilizzabile (il link) → 409 altrimenti;
+>   la scheda Impostazioni la abilita da `instanceConfig.email.links`.
+> - Pagina `/verify-email` (mia): legge `#token=`, conferma, torna al login con un flash «email verificata».
+>
+> **Decisioni del coordinatore** (15/10, 22:3x): (1) verifica per tutte le registrazioni tranne il primo account,
+> inviti compresi; (2) opzione accesa ma email o link non pronti alla registrazione → 409
+> `EMAIL_VERIFICATION_UNAVAILABLE`; (3) gli account in attesa contano per `LIBREFOLIO_MAX_USERS` finché il link è
+> vivo; (4) «rispedisci» con nome e password; (5) ad A per A6e: `email_verified_at` a NULL quando l'email cambia;
+> (6) spegnere l'opzione lascia gli account in attesa; (7) badge «in attesa» nella scheda Users fuori dalla 1.3
+> (backlog E-7). **Le righe nei file di A le scrivo io, dichiarate, A le rivede, ma solo dopo l'ingresso di A6d e
+> A6e** (A tocca proprio `registration_service`, `auth.py`, `settings_service`, `LoginCard`, `GlobalSettingsTab`).
+> Adesso: le parti solo mie (`email/verification.py`, le due rotte, `/verify-email`, l'i18n).
+>
+> **Dettaglio del disegno** (deciso scrivendo): il token creato dentro la transazione di `register_user` («tenuta»,
+> `email` NULL) segna l'attesa e tiene il posto, ma il suo testo non esce mai; il lavoro in background ne crea uno
+> nuovo con l'email dell'account, che revoca la tenuta, e lo spedisce. Se l'invio fallisce il token resta: l'account
+> resta in attesa e «rispedisci» funziona. I limiti per account contano solo i token spediti (`email` non NULL); la
+> conferma accetta solo un token la cui `email` è quella attuale dell'account.
+
+#### E5.1 — Le parti solo mie (lotto E5a) ✅ scritte (2026-10-15)
+> **Note implementazione**:
+> - `services/email/verification.py` (nuovo): `verification_required`, `links_can_go`,
+>   `ensure_verification_can_be_enabled`, `awaiting_verification`, `hold_for_verification` (lancia
+>   `RegistrationError("EMAIL_VERIFICATION_UNAVAILABLE")` con import pigro: `registration_service` lo chiamerà),
+>   `registration_email_work` (background, mai un'eccezione), `confirm_email`, `resend_verification` (limite per
+>   indirizzo prima della password, `verify_password_or_dummy` di A, limiti per account sui soli token spediti, posto
+>   di nuovo se il link è scaduto, riconteggio nella transazione come la password dimenticata).
+> - `flows.py`: `_require_email` → `require_email`, `_remaining` → `link_ttl` (pubbliche, le riusa la verifica).
+> - Rotte: `POST /email/verification/confirm` (400 `TOKEN_INVALID` con lo `status`) e `/resend` (401 e 403 come il
+>   login, 409, 429 con `Retry-After`, 502, 422); schemi con docstring su una riga (backlog E-5).
+> - Frontend: `verificationApi.ts`; in `emailApi.ts` `refusalBody`/`refusalStatus`/`refusalDetail`/`retryAfterOf`
+>   esportati e riusati da `readTestFailure`; `emailText.ts` `VERIFY_PAGE_KEYS`, `resendFailureMessage`;
+>   `VerifyEmailCard.svelte` (sopra `AuthCard` di A: la `LinkStatusCard` di A manda sempre dall'admin, qui invece
+>   «accedi e chiedine un altro»); `VerificationNotice.svelte` (il «rispedisci» che `LoginCard` ospiterà con gli
+>   agganci); pagina `routes/verify-email/+page.svelte` (come `/reset-password`: token tolto dalla barra, flash al
+>   login). Il backend serve `200.html` per ogni percorso: nessuna registrazione della rotta.
+> - i18n `email.verification.*` × 4 (19 chiavi); le chiavi degli agganci (messaggio della registrazione, rifiuto
+>   della registrazione, opzione nelle Impostazioni) arrivano con gli agganci.
+> - Prove leggere: `ruff`/`black` ✅; le rotte si importano ✅; `api sync` ✅ (nessun file tracciato toccato);
+>   `prettier --check` ✅; `i18n build` + `check` ✅ (4 653 chiavi); `front check` 0 errori, 0 avvisi.
+> - **Atterraggio senza agganci**: le rotte vivono ma nessun token di verifica esiste finché `register_user` non chiama
+>   `hold_for_verification`: `confirm` risponde 400, `resend` 401/403/409. Innocuo.
+>
+> **⚠️ Fuori pista** (rilettura di docs-writer, due difetti nel mio codice, corretti prima dei test):
+> - un'email di verifica non partita lasciava il token con l'indirizzo, contato come «spedito»: il «rispedisci» subito
+>   dopo un 502 dava 429 «un link è appena partito». Ora il token perde l'indirizzo (`email` NULL) e torna una tenuta:
+>   l'account resta in attesa, il link (che non ha raggiunto nessuno) non si conferma, e non conta per i limiti;
+> - le 409 `EMAIL_UNAVAILABLE`/`EMAIL_LINKS_UNAVAILABLE` di `/verification/resend` mostravano il `problem` della
+>   configurazione a chi non è admin: tolto, come in `/password-reset`.
+>
+> **Per gli agganci** (lotto E5b, dopo A6d e A6e): `_REGISTRATION_REFUSALS` di `auth.py` non conosce
+> `EMAIL_VERIFICATION_UNAVAILABLE` (oggi uscirebbe 400 senza codice: va a 409); il commento «placeholder» di
+> `schemas/settings.py:294`; `confirm_email` conta sulla revoca dei token ai cambi di stato dell'admin (aggancio).
+> - seconda rilettura di docs-writer: (1) un'email che arriva dopo un errore di connessione (timeout dopo il DATA)
+>   lasciava un token senza indirizzo che `confirm_email` revocava: se era l'unico, l'account smetteva di essere in
+>   attesa → bloccato. Ora un token senza indirizzo è rifiutato (`revoked`) **senza** revocarlo; (2) il `try` copre
+>   tutto quello che segue il commit, non solo `send_email`; (3) `resendErrors.EMAIL_RATE_LIMITED` reso neutro × 4
+>   (lo danno anche il limite per indirizzo e il budget). `ruff`/`black`, `i18n build` + `check` ✅.
+
+#### E5.2 — Test e doc di E5a ✅ (2026-10-15)
+> **Note implementazione**:
+> - test-author: `test_email_verification.py` (EMV-001…042, `services email-verification`, pure);
+>   `test_email_verification_api.py` (EVA-001…015, `api email-verification`, pure); Vitest `verificationApi.test.ts`
+>   (VFA-01…18, core-unit), `emailApi.test.ts` EAP-08…11, `emailText.test.ts` ETX-07…10; componenti
+>   `VerifyEmailCard.test.ts` (VEC), `VerificationNotice.test.ts` (VNT), `routes/verify-email/page.test.ts` (VEP).
+>   Registrazioni nel runner: due voci backend, una core-unit, tre component-unit. Primo giro: 6 rossi di EMV-017,
+>   colpa del test (id letto dopo il rollback), corretti nel test.
+> - Decisione mia su una domanda di test-author: anche la 502 di `resend` perde lo `smtp_code` (chi chiede non è
+>   admin), come le 409.
+> - docs-writer: sezione `#verification` di `developer/backend/email.md` (attesa, tenuta e link spediti, funzioni,
+>   limiti, log, frontend, «non ancora collegato»), le due rotte, `link_ttl`/`require_email`. Tabella Testing mia.
+> - Prove (prima della finestra delle 00:00, una alla volta): `services email-verification` 115 ✅,
+>   `api email-verification` 48 ✅, `services email-flows` 132 ✅, `api email` 160 ✅, Vitest di
+>   `features/email/` + `routes/verify-email/` 523 ✅ (8 file), `front check` 0/0, `prettier`, `ruff`, `black` (solo
+>   la riga di A), `check-orphans` ✅.
+> - Dopo la decisione sulla 502: `api email-verification` 48 ✅ di nuovo; `mkdocs build` stretto ✅ (nessun
+>   WARNING/ERROR), `check-links` 96 ✅; `front-utility core-unit` intero (via del coordinatore, 23:27): 159 file,
+>   5 415 test ✅ (`/tmp/libreFolio_e5a_core_unit.log`).
+
+### Checkpoint E5a 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `2415faf33`. Delta: 17 file tracciati modificati, 11 nuovi (`services/email/verification.py`, due
+> file di test backend, `verificationApi.ts` e il suo test, `VerifyEmailCard` e `VerificationNotice` con i loro test,
+> `routes/verify-email/` con pagina e test). Righe condivise: i tre file del runner (solo voci mie), la riga E-7 del
+> backlog. Nessun file di A toccato: gli agganci sono il lotto E5b, dopo A6d e A6e.
+>
+> **Committato** dal coordinatore: `50fa84159` (feat) e `a77033a9e` (journal); base aggiornata a `89f54be21` (T+DV,
+> H CP-U1, X-RL, W F36). Verde sulla revisione unita: `api sync`, `front check` 0/0, `core-unit` 167 file / 5 658,
+> `theme-roles.mjs --check` pulito, `services email-verification` 115, `api email-verification` 48, Vitest 523.
+
+### E4 — invio per email, «password dimenticata», avviso al vecchio indirizzo
+
+Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli agganci nei file di A in E4b, dopo A6e.
+
+#### E4.0 — Analisi (2026-10-15, base `89f54be21`)
+> - Il lato servizio c'è già: `POST /email/links` (E3) e i testi `invite`/`password_reset`; «password dimenticata»
+>   (ammissione, limiti, lavoro) tenuta dalla 409. L'email di un account cambia solo da `PUT /auth/profile`: le rotte
+>   admin di `users.py` (stato e ruolo, inviti, link di reset, sessioni) non la toccano.
+> - **E4a**: `SendLinkByEmail.svelte` (props del registro di A, token dal `#token=`, invito con indirizzo, reset
+>   senza), `sendByEmailVisible()` da `instanceConfig.email.links`; tipo `email_changed` nel catalogo × 4,
+>   `build_email_changed`, `flows.email_changed_work` (background, senza link); `ForgotPasswordEmailForm.svelte` e i
+>   wrapper; i18n `email.sendLink.*`, `email.forgot.*`; test; doc per sviluppatori.
+> - **E4b** (dopo A6e): la riga in `LINK_SHARE_ACTIONS`; `ForgotPasswordCard` ospita il modulo con `email.links`;
+>   `update_profile` → `email_changed_work` in background; tolta di `FORGOT_PASSWORD_HELD` con test e doc; doc admin e
+>   utente; E2E nello slot; CHANGELOG; revisione di sicurezza mirata sulla «password dimenticata» aperta.
+> - **Decisioni notturne, da rivedere**: (a) l'avviso mostra il nuovo indirizzo come `***@dominio`; (b) il nome
+>   dell'istanza nell'avviso è l'host di `LIBREFOLIO_PUBLIC_URL`, altrimenti «LibreFolio», mai l'host della
+>   richiesta; (c) l'avviso va solo all'indirizzo vecchio.
+> - **Per la lista del developer** (E4b, file di A): con l'email pronta, `ForgotPasswordCard` mostra il modulo in alto
+>   e tiene sotto il riquadro dei comandi (proposta), oppure lo nasconde.
+> - **Via del coordinatore** (23:3x) con le decisioni notturne (a), (b), (c); la domanda sul `ForgotPasswordCard` va
+>   nella lista del developer, e per E4b vale la mia proposta salvo sua diversa indicazione.
+
+#### E4.1 — Le parti solo mie (lotto E4a) ✅ scritte (2026-10-15)
+> **Note implementazione**:
+> - Backend: `EmailKind.EMAIL_CHANGED`; `messages.masked_address()` (`***@dominio`) e `build_email_changed()` (il nuovo
+>   indirizzo sempre mascherato dal costruttore, nessun link); testi `email_changed` × 4 nel catalogo del backend;
+>   `flows.email_changed_work(user_id, old, new)` (background, sessione propria, `require_email`, lingua
+>   dell'account, istanza da `LIBREFOLIO_PUBLIC_URL` o `INSTANCE_FALLBACK` = «LibreFolio», solo al vecchio
+>   indirizzo, niente se uguali, log senza indirizzi, mai un'eccezione).
+> - Frontend: `sendLinkApi.ts` (`tokenFromLink`, `sendByEmailVisible` da `instanceConfig`, `sendLinkByEmail`,
+>   `readLinkSendFailure`); `forgotPasswordApi.ts` (`requestPasswordResetEmail`, `readForgotFailure`); in
+>   `emailText.ts` `linkSendFailureMessage` (i codici SMTP con le chiavi `email.smtpErrors.*` già esistenti) e
+>   `forgotFailureMessage`; `SendLinkByEmail.svelte` (props del registro di A; invito con l'indirizzo modificabile,
+>   reset senza); `ForgotPasswordEmailForm.svelte` (202 come avviso informativo, mai «inviato»).
+> - i18n `email.sendLink.*` (16) ed `email.forgot.*` (8) × 4.
+> - Prove leggere: `ruff`/`black` ✅, resa delle quattro lingue a mano ✅ (l'indirizzo pieno mai nel testo),
+>   `prettier` ✅, `i18n build` + `check` ✅ (4 678 chiavi), `front check` 0/0, `theme-roles.mjs --check` pulito.
+> - **⚠️ Fuori pista** (autorevisione e rilettura di docs-writer): (1) con l'email spenta, il default del
+>   self-hosted, ogni cambio d'email avrebbe scritto un WARNING «notice not sent»: ora una riga `info` e basta, il
+>   warning resta per l'email configurata ma inutilizzabile; (2) un indirizzo d'invito scritto male lo rifiuta la
+>   validazione di FastAPI (422 con `detail` lista) e l'azione mostrava l'errore generico: ora
+>   `readLinkSendFailure` lo legge come `EMAIL_RECIPIENT_INVALID`; (3) commento d'intestazione del modulo «password
+>   dimenticata» allineato (ospitato da E4b).
+> - **Decisione notturna, da rivedere**: «Invia per email» non sceglie la lingua dell'invito (sempre quella
+>   predefinita dell'istanza); backlog E-8.
+
+#### E4.2 — Test e doc di E4a ✅ (2026-10-15), `front check`, `core-unit`, `mkdocs build` ✅ (2026-10-16, 01:3x)
+> **Note implementazione**:
+> - test-author: `test_email_messages.py` EMM-034…038 (il sesto tipo, i testi × 4, la maschera, `masked_address`,
+>   l'escape del dominio); `test_email_flows.py` EMF-043…052 (contratto 14: `email_changed_work`); Vitest
+>   `sendLinkApi.test.ts` (SLA-01…14) e `forgotPasswordApi.test.ts` (FPA-01…10) in core-unit, `emailText.test.ts`
+>   ETX-11…14; componenti `SendLinkByEmail.test.ts` (SLE-01…09) e `ForgotPasswordEmailForm.test.ts` (FPF-01…06) in
+>   component-unit. Nessun difetto trovato nel codice di produzione.
+> - docs-writer: `developer/backend/email.md` (i sei tipi `#kinds`, `#flow-email-changed`, `#link-actions` con
+>   `#send-by-email` e `#forgot-form`, «non ancora collegato», le decisioni notturne); tabella Testing mia.
+> - Prove (prima delle 00:00, una alla volta): `services email-messages` 316 ✅, `services email-flows` 155 ✅,
+>   Vitest di `features/email/` 748 ✅ (11 file), `prettier`, `ruff`/`black`, `check-orphans` ✅.
+> - **Dopo la finestra**: `front check` (i quattro file di test nuovi), `front-utility core-unit` (cataloghi),
+>   `mkdocs build` stretto e `check-links`.
+
+#### E5.3 — Agganci di E5b preparati fuori dal worktree ✅ (2026-10-16, notte)
+> **Note implementazione** (richiesta del coordinatore, 23:59, nessuna prova): in `/tmp/libreFolio_e5b/` (copia nella
+> cartella della sessione) la patch `e5b_hooks_A6d.patch` su A6d (`ce4acff6c`, 14 file: `registration_service`
+> con `user_usage` e la tenuta, `auth.py` login/register, `schemas/auth.py`, `user_service` che revoca i token di
+> verifica ai cambi di stato, `settings_service` + `api/v1/settings.py` con la 409, il commento di
+> `schemas/settings.py`, GSET-VAL-007 su `scheduler_enabled` e GSET-VAL-011 nuovo, `types/user.ts`,
+> `stores/app/auth.ts`, `LoginCard`, `RegisterCard`, `registrationErrors.ts`, `GlobalSettingsTab`); `e5b_i18n.py`
+> (quattro chiavi × 4); il README con l'ordine d'applicazione, i test da scrivere e i cancelli. `git apply --check`
+> pulito su A6d; `ruff` (con l'estrazione di `_refuse_what_cannot_turn_on`: la funzione superava la complessità
+> 10), `black`, `prettier` puliti. Esclusi, per regola: `update_profile` e `ProfileTab` (A6e).
+> - **⚠️ Fuori pista** (trovato da docs-writer scrivendo le bozze): con `user_usage` che conta gli account in attesa,
+>   su un'istanza piena l'admin non poteva riattivare un account in attesa (409 `USER_LIMIT_REACHED` di
+>   `PATCH /users/{id}`), benché il suo posto fosse già contato; `user activate` stampava un avviso falso. Aggiunto
+>   `verification.holds_place()` (patch mia, `e5b_mine.patch`) e usato da `api/v1/users.py` e `scripts/user_cli.py`
+>   (patch di A, ora 16 file). Ricontrollati `git apply --check`, `ruff` (un import da riordinare), `black`.
+> - Bozze di doc (docs-writer, in `docs/` del pacchetto): sezione `#verification` di `admin/email.en.md`, la parte E4b
+>   della stessa pagina, la riga di `admin/settings.en.md`, `admin/users.en.md`, `user/getting-started.en.md`, le
+>   sostituzioni nelle pagine per sviluppatori, e `extra_pages.md` (pagine tradotte, solo col via del coordinatore).
+> - Resta un buco nell'interfaccia (docs-writer): `UserRow` spegne **Riattiva** su un'istanza piena per ogni account
+>   disattivo, perché la lista non dice chi è in attesa. Preparata una patch **opzionale** (decide il coordinatore):
+>   `AdminUserRead.holds_place` (una query, `verification.place_holders()` in `e5b_mine_optional.patch`),
+>   `AdminAccount.holds_place?`, `UserRow` che non spegne il pulsante per quegli account; lo stesso campo porterebbe il
+>   badge E-7. Proposta: includerla in E5b. Controllata in sequenza dopo la patch principale (`git apply --check`).
+> - **Decisione del coordinatore** (16/10, 00:34, notturna, da rivedere): la patch opzionale entra in E5b (campo
+>   `holds_place` e **Riattiva** acceso); il badge E-7 resta fuori dalla 1.3 (il campo c'è, il badge no). Si applica
+>   dopo l'ingresso di A6d e A6e e l'aggiornamento della base, con un nuovo `git apply --check` (A6e tocca gli stessi
+>   file).
+> - **Test di E5b scritti in anticipo** (test-author, in `tests/` del pacchetto, file nuovi di E per non toccare i test
+>   di A che A6e può cambiare; non eseguiti): `test_email_verification_hooks_api.py` (EVH-001…010, la catena intera),
+>   `test_email_verification_hooks.py` (EVK-001…008), Vitest/componenti `auth.verification`, `registrationErrors
+>   .verification`, `LoginCard.verification`, `RegisterCard.verification`, `GlobalSettingsTab.verification`,
+>   `UserRow.verification`; `REGISTRATION.md` con le righe del runner. Dai suoi dubbi: (1) nella patch principale la
+>   riga di `auth.test.ts` di A (`ENGLISH` è un `Record<AuthErrorKey, string>`: senza, `front check` rosso); (4)
+>   `verificationBlocked` legge il valore **salvato**, non quello modificato: acceso e con l'email rotta, l'interruttore
+>   resta usabile nei due sensi fino al salvataggio. **Decisione notturna, da rivedere** (2): un account in attesa,
+>   già disattivo, non si «disattiva» con il PATCH (nessun cambio); per un'iscrizione indesiderata l'azione è Elimina,
+>   o `user deactivate` dalla CLI. Patch principale ora 17 file, opzionale 4; applicate in sequenza su A6d ✅.
+> - Ultimo dubbio di test-author: la risposta di `PATCH /users/{id}` non portava il flag (`holds_place: false` anche
+>   per un account in attesa), e una riga sostituita da quella risposta avrebbe spento **Riattiva** fino al
+>   ricaricamento. Ora la patch opzionale calcola il flag anche lì; nota in `tests/REGISTRATION.md` per il caso EVH da
+>   aggiungere all'applicazione. Patch ricontrollate in sequenza su A6d; `ruff`, `black` puliti.
+> - **Per il merge con A6e** (avviso del coordinatore, 00:50): A6e corregge «si cambia con la sola sessione» in
+>   `developer/backend/email.md` e `admin/email.en.md`. E4a toccava solo la riga accanto nel primo (`lot E4` → `E4b`
+>   nel riquadro della tenuta): ripristinata, così E4a non tocca più quel paragrafo e il merge non trova conflitti lì.
+>   Il riquadro sparisce comunque con E4b.
+
+#### E4.3 — Agganci di E4b preparati fuori dal worktree ✅ (2026-10-16, finestra senza prove)
+> **Note implementazione**: in `/tmp/libreFolio_e4b/` (copia nella cartella della sessione): `e4b_hooks_A.patch` (la
+> riga `send-by-email` in `LINK_SHARE_ACTIONS`, il modulo in `ForgotPasswordCard` con `email.links` e il riquadro dei
+> comandi sotto) ed `e4b_mine.patch` (la tenuta tolta: costante, errore, 409, caso frontend e chiave i18n × 4).
+> **Decisione notturna, da rivedere**: la tenuta si toglie del tutto, non resta come interruttore spento. README con
+> l'ordine, i test da togliere e da aggiungere, l'E2E, la doc, i cancelli. Esclusi per regola: l'aggancio in
+> `update_profile` e `ProfileTab` (A6e). `git apply --check` pulito sul worktree; `ruff`, `black`, `prettier` puliti.
+> - **Test di E4b scritti in anticipo** (test-author, `tests/` del pacchetto E4b, non eseguiti): `e4b_tests_mine.patch`
+>   sui miei file di test (via EMF-035, EMA-046 e le fixture che toglievano la tenuta; nuovi EMF-053 ed EMA-049: la
+>   rotta aperta come esce, 202 e un'email), `e4b_runner_desc.patch` a parte (descrizioni nel runner condiviso),
+>   nuovi `linkShareRegistration.test.ts` (LSR) e `ForgotPasswordCard.email.test.ts` (FCE), le bozze E2E
+>   `email-send-link.spec.ts` (ESL-E) e `forgot-password-email.spec.ts` (FPE-E) con `fixtures/instance-email.ts`,
+>   `REGISTRATION.md`. Dal suo dubbio 1: `data-testid="forgot-email-unavailable"` sull'avviso della card (patch di A
+>   rigenerata). Tutte le patch passano `git apply --check` sul worktree.
+
+#### E4.4 — Le ultime prove di E4a ✅ (2026-10-16, ripresa delle 01:33)
+> `dev.py front check` 0 errori, 0 avvisi; `front-utility core-unit` 169 file, 5 867 test ✅
+> (`/tmp/libreFolio_e4a_core_unit.log`); `dev.py mkdocs build` stretto ✅ (nessun WARNING/ERROR), `check-links` 96 ✅.
+> Una alla volta, `nice -n 10`, carico sotto 70.
+
+### Checkpoint E4a 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `89f54be21`. Codice: `messages.py` (`EMAIL_CHANGED`, `masked_address`, `build_email_changed`), i
+> testi `email_changed` × 4 del backend, `flows.py` (`email_changed_work`, `INSTANCE_FALLBACK`); frontend
+> `sendLinkApi.ts`, `forgotPasswordApi.ts`, `emailText.ts`, `SendLinkByEmail.svelte`, `ForgotPasswordEmailForm.svelte`;
+> i18n `email.sendLink.*`, `email.forgot.*` × 4. Test (EMM-034…038, EMF-043…052, SLA, FPA, ETX-11…14, SLE, FPF);
+> doc `developer/backend/email.md`; runner (voci mie); backlog E-8; questo piano. Nessun file di A. I pacchetti E5b ed
+> E4b stanno fuori dal worktree (`/tmp/libreFolio_e5b/`, `/tmp/libreFolio_e4b/`, copie nella cartella della sessione).

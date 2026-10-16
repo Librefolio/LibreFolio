@@ -249,6 +249,14 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API tests", verbose=verbose)
 
 
+def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduled wake-up (POST /system/wake-sync) and its token, in an app of the test (no server reached)."""
+    print_section("System API: the scheduled wake-up")
+    print_info("Testing: LIBREFOLIO_WAKE_TOKEN(_FILE) → 404 off, 503 unusable, 401 without it; with it, one run at a time (409), a streamed 200 (spaces, then the run's report), a run left to end when its client goes (in-process app, run_due_jobs replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_wake.py", test_names)
+    return run_command(cmd, "System API wake-up tests", verbose=verbose)
+
+
 def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance block (workstream H, CP6): refuse_when_blocked, ALLOWED_WHEN_BLOCKED, GET /system/block."""
     print_section("Instance Block Tests")
@@ -717,6 +725,16 @@ def api_email(verbose: bool = False, test_names: list[str] | None = None) -> boo
     return run_command(cmd, "Email administration API tests", verbose=verbose)
 
 
+def api_email_verification(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the email verification API tests: POST /email/verification/confirm and POST /email/verification/resend, in-process."""
+    print_section("Email Verification API Tests")
+    print_info("Testing POST /email/verification/confirm (anonymous: 200 {username}, 400 TOKEN_INVALID with the token's status, 422) and POST /email/verification/resend (anonymous: 200 {language}, the login's 401/403, 409 without problem, 429 with Retry-After, 502, 422)")
+    print_info("In-process: the real auth and email routers on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_api.py", test_names)
+    return run_command(cmd, "Email verification API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -832,6 +850,18 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    add_test(
+        api,
+        "system-wake",
+        api_system_wake,
+        name="System API Wake-up",
+        desc="POST /system/wake-sync and LIBREFOLIO_WAKE_TOKEN(_FILE): wake_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, the panel token's rule value for value: anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 wake_unavailable and one error line naming the variable; missing or wrong token → 401 wake_unauthorized, WWW-Authenticate: Bearer; with it, run_due_jobs('wake') as a task, one at a time (token first, then 409 wake_in_progress until the run ends, a disconnect included, the run never cancelled); 200 application/json no-store streamed: a space at once, one per WAKE_KEEPALIVE_SECONDS, then WakeSyncResponse mirroring the RunReport, any status; a raising run → error, its class name only; started/finished/failed logged; D-W3 on the real scheduler: blocked, nothing past the switches; OpenAPI (WakeToken, WakeSyncResponse, 401/404/409/503) and the composition; through the middleware stack in flight without presence, the first gzip chunk before the run ends; the token never in an answer or the log",
+        # PURE: an app of the test holds the system router under /api/v1 (the middleware stack added where it is under
+        # test), run_due_jobs is replaced on the wake module by a fake (the real one runs once, blocked, every collaborator
+        # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or
+        # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.
     add_test(api, "instance-block", api_instance_block, name="Instance Block", desc="423 on a blocked instance but the allowed routes, 401 first for anonymous callers, GET /system/block, route guard")
@@ -941,6 +971,17 @@ Tests for REST API endpoints (server auto-started):
         desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous: ships held, 409 FORGOT_PASSWORD_DISABLED with one answer for everyone and nothing scheduled; lifted: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
+        # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "email-verification",
+        api_email_verification,
+        name="Email Verification API",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
+        # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )

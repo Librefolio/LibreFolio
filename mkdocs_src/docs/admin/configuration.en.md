@@ -43,6 +43,7 @@ the same sample as `.env`.
 | `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | _not set_ | Leave it unset. A hosting provider sets it so that its hosting panel can back up the instance through `/api/v1/backup/panel/jobs`: at least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`. Not set: those routes answer `404`. A token LibreFolio cannot use does not stop the server: the routes answer `503` and the log has an error. `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Read from the environment only. See [Hosting for Others](hosting_providers.md#panel-backups). |
 | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | _not set_ | Leave it unset. The largest archive an administrator may upload to check it for a restore, in megabytes; `0` is no limit. Not set: no limit, or `500` in the `managed` profile. A hosting provider sets it, since there the administrator is its customer. A value that is not a whole number does not stop the server: the uploads answer `503` and the log has an error. Read from the environment only. See [Hosting for Others](hosting_providers.md#restore-upload-limit). |
+| `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -99,7 +100,7 @@ users start from the **Default Currency** in [Global Settings](settings.md).
 
 ## 🔐 Secrets {: #secrets }
 
-Five options are secrets: keep them as private as the database. Each one can be written in `.env` or
+These options are secrets: keep them as private as the database. Each one can be written in `.env` or
 read from a file.
 
 | Secret | From a file | What it is |
@@ -109,6 +110,7 @@ read from a file.
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` | The token of the hosting panel that backs up the instance: see [Hosting for Others](hosting_providers.md#panel-backups). Like the web-search key, a file that cannot give it does not stop the server: the panel's backup routes answer `503`. |
+| `LIBREFOLIO_WAKE_TOKEN` | `LIBREFOLIO_WAKE_TOKEN_FILE` | The token of the [scheduled wake-up](sleep_wake.md#wake-sync), in the main options above. A token that cannot be used, or a file that cannot give it, does not stop the server either: the scheduled wake-up answers `503` until it is fixed. |
 
 A plugin may have secrets of its own, such as the API key of a paid data source: see
 [Plugin Settings](#plugin-settings).

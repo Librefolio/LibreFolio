@@ -82,6 +82,63 @@
       "TIMEOUT": "El servidor SMTP no ha respondido a tiempo.",
       "SEND_FAILED": "El servidor SMTP no ha aceptado el mensaje."
     },
-    "loadError": "No se ha podido leer el estado del correo."
+    "loadError": "No se ha podido leer el estado del correo.",
+    "verification": {
+      "page": {
+        "checking": "Verificando tu dirección de correo…",
+        "expired": "Este enlace ha caducado. Inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo.",
+        "consumed": "Este enlace ya se ha usado. Si tu cuenta está activa, inicia sesión.",
+        "revoked": "Este enlace ya no funciona: inicia sesión para pedir uno nuevo.",
+        "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
+        "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
+      },
+      "verified": "Tu dirección de correo está verificada, {username}: ya puedes iniciar sesión.",
+      "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo que te enviamos y luego inicia sesión.",
+      "resend": "Enviar el enlace de nuevo",
+      "resending": "Enviando…",
+      "resent": "Un enlace nuevo está en camino: revisa tu bandeja de entrada y el spam. Los enlaces anteriores ya no funcionan.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "El nombre de usuario o la contraseña no son correctos: revísalos en el formulario de arriba.",
+        "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Tu cuenta ya está activa: inicia sesión.",
+        "USER_LIMIT_REACHED": "Tu enlace ha caducado y esta instancia está completa ahora: pregunta a su administrador.",
+        "ACCOUNT_DISABLED": "Esta cuenta está desactivada: pregunta al administrador de esta instancia.",
+        "unavailable": "Ahora no se puede enviar el correo: inténtalo más tarde o pregunta al administrador de esta instancia.",
+        "generic": "No se pudo enviar el enlace: inténtalo de nuevo."
+      }
+    },
+    "sendLink": {
+      "button": "Enviar por correo",
+      "sending": "Enviando…",
+      "toLabel": "Enviar a",
+      "toPlaceholder": "nombre@ejemplo.es",
+      "resetTarget": "El enlace va a la dirección de correo de la cuenta.",
+      "publicUrlHint": "El enlace del correo empieza por la dirección definida en LIBREFOLIO_PUBLIC_URL, que puede ser distinta de la de arriba.",
+      "sent": "Enviado a {to}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "El correo está apagado o no funciona en esta instancia.",
+        "EMAIL_LINKS_UNAVAILABLE": "Los correos no pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL no está definida, o no puede iniciar un enlace.",
+        "EMAIL_LINK_INVALID": "Este enlace ya no funciona: crea uno nuevo.",
+        "EMAIL_ACCOUNT_INACTIVE": "La cuenta no está activa: actívala antes de enviarle un enlace de restablecimiento.",
+        "EMAIL_RECIPIENT_REQUIRED": "Escribe la dirección a la que enviar la invitación.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un enlace de restablecimiento solo va a la dirección de su cuenta.",
+        "EMAIL_RECIPIENT_INVALID": "No es una sola dirección de correo válida.",
+        "EMAIL_RATE_LIMITED": "Se alcanzó el límite de correos por hora: inténtalo de nuevo en {minutes} min.",
+        "generic": "No se pudo enviar el correo."
+      }
+    },
+    "forgot": {
+      "label": "Nombre de usuario o dirección de correo",
+      "submit": "Enviarme un enlace de restablecimiento",
+      "sending": "Enviando…",
+      "accepted": "Si coincide una cuenta activa, su propietario recibe un correo con un enlace para elegir una contraseña nueva. Revisa la bandeja de entrada y el spam: el enlace funciona durante 30 minutos.",
+      "errors": {
+        "FORGOT_PASSWORD_DISABLED": "El restablecimiento de la contraseña por correo aún no está disponible en esta instancia: pregunta a su administrador.",
+        "unavailable": "Ahora esta instancia no puede enviar correos: pregunta a su administrador.",
+        "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
+        "generic": "No se pudo enviar la solicitud: inténtalo de nuevo."
+      }
+    }
   }
 }
