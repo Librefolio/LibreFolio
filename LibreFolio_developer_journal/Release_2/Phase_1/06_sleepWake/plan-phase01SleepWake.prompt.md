@@ -3012,3 +3012,111 @@ con lo stesso codice, o con un altro, non riavvia il poller».
    `zodios-client.ts`, che importa `priceRefresh.ts` (Z5) e, sulla riga dopo, `instanceBlock.svelte.ts` di H, con
    `$state` al primo livello dal 15/10 (`cb34327e9`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
    detto al coordinatore.
+
+### Z-14 — le pagine dei prezzi e dei cambi vedono un recupero: analisi (17/10 ~00:05, sola lettura)
+
+> **Via** (coordinatore, 16/10 ~23:55): «Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14.»
+> Poi (17/10 ~00:00): «I'm waiting for the Z-14 analysis.» Base: `31a64eb17`, albero pulito.
+
+**Stato reale.**
+- I due registri (`lib/stores/assetPriceStoreRegistry.ts`, `lib/stores/fxStoreRegistry.ts`) tengono un
+  `TimeSeriesStore` (`lib/stores/core/TimeSeriesStore.ts`, usato solo da loro) per chiave. Un intervallo segnato
+  `markFetched` non si chiede più; `invalidateAll()` cancella dati e segni. Nessuno dei due ascolta il bus.
+- Le risposte dei prezzi e dei cambi riempiono all'indietro i giorni senza dato (`backward_fill_info`): il negozio ha
+  un punto per ogni giorno. Dopo un recupero i giorni nuovi non sono buchi: né `getMissingIntervals` né il solo
+  azzeramento dei segni li farebbero chiedere. Serve uno stato «stale» che chieda di nuovo anche dove ci sono dati.
+- Chi legge: le due pagine degli asset, con `getMissingIntervals`. Su un hit il dettaglio chiede comunque eventi e
+  segnali (`include_price: false`): dopo un recupero mostra prezzi vecchi con segnali calcolati sui nuovi. Il dettaglio
+  di un cambio (`loadChartData`, `getMissingIntervals`); la lista dei cambi (`loadFxRatesAndSignalsBulk`: con segnali
+  chiede sempre l'intervallo intero, senza solo i buchi). I moduli delle transazioni con `lookupFxRate`, che prende un
+  punto per sola presenza della data e lo fonde senza `markFetched`. Molte letture sincrone (`getRange`,
+  `getAllSorted`, `lookupFxRateSync`): svuotare i negozi lascerebbe vuoti valori che nessuno ricarica.
+- Il bus: report, rischio e lotti segnano stale, Dashboard e broker ricaricano (Z-13); i negozi si registrano
+  all'import, prima delle pagine.
+
+**Disegno proposto, A** (solo `.ts` di `lib/stores/`, decisioni N-Z14-1…3, «da rivedere»):
+- N-Z14-1: `TimeSeriesStore.markStale()` toglie i segni e mette il negozio in stato stale: da lì
+  `getMissingIntervals(start, end)` restituisce le parti dell'intervallo non lette dopo il segno, anche dove ci sono
+  dati. I dati restano (le letture sincrone non cambiano); la prossima lettura chiede di nuovo, poi l'intervallo è
+  fresco. `invalidateAll()` azzera anche lo stato.
+- N-Z14-2: i due registri ascoltano il bus all'import e segnano stale tutti i loro negozi solo su `{kind: 'prices'}`.
+  Non su `mutation` (il poll dal vivo lo è ogni 30 s: ogni poll farebbe richiedere intervalli interi), né su
+  `refresh` (l'«Aggiorna» del portafoglio; le pagine dei prezzi hanno il loro).
+- N-Z14-3: `lookupFxRate` tratta un punto stale come mancante (`getMissingIntervals(date, date)`) e segna la lettura.
+
+**Fuori, da decidere (B):** una pagina dei prezzi o dei cambi già aperta durante il recupero non si ricarica da sola,
+come fanno Dashboard e broker (Z-13). Servirebbero un ascoltatore e una ricarica silenziosa (la lezione di Z-18) in
+quattro pagine (asset lista e dettaglio, cambi lista e dettaglio), fra cui il dettaglio asset, ora in mano a Y.
+Proposta: Z-14b nel backlog. Nel cloud la prima pagina dopo un risveglio è di solito il Dashboard (Z-13); con A la
+navigazione successiva è fresca.
+
+**Test** (test-author, rossi prima): `TimeSeriesStore.test.ts` (lo stato stale), `assetPriceStoreRegistry.test.ts` e
+`fxStoreRegistry.test.ts` (l'ascolto, solo `prices`; le letture dopo il segno; `lookupFxRate`), azioni `front-fx
+fx-unit` e `front-asset asset-unit`. E2E nello spec di Z-13 (`front-portfolio price-refresh`): dettaglio di un asset,
+il Dashboard (navigazione nell'app, i negozi restano in memoria), un recupero simulato come in (a), ritorno al
+dettaglio: la query della pagina chiede i prezzi (`include_price: true`); rosso oggi (`false`). Lo stesso per il
+dettaglio di un cambio, sulla sua richiesta `convert`.
+
+**Superfici e conflitti:** i tre `.ts` dei negozi (ultimo tocco: 11/10, X), tre file di test, lo spec di Z-13 (mio).
+Doc: `developer/frontend/state/registries.md` (passo 4, «Invalidating»), `core-infrastructure.md`, `live-ticker.md`
+(`#price-refresh`), `domain-state.md` (chi ascolta il bus). Nessun `.svelte`, nessuna area dei colori. Rischio:
+basso; una lettura in più per intervallo dopo ogni recupero, nessuna fra un recupero e l'altro.
+
+> **Via** (coordinatore, 17/10 ~00:10): «Z-14: proposal A approved (N-Z14-1/2/3), go with the reds. Z-14b in the
+> backlog as you described it, a UX decision for the developer: I'm noting it among the morning questions. For the
+> E2E, a short slot when you're ready.»
+
+**Passi:** 1. rossi (test-author); 2. codice; 3. doc (docs-writer); 4. controlli leggeri; 5. slot E2E corto
+(`price-refresh`); 6. backlog (Z-14 ✅, Z-14b nuova) e checkpoint.
+
+1. ✅ 17/10 00:10–00:46 — Rossi (test-author): `TimeSeriesStore.test.ts` 8 casi nuovi più uno che fissa il
+   comportamento senza segno; `assetPriceStoreRegistry.test.ts` 4; `fxStoreRegistry.test.ts` 6; nello spec di Z-13
+   (g) dettaglio asset e (h) dettaglio cambio, col registratore della pagina esteso alle richieste
+   `prices/query` e `fx/convert` (aggiunta). Ognuno ha un controllo: senza recupero la cache risponde, provato con
+   `performance.timeOrigin` invariato (navigazione nell'app). Vitest sui tre file, codice di HEAD
+   (`files/z14_light.sh red`): 18 rossi su 141, i 18 attesi, ognuno col suo messaggio «(Z-14)»; 123 verdi.
+   > **⚠️ Fuori pista**: Prettier segnalava una riga del registratore (HEAD era pulito): riscritta in due righe,
+   > pulita. La nota in fondo a `fxStoreRegistry.test.ts` (già a HEAD) citava `fxStoreRegistry.ts:296` e `:399`,
+   > numeri già sbagliati e spostati dal codice: ora nomina le due funzioni («two arms», non «three»).
+2. ✅ 17/10 00:47 — Codice (`files/z14-draft/apply_z14.py code`, inverso esatto provato su una copia; impronta in
+   `files/z14-draft/z14_applied.md5`): `TimeSeriesStore.ts` +48 −1, `assetPriceStoreRegistry.ts` +11,
+   `fxStoreRegistry.ts` +15 −1; Prettier pulito. Descrizione dell'azione `front-portfolio price-refresh` e docstring
+   aggiornate (Z-14).
+   > **Osservazioni di test-author, non cambiate**: `ensureAssetPriceRangeLoaded` non ha chiamanti nel prodotto (le
+   > pagine usano il negozio direttamente; preesistente); dopo un recupero il ritorno a una pagina dei prezzi mostra
+   > il caricamento, come una prima visita, non i punti vecchi (le pagine non li leggono su un buco): una volta per
+   > recupero, accettato dal contratto; nella riga di Z-14b.
+3. ✅ 17/10 00:47–01:05 — Doc (docs-writer, verificata da me): `state/registries.md` (passo 5 nuovo «Going stale after
+   a price catch-up», il diagramma, il passo 2), `state/core-infrastructure.md` (`markStale()`), `state/domain-state.md`
+   (i due registri fra gli ascoltatori del bus, solo `prices`), `live-ticker.md` (`#price-refresh`, due righe nuove e
+   (f)–(h) nella tabella dei test). Due correzioni sue, accettate: `lookupFxRate` non precompila, dà il cambio di
+   mercato che le modali delle transazioni confrontano (`TxFormPairSection.svelte:355`, `TransactionBulkModal.svelte`);
+   ho corretto con lui il messaggio dell'asserzione in `fxStoreRegistry.test.ts`. Derive trovate e non toccate:
+   `domain-state.md` 13–16 (colonna «Location» di quattro store, preesistente), l'intro di `#price-refresh`,
+   `admin/sleep_wake.en.md` (pagina tradotta: niente).
+4. ✅ 17/10 00:46–01:36 — Controlli leggeri (`files/z14_light.sh green`, soglia 50), col codice: i tre file
+   141/141; `front-fx fx-unit` 153/153; `front check` 0 errori e 0 avvisi; `front-asset asset-unit` 884/885: rosso solo
+   `growthLadderAxis.test.ts` «L14-self.4», «Test timed out in 5000ms» a 5054 ms, sotto carico.
+   > **⚠️ Fuori pista** (test-triage): il file non è nel lotto e non arriva al codice di Z-14 (importa `echarts`, i
+   > moduli della scala e `timeSeriesAggregation.ts`, che ha solo import di tipo). Ipotesi: tempo massimo di Vitest
+   > superato sotto carico; prova: lo stesso file da solo, poi l'azione intera (sotto).
+   Prova (`files/z14_after.sh`): il file da solo 138/138, «L14-self.4» verde; `front-asset asset-unit` di nuovo 885/885:
+   era il carico. Poi `front-utility core-unit` 7308/7308; `mkdocs build` stretto senza avvisi (con `anchors: warn`);
+   `check-links` 97 validi. In più, a mano: il docblock di `portfolioMutation.ts` nomina i due registri (solo
+   commento) e la riga E2E di `live-ticker.md` dice dell'«Aggiorna» nei due giri. Porta 6186 libera.
+5. ✅ 17/10 00:51–01:26 — Slot 1 (coordinatore, «start right away»: la galleria dei colori alza il carico dalle
+   ~01:16), `files/z14_slot.sh`:
+   - A (codice tolto, i tre file = HEAD): `front-portfolio price-refresh` 6 verdi, (g) e (h) rossi; B (impronta
+     verificata): 7 verdi, (h) rosso.
+   > **⚠️ Fuori pista**: (h) era rosso in A e in B alla stessa premessa («a running catch-up shows the notice»),
+   > prima dell'asserzione di Z-14: difetto del test. Il caso contava sulle risposte del Dashboard per avviare il
+   > tracker; in (g) succede perché il poll dal vivo della pagina asset è una scrittura e rende stale il report del
+   > Dashboard, la pagina del cambio non scrive. Riparo (test-author, via del coordinatore): l'«Aggiorna» del
+   > Dashboard in entrambi i giri, controllo e recupero, in (g) e (h) — sul server legge soltanto, i negozi ignorano
+   > `refresh`, nessuna voce nella cronologia — più la premessa esplicita «no API answer after the header was set».
+   - Re-run filtrato su (g) e (h) (`files/z14_rerun.sh`, slot 1 di nuovo): B 2/2; A 2 rossi, ognuno col suo
+     messaggio Z-14 dopo premesse e controllo; poi di nuovo B, impronta verificata. Porta 6186 libera.
+   - I sei casi di Z5/Z-13/Z-18 erano verdi in B nel primo slot, sullo spec di prima del riparo, che ha toccato solo
+     helper e commenti di Z-14: non rifatti in pieno.
+6. ✅ 17/10 01:40 — Backlog: Z-14 ✅, Z-14b nuova (domanda di UX del mattino). Checkpoint FROZEN inviato al
+   coordinatore. Nessun `.svelte`, nessuna area dei colori.
