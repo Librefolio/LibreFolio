@@ -23,7 +23,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
+    import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
