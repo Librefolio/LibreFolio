@@ -2765,10 +2765,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal`.
 > Il piano: `../Phase_1/10_colorSystem/IW-importColors/`. Gli ID di questa sezione sono `IW-n`.
 
-- **IW-1 · Quattro pulsanti pieni verdi e blu in attesa dei ruoli hover** — basso; IW, 16/10 (D2). Restano legacy
+- ✅ **IW-1 · Quattro pulsanti pieni verdi e blu in attesa dei ruoli hover** — basso; IW, 16/10 (D2). Restano legacy
   `asset-group-confirm-all`, `asset-group-confirm-{id}` (`AssetGroupStep`), `import-wizard-warning-confirm` (il ramo
   info) e `create-primary-confirm` (`ImportWizardModal`). T ha aggiunto `hover:bg-lf-success-hover` e
   `hover:bg-lf-info-hover` (`f043c1b58`): si convertono dopo la base merge. Dettagli: [piano IW](../Phase_1/10_colorSystem/IW-importColors/plan-phase00ImportColors.prompt.md), sezione «Restano legacy».
+  ✅ 16/10, checkpoint 2 di IW (passo 5 del piano; SHA al commit del coordinatore): i quattro su `success`/`info` con i
+  loro hover; `create-primary-confirm` resta nei «da rivedere» (IW-7).
 - **IW-2 · Le stelle «primario» degli identificativi senza ruolo** — basso; IW, 16/10 (D6). `AssetGroupStep`,
   `fill-amber-400 text-amber-500` su legenda e badge (6 classi): serve un ruolo «marcatore», o i categoriali.
   Dettagli: piano IW, sezione «Restano legacy».
@@ -2787,7 +2789,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **IW-7 · Scelte «da rivedere» della migrazione dell'import** — basso, aspetto; IW, 16/10. Stato dei duplicati tutto
   `warning` (D1), timeline del set, stepper e barre su `checked`, fuoco blu diventato verde, pulsanti contornati al 3:1,
   bordi tratteggiati dei gruppi di asset sul `-line`, testi `-800` su card a `text-lf-X`, maniglia su `bg-lf-input`,
-  testo attenuato su `neutral` (~4:1). Dettagli: piano IW, «Da rivedere per il developer» e note dei lotti.
+  testo attenuato su `neutral` (~4:1), `create-primary-confirm` su `info` (è l'azione primaria del suo dialogo: forse
+  `action`). Dettagli: piano IW, «Da rivedere per il developer» e note dei lotti.
 - **IW-8 · Note di test-author su `tx-brim-import.spec.ts` e `tx-import-resolution.spec.ts`** — basso, test; IW, 16/10
   (area W: da spostare). In T4 la guardia `if` salta l'asserzione solo quando qualcosa si rompe, e la guardia esterna usa
   il testo tradotto `text=Resolve Assets` (c'è `import-wizard-resolve-section`); T1 non importa mai con questo campione;

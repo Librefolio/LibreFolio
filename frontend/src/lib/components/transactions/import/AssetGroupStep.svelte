@@ -339,7 +339,7 @@
     <InfoBanner variant="info" message={$t('importWizard.assetUnify.intro')} />
     {#if openProposalCount >= 2 && onconfirmall}
         <div class="flex justify-end">
-            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" onclick={onconfirmall} data-testid="asset-group-confirm-all">
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-lf-success px-3 py-2 text-xs font-semibold text-lf-on-status hover:bg-lf-success-hover" onclick={onconfirmall} data-testid="asset-group-confirm-all">
                 <Check class="h-4 w-4" />
                 {$t('importWizard.assetUnify.confirmAll', {values: {count: openProposalCount}})}
             </button>
@@ -512,7 +512,7 @@
                         <span class="text-[11px] text-lf-muted">{$t('importWizard.assetUnify.txCount', {values: {count: txCountOf(group)}})}</span>
                         <div class="flex shrink-0 items-center gap-1.5">
                             {#if proposed}
-                                <button type="button" class="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700" onclick={() => confirmGroup(group)} data-testid="asset-group-confirm-{group.groupId}">
+                                <button type="button" class="inline-flex items-center gap-1 rounded bg-lf-success px-2 py-1 text-xs font-medium text-lf-on-status hover:bg-lf-success-hover" onclick={() => confirmGroup(group)} data-testid="asset-group-confirm-{group.groupId}">
                                     <Check class="h-3.5 w-3.5" />
                                     {$t('importWizard.assetUnify.confirm')}
                                 </button>

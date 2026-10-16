@@ -16,7 +16,8 @@
 >
 > **Stato:** ✅ analisi inviata (16/10, 11:00); ✅ approvata dal developer nella sessione IW (uscita dal plan mode, ~11:05)
 > e dal coordinatore con le decisioni D1–D6 (~11:15); ✅ cinque lotti scritti e rivisti (11:47); ✅ prove leggere verdi
-> (12:05); ⏳ checkpoint 1 inviato, FROZEN; poi i 4 pulsanti di D2 con i ruoli nuovi di T e gli slot pesanti.
+> (12:05); ✅ checkpoint 1 `48ecea1e2`, base merge `b3162db80`; ✅ passo 5, i pulsanti di D2 (12:21); ⏳ checkpoint 2
+> inviato, FROZEN; slot pesante unico verso le 15:30, dopo TR.
 
 ## ✅ Autorizzazione e decisioni (16/10/2026)
 
@@ -151,10 +152,10 @@ comune (J, Z, H hanno solo il merge di `d5c3c3ae3`). Il checkout principale non 
 
 - `GapFixToggle.svelte` (4): lotto unico degli interruttori di T.
 - `AssetGroupStep`: badge identificativi (`KIND_TONES`, categoriali) con anello ambra e `ring-offset` del primario (2); stelle «primario» `fill-amber-400 text-amber-500` (6, legenda compresa): nessun ruolo per un segnaposto, D6; pulsanti «Conferma» `bg-emerald-600 hover:bg-emerald-700 text-white` (6): D2.
-- `ImportWizardModal`: conferma degli avvisi (ramo info `bg-sky-500 hover:bg-sky-600`, 5 sull'elemento intero) e `create-primary-confirm` `bg-blue-600 hover:bg-blue-700` (3): D2.
+- `ImportWizardModal`: conferma degli avvisi (ramo info `bg-sky-500 hover:bg-sky-600`, 5 sull'elemento intero) e `create-primary-confirm` `bg-blue-600 hover:bg-blue-700` (3): D2. ✅ Convertiti al passo 5 con i ruoli nuovi di T, insieme alle due conferme smeraldo di `AssetGroupStep`.
 - `pairCellHtml.ts` (D4, in IW-5): il chip viola del tasso implicito `text-violet-600 dark:text-violet-400` (2), categoriale; rispecchia il suggerimento di promozione del Bulk di TR (`renderDualHtml` di `TransactionBulkModal`).
 
-Totale previsto: **28** classi legacy restano (26 dell'area + 2 di `pairCellHtml.ts`), m2 a 0.
+Totale previsto: **28** classi legacy restano (26 dell'area + 2 di `pairCellHtml.ts`), m2 a 0. Dopo il passo 5: **14**.
 
 ## Decisioni chieste al coordinatore (✅ decise il 16/10: vedi «Autorizzazione e decisioni» in testa)
 
@@ -283,13 +284,26 @@ duplicati (D1); la timeline della card del set (12).
    > nessun processo rimasto, porta 6151 libera.
 3. ⏳ Slot pesanti A (IW-1…IW-3) e B (IW-4, IW-5), quando li assegna il coordinatore: `api sync` (fatto),
    `front check`, `front-utility core-unit`, `front-utility component-unit`, E2E mirati (elenco nella sezione dei lotti).
-4. ⏳ Checkpoint 1 (16/10, 12:05): `--update` della baseline, che si stringe solo sulle 17 righe dell'area (m1 8.249 →
+4. ✅ Checkpoint 1 (16/10, 12:05; committato dal coordinatore: `48ecea1e2`): `--update` della baseline, che si stringe solo sulle 17 righe dell'area (m1 8.249 →
    **6.967**, −1.282; m2 54 → **53**, via `#dc2626`); voci IW-1…IW-8 nel backlog; messaggio al coordinatore con file,
    prove, esclusioni, conflitti, messaggio di commit, «dove guardarlo». Poi FROZEN.
    - Area dopo il lotto: m1 1.310 → **28** (AssetGroupStep 14, GapFixToggle 4, ImportWizardModal 8, `pairCellHtml.ts`
      2), m2 1 → **0**.
-5. ⏳ Dopo la base merge con i ruoli nuovi di T (`f043c1b58`: `hover:bg-lf-success-hover`, `hover:bg-lf-info-hover`): i 4
-   pulsanti pieni di D2 (backlog IW-1). AssetGroupStep 14 → 8, ImportWizardModal 8 → 0, area 28 → 14.
+5. ✅ Dopo la base merge con i ruoli nuovi di T (16/10, 12:13–12:21; coordinatore: checkpoint 1 = `48ecea1e2`, base
+   merge `b3162db80` con la punta `b171c058e`, che porta `f043c1b58`):
+   - `api sync` dopo la base merge (12:16, uscita 0, solo file ignorati);
+   - i 4 pulsanti pieni di D2 (backlog IW-1): `asset-group-confirm-all` e `asset-group-confirm-{id}` → `bg-lf-success
+     text-lf-on-status hover:bg-lf-success-hover`; `import-wizard-warning-confirm` → `{… ? 'bg-lf-warning
+     hover:bg-lf-warning-hover' : 'bg-lf-info hover:bg-lf-info-hover'} text-lf-on-status`; `create-primary-confirm` →
+     `bg-lf-info text-lf-on-status hover:bg-lf-info-hover` (da rivedere: è l'azione primaria del suo dialogo, forse
+     `action`; OK del coordinatore a segnarlo);
+   - ritocco chiesto dal coordinatore: il campo dell'importo della ripartizione (`FixFlaggedStep:764`) prende
+     `placeholder:text-lf-placeholder` (`app.css` colora testo e segnaposto dei campi nativi solo senza classi `-lf-`);
+   - prove: `--check` pulito; `dark_only_check.py b3162db80` 0; `native_field_check.py 6e569084a` 0 su 16 file;
+     `git diff --check` e Prettier puliti; Vitest dei gate più `FixFlaggedStep` e `ImportWizardModal`: **6 file, 138
+     test verdi** (12:19); `--update`: m1 6.967 → **6.953** (AssetGroupStep 14 → 8, ImportWizardModal 8 → 0, riga tolta).
+   - **Area:** m1 1.310 → **14** (AssetGroupStep 8: badge `KIND_TONES` con anello, 3 stelle; GapFixToggle 4;
+     `pairCellHtml.ts` 2), m2 **0**.
 
 ## Definizione di fatto
 
