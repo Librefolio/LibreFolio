@@ -288,3 +288,13 @@ def pending_admin_filter():
         setup_links.exists(),
         ~setup_links.where(AccountToken.consumed_at.is_not(None)).exists(),  # type: ignore[union-attr]
     )
+
+
+async def pending_admin_ids(session: AsyncSession) -> set[int]:
+    """The ids of the accounts waiting for their F02 setup (``pending_admin_filter``): the Users tab marks them."""
+    return set((await session.execute(select(User.id).where(*pending_admin_filter()))).scalars().all())
+
+
+async def is_pending_admin(session: AsyncSession, user: User) -> bool:
+    """Whether ``user`` waits for its F02 setup (``pending_admin_filter``): it activates through its setup link only."""
+    return (await session.execute(select(User.id).where(User.id == user.id, *pending_admin_filter()))).first() is not None

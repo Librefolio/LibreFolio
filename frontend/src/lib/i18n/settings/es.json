@@ -246,7 +246,8 @@
         "you": "Tú",
         "admin": "Admin",
         "inactive": "Desactivada",
-        "protected": "Protegida"
+        "protected": "Protegida",
+        "pendingSetup": "Pendiente de configuración"
       },
       "actions": {
         "deactivate": "Desactivar",
@@ -307,7 +308,8 @@
         "DELETION_FAILED": "La eliminación ha fallado: no se ha eliminado nada.",
         "INVALID_INPUT": "Revisa lo que has introducido: puede que la dirección de correo no sea válida.",
         "generic": "La acción ha fallado. Inténtalo de nuevo.",
-        "load": "No se han podido cargar las cuentas."
+        "load": "No se han podido cargar las cuentas.",
+        "PENDING_SETUP": "Este administrador activa la cuenta con su enlace de configuración: no se puede reactivar desde aquí."
       },
       "invite": {
         "button": "Invitar",
@@ -338,7 +340,8 @@
         "signedOut": "Se han cerrado todas las sesiones de {username}.",
         "guidesRestarted": "Las guías de {username} empiezan de nuevo.",
         "resetLinkCreated": "Enlace de restablecimiento creado para {username}."
-      }
+      },
+      "pendingSetupHint": "Esta cuenta de administrador se activa con su enlace de configuración. Si el enlace se ha perdido, ejecuta «dev.py user setup-link» en el servidor o pídelo a tu proveedor."
     },
     "linkShare": {
       "addressLabel": "Dirección del servidor",

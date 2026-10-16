@@ -3607,8 +3607,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `setting-save`/`setting-undo`, prova della sola lettura (nuovo `settings-readonly-indicator`), il segnaposto in
     `SettingControls.test.ts`; `front-utility settings` 46 ✅. Commit al checkpoint A6b; dettagli in «A6b.2».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
-- **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
-  A (15/10, dal merge di H CP6; accettato dal coordinatore).
+- ✅ **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo; chiusa
+  il 16/10 in A7b (commit del coordinatore); A (15/10, dal merge di H CP6; accettato dal coordinatore).
+  - Cura (decisione del coordinatore, A7b): l'intercettore del client non porta più al login su un 401 dalle pagine
+    anonime dei link (`/setup`, `/invite`, `/reset-password`, `/verify-email`, `isLinkPage`; revisione di H), e
+    `describeRegistrationError` legge il 401, o il 423 `instance_blocked`, come `auth.instanceBlocked`. Per
+    `/verify-email` il 401 di `confirm` resta da riconoscere nella pagina: H lo passa a E.
   - Contesto: per non perdere l'accesso, `auth.inspect_link_token` e `auth.reset_password_with_link` entrano in
     `ALLOWED_WHEN_BLOCKED` (lotto piccolo di H dopo A5); `auth.register` resta fuori.
   - Effetto: `tokens/inspect` risponde anche per gli inviti, quindi `/invite` mostra il modulo. La registrazione
@@ -3752,6 +3756,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     scheda.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
+- **A-29 · Sotto `vite dev` le pagine dei link portano al login** — minimo; da H, revisione di A7b (16/10).
+  `frontend/src/hooks.server.ts` ha `PUBLIC_ROUTES` = `/` e `/api`: con il server di sviluppo (5173) chi apre un link
+  senza sessione viene mandato a `/?redirect=…` e il token nel frammento si perde. In produzione e nelle corsie di test
+  il frontend è statico e non passa di lì. Cura possibile: le quattro pagine dei link (`isLinkPage`) fra le pubbliche.
+  Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b.5».
+- **A-30 · Un nuovo link di setup dall'API e dalla scheda Utenti** — basso; deciso dal coordinatore (A7b, 16/10).
+  Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
+  la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
