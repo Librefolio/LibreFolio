@@ -3592,3 +3592,14 @@ all-or-nothing tests red. The page gains the fix, a testing lesson (only a *rele
 early) and its source files.
 Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | A TRANSFER left without its other half becomes a plain ADJUSTMENT (V-3)
+Decision 47 built (workstream W, on J's CP-16 FIFO handover at cost): the giving leg of a TRANSFER whose receiver is
+deleted becomes an ADJUSTMENT-out at the Auto cost of its own broker (`_handover_cost`), without a cost it only loses its
+link; the split of a TRANSFER pair prices its giving leg in the WAC stage (refused with `WAC_FX_UNAVAILABLE` on a missing
+conversion), a promote back to TRANSFER drops the giving side's cost; the lone legs already in databases are converted by
+the `lone-transfer-legs` startup step after the post-migration fixes (the sync fix cannot compute the async WAC), with a
+dry run in the offline CLI. Entry after J-17 (price marks from adjustments). The status's stale «not in the code yet» and
+«waits for point 46/47» lines are gone.
+Updated: [[decisions/orphan-transfer-becomes-an-adjustment]].
+Graph: not updated; graphify is not available in this worktree.
