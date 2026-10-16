@@ -140,6 +140,9 @@ is small because an exclusive has to survive being written down.
 The units that came with the registration modes show the other way out: `api registration` and `api users-admin`
 run every case that needs another mode, an accounts variable or a user limit in-process, on a private database, and
 touch only their own accounts and tokens on the lane's server, so they stay WRITE-SCOPED with no exclusive.
+`api admin-setup` goes the same way: an administrator waiting for its setup exists only on an instance that had no
+account, so every case that needs one runs in-process on a private database, and the lane's server only gets
+refusals that write nothing.
 
 Two claims that look like reasons and are not:
 
@@ -724,12 +727,17 @@ def populate_registry(registry: dict) -> None:
 ### Registry Entry Shape
 
 A category registered in `TEST_REGISTRY` maps to a dictionary containing:
-* `_meta`: General information about the category (used for `--help` texts).
+
+* `_meta`: General information about the category (used for `--help` texts) and, when the category declares them in `make_category()`, these keys:
+    * `setup`: What the category does to its environment before its units run: `services` recreates the test database empty, `api` reseeds it. `run_category_setup()` runs it once per invocation, whichever caller reaches it first.
+    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts.
+    * `setup_needed`: For one action run on its own, a no-argument callable that returns why the setup must run first, or `None` (a check that raises counts as a reason). With a reason, `ensure_category_setup()` prints it in one line and runs the setup. `api` returns one when the lane's test database is missing, unreadable or lacks one of its fixture users.
+    * `default_isolation`: The isolation class of every unit that declares neither `isolation` nor `exclusive_because` — see [Declaring a class — and earning it](#declaring-a-class-and-earning-it).
 * A set of actions (e.g., `"decimal-precision"`, `"all"`), where each action points to:
-  * `func`: The Python callable that starts the test.
-  * `name`: A human-readable title.
-  * `desc`: A short description of the test action.
-  * `prereq` / `tests` / `note`: Optional flags and metadata for dependencies.
+    * `func`: The Python callable that starts the test.
+    * `name`: A human-readable title.
+    * `desc`: A short description of the test action.
+    * `prereq` / `tests` / `note`: Optional flags and metadata for dependencies.
 
 ---
 
@@ -806,7 +814,7 @@ sequenceDiagram
 | `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. `start()` refuses a port that another process holds, then builds before it spawns: `build_server_prerequisites()` runs `dev.py server --test --build-only` in the foreground, its output on the terminal, with the runner's environment but not the coverage wiring the server gets (the tooling is not measured). That rebuilds the frontend (debug) and the MkDocs site when they are missing or stale and refreshes the JS cache; a failed build starts no server. The backend spawned next finds those builds up to date, so `STARTUP_TIMEOUT` (300 s; `LIBREFOLIO_TEST_STARTUP_TIMEOUT` overrides it, in whole seconds) measures its start alone. Before this step the server made the builds inside that wait, about 130 s after a large merge, unseen: its output was discarded at the time. Its stdout and stderr (dev.py, uvicorn, the app's console log) go to one file for the whole run, not only the startup: `shared-backend.log`, in the run's log directory (`--log-dir`, `.testLog` by default), next to the per-unit logs. The file is emptied when the run's backend first starts and appended to when the backend restarts mid-run around `db create`, so it keeps every start's output; the next run archives it with the per-unit logs (`prepare_log_dir`, `00_archive/`). A file and not a pipe, so a server that writes a lot never blocks; when the output goes there, the spawn sets `PYTHONUNBUFFERED=1` for the whole exec chain, so dev.py's own lines come out in order among uvicorn's. When a start fails (the process exits during startup, or `STARTUP_TIMEOUT` passes), the runner prints, under its error line, the file's path and the last 30 lines written by that start, never an earlier start's, or `(no output)` when that start wrote nothing; it reads at most the file's last 64 KiB. With `--log-dir ""` there is no file and the output is discarded. It sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, and stops with SIGTERM and a grace period: 30 s under coverage, 10 s otherwise, the server's own shutdown budget (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default) plus a margin, so that outside coverage a `Shared backend ignored SIGTERM` warning means the server broke that budget. It steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
 | `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one vitest invocation and one Playwright invocation per project selection (desktop only, or desktop and mobile; in batches of 8 specs under JS coverage), then reads the JSON reporters back into a per-spec verdict. |
 | `scripts/test_runner/_consolidate_backend.py` | The backend counterpart: when a whole category or suite runs, one pytest invocation per category instead of one per unit — `services`, `utils`, `schemas`, `api`, `e2e`, in that order, while `db` and `external` keep one per action — with the JUnit report read back into a per-file verdict, so the summary and `--resume` stay per unit. |
-| `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category` and `add_test`. |
+| `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category`, `add_test`, `run_category_setup` (runs a category's declared setup, once per invocation) and `ensure_category_setup` (before one action run on its own, runs that setup when the category's `setup_needed` gives a reason). |
 | `scripts/test_runner/_archive.py` | Archives test artefacts — the previous `--log-dir` logs, coverage databases before they are replaced or cleaned, the test-DB snapshot taken at the end of a run with a log directory — as `<target>/00_archive/<label>_<YYYYMMDD_HHMMSS>.tar.xz`, compressed with the standard library only (falling back to `.tar.bz2`, `.tar.gz`, then plain `.tar` when the interpreter lacks `lzma`). It also names the per-unit logs, `<category>__<unit>.log`. |
 | `scripts/test_runner/_backend_*.py` | One module per backend category; `_backend_api.py` registers both `api` and `e2e`. The actions launch pytest, except `db create` and `db populate`, which build and fill the test database. |
 | `scripts/test_runner/_frontend_*.py` | One module per frontend category (`utility`, `broker`, `user`, `fx`, `asset`, `transaction`, `portfolio`, `ai_export`): its Playwright specs and Vitest files. `_frontend_common.py` matches the pattern but is not a category — see the next row. |

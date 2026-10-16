@@ -37,7 +37,7 @@ class TokenInspectRequest(StrictModel):
     """``POST /auth/tokens/inspect``: what a link's token is worth, asked by whoever holds it."""
 
     token: str = Field(..., min_length=1, max_length=200, description="The token of the link")
-    purpose: Literal["invite", "password_reset"] = Field(..., description="What the link is for: a token of another purpose is unknown")
+    purpose: Literal["invite", "password_reset", "admin_setup"] = Field(..., description="What the link is for: a token of another purpose is unknown")
 
 
 class PasswordResetRequest(StrictModel):
@@ -115,11 +115,11 @@ class TokenInspectResponse(StrictModel):
     """The status of a link's token; the details only when it is valid, and only to whoever holds it."""
 
     status: Literal["valid", "expired", "consumed", "revoked", "unknown"] = Field(..., description="unknown also for a token of another purpose")
-    purpose: Literal["invite", "password_reset"]
+    purpose: Literal["invite", "password_reset", "admin_setup"]
     expires_at: Optional[UTCDateTime] = Field(None, description="When the link stops working (valid links only)")
     grants_admin: Optional[bool] = Field(None, description="Invitation only: the account it creates is an administrator")
     email: Optional[str] = Field(None, description="Invitation only: the address the administrator wrote, if any (a suggestion, not a constraint)")
-    username: Optional[str] = Field(None, description="Password reset only: the account whose password the link resets")
+    username: Optional[str] = Field(None, description="Password reset and administrator setup: the account the link sets the password of")
 
 
 class PasswordResetResponse(StrictModel):
@@ -161,3 +161,10 @@ class UpdateProfileResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Profile updated successfully"
+
+
+class AdminSetupRequest(StrictModel):
+    """``POST /auth/setup``: the setup link of the initial administrator (F02) and the password chosen with it."""
+
+    token: str = Field(..., min_length=1, max_length=200, description="The token of the setup link")
+    new_password: str = Field(..., min_length=1, description="The administrator's password: the password rules apply (GET /system/instance, accounts.password_rules)")

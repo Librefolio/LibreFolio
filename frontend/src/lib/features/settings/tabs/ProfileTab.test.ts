@@ -173,7 +173,8 @@ async function type(input: HTMLInputElement, value: string) {
 
 /**
  * The current password an e-mail change asks for (lot A6e, contract C4): `profile-email-password`, rendered only
- * while the profile is unlocked and the e-mail differs from the stored one — null otherwise.
+ * while the profile is unlocked and the edit is another address (a change of capitals only is not one: P18, A-25) —
+ * null otherwise.
  */
 const emailPassword = () => screen.queryByTestId('profile-email-password') as HTMLInputElement | null;
 
@@ -1016,8 +1017,9 @@ describe('ProfileTab — the creation date in the interface locale, the browser�
  * is wrong — and once the address has changed it signs the account's other sessions out. This block is the tab's half
  * of the contract (C4):
  *   - the field `profile-email-password` (`type="password"`, `autocomplete="current-password"`) and its hint
- *     `profile-email-password-hint`: there exactly while the profile is unlocked and the e-mail differs from the
- *     stored one; gone once it is the stored one again (typed back, its undo, undo all), and empty when it comes back;
+ *     `profile-email-password-hint`: there exactly while the profile is unlocked and the edit is another address (a
+ *     change of capitals only is not one: P18, A-25, the block «a change of capitals only (P18)» below); gone once it
+ *     is the stored one again (typed back, its undo, undo all), and empty when it comes back;
  *   - no e-mail save without it: while it is empty, the e-mail row's two Saves (the mobile and the desktop variant)
  *     and save-all are off; a username change alone never asks for it;
  *   - the request: `{email, current_password}` from the row and from save-all; the username's stays `{username}`;
@@ -1092,7 +1094,7 @@ describe('ProfileTab — changing the e-mail asks for the current password (A6e)
             expect(hint()).toBeNull();
         });
 
-        it('appears once the e-mail differs: an empty password input the browser fills with the current password, and its hint', async () => {
+        it('appears once the edit is another address: an empty password input the browser fills with the current password, and its hint', async () => {
             await mountUnlocked();
 
             await type(email(), 'new@example.com');
@@ -1308,6 +1310,193 @@ describe('ProfileTab — changing the e-mail asks for the current password (A6e)
             expect(error()).toHaveTextContent(/\S/);
             // Only a code the tab can word is published (see this block's comment): an unknown one reads as a generic failure.
             expect(error()!.getAttribute('data-error-code') ?? '', 'an unknown code publishes no code').toBe('');
+        });
+    });
+});
+
+// =========================================================================
+/**
+ * Lot A-25 (release 1.3, workstream A) — a change of capitals only is no change of address (decision P18).
+ *
+ * Why. P18, now in the backend: an address is the same whatever the case of its letters A–Z, and of those only —
+ * letters outside A–Z compare as written, so `émile@` and `Émile@` are two addresses. One's own address written in
+ * other A–Z capitals is therefore no change of address: `PUT /auth/profile` takes it without `current_password`, ends
+ * no session and keeps the verification; the new form is stored (its local part as typed: `EmailStr` lowers the
+ * domain). The tab still compares exactly (`editedEmail !== originalEmail`): for such a change it shows the
+ * current-password field and its hint, which announces a sign-out that never comes, and keeps every Save off until a
+ * password the server will not read is typed.
+ *
+ * The contract (plan-phase01Accounts, «A-25 — contratto»), the tab's half:
+ *   - C2: a change of capitals only is still a change, saved as typed: the row offers Save and Undo, and save all is
+ *     there;
+ *   - C3: the field `profile-email-password` and its hint `profile-email-password-hint` only while the address really
+ *     changes, and only then does every Save wait for the password; a password typed for a real change is dropped once
+ *     the edit is back to capitals only;
+ *   - C4: capitals only → the request is exactly `{email}`, with no `current_password` key — not even an empty one,
+ *     which the server's schema (`min_length=1`) refuses with a 422 — from the row and from save all; a real change →
+ *     `{email, current_password}`, as before;
+ *   - C5: the ASCII limit: a letter outside A–Z in another case makes another address, and the password is asked.
+ * The rule itself (C1) is `$lib/features/auth/emailCase`, pinned by `emailCase.test.ts`. This block does not import it:
+ * it reads the tab through its DOM and its requests — and the import of a module that does not exist yet would turn
+ * this whole file red, not only these cases.
+ *
+ * Red until A-25: the cases of capitals only (C2–C4). Guard, green today and to stay so: the ASCII limit (C5). The
+ * guard «a real change still asks for the password, every Save off until it is typed» is already the A6e block's
+ * («the field › appears once the edit is another address…», «no e-mail save without it › keeps both e-mail Saves
+ * and save-all off while it is empty…») and is not repeated here.
+ *
+ * The stored addresses keep their domain in small letters, as `EmailStr` leaves it. Not asserted: the amber tint of a
+ * modified row (a CSS class: the Save appearing is its observable half), and the words of the hint.
+ */
+describe('ProfileTab — a change of capitals only (P18)', () => {
+    const passwordHint = () => screen.queryByTestId('profile-email-password-hint');
+    const saveAllButton = () => screen.getByTestId('profile-save-all');
+
+    /** The e-mail row's Saves, checked as a pair (mobile, desktop), so that «every one is on» never passes on an empty list. */
+    function emailSaves(): HTMLElement[] {
+        const saves = fieldButtons('profile-email', 'save');
+        expect(saves, "the e-mail row's Save, in its mobile and its desktop variant").toHaveLength(2);
+        return saves;
+    }
+
+    /** The e-mail row's Undos, the same pair. */
+    function emailUndos(): HTMLElement[] {
+        const undos = fieldButtons('profile-email', 'undo');
+        expect(undos, "the e-mail row's Undo, in its mobile and its desktop variant").toHaveLength(2);
+        return undos;
+    }
+
+    /** The two controls that save an e-mail change alone: the row's Save (its first variant, see `fieldButtons`) and save all. */
+    const EMAIL_SAVES = [
+        {via: "the e-mail row's Save", save: () => emailSaves()[0]},
+        {via: 'save all', save: () => saveAllButton()},
+    ];
+
+    /** The body of the profile request number `index`, as the tab handed it to the client. */
+    const sentBody = (index: number) => profilePut().mock.calls[index][0] as Record<string, unknown>;
+
+    /** Mount, unlocked, for an account whose stored address is `address`. */
+    async function mountUnlockedAt(address: string) {
+        user.set({username: 'alice', email: address, created_at: '2024-03-05T10:00:00Z'});
+        return mountUnlocked();
+    }
+
+    /** One's own address, and the same address in other A–Z capitals (P18). */
+    const CAPITALS_ONLY = [
+        {why: 'capitals added, in the local part and in the domain', stored: 'alice@example.com', typed: 'Alice@Example.COM'},
+        {why: 'the capital of the stored form taken away', stored: 'Alice@example.com', typed: 'alice@example.com'},
+        {why: 'A–Z capitals around an é, which stays as written', stored: 'émile@example.com', typed: 'éMILE@EXAMPLE.COM'},
+    ];
+
+    /** One's own address with a letter outside A–Z in another case: another address (C5), whatever its A–Z do. */
+    const OUTSIDE_A_Z = [
+        {why: 'É for é', stored: 'émile@example.com', typed: 'Émile@example.com'},
+        {why: 'é for É', stored: 'Émile@example.com', typed: 'émile@example.com'},
+        {why: 'every A–Z folds back, the É does not', stored: 'émile@example.com', typed: 'ÉMILE@EXAMPLE.COM'},
+    ];
+
+    describe('the field and the Saves (C2, C3)', () => {
+        // red until A-25
+        it.each(CAPITALS_ONLY)('$why ($stored → $typed): a change all the same — Save, Undo and save all, every one on — with no password field and no hint', async ({stored, typed}) => {
+            await mountUnlockedAt(stored);
+
+            await type(email(), typed);
+
+            // C2: still a change, to be saved as typed — the row offers its pair and save all is there: the edit registered.
+            const saves = emailSaves();
+            for (const undo of emailUndos()) expect(undo).toBeEnabled();
+            expect(saveAllButton()).toBeInTheDocument();
+            // C3: …but not a change of address: nothing to confirm, nobody to sign out.
+            expect(emailPassword(), 'a change of capitals only asks for no password').toBeNull();
+            expect(passwordHint(), 'and announces no sign-out').toBeNull();
+            for (const save of saves) expect(save).toBeEnabled();
+            expect(saveAllButton()).toBeEnabled();
+        });
+    });
+
+    describe('what is sent (C4)', () => {
+        // red until A-25
+        it.each(EMAIL_SAVES)('through $via: exactly {email} as typed — no current_password key, not even an empty one', async ({save}) => {
+            await mountUnlocked();
+            await type(email(), 'Alice@Example.COM');
+            expect(save(), 'nothing to type first: the Save is on').toBeEnabled();
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            const body = sentBody(0);
+            expect(body).toStrictEqual({email: 'Alice@Example.COM'});
+            expect('current_password' in body, 'a change of capitals only carries no current_password key').toBe(false);
+        });
+    });
+
+    describe('from a real change back to capitals only (C3, C4)', () => {
+        // red until A-25
+        it('the field goes with its hint, and the password typed for the real change with it: the next real change asks afresh', async () => {
+            await mountUnlocked();
+            await type(email(), 'Alice@Example.org');
+            // The way in, as today: another domain is another address, whatever its capitals — the password is asked.
+            expect(emailPassword(), 'a real change, even in other capitals, asks for the password').not.toBeNull();
+            await typeEmailPassword(CURRENT_PASSWORD);
+            expect(emailPassword()).toHaveValue(CURRENT_PASSWORD);
+
+            await type(email(), 'Alice@Example.com');
+
+            await waitFor(() => expect(emailPassword(), 'back to capitals only: the field goes').toBeNull());
+            expect(passwordHint()).toBeNull();
+            // Still a change: its Saves are there, and on.
+            for (const save of emailSaves()) expect(save).toBeEnabled();
+
+            await type(email(), 'Alice@Example.net');
+
+            await waitFor(() => expect(emailPassword()).not.toBeNull());
+            // What was typed for the first real change did not stay behind the scenes.
+            expect(emailPassword()).toHaveValue('');
+            for (const save of emailSaves()) expect(save).toBeDisabled();
+        });
+
+        // red until A-25
+        it.each(EMAIL_SAVES)('through $via, the request is {email} alone — never the password typed for the real change', async ({save}) => {
+            await mountUnlocked();
+            await type(email(), 'Alice@Example.org');
+            await typeEmailPassword(CURRENT_PASSWORD);
+            await type(email(), 'Alice@Example.com');
+            expect(save()).toBeEnabled();
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            const body = sentBody(0);
+            expect(body).toStrictEqual({email: 'Alice@Example.com'});
+            expect('current_password' in body, 'the password typed for another change does not ride along').toBe(false);
+        });
+    });
+
+    describe('the ASCII limit (C5)', () => {
+        // guard
+        it.each(OUTSIDE_A_Z)('$why ($stored → $typed) is another address: the field and its hint, every Save off until the password is typed, and the request carries it', async ({stored, typed}) => {
+            expect(
+                [stored, typed].map((address) => address.normalize('NFC')),
+                'premise: written precomposed, as a keyboard types it',
+            ).toEqual([stored, typed]);
+            await mountUnlockedAt(stored);
+
+            await type(email(), typed);
+
+            expect(emailPassword(), 'a letter outside A–Z compares as written: the password is asked').not.toBeNull();
+            expect(passwordHint()).not.toBeNull();
+            for (const save of emailSaves()) expect(save).toBeDisabled();
+            expect(saveAllButton()).toBeDisabled();
+
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await waitFor(() => expect(saveAllButton()).toBeEnabled());
+            for (const save of emailSaves()) expect(save).toBeEnabled();
+
+            await fireEvent.click(emailSaves()[0]);
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            expect(sentBody(0)).toStrictEqual({email: typed, current_password: CURRENT_PASSWORD});
         });
     });
 });

@@ -20,6 +20,16 @@ import {formatFixed} from '$lib/utils/core/formatFixed';
 
 export type SyncStatus = 'ok' | 'partial' | 'failed' | 'skipped';
 
+/** One asset's answer from `POST /assets/prices/sync`, as the creation of an asset reports it (`AssetModal`'s
+ * `onsynced`, O-20): the fields a toast reads. */
+export interface AssetCreateSyncResult {
+    status?: string;
+    points_fetched?: number;
+    inserted_count?: number;
+    updated_count?: number;
+    errors?: string[];
+}
+
 export interface SyncResult {
     id: string; // pair slug for FX, asset_id.toString() for Asset
     status: SyncStatus;

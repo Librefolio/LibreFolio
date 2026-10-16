@@ -28,7 +28,7 @@
     "unrealizedDelta": "Unrealized change",
     "unrealizedDeltaTooltip": "Change in unrealized gain/loss on positions still open.",
     "realizedSales": "Sales",
-    "realizedSalesTooltip": "Realized gain or loss from sales in the period, calculated against average cost basis.",
+    "realizedSalesTooltip": "Realized gain or loss from sales in the period, and from holdings handed over at a cost (for example to a broker LibreFolio does not track), calculated against average cost basis.",
     "income": "Dividends & interest",
     "incomeTooltip": "Income received in the period from dividends, interest or coupons.",
     "feesAndTaxes": "Fees & taxes",
