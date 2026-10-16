@@ -578,10 +578,11 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
 | 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
 | 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
-| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | 🔄 checkpoint di scrittura `7df164689` (prove leggere); prove pesanti nello slot insieme a W3-c/d, poi un ingresso unico |
-| 13 | W3-c e W3-d (stati e polarità sui ruoli) | 🔄 checkpoint di scrittura `078d4dcf8` (prove leggere); prove pesanti nello slot insieme a TD-3, W3-b e I1 |
-| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; base `7d78607df`; prove pesanti nello slot unico |
-| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | 🔄 checkpoint di scrittura pronto (prove leggere), due commit; prove pesanti nello slot unico |
+| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | ✅ commit `7df164689`; validato nello slot unico del 16/10 (02:08–03:21) su `abc4c84de`; ingresso unico con 13–15 |
+| 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `078d4dcf8`; validato nello slot unico; ingresso unico |
+| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
+| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
+| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | 🔄 bozze su copie durante lo slot, patch pronte; si applicano dopo l'ingresso, poi tre checkpoint e il secondo slot (~04:15) |
 
 ## Avanzamento
 
@@ -1771,3 +1772,83 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > provider nella modale dell'asset (la tabella col bordo delle intestazioni), la legenda della rotta dei provider dei
 > cambi (l'avviso), le formule KaTeX del pianificatore PAC; l'editor delle distribuzioni (settori, paesi) nella modale
 > dell'asset; il campo dei tag.
+
+> **Commit:** `eebbd1da4` (W1-d) e `17e26bfce` (Q10), dal coordinatore alle 01:38; albero pulito, `--check` pulito.
+> Approvato il ritiro di `ExactDecimalInput` ed `ExactQuantityInput`: vanno con i chiamanti, con l'OK dei proprietari.
+
+### Slot unico — ✅ 16/10/2026 (W3, I1, `LotCustodyModal`, W1-d, Q10: le prove pesanti)
+
+> **Via** (coordinatore, 02:08): valida `abc4c84de`, la base col target `57802d827` (DV, Y7, Z4, W-B31/36, E4a). Corsia
+> 6155 e `/tmp/librefolio-r2-t`, carico 33–38; script `/tmp/libreFolio_T_r2/slot_w3_i1.sh` in ordine di priorità, con lo
+> stop a 70 minuti e il resoconto di cosa resta; albero fermo durante lo slot.
+
+> ✅ **Esito** (02:08–03:21, 72 minuti, nessun passo saltato):
+> - `--check` pulito; `component-unit` 3.816/3.816; `risk-levels-component` 273/273;
+> - E2E a 1 worker, W3: `dashboard` 27, `banners` 20, `risk` 38, `asset-list` 28, il flash del prezzo 4, `fx-list` 12,
+>   `tx-import-report-set` 32 (più 32 saltati per progetto, come vuole lo spec: ogni test gira solo sul suo, desktop o
+>   `@mobile`), `files` 28, `pac-allocator-real` 1; I1 e W1-d: `select` 17, `asset-modal` 17, `transactions-modals` 25,
+>   `asset-classification` 4, `fx-add-pair` 11, `tx-import-upload` 10, `broker-sharing` 17, `fx-detail` 17, `risk-lab`
+>   44; Q10: `tooltip` 9;
+> - **la prova di G per W1-d:** galleria filtrata `Asset distribution editors`, 1 worker, desktop e mobile, 2 test verdi,
+>   32 scatti su 32; `compare_fingerprints.py` contro `g-ref13-r1`: `y`, `dh`, `vh`, `hdr` e `focus` uguali in tutti e 32.
+>   L'unico campo diverso è `charts` in 12 scatti (5 → 4 o 3): i grafici già disegnati sulla pagina dell'asset dietro la
+>   modale, un tempo, non un colore. Il coordinatore: «le impronte di W1-d tornano».
+> - **⚠️ Fuori pista — il client API vecchio:** lo script non apriva con `api sync`. Al primo giro `front check` 12 errori
+>   in 4 file e `core-unit` 15 rossi su 5.902, tutti in `features/email/verificationApi.test.ts`
+>   (`confirm_email_verification_… is not a function`): la base aveva portato gli endpoint della verifica email e `scope`
+>   in `UploadFileInfo`, e `generated.ts`, ignorato da git, era di prima. Nessun file di T. Il build del primo E2E
+>   (`cmd_fe_build`) l'ha rigenerato, col suo `svelte-check` 0 e 0; alle 03:22 `front check` 0 e 0 e
+>   `verificationApi.test.ts` 104/104. **Regola per gli slot:** aprire con `api sync`.
+> - Porta 6155 libera alla fine.
+
+> ✅ **Base** (coordinatore, 03:2x): `3b9c4ca1c`, col target `8850ad002` (Y4b, il rischio in `features/risk`: 103 file
+> che usano `toneClasses` spostati; H CP-U2, A6d/e, X CP11b, Z7b, B2); baseline e backlog fusi da soli. Cancello sulla
+> revisione unita, nella corsia: `api sync` rc 0, `front check` 0 e 0, `--check` pulito (03:24–03:25).
+
+### W1-c, W1-e e W2-a — 🔄 16/10/2026 (bozze su copie durante lo slot; D-T27)
+
+> **Avvio** (coordinatore, 01:4x–02:2x): OK a W1-c (10 file e `DateRangePicker.test.ts`; la 1.3 per
+> `fx-list.spec.ts:155` e `asset-data-editor.spec.ts:115,126`, solo quelle righe), a W1-e (`ModalBase`) e a W2-a
+> (la 1.3: A9 stanotte non c'è; H copierà direttamente i ruoli in `InstanceNotices`). Durante lo slot si scrive solo su
+> copie fuori dall'albero, in `files/W1c-draft`, `W1e-draft`, `W2a-draft` della sessione (`base/` dalla revisione dello
+> slot, `work/` convertita, `FILES`, `BASE_COMMIT`, `count_legacy.mjs` che importa in sola lettura i pattern del gate);
+> dopo l'ingresso le patch si applicano con `git apply --3way`, controllando prima `git diff <BASE_COMMIT> HEAD` sui loro
+> file. `theme-roles.mjs` non si tocca fino a Y5 (resta orfana la voce `ARBITRARY_ALLOWED` del coachmark).
+
+> ✅ **1 · W1-c** (sotto-agente su copie di `17e26bfce`): i 10 file da 225 classi legacy a 0. Il giorno di `CalendarMonth`
+> è una catena di rami esclusivi per sfondo e testo (selezionato e capi `bg-lf-checked text-lf-on-checked`, intervallo
+> `bg-lf-selected`, in sospeso `bg-lf-checked/50` col testo primario per il contrasto, oggi `ring-lf-focus`, fuori mese e
+> futuri `text-lf-muted`): il `!text-white` del piano non serve più. La cornice di `DateRangePicker` col bordo in un solo
+> ternario (aperto `ring-lf-focus border-lf-focus`, chiuso `border-lf-input hover:border-lf-input-hover`), e così il
+> testo d'errore dei campi. Preset attivi e segmento attivo di `ViewModeToggle` D-T16; preset inattivi riallineati da me
+> alla tabella della skill (`bg-lf-panel text-lf-secondary hover:bg-lf-neutral`, scuri al passaggio come oggi), testo
+> inattivo del toggle `text-lf-muted`; `CompactDurationBadge` attivo resta sull'avviso (ambra, oggi); `TabBar` attiva
+> `text-lf-link border-lf-focus bg-lf-selected`. Nessun chiamante passa classi di palette (`fieldClass`, `className`,
+> `tab.className`: solo classi d'immagine). `test-author` su copie: la cornice di `DateRangePicker.test.ts` divisa in
+> base, bordo chiuso e aperto, più un test che a calendario aperto vuole il bordo di focus e nessun bordo chiuso;
+> `fx-list.spec.ts:155` su `data-active`, `asset-data-editor.spec.ts:114–115, 126` su `aria-selected`. Patch
+> `w1c.patch`, 13 file; `git apply --check` pulito su `abc4c84de`.
+> - **Da rivedere:** al passaggio i preset inattivi si scuriscono come oggi; il badge personalizzato resta ambra; la
+>   sottolineatura al passaggio delle schede è del colore della riga sotto la barra.
+
+> ✅ **2 · W1-e** (io, su copie di `abc4c84de`): `ModalBase`, fondale `var(--lf-surface-overlay)` (Q13), pannello
+> `var(--lf-surface-card)` con l'ombra `var(--lf-shadow-raised)` (Q8), via la regola `.dark`; il bordo `border
+> border-lf-raised` (N3) e il testo `text-lf-primary` come classi nel markup. **⚠️ Fuori pista:** lo stile di un
+> componente sta fuori dai layer di Tailwind e batte ogni utility: un bordo nel `<style>` cancellerebbe il
+> `border-2 border-red-300 dark:border-red-700` che `AssetCurrencyChangeModal` passa in `contentClass`; come classi, le
+> sue vincono per ordine. Il `bg-white dark:bg-slate-*` di `LotCustodyModal` era già morto (vince lo sfondo del
+> componente) e resta tale. Nota per dopo: quando `AssetCurrencyChangeModal` migrerà (per esempio a
+> `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` e perderebbe: servirà una variante della modale.
+> Nessun test legge questi colori; `OnboardingCoachmark.test.ts` usa `modal-content` come selettore (il nome resta).
+> Patch `w1e.patch`; `git apply --check` pulito.
+
+> ✅ **3 · W2-a** (sotto-agente su copie di `abc4c84de`): gli 8 file da 240 classi legacy a 0. Il banner del bootstrap
+> sulla tinta d'avviso (il modello per H); il blocco con la card dal bordo `danger-line`; il coachmark con fondale
+> `bg-lf-overlay`, bagliore `border-lf-focus shadow-[0_0_0_5px_var(--lf-tour-glow),0_0_28px_var(--lf-tour-glow)]` (Q9),
+> pannello flottante; pagine di benvenuto su `bg-lf-page`, card `bg-lf-card`, il disco dell'avatar `bg-lf-brand`; i punti
+> dell'introduzione in un solo ternario. `onboarding-tour.spec.ts:443–448` legge l'alfa calcolata del puntatore (0,7 e
+> 0,8): coi ruoli `color-mix()` il browser dà `oklab(… / 0.7)`, che passa la regex. Patch `w2a.patch`, 8 file; `git apply
+> --check` pulito.
+> - **Da rivedere:** il contorno del pulsante «Riprova» sul banner (`border-lf-warning-line`) è tenue in chiaro; i punti
+>   inattivi dell'introduzione più tenui in scuro; le tessere del logo bianche anche in scuro (`bg-lf-logo`); fondale
+>   del coachmark al 60 % invece del 45 %.
