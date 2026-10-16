@@ -3040,7 +3040,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
 > solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
 > chiudere AF-8 (conferma) e AF-10 (ruolo di T). La sera del 16/10 il lotto dei component tokens di file, media e menu
-> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13.
+> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13. Nella notte del 17/10
+> `lib/theme/drawnColors.ts` passa ai ruoli (piano AF, passo 17) e lascia AF-14.
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -3109,6 +3110,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   compresi: un `.DS_Store` toccato da macOS ha fatto rifare la build a metà di uno slot (circa 7 minuti col carico a
   160). Va escluso, insieme agli altri file nascosti; tocca al proprietario del runner. Dettagli: piano AF, passo 16.4.
   Si è ripetuto nello slot di recupero (23:52, una build in più all'avvio di `asset-list`; piano AF, passo 16.6).
+- **AF-14 · Il foglio di calcolo in chiaro resta sul tema della libreria** — minimo; AF, 17/10. Con `drawnColors.ts` sui
+  ruoli, l'anteprima dei fogli (`FilePreviewModal`, cheetah-grid) disegna il tema scuro tutto dai ruoli, mentre in chiaro
+  tiene `MATERIAL_DESIGN` della libreria (fondo, testo, selezione blu) con i soli due bordi sui ruoli: una scelta
+  provvisoria, nel punto 35 della raccolta per la designer, insieme alla riga indicata su `mark` e all'iniziale degli
+  avatar con `readableText`. Un tema unico dai ruoli per i due temi è la sua decisione (riga 10 del rapporto di L).
+  Dettagli: piano AF, passo 17.
 
 ---
 
