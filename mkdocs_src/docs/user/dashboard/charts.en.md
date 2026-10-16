@@ -81,7 +81,7 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 - **In transit** — until the transfer arrives, the value and its price or exchange-rate moves stay with the broker it left.
 - **Different ownership shares** — when the two brokers have different [ownership shares](../brokers/sharing.md), the receiving line keeps a step on the arrival day: the same step the total shows.
 - **No value on the arrival day** — if the security has no price yet, or an exchange rate is missing, the jump stays: nothing is guessed.
-- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
+- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. When the other broker of a transfer is deleted, the half left behind is no longer a transfer: securities become an adjustment, counted as capital at their cost rather than their market value, and money a deposit or a withdrawal (see [Edit or delete a broker](../brokers/index.md)). Only securities sent whose average cost needs a missing exchange rate stay a transfer, counted at market value.
 
 With one broker, or on a broker's page, only the total is drawn.
 
