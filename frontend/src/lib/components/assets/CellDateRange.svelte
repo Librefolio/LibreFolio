@@ -114,15 +114,15 @@
     <div
         bind:this={anchorEl}
         class="inline-flex items-center gap-1 text-sm cursor-pointer select-none
-               {disabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-libre-green'}"
+               {disabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-lf-link'}"
         onclick={() => !disabled && openGracePopover()}
         data-testid="celldr-late-trigger"
         data-grace-days={graceDays}
         data-disabled={disabled}
     >
-        <span class="text-amber-500">⚡</span>
+        <span class="text-lf-warning">⚡</span>
         <span class="font-medium">Late</span>
-        <span class="text-gray-400 text-xs">(+{graceDays}d grace → ∞)</span>
+        <span class="text-lf-muted text-xs">(+{graceDays}d grace → ∞)</span>
     </div>
 
     {#if showGracePopover}
@@ -139,11 +139,11 @@
             ></div>
             <div style={gracePopoverStyle} data-testid="celldr-grace-popover">
                 <div
-                    class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600
-                            rounded-xl shadow-xl p-3 space-y-3"
+                    class="bg-lf-card border border-lf-raised
+                            rounded-xl shadow-xl shadow-lf-shadow p-3 space-y-3"
                     style="min-width:260px;"
                 >
-                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400">⚡ Late Interest — Grace Period</div>
+                    <div class="text-xs font-medium text-lf-muted">⚡ Late Interest — Grace Period</div>
                     <!-- Y / M / D inputs -->
                     <div class="flex items-center gap-1.5">
                         <input
@@ -153,11 +153,11 @@
                             oninput={handleYMDBlur}
                             min="0"
                             data-testid="celldr-grace-y"
-                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                   bg-lf-field text-lf-primary text-center
+                                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
                         />
-                        <span class="text-xs text-gray-500">y</span>
+                        <span class="text-xs text-lf-muted">y</span>
                         <input
                             type="number"
                             use:numericArrows
@@ -165,11 +165,11 @@
                             oninput={handleYMDBlur}
                             min="0"
                             data-testid="celldr-grace-m"
-                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                   bg-lf-field text-lf-primary text-center
+                                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
                         />
-                        <span class="text-xs text-gray-500">m</span>
+                        <span class="text-xs text-lf-muted">m</span>
                         <input
                             type="number"
                             use:numericArrows
@@ -177,15 +177,15 @@
                             oninput={handleYMDBlur}
                             min="0"
                             data-testid="celldr-grace-d"
-                            class="w-14 px-1.5 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                            class="w-14 px-1.5 py-1.5 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                   bg-lf-field text-lf-primary text-center
+                                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
                         />
-                        <span class="text-xs text-gray-500">d</span>
+                        <span class="text-xs text-lf-muted">d</span>
                     </div>
                     <!-- Total days (also editable for convenience) -->
                     <div class="flex items-center gap-2">
-                        <label for="grace-days" class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap"> = Total: </label>
+                        <label for="grace-days" class="text-xs text-lf-muted whitespace-nowrap"> = Total: </label>
                         <input
                             id="grace-days"
                             type="number"
@@ -194,11 +194,11 @@
                             oninput={handleGraceDaysBlur}
                             min="0"
                             data-testid="celldr-grace-total"
-                            class="w-20 px-2 py-1 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                   bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-center
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50"
+                            class="w-20 px-2 py-1 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                                   bg-lf-field text-lf-primary text-center
+                                   focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
                         />
-                        <span class="text-xs text-gray-400">days</span>
+                        <span class="text-xs text-lf-muted">days</span>
                     </div>
                     <button
                         type="button"
@@ -206,8 +206,8 @@
                             showGracePopover = false;
                         }}
                         data-testid="celldr-grace-close"
-                        class="w-full px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-slate-700
-                               text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                        class="w-full px-3 py-1.5 text-xs rounded-lg bg-lf-panel
+                               text-lf-secondary hover:bg-lf-neutral transition-colors"
                     >
                         Close
                     </button>
