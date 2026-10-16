@@ -915,3 +915,17 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
     - Via e slot li dà il coordinatore; fino ad allora G resta in attesa, senza run.
   - Delta non committato: questa riga, l'intestazione, la DoD (§1), il README di G e il backlog (G-1 ✅, G-13).
     FROZEN.
+- **Dopo la chiusura (15–16/10), fuori dal piano: le voci del backlog.**
+  - Revisioni in sola lettura degli scatti nuovi di Settings:
+    - E2b `settings/email`, A6b `settings/users`, B `settings/backup-ready`: doppio lancio `g-new3-a/b`, 6/6 ×2;
+    - X `settings/plugins`.
+  - Voci nuove: G-14 (fuso orario della gallery), G-15 (barra delle schede di Settings in spagnolo).
+  - **G-16** (`tools/pac-result-exposures`): verificata, e `stable` nella coppia.
+  - **G-13 ✅, 16/10.**
+    - Tre gallery complete di `a2c1c39f4`: r1 con 6 rossi di carico, r2 e r3 verdi.
+    - **Coppia del rumore r1↔r2**; r2↔r3 attraversa la data UTC (il planner del PAC, N26).
+    - **Riferimento `g-ref13-r3`.** Candidata della notte `g-cand16a` (`72e66d1a6`), verde, con il foglio di
+      confronto per il developer.
+    - Evidenze: [analisi G-13](evidence/analysis-g13-2026-10-16.md), [stabilità](evidence/stability-2026-10-16.md).
+    - README del toolkit: la regola della data UTC, le durate, il comportamento al 16/10.
+    - Nuova G-17 (nome dell'account usa e getta).
