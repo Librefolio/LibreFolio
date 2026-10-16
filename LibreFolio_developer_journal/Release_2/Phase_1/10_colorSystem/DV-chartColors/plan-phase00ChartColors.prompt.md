@@ -1580,6 +1580,19 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     `AllocationPanel.negativeCash` 10/10.
   > - Resta lo slot, al via del coordinatore dopo BK: l'E2E `front-portfolio dashboard`, che guida le 4 viste di
   >   `PositionsPanel`. Gli scatti di galleria aspettano la prossima galleria completa.
+  > - Commit `45f582eeb` del coordinatore (20:14). Base merge `8f1f27a44` con la punta `624fa5609` (A-25 della 1.3:
+  >   `ProfileTab`, `emailCase`), pulita; gate del coordinatore 119/119.
+  > - **Slot** (via del coordinatore alle 20:14, in parallelo a BK), su `8f1f27a44`, corsia 6156 e
+  >   `/tmp/librefolio-r2-dv`, dalle 20:15:17 alle 20:23:08, carico da 51 a 30. Script e log in `files/w6d-slot/`
+  >   della sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 24 s |
+  >   | E2E `front-portfolio dashboard`, 1 worker | 27 passed, nessun tentativo ripetuto | 447 s: build di frontend e documentazione 243 s, il popolamento, i 27 test in 2,4 min |
+  >
+  >   - La spec guida le 4 viste di `PositionsPanel` e quelle di `AllocationPanel` («adesso», «storico» e le schede).
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `8f1f27a44` e il worktree non ha file tracciati cambiati.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
