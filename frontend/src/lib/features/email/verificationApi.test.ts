@@ -1,0 +1,269 @@
+/**
+ * verificationApi — the seam of the verification of an email address at sign-up (workstream E, lot E5a; developer
+ * decision 44) on the generated client.
+ *
+ * The contract under test:
+ *   - `confirmEmailVerification(token)` posts `POST /email/verification/confirm` once, through its generated alias, with
+ *     `{token}` alone, and answers `{username}` alone; a refusal reaches the caller as the client raised it;
+ *   - `resendEmailVerification(username, password)` posts `POST /email/verification/resend` once, through its alias,
+ *     with `{username, password}`, and answers the language of the email; a refusal reaches the caller as raised;
+ *   - `readLinkRefusal(error)`: a 400 whose `detail` is `TOKEN_INVALID` is the token's status — `expired`, `consumed`,
+ *     `revoked`, `unknown`, and `unknown` for any other or missing status —; anything else — another status code,
+ *     another code, a `detail` that is not an object, no answer at all — is `null`, a failure that may be tried again;
+ *   - `readResendFailure(error)`: any 401 is `INVALID_CREDENTIALS` (the login's answer is a plain-text `detail`); a coded
+ *     refusal is its `error_code`, with `retryAfter` when `retry_after` is a finite number; no `detail` object — a
+ *     validation list, a plain-text `detail` other than a 401, no answer — is `UNKNOWN`;
+ *   - both readers read a refusal carried by axios's own `AxiosError` (what the generated client rejects with) or by an
+ *     `ApiError`;
+ *   - through the real client, only the transport faked: the requests reach it as described, and what a refusal rejects
+ *     with is read by the two readers — the composition the page and the notice perform.
+ *
+ * Mocks: the two aliases are spied on the real generated client (`vi.spyOn`, restored after each test), which also
+ * proves they exist on it; the last block replaces `axiosInstance.defaults.adapter` and puts it back after each test
+ * (the pattern of `emailApi.test.ts`). Node environment: nothing here renders.
+ */
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
+import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
+import {confirmEmailVerification, readLinkRefusal, readResendFailure, resendEmailVerification, type ResendFailure, type VerificationLinkRefusal} from './verificationApi';
+
+const CONFIRM_ALIAS = 'confirm_email_verification_api_v1_email_verification_confirm_post';
+const RESEND_ALIAS = 'resend_email_verification_api_v1_email_verification_resend_post';
+const TOKEN = 'zq-Verify_Token-0123';
+
+/** The config axios attaches to an error raised outside a request. */
+const REQUEST = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+
+/** What axios rejects with when the server answers `status` (lib/core/settle.js): an AxiosError carrying the response. */
+function axiosRefusal(status: number, data: unknown, config: InternalAxiosRequestConfig = REQUEST): AxiosError {
+    const response: AxiosResponse = {status, statusText: '', headers: {'content-type': 'application/json'}, config, request: {}, data};
+    return new AxiosError(`Request failed with status code ${status}`, status < 500 ? AxiosError.ERR_BAD_REQUEST : AxiosError.ERR_BAD_RESPONSE, config, {}, response);
+}
+
+/** The two shapes a refusal reaches the readers in. */
+const CARRIERS: Array<{carrier: string; refuse: (status: number, body?: unknown) => unknown}> = [
+    {carrier: 'an AxiosError, as the generated client rejects', refuse: (status, body) => axiosRefusal(status, body)},
+    {carrier: 'an ApiError', refuse: (status, body) => new ApiError(status, '', body)},
+];
+
+/** What carries no answer at all. */
+const NO_ANSWER: Array<{label: string; make: () => unknown}> = [
+    {label: 'a request that reached no server', make: () => new AxiosError('Network Error', AxiosError.ERR_NETWORK, REQUEST, {})},
+    {label: 'a request that timed out', make: () => new AxiosError('timeout of 30000ms exceeded', AxiosError.ECONNABORTED, REQUEST, {})},
+    {label: 'a plain Error', make: () => new Error('boom')},
+    {label: 'a thrown string', make: () => 'boom'},
+    {label: 'undefined', make: () => undefined},
+    {label: 'null', make: () => null},
+];
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
+
+// =====================================================================================================================
+describe('confirmEmailVerification and resendEmailVerification — through their aliases', () => {
+    it('VFA-01: confirm posts {token} alone, once, and answers {username} alone', async () => {
+        const alias = vi.spyOn(zodiosApi, CONFIRM_ALIAS).mockResolvedValueOnce({username: 'zq_alice'});
+
+        await expect(confirmEmailVerification(TOKEN)).resolves.toStrictEqual({username: 'zq_alice'});
+        expect(alias).toHaveBeenCalledTimes(1);
+        expect(alias.mock.calls[0][0]).toStrictEqual({token: TOKEN});
+    });
+
+    it('VFA-02: resend posts {username, password}, once, and answers the language alone', async () => {
+        const alias = vi.spyOn(zodiosApi, RESEND_ALIAS).mockResolvedValueOnce({language: 'it'});
+
+        await expect(resendEmailVerification('zq_alice', 'Pass-2026')).resolves.toBe('it');
+        expect(alias).toHaveBeenCalledTimes(1);
+        expect(alias.mock.calls[0][0]).toStrictEqual({username: 'zq_alice', password: 'Pass-2026'});
+    });
+
+    it('VFA-03: a refusal of either reaches the caller as the client raised it', async () => {
+        const refusedLink = axiosRefusal(400, {detail: {error_code: 'TOKEN_INVALID', status: 'expired'}});
+        const refusedResend = axiosRefusal(401, {detail: 'Invalid credentials'});
+        vi.spyOn(zodiosApi, CONFIRM_ALIAS).mockRejectedValueOnce(refusedLink);
+        vi.spyOn(zodiosApi, RESEND_ALIAS).mockRejectedValueOnce(refusedResend);
+
+        await expect(confirmEmailVerification(TOKEN)).rejects.toBe(refusedLink);
+        await expect(resendEmailVerification('zq_alice', 'wrong')).rejects.toBe(refusedResend);
+    });
+});
+
+// =====================================================================================================================
+describe.each(CARRIERS)('readLinkRefusal — a refusal carried by $carrier', ({refuse}) => {
+    it.each<VerificationLinkRefusal>(['expired', 'consumed', 'revoked', 'unknown'])('VFA-04: 400 TOKEN_INVALID %s is %s', (status) => {
+        expect(readLinkRefusal(refuse(400, {detail: {error_code: 'TOKEN_INVALID', status, message: 'This verification link is not valid'}}))).toBe(status);
+    });
+
+    it.each<{label: string; status: unknown}>([
+        {label: 'valid', status: 'valid'},
+        {label: 'a status no link has', status: 'weird'},
+        {label: 'an empty status', status: ''},
+        {label: 'a status that is not text', status: 42},
+        {label: 'no status', status: undefined},
+        {label: 'an inherited name', status: 'constructor'},
+    ])('VFA-05: 400 TOKEN_INVALID with $label is unknown', ({status}) => {
+        expect(readLinkRefusal(refuse(400, {detail: {error_code: 'TOKEN_INVALID', status}}))).toBe('unknown');
+    });
+
+    it.each<{label: string; status: number; body: unknown}>([
+        {label: 'a 400 with another code', status: 400, body: {detail: {error_code: 'SOMETHING_ELSE', status: 'expired'}}},
+        {label: 'a 400 with a plain-text detail', status: 400, body: {detail: 'Bad request'}},
+        {label: 'a 422 validation list', status: 422, body: {detail: [{loc: ['body', 'token'], msg: 'Field required', type: 'missing'}]}},
+        {label: 'TOKEN_INVALID with a 409', status: 409, body: {detail: {error_code: 'TOKEN_INVALID', status: 'expired'}}},
+        {label: 'TOKEN_INVALID with a 500', status: 500, body: {detail: {error_code: 'TOKEN_INVALID', status: 'expired'}}},
+        {label: 'a 502 without a body', status: 502, body: undefined},
+    ])('VFA-06: $label is null — a failure to try again', ({status, body}) => {
+        expect(readLinkRefusal(refuse(status, body))).toBeNull();
+    });
+});
+
+describe('readLinkRefusal — what carries no answer is null', () => {
+    it.each(NO_ANSWER)('VFA-07: $label', ({make}) => {
+        expect(readLinkRefusal(make())).toBeNull();
+    });
+});
+
+// =====================================================================================================================
+describe.each(CARRIERS)('readResendFailure — a refusal carried by $carrier', ({refuse}) => {
+    it.each<{label: string; body: unknown}>([
+        {label: 'the login’s plain-text detail', body: {detail: 'Invalid credentials'}},
+        {label: 'a coded detail', body: {detail: {error_code: 'SOMETHING_ELSE', retry_after: 30}}},
+        {label: 'no body', body: undefined},
+    ])('VFA-08: any 401 — $label — is INVALID_CREDENTIALS alone', ({body}) => {
+        expect(readResendFailure(refuse(401, body))).toStrictEqual({errorCode: 'INVALID_CREDENTIALS'});
+    });
+
+    it.each<{status: number; detail: Record<string, unknown>; failure: ResendFailure}>([
+        {status: 403, detail: {error_code: 'ACCOUNT_DISABLED', message: 'Account is disabled'}, failure: {errorCode: 'ACCOUNT_DISABLED'}},
+        {status: 409, detail: {error_code: 'EMAIL_VERIFICATION_NOT_NEEDED', message: 'This account is active: sign in'}, failure: {errorCode: 'EMAIL_VERIFICATION_NOT_NEEDED'}},
+        {status: 409, detail: {error_code: 'EMAIL_UNAVAILABLE', message: 'This instance cannot send emails'}, failure: {errorCode: 'EMAIL_UNAVAILABLE'}},
+        {status: 409, detail: {error_code: 'EMAIL_LINKS_UNAVAILABLE', message: 'This instance cannot send emails with a link'}, failure: {errorCode: 'EMAIL_LINKS_UNAVAILABLE'}},
+        {status: 409, detail: {error_code: 'USER_LIMIT_REACHED', message: 'The instance has reached its maximum number of users'}, failure: {errorCode: 'USER_LIMIT_REACHED'}},
+        {status: 429, detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 180, message: 'Too many requests: try again later'}, failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 180}},
+        {status: 502, detail: {error_code: 'EMAIL_DELIVERY_FAILED', message: 'The email could not be sent'}, failure: {errorCode: 'EMAIL_DELIVERY_FAILED'}},
+        {status: 422, detail: {error_code: 'EMAIL_RECIPIENT_INVALID', message: 'The address of this account is not a single email address'}, failure: {errorCode: 'EMAIL_RECIPIENT_INVALID'}},
+    ])('VFA-09: $status $detail.error_code is read', ({status, detail, failure}) => {
+        expect(readResendFailure(refuse(status, {detail}))).toEqual(failure);
+    });
+
+    it.each<{label: string; retryAfter: unknown}>([
+        {label: 'a numeric string', retryAfter: '180'},
+        {label: 'NaN', retryAfter: Number.NaN},
+        {label: 'Infinity', retryAfter: Number.POSITIVE_INFINITY},
+        {label: 'null', retryAfter: null},
+    ])('VFA-10: a retry_after that is $label is left out, the code kept', ({retryAfter}) => {
+        const failure = readResendFailure(refuse(429, {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: retryAfter}}));
+
+        expect(failure.errorCode).toBe('EMAIL_RATE_LIMITED');
+        expect(failure.retryAfter).toBeUndefined();
+    });
+
+    it.each<{label: string; status: number; body: unknown}>([
+        {label: 'no error_code', status: 409, body: {detail: {message: 'no code'}}},
+        {label: 'an empty error_code', status: 409, body: {detail: {error_code: ''}}},
+        {label: 'an error_code that is not text', status: 409, body: {detail: {error_code: 409}}},
+        {label: 'a plain-text detail other than a 401', status: 403, body: {detail: 'Forbidden'}},
+        {label: 'a validation list', status: 422, body: {detail: [{loc: ['body', 'password'], msg: 'Field required', type: 'missing'}]}},
+        {label: 'no detail', status: 500, body: {}},
+        {label: 'a body that is not JSON (a proxy page)', status: 502, body: '<html><body>502 Bad Gateway</body></html>'},
+    ])('VFA-11: $label is UNKNOWN', ({status, body}) => {
+        expect(readResendFailure(refuse(status, body)).errorCode).toBe('UNKNOWN');
+    });
+});
+
+describe('readResendFailure — what carries no answer is UNKNOWN', () => {
+    it.each(NO_ANSWER)('VFA-12: $label', ({make}) => {
+        expect(readResendFailure(make())).toStrictEqual({errorCode: 'UNKNOWN'});
+    });
+});
+
+// =====================================================================================================================
+describe('through the real client, only the transport faked', () => {
+    /** The requests the fake transport received. */
+    const received: InternalAxiosRequestConfig[] = [];
+    let realAdapter: typeof axiosInstance.defaults.adapter;
+
+    beforeEach(() => {
+        realAdapter = axiosInstance.defaults.adapter;
+        received.length = 0;
+    });
+
+    afterEach(() => {
+        axiosInstance.defaults.adapter = realAdapter;
+    });
+
+    /** The server answers `status` with `data`, settled as axios's own adapters settle it: a 2xx resolves, any other status rejects. */
+    function serverAnswers(status: number, data: unknown): void {
+        const adapter: AxiosAdapter = async (config) => {
+            received.push(config);
+            if (status >= 200 && status < 300) return {status, statusText: 'OK', headers: {'content-type': 'application/json'}, config, request: {}, data};
+            throw axiosRefusal(status, data, config);
+        };
+        axiosInstance.defaults.adapter = adapter;
+    }
+
+    function noServer(): void {
+        const adapter: AxiosAdapter = async (config) => {
+            received.push(config);
+            throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, {});
+        };
+        axiosInstance.defaults.adapter = adapter;
+    }
+
+    /** The JSON body of the request the transport received. */
+    function sentBody(): unknown {
+        const data = received[0]?.data;
+        return typeof data === 'string' ? JSON.parse(data) : data;
+    }
+
+    it('VFA-13: confirm reaches POST /api/v1/email/verification/confirm with {token}, and its answer comes back as {username} alone', async () => {
+        serverAnswers(200, {username: 'zq_alice', note: 'a field the schema does not know'});
+
+        await expect(confirmEmailVerification(TOKEN)).resolves.toStrictEqual({username: 'zq_alice'});
+        expect(received.map(({method, url}) => `${method} ${url}`)).toEqual(['post /api/v1/email/verification/confirm']);
+        expect(sentBody()).toStrictEqual({token: TOKEN});
+    });
+
+    it('VFA-14: resend reaches POST /api/v1/email/verification/resend with {username, password}, and the language comes back', async () => {
+        serverAnswers(200, {language: 'fr'});
+
+        await expect(resendEmailVerification('zq_alice', 'Pass-2026')).resolves.toBe('fr');
+        expect(received.map(({method, url}) => `${method} ${url}`)).toEqual(['post /api/v1/email/verification/resend']);
+        expect(sentBody()).toStrictEqual({username: 'zq_alice', password: 'Pass-2026'});
+    });
+
+    it.each<VerificationLinkRefusal>(['expired', 'consumed', 'revoked', 'unknown'])('VFA-15: a refused link (%s), as the client raises it, is read by readLinkRefusal', async (status) => {
+        serverAnswers(400, {detail: {error_code: 'TOKEN_INVALID', status, message: 'This verification link is not valid'}});
+
+        await expect(confirmEmailVerification(TOKEN).then(() => 'resolved', readLinkRefusal)).resolves.toBe(status);
+    });
+
+    it('VFA-16: a confirm that reaches no server is null — tried again', async () => {
+        noServer();
+
+        await expect(confirmEmailVerification(TOKEN).then(() => 'resolved', readLinkRefusal)).resolves.toBeNull();
+        expect(received, 'premise: the request reached the transport').toHaveLength(1);
+    });
+
+    it.each<{label: string; status: number; body: unknown; failure: ResendFailure}>([
+        {label: '401 Invalid credentials', status: 401, body: {detail: 'Invalid credentials'}, failure: {errorCode: 'INVALID_CREDENTIALS'}},
+        {label: '403 ACCOUNT_DISABLED', status: 403, body: {detail: {error_code: 'ACCOUNT_DISABLED', message: 'Account is disabled'}}, failure: {errorCode: 'ACCOUNT_DISABLED'}},
+        {label: '409 EMAIL_UNAVAILABLE', status: 409, body: {detail: {error_code: 'EMAIL_UNAVAILABLE', message: 'This instance cannot send emails'}}, failure: {errorCode: 'EMAIL_UNAVAILABLE'}},
+        {label: '429 EMAIL_RATE_LIMITED', status: 429, body: {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 840, message: 'Too many requests: try again later'}}, failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}},
+        {label: '502 EMAIL_DELIVERY_FAILED', status: 502, body: {detail: {error_code: 'EMAIL_DELIVERY_FAILED', message: 'The email could not be sent'}}, failure: {errorCode: 'EMAIL_DELIVERY_FAILED'}},
+    ])('VFA-17: $label, as the client raises it, is read by readResendFailure', async ({status, body, failure}) => {
+        serverAnswers(status, body);
+
+        const read = await resendEmailVerification('zq_alice', 'Pass-2026').then(() => null, readResendFailure);
+
+        expect(received, 'premise: the request reached the transport').toHaveLength(1);
+        expect(read).toEqual(failure);
+    });
+
+    it('VFA-18: a resend that reaches no server is UNKNOWN', async () => {
+        noServer();
+
+        await expect(resendEmailVerification('zq_alice', 'Pass-2026').then(() => null, readResendFailure)).resolves.toStrictEqual({errorCode: 'UNKNOWN'});
+    });
+});

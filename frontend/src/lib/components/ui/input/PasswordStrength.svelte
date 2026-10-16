@@ -77,8 +77,8 @@
 
         <!-- Rules Checklist: ✓ and ✗ say which rule holds, the colour only repeats it -->
         {#if showRules}
-            <div class="bg-lf-success-soft rounded-lg p-3 border border-lf-success-line" data-testid="password-requirements">
-                <p class="text-xs font-medium text-lf-success-on-soft mb-2">
+            <div class="bg-lf-panel rounded-lg p-3 border border-lf-subtle" data-testid="password-requirements">
+                <p class="text-xs font-medium text-lf-primary mb-2">
                     {$_('auth.passwordStrength.requirements')}
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">
@@ -86,7 +86,7 @@
                         <div class="flex items-center gap-1.5 text-xs" data-passed={rule.passed} data-testid="password-rule-{rule.key}">
                             {#if rule.passed}
                                 <Check class="w-3.5 h-3.5 text-lf-success" />
-                                <span class="text-lf-success-on-soft">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
+                                <span class="text-lf-secondary">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
                             {:else}
                                 <X class="w-3.5 h-3.5 text-lf-muted" />
                                 <span class="text-lf-muted">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>

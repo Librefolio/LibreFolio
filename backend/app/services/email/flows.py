@@ -26,8 +26,8 @@ from backend.app.services.accounts import token_service, user_service
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError, send_email
-from backend.app.services.email.links import email_link, require_links
-from backend.app.services.email.messages import build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.email.links import email_link, links_state, require_links
+from backend.app.services.email.messages import build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -143,7 +143,7 @@ async def send_test_email(session: AsyncSession, user: User, *, instance: str) -
     return language
 
 
-async def _require_email() -> delivery.EmailConfigState:
+async def require_email() -> delivery.EmailConfigState:
     """The configuration when email can be used now, else ``EmailUnavailableError`` (``INSTANCE_BLOCKED`` while the
     hosting provider blocks the instance); read off the event loop."""
     if delivery.sending_blocked():
@@ -154,7 +154,8 @@ async def _require_email() -> delivery.EmailConfigState:
     return state
 
 
-def _remaining(record: AccountToken, now: datetime) -> timedelta:
+def link_ttl(record: AccountToken, now: datetime) -> timedelta:
+    """How long the link of ``record`` still works at ``now``: never negative."""
     return max(ensure_utc(record.expires_at) - ensure_utc(now), timedelta(0))
 
 
@@ -176,7 +177,7 @@ async def send_link_email(
     that purpose), ``EmailRecipientRequiredError``, ``EmailRecipientNotAllowedError``, ``EmailAccountInactiveError`` (a
     reset link of an inactive account), and what ``send_email`` raises.
     """
-    await _require_email()
+    await require_email()
     links = require_links()
     moment = now or utcnow()
     inspection = await token_service.inspect_token(session, token, _PURPOSES[purpose], now=moment)
@@ -189,7 +190,7 @@ async def send_link_email(
         if not recipient:
             raise EmailRecipientRequiredError()
         lang = supported_email_language(language) or await instance_language(session)
-        content = build_invite(language=lang, link=link, ttl=_remaining(record, moment), instance=links.instance, inviter=admin.username, grants_admin=record.grants_admin)
+        content = build_invite(language=lang, link=link, ttl=link_ttl(record, moment), instance=links.instance, inviter=admin.username, grants_admin=record.grants_admin)
         user_id = None
     else:
         if to is not None:
@@ -201,7 +202,7 @@ async def send_link_email(
             raise EmailAccountInactiveError()
         recipient = user.email
         lang = await account_language(session, user.id)
-        content = build_password_reset(language=lang, username=user.username, link=link, ttl=_remaining(record, moment), instance=links.instance)
+        content = build_password_reset(language=lang, username=user.username, link=link, ttl=link_ttl(record, moment), instance=links.instance)
         user_id = user.id
     await send_email(content, to=recipient, user_id=user_id)
     logger.info("Link emailed by an administrator", admin_id=admin.id, purpose=purpose, token_id=record.id, user_id=user_id, language=lang)
@@ -218,7 +219,7 @@ async def admit_forgotten_password(address: str | None, identifier: str) -> None
     """
     if FORGOT_PASSWORD_HELD:
         raise ForgottenPasswordHeldError()
-    state = await _require_email()
+    state = await require_email()
     require_links()
     # Without an address (a unix socket), one shared count would let a single client block the feature for everyone:
     # the limits per identifier and per account, and the hourly budget, still apply.
@@ -288,7 +289,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
                 logger.info("Forgotten password: an administrator's reset link is still live, nothing sent", user_id=user_id)
                 return
             # Checked again now, since the answer went out: nothing is created when the email cannot go.
-            state = await _require_email()
+            state = await require_email()
             links = require_links()
             if not delivery.budget_status(state.max_per_hour).allowed:
                 logger.warning("Forgotten password: the hourly limit of the instance is reached, nothing sent", user_id=user_id)
@@ -313,7 +314,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
                     language=language,
                     username=user.username,
                     link=email_link(AccountTokenPurpose.PASSWORD_RESET, issued.token),
-                    ttl=_remaining(issued.record, moment),
+                    ttl=link_ttl(issued.record, moment),
                     instance=links.instance,
                 )
                 await send_email(content, to=user.email, user_id=user_id)
@@ -329,3 +330,42 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
     except Exception as exc:  # noqa: BLE001 — a background task has nobody to raise to: log and end
         # No traceback: a database error would print its SQL parameters, the identifier among them.
         logger.error("Forgotten password: the request failed", error=type(exc).__name__)
+
+
+#: The name of the instance in an email that carries no link, when ``LIBREFOLIO_PUBLIC_URL`` gives none: never the host of a
+#: request, which its sender writes (night decision of 15/10, to be reviewed).
+INSTANCE_FALLBACK = "LibreFolio"
+
+
+async def email_changed_work(user_id: int, old_address: str, new_address: str, *, engine: AsyncEngine | None = None) -> None:
+    """The notice to the address an account had before its email changed, after the answer, with a session of its own.
+
+    It goes only to the old address, in the account's language, and shows the new one masked (``***@domain``). It carries
+    no link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else «LibreFolio». Nothing
+    goes when the addresses are the same, email is off (an ``info`` line, not a warning: the self-hosted default), the
+    account is gone or email cannot be used now; a refusal or a failure is logged without either address. Never raises.
+    """
+    if old_address.strip().casefold() == new_address.strip().casefold():
+        return
+    try:
+        # Email off is the default of a self-hosted instance, not a fault: no warning for it.
+        if not (await asyncio.to_thread(delivery.email_config_state)).configured:
+            logger.info("Email change notice: email is off, nothing sent", user_id=user_id)
+            return
+        async with AsyncSession(engine or get_async_engine(), expire_on_commit=False) as session:
+            user = await user_service.get_user_by_id(session, user_id)
+            if user is None:
+                logger.info("Email change notice: the account no longer exists, nothing sent", user_id=user_id)
+                return
+            await require_email()
+            language = await account_language(session, user_id)
+            links = links_state()
+            instance = links.instance if links.ready else INSTANCE_FALLBACK
+            content = build_email_changed(language=language, username=user.username, new_address=new_address, instance=instance)
+            await send_email(content, to=old_address, user_id=user_id)
+            logger.info("Email change notice sent to the previous address", user_id=user_id, language=language)
+    except (EmailError, ValueError) as exc:
+        logger.warning("Email change notice: not sent", user_id=user_id, reason=type(exc).__name__, code=getattr(exc, "code", None))
+    except Exception as exc:  # noqa: BLE001 — a background task has nobody to raise to: log and end
+        # No traceback: a database error would print its SQL parameters.
+        logger.error("Email change notice: the request failed", user_id=user_id, error=type(exc).__name__)
