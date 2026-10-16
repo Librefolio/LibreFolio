@@ -25,6 +25,7 @@ from backend.app.schemas.brokers import (
 from backend.app.schemas.common import Currency
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
+from backend.app.services.financial_math.returns import gain_loss_ratio
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.transactions.transaction_service import TransactionService
 
@@ -137,8 +138,9 @@ class BrokerSummaryMixin:
                     unrealized_pnl_amount = current_value_amount - total_cost_amount
                     unrealized_pnl = Currency(code=asset.currency, amount=unrealized_pnl_amount)
 
-                    if total_cost_amount != Decimal("0"):
-                        unrealized_pnl_percent = ((unrealized_pnl_amount / total_cost_amount) * 100).quantize(Decimal("0.01"))
+                    unrealized_pnl_ratio = gain_loss_ratio(unrealized_pnl_amount, total_cost_amount, positive_base=False)
+                    if unrealized_pnl_ratio is not None:
+                        unrealized_pnl_percent = (unrealized_pnl_ratio * 100).quantize(Decimal("0.01"))
 
             holdings.append(
                 BRAssetHolding(
