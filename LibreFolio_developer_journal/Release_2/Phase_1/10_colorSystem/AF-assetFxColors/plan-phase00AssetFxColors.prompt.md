@@ -10,11 +10,11 @@
 > [`theme-roles`](../../../../../.github/skills/design-tools/theme-roles/SKILL.md) (tabella classe → ruolo, baseline).
 > Backlog: sezione «AF · Colori di asset e cambi» di [`BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md),
 > voci `AF-n`.
-> **Stato (16/10, 13:05):**
+> **Stato (16/10, 17:06):**
 > - **Lotti 1–8 nel target** (`bfd33a0f5`): A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, docs `15f31f12e`, fix G6
 >   `5cdf4c307`. Il target scende da m1 8.249 e m2 54 a 6.734 e 48.
-> - AF-6 è nel checkpoint successivo.
-> - Il lotto 9, il dettaglio asset, aspetta FE5c di X (slot 13:15–14:00).
+> - **AF-6** (`8dc5b864c`) e il piano (`830a805a3`) entrano con il lotto 9.
+> - **Lotto 9 e AF-4 al checkpoint D** (passo 13); il suo slot pesante è verso le 18:00.
 > - Le decisioni chieste nell'analisi le ha prese il coordinatore (passo 1).
 
 ## 0. Dati di partenza (verificati il 16/10, 10:41–11:30)
@@ -587,10 +587,58 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     >   103/103.
     > - **Da rivedere:** il velo passa dal 40 % di nero al 60 % del fondale (`#0D1110`), quindi è più scuro.
     >   `on-overlay` è provvisorio (domanda aperta 5 dello skill).
-13. ⏳ **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (X, slot 13:15–14:00): `routes/(app)/assets/[id]/+page.svelte`
-    e `lib/components/assets/detail/*.svelte`.
-    > **Lo slot del lotto 9** porta anche fx-settings, fx-destructive, asset-event-delete, asset-event-editor-save e
-    > tx-import-asset-inspector.
+13. ✅ (16/10, 16:53–17:06) **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (`a44951cf5`; base merge
+    `10bcf4486`). Conteggio sui file reali: 300 classi, cioè 123 della pagina e 177 dei 7 componenti di `detail/`. Si
+    scende a **55**, tutte AF-1: i tre interruttori della barra del grafico nella pagina (42); l'icona dei metadati, le
+    tre viola delle misure e l'icona dei segnali (13).
+    > **Note implementazione:**
+    > - **Analisi breve:**
+    >   - nessun ramo locale ha commit fuori dal target su quei file;
+    >   - nessun test legge i loro colori (i 6 test di `detail/`, `AssetCurrencyChangeModal.test.ts`, `asset-detail.spec.ts`,
+    >     le fixture della galleria);
+    >   - analisi approvata dal coordinatore alle 17:0x.
+    > - **Bozze:** due sotto-agenti in parallelo, uno sulla pagina e uno sui 7 componenti, riletti da me.
+    >   - Pagina:
+    >     - radice `text-lf-primary`;
+    >     - banner d'errore ambra e cornice dell'editor sul set `warning`, come la pagina dei cambi;
+    >     - spinner `text-lf-link`; primari `action`; secondari `bg-lf-panel hover:bg-lf-neutral`.
+    >   - Componenti:
+    >     - card `bg-lf-card shadow-lf-shadow-card border-lf-subtle`;
+    >     - pallino di stato `bg-lf-success`/`bg-lf-danger`;
+    >     - chip del tipo `bg-lf-neutral`; badge del fornitore sul set `success`, «Manual» sul set `warning`;
+    >     - segmenti prezzi/rendimento e preset delle finestre su `checked`;
+    >     - bottoni della barra `bg-lf-card border-lf-subtle hover:bg-lf-hover`.
+    > - **AF-4, fatta da me:** `AssetCurrencyChangeModal` passa a `<ModalBase tone="danger">` (T, `4d8ae68c4`), senza più
+    >   il `contentClass` di colore; da 2 classi a 0.
+    > - **Modifiche non di colore:**
+    >   - `tone="danger"`;
+    >   - `text-lf-primary` sulla radice della pagina;
+    >   - tolta la classe morta `dark:hover:bg-slate-750` (`AssetDetailMeasuresSection:30`: la tonalità 750 non esiste);
+    >   - Prettier ha cambiato solo spazi e a capo in 5 file.
+    > - **Prove:**
+    >   - `--check` pulito, regola 8 a 0, `dark_only_check` 0 su 9 file, `native_field_check` 0 su 10 file;
+    >   - compilazione 9/9, Prettier verde, `git diff --check` pulito;
+    >   - Vitest dei gate 101/101 dopo C4 (sotto); i Vitest dei componenti li copre `component-unit` nello slot.
+    > - **Baseline** (`--update`): m1 da 1.183 a 936, m2 resta 2.
+    >
+    > **⚠️ Fuori pista — C4:** il lotto ha tolto l'ultimo uso di `text-gray-800` in tutto il frontend, e il gate C4
+    > (`themeTokens.gate.test.ts`) ha chiesto di togliere la regola `html.dark .text-gray-800` da `app.css`. L'ho tolta,
+    > come prevede il mandato (unica eccezione su `app.css`). Nessun test la leggeva.
+    >
+    > **Da rivedere:**
+    > - il link «Transazioni (n)» passa dal blu al verde dei link (`text-lf-link`, lo skill; OK del coordinatore, nella
+    >   raccolta per la designer);
+    > - il chip del tipo è più scuro in chiaro;
+    > - in scuro i segmenti e i preset attivi hanno il testo scuro sul verde;
+    > - in scuro le cornici ambra tornano visibili: prima il rimappaggio di `.rounded-xl` le rendeva grigie;
+    > - il bottone di chiusura del banner ha l'hover sulla linea ambra;
+    > - in scuro i secondari si staccano poco dalla card (domanda aperta 3);
+    > - la nota dell'editor è su `-on-soft/70`.
+14. ⏳ **Slot pesante del lotto 9** (verso le 18:00, dopo la galleria di G, al massimo 45 minuti):
+    - `api sync` e `front build --debug`; `front check`; `component-unit`;
+    - E2E `front-asset` asset-detail, asset-browse, live-pause, asset-modal, asset-event-delete, asset-event-editor-save;
+    - `front-portfolio` risk-asset-detail; `front-transaction` tx-import-asset-inspector;
+    - `front-fx` fx-settings e fx-destructive.
 
 ## 12. Dove guardarlo (per il developer)
 
@@ -611,5 +659,12 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
   - cambio valuta, unione di asset, taglio o eliminazione delle date, import CSV di prezzi ed eventi;
   - editor dell'investimento programmato, col segnaposto delle note (G6).
 - **C, lotto 8:** la barra di `/assets` (ricerca, filtri attivi e inattivi, tipo, pastiglie delle valute, segmenti).
-- **Galleria:** le scene `fx-*`, `assets*`, `asset-modal*`, `asset-detail-header`; il dettaglio asset cambia col lotto 9.
-- I «da rivedere», lotto per lotto, sono nei passi 2–8 e 12.
+- **Galleria:** le scene `fx-*`, `assets*`, `asset-modal*`, `asset-detail-*`.
+- **D, lotto 9:**
+  - il dettaglio asset `/assets/<id>`: intestazione (pallino di stato, chip del tipo, link «Transazioni (n)» ora verde,
+    badge del fornitore o «Manual», ‹ n/N ›);
+  - la barra delle azioni; i segmenti prezzi/rendimento; i preset delle finestre del rendimento;
+  - il banner d'errore, la cornice «Modifica dati», i pannelli segnali, misure e metadati;
+  - nessun dato: i bottoni sincronizza e inserisci a mano;
+  - la modale del cambio valuta, ora con la cornice `tone="danger"`.
+- I «da rivedere», lotto per lotto, sono nei passi 2–8, 12 e 13.
