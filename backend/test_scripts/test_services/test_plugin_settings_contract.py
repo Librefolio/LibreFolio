@@ -4,7 +4,10 @@ Modules under test: ``services/plugin_settings/fields.py`` and ``contract.py``, 
 ``services/provider_registry.py``. The contract pinned here, hardened after the security review:
 
 1. **Declarations** (``validate_declaration``), per family (``FAMILY_RULES``): an asset plugin may declare ``user`` fields
-   and secrets; an FX plugin only ``system`` fields, secrets included; a family without rules declares nothing. A key is
+   and secrets; an FX plugin only ``system`` fields, secrets included; a family without rules declares nothing. A
+   ``user`` field is never ``required``, plain or secret, whatever its default: the calls made for nobody (prices,
+   history, scheduled jobs) never receive it, so it would leave them ``NOT_CONFIGURED`` for ever while every user's
+   catalogue says «configured»; the same field optional, or required at the ``system`` scope, is accepted. A key is
    lowercase letters, digits and ``_``, a letter first, at most 64 characters, never ending in ``_file`` (that suffix
    belongs to the ``_FILE`` variables), declared once. ``type`` and ``scope`` are the enum values, an English label is
    required. A secret is a string, has no default and accepts at least 8 characters, a floor no declaration lowers. An
@@ -41,6 +44,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from dataclasses import replace
 
 import pytest
 
@@ -145,6 +149,30 @@ def test_an_fx_plugin_declares_system_fields_and_secrets_but_no_user_field():
     with pytest.raises(SettingsDeclarationError, match="'limit'"):
         validate_declaration((_field("limit", INTEGER, USER, default=10),), family="fx")
     print_success("FX: system and secret accepted, a user field refused")
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(_field("nickname", STRING, USER, required=True, max_length=40), id="a-plain-text"),
+        pytest.param(_field("language", SELECT, USER, required=True, default="all", options=_options("all", "it")), id="a-select-with-a-default"),
+        pytest.param(_secret("token", USER, required=True), id="a-secret"),
+    ],
+)
+def test_a_personal_field_cannot_be_required(declared: PluginSettingField):
+    """1: the calls made for nobody — prices, history, scheduled jobs — never receive a user's values: a required
+    personal field would leave them ``NOT_CONFIGURED`` for ever, while every user's catalogue says «configured». Refused,
+    plain or secret, a default or not. The controls, so that ``required`` alone is what is refused: the same field
+    optional, and the same field required at the instance's scope, declare cleanly."""
+    print_section(f"1: a required personal field, {declared.key}")
+    assert (declared.scope, declared.required) == (USER, True), "setup: a personal field, required"
+
+    with pytest.raises(SettingsDeclarationError, match=f"field '{declared.key}': a personal field cannot be required"):
+        validate_declaration((declared,), family="asset")
+
+    validate_declaration((replace(declared, required=False),), family="asset")
+    validate_declaration((replace(declared, scope=SYSTEM),), family="asset")
+    print_success(f"{declared.key}: refused when personal and required; optional, or the instance's, accepted")
 
 
 @pytest.mark.parametrize("family", ["brim", "tools", "signal", "", "ASSET"])
@@ -422,6 +450,7 @@ def test_the_real_registries_name_their_settings_family():
     [
         pytest.param(_AssetLabRegistry, (_field("Bad-Key", default="x"),), "a key is lowercase letters", id="asset-bad-key"),
         pytest.param(_AssetLabRegistry, (_secret("token", default="s3cret-default"),), "a secret has no default", id="asset-secret-with-default"),
+        pytest.param(_AssetLabRegistry, (_field("limit", INTEGER, USER, default=10), _secret("token", USER, required=True)), "a personal field cannot be required", id="asset-required-personal-field"),
         pytest.param(_FXLabRegistry, (_field("limit", INTEGER, USER, default=1),), "'limit'", id="fx-user-field"),
         pytest.param(_NoSettingsLabRegistry, (_field("key", default="x"),), "cannot declare settings", id="registry-without-family"),
     ],

@@ -175,6 +175,7 @@ plugins:
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
             User Preferences: Preferenze Utente
+            Plugins: Plugin
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
             "CLI Admin Tools": "Strumenti CLI di amministrazione"
@@ -420,6 +421,7 @@ plugins:
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
             User Preferences: Préférences Utilisateur
+            Plugins: Plugins
             About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
@@ -666,6 +668,7 @@ plugins:
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
             User Preferences: Preferencias de Usuario
+            Plugins: Plugins
             About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
@@ -955,6 +958,7 @@ nav:
           - Overview: user/settings/index.md
           - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
+          - Plugins: user/settings/plugins.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
