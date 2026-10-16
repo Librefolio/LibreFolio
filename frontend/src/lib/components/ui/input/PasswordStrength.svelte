@@ -4,11 +4,17 @@
     import * as zxcvbnCommonPackage from '@zxcvbn-ts/language-common';
     import * as zxcvbnEnPackage from '@zxcvbn-ts/language-en';
     import {Check, X} from 'lucide-svelte';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {DEFAULT_PASSWORD_RULES, RULE_UI_KEYS, ruleMet, type PasswordRule} from '$lib/features/auth/passwordRules';
 
-    export let password: string = '';
-    export let showRules: boolean = true;
-    /** Every rule is met. A form that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the rules. */
-    export let valid: boolean = false;
+    interface Props {
+        password?: string;
+        showRules?: boolean;
+        /** Every rule is met. A form that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the rules. */
+        valid?: boolean;
+    }
+
+    let {password = '', showRules = true, valid = $bindable(false)}: Props = $props();
 
     // Initialize zxcvbn with dictionaries
     const options = {
@@ -21,32 +27,30 @@
     };
     zxcvbnOptions.setOptions(options);
 
-    // Password rules
-    interface PasswordRule {
-        key: string;
-        check: (pwd: string) => boolean;
-    }
-
-    const rules: PasswordRule[] = [
-        {key: 'minLength', check: (pwd) => pwd.length >= 8},
-        {key: 'hasUppercase', check: (pwd) => /[A-Z]/.test(pwd)},
-        {key: 'hasLowercase', check: (pwd) => /[a-z]/.test(pwd)},
-        {key: 'hasNumber', check: (pwd) => /\d/.test(pwd)},
-        {key: 'hasSpecial', check: (pwd) => /[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~;']/.test(pwd)},
-    ];
+    // The rules come from the server (`GET /system/instance`, decision 37); until it answers, or if it sends none, the
+    // rules of release 1.3. A rule this app does not know is neither drawn nor checked: the server decides.
+    const rules: PasswordRule[] = $derived.by(() => {
+        // The generated type widens an optional integer to `number | null | Array<…>`; the schema allows a number or null.
+        const served = instanceConfig.config.accounts.password_rules?.map(({code, value}) => ({code, value: typeof value === 'number' ? value : null}));
+        return (served?.length ? served : DEFAULT_PASSWORD_RULES).filter((rule) => Object.hasOwn(RULE_UI_KEYS, rule.code));
+    });
 
     // Calculate strength
-    $: strength = password ? zxcvbn(password) : null;
-    $: score = strength?.score ?? 0;
+    const strength = $derived(password ? zxcvbn(password) : null);
+    const score = $derived(strength?.score ?? 0);
 
     // Check rules
-    $: ruleResults = rules.map((rule) => ({
-        key: rule.key,
-        passed: password ? rule.check(password) : false,
-    }));
+    const ruleResults = $derived(
+        rules.map((rule) => ({
+            key: RULE_UI_KEYS[rule.code],
+            value: rule.value ?? null,
+            passed: password ? ruleMet(rule, password) === true : false,
+        })),
+    );
 
-    $: allRulesPassed = ruleResults.every((r) => r.passed);
-    $: valid = allRulesPassed;
+    $effect.pre(() => {
+        valid = ruleResults.every((r) => r.passed);
+    });
 
     // Strength labels and colours: three states for five scores (decision D-T13). The label says the level in words;
     // the colours of the bar only repeat it.
@@ -58,7 +62,7 @@
         {label: 'veryStrong', color: 'bg-lf-success', textColor: 'text-lf-success'},
     ];
 
-    $: currentConfig = strengthConfig[score];
+    const currentConfig = $derived(strengthConfig[score]);
 </script>
 
 {#if password.length > 0}
@@ -86,10 +90,10 @@
                         <div class="flex items-center gap-1.5 text-xs" data-passed={rule.passed} data-testid="password-rule-{rule.key}">
                             {#if rule.passed}
                                 <Check class="w-3.5 h-3.5 text-lf-success" />
-                                <span class="text-lf-secondary">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
+                                <span class="text-lf-secondary">{rule.value === null ? $_(`auth.passwordStrength.rules.${rule.key}`) : $_(`auth.passwordStrength.rules.${rule.key}`, {values: {value: rule.value}})}</span>
                             {:else}
                                 <X class="w-3.5 h-3.5 text-lf-muted" />
-                                <span class="text-lf-muted">{$_(`auth.passwordStrength.rules.${rule.key}`)}</span>
+                                <span class="text-lf-muted">{rule.value === null ? $_(`auth.passwordStrength.rules.${rule.key}`) : $_(`auth.passwordStrength.rules.${rule.key}`, {values: {value: rule.value}})}</span>
                             {/if}
                         </div>
                     {/each}

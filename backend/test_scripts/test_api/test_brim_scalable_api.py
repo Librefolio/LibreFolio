@@ -91,7 +91,7 @@ def test_server():
 async def _log_in_new_user(client: httpx.AsyncClient) -> None:
     """Register a user of this test alone and log it in: the brokers it creates are the only ones it can see."""
     username = f"brim_scalable_{uuid.uuid4().hex[:12]}"
-    password = "testpass123"
+    password = "TestPass123!"  # meets the password rules (decision 37), which POST /auth/register applies
     response = await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": password}, timeout=TIMEOUT)
     assert response.status_code == 201, f"Register failed: {response.text}"
     response = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)

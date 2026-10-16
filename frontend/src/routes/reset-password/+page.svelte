@@ -16,6 +16,7 @@
     import {replaceAddress} from '$lib/features/auth/addressBar';
     import {setAuthFlash} from '$lib/features/auth/authFlash';
     import {inspectLinkToken, takeLinkToken, type LinkPageStatus} from '$lib/features/auth/linkToken';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 
     let token = $state<string | null>(null);
     let status = $state<LinkPageStatus | 'form'>('checking');
@@ -41,6 +42,9 @@
     }
 
     onMount(() => {
+        // The password rules come from the server (decision 37); the meter follows them when they arrive, so the
+        // form does not wait for this request.
+        void instanceConfig.load();
         token = takeLinkToken(new URL(window.location.href), replaceAddress);
         void check();
         // A link pasted into a tab already on this page changes only the fragment: no reload, so read it here

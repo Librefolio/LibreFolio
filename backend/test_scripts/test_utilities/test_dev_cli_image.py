@@ -81,6 +81,18 @@ The contract:
   breaks the rules, or a username already taken, it prints ``❌``, exits 1 and creates or
   changes nobody (**IMG-012b**); ``create-superuser``, which still creates the E2E
   administrators, keeps creating an active administrator (**IMG-012c**);
+* **IMG-031**: the command line checks a new password with the backend's password rules
+  (decision 37, lot A6c of workstream A): ``validate_password``, which ``user create``,
+  ``user reset`` and ``user_cli.py create-user`` call, answers ``(True, [])`` for a password
+  that meets every rule, and otherwise ``False`` with one message per rule missed, in the
+  policy's order (``min_length``, ``uppercase``, ``lowercase``, ``digit``, ``special``), each
+  naming its rule's code (**IMG-031**). The classes are Unicode's, so the old copy's verdict
+  turns both ways: ``Écrire12€`` (``€`` was not among its ASCII symbols) is accepted, and
+  ``user create`` with it creates the account, whose stored hash takes it (**IMG-031b**);
+  ``Ecrire²²!`` (``'²'.isdigit()`` made its digit) is refused, and ``user reset`` with it
+  prints ``❌``, names ``digit``, exits 1 and keeps the old password (**IMG-031c**). A space
+  is not a symbol: ``user create`` with ``Ecrire12 `` prints ``❌``, names ``special``, exits
+  1 and creates nobody (**IMG-031d**);
 * **IMG-027**: ``user invite [--admin] [--email E]`` (plan phase01Accounts A5.1, point 6)
   issues a live invitation and prints its link: without ``LIBREFOLIO_PUBLIC_URL`` the path
   alone (``/invite#token=…``: the token travels in the URL fragment, which a browser never
@@ -132,10 +144,13 @@ and so did the runner's ``_ensure_test_users`` and ``e2e/global-setup.ts`` for e
 user, so on an empty database the users meant to be ordinary were administrators; a
 populated database hid it, because ``populate_mock_data.py`` creates them first with the
 right role. IMG-025 and IMG-026 pin lot B1 of workstream B (plan 07_backupDocker §3.10): the
-``backup`` group works in the image, as ``docker compose exec`` runs it. The messages are
+``backup`` group works in the image, as ``docker compose exec`` runs it. IMG-031 pins decision
+37 (lot A6c of workstream A): the password rules have one source, the backend's, and the
+command line calls it instead of keeping its own copy. The messages are
 English CLI output, not UI text, so the fragments above are the contract: "not available in
 this installation", "last active administrator" and "invalid choice" (case aside), the
-missing directory, the option argparse names, ``❌`` and ``✅``, nothing more. Roles are read
+missing directory, the option argparse names, the codes of the password rules (case aside),
+``❌`` and ``✅``, nothing more. Roles are read
 from the database itself: no exit code tells an administrator from an ordinary user.
 
 "Without a traceback" means none of ``Traceback (most recent call last)``,
@@ -1269,6 +1284,93 @@ class TestAccountRole:
         assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
         assert account(image_db.path, name) == ADMIN_ACCOUNT, f"create-superuser must make an active administrator: {account(image_db.path, name)}; {run}"
         print_success(f"{name}: an active administrator, {SUCCEEDED}, exit 0")
+
+
+# ---------------------------------------------------------------------------
+# IMG-031: the command line applies the backend's password rules (decision 37, lot A6c)
+# ---------------------------------------------------------------------------
+
+#: Accepted now; the old copy refused it, ``€`` not being among its ASCII symbols. ``É`` is an uppercase letter either way.
+UNICODE_PASSWORD = "Écrire12€"
+#: Refused now, for its digit; the old copy accepted it: ``'²'.isdigit()`` is True, but ``²`` is a number (``No``), not a decimal digit (``Nd``).
+SUPERSCRIPT_DIGITS_PASSWORD = "Ecrire²²!"
+#: Refused, for its symbol: a space is not one (the old copy refused it too).
+SPACE_AS_SYMBOL_PASSWORD = "Ecrire12 "
+#: (password, the codes of the rules it misses, in the policy's order).
+CLI_PASSWORD_SAMPLES = [
+    pytest.param(UNICODE_PASSWORD, [], id="euro-sign-is-a-symbol"),
+    pytest.param("Écrire12!", [], id="E-acute-is-an-uppercase-letter"),
+    pytest.param(SUPERSCRIPT_DIGITS_PASSWORD, ["digit"], id="superscript-two-is-not-a-digit"),
+    pytest.param(SPACE_AS_SYMBOL_PASSWORD, ["special"], id="a-space-is-not-a-symbol"),
+    pytest.param("Short1!", ["min_length"], id="seven-characters"),
+    pytest.param(WEAK_PASSWORD, ["uppercase", "digit", "special"], id="three-rules"),
+    pytest.param("", ["min_length", "uppercase", "lowercase", "digit", "special"], id="every-rule"),
+]
+
+
+class TestPasswordRules:
+    """``user create`` and ``user reset`` check a new password with the backend's rules, through ``validate_password`` (decision 37, lot A6c).
+
+    The old copy — ``str.isupper``, ``str.islower``, ``str.isdigit`` and a fixed set of ASCII symbols — judged some
+    passwords the other way round from the policy: the classes are now Unicode's, and the messages name the rules missed
+    by the codes the API answers with.
+    """
+
+    @pytest.mark.parametrize(("password", "missed"), CLI_PASSWORD_SAMPLES)
+    def test_validate_password_names_the_rules_missed(self, password, missed):
+        """IMG-031: validate_password → (True, []) for a password that meets every rule; otherwise (False, one message per rule missed, in the policy's order, each naming its rule's code)."""
+        print_section(f"IMG-031: validate_password({password!r})")
+
+        valid, errors = validate_password(password)
+
+        assert valid is (not missed), f"validate_password({password!r}) must answer {not missed}, the password missing {missed}: got {valid}, {errors}"
+        assert len(errors) == len(missed), f"validate_password({password!r}) must give one message per rule missed, {missed}: got {errors}"
+        unnamed = [(code, message) for code, message in zip(missed, errors, strict=True) if code not in message.lower()]
+        assert not unnamed, f"each message must name its rule's code, in the policy's order {missed}; these do not: {unnamed}"
+        print_success(f"{password!r}: {'valid' if valid else errors}")
+
+    def test_user_create_accepts_a_password_the_old_copy_refused(self, image, image_db):
+        """IMG-031b — NEW, red today (❌, exit 1: € is not among the old copy's symbols): user create with Écrire12€ → ✅, exit 0, an active administrator, and its stored hash takes that password."""
+        print_section(f"IMG-031b: user create with {UNICODE_PASSWORD!r}, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", UNICODE_PASSWORD, env=image_db.env)
+
+        assert_succeeds(run)
+        assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"user create must make an active administrator: {account(image_db.path, name)}; {run}"
+        assert verify_password(UNICODE_PASSWORD, stored_password_hash(image_db.path, name)), f"the stored hash of {name} must take {UNICODE_PASSWORD!r}, the password given on the command line"
+        print_success(f"{name}: created with {UNICODE_PASSWORD!r}, which its stored hash takes")
+
+    def test_user_reset_refuses_a_password_the_old_copy_accepted(self, image, image_db):
+        """IMG-031c — NEW, red today (✅, exit 0: '²'.isdigit() is True): user reset with Ecrire²²! → ❌, the output names the rule missed, digit, exit 1, and the stored hash still takes the old password."""
+        print_section(f"IMG-031c: user reset with {SUPERSCRIPT_DIGITS_PASSWORD!r}, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env))
+
+        run = run_dev(image, "user", "reset", name, SUPERSCRIPT_DIGITS_PASSWORD, env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the refusal to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"a refused password must exit 1: {run}"
+        assert "digit" in run.output.lower(), f"the output must name the rule missed, digit: {run}"
+        stored = stored_password_hash(image_db.path, name)
+        assert verify_password(OLD_PASSWORD, stored) and not verify_password(SUPERSCRIPT_DIGITS_PASSWORD, stored), f"a refused password must leave the old one in place: the stored hash of {name} must take {OLD_PASSWORD!r} and refuse {SUPERSCRIPT_DIGITS_PASSWORD!r}"
+        print_success(f"{name}: {FAILED}, digit named, exit 1, the old password kept")
+
+    def test_user_create_refuses_a_space_as_the_only_symbol(self, image, image_db):
+        """IMG-031d — GUARD for the verdict (the old copy refused it too): user create with "Ecrire12 " — a space is not a symbol — → ❌, the output names the rule missed, special, exit 1, and nobody is created."""
+        print_section("IMG-031d: user create with a space as its only symbol, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", SPACE_AS_SYMBOL_PASSWORD, env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the refusal to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"a refused password must exit 1: {run}"
+        assert "special" in run.output.lower(), f"the output must name the rule missed, special: {run}"
+        assert account(image_db.path, name) is None, f"a refused password must create nobody, yet {name} is in the database"
+        print_success(f"{name}: {FAILED}, special named, exit 1, not created")
 
 
 # ---------------------------------------------------------------------------
