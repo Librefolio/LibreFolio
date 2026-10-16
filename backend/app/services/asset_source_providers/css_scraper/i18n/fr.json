@@ -1,0 +1,22 @@
+{
+  "assets": {
+    "providerParams": {
+      "css_scraper": {
+        "label": {
+          "current_css_selector": "Sélecteur CSS du prix",
+          "currency": "Devise",
+          "decimal_format": "Format des nombres",
+          "timeout": "Délai d'attente (secondes)",
+          "user_agent": "User-Agent"
+        },
+        "description": {
+          "current_css_selector": "Sélecteur CSS de l'élément qui contient le prix sur la page web",
+          "currency": "Code de la devise (ISO 4217, p. ex. EUR, USD)",
+          "decimal_format": "Format des nombres : 'us' = 1,234.56 / 'eu' = 1.234,56",
+          "timeout": "Délai d'attente de la requête HTTP, en secondes",
+          "user_agent": "En-tête User-Agent personnalisé"
+        }
+      }
+    }
+  }
+}

@@ -78,12 +78,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
 - API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
 - **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
+- Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
+- Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
+- Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
 
 #### 🎨 A new colour palette
 
-- **A new colour palette, in light and in dark**, chosen with a designer: «Stone and Sage» in light, «Slate and Sage» in dark. It already covers the sign-in pages, the sidebar, the header and its menus; the rest of the app keeps its current look and moves to the new palette over the next updates. Every text and control of the palette meets the WCAG contrast minimum (4.5:1 for text, 3:1 for controls) in both themes.
+- **A new colour palette, in light and in dark**, chosen with a designer: «Stone and Sage» in light, «Slate and Sage» in dark. It now covers most of the app; the screens still on the old colours move over the next updates. Every text and control of the palette meets the WCAG contrast minimum (4.5:1 for text, 3:1 for controls) in both themes.
 - **Green sidebar, neutral header.** The sidebar takes the brand green in both themes, with the page you are on marked by a bar on its left; the header sits on a neutral band, a shade darker than the page in light and lighter in dark. The control you reach with the keyboard shows a clear focus ring. The title bar of the installed app takes the sidebar's green.
 - **Softer red and green in the dark theme**, easier on the eyes, for errors, success marks, the password-strength bar, the connection status and the gains and losses on the Dashboard.
+- **States, signs and messages on the palette:** gains and losses in the asset and FX lists, the live price flash, the broker cards and the lot details; toasts (solid, with the close button and the countdown in the same colour), badges and notices, the data-quality banner, the import badges and the risk panels.
+- **Tooltips on an inverted surface:** dark in the light theme and light in the dark theme, with warnings, errors and info inside them readable on both.
+- **One frame for every dialog**, with a thin border and a darker backdrop. Selects, date pickers, tabs, toolbars, the distribution editor and tags follow the palette too.
+- **Numeric fields** keep their red border while invalid, also when focused.
+- **On the new palette:** the welcome page and the guided tour, the PAC planner, the chart settings, the sync dialogs, the changelog and the server-unreachable page.
+- **PAC result:** the real exposure bars take their category colour, the ideal ones a neutral grey. **Growth chart:** each broker line takes the colour of an asset type.
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 
@@ -147,6 +156,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The image picker no longer reloads its list over and over when it has nothing to show.
 - **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
 - **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
+- A dividend or split dated today now shows up the same day, not the next one.
+- API: when a transaction breaks two or more rules at once, each message of the validation and import responses names the transaction type ("BUY requires asset_id") instead of a literal `{type}`.
+- Borsa Italiana ETCs and ETNs are now typed as commodity ETFs (an asset already saved changes type when you refresh its metadata); the justETF and CSS scraper settings show translated labels.
+- A refused **Split pair** or **Promote pair** on the Transactions page now says why in an error message, and the confirmation stays open: until now nothing was shown.
+- A broker's **Uploaded Reports** no longer lists the reports an older version stored without a broker: they stay on the Files page.
 
 #### 🔒 Security
 
