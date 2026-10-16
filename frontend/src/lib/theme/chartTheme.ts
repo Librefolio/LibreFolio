@@ -209,7 +209,7 @@ export const GROWTH_SERIES = {
     deposit: {light: '#0d9488', dark: '#2dd4bf'},
 } as const;
 
-/** The Growth chart's strokes other than its series. Its broker lines: `GROWTH_BROKER_PALETTE` in `./chartPalettes`. */
+/** The Growth chart's strokes other than its series. Its broker lines: `growthBrokerColor` in `./chartPalettes`. */
 export const GROWTH_CHART_COLORS = {
     /** The dashed zero line of the P&L mode. */
     pnlReference: {light: '#9ca3af', dark: '#64748b'},
@@ -259,12 +259,6 @@ export const TREEMAP_COLORS = {
     /** Borders of the first two levels: groups, then tiles. */
     groupBorder: {light: '#e2e8f0', dark: '#334155'},
     tileBorder: {light: '#cbd5e1', dark: '#475569'},
-} as const;
-
-/** The PAC planner's exposure bars: target in grey, after the plan in the brand green (its two token values). */
-export const PAC_EXPOSURE_BAR_COLORS = {
-    light: {target: '#9ca3af', final: '#1a4031'},
-    dark: {target: '#6b7280', final: '#00d681'},
 } as const;
 
 /** Lines the risk panels add to a price chart, the same in both themes. */

@@ -1,11 +1,15 @@
 """Plugin settings API: ``GET /api/v1/settings/plugins`` and ``PATCH /api/v1/settings/plugins/bulk`` (plan 03, CP10 step 6).
 
 Against the lane's server, with the test double ``mockprov`` (four system fields, three user fields, a secret of each
-scope) and, read-only, ``MOCKFX``. The contract pinned here:
+scope), read-only ``MOCKFX``, and the search preferences of two real plugins, ``justetf`` and ``borsa_italiana`` (CP11a).
+The contract pinned here:
 
 1. **The catalogue**: a test-only plugin is listed only when ``plugin_code`` names it; ``family`` filters; each field
    shows what its declaration says and its state for the caller; system fields are editable by an administrator only,
-   user fields by their owner; ``MOCKFX`` is read-only for a member.
+   user fields by their owner; ``MOCKFX`` is read-only for a member. Each entry says whether its plugin is
+   ``configured`` (a boolean). The full catalogue lists ``justetf`` (``preferred_currency``) and ``borsa_italiana``
+   (``preferred_language``): one user select each, editable by a member, on its default ``all``, configured, its
+   options with their label keys; a member saves them, reads them back as theirs, and clears them.
 2. **Secrets are write-only**: a secret goes in ``secret_value`` and never comes back — no response of this module
    (every body is collected) ever holds a marker secret; a set secret shows only ``is_set`` and ``source: db``.
 3. **All or nothing**: a refused write answers 422 whose ``detail.results`` lists every item with ``success`` and
@@ -22,7 +26,8 @@ scope) and, read-only, ``MOCKFX``. The contract pinned here:
    administrator leaves the rows without an author (``SET NULL``); deleting a user deletes the user's rows (``CASCADE``).
 
 Isolation. The user fields are written only by accounts this module registers (never ``e2e_test_user``) and go with
-them at teardown. The system fields are instance-wide singletons whose values make the fingerprint in the cache keys
+them at teardown; the search preferences of ``justetf`` and ``borsa_italiana`` are also cleared in a ``finally`` by the
+account that wrote them. The system fields are instance-wide singletons whose values make the fingerprint in the cache keys
 of every mockprov call, so the unit is exclusive (its ``exclusive_because`` in the runner): one write-and-clear round,
 done by administrators this module creates, and the rows of mockprov's system fields put back exactly as they were
 found, after a red too. ``MOCKFX`` is never written over HTTP: its writes are covered on a private database by
@@ -181,6 +186,14 @@ async def _fields(lane: _Lane, account: _Account, code: str = "mockprov", family
     return {field["key"]: field for field in plugins[0]["fields"]} if plugins else {}
 
 
+async def _entry(lane: _Lane, account: _Account, code: str) -> dict[str, Any]:
+    """The catalogue entry of one plugin, named by ``plugin_code``, as ``account`` sees it; listed once, or the test fails."""
+    response = await lane.call("GET", CATALOGUE, account=account, params={"plugin_code": code})
+    assert response.status_code == 200, response.text
+    (entry,) = [plugin for plugin in response.json()["plugins"] if plugin["plugin_code"] == code]
+    return entry
+
+
 async def _write(lane: _Lane, account: _Account, items: list[dict]) -> httpx.Response:
     return await lane.call("PATCH", BULK, account=account, json={"items": items})
 
@@ -273,6 +286,71 @@ async def test_system_fields_are_editable_by_an_administrator_only_and_mockfx_is
     assert {key: field["editable"] for key, field in fx_admin.items()} == {"api_key": True, "decimals": True}
     assert all(field["env_variable"] is None for field in [*as_member.values(), *as_admin.values()])
     print_success("member: user fields only, MOCKFX read-only; administrator: everything")
+
+
+#: The search preferences of the real plugins (CP11a): plugin → (its one field, its options with their label keys).
+_SEARCH_PREFERENCES = {
+    "justetf": ("preferred_currency", [("all", "pluginSettings.asset.justetf.option.preferred_currency.all"), ("EUR", None), ("USD", None), ("CHF", None), ("GBP", None)]),
+    "borsa_italiana": (
+        "preferred_language",
+        [
+            ("all", "pluginSettings.asset.borsa_italiana.option.preferred_language.all"),
+            ("it", "pluginSettings.asset.borsa_italiana.option.preferred_language.it"),
+            ("en", "pluginSettings.asset.borsa_italiana.option.preferred_language.en"),
+        ],
+    ),
+}
+
+
+@pytest.mark.asyncio
+async def test_the_full_catalogue_lists_the_search_preferences_of_justetf_and_borsa_italiana(lane: _Lane):
+    """1: every entry says whether its plugin is configured; justetf and borsa_italiana each list their one user select,
+    editable by a member, on its default ``all``, configured, with its options' label keys; the test doubles, named,
+    are configured too (no field of theirs is required, the lane sets no variable of theirs)."""
+    print_section("1: configured, and the search preferences in the full catalogue")
+    member = await lane.member("ps_preferences")
+
+    response = await lane.call("GET", CATALOGUE, account=member)
+    doubles = {code: (await _entry(lane, member, code))["configured"] for code in ("mockprov", "MOCKFX")}
+
+    assert response.status_code == 200, response.text
+    entries = {entry["plugin_code"]: entry for entry in response.json()["plugins"]}
+    assert all(type(entry["configured"]) is bool for entry in entries.values()), f"configured must be a boolean: {entries}"
+    assert set(_SEARCH_PREFERENCES) <= set(entries), f"the full catalogue lists {sorted(entries)}"
+    for code, (key, options) in _SEARCH_PREFERENCES.items():
+        entry = entries[code]
+        assert (entry["family"], entry["configured"], [field["key"] for field in entry["fields"]]) == ("asset", True, [key]), code
+        (field,) = entry["fields"]
+        assert (field["type"], field["scope"], field["secret"], field["required"], field["editable"], field["locked"]) == ("select", "user", False, False, True, False), code
+        assert (field["source"], field["value"], field["default"], field["is_set"], field["problem"]) == ("default", "all", "all", False, None), code
+        assert (field["label_key"], field["description_key"]) == (f"pluginSettings.asset.{code}.label.{key}", f"pluginSettings.asset.{code}.description.{key}")
+        assert [(option["value"], option["label_key"]) for option in field["options"]] == options, code
+    assert doubles == {"mockprov": True, "MOCKFX": True}
+    print_success("justetf and borsa_italiana: one user select each, on 'all', configured")
+
+
+@pytest.mark.asyncio
+async def test_a_member_saves_the_search_preferences_and_clears_them(lane: _Lane):
+    """1: a member writes both preferences and reads them back as theirs; a value outside the options is refused; cleared
+    in the end — after a red too — the defaults are back and no row is left."""
+    print_section("1: the search preferences, written and cleared")
+    member = await lane.member("ps_preference_write")
+    preferences = [_item("preferred_currency", "user", code="justetf", value="EUR"), _item("preferred_language", "user", code="borsa_italiana", value="en")]
+    try:
+        written = await _write(lane, member, preferences)
+        saved = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+        refused = await _write(lane, member, [_item("preferred_currency", "user", code="justetf", value="JPY")])
+    finally:
+        cleared = await _write(lane, member, [_item(item["field_key"], "user", code=item["plugin_code"], clear=True) for item in preferences])
+    restored = {code: (await _fields(lane, member, code))[key] for code, (key, _options) in _SEARCH_PREFERENCES.items()}
+
+    assert written.status_code == 200 and written.json()["success_count"] == 2, written.text
+    assert {code: (field["value"], field["source"], field["is_set"]) for code, field in saved.items()} == {"justetf": ("EUR", "db", True), "borsa_italiana": ("en", "db", True)}
+    assert _outcomes(refused) == [("preferred_currency", False, "INVALID_VALUE")]
+    assert cleared.status_code == 200 and cleared.json()["success_count"] == 2, cleared.text
+    assert {code: (field["value"], field["source"], field["is_set"]) for code, field in restored.items()} == dict.fromkeys(_SEARCH_PREFERENCES, ("all", "default", False))
+    assert await _user_rows(member.user_id) == [], "nothing left behind"
+    print_success("EUR and en saved as the member's own, JPY refused, both cleared")
 
 
 # =============================================================================

@@ -12,7 +12,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
 - **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas.
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
-- **📁 File Upload Security**: MIME type validation, executable blocking, size limits.
+- **📁 File Upload Security**: MIME type validation, executable blocking, size limits, and a [scope](#upload-scope) per file: common, or personal to its uploader and the administrators.
 - **🚫 Endpoint Protection**: **All** data and file endpoints require a valid session cookie — including uploaded files and plugin assets.
 
 ### ⚠️ Out of Scope
@@ -400,13 +400,48 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
-    Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed.
+    Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed. A personal file needs more than a session: see [Uploaded Files: Common and Personal](#upload-scope).
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
+
+### 📁 Uploaded Files: Common and Personal {: #upload-scope }
+
+Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
+[Data Directory on Disk](database/index.md#data-directory)) has a scope, `UploadScope`
+(`backend/app/schemas/uploads.py`): `common`, seen by every signed-in user (icons, logos, asset photos, avatars), or
+`personal`, seen only by its uploader and the administrators (`is_superuser`). The rule lives in
+`backend/app/services/files/static_uploads.py`, the routes in `backend/app/api/v1/uploads.py`:
+
+- **The scope.** The sidecar stores it. A sidecar written before scopes existed, or by the seeding of the default
+  avatars, has none, and `effective_scope()` applies the inheritance rule at every read, with no migration: the
+  application's own files (uploader id `0`, `SYSTEM_USER_ID`: the seeded default avatars) are common, `image/*` is
+  common, anything else is personal. `POST /uploads` takes an optional multipart field `scope`, `common` or
+  `personal`; without it, the same rule decides, and the result is stored.
+- **Seeing a file** (`can_view_upload()`). `GET /uploads` lists the common files and the user's own personal ones,
+  every file for an administrator; `my_files_only=true` keeps only one's own files, of both scopes. `GET /uploads/{id}`,
+  `GET /uploads/{id}/preview` and `GET /uploads/file/{id}` (download, `img_preview` thumbnail, text window) answer a
+  personal file of someone else with the `404` *File not found* of a file that does not exist, so its existence is not
+  revealed. The check runs first, before the thumbnail cache and before any type check.
+- **Changing a file** (`can_manage_upload()`). `DELETE /uploads/{id}` and `PATCH /uploads/{id}` with
+  `{"scope": "common"}` or `{"scope": "personal"}` (`UploadUpdateRequest`) belong to the uploader and the
+  administrators. Another user gets `403` on a common file, and the same `404` on a personal one. Every
+  `UploadFileInfo` carries `scope` and `can_delete`: whether the requesting user may delete the file and change its
+  scope.
+- **Private thumbnails.** `img_preview` answers carry `Cache-Control: private, max-age=3600`, never `public`: they are
+  signed-in content, which the browser may keep and a shared cache in front of the instance must not.
+- **Several workers** (`dev.py server --workers N`). Each worker caches a sidecar for up to an hour (`upload_metadata`),
+  but checks the sidecar's stamp (inode, mtime, size) at every read, and `_save_metadata()` replaces a sidecar
+  atomically (a temporary file in the same folder, then `os.replace`). A scope changed through one worker holds at
+  once in the others, and no reader sees half a file.
+
+The broker report files of [BRIM](../backend/brim/architecture.md) answer differently, and deliberately so: their
+routes (`/brokers/import/files/…`) give `403` to a user without access to the file's broker.
+
+Tests: `./dev.py test services static-uploads`, `./dev.py test api uploads` and `./dev.py test api uploads-serve-file`.
 
 ### 🚧 Instance Block {: #instance-block }
 
@@ -439,6 +474,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
+| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -460,7 +496,8 @@ valid session gets these answers:
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
-  `/system/info` and `/system/ready` answer as on any other instance.
+  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up
+  tells, and only to the holder of its token: `status: "blocked"`.
 - The public routes outside the list answer `401` only while the instance is blocked. From them, a
   caller without a session can tell that the instance is blocked, and nothing more: they return no
   data.
@@ -484,9 +521,11 @@ fills it in `block.py` with one call to its service.
 lost the password (see the table above): they read a link already sent or spend a reset link, and
 create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
 that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
-full backup for the administrator and the scheduled wake-up join the list, one line each, when their
-routes exist; any other addition goes through the
-developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
+full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
+delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
+instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
+of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). Any other
+addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
 documentation, so an addition, or a route the guard does not reach, shows in review.
@@ -495,7 +534,8 @@ documentation, so an addition, or a route the guard does not reach, shows in rev
 FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
 covered: the browser still loads the app, which turns the first `423` into the block page (see
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
-HTTP, so its jobs keep running.
+HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
+job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 

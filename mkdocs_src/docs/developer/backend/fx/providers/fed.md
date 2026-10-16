@@ -18,6 +18,7 @@ The Federal Reserve provides exchange rate data through FRED (Federal Reserve Ec
 - **Series IDs**: Format `DEXXX` (e.g., `DEXUSEU` = USD per 1 EUR).
 - **Quotation**: "USD per 1 foreign currency" — the provider **inverts** these automatically to get LibreFolio's standard format.
 - **Multi-unit currencies**: None (FRED quotes all currencies per 1 unit).
+- **Too many requests**: an HTTP 429 on any currency's request refuses the whole call. After the parallel fetch, `raise_longest_refusal()` raises the `FXRateLimitedError` with the longest `Retry-After`, and the core pauses the provider ([Paused Providers](../configuration.md#paused-providers)).
 
 ### 💰 Supported Currencies
 
@@ -36,6 +37,6 @@ EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CAD 🇨🇦, CHF 🇨🇭, AUD 🇦�
 
 ### ⚠️ Limitations
 
-- One HTTP request per currency (sequential fetching).
+- One HTTP request per currency, sent in parallel (`asyncio.gather`).
 - No data on US holidays and weekends.
 - Some series may have occasional gaps.

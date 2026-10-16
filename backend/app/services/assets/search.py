@@ -16,7 +16,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResultItem,
 )
 from backend.app.services.assets import core, web_link_finder
-from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
@@ -227,10 +227,10 @@ class AssetSearchService:
             )
 
         # Create search tasks for parallel execution
-        async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None]:
+        async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None, str | None]:
             """
-            Search a single provider and return (code, results, error).
-            Error is None if successful, error message string if failed.
+            Search a single provider and return (code, results, error, error code).
+            Error is None if successful, error message string if failed; the error code is NOT_CONFIGURED or None.
             Uses Layer 2 (query cache) and Layer 1 (item cache) for acceleration.
             """
             query_lower = query.lower().strip()
@@ -241,7 +241,7 @@ class AssetSearchService:
             cached_query, q_ok = core._search_query_cache.get(query_cache_key)
             if q_ok and cached_query is not None:
                 logger.debug(f"Search query cache HIT for '{query}' on provider '{code}'")
-                return (code, cached_query, None)
+                return (code, cached_query, None, None)
 
             # Layer 1: fuzzy match on cached individual items (24h)
             # Scan core._search_result_cache keys for contains match
@@ -255,18 +255,22 @@ class AssetSearchService:
                     search_results = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 core._search_query_cache.set(query_cache_key, search_results)
-                return (code, search_results, None)
+                return (code, search_results, None, None)
             except Exception as e:
                 error_str = str(e).lower()
-                if "not_supported" in error_str or "not supported" in error_str:
-                    logger.debug(f"Provider '{code}' does not support search")
-                    return (code, [], None)
-                elif isinstance(e, AssetSourceError) and e.error_code == "NOT_CONFIGURED":
+                # The typed refusals first: their messages carry plugin-declared names, which a text test could match.
+                if isinstance(e, AssetSourceError) and e.error_code == "NOT_CONFIGURED":
                     logger.info("Search skipped: provider not configured", provider=code, missing=e.details.get("missing"))
-                    return (code, [], str(e))
+                    return (code, [], str(e), "NOT_CONFIGURED")
+                elif isinstance(e, AssetRateLimitedError):
+                    logger.info("Search skipped: provider paused after too many requests", provider=code, retry_after=e.retry_after)
+                    return (code, [], str(e), None)
+                elif "not_supported" in error_str or "not supported" in error_str:
+                    logger.debug(f"Provider '{code}' does not support search")
+                    return (code, [], None, None)
                 else:
                     logger.exception(f"Search error from provider '{code}': {e}")
-                    return (code, [], str(e))
+                    return (code, [], str(e), None)
 
         # Execute all searches in parallel
         tasks = [search_single_provider(code, provider) for code, provider in valid_providers]
@@ -277,6 +281,7 @@ class AssetSearchService:
         results: list[FAProviderSearchResultItem] = []
         providers_queried: list[str] = []
         providers_with_errors: list[str] = []
+        providers_not_configured: list[str] = []
 
         for result in search_results_raw:
             if isinstance(result, Exception):
@@ -284,11 +289,13 @@ class AssetSearchService:
                 logger.error(f"Unexpected error in search task: {result}")
                 continue
 
-            code, items, error = result
+            code, items, error, error_code = result
             providers_queried.append(code)
 
             if error:
                 providers_with_errors.append(code)
+                if error_code == "NOT_CONFIGURED":
+                    providers_not_configured.append(code)
                 continue
 
             # Convert provider results to response schema
@@ -322,6 +329,7 @@ class AssetSearchService:
             results=results,
             providers_queried=providers_queried,
             providers_with_errors=providers_with_errors,
+            providers_not_configured=providers_not_configured,
         )
 
     @staticmethod
@@ -334,6 +342,10 @@ class AssetSearchService:
 
         SSE events:
         - provider_results: {provider_code, results: [...]}
+        - provider_error: {provider_code, error, error_code?, retry_after?} — ``error_code`` for an ``AssetSourceError``:
+          ``NOT_CONFIGURED`` (a required setting has no value; the plugin's settings are in
+          ``GET /api/v1/settings/plugins``), ``RATE_LIMITED`` with ``retry_after`` (the seconds of pause), or the
+          provider's own code
         - done: {total_results, providers_queried, providers_with_errors}
 
         Args:
@@ -374,7 +386,7 @@ class AssetSearchService:
             cached_query, q_ok = core._search_query_cache.get(query_cache_key)
             if q_ok and cached_query is not None:
                 logger.debug(f"Search stream query cache HIT for '{query}' on provider '{code}'")
-                await queue.put((code, cached_query, None))
+                await queue.put((code, cached_query, None, {}))
                 return
 
             try:
@@ -384,10 +396,19 @@ class AssetSearchService:
                     items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 core._search_query_cache.set(query_cache_key, items)
-                await queue.put((code, items, None))
+                await queue.put((code, items, None, {}))
+            except AssetRateLimitedError as e:
+                logger.info("Search stream: provider paused after too many requests", provider=code, retry_after=e.retry_after)
+                await queue.put((code, [], str(e), {"error_code": e.error_code, "retry_after": e.retry_after}))
+            except AssetSourceError as e:
+                if e.error_code == "NOT_CONFIGURED":
+                    logger.info("Search stream: provider not configured", provider=code, missing=e.details.get("missing"))
+                else:
+                    logger.warning(f"Search stream: provider '{code}' error: {e}")
+                await queue.put((code, [], str(e), {"error_code": e.error_code}))
             except Exception as e:
                 logger.warning(f"Search stream: provider '{code}' error: {e}")
-                await queue.put((code, [], str(e)))
+                await queue.put((code, [], str(e), {}))
 
         # Launch all providers concurrently
         tasks = [asyncio.create_task(_search_one(code, prov)) for code, prov in valid_providers]
@@ -395,13 +416,13 @@ class AssetSearchService:
         # Yield results as they complete
         completed = 0
         while completed < len(tasks):
-            code, items, error = await queue.get()
+            code, items, error, error_fields = await queue.get()
             completed += 1
             providers_queried.append(code)
 
             if error:
                 providers_with_errors.append(code)
-                yield f'data: {json.dumps({"event": "provider_error", "provider_code": code, "error": error})}\n\n'
+                yield f'data: {json.dumps({"event": "provider_error", "provider_code": code, "error": error, **error_fields})}\n\n'
                 continue
 
             # Convert items to serializable dicts
