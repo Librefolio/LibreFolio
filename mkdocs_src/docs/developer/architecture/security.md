@@ -678,8 +678,8 @@ job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. Invitations and password-reset links use it today ([Links in use](#account-token-links));
-email verification and the setup link have no caller yet.
+guarantees for all four. Invitations, password-reset links and email verification use it today
+([Links in use](#account-token-links)); the setup link has no caller yet.
 
 ### 🎲 Generation and Storage
 
@@ -756,12 +756,12 @@ contract, including two sessions consuming one token at once and a search of the
 column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
 
-### 🔗 Links in Use: Invitations and Password Resets {: #account-token-links }
+### 🔗 Links in Use: Invitations, Password Resets, Email Verification {: #account-token-links }
 
-Two purposes have callers: invitations and password-reset links. Their rules — who may register, the
-user limit, what each endpoint answers — are in
-[Registration, Invitations and the Admin API](access_control.md#registration). What protects their
-tokens:
+Three purposes have callers: invitations, password-reset links and email verification. The rules of the first two —
+who may register, the user limit, what each endpoint answers — are in
+[Registration, Invitations and the Admin API](access_control.md#registration); those of email verification in
+[Email Verification](../backend/email.md#verification). What protects their tokens:
 
 - **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
   `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
@@ -769,6 +769,12 @@ tokens:
   once. A lost link is replaced with a new one.
 - **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
   spending one revokes any other.
+- **A verification link is never shown, only emailed, and only to the account's own address.** Registration
+  issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
+  email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
+  Each new link revokes the account's others, and spending one activates the account in the same commit.
+  `confirm_email()` refuses a token without an address, and revokes one emailed to an address the account no
+  longer has.
 - **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
   a reset link in the commit that sets the new password, raises the session version and revokes the other links.
   If the account cannot be created, the invitation stays unspent.
@@ -780,17 +786,20 @@ tokens:
   and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
   locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
   [password rules](#password-rules), the same on every instance.
-- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
-  `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
-  for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
-  never puts the fragment in a `Referer` either. A token in the query string would be in all those logs. The page
-  reads it with JavaScript (`location.hash`); a `token` in the query string is not read at all.
-- **The link pages hide and keep the token.** `/invite` and `/reset-password` read the token when they mount,
-  then put the bare path in the address bar (`replaceState`), so the token stays out of the history and of a
-  bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
-  the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
+- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
+  `/reset-password#token=…` and `/verify-email#token=…`. A browser never sends the fragment to the server, so the
+  token is not in the request for the page: it stays out of the server's access log and out of the logs of every
+  proxy on the way. A browser never puts the fragment in a `Referer` either. A token in the query string would be
+  in all those logs. The page reads it with JavaScript (`location.hash`); a `token` in the query string is not read
+  at all.
+- **The link pages hide and keep the token.** `/invite`, `/reset-password` and `/verify-email` read the token when
+  they mount, then put the bare path in the address bar (`replaceState`), so the token stays out of the history and
+  of a bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
+  the page changes only the fragment and loads nothing, so the page reads the new token there. All three declare
   `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
-  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
+  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages), except those
+  of `/verify-email`, which spends its token at once, without inspecting it first:
+  [In the Frontend](../backend/email.md#verification-frontend).
 
 ## 📡 Address Probe {: #address-probe }
 
@@ -944,7 +953,9 @@ a single- or double-quoted attribute. The `escapeHtml` exported by `$lib/utils/i
 deliberately leaves the apostrophe alone because its output feeds KaTeX, where `f'(x)` is prime
 notation: do not use it for attribute values.
 
-Two source gates keep the rule in force; both run in `./dev.py test front-utility core-unit`:
+Three source gates keep the rule in force; the first two run in
+`./dev.py test front-utility core-unit`, the third in
+`./dev.py test front-portfolio chart-safety-unit`:
 
 - `frontend/src/htmlInterpolation.gate.test.ts` parses every non-test `.svelte` and `.ts` file
   under `frontend/src` and fails when a user or provider text field reaches an HTML template
@@ -953,8 +964,13 @@ Two source gates keep the rule in force; both run in `./dev.py test front-utilit
 - `frontend/src/htmlSink.gate.test.ts` requires every `{@html X}` in a non-test `.svelte` file
   to be a `sanitizeHtml(…)` call or an entry of its reviewed list, which records a reason for
   each sink. An entry that no longer matches a sink fails the gate.
+- `frontend/src/lib/utils/core/escapeHtml.single.test.ts` fails when a non-test `.svelte` or `.ts`
+  file under `frontend/src` holds an HTML escaper of its own (`&` mapped to `&amp;`) outside
+  `escapeHtml.ts`. One file is exempt: `inlineMath.ts`, the KaTeX variant above. An exempt file
+  that no longer holds a copy fails the gate (see
+  [Tooltip HTML](../frontend/components/charts.md#chart-tooltip-escaping)).
 
-Neither gate sees a raw `innerHTML` assignment that involves no template: do not write one.
+No gate sees a raw `innerHTML` assignment that involves no template: do not write one.
 `./dev.py test front-asset asset-name-xss` (`frontend/e2e/assets/asset-name-xss.spec.ts`)
 creates an asset whose name and icon URL carry markup, through the API, and checks in a real
 browser that the table and card views of `/assets` show it as text and run nothing.
@@ -967,7 +983,7 @@ browser that the table and card views of `/assets` show it as text and run nothi
     of every user who opened the asset list — the administrator included. The same flaw sat in
     other `html` cells, chart tooltips, toasts, and validation messages. The 1.2 fix escapes
     user text where it enters an HTML string, sanitizes the sinks that receive mixed markup,
-    and adds the two gates above.
+    and adds the first two gates above.
 
 ## 🐳 Container Image Check
 

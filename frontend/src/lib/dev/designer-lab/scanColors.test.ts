@@ -336,10 +336,10 @@ describe('scanSource — layers', () => {
     });
 
     it.each([
-        ['a chart folder', 'src/lib/components/dashboard/Kpi.svelte'],
+        ['the shared charts folder', 'src/lib/components/charts/GeographyMap.svelte'],
+        ['a charts folder elsewhere', 'src/lib/features/insights/charts/Trend.svelte'],
         ['the dashboard feature folder', 'src/lib/features/dashboard/Kpi.svelte'],
-        ['the risk folder', 'src/lib/components/risk/Heatmap.svelte'],
-        ['the risk feature folder', 'src/lib/features/risk/components/CorrelationHeatmap.svelte'],
+        ['the risk feature folder', 'src/lib/features/risk/CorrelationHeatmap.svelte'],
         ['the broker lots feature folder', 'src/lib/features/brokers/lots/LotsAnalysisPanel.svelte'],
         ['the PAC planner results', 'src/lib/features/tools/pac-allocator/planner/result/ExposureBars.svelte'],
         ['a file named after charts', 'src/lib/utils/chartColors.ts'],
@@ -357,6 +357,8 @@ describe('scanSource — layers', () => {
         ['a utility module', 'src/lib/utils/format.ts', 'ts'],
         // Under `features/brokers` only `lots` is a chart folder (Y5): the rest of the feature is not.
         ['the broker feature folder, outside its lots', 'src/lib/features/brokers/BrokerImportFilesModal.svelte', 'svelte-script'],
+        // The `components/` folders moved to `features/` (dashboard Y3, risk Y4b, lots Y5) are no longer chart folders.
+        ['a former chart folder, moved to features/ (Y3)', 'src/lib/components/dashboard/Kpi.svelte', 'svelte-script'],
     ])('keeps the colours of any other module in the script layer: %s', (_label, rel, zone) => {
         const lines = rel.endsWith('.svelte') ? ['<script lang="ts">', "    const c = '#000044';", '</script>'] : ['', "export const c = '#000044';"];
         expect(literal(scan(rel, lines), 2, '#000044')).toMatchObject({zone, layer: 'script', preview: false, chart: false});

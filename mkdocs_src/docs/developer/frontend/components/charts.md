@@ -37,7 +37,7 @@ export function namedPoint(date: string, value: number | null) {
 }
 ```
 
-**Partial vs Full update pattern** (`lib/components/dashboard/GrowthChart.svelte`, used by the
+**Partial vs Full update pattern** (`lib/features/dashboard/GrowthChart.svelte`, used by the
 Dashboard and Broker detail):
 
 ```typescript
@@ -254,9 +254,20 @@ the chart is converted, and each Asset comparison gets an item of its own — `i
 so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
 sends it, and `parseAssetPriceQueryWithSignalIsolation()`
 (`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
-malformed result does not discard the response. The plugin is `catalog_visible = False`
-(see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
-selector offers it.
+malformed result does not discard the response.
+
+The same plugin is also in the signal catalog (see
+[Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)): in
+`'price'` mode the Signals panel offers it in its Risk group as **Rolling Return**, a config of
+`signalType` `asset-calendar-rolling-return` whose card edits `window_days` (30 by default, at
+least 1). `buildBackendSignalRequestPlan()` requests it like any other backend indicator, and its
+`calendar_return` line is drawn over the prices on a secondary axis of its own,
+`independent:calendar_return`. Overlay and mode compute the same metric, the price return against
+the resolved close `window_days` calendar days earlier, but never in the same request:
+`loadChartData()` requests the overlay only in `'price'` mode, with its card's window, and the
+mode's series only in `'calendar-return'` mode, with the **Window** control's days. In
+`'calendar-return'` mode the overlay config stays saved and hidden, like every config but the
+Asset comparisons.
 
 `calendarReturnWindow.ts` turns the **Window** control into days: presets `1w`, `1m`, `3m`, `1y`
 are 7, 30, 90 and 365 days, and a custom amount is multiplied by 7, 30 or 365 (weeks, months,
@@ -329,6 +340,21 @@ Saving a scope default (`setGlobalSettings(settings, scope)`) deletes every over
 scope, detail pages included, and leaves the other scope alone. The period is not a chart
 setting: `dateRangeStore.svelte.ts` keeps it in `sessionStorage` (`librefolio_dateRange`), shared
 by the Dashboard, broker, asset and FX pages of the tab.
+
+The stored document carries a `version`, `STORAGE_VERSION` (3). When the store reads it,
+`migratePersistedChartSettings()` brings a version 1 or 2 document to version 3, in the global
+settings and in every override; a document of any other version is ignored, and the defaults
+apply. Version 3 follows the developer's decision 29, one Rolling Return measured in calendar
+days: the observation-count `RISK_ROLLING_RETURN` plugin is gone, so every saved
+`risk-rolling-return` config becomes an `asset-calendar-rolling-return` one. Its `window` param
+becomes `window_days`, with the same number; the style of its `rolling_return` output moves to
+`calendar_return` in `componentStyles`; and the secondary-axis scale saved under
+`independent:risk_return` moves to `independent:calendar_return`, unless that key already holds
+one. Every other field and every other signal stay as they were. A window of N observations thus
+becomes N calendar days: 30 observations of an exchange-traded asset, about 42 calendar days,
+become 30 days, while a crypto-asset, quoted every day, sees no change. The store writes the
+migrated document back to `localStorage` at once; `chartSettingsStore.migration.test.ts` covers
+both the function and that rewrite.
 
 ### Axis rows and ranges
 
@@ -453,6 +479,84 @@ computes it with every option it builds and on resize (`lazyUpdate`). `LotCompar
 (`base: 18` px, 12 px labels) computes it on its axis date range (`xAxisRange`, else the series'
 own) only when it builds the option: a px base does not follow the width. `LotWacPriceChart` and
 `LotGanttChart` keep a fixed 18 px (`GRID_RIGHT_PX`).
+
+## Chart Text and Tooltips {: #chart-text-and-tooltips }
+
+ECharts reads none of the app's CSS: it draws legends, labels and axes on a canvas, and writes its
+tooltip as HTML with an inline `font`. Two rules follow, one for the font of that text and one for
+the tooltip's HTML.
+
+### Flags in chart text {: #chart-flag-font }
+
+The app draws flags (the regional indicator symbols U+1F1E6–1F1FF) with the `'LF Flags'` face that
+starts its CSS font stacks ([Fonts](../styling.md#fonts)). That CSS never reaches chart text:
+ECharts drew it in its own default family, and a flag in a legend, a label, an axis or a tooltip
+fell back to the system, which prints two letters where it has no flag glyphs (Windows among them).
+
+`lib/components/charts/chartFont.ts` exports the charts' font:
+
+- `CHART_FONT_FAMILY`: `'LF Flags'`, then ECharts' own default family (`sans-serif`, or
+  `'Microsoft YaHei'` on Windows, chosen the way ECharts chooses it). The face covers the flags and
+  nothing else, so every other character falls through to that default and keeps its font.
+- `CHART_INIT_THEME`: `{textStyle: {fontFamily: CHART_FONT_FAMILY}}`.
+
+Every chart is created with that theme:
+
+```typescript
+chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
+```
+
+A theme's `textStyle` is ECharts' global font: the canvas text and the tooltip's inline `font` use
+it unless a component sets its own `fontFamily`. It is a theme rather than a `textStyle` in each
+option because ECharts merges the theme again on every `setOption`, a `notMerge` one included, so
+no option builder has to repeat it. A component that sets its own family uses `CHART_FONT_FAMILY`,
+as `CorrelationHeatmap` does on its axis labels, which it measures with a canvas context in that
+same font. The code that measures chart text from the chart model (`axisLabelFont`, see
+[Responsive Date Axis](#responsive-date-axis), and `GrowthChart`'s ladder labels) reads its
+`textStyle.fontFamily`, which is this family too.
+
+The chart colours stay in `lib/theme/chartTheme.ts`, and the font is kept out of it on purpose:
+that module holds colours only, and `chartTheme.test.ts` requires every string it exports to be a
+colour.
+
+**Loading the face.** A canvas paints its text once, with the faces loaded at that moment, and the
+browser fetches a `unicode-range` face only for page text that needs it: canvas text does not
+count. Two steps cover this:
+
+1. `chartFont.ts` asks for the face when the first chart module loads, before any chart can paint:
+   `chartFontReady()` calls `document.fonts.load()` once, with a flag as sample text (other text
+   would load nothing), and never rejects, so a face that fails to load leaves the system fallback.
+   Without `document.fonts`, in a test or on the server, it resolves at once.
+2. `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), which a chart calls once after
+   its first full `setOption`, checks `chartFontLoaded()`: when the face is not in yet, it repaints
+   the chart (`resize()`) once the request of `chartFontReady()` settles. Every chart calls it
+   except `LotGanttChart`.
+
+### Tooltip HTML {: #chart-tooltip-escaping }
+
+ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a formatter takes from
+the data or from currency metadata (names, captions, currency codes, flags, event types) goes
+through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
+is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
+through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+
+The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
+`>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
+uses; a copy that escapes fewer characters is the defect this rule removes. One file is exempt:
+`lib/utils/inlineMath.ts`, whose KaTeX variant keeps the apostrophe on purpose (`f'(x)` is prime
+notation). The rule for every hand-built HTML string, and its other gates, is in
+[Output Escaping](../../architecture/security.md#output-escaping).
+
+### Guards {: #chart-text-guards }
+
+`./dev.py test front-portfolio chart-safety-unit` runs them:
+
+| Test | Checks |
+|---|---|
+| `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
+| `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
+| `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
+| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
 
 ## Pie Charts (AllocationPieChart)
 

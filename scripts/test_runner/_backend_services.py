@@ -546,6 +546,15 @@ def services_email_verification(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "E-mail verification tests", verbose=verbose)
 
 
+def services_email_verification_hooks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the email-verification hooks in A's services (lot E5b): user_usage, register_user, the changes of status, holds_place, the setting's guard."""
+    print_section("Services: E-mail Verification Hooks")
+    print_info("Testing: registration_service.user_usage/register_user, user_service.update_user_status/set_user_active, verification.holds_place/place_holders, settings_service._refuse_what_cannot_turn_on")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification_hooks.py", test_names)
+    return run_command(cmd, "E-mail verification hooks tests", verbose=verbose)
+
+
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
     """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
     print_section("Services: E-mail Links")
@@ -1579,10 +1588,20 @@ Note: No backend server required.
         "email-verification",
         services_email_verification,
         name="E-mail Verification",
-        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance, the budget, a link emailed meanwhile rolled back; no token, password, identifier or address in the logs",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
         # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
         # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
         # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-verification-hooks",
+        services_email_verification_hooks,
+        name="E-mail Verification Hooks",
+        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_allowed: 10 an hour per client address; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server, no SMTP conversation; the email variables removed then set with monkeypatch; the loopback only resolves.
         isolation="pure",
     )
     add_test(

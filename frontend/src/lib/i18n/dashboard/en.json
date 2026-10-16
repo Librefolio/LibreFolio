@@ -147,6 +147,7 @@
     "unrealizedAssetEffect": "Assets in {currency}",
     "unrealizedFxEffect": "{from} → {to} rate",
     "unrealizedUnsplit": "{currency}, not split",
-    "fxOnCash": "FX on cash"
+    "fxOnCash": "FX on cash",
+    "allocationNegativeCash": "Negative cash: {amount}"
   }
 }

@@ -35,14 +35,14 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, RefreshCw, Trash2, X} from 'lucide-svelte';
-    import FilesTable from '$lib/components/files/FilesTable.svelte';
-    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
+    import FilesTable from '$lib/features/files/FilesTable.svelte';
+    import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
-    import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
