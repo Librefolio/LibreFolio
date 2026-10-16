@@ -232,3 +232,5 @@ Sono tutti locali: la push la fa il developer.
 | 142 | 16/10 21:55 | W: decisione 47 (la metà che cede va al costo medio; gambe sole convertite all'avvio) provata con J-24; all-backend 7/7 su `6162dfc0f` | `ea72346b7` |
 | 143 | 16/10 22:08 | H: docstring di `instance_block.py` (rotte pubbliche fuori lista, pagine dei link) | `3f561e204` |
 | 144 | 16/10 22:10 | Y: Y-14 («Aggiorna» della lista dei broker ricalcola le schede) | `47ed8ebc4` |
+| — | 16/10 22:15 | E: E-4 (nome non deprecato del 422 in `settings.py`) | `07700355f` |
+| 145 | 16/10 22:25 | J: CP-7b (riferimento dei lotti aperti da un ADJUSTMENT dalla serie della casa, al cambio del giorno d'apertura; giorni al costo come il Dashboard; chiude J-28) | `48da9bf3c` |
