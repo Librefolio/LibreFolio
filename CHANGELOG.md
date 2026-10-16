@@ -163,6 +163,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Borsa Italiana ETCs and ETNs are now typed as commodity ETFs (an asset already saved changes type when you refresh its metadata); the justETF and CSS scraper settings show translated labels.
 - A refused **Split pair** or **Promote pair** on the Transactions page now says why in an error message, and the confirmation stays open: until now nothing was shown.
 - A broker's **Uploaded Reports** no longer lists the reports an older version stored without a broker: they stay on the Files page.
+- With negative cash, the Dashboard allocation history no longer cuts the holdings at 100 %: the overdraft is drawn below zero and listed on its own tooltip row, and a note under the pie states it, masked in privacy mode.
+- Flags in chart legends, labels, axes and tooltips are drawn with the app's flag font on every system; Windows showed two letters.
+- Chart tooltips show names, captions, currency codes and flags as plain text, so a name with HTML in it stays text.
 
 #### 🔒 Security
 

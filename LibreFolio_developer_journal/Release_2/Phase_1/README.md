@@ -190,3 +190,4 @@ Sono tutti locali: la push la fa il developer.
 | 101 | 16/10 08:17 | W per cherry-pick: W-B32 (i report senza broker non compaiono più sotto ogni broker; `api brim` 118/118; dentro la decisione 36, da rivedere) | `84d24ed03` |
 | 102 | 16/10 08:24 | W per cherry-pick: W-B45 (T13 di `transactions-modals` con il budget di 60 s dei vicini) | `72ac088fc` |
 | 103 | 16/10 08:29 | E: E5b (verifica email alla registrazione, limiti 3/h per casella e 10/h per rete, revisione di sicurezza, merge con A6c; E2E 5/5, mirate sulla revisione unita) | `dbe232723` |
+| 104 | 16/10 08:33 | Y: Y3 (FE6b dashboard in `features/`), Y9 (font delle bandiere e testo sicuro nei grafici), Y10 (decisione 49, liquidità negativa nell'allocazione), Y5 (broker e lotti in `features/brokers`), Y6 (file in `features/files`), C-34 (guardia), cura dell'attesa in `brokers-detail.spec.ts`; E2E unica 223/224 + 37/37, leggere sulla revisione unita | `4447814ed` |
