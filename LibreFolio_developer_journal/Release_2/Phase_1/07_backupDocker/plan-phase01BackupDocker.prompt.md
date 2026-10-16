@@ -2943,6 +2943,88 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   nessuna delle due vecchie, guardate anche con «send new ones» e «stop working»), `mkdocs build` stretta 0 avvisi,
 >   `check-links` 96, `utils gate-docs-links` 63. Porta libera.
 
+### Decisioni del developer su P7, P8 e P12 (2026-10-16, 11:11-11:25)
+
+> - **P11 committato** dal coordinatore: `51fa21b59` fix, `4ec25ade0` journal (HEAD). La doc sugli account in attesa di
+>   verifica resta com'è: spiega il comportamento reale.
+> - **P7** («se l'app è bloccata, che ripristino avvierei? Il ripristino resta bloccato anche lui finché non pagano, da UI
+>   e da API»): un ripristino confermato prima del blocco **non si applica** finché l'istanza è bloccata, aspetta lo
+>   sblocco (`waiting = instance_blocked`); le rotte restano bloccate come sono. La mia decisione notturna («applicato
+>   comunque») cade. Contratto B3 §11: l'ordine dei motivi (altra cartella dati, poi `instance_blocked`, poi server
+>   acceso e backup in corso); un `LIBREFOLIO_BLOCKED` illeggibile conta come bloccato; le riparazioni (annullamenti) e il
+>   commit restano anche da bloccata. Rossi al test-author `3deeac3c`.
+> - **P8**, la scheda del ripristino (approvato come l'ho letto alle 11:25):
+>   - dopo la prova e la conferma il server si riavvia subito (niente passo «Riavvia ora» separato; il blocco «in attesa»
+>     resta per un ripristino trovato in attesa: confermato da CLI, o un riavvio non partito);
+>   - **successo senza messaggio** («se ha funzionato lo vedi»): la pagina va dritta al login, poi alla solita pagina
+>     iniziale; la scheda non mostra «ripristino applicato» (`restoreNavigation`, un punto solo);
+>   - **fallimento sulla stessa schermata**, con il motivo (annullato, o non applicato, `instance_blocked` compreso);
+>   - **la parola di conferma**: una parola vera a caso, 6-10 lettere, nella lingua dell'interfaccia, scritta **senza
+>     copia e incolla** (incolla e trascina bloccati sul campo); liste curate in un frammento i18n
+>     (`backup.restore.confirm.words`, minuscole senza accenti: 59 en, 50 it, 46 fr, 46 es), un test sulle quattro liste;
+>     controllata **solo nella pagina** (protegge da un clic frettoloso, non da un attacco: un admin può sempre chiamare
+>     l'API). Valutato e scartato il controllo sul server (mezza giornata: rotta, prova, CLI, quattro liste anche lì).
+>   Contratto B5b §0 riscritto; bozze in `files/b5b-wip/` aggiornate (123 chiavi per lingua, tutte usate); il test-author
+>   `a30e058d` scrive i rossi sul contratto nuovo.
+> - **P12**, B4 (non adesso): scrypt `n = 2^15` (32 MiB); la password segue le regole e l'indicatore `PasswordStrength`
+>   della registrazione e del cambio password (A6c), più un minimo di 12 caratteri (contratto B4 §8).
+> - **11:30, domanda di A** (P18, migrazione 009, email unica senza badare alle maiuscole): il report della prova non
+>   mostra l'errore della migrazione così com'è (API e scheda: solo `upgrade_failed`; CLI: «the log of the server has the
+>   details»); il log del server ha gli ultimi 4000 caratteri dello `stderr` di alembic. A si accontenta di una riga di
+>   doc che rimandi al log; la scrivo io quando 009 entra nella mia base (testo e comando di A in
+>   `files/a009-doc-line.md`).
+> - **P7, i rossi** (test-author `3deeac3c`): `services backup-apply` 210 (16 nuovi), `api backup-restore-apply` 84,
+>   `utils backup-cli-restore` 51 e oltre. Rilievi decisi:
+>   - la CLI non rifiuta su un'istanza bloccata (la usa chi gestisce il server): conferma e aggiunge la riga
+>     `instance_blocked` (coordinatore d'accordo, 11:38);
+>   - `backup pending` legge il blocco anche al momento: una riga sola, dopo quella registrata da un avvio;
+>   - nessuna scadenza per un ripristino in attesa durante il blocco (coordinatore d'accordo); nella doc le due
+>     conseguenze: il disco occupato dalla copia (`backup pending --cancel`) e la migrazione al primo avvio dopo lo
+>     sblocco se LibreFolio è stato aggiornato nel frattempo.
+>   Codice e doc pronti in script ancorati (`files/b3-wip/apply_p7.py`, `apply_p7_docs.py`), provati a secco.
+> - **B5b, i rossi** (test-author `a30e058d`, solo Prettier): `restoreFlow.test.ts` 167, `backupApi.test.ts` +40,
+>   `RestoreCard.test.ts` 42, `RestoreReportModal.test.ts` 40, `RestartOverlay.test.ts` 14, `restoreI18n.test.ts` 96 (le
+>   chiavi nei quattro cataloghi e le liste delle parole). Moduli mancanti caricati con `import.meta.glob`: ogni test
+>   fallisce da sé. Decisione mia: un riavvio rifiutato con `restore_not_pending` (ripristino annullato da CLI nel
+>   frattempo) dà `failed`, non un blocco «in attesa» che non esiste più. Le bozze adattate alle scelte del test-author
+>   (l'overlay riceve lo `status`, `restore-cancel-check` ferma anche l'invio, `load()` azzera l'overlay); cinque righe
+>   del runner invece di quattro (`restoreI18n.test.ts` in core-unit), detto al coordinatore.
+
+### P7 — rosso, codice, verde (2026-10-16, 11:49-12:28) ✅ — 🧊 FROZEN
+
+> - **11:49, i casi di `backup pending`** (test-author `3deeac3c`): una matrice di 15 casi (ciò che ha registrato
+>   l'ultimo avvio × il blocco letto ora: `true`, illeggibile, assente) e una guardia di 12 (nessun ripristino, o non in
+>   attesa: mai la riga del blocco). Deciso: **`other_data_directory` vince anche qui**, come all'avvio: una copia della
+>   cartella dati non applica mai il ripristino, e la riga del blocco prometterebbe il falso. Regola: la riga del blocco
+>   esce quando `waiting == instance_blocked`, oppure quando l'istanza è bloccata ora e `waiting` non è
+>   `other_data_directory`; una volta sola, dopo la riga registrata. Bozza `apply_p7.py` e doc di `cli_tools`
+>   («the last start found the instance blocked, or it is blocked now») allineate. File della CLI: 77 test.
+> - **Giro rosso** (11:54-12:02, carico sotto 50): `services backup-apply` 8 rossi su 210, `api backup-restore-apply`
+>   2 su 84, `utils backup-cli-restore` 12 su 77. Tutti e soli i previsti (motivo nuovo nel `Literal`, attesa da
+>   bloccata con `true`, `1`, `yes`, `ON` e con un valore illeggibile, ordine prima di backup e server, OpenAPI, la riga
+>   dopo `restore --yes`, la matrice di `pending`).
+> - **⚠️ Fuori pista**: alle 11:55 un errore di rete del servizio ha interrotto il mio turno; il test-author di B5b
+>   (`a30e058d`) è morto sullo stesso errore durante la richiesta su `restore_not_pending`. La modifica era già salvata
+>   (11:51): i due casi (dopo la conferma e con `restartNow()`) danno `failed` (`restart`), annunciato, niente sonda, lo
+>   stato riletto solo da `retry()`; intestazione del file allineata. Prettier pulito sui sei file; la bozza
+>   `restoreFlow.svelte.ts` lo fa già. La prova della corsia (PID 76895) era la mia: lasciata finire.
+> - **12:03, applicati** `apply_p7.py` (`apply.py`: `_blocked()` e il controllo dopo `other_data_directory`;
+>   `schemas/backup.py`; `backup_cli.py`: `_instance_blocked()`, la riga dopo la conferma e in `pending`; descrizione
+>   del catalogo) e `apply_p7_docs.py` (`hosting_providers`, `security.md`, `cli_tools`, `backup_restore`). Ruff e black
+>   puliti sui sette file Python toccati. `config.platform` importa solo `os`, `datetime` e `config`: leggero per il
+>   primo passo d'avvio.
+> - Doc: `cli_tools` ha le traduzioni, ma le righe nuove sono comportamento nuovo: debito di traduzione vero, nessuno
+>   stamp. `hosting_providers` e `backup_restore` sono solo in inglese.
+> - **Giro verde** (12:03-12:22, `files/scripts/b_green.sh`, carico sotto 50): `services backup-apply` 210,
+>   `api backup-restore-apply` 84 (svelte-check 0/0 sul client rigenerato, con `instance_blocked`),
+>   `utils backup-cli-restore` 77, `utils backup-cli` 102, `api backup` 23, `services app-lifecycle` 42,
+>   `e2e backup-roundtrip` 3. Porta 6187 libera.
+> - **Doc** (12:22-12:27, `files/scripts/b_docs.sh`): `mkdocs build` stretta 0 avvisi, `check-links` 96,
+>   `utils gate-docs-links` 63. `git diff --check` pulito.
+> - **12:28, handoff del checkpoint P7** al coordinatore, 🧊 FROZEN: 12 file tracciati (7 codice e test, 4 doc, questo
+>   piano), nessun file nuovo. Esclusi i rossi di B5b (`backupApi.test.ts` e i cinque file nuovi di
+>   `features/backup/`): restano rossi finché il codice non entra. Il giro rosso di B5b dopo il commit (carico a 122).
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
