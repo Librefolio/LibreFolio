@@ -12,11 +12,16 @@
  * timeout — for the button only, the request is not cancelled — with one console warning naming it; a route change
  * drops them all (`reset`). The button and the pages are wired in later steps of Y11: this file pins the store alone.
  *
- * The pages call `track` / `begin` from inside the `$effect` of a period, a currency or a filter. That effect must not
- * start depending on the store: every other token that begins or ends would run it again, and an effect that begins on
- * every run would loop. The last block calls each writer — `begin`, `track`, `end`, `reset` — from inside an effect, on
- * its first run only, and counts its runs while other requests come and go; a change of the effect's own dependency
- * then proves it was alive all along.
+ * `join` (N55) is for a load that completes what the page is already doing — the P&L candles and the contribution a
+ * panel asks again once the page's report has dropped them: on a busy page it holds a token of its own until its work
+ * settles, on an idle page (a reload in background has landed, or the user switched the view) the work runs alone and
+ * holds nothing. The choice is made at the call, from the pending list read untracked.
+ *
+ * The pages call `track` / `begin` from inside the `$effect` of a period, a currency or a filter, and the panels call
+ * `join` from theirs. That effect must not start depending on the store: every other token that begins or ends would
+ * run it again, and an effect that begins on every run would loop. The effect blocks call each writer — `begin`,
+ * `track`, `join`, `end`, `reset` — from inside an effect, on its first run only, and count its runs while other
+ * requests come and go; a change of the effect's own dependency then proves it was alive all along.
  *
  * The store is a module singleton: after each case its effect readers are stopped, then `reset()`, then the fake clock
  * (on in every case, so no real two-minute timer outlives one) and the `console.warn` spy are restored.
@@ -483,6 +488,218 @@ describe('pageBusy — called from inside an effect, as the pages call it', () =
         expect(pageBusy.busy, 'precondition: the call inside the effect took the token off the list').toBe(false);
 
         expect(otherRequestsComeAndGo()).toEqual(comingAndGoingOver([]));
+        expect(effect.runs).toEqual(['1M']);
+
+        effect.page.period = '3M';
+        flushSync();
+        expect(effect.runs).toEqual(['1M', '3M']);
+    });
+});
+
+describe('pageBusy.join — a load that completes what the page is already doing (N55)', () => {
+    it('on an idle page runs the work alone: started at the call, no token and no timer while it runs, and it resolves with the value of the work', async () => {
+        const baseline = vi.getTimerCount();
+        const answer = deferred<{rows: number}>();
+        let started = 0;
+        const result = pageBusy.join(
+            'panel',
+            () => {
+                started += 1;
+                return answer.promise;
+            },
+            {timeoutMs: SHORT_TIMEOUT_MS},
+        );
+
+        expect(started, 'the work starts at the call').toBe(1);
+        expect(pageBusy.busy).toBe(false);
+        expect(pageBusy.labels).toEqual([]);
+        expect(vi.getTimerCount(), 'no token, so no timer either').toBe(baseline);
+
+        const payload = {rows: 3};
+        answer.resolve(payload);
+        await expect(result).resolves.toBe(payload);
+        expect(pageBusy.busy).toBe(false);
+        expect(pageBusy.labels).toEqual([]);
+
+        vi.advanceTimersByTime(PAGE_BUSY_TIMEOUT_MS);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('on a busy page holds a token of its own, after the request it joined, until its work settles: the page stays busy once that request has ended', async () => {
+        const first = pageBusy.begin('first-load');
+        const answer = deferred<string>();
+        const result = pageBusy.join('panel', () => answer.promise);
+
+        expect(pageBusy.busy).toBe(true);
+        expect(pageBusy.labels).toEqual(['first-load', 'panel']);
+
+        pageBusy.end(first);
+        expect(pageBusy.busy, 'the joined work is still pending').toBe(true);
+        expect(pageBusy.labels).toEqual(['panel']);
+
+        answer.resolve('loaded');
+        await expect(result).resolves.toBe('loaded');
+        expect(pageBusy.busy).toBe(false);
+        expect(pageBusy.labels).toEqual([]);
+
+        // Ended, not merely dropped: its timer went with it.
+        vi.advanceTimersByTime(PAGE_BUSY_TIMEOUT_MS);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('on a busy page, a joined work that settles before the request it joined ends its own token only', async () => {
+        const first = pageBusy.begin('first-load');
+        const answer = deferred<string>();
+        const result = pageBusy.join('panel', () => answer.promise);
+        expect(pageBusy.labels).toEqual(['first-load', 'panel']);
+
+        answer.resolve('loaded');
+        await expect(result).resolves.toBe('loaded');
+        expect(pageBusy.busy).toBe(true);
+        expect(pageBusy.labels).toEqual(['first-load']);
+
+        pageBusy.end(first);
+        expect(pageBusy.busy).toBe(false);
+    });
+
+    it('decides at the call: a work started alone takes no token when the page turns busy meanwhile, and its end leaves the later token pending', async () => {
+        const answer = deferred<string>();
+        const result = pageBusy.join('panel', () => answer.promise);
+        expect(pageBusy.busy, 'precondition: the page was idle at the call').toBe(false);
+
+        const refresh = pageBusy.begin('refresh');
+        expect(pageBusy.labels, 'only the later request is pending').toEqual(['refresh']);
+
+        answer.resolve('loaded');
+        await expect(result).resolves.toBe('loaded');
+        expect(pageBusy.busy).toBe(true);
+        expect(pageBusy.labels).toEqual(['refresh']);
+
+        pageBusy.end(refresh);
+        expect(pageBusy.busy).toBe(false);
+    });
+
+    it('joined: a rejection releases its token, and the same error reaches the caller', async () => {
+        const first = pageBusy.begin('first-load');
+        const failure = new Error('502 from the backend');
+        const result = pageBusy.join('panel', () => Promise.reject(failure));
+        expect(pageBusy.labels, 'precondition: the work joined the pending request').toEqual(['first-load', 'panel']);
+
+        await expect(result).rejects.toBe(failure);
+        expect(pageBusy.busy).toBe(true);
+        expect(pageBusy.labels).toEqual(['first-load']);
+
+        pageBusy.end(first);
+        expect(pageBusy.busy).toBe(false);
+        vi.advanceTimersByTime(PAGE_BUSY_TIMEOUT_MS);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('alone: a rejection reaches the caller, and nothing is pending', async () => {
+        const failure = new Error('502 from the backend');
+
+        await expect(pageBusy.join('panel', () => Promise.reject(failure))).rejects.toBe(failure);
+        expect(pageBusy.busy).toBe(false);
+        expect(pageBusy.labels).toEqual([]);
+    });
+
+    it.each<{page: string; pendingBefore: () => string[]}>([
+        {page: 'an idle', pendingBefore: () => []},
+        {
+            page: 'a busy',
+            pendingBefore: () => {
+                pageBusy.begin('first-load');
+                return ['first-load'];
+            },
+        },
+    ])('on $page page, a work that throws synchronously makes a rejected promise, not a throw at the call, and leaves only what was pending before', async ({pendingBefore}) => {
+        const before = pendingBefore();
+        const failure = new Error('thrown before the request left');
+        let result!: Promise<unknown>;
+
+        expect(() => {
+            result = pageBusy.join('panel', () => {
+                throw failure;
+            });
+        }).not.toThrow();
+
+        await expect(result).rejects.toBe(failure);
+        expect(pageBusy.labels).toEqual(before);
+    });
+
+    it('joined: passes timeoutMs on to its token — past it the token is dropped with its warning, and the value of the work still arrives', async () => {
+        const first = pageBusy.begin('first-load');
+        const answer = deferred<string>();
+        const result = pageBusy.join('slow-panel-load', () => answer.promise, {timeoutMs: SHORT_TIMEOUT_MS});
+        pageBusy.end(first);
+
+        vi.advanceTimersByTime(SHORT_TIMEOUT_MS - 1);
+        expect(pageBusy.labels).toEqual(['slow-panel-load']);
+        expect(warn).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(1);
+        expect(pageBusy.busy).toBe(false);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warned(0)).toContain('slow-panel-load');
+
+        answer.resolve('late answer');
+        await expect(result).resolves.toBe('late answer');
+        expect(pageBusy.busy).toBe(false);
+        expect(warn).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('pageBusy.join — called from inside an effect, as the panels call it', () => {
+    beforeAll(() => {
+        assertEffectsRun();
+    });
+
+    it('an effect that joins a busy page does not run again when other tokens come and go, when the request it joined ends, nor when its own work settles', async () => {
+        const first = pageBusy.begin('first-load');
+        const answer = deferred<string>();
+        let work!: Promise<string>;
+        const effect = pagePeriodEffect(() => {
+            work = pageBusy.join('panel', () => answer.promise);
+        });
+        expect(effect.runs).toEqual(['1M']);
+        expect(pageBusy.labels, 'precondition: the call inside the effect joined the pending request').toEqual(['first-load', 'panel']);
+
+        expect(otherRequestsComeAndGo()).toEqual(comingAndGoingOver(['first-load', 'panel']));
+        expect(effect.runs).toEqual(['1M']);
+
+        pageBusy.end(first);
+        flushSync();
+        expect(pageBusy.labels).toEqual(['panel']);
+        expect(effect.runs).toEqual(['1M']);
+
+        answer.resolve('loaded');
+        await expect(work).resolves.toBe('loaded');
+        flushSync();
+        expect(pageBusy.busy).toBe(false);
+        expect(effect.runs).toEqual(['1M']);
+
+        // The presence barrier: the effect was alive all along — it runs again when what it does read changes.
+        effect.page.period = '3M';
+        flushSync();
+        expect(effect.runs).toEqual(['1M', '3M']);
+    });
+
+    it('an effect that calls join on an idle page does not run again when tokens begin, end or time out afterwards, nor when its work settles', async () => {
+        const answer = deferred<string>();
+        let work!: Promise<string>;
+        const effect = pagePeriodEffect(() => {
+            work = pageBusy.join('panel', () => answer.promise);
+        });
+        expect(effect.runs).toEqual(['1M']);
+        expect(pageBusy.busy, 'precondition: the call inside the effect ran the work alone').toBe(false);
+
+        expect(otherRequestsComeAndGo()).toEqual(comingAndGoingOver([]));
+        expect(effect.runs).toEqual(['1M']);
+
+        answer.resolve('loaded');
+        await expect(work).resolves.toBe('loaded');
+        flushSync();
+        expect(pageBusy.busy).toBe(false);
         expect(effect.runs).toEqual(['1M']);
 
         effect.page.period = '3M';
