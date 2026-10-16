@@ -3549,7 +3549,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
     ASCII dà `SEND_FAILED`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
-- **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; dal `docs-writer` di P18
+- ✅ **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; chiusa il 16/10 (lotto A-25,
+  commit del coordinatore); dal `docs-writer` di P18
   (16/10).
   - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
     la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
@@ -3575,6 +3576,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
     `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
     «A-27».
+- **A-28 · La riga dell'email della scheda Profilo non si assesta dopo certi salvataggi** — minimo; dal `test-author` di
+  A-25 (16/10).
+  - Il server mette il dominio in minuscolo (`EmailStr`): dopo aver salvato `Alice@Example.COM`, `/auth/me` risponde
+    `Alice@example.com`, l'input tiene quanto scritto e la riga resta «modificata» (con un cambio vero scritto con il
+    dominio in maiuscolo, prima di A-25 chiedeva perfino di nuovo la password per lo stesso indirizzo).
+  - Un indirizzo cambiato altrove mentre la scheda è aperta: una variante di sole maiuscole della forma vecchia è un
+    cambio vero per il server, che risponde 400 `CURRENT_PASSWORD_REQUIRED`; la scheda tiene l'indirizzo e svuota la
+    password, ma non mostra il campo per scriverla.
+  - Cura possibile: dopo un salvataggio riuscito l'input prende la forma che il server ha conservato; sul 400
+    `CURRENT_PASSWORD_REQUIRED` la scheda rilegge l'indirizzo salvato. Da decidere con A7b/A8, che toccano la stessa
+    scheda.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
