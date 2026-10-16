@@ -307,28 +307,28 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="profile-tab" data-busy={saving ? 'true' : 'false'} aria-busy={saving}>
+<div class="space-y-6 text-lf-primary" data-testid="profile-tab" data-busy={saving ? 'true' : 'false'} aria-busy={saving}>
     <!-- Header with Lock/Unlock + Save/Undo All -->
-    <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
+    <div class="flex items-center justify-between pb-4 border-b border-lf-subtle">
         <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+            <h3 class="text-lg font-semibold text-lf-primary flex items-center">
                 <User class="mr-2" size={20} />
                 {$_('settings.profileInfo')}
             </h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.profileDescription')}</p>
+            <p class="text-sm text-lf-muted">{$_('settings.profileDescription')}</p>
         </div>
         <div class="flex items-center space-x-1">
             {#if !isLocked && hasAnyChanges}
-                <button on:click={saveAll} disabled={saving || emailNeedsPassword} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" title={$_('common.saveAll')} data-testid="profile-save-all">
+                <button on:click={saveAll} disabled={saving || emailNeedsPassword} class="p-2 rounded-lg transition-all bg-lf-action text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" title={$_('common.saveAll')} data-testid="profile-save-all">
                     <Save size={18} />
                 </button>
-                <button on:click={undoAll} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" title={$_('common.undoAll')} data-testid="profile-undo-all">
+                <button on:click={undoAll} class="p-2 rounded-lg transition-all bg-lf-panel text-lf-secondary hover:bg-lf-neutral" title={$_('common.undoAll')} data-testid="profile-undo-all">
                     <Undo size={18} />
                 </button>
             {/if}
             <!-- Edit toggle button -->
             <button
-                class="p-2 rounded-lg transition-all {isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
+                class="p-2 rounded-lg transition-all {isLocked ? 'bg-lf-panel text-lf-muted hover:bg-lf-neutral' : 'bg-lf-warning-soft text-lf-warning hover:bg-lf-warning-line'}"
                 data-testid="profile-edit-toggle"
                 on:click={toggleLock}
                 title={isLocked ? $_('settings.enableEditing') : $_('settings.disableEditing')}
@@ -352,56 +352,56 @@
     {/if}
 
     <!-- Avatar Section -->
-    <div class="flex items-center gap-4 pb-4 border-b border-gray-100 dark:border-slate-700" data-testid="profile-avatar">
+    <div class="flex items-center gap-4 pb-4 border-b border-lf-subtle" data-testid="profile-avatar">
         <!-- Avatar Preview -->
         <div class="relative group">
             {#if editedAvatarUrl}
-                <img src={editedAvatarUrl} alt="Avatar" class="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-slate-600" />
+                <img src={editedAvatarUrl} alt="Avatar" class="w-20 h-20 rounded-full object-cover border-2 border-lf-subtle" />
             {:else}
-                <div class="w-20 h-20 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center">
-                    <User size={32} class="text-gray-400 dark:text-slate-500" />
+                <div class="w-20 h-20 rounded-full bg-lf-neutral flex items-center justify-center">
+                    <User size={32} class="text-lf-muted" />
                 </div>
             {/if}
             <!-- Upload overlay (only when not locked) - opens AssetPickerModal -->
             {#if !isLocked}
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity" on:click={() => (showAvatarPicker = true)} data-testid="profile-avatar-trigger">
+                <div class="absolute inset-0 rounded-full bg-lf-overlay opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity" on:click={() => (showAvatarPicker = true)} data-testid="profile-avatar-trigger">
                     <Camera size={20} class="text-white" />
                 </div>
             {/if}
         </div>
         <!-- Avatar Info -->
         <div class="flex-1">
-            <h4 class="font-medium text-gray-900 dark:text-white">{$_('common.avatar')}</h4>
-            <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.avatarHint')}</p>
+            <h4 class="font-medium text-lf-primary">{$_('common.avatar')}</h4>
+            <p class="text-sm text-lf-muted">{$_('settings.avatarHint')}</p>
         </div>
     </div>
 
     <!-- Account Fields -->
     <div class="space-y-0">
         <!-- Username -->
-        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {usernameModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-lf-subtle gap-3 {usernameModified ? 'bg-lf-warning-soft/50 -mx-4 px-4' : ''}">
             <!-- Left: Label, hint and action buttons on mobile -->
             <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between min-h-[28px]">
-                    <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                        <User class="mr-2 text-gray-500 dark:text-gray-400" size={16} />
+                    <div class="flex items-center text-sm font-medium text-lf-secondary">
+                        <User class="mr-2 text-lf-muted" size={16} />
                         {$_('auth.username')}
                     </div>
                     <!-- Action buttons - next to label on mobile, hidden on desktop -->
                     {#if !isLocked && usernameModified}
                         <div class="flex items-center space-x-1 sm:hidden">
-                            <button type="button" on:click={() => saveField('username')} disabled={saving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('username')} disabled={saving} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('username')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('username')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
                                 <Undo size={14} />
                             </button>
                         </div>
                     {/if}
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.usernameHint')}</p>
+                <p class="text-xs text-lf-muted mt-1">{$_('settings.usernameHint')}</p>
             </div>
 
             <!-- Right: Actions (desktop only) + Input -->
@@ -410,10 +410,10 @@
                 {#if !isLocked}
                     <div class="hidden sm:flex items-center space-x-1">
                         {#if usernameModified}
-                            <button type="button" on:click={() => saveField('username')} disabled={saving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('username')} disabled={saving} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('username')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('username')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
                                 <Undo size={14} />
                             </button>
                         {/if}
@@ -423,9 +423,9 @@
                 <!-- Input -->
                 <input
                     bind:value={editedUsername}
-                    class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                           text-gray-900 dark:text-gray-100 text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
-                           focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
+                    class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
+                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                           focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="profile-username"
                     disabled={saving || isLocked}
@@ -435,27 +435,27 @@
         </div>
 
         <!-- Email -->
-        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3 {emailModified ? 'bg-amber-50/50 dark:bg-amber-900/10 -mx-4 px-4' : ''}">
+        <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-lf-subtle gap-3 {emailModified ? 'bg-lf-warning-soft/50 -mx-4 px-4' : ''}">
             <!-- Left: Label, hint and action buttons on mobile -->
             <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between min-h-[28px]">
-                    <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                        <Mail class="mr-2 text-gray-500 dark:text-gray-400" size={16} />
+                    <div class="flex items-center text-sm font-medium text-lf-secondary">
+                        <Mail class="mr-2 text-lf-muted" size={16} />
                         {$_('auth.email')}
                     </div>
                     <!-- Action buttons - next to label on mobile, hidden on desktop -->
                     {#if !isLocked && emailModified}
                         <div class="flex items-center space-x-1 sm:hidden">
-                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
                                 <Undo size={14} />
                             </button>
                         </div>
                     {/if}
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.emailHint')}</p>
+                <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
                 {#if !isLocked && emailModified}
                     <!-- A6e: the current password, for the email change only; the change signs the other devices out. -->
                     <div class="mt-3 space-y-1">
@@ -483,10 +483,10 @@
                 {#if !isLocked}
                     <div class="hidden sm:flex items-center space-x-1">
                         {#if emailModified}
-                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
                                 <Undo size={14} />
                             </button>
                         {/if}
@@ -496,9 +496,9 @@
                 <!-- Input -->
                 <input
                     bind:value={editedEmail}
-                    class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700
-                           text-gray-900 dark:text-gray-100 text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
-                           focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all
+                    class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
+                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                           focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="profile-email"
                     disabled={saving || isLocked}
@@ -511,34 +511,34 @@
         <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 gap-2">
             <!-- Left: Label -->
             <div class="flex-1 min-w-0">
-                <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <Calendar class="mr-2 text-gray-500 dark:text-gray-400" size={16} />
+                <div class="flex items-center text-sm font-medium text-lf-secondary">
+                    <Calendar class="mr-2 text-lf-muted" size={16} />
                     {$_('settings.accountCreated')}
                 </div>
             </div>
 
             <!-- Right: Value -->
-            <div class="text-sm text-gray-600 dark:text-gray-300 sm:text-right">
+            <div class="text-sm text-lf-secondary sm:text-right">
                 {formatDate($currentUser?.created_at, $uiLocaleStore)}
             </div>
         </div>
     </div>
 
     <!-- Security Section -->
-    <div class="pt-6 border-t border-gray-200 dark:border-slate-700">
-        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center">
+    <div class="pt-6 border-t border-lf-subtle">
+        <h3 class="text-lg font-semibold text-lf-secondary mb-4 flex items-center">
             <Key class="mr-2" size={20} />
             {$_('settings.security')}
         </h3>
 
         <div class="space-y-0">
             <!-- Change Password -->
-            <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-gray-100 dark:border-slate-700 gap-3">
+            <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 border-b border-lf-subtle gap-3">
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-700 dark:text-gray-200">{$_('settings.changePassword')}</div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.changePasswordDescription')}</p>
+                    <div class="text-sm font-medium text-lf-secondary">{$_('settings.changePassword')}</div>
+                    <p class="text-xs text-lf-muted mt-1">{$_('settings.changePasswordDescription')}</p>
                 </div>
-                <button class="px-4 py-2 bg-libre-green text-white text-sm rounded-lg hover:bg-libre-green/90 transition-colors w-full sm:w-auto" data-testid="change-password-button" on:click={() => (showPasswordModal = true)}>
+                <button class="px-4 py-2 bg-lf-action text-lf-on-action text-sm rounded-lg hover:bg-lf-action-hover transition-colors w-full sm:w-auto" data-testid="change-password-button" on:click={() => (showPasswordModal = true)}>
                     {$_('settings.changePassword')}
                 </button>
             </div>
@@ -546,10 +546,10 @@
             <!-- Delete Account -->
             <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 gap-3">
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-red-600 dark:text-red-400">{$_('settings.deleteAccount')}</div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.deleteAccountDescription')}</p>
+                    <div class="text-sm font-medium text-lf-danger">{$_('settings.deleteAccount')}</div>
+                    <p class="text-xs text-lf-muted mt-1">{$_('settings.deleteAccountDescription')}</p>
                 </div>
-                <button class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors w-full sm:w-auto" data-testid="delete-account-button" on:click={() => (showDeleteModal = true)}>
+                <button class="px-4 py-2 bg-lf-danger-solid text-lf-on-danger-solid text-sm rounded-lg hover:bg-lf-danger-hover transition-colors w-full sm:w-auto" data-testid="delete-account-button" on:click={() => (showDeleteModal = true)}>
                     {$_('settings.deleteAccount')}
                 </button>
             </div>
@@ -563,20 +563,20 @@
 <!-- Discard Changes Confirmation -->
 {#if showDiscardConfirm}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" data-testid="profile-discard-dialog" aria-modal="true" tabindex="-1">
+    <div class="fixed inset-0 bg-lf-overlay z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" data-testid="profile-discard-dialog" aria-modal="true" tabindex="-1">
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+        <div class="bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-xl shadow-lf-shadow w-full max-w-sm p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
+            <h2 class="text-lg font-semibold text-lf-primary mb-2">
                 {$_('common.discardChanges')}
             </h2>
-            <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
+            <p class="text-lf-secondary text-sm mb-4">
                 {$_('settings.discardChangesWarning')}
             </p>
             <div class="flex justify-end gap-3">
-                <button on:click={cancelDiscard} class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                <button on:click={cancelDiscard} class="px-4 py-2 text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors">
                     {$_('common.continueEditing')}
                 </button>
-                <button on:click={confirmDiscard} class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
+                <button on:click={confirmDiscard} class="px-4 py-2 bg-lf-warning text-lf-on-status rounded-lg hover:bg-lf-warning-hover transition-colors">
                     {$_('settings.discardAndLock')}
                 </button>
             </div>
