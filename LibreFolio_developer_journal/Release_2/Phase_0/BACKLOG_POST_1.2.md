@@ -4756,12 +4756,18 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   paragrafo nuovo, due link) e `financial-theory/instruments/transaction-types/adjustment` (la nota sulla valuta della
   consegna rovesciata). `index` punta all'ancora nuova: tradurla con `fifo-lot-analysis` nello stesso giro. Dettagli:
   piano J, §10 «CP-7a».
-- **J-26 · Sonda reale dell'AI Export per CP-7a** — basso, prova; J, 16/10. Il realizzato e il «di mercato» dei lotti
+- ✅ **J-26 · Sonda reale dell'AI Export per CP-7a** — basso, prova; J, 16/10. **Chiusa il 16/10** (commit al checkpoint):
+  sonda reale sulla copia dei dati del developer (P26), base `4f0a5d323` contro la mia HEAD, 9 casi. Equivalenza
+  UI/sonda esatta; solo le versioni attese (J-17, MF), tutte compatte; il testo cambia solo nella provenienza (J-17,
+  J-24); nessun reperto. Il ponte della sonda era rotto su dev dal 16/10 11:18 (Z-20): corretto nello stesso lotto.
+  Testo originale: Il realizzato e il «di mercato» dei lotti
   esteri cambiano (decisione 26) attraverso builder invariati, quindi nessuna versione; i test dei componenti passano
   (302). La sonda mirata (`ai_export_real_prompt_probe.py`) gira sugli utenti reali del developer e con le loro
   credenziali, che una corsia coordinata non ha: da fare col developer, un Asset con un lotto USD chiuso e il suo Broker
   (atteso: realizzato coi cambi delle due date, non realizzato 0). Dettagli: piano J, §10 «CP-7a».
-- **J-27 · `ControlTotals.from_json` espande per intero un importo con un esponente enorme** — basso, robustezza; trovata
+- ✅ **J-27 · `ControlTotals.from_json` espande per intero un importo con un esponente enorme** — basso, robustezza;
+  **chiusa il 16/10** (commit al checkpoint): `_as_amount` legge solo testo decimale semplice, al più 60 cifre per parte;
+  doc e docstring dicono la prova del ripristino prima della conferma. Testo originale: trovata
   dal test-author di B con una sonda, via il coordinatore, 16/10. `_as_amount` (`financial_math/ledger_totals.py:190`)
   accetta ogni testo decimale finito e lo passa a `_canonical`, che lo scrive per esteso: `"1E+50000000"` costa 121 MB e
   0,4 s, quindi un manifest scritto a mano può esaurire la memoria nella prova a secco del ripristino. B si protegge da
