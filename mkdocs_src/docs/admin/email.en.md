@@ -13,6 +13,9 @@ What LibreFolio sends:
   with the invitation and reset dialogs.
 - **A reset link for a forgotten password**, to whoever asks for one for their account. This one is
   held for now, for a security reason: see [Forgotten Passwords](#forgot-password).
+- **The setup link of the initial administrator**, once, when LibreFolio creates that administrator
+  from `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself: see
+  [Hosting for Others](hosting_providers.md#initial-admin).
 - **A link to confirm the email address of a new account**, when **Require Email Verification** is
   on: see [Email Verification](#verification).
 
