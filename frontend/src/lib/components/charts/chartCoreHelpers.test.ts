@@ -27,7 +27,7 @@ import {axisLabelFont, axisLabelMeasure, buildResponsiveXAxisPolicy, categoryAxi
 import * as responsiveXAxis from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildTooltipDivider, type TooltipTheme} from './echartsTooltipHelpers';
-import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
+import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../../features/brokers/lots/lotComparisonChartHelpers';
 import {clampGrowthLogicalRange, type GrowthLogicalRange} from '../../features/dashboard/growthChartRange';
 import {
     aggregateFlowMetric,
@@ -2010,15 +2010,15 @@ describe('canonical overlay axis and reference helpers', () => {
         ['PriceChartFull', new URL('./PriceChartFull.svelte', import.meta.url)],
         ['GrowthChart', new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url)],
         ['AllocationHistoryChart', new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url)],
-        ['LotGanttChart', new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url)],
-        ['LotComparisonChart', new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url)],
-        ['LotWacPriceChart', new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
+        ['LotGanttChart', new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url)],
+        ['LotComparisonChart', new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url)],
+        ['LotWacPriceChart', new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
     ] as const;
 
     const LOT_RESPONSIVE_X_AXIS_CHARTS = [
-        ['LotGanttChart', new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url)],
-        ['LotComparisonChart', new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url)],
-        ['LotWacPriceChart', new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
+        ['LotGanttChart', new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url)],
+        ['LotComparisonChart', new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url)],
+        ['LotWacPriceChart', new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
     ] as const;
 
     /** The zoomable category charts (47-1): their labels follow the zoomed window, and their resize merges `categoryAxisLabelPatch(policy)`. */
@@ -3297,7 +3297,7 @@ describe('canonical overlay axis and reference helpers', () => {
         const LOT_X_AXIS_PATCH_GUARDS = [
             {
                 chart: 'LotGanttChart',
-                path: new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url),
                 watcher: 'const axisResizeWatcher = createResizeWatcher(',
                 // Only the sticky axis instance is patched on resize; the lanes instance never is.
                 instance: 'axisInstance',
@@ -3312,7 +3312,7 @@ describe('canonical overlay axis and reference helpers', () => {
             },
             {
                 chart: 'LotComparisonChart',
-                path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url),
                 watcher: 'const resizeWatcher = createResizeWatcher(',
                 instance: 'chartInstance',
                 flag: 'chartOptionSet',
@@ -3324,7 +3324,7 @@ describe('canonical overlay axis and reference helpers', () => {
             },
             {
                 chart: 'LotWacPriceChart',
-                path: new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url),
                 watcher: 'const resizeWatcher = createResizeWatcher(',
                 instance: 'chartInstance',
                 flag: 'chartOptionSet',
@@ -3434,7 +3434,7 @@ describe('canonical overlay axis and reference helpers', () => {
             const INSET_CHARTS = [
                 {chart: 'GrowthChart', path: new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
                 {chart: 'AllocationHistoryChart', path: new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
-                {chart: 'LotComparisonChart', path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), base: '18', fontSize: 12},
+                {chart: 'LotComparisonChart', path: new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), base: '18', fontSize: 12},
             ] as const;
 
             /** The argument text of every `timeAxisGridRight(…)` call in `source`, parentheses balanced: one entry per call site. */
@@ -3501,7 +3501,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('LotComparisonChart computes its grid right in buildOption in place of the 18 px literal (E2)', () => {
                 // Why: the lots chart has no other grid write, so the inset must be computed where the option is built.
-                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
                 const buildOption = blockAfter(source, 'function buildOption(', '{');
                 if (!buildOption) throw new Error('LotComparisonChart: buildOption() not found');
 
@@ -3540,7 +3540,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('LotComparisonChart leaves the inset out of its resize callback: a px base does not depend on the width (E5)', () => {
                 // Why: with base 18 the inset follows the labels alone, so the resize keeps the single axis write LOT_X_AXIS_PATCH_GUARDS counts.
-                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
                 const callback = blockAfter(source, 'const resizeWatcher = createResizeWatcher(', '=> {');
                 if (!callback) throw new Error('LotComparisonChart: resize callback not found');
 

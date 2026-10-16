@@ -7,7 +7,7 @@
     import {userSettings} from '$lib/stores/app/settings';
     import {CurrencySearchSelect, ImportPluginSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';

@@ -35,7 +35,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, RefreshCw, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';

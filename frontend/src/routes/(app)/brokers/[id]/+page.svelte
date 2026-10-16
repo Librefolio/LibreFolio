@@ -14,11 +14,11 @@
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
-    import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
+    import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
+    import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';

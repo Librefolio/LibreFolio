@@ -98,4 +98,4 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 | dashboard page (race) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | The shared reactive icon chain (Form B fix) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The store that starts the plugin-icon cache; `ensureBrokerIconFieldsLoaded` | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| C-56, latent: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| C-56, latent: the chain reads only the props | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |
