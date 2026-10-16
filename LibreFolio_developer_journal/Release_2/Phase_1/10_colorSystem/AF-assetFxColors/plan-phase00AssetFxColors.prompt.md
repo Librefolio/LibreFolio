@@ -838,6 +838,31 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        >
        > **Resta debole** (fuori dall'OK): F2 e F3 decidono con `isVisible()` istantanei se aprire le modali, e possono
        > passare senza aprirne nessuna; nessuno dei due verifica il tema. Seguito possibile, annotato in AF-12.
+    6. ✅ (16–17/10, 23:37–00:09) **Slot di recupero**, nella 6157 su `285a1cb39` (base merge del coordinatore con la
+       punta `db506eb21`: FE8b, B, E e J della 1.3; i commit `f2f13184b` e `391087b35` dentro). Nessun passo nuovo dopo
+       le 00:30. Script `/tmp/libreFolio_af_slotR.sh`, con la scadenza assoluta (il taglio passava la mezzanotte); log in
+       `/tmp/libreFolio_af_slotR/`.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync` | rc 0 |
+       > | `front build --debug` | rc 0 |
+       > | E2E `front-utility` image-crop (1 worker) | **42/42**, F1–F3 compresi, col nuovo `beforeEach` |
+       > | `front-broker detail` (1 worker) | 37/38; **rilanciata da sola: 38/38** |
+       > | `front-asset asset-list` (1 worker) | 30/30 |
+       > | `front-transaction tx-import-upload` (2 worker) | 10/10 |
+       >
+       > Porta libera alla fine; HEAD `285a1cb39`, albero pulito. Con lo slot E, tutte le spec dell'elenco del lotto sono
+       > verdi.
+       >
+       > **⚠️ Fuori pista — `brokers-detail`, «clicking the "Analyze Lots" row action opens the FIFO lots panel»:** un
+       > timeout nell'helper `goToBrokerWithHoldings`. Dopo il clic sulla card di Interactive Brokers la pagina del
+       > dettaglio non era montata entro 10 s: l'istantanea mostra ancora la lista dei broker, col carico fra 80 e 113.
+       > Rilanciata da sola (carico 59, 1 worker): 38/38 in 2,8 minuti, contro i 5,2 della prima corsa. Verdetto del
+       > triage: lentezza sotto il carico della macchina, non il lotto. Il lotto non tocca la lista dei broker né la
+       > navigazione, e gli altri 37 test passano con lo stesso helper.
+       >
+       > **⚠️ Fuori pista — AF-13 di nuovo:** macOS ha toccato `frontend/src/.DS_Store` alle 23:52:26, e `asset-list` ha
+       > rifatto la build all'avvio.
 
 ## 12. Dove guardarlo (per il developer)
 
