@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 91,9 % delle classi sui ruoli (m1 930 nel target), il resto aspetta la designer o la 1.3 |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -3041,8 +3041,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   righe 392–419 (spec della 1.3): la regex prenderebbe anche un ruolo `bg-lf-selected` quando `DataTable` (T, W6) migra;
   meglio leggere `aria-selected`. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   sezione «Stato attuale».
-- **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
-  16/10); poi migrazione dalla versione di Y, 205 → 20. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+- ✅ **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
+  16/10); poi migrazione dalla versione di Y, 205 → 20. Chiusa il 16/10 sera nel checkpoint L4 di BK, con il misto di
+  G-18 (`contentClass` tolto); restano i 20 di BK-2. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   passo S7.
 
 ---
@@ -3549,7 +3550,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
     ASCII dà `SEND_FAILED`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
-- **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; dal `docs-writer` di P18
+- ✅ **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; chiusa il 16/10 (lotto A-25,
+  commit del coordinatore); dal `docs-writer` di P18
   (16/10).
   - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
     la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
@@ -3575,6 +3577,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
     `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
     «A-27».
+- **A-28 · La riga dell'email della scheda Profilo non si assesta dopo certi salvataggi** — minimo; dal `test-author` di
+  A-25 (16/10).
+  - Il server mette il dominio in minuscolo (`EmailStr`): dopo aver salvato `Alice@Example.COM`, `/auth/me` risponde
+    `Alice@example.com`, l'input tiene quanto scritto e la riga resta «modificata» (con un cambio vero scritto con il
+    dominio in maiuscolo, prima di A-25 chiedeva perfino di nuovo la password per lo stesso indirizzo).
+  - Un indirizzo cambiato altrove mentre la scheda è aperta: una variante di sole maiuscole della forma vecchia è un
+    cambio vero per il server, che risponde 400 `CURRENT_PASSWORD_REQUIRED`; la scheda tiene l'indirizzo e svuota la
+    password, ma non mostra il campo per scriverla.
+  - Cura possibile: dopo un salvataggio riuscito l'input prende la forma che il server ha conservato; sul 400
+    `CURRENT_PASSWORD_REQUIRED` la scheda rilegge l'indirizzo salvato. Da decidere con A7b/A8, che toccano la stessa
+    scheda.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 

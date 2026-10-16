@@ -34,13 +34,13 @@ Since the other users see your avatar, its picture is **shared**: an image you u
 
 ### 📧 Changing Your Email {: #email-change }
 
-As soon as the email in the field differs from your current one, a **Current Password** field appears under the email's description, with a reminder: *To change your email, enter your current password. Your other devices will be signed out.* The email's save button, and **save all**, stay disabled until you type it.
+As soon as the email in the field is another address than your current one, a **Current Password** field appears under the email's description, with a reminder: *To change your email, enter your current password. Your other devices will be signed out.* The email's save button, and **save all**, stay disabled until you type it.
 
 - **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
 - **Email refused for another reason**, for example because another account already uses it, even with other capitals: the tab shows the reason, and your current email comes back.
 - **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.
 - **A notice to your old address**: when your instance can send emails, LibreFolio writes to the address you had before, to tell you of the change. It shows only the domain of the new address, such as `***@example.com`, and says what to do if you did not make the change. Nothing goes to the new address.
-- **Only the capitals changed**, such as `Anna@example.com` for `anna@example.com`: it is still your address, so no device is signed out and it stays verified. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
+- **Only the capitals changed**, such as `Anna@example.com` for `anna@example.com`: it is still your address, so the tab asks for no password, you save it straight away, no device is signed out and it stays verified. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
 
 Changing only your username asks for no password and signs no device out.
 

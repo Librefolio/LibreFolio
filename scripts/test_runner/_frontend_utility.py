@@ -183,6 +183,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/auth/linkToken.test.ts",
             "src/lib/features/auth/registrationErrors.test.ts",
             "src/lib/features/auth/passwordRules.test.ts",
+            "src/lib/features/auth/emailCase.test.ts",
             "src/lib/features/instance/instanceBlock.test.ts",
             "src/lib/api/zodios-client.test.ts",
             "src/lib/features/live-updates/activityTracker.test.ts",

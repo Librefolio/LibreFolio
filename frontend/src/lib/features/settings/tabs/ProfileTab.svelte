@@ -15,6 +15,7 @@
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import {sameEmail} from '$lib/features/auth/emailCase';
 
     // Format date for display, in the interface locale (M-18). The template passes it: read there, the
     // store is tracked, and the date follows a language change.
@@ -87,9 +88,12 @@
     // Track modifications (separate reactive statements)
     $: usernameModified = editedUsername !== originalUsername;
     $: emailModified = editedEmail !== originalEmail;
-    // The password belongs to the change it was typed for: back to the stored email, it is gone.
-    $: if (!emailModified) emailPassword = '';
-    $: emailNeedsPassword = emailModified && emailPassword === '';
+    // P18: the same address in other A–Z capitals is no change of address — saved as typed, with no password and
+    // nobody signed out. Only a real change asks for the current password (A6e).
+    $: emailChangesAddress = emailModified && !sameEmail(editedEmail, originalEmail);
+    // The password belongs to the change it was typed for: back to the stored address, in any capitals, it is gone.
+    $: if (!emailChangesAddress) emailPassword = '';
+    $: emailNeedsPassword = emailChangesAddress && emailPassword === '';
     $: avatarModified = editedAvatarUrl !== originalAvatarUrl;
     $: hasAnyChanges = usernameModified || emailModified || avatarModified;
 
@@ -139,6 +143,11 @@
         errorCode = null;
     }
 
+    /** The body of an email save: the current password only when the address itself changes (A6e, P18). */
+    function emailPayload(): {email: string; current_password?: string} {
+        return emailChangesAddress ? {email: editedEmail, current_password: emailPassword} : {email: editedEmail};
+    }
+
     // Save individual field
     async function saveField(field: 'username' | 'email') {
         debug.log('ProfileTab', 'saveField', field);
@@ -147,7 +156,7 @@
         errorCode = null;
 
         try {
-            const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail, current_password: emailPassword};
+            const payload = field === 'username' ? {username: editedUsername} : emailPayload();
 
             await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
             await auth.checkAuth();
@@ -196,7 +205,7 @@
 
         for (const field of fields) {
             try {
-                const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail, current_password: emailPassword};
+                const payload = field === 'username' ? {username: editedUsername} : emailPayload();
                 await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
                 saved.push({field, label: field === 'username' ? $_('auth.username') : $_('auth.email')});
                 if (field === 'username') originalUsername = editedUsername;
@@ -456,8 +465,8 @@
                     {/if}
                 </div>
                 <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
-                {#if !isLocked && emailModified}
-                    <!-- A6e: the current password, for the email change only; the change signs the other devices out. -->
+                {#if !isLocked && emailChangesAddress}
+                    <!-- A6e: the current password, for a change of address only (P18: not for other capitals); the change signs the other devices out. -->
                     <div class="mt-3 space-y-1">
                         <label class="sr-only" for="profile-current-password">{$_('settings.currentPassword')}</label>
                         <input
