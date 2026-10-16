@@ -2,8 +2,7 @@ import type {ECharts} from 'echarts';
 import {chartFontLoaded, chartFontReady} from './chartFont';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
-import {themed} from '$lib/theme/themePair';
-import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+import {chartNeutrals} from '$lib/theme/chartTheme';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -24,15 +23,12 @@ export interface TooltipTheme {
 }
 
 /**
- * Get tooltip colors for the current theme.
+ * Get tooltip colors for the current theme: the roles of the shared box (`chartNeutrals().tooltip.box`), read on
+ * `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildTooltipTheme(isDark: boolean): TooltipTheme {
-    return {
-        bg: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-        border: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-        textColor: themed(CHART_TOOLTIP_COLORS.box.text, isDark),
-        mutedColor: themed(CHART_TOOLTIP_COLORS.box.muted, isDark),
-    };
+export function buildTooltipTheme(isDark: boolean, scope?: Element | null): TooltipTheme {
+    const {box} = chartNeutrals(isDark, scope).tooltip;
+    return {bg: box.background, border: box.border, textColor: box.text, mutedColor: box.muted};
 }
 
 // =============================================================================
@@ -159,13 +155,12 @@ export interface ChartGridColors {
 }
 
 /**
- * Standard grid colors for axes and split lines.
+ * Standard grid colors for axes and split lines: the roles of the dashboard charts (`chartNeutrals().dashboard`), read
+ * on `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildGridColors(isDark: boolean): ChartGridColors {
-    return {
-        textColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
-        gridColor: themed(CHART_NEUTRALS.dashboard.gridLine, isDark),
-    };
+export function buildGridColors(isDark: boolean, scope?: Element | null): ChartGridColors {
+    const {dashboard} = chartNeutrals(isDark, scope);
+    return {textColor: dashboard.text, gridColor: dashboard.gridLine};
 }
 
 // =============================================================================
