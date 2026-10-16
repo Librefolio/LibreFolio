@@ -61,6 +61,13 @@ async function clickRowAction(page: Page, row: Locator, actionId: string): Promi
  * path. A caller on the wrong page fails here with that message, within the default
  * expect timeout; on the right page, the card assertion below verifies the list itself,
  * and its message says what went wrong.
+ *
+ * After the click it waits for the detail page, on a navigation budget, before checking
+ * the new address. SvelteKit changes the address only when the navigation completes, once
+ * the detail page's code has loaded — and each test fetches that code again, in a fresh
+ * browser context — so on a loaded machine the address changed later than the 5 s its
+ * check used to allow. With the page on screen, the address check is immediate.
+ * `goToBrokerWithHoldings`, the card-click test and the "View Asset" test follow the same order.
  */
 async function goToFirstBrokerDetail(page: Page): Promise<void> {
     await expect(page, 'the broker list must be the current page — the outer beforeEach (ensureBrokerExists) leaves it landed; a caller that starts elsewhere navigates to /brokers first').toHaveURL(/\/brokers(?:[?#]|$)/);
@@ -69,8 +76,8 @@ async function goToFirstBrokerDetail(page: Page): Promise<void> {
     await expect(brokerCards.first(), 'the mock always ships brokers — an empty list means the page never loaded').toBeVisible({timeout: 8_000});
 
     await brokerCards.first().click();
-    await expect(page).toHaveURL(/\/brokers\/\d+/, {timeout: 5000});
-    await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+    await expect(page.getByTestId('broker-detail-page'), 'a broker card opens its detail page — not mounted in time means the click did not navigate, or the route had not finished loading').toBeVisible({timeout: 10_000});
+    await expect(page).toHaveURL(/\/brokers\/\d+/);
     // Wait for broker data to load (broker-name is inside {#if broker})
     await expect(page.getByTestId('broker-name')).toBeVisible({timeout: 10000});
 }
@@ -101,8 +108,8 @@ async function goToBrokerWithHoldings(page: Page): Promise<void> {
     await expect(card.first(), `${BROKER_WITH_HOLDINGS} is the broker the mock gives positions to — check populate_mock_data.py`).toBeVisible({timeout: 8_000});
 
     await card.first().click();
-    await expect(page).toHaveURL(/\/brokers\/\d+/, {timeout: 5000});
-    await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+    await expect(page.getByTestId('broker-detail-page'), `the ${BROKER_WITH_HOLDINGS} card opens its detail page — not mounted in time means the click did not navigate, or the route had not finished loading`).toBeVisible({timeout: 10_000});
+    await expect(page).toHaveURL(/\/brokers\/\d+/);
     await expect(page.getByTestId('broker-name')).toBeVisible({timeout: 10000});
 }
 
@@ -125,6 +132,14 @@ async function goToPosizioniTab(page: Page): Promise<void> {
 test.describe.configure({mode: 'parallel'});
 
 test.describe('Broker Detail Page', () => {
+    // An explicit budget for the chain every test here walks: login, the broker list, then the
+    // broker page. A describe's timeout runs from the start of the test, so it also covers the
+    // beforeEach below (login and list), as in the FIFO block. C-58 gave only that block 60 s,
+    // this one's slowest test then taking 13 s; at load ~70 a test has since reached its first
+    // click only after ~24 s, leaving the broker page a few seconds of the default 30 s. Only
+    // the timeout is set: the file's parallel mode is inherited unchanged.
+    test.describe.configure({timeout: 60_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
         await ensureBrokerExists(page);
@@ -137,8 +152,8 @@ test.describe('Broker Detail Page', () => {
         await expect(brokerCards.first(), 'the mock always ships brokers — an empty list means the page never loaded').toBeVisible({timeout: 8_000});
 
         await brokerCards.first().click();
+        await expect(page.getByTestId('broker-detail-page'), 'a broker card opens its detail page — not mounted in time means the click did not navigate, or the route had not finished loading').toBeVisible({timeout: 10_000});
         await expect(page).toHaveURL(/\/brokers\/\d+/);
-        await expect(page.getByTestId('broker-detail-page')).toBeVisible();
     });
 
     test('broker detail page shows broker name', async ({page}) => {
@@ -319,7 +334,8 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'view-asset');
-            await expect(page).toHaveURL(/\/assets\/\d+/, {timeout: 5000});
+            await expect(page.getByTestId('asset-detail-page'), 'the "View Asset" row action opens the asset detail page — not mounted in time means the action did not navigate, or the route had not finished loading').toBeVisible({timeout: 10_000});
+            await expect(page).toHaveURL(/\/assets\/\d+/);
         });
 
         test('right-clicking a holding row shows a context menu with both actions', async ({page}) => {
