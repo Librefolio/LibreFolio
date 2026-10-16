@@ -683,3 +683,268 @@ Due commit, perché un lotto che cambia numeri va da solo:
 
 Restano dell'ondata 1, bloccati: N, F2 e gli aumenti di versione di D (dopo J-17), M e G1 (dopo J-17),
 `drawdown_context.py` (dopo CP-13a), le mappe di `returns.py` (dopo CP-13a).
+
+- ✅ Committati dal coordinatore: `30b464272` (O+K1+I1+D), `bf05b43b6` (F1), `f8cbc6fd2` (giornale). HEAD verificata.
+  `all-backend` sullo slot 1 dopo le 14:45, sulla revisione combinata (il coordinatore aggiorna prima la base).
+- **MF-O2** assegnata a MF nell'ondata 2, dopo J-17 (schema in `schemas/portfolio.py`); il sesto caricatore degli split
+  (`auto_cost.py`, W) va in I2 col via di W chiesto dal coordinatore.
+
+#### Analisi in attesa dello slot (16/10, dalle 13:21, sola lettura; nessun test nell'albero prima di `all-backend`)
+
+- **MF-N — disegno**: `_load_broker_ownership_share` (`broker_cost_efficiency.py:152-158`) legge la sola
+  `share_percentage`; passa a leggere anche `role` e a restituire `native_cash.effective_share(role, share)` (un Editor o
+  un Viewer → 1; un proprietario senza quota → 1; l'accesso mancante resta l'errore di oggi). La descrizione del campo
+  `ownership_share_ratio` (`:294`) dice «share_percentage»: diventa «la quota che il report applica a questo broker».
+  Componente `broker.cost_efficiency` v1 → **v2** (vincolo 3, dopo J-17) con la voce in `COMPACT_COMPONENT_VERSIONS`.
+  Rossi: Viewer con quota 0 → turnover pieno e `ownership_share_ratio` 1; Editor con quota 0,5 → 1; proprietario 0,5
+  → 0,5 (controllo); proprietario senza quota → 1. File: `test_ai_export_components_broker_adequacy.py` (usa
+  `_patch_activity`, cioè scavalca il caricatore: i rossi del caricatore vogliono un test sul DB o un patch del
+  `select`; da decidere col test-author).
+- **MF-F2 — disegno**: `portfolio_income.py:340-385` legge la quota grezza (`None` → 1) senza ruolo e `abs(amount)`.
+  Diventa: ruolo e quota → `effective_share`; importo col segno. Il docstring (`:26-28`, «exactly like the report's
+  `period_income`») torna vero. Componente `portfolio.income_timeline` v1 → **v2** dopo J-17. Rossi: correzione negativa
+  → importo negativo; Viewer/Editor → quota 1; proprietario con quota → scalato (controllo). File:
+  `test_ai_export_components_portfolio_income.py` (c'è già `test_ownership_share_scales_native_amount`).
+- **MF-K2 — disegno** (`portfolio_service.py`, dopo J): card `get_summary` (`:871-893`) → `period_mwrr(period_navs,
+  period_cfs, date_to or today, engine_nav)` al posto della guardia e del ripiego locali; linea `get_history`
+  (`:1129-1135`) → `period_mwrr_series(period_nav_snapshots, period_cash_flows)`. Il primo punto resta fissato a 0
+  (`:1189-1195`, definizione della crescita dall'inizio del periodo). Riletto: gli snapshot sono gli stati giornalieri
+  del motore fino a `date_to` (`derived_views.build_performance_inputs`, `:168-198`) e `engine_nav` è il NAV dello stato
+  a `valuation_date` (`:599`): con `date_to` dato, l'ultimo snapshot è `(date_to, engine_nav)` e card = ultimo punto per
+  costruzione; il rosso lo fissa anche senza `date_to` (oggi). Il «timing effect» del frontend
+  (`mwrr_cumulative − twrr`) segue la card.
+
+#### ⏸️ Pausa del developer (16/10, 13:22) — 🧊 FROZEN
+
+- HEAD `f8cbc6fd2`; sporco solo questo piano (le analisi di N, F2, K2 qui sopra); nessun comando né specialista in corso;
+  porta 6190 libera.
+- **Prossimo passo** al via: aggiornamento di base dal coordinatore → prove leggere sulla revisione combinata →
+  `all-backend` nello slot 1 (dopo le 14:45); poi N e F2 (con l'aumento di versione) appena entra J-17.
+
+#### Ripresa (16/10, 14:14) — base aggiornata
+
+- ✅ Merge del coordinatore `e19b3376a` (genitori `f8cbc6fd2` + `dev_release2` `04dcf3a37`), pulito; il piano sporco
+  intatto. Entrati: configurazione, chiave d'istanza, controllo dei segreti dei plugin, `batch_edits.py`, la regola del
+  costo nelle transazioni, il catalogo del runner (`_backend_services.py`, righe d'altri) e la galleria: nessun file di
+  MF. `all-backend` nello slot 1 verso le 15:30 (chiusura 16:15), su chiamata del coordinatore.
+- ✅ **Prove leggere sulla revisione combinata** `e19b3376a` (14:14–14:31, `files/wave1.sh green`, `nice -n 10`, ognuna
+  col carico < 50; log `files/logs/merged/`): `financial-math` 464, `roi-utils` 9, `roi-fifo-utils` 757,
+  `lots-analysis-pure` 162, `portfolio-engine` 40, `ai-export -k "technical or fx_timing or portfolio_broker"` 307,
+  `risk-all -k "comparison or risk_service or annualiz"` 183: gli stessi conteggi di prima del merge, 0 falliti.
+- Slot spostato dal coordinatore a ~15:45 (la verifica della galleria di G si allunga).
+- ✅ **Prerequisiti dello slot** (OK del coordinatore 15:02; `files/slot.sh prep`, carico < 50): `npm ci` dal lock in
+  `frontend/` (15:11, exit 0; npm segnala lo script `postinstall` di `esbuild` non approvato, senza effetto sulla
+  build), `dev.py front build --debug` (15:12, verde, svelte-check senza diagnostiche). Artefatti ignorati da git.
+- **⚠️ Fuori pista**: il worktree non aveva `node_modules` né la build del frontend, che il backend condiviso di
+  `all-backend` costruirebbe dentro i suoi 300 s d'avvio: chiesto e ottenuto l'OK prima dello slot.
+
+#### C-97 (W, decimali) e il lotto G1 (16/10, 15:33)
+
+- **Decisione del developer** (via coordinatore): le somme SQL di quantità e importi passano in Python (`Decimal`), così
+  il rumore dei REAL di SQLite non arriva a vista coi decimali in più. G1 (loader del PAC) ne è una parte; W fa
+  `balances.py` e `assets/crud.py`. Da accordare con W la casa unica della somma.
+- **Censimento** delle `func.sum` di quantità e importi in `services/`: `transactions/balances.py:132, 133, 169` (W),
+  `assets/crud.py:282` (W), `pac_allocator/source/loaders.py:21, 94` (MF, G1). Le altre (`assets/crud.py:507-508`,
+  `risk/eligibility.py:258`) contano righe, non importi.
+- **Proposta a W** (15:35): nessuna funzione nuova, la casa c'è ed è pura — `ledger_totals.position_quantities` e
+  `native_cash.native_balances` con `cash_movement_from_transaction`, su righe leggere; i filtri restano nella query, la
+  soglia della polvere o il «≠ 0» al chiamante; una variante ripetuta la aggiunge MF alla casa, coi test.
+- ✅ **Accordo con W** (15:39): bastano le due funzioni, nessuna variante. W fa `transactions/balances.py`
+  (`_get_balances_before_date`, cassa e quantità; `get_asset_holdings`) e `assets/crud.py:282`, con la soglia della
+  polvere sul risultato; MF i loader del PAC dopo J-17. Differenza verificata da W: `position_quantities` salta le righe
+  a quantità 0 (dove la somma SQL dava una riga a 0, la casa non dà la riga); i suoi tre lettori leggono la riga mancante
+  come zero. **Per G1**: `load_holding_rows` ha già `having(quantity_sum != 0)`, quindi la riga mancante coincide; la
+  cassa (`native_balances`) tiene le righe a zero come la somma SQL. Il cammino giorno per giorno di
+  `_validate_broker_balances` (W-B19) resta a W, fuori da C-97a.
+
+#### `all-backend` nello slot 1 (16/10, dalle 16:04; chiusura 16:55)
+
+- Via del coordinatore alle 16:03: `--workers 2 all-backend` su `e19b3376a` (più il piano), `files/slot.sh all`, log
+  `files/logs/slot/all_backend.log`. Carico alto (altre due corse pesanti): un `ReadTimeout` da 30 s passa dal
+  test-triage prima d'essere chiamato rosso.
+- **Esito** (16:04–17:01; chiusura spostata dal coordinatore alle 17:10): **6/7 categorie verdi**; passate parallele
+  16 222 + 1 171 passed, 7 skipped; DB 19/19; mock data ok. **API rossa per un test solo**:
+  `test_brim_scalable_api.py::TestScalableAccounts::test_transfers_merged_across_the_two_brokers_come_back_as_duplicates`,
+  `httpx.ReadTimeout` (30 s) sulla `POST /brokers/import/files/{id}/parse` del primo file, nel worker 1 delle API
+  (1 failed, 669 passed). Porta 6190 libera; slot liberato alle 17:01.
+  - **⚠️ Fuori pista**: il runner ha ricostruito la documentazione all'avvio (198 s, sito vecchio dopo il merge), non
+    messi in conto.
+- **Triage** (skill `test-triage`):
+  1. *forma della risposta*: no, nessuna asserzione: la richiesta non è tornata entro 30 s;
+  2. *orologio*: il test usa un `TIMEOUT = 30` fisso per richiesta; la parse gira nel pool di processi di BRIM
+     (`brim/brim_parse_pool.py`, `parse_file_offloaded`), poi `_report_set_truth` e la ricerca dei candidati;
+  3. *il codice di MF*: nessun modulo toccato dall'ondata 1 è sul percorso della parse (né `financial_math`, né
+     `portfolio_service`, né `lots_analysis_service`, né i componenti AI o del rischio: grep su `services/brim*` e
+     sull'endpoint, `api/v1/brokers.py:909-1000`).
+  - Prova: il test da solo, col carico sotto 50 (`api brim-scalable`, log `files/logs/slot/triage_brim_scalable.log`).
+  - **Verdetto** (17:08): **environment / lentezza**, non di MF. Il coordinatore lo riconosce come noto (J e H l'hanno
+    visto: avvio a freddo del pool di processi della parse BRIM oltre i 30 s del test) → **J-30, a W**. La prova da solo
+    aspettava ancora il carico (150 alle 17:07): fermata prima di partire, per non avere due comandi nella corsia; corsia
+    libera.
+
+#### J-17 è entrato (16/10, ~17:05) — cosa si apre
+
+- **J a MF** (diretto): restano di J `portfolio/daily_state.py` e `portfolio/models.py` (fino a J-24), un pezzo di
+  `returns.py` e le mappe (CP-13a: `required_recovery_return`), `risk/metrics.py` (`drawdown_episodes`),
+  `schemas/risk.py` e i due plugin del drawdown (CP-13a), `lots_analysis_service.py` e `lots/*` (CP-7b). **Liberi**:
+  `price_marks.py`, `portfolio/data_quality.py`, `schemas/portfolio.py`, `portfolio_service.py`, i file AI Export di
+  J-17, `planner/source.ts`, i cataloghi `dataQuality/*` e `pacAllocator/*`. Il renderer resta di J: MF tocca solo le
+  voci di `COMPACT_COMPONENT_VERSIONS` dei componenti che alza, e lo dice a J.
+- **Versioni già usate da J-17 nella 1.3** (non si rialzano): `asset.provenance` 2, `asset.positions_by_broker` 2,
+  `portfolio.provenance` 3, `broker.provenance` 3, `portfolio.positions` 2, `broker.positions` 2.
+- **Per C**: una posizione `ESTIMATED_AT_COST` ha `current_value` = il costo e conta in entrambi i pesi. **Per D**:
+  `remaining_to_peak_ratio` diventa nullable con CP-13a.
+- **Sbloccati ora**: M e G1 (PAC), N e F2 (con l'aumento di versione), MF-O2 (schema libero). `portfolio_service.py`
+  è libero: anche A, B, H, C (parte servizio), K2 e I2 (parte servizio) possono partire, ma **A e J1 toccano
+  `daily_state.py`/`models.py`** (le istantanee d'inizio periodo): aspettano J-24.
+
+#### Ondata 1b (16/10, dalle ~17:15) — base `9243493b7` (J-17 dentro)
+
+- ✅ Base verificata: merge del coordinatore `9243493b7` (genitori `e19b3376a` + `dev_release2` `ce5954329`). J-17 ha
+  toccato `schemas/portfolio.py`, `catalog.py`, `snapshotDataRenderer.ts`, `daily_state.py`, `data_quality.py`,
+  `models.py`, `price_marks.py`, `lots/conversions.py` e il test della sorgente del PAC; nessuno dei miei file.
+- **MF-M — codice** ✅ (solo scrittura): `pac_allocator/source/wac.py` — via `_load_current_wac_fx_rows` (finestra
+  per coppia e «l'ultima riga ≤ data della transazione»: una seconda risoluzione del cambio, gemella del riempimento
+  all'indietro di `convert_bulk`); al suo posto `_load_wac_fx_rows(keys)`, una lettura delle righe **esattamente** a
+  `(base, quote, rate_date)` che la conversione del costo ha usato, per la loro `source` e per fallire chiuso se la riga
+  è cambiata o sparita (`_rates_match` resta). Equivalenza: con `use_cache=False` il costo è calcolato nella stessa
+  richiesta, quindi la riga di `rate_date` è proprio l'ultima ≤ data della transazione; cambia solo il caso «una riga più
+  nuova inserita dopo il costo» (prima mancante, ora disponibile: la conversione l'avrebbe già presa). −55 righe.
+- **MF-G1 — codice** ✅: `pac_allocator/source/loaders.py` — `load_holding_rows` e `load_cash_by_broker` leggono le
+  righe e sommano in Python con `ledger_totals.position_quantities` e `native_cash.native_balances` (C-97, accordo con
+  W); stessa forma d'uscita (tuple `(broker, asset, quantità)` ordinate; cassa per valuta con le righe a zero).
+  `load_latest_prices` resta: la sezione `prices` del PAC riporta le quotazioni salvate (data e fonte), non valuta; se
+  il PAC le usa per valorizzare, è una domanda a parte (annotata, nessun lotto).
+- **MF-N — codice** ✅: `broker_cost_efficiency.py` — `_load_broker_ownership_share` legge ruolo e quota e restituisce
+  `effective_share`; descrizioni del campo e della classe; `broker.cost_efficiency` v1 → **v2** (spec del modulo e
+  segnaposto del catalogo).
+- **MF-F2 — codice** ✅: `portfolio_income.py` — importo col segno, quota del report (`effective_share`); i docstring
+  tornano veri; `portfolio.income_timeline` v1 → **v2**. Renderer di J: solo le due voci nuove in
+  `COMPACT_COMPONENT_VERSIONS` (`{1, 2}`), da dire a J.
+- **MF-K2 — codice** ✅: `portfolio_service.py` — la card legge `period_mwrr(period_navs, period_cfs, date_to or
+  today, engine_nav)` (stessi ingressi di prima: il NAV iniziale è sempre `period_navs[0].nav`, riletto
+  `rebase_to_period`; stesse guardie), la linea `period_mwrr_series`; via `period_start_nav_perf` e il commento della
+  riprova MWRR nel `noqa` di `get_report` (la riprova era uscita con CP-4d). Ruff e black puliti sui file toccati.
+- **Test** (4 test-author in parallelo, file distinti, nessuna esecuzione): M+G1 `test_portfolio_allocation_source.py`;
+  N `test_ai_export_components_broker_adequacy.py`; F2 `test_ai_export_components_portfolio_income.py`; K2
+  `test_financial/test_portfolio_mwrr_card_and_line.py` (nuovo).
+  - **N** (finito): 8 casi in `TestCostEfficiencyReportShareRule`, su SQLite privato in memoria: Viewer a quota 0 → 1,
+    Editor 0,5 → 1, proprietario senza quota → 1 (oggi `None`: il componente diceva «nessun accesso»; schema copiato
+    con la colonna nullable, perché in produzione è `NOT NULL` default 1), il componente intero (turnover 1000,
+    `fees_to_turnover` 10/1000; oggi turnover 0 e rapporto «non applicabile»), versione 2. Controlli: proprietario 0,5 e
+    0, accesso mancante.
+  - **F2** (finito): 14 casi (11 rossi su `HEAD`): correzioni negative col segno nelle righe, nei totali e nei secchi
+    (FULL e COMPACT), quota del report (Viewer 0 → 1, Editor 0,5 → 1), totale come `period_income`, versione 2 nel
+    catalogo e nella busta (con `schema_version` 1, che il renderer compatto richiede). Lo stub del caricatore ora
+    risponde a entrambe le query. Trovato: nulla rifiuta importi negativi; un INTEREST negativo (interessi passivi, se un
+    importatore li scrive così) ora si sottrae, come in `period_income`; il docstring di modulo (~:50) dice ancora «non
+    collegato al catalogo»: vecchio, non di MF.
+  - **M+G1** (finito): G1 3 test nuovi (somme esatte, righe a zero, nessun `sum(` né `group by` nell'SQL, filtri e
+    parametri); M 1 riscritto, 1 sostituito (`_load_wac_fx_rows` legge alla data esatta), 1 riscritto con il caso
+    «riga cancellata», 2 nuovi di guardia (tolleranza dentro/fuori; una riga più nuova non sostituisce quella della
+    data). Quattro test esistenti alimentavano i caricatori veri con righe aggregate: ora con righe singole
+    (`_HoldingLedgerRow`, `_CashLedgerRow`). **Corretto su sua segnalazione**: `_load_wac_fx_rows` restituisce solo le
+    chiavi chieste (prima anche le righe in più che la lettura poteva restituire). Trovato: la quota si applica una volta
+    sola, a valle (`entities.py`): i caricatori devono dare il broker intero (i test lo fissano con una quota 0,25).
+  - **K2** (finito): `test_financial/test_portfolio_mwrr_card_and_line.py`, 12 test (5 rossi su `HEAD`): prelievi netti
+    (storia intera e `date_from`): dal giorno del prelievo la linea non ha MWRR (oggi ~2,02 → 1,84 annuo); confronto
+    giorno per giorno linea ↔ card con `date_to` di quel giorno; valore azzerato con investito netto > 0 (oggi −72,86 %
+    annuo costante e cumulato che scende dopo lo svuotamento). Verdi prima e dopo: card nei due casi, quattro combinazioni
+    `date_from`/`date_to` con card = ultimo punto esatto. Trovati: l'AI Export legge l'MWRR solo dal sommario (nessun
+    effetto); il grafico della Dashboard fa già un buco su un valore mancante; il golden `eur_only_golden.json` non ha
+    punti con valore o investito netto ≤ 0 (invariato). **Simile, fuori da D-MF5**: il TWRR ha la stessa spaccatura col
+    valore ≤ 0 (card senza TWRR, linea piatta a −0,5) → da proporre come voce, non in K2.
+  - **O2** (finito): `test_yield_on_cost.py` — rosso: correzioni oltre il reddito (+10, −30, WAC 12,5) →
+    `UNAVAILABLE`/`negative_net_income`, reddito per unità −2, WAC d'ingresso (oggi `ValidationError`); controlli +10/−10
+    (0, `net_zero`) e +30/−10 (0,2: la correzione si sottrae). `ExposureTable.test.ts` — il motivo nel tipo locale e un
+    test della cella (chiavi, `data-testid`, `aria-label` e tooltip), rosso perché manca la chiave e la mappatura;
+    selettore `front-utility component-unit`. Docstring di `test_positive_income_sources_window_inclusive_and_asset_linked_only`
+    allineato a D-MF3 (diceva «solo positivi»; il test non ha righe negative).
+- ✅ **Doc di 1b** (docs-writer, nessuna build né stamp): teoria `yield-on-cost.en.md` (reddito col segno; il motivo
+  `negative_net_income`), `performance-metrics/index.en.md` (due «non-negative»), `user/dashboard/positions.en.md` (il
+  motivo nuovo nel riquadro dei «—»), dev `architecture/patterns/ai_export_composition.md` (la quota del report, il
+  reddito col segno, le v2), teoria `mwrr.en.md` (sezione nuova «When No MWRR Is Shown»), dev
+  `frontend/data-quality-banner.md` (riga `MWRR_NOT_CALCULABLE`), `user/dashboard/charts.en.md` (diceva che la linea
+  MWRR spariva col banner: falso). Debito di traduzione: `yield-on-cost`, `mwrr` (pipeline); `performance-metrics/index`,
+  `user/dashboard/positions`, `user/dashboard/charts` (piccoli). Frase proposta per `financial_math.md` (riga di
+  `returns.py`, dopo CP-13a) salvata nella cartella di sessione.
+- **⚠️ Fuori pista — trovato dal docs-writer, corretto**: con un intervallo che comincia prima del primo giorno del
+  portafoglio, `rebase_to_period` apre a NAV 0 e lascia fuori il flusso del deposito del primo giorno (è già dentro il
+  primo NAV): la guardia «investito netto = −Σ flussi» vedeva 0, e la card diceva «—» (`MWRR_NOT_CALCULABLE`) per un
+  portafoglio con un solo deposito; con D-MF5 anche la linea sarebbe sparita (una regressione per ogni portafoglio più
+  giovane dell'intervallo). **Cura** (`returns.py`, il mio pezzo di K1): l'investito netto è il capitale che il solve
+  vede, `NAV del primo snapshot + flussi dopo di esso fino alla fine` (`_net_invested`). Identico al vecchio dentro la
+  storia (il flusso sintetico d'apertura vale proprio il primo NAV) e senza `date_from` a parte il P&L del primo giorno;
+  **cambia la card** nel caso del portafoglio giovane: da «—» a un valore. Da dichiarare al coordinatore; rossi chiesti
+  ai test-author di K1 (`test_period_mwrr.py`) e di K2 (il caso di servizio).
+  - ✅ **Decisione N54 del coordinatore** (17:35, da rivedere col developer): dentro K2, con la riga 🐛 nel CHANGELOG.
+    «Investito netto = NAV del primo snapshot + i flussi dopo»; un solo deposito è il caso più semplice e deve dare un
+    valore. Rossi in più: intervallo che parte esattamente il primo giorno; portafoglio giovane con un prelievo dopo il
+    primo giorno (che non esaurisce il capitale; e il caso limite che lo porta ≤ 0). Doc: corretto l'esempio di
+    `data-quality-banner.md` (riga 181: il fattore scatenante diventa un prelievo oltre l'investito; riga 106: la
+    definizione); la sezione nuova di `mwrr.en.md` dice già «il valore d'apertura più depositi meno prelievi».
+  - **CHANGELOG di K2** (🐛 Fixed), proposta: «Dashboard: the money-weighted return (MWRR) now follows one rule for the
+    card and the chart line: where the period has no net invested capital, both show "—"; and a portfolio younger than
+    the selected range now gets its MWRR instead of "—".»
+  - ✅ **Rossi di N54** (test-author): `test_period_mwrr.py` sezione 7, 9 casi (6 rossi sulla guardia di prima: portafoglio
+    giovane, flussi prima del primo snapshot in entrambi i versi, «il primo NAV, non i flussi del primo giorno»; 3
+    verdi: il ribasamento dentro la storia è invariato); `test_portfolio_mwrr_card_and_line.py` 14 casi in più (26):
+    deposito singolo con intervallo prima (card e linea) rossi, intervallo dal primo giorno verde (guardia), prelievo che
+    lascia 700 rosso, prelievo che porta l'investito a 0 o −200 (confine ≤ 0) rosso. Le 12 attese di prima non cambiano
+    (in ogni scenario il primo NAV vale i depositi del primo giorno). Trovato: anche il ROI semplice ha lo stesso punto
+    cieco → in MF-K3 (backlog), con il TWRR.
+
+#### Ondata 1b — statici e rossi (16/10, dalle 17:53, dopo la fine della pausa della galleria)
+
+- ✅ **Statici** (`files/wave1b.sh lint`): ruff e black puliti (15 file), `theme-roles --check` pulito, `i18n check`
+  stretto verde (4 783 chiavi).
+- ✅ **Rossi sul codice di `HEAD`** (17:53–18:00, `files/wave1b.sh red`: prodotto tolto con `git apply -R`, patch
+  sha256 `1f51adf1…`, rimesso con lo stesso sha256; test nuovi tenuti; ognuna col carico < 50):
+  - `services portfolio-allocation-source`: **13 failed**, 85 passed (G1 5, M 4, e i 4 test esistenti che ora
+    alimentano i caricatori con righe singole);
+  - `services ai-export -k "broker_adequacy or portfolio_income or dataset_analysis_catalogs"`: **17 failed**, 121
+    passed (N 6, F2 11). **Uno dei 6 di N è un controllo che fallisce nel setup** (`test_missing_access_row_still_raises_access_error`:
+    vincolo FK, l'utente 2 non esiste nel DB privato): difetto del test, rimandato al test-author;
+  - `services roi-fifo-utils -k "test_yield_on_cost or test_portfolio_mwrr_card_and_line"`: **16 failed**, 73 passed
+    (K2 e N54 15, O2 1: la `ValidationError` del YoC negativo);
+  - `front-utility component-unit MF-O2`: **1 failed** (la chiave e la mappatura del motivo mancano);
+  - `services financial-math -k test_period_mwrr`: **6 failed**, 22 passed (sezione 7, la guardia N54).
+- ✅ **Controllo di N corretto** (test-author): il setup inseriva l'accesso dell'altro utente prima dell'utente
+  (`user_id` è una FK senza relazione ORM); ora prima l'utente, `flush`, poi l'accesso, e un controllo che l'unica riga
+  d'accesso del broker sia dell'altro utente. Verde nella corsa qui sotto.
+- ✅ **Verdi sul codice nuovo** (18:01–18:19, `files/wave1b.sh green`, ognuna col carico < 50):
+  - `dev.py api sync` verde, nessun file tracciato cambiato (i generati sono ignorati da git);
+  - `front-utility component-unit` **4 093 passed** (158 file);
+  - `services portfolio-allocation-source` **98 passed**; `services pac-planner-wire-numbers` **39 passed**;
+  - `services ai-export` **1 056 passed** (intero, 7 min; compreso il controllo corretto);
+  - `services roi-fifo-utils` **831 passed** (golden del motore compreso: invariato);
+  - `services financial-math` **473 passed**; `api portfolio` **51 passed**.
+  - Porta 6190 libera; `git diff --check` pulito.
+- ✅ **MkDocs** (18:24): `mkdocs build` stretto verde (46 s, nessun avviso); `check-links` verde (97).
+
+#### Checkpoint ondata 1b — 🧊 FROZEN (16/10, ~18:27), su `9243493b7`
+
+Quattro commit, uno per lotto che cambia numeri:
+1. **M + G1** (nessun numero) — `refactor(pac): WAC FX evidence at the cost's date, sums via the home`.
+2. **N + F2** (AI Export, v2) — `fix(ai-export): report share and signed income in two components`. CHANGELOG 🐛:
+   «AI Export: the income timeline keeps negative corrections and both it and the broker cost evidence count the
+   broker share as the report does (editors and viewers see the whole broker).»
+3. **K2 + N54** (Dashboard) — `fix(portfolio): one MWRR rule for card and line`. CHANGELOG 🐛: la proposta sopra.
+4. **O2** (Yield on Cost) — `fix(yoc): negative net income shows a reason`. CHANGELOG 🐛: «Yield on Cost: when
+   corrections exceed the income of the last year, the holding shows "—" with the reason instead of an error.»
+- **MF-O2** non ancora: tocca anche `features/dashboard/YieldOnCostCell.svelte` (il tipo dei motivi e l'etichetta) e i
+  cataloghi `dashboard/*`: serve l'OK del coordinatore per il `.svelte`.
+- **J sulle versioni** (17:17): ok le due voci (v1 nella 1.2.1, quindi v2 nella regola). Il segnaposto del catalogo è
+  già a `version=2` per entrambe (il test `test_ai_export_dataset_analysis_catalogs.py` confronta i due lati);
+  `snapshotDataRenderer.test.ts` non ha casi di ripiego v2 per questi componenti (solo `asset.ohlc_returns` e
+  `portfolio.summary`): niente da spostare. All'aggiornamento di base: se la mappa confligge, tenere le voci di J-17 e
+  le mie.
+- **Coordinatore** (17:2x): sì a `YieldOnCostCell.svelte` (2 righe, nessuna classe di colore; `theme-roles --check`
+  nelle prove leggere); le due voci di `COMPACT_COMPONENT_VERSIONS` sono di MF.
+- **MF-O2 — codice** ✅ (solo scrittura): `schemas/portfolio.py` — `YieldOnCostUnavailableReason.NEGATIVE_NET_INCOME`;
+  `yield_on_cost.py` — un reddito netto per unità < 0 dà `UNAVAILABLE` con quel motivo, la provenienza col reddito
+  negativo e il WAC d'ingresso (prima: `ValidationError` e report in errore); `YieldOnCostCell.svelte` — il motivo nel
+  tipo e la sua etichetta; chiave `dashboard.yieldOnCostReasons.negativeNetIncome` nei 4 cataloghi `dashboard/*` con
+  `dev.py i18n add` (EN «Corrections exceed the income of the last year.», IT/FR/ES). Test al test-author
+  (`test_yield_on_cost.py`, `ExposureTable.test.ts`). Da fare: `api sync` (enum nuovo nell'OpenAPI), pagina di teoria
+  di Yield on Cost (dice i negativi «non supportati»).

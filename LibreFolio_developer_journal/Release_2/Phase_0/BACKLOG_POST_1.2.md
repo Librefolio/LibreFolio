@@ -4805,3 +4805,11 @@ punto di partenza, l'audit dello stesso giorno:
   (`schemas/portfolio.py:335-340`), con un errore invece di «—». Cura proposta: `UNAVAILABLE` con un motivo nuovo
   (`negative_net_income`) nello schema di J, poi `api sync` e l'etichetta nei 4 cataloghi; rosso prima. Dettagli: piano
   MF, sezione «MF-F1».
+- **MF-K3 · La card e la linea del TWRR e del ROI semplice in due casi limite** — basso, numeri (proposta, da decidere);
+  test-author di MF, 16/10 (K2). (1) Come l'MWRR prima di D-MF5: la card calcola il TWRR solo con NAV > 0
+  (`portfolio_service.py`, `get_summary`), la linea (`calculate_twrr_series`) no: col portafoglio svuotato la card dice
+  «—» e la linea resta piatta a −50 %. (2) Come l'MWRR prima di N54: il ROI semplice della card
+  (`period_net_invested = Σ −flussi`) e la sua linea (`calculate_simple_roi_series`) vedono 0 di capitale quando
+  l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
+  anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
+  MF, sezione «Ondata 1b», K2.
