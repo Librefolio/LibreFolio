@@ -937,6 +937,17 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
 
+def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's retry of deferred items and its backoff after a job that raises (lot Z7b)."""
+    print_section("Services: Scheduler Retry and Backoff")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (due_current_price, due_history_sync, run_due_jobs, JobOutcome)")
+    print_info(
+        "Tests: SBO-001..012 — next_attempt_at holds a job back, retry_at makes it due before its regular round, unreadable timestamps absent; a job or its save that raises: failure recorded and saved, backoff 60 s doubling to its cap, each job its own, reset by a run that ends; outcomes: items_deferred, retry_at"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
+    return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -1741,7 +1752,13 @@ Note: No backend server required.
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
-    add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
+    add_test(
+        cat,
+        "scheduler-state",
+        services_scheduler_state,
+        name="Scheduler State",
+        desc="Load/save/atomic write, corrupt/partial JSON recovery; the fields of lot Z7b (last_items_deferred, retry_at, consecutive_failures, next_attempt_at) saved, defaulted in an older file, a newer file's unknown keys ignored",
+    )
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
@@ -1760,10 +1777,22 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-backoff",
+        services_scheduler_backoff,
+        name="Scheduler Retry and Backoff",
+        desc="Lot Z7b. Due rules first: next_attempt_at ahead holds a job back (even past its retry_at or an overdue round), else retry_at reached makes it due before its regular round (a history sync deferred at 23:00 retries at 23:0x), else today's rule; unreadable timestamps absent. run_due_jobs: a job that raises keeps its previous JobState (last_run_at too) with consecutive_failures+1, next_attempt_at now+backoff, error by class name, saved and logged; a save that raises after the job records it on the job's fresh JobState; backoff 60 s doubling, capped at 1 h for history and at the price frequency for the price; each job its own; a run that ends resets. JobOutcome items_deferred and retry_at: copied, next attempt of a failure, pending time of a job not due, whatever the reason",
+        # PURE: no DB, no server, no lane port, no network. The due functions are called as they are; for run_due_jobs every
+        # other collaborator (switches, leader, settings, state store, jobs, utc_now, settle_clock) is a fake set with
+        # monkeypatch, the state store in memory, and the process's ACTIVITY is replaced only through monkeypatch by an
+        # Activity on a fake clock. Nothing sleeps: every moment is a fake wall clock's.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
-        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled); lot Z7b: RATE_LIMITED items deferred whatever their status or value, retry_at at the shortest pause, a run that ends resets the failure backoff, deferred marks and counters in the job log",
         # READ, not write-global: the three bulk entry points that rewrite prices for
         # every active asset and every FX route are replaced by doubles, so only the
         # two SELECTs reach the shared DB. The job log is redirected to a per-test
