@@ -3607,3 +3607,14 @@ native-cash revaluation decision («stays open») and the native-cash entity (no
 line with the resolved problem page.
 Updated: [[concepts/pre-frame-frame-separation]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] file | Tailwind 4 sorts same-property utilities by name
+Workstream T, lot I1 of the colour programme (the selects, night of 15–16/10): moving `SimpleSelect`'s trigger onto the
+roles kept the idle border always on and added the open one conditionally, and the open border vanished. Tailwind 4
+emits two base utilities of one property sorted by name, so `border-lf-input` came after `border-lf-focus`; the legacy
+pair had worked by luck. The page covers the cause (variant order and specificity in 4.1.18, the `:where()` dark
+variant), the rule (one property, one ternary; a state that must beat a caller is a variant), the same logic across
+class props and `<style>` (`ModalBase`, `AssetCurrencyChangeModal`), and the prevention. The rule is also rule 8 of the
+`theme-roles` skill.
+Filed: [[problems/tailwind4-same-property-utilities-sorted-by-name]].
+Graph: not updated; no graphify run while the machine is reserved for the gallery (coordinator, 16/10).
