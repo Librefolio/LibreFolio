@@ -3764,7 +3764,8 @@ sulla base `23f6578f3`.
   per due contenitori sulla stessa cartella dati (spazi di PID diversi). Cura: un'identità senza orologio su Linux
   (`starttime` in tick da `/proc/<pid>/stat`, più `/proc/sys/kernel/random/boot_id`).
   Dettagli: piano 07, §13, «B3 — revisione di sicurezza di metà percorso».
-- **B-13 · I totali di controllo di J (CP-15) nel manifest, nella prova su copia e nell'e2e** — medio; B, 16/10 (B3).
+- ✅ **B-13 · I totali di controllo di J (CP-15) nel manifest, nella prova su copia e nell'e2e** — medio; B, 16/10 (B3).
+  **Fatto il 16/10** nel lotto B-13 (commit del coordinatore dopo l'handoff delle 08:40).
   CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
   il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
   `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
