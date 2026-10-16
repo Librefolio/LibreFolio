@@ -929,9 +929,9 @@
     </div>
 
     {#if loading}
-        <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+        <div class="absolute inset-0 z-10 bg-lf-panel rounded animate-pulse"></div>
     {:else if data.length === 0}
-        <div class="absolute inset-0 z-10 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+        <div class="absolute inset-0 z-10 flex items-center justify-center text-lf-muted text-sm">
             {$_('common.noData')}
         </div>
     {/if}

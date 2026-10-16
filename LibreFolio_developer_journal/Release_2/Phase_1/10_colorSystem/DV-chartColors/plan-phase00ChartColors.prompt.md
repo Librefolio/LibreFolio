@@ -1158,7 +1158,47 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   `git diff --check` pulito.
   > - `--update`: m1 7.901 → 7.142 (−759 = 763 − 4), m2 54 invariato. 29 file escono a zero, `RiskReturnLevel` resta a 4
   >   (la legenda, punto 2.5); poi `--check` pulito.
-- [ ] W6-b: idem.
+- [x] ✅ (16/10/2026) W6-b: conversione, ritocchi, `--update`/`--check`; checkpoint consegnato senza le Vitest, come
+  W6-a.
+  > **Note implementazione** (16/10, 11:31–11:35), sulla base `622683733` (W6-a). Il convertitore ha cambiato 95
+  > stringhe in 10 file. Ne ha lasciate 5, tutte per decisione:
+  > - **`KpiSection`, 3 righe (6 classi):** le catene verso `KpiMetricBar`, ancora legacy: `valueColor`@354 e le barre
+  >   @405 (valore contabile, blu) e @417 (liquidità, smeraldo).
+  >   - Le prende T, che ha `ui/display` (coordinatore, 10:58).
+  >   - La barra della liquidità dipende anche dal punto 2.2.
+  > - **`OtherPeriodEffectsTable`, 2 righe (8 classi):** i badge «Income» e «Cost» restano legacy (coordinatore, 10:58).
+  >   - Migrano con `SIGN_BADGE` di T (DV-9).
+  >   - L'elemento non resta misto: la parte fissa della classe non ha colori, e il ramo neutro `default` passa ai
+  >     ruoli (`bg-lf-panel text-lf-secondary`).
+  >
+  > **Ritocchi a mano:**
+  > - **Filtro dei broker della dashboard** (scelta 4, da rivedere):
+  >   - attivo → `bg-lf-selected text-lf-link border-lf-focus`;
+  >   - spento → `bg-lf-card text-lf-secondary border-lf-input hover:bg-lf-hover`;
+  >   - voce scelta e spunta → `text-lf-link`.
+  >   - Il convertitore aveva messo le terne `info`, dal blu di oggi.
+  > - **Il menu a tendina del filtro** (`fixed z-50`, regola 9) → `border-lf-raised` e `shadow-lf-shadow`. I bottoni
+  >   «tutti/nessuno» dentro sono pieni secondari, `bg-lf-panel hover:bg-lf-neutral`, come dice lo skill.
+  > - **Card di pagina** (regola 9) → `shadow-sm shadow-lf-shadow-card`, come T: `GrowthChart`, `KpiCard`, le 3 card di
+  >   `KpiSection` e 3 card della pagina (liquidità, caricamento del rischio).
+  > - **Regola 3:** `text-lf-primary` sulla radice della pagina e su `GrowthChart`, `KpiCard`, `KpiSection` e
+  >   `PerformanceChart`, che la pagina del broker monta anche lei.
+  > - **Badge di stato di `ContributionTable`:** «aperta» → `bg-lf-success-soft text-lf-success-on-soft`, come
+  >   `STATUS_TONES.fileSet.set`; «venduta tutta» → `bg-lf-panel text-lf-secondary`.
+  >
+  > **Controlli:**
+  > - segmenti di `GrowthChart` (D-T16);
+  > - tooltip dei KPI: `tooltipRows` con le emoji, nessun colore dentro;
+  > - regola 4: 0 casi;
+  > - `dark:` senza metà chiara: 0;
+  > - test che asseriscono classi: nessuno.
+  >
+  > - Prettier ha riscritto 3 file (`ExposureTreemap`, `GrowthChart`, `+page`), puliti a `HEAD`, solo negli elementi
+  >   toccati. Compilatore Svelte 10 file, 0 avvisi; `git diff --check` pulito.
+  > - `--update`: m1 7.142 → 6.861 (−281 = 295 − 14), m2 54 invariato. 8 file escono a zero, `KpiSection` resta a 6 e
+  >   `OtherPeriodEffectsTable` a 8; poi `--check` pulito.
+  > - **Vitest:** le 92 collegate a W6-a e W6-b (55 + 38, una in comune) girano appena il carico scende sotto 50, prima
+  >   dello slot. Alle 11:33 era 73.
 - [ ] Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i gate Vitest
   `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
   pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`.
