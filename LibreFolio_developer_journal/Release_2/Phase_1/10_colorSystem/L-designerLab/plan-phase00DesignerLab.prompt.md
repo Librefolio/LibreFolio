@@ -1787,3 +1787,16 @@ Le quattro fasi previste:
 > **Nota sui numeri attesi:** `custom` è salito a 1500, non 1375, perché il target ha aggiunto classi (T, Y4b e gli altri); la parità resta identica.
 
 **✅ Passo 8 — checkpoint (16/10, 03:5x):** handoff al coordinatore, FROZEN, con le righe «dove guardarlo». Delta: `scan-colors.mjs` (la correzione di una riga), questo piano, la sezione L del backlog.
+> **Commit del coordinatore** `fca2e06eb` (3 file). **Merge di base per l'ingresso** `995bb25bd`, con padri `fca2e06eb` e il target `d0efca910`, che porta il lotto di T (i 3 ruoli `-on-inverse` di Q10), H CP7b-1 e J CP-6. Nessun cambio sui miei path; `ChartRole` invariato, quindi nulla da toccare nell'E2E.
+>
+> **Controllo leggero sotto `nice -n 10` (03:54–03:55, script `/tmp/libreFolio_L16_light_995.sh`):**
+>
+> | Prova | Esito |
+> |---|---|
+> | `git diff --check` (merge e albero) | 0 righe |
+> | unitari del Lab + `chartCategories.test.ts` | 21 file, **712/712** |
+> | `theme-roles --check` | pulito |
+> | parità scanner/Python | **identica**: tw 9520, custom 1931, arbitrary 12, hex 1349, fn 243, var_uses 1389 (872 distinte), var_defs 1097, files 1229 |
+> | categorie | 27, con 54 letterali |
+>
+> I conteggi si spostano per il lotto di T (`custom` 1500 → 1931, `tw` 10270 → 9520). Porta libera, HEAD invariata. Niente E2E e niente build, come chiesto.
