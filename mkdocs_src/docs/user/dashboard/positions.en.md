@@ -42,7 +42,7 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 | **Qty** | Shares, units or coins held |
 | **Price** *(hidden)* | The unit price used: the market price, or the price of your last purchase or sale when there is no quote; `—` for an asset valued at what it cost you, which has no price at all → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | **Avg. Cost** *(hidden)* | Average purchase price per unit, each purchase at its own date's exchange rate → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
-| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open |
+| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open at this broker; a stock split keeps the dates |
 | **Brokers** | The broker holding the position |
 
 **How to read it**

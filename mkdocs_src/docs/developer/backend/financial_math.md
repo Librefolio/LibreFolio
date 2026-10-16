@@ -54,6 +54,7 @@ backend/app/services/financial_math/
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
+├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result

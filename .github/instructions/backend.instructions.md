@@ -82,6 +82,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows and the usable ratio | `services/financial_math/splits.py` |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
+| Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
 | Risk metrics and optimization | `services/risk/quant/` |
