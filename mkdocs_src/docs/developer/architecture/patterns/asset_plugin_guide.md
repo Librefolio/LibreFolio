@@ -196,7 +196,10 @@ overrides:
 
 `GET /assets/provider` shows each provider's effective `tier` and `priority`. The non-streaming search
 (`GET /assets/provider/search`) returns the results in this order; the streaming one sends them as they arrive, and
-the frontend groups them by tier.
+the frontend orders them the same way as they land (`frontend/src/lib/components/assets/assetSearchSections.ts`,
+from the `tier` and `priority` of that list): premium first, then lower priority, with a stable sort, so with every
+provider at its defaults the list keeps the order of arrival. Only when a premium provider took part in the search
+does the dropdown split it into a **Premium** section and a closed community section; otherwise it is one list.
 
 ### 🔌 Provider Support
 
