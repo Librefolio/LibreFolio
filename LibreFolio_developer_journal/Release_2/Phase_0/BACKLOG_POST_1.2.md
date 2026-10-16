@@ -4142,7 +4142,8 @@ da Y il 15/10.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
 - **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
-  (riscrittura di Y-12).
+  (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
+  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca.
   - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
     fanno `toHaveClass(/selected/)` sulla riga.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
