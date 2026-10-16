@@ -501,41 +501,41 @@
     }
 </script>
 
-<div class="csv-editor rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden bg-white dark:bg-slate-800">
+<div class="csv-editor rounded-lg border border-lf-subtle overflow-hidden bg-lf-field text-lf-primary">
     <!-- Status bar -->
-    <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-600 text-xs">
-        <span class="text-gray-500 dark:text-gray-400">
+    <div class="flex items-center justify-between px-3 py-1.5 bg-lf-panel border-b border-lf-subtle text-xs">
+        <span class="text-lf-muted">
             {validDataCount} valid row{validDataCount !== 1 ? 's' : ''}
             {#if errorCount > 0}
-                <span class="text-red-500 dark:text-red-400 ml-2">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+                <span class="text-lf-danger ml-2" data-state="invalid">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
             {/if}
             {#if hasDuplicates}
-                <span class="text-amber-500 dark:text-amber-400 ml-2">• duplicate {identityLabel}s</span>
+                <span class="text-lf-warning ml-2">• duplicate {identityLabel}s</span>
             {/if}
         </span>
-        <span class="inline-flex items-center gap-1.5 text-gray-400 dark:text-gray-500 text-[10px]">
-            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">{detectedSeparator}</kbd>
-            · {$t('csvImport.decimal')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">.</kbd>
-            / <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">,</kbd>
-            · {$t('csvImport.thousands')} <kbd class="px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 font-mono text-xs text-gray-500 dark:text-gray-400">_</kbd>
+        <span class="inline-flex items-center gap-1.5 text-lf-muted text-[10px]">
+            {$t('csvImport.sep')} <kbd class="px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card font-mono text-xs text-lf-muted">{detectedSeparator}</kbd>
+            · {$t('csvImport.decimal')} <kbd class="px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card font-mono text-xs text-lf-muted">.</kbd>
+            / <kbd class="px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card font-mono text-xs text-lf-muted">,</kbd>
+            · {$t('csvImport.thousands')} <kbd class="px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card font-mono text-xs text-lf-muted">_</kbd>
         </span>
     </div>
 
     <!-- Editor area -->
     <div class="flex overflow-hidden" style="min-height: {minHeight};">
         <!-- Line numbers -->
-        <div bind:this={lineNumbersEl} class="flex-shrink-0 w-10 bg-gray-50 dark:bg-slate-700/30 border-r border-gray-200 dark:border-slate-600 overflow-hidden select-none">
+        <div bind:this={lineNumbersEl} class="flex-shrink-0 w-10 bg-lf-panel border-r border-lf-subtle overflow-hidden select-none">
             {#each validations as v}
                 <div
                     class="h-5 flex items-center justify-end pr-2 text-xs font-mono leading-5
-                        {v.duplicate ? 'bg-amber-50 dark:bg-amber-900/20' : v.isHeader && v.valid ? 'bg-emerald-50 dark:bg-emerald-900/10' : v.valid ? '' : 'bg-red-50 dark:bg-red-900/20'}"
+                        {v.duplicate ? 'bg-lf-warning-soft' : v.isHeader && v.valid ? 'bg-lf-success-soft' : v.valid ? '' : 'bg-lf-danger-soft'}"
                 >
                     {#if v.error}
                         <Tooltip text={v.error} position="right">
-                            <span class={v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}>{v.lineNumber}</span>
+                            <span class={v.parsed && !v.duplicate ? 'text-lf-success' : v.duplicate ? 'text-lf-warning' : v.isHeader && v.valid ? 'text-lf-success' : v.valid ? 'text-lf-muted' : 'text-lf-danger'}>{v.lineNumber}</span>
                         </Tooltip>
                     {:else}
-                        <span class={v.parsed && !v.duplicate ? 'text-emerald-500' : v.duplicate ? 'text-amber-500' : v.isHeader && v.valid ? 'text-emerald-600 dark:text-emerald-400' : v.valid ? 'text-gray-400 dark:text-gray-500' : 'text-red-500'}>{v.lineNumber}</span>
+                        <span class={v.parsed && !v.duplicate ? 'text-lf-success' : v.duplicate ? 'text-lf-warning' : v.isHeader && v.valid ? 'text-lf-success' : v.valid ? 'text-lf-muted' : 'text-lf-danger'}>{v.lineNumber}</span>
                     {/if}
                 </div>
             {/each}
@@ -546,18 +546,18 @@
             {#each validations as v}
                 <div class="h-5 flex items-center justify-center text-xs leading-5">
                     {#if v.isHeader && v.valid}
-                        <span class="text-emerald-600 dark:text-emerald-400">H</span>
+                        <span class="text-lf-success">H</span>
                     {:else if v.parsed && !v.duplicate}
-                        <span class="text-emerald-500">✓</span>
+                        <span class="text-lf-success" data-state="valid">✓</span>
                     {:else if v.duplicate}
-                        <span class="text-amber-500">⚠</span>
+                        <span class="text-lf-warning">⚠</span>
                     {:else if !v.valid}
                         {#if v.error}
                             <Tooltip text={v.error} position="right">
-                                <span class="text-red-500">✗</span>
+                                <span class="text-lf-danger" data-state="invalid">✗</span>
                             </Tooltip>
                         {:else}
-                            <span class="text-red-500">✗</span>
+                            <span class="text-lf-danger" data-state="invalid">✗</span>
                         {/if}
                     {/if}
                 </div>
@@ -569,7 +569,7 @@
             autocomplete="off"
             bind:this={textareaEl}
             bind:value
-            class="flex-1 font-mono text-xs leading-5 p-0 pl-2 border-0 bg-transparent text-gray-700 dark:text-gray-300 focus:ring-0 resize-y overflow-y-auto"
+            class="flex-1 font-mono text-xs leading-5 p-0 pl-2 border-0 bg-transparent text-lf-primary placeholder:text-lf-placeholder focus:ring-0 resize-y overflow-y-auto"
             data-testid="csv-editor-input"
             oninput={handleInput}
             onscroll={handleScroll}
