@@ -3943,3 +3943,116 @@ vengono dal catalogo generato alle 18:27.
 >   - `git diff --check` pulito; la porta 6189 è libera.
 > - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
 >   sul W6-d.
+- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `daa2001ea` (fix) e `7c36f2129` (journal).
+  `assets/[id]` aspetta il lotto A di Z.
+
+### MF-P · contratti dei campi per il resto di Y12b (22:06–22:12, sola lettura)
+
+> **Note implementazione**.
+> - Il coordinatore (22:06): R17, W8 e V11 arrivano con MF-P (ondata 3 di MF); P4 dopo MF-A (ondata 2, che parte
+>   ora); P5 dopo MF-E, che aspetta CP-7b di J. I contratti e le date li concordo con MF direttamente.
+> - Fonti:
+>   - il piano MF in dev, letto con `git show dev_release2:…` e copiato in `files/mf_plan_dev.md`: MF-P è alla riga
+>     328, D-MF6 alla 381;
+>   - le righe di oggi del frontend.
+> - **Mandato a MF** (session `dfb94070…`), voce per voce: cosa calcola oggi il frontend e la mia proposta.
+>   - **R17**: `pnl_change_1d`, `…_vs_total_pnl_percent`, `…_vs_nav_percent` e `timing_effect_percent` in
+>     `PortfolioSummary`. Il giorno prima è il punto precedente della serie, con il segno della variazione e null su
+>     base 0.
+>   - **W8**: un valore di G/L % per ogni nodo broker e (broker, tipo) della treemap.
+>   - **P4**: `net_percent_of_start` negli item di `positions_contribution`, dopo MF-A.
+>   - **V11**: `opening_value` negli eventi BUY.
+>   - **P5**: con D-MF6(b) il piè della tabella somma le righe visibili, quindi è un aggregato interattivo da
+>     dichiarare. Un campo serve solo per un totale fisso di tutti i lotti. Anche il ribasamento in % di
+>     `lotWacPriceChartHelpers.ts:142` è una scala da dichiarare.
+>   - Ho chiesto le date.
+
+### Y-18 · indicatore proprio per le candele (analisi per le domande del developer, 22:12)
+
+> **Note implementazione** (sola lettura).
+> - **Oggi**:
+>   - `GrowthChart` ha uno scheletro solo per la storia: `{#if loading}` disegna
+>     `absolute inset-0 z-10 bg-lf-panel rounded animate-pulse` e nasconde il contenitore del grafico (righe
+>     1467–1474);
+>   - nella vista Candele, finché `pnlCandles` è null, il grafico mostra gli assi senza candele, e nessun indicatore
+>     lo segnala;
+>   - entrambe le pagine hanno già `pnlCandlesLoading` (Dashboard alla riga 100, broker alla 92), ma non lo passano al
+>     grafico;
+>   - dopo N55, con un passaggio diretto alle Candele a pagina ferma, il pulsante della pagina non gira più.
+> - **Proposta A (consigliata)**:
+>   - una prop `candlesLoading?: boolean`, passata dalle due pagine (`{pnlCandlesLoading}`);
+>   - con vista P&L → Candele, `candlesLoading` vero e `pnlCandles == null`, lo stesso scheletro della storia
+>     (`bg-lf-panel animate-pulse`): nessun colore nuovo;
+>   - `aria-busy` sul contenitore (riga 1377) e un `data-testid="growth-candles-loading"`;
+>   - il testo per i lettori di schermo è `common.loading`, una chiave che esiste già.
+>   - Costo: circa 1–1,5 ore. Un test Vitest in `GrowthChart.test.ts` e un controllo E2E nel test N55 della Dashboard,
+>     mentre la richiesta delle candele è trattenuta: `page-busy.spec.ts` si può toccare dopo l'ingresso di Z.
+>   - `GrowthChart` è nell'area DV: prima lo annuncio al coordinatore.
+> - **Proposta B**: un piccolo `LoadingSpinner` accanto al pulsante «Candele». È meno visibile, e il grafico vuoto
+>   resta.
+> - **Domanda collegata (P3)**: durante un ricaricamento di sfondo, `applyReport` e `applyOverview` azzerano
+>   `pnlCandles`, quindi oggi le candele spariscono fino alla nuova richiesta. Con A al loro posto comparirebbe lo
+>   scheletro. Invece la documentazione utente dice che durante un ricalcolo di sfondo «le cifre restano». In
+>   alternativa si possono tenere le candele vecchie finché arrivano le nuove, ma questo tocca il ricaricamento di Z-13
+>   e le due pagine: è una decisione a parte.
+- **22:12, la risposta di MF sui contratti di MF-P**:
+  - **Unità**: frazione ovunque (0.05 = 5 %), come oggi `twrr_percent`, `gain_loss_percent` e `period_pnl_percent`;
+    SafeDecimal come stringa; null si legge «—».
+  - **R17**, in `PortfolioSummary`: `pnl_change_1d: Currency|null`, `pnl_change_1d_vs_total_pnl_percent`,
+    `pnl_change_1d_vs_nav_percent` e `timing_effect_percent`.
+    - «Il giorno prima» è **D−1 di calendario** (`state_as_of(D−1)`), non il punto precedente della serie: se il
+      report campiona, oggi il frontend confronta due punti lontani.
+    - Le percentuali sono Δ/|base|; null con base 0 o senza un D−1.
+    - Il timing è null se manca l'MWRR, che dopo D-MF5/N54 può mancare.
+  - **W8**: `summary.holding_groups: list[{broker_id, asset_type: str|null, gain_loss: Currency|null,
+    gain_loss_percent: str|null}]`, dove `asset_type` null è il livello del broker.
+    - Si contano solo i titoli con valore e G/L entrambi noti.
+    - Oggi un titolo con G/L nullo mette il suo valore nella base come se fosse costo: è un 🐛 per il CHANGELOG.
+  - **P4**: nessun campo nuovo. Si usa `period_pnl_percent` (= `period_pnl/|start_value|`) così com'è; con MF-A i
+    valori migliorano.
+  - **V11**: `opening_value: Currency|null` sui BUY, nella valuta di `unit_price`. Arriva con MF-E, dopo CP-7b di J.
+  - **P5**:
+    - il piè della tabella sulle righe visibili e il ribasamento di `lotWacPriceChartHelpers.ts:142` si dichiarano nel
+      codice;
+    - il totale fisso c'è già (`LotSummarySchema`).
+  - **Date**: R17 e W8 il 17/10 mattina; P4 subito; V11 ed eventuali totali di P5 verso il 18/10. MF mi manda lo schema
+    dopo `api sync`, per i rossi.
+  - **La sua domanda sui periodi fissi dell'asset (1G, 1S…)**: non sono in Y12b. Stanno in
+    `lib/utils/assetPriceDerived.ts:193-196` (`computePeriodDelta`, lista degli asset) e in
+    `routes/(app)/fx/+page.svelte:236-240`, area di X. Gliel'ho risposto.
+
+### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `7c36f2129`) — ✅ 22:31
+
+> **Note implementazione**.
+> - **Analisi**: nello schema le due durate sono `int` obbligatori e ≥ 0, e il riepilogo controlla la coerenza fra
+>   durata e stato del recupero.
+>   - Con dati validi la profondità e la durata vengono dalla stessa fonte.
+>   - Si mescolano solo quando c'è il riepilogo ma la sua profondità ha il segno contrario, che `lossMagnitude` legge
+>     come assente.
+> - **Correzione**, una riga (`files/patches/y19_levelHelpers.py`):
+>   `durationDays: summaryDepth !== null ? finite(summary…) : finite(kpi…)`. Lo stesso schema vale per il recupero da
+>   Y12b. Non sposta i numeri di riga citati da `risk-lab.md`.
+> - **Rosso**: `test-author` scrive un caso con la profondità del riepilogo di segno contrario e un caso di guardia in
+>   cui vince un riepilogo valido.
+> - **Ciclo**: `files/scripts/y19_cycle.sh`, cioè rosso, patch, verde, Prettier, svelte-check e core, ogni passo solo
+>   con il carico sotto 50. Niente E2E.
+> - **`test-author`** (dalle 22:13 alle 22:15, `levelHelpers.test.ts`), due casi subito dopo quello Y12b del segno
+>   contrario:
+>   - il rosso: la profondità del riepilogo ha il segno sbagliato (`0.3`, durata 99), e il KPI ha `−0.4` con durata 30.
+>     Ci si aspettano una perdita di 0.4 e una durata di 30;
+>   - la guardia: un riepilogo valido (`−0.25`, durata 12) accanto a un KPI più profondo. Profondità e durata del
+>     riepilogo vincono insieme, cioè 0.25 e 12. Copre il verso opposto del test che già c'era, dove il KPI era meno
+>     profondo.
+> - **Ciclo** (`files/scripts/y19_cycle.sh`, dalle 22:19 alle 22:31, ogni passo solo con il carico sotto 50):
+>   - **rosso**: risk-levels-unit 1 fallito su 513, cioè proprio il caso atteso («expected 99 to be 30»);
+>   - la patch di una riga;
+>   - **verde**: 513/513;
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; core 6 830/6 830; `git diff --check` pulito; la porta 6189 è
+>     libera.
+> - Nel BACKLOG Y-19 è ✅. Nessuna E2E, perché le stub sono valide e il comportamento resta quello.
+- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 1b46178bd`), sui due casi «reload in background»
+  di `page-busy.spec.ts`:
+  - durante la richiesta trattenuta la radice della Dashboard deve essere `data-busy="false"` (Z-18);
+  - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
+  - `holds` esiste nel test.
+  - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
