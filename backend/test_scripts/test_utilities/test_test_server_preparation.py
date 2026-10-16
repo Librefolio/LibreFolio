@@ -41,7 +41,12 @@ The contracts held here:
   ``stop()`` the log's path and the last 30 lines this start wrote (fewer when it wrote fewer, ``(no output)`` when it
   wrote none, whatever earlier starts wrote), read by ``log_tail()`` from the file's size at the open and from at most
   its last 64 KiB, a line cut by that limit left out, bytes that are not UTF-8 replaced; without a log, under
-  ``--verbose`` and after a start that succeeds, no tail comes out.
+  ``--verbose`` and after a start that succeeds, no tail comes out;
+* ``cmd_fe_build`` takes the fingerprint of the Tool codegen inputs' listing (``tool_contract_fingerprint``, imported
+  with ``record_tool_contract_inputs`` from ``scripts.cli_base``, whose ``check_frontend_needs_build()`` computes the
+  one it compares) after its node_modules and JS cache checks, right before ``cmd_api_sync`` generates the codecs from
+  those inputs, and records it only once the npm build answered 0: after a missing tool, a failed step or a failed
+  build nothing is recorded (H-24r).
 
 PURE — no server, no database, no network. Every seam (the build steps, ``subprocess``, ``os.execvpe``, signals,
 lsof, health, the clock, the CPU count, the build step's ``sys`` streams) is faked, the ``node_modules/.bin`` layouts
@@ -64,6 +69,7 @@ from types import SimpleNamespace
 import pytest
 
 import dev
+import scripts.cli_base as cli_base
 from scripts.test_runner import _common as test_runner_common
 from scripts.test_runner import _server as test_runner_server
 
@@ -1427,3 +1433,119 @@ class TestSharedBackendLogWithARealChild:
         named_at = printed.find(str(log_path), printed.index(failure_line))
         assert named_at >= 0, f"H-12: no line naming {log_path} after {failure_line!r}: {printed!r}"
         assert CHILD_FAILURE in printed[named_at:], f"H-12: the tail does not bring back the child's stderr: {printed!r}"
+
+
+# ── Contract 8 — `cmd_fe_build` records the listing of the Tool codegen inputs it built from (H-24r) ──
+#
+# `check_frontend_needs_build()` compares the Tool codegen inputs' listing with the one the last successful build
+# recorded in `frontend/build/.tool-contract-inputs` (`scripts/cli_base.py`): a folder's mtime cannot tell a `.DS_Store`
+# the Finder dropped from a `.py` that was removed. The build takes the listing's fingerprint right before `cmd_api_sync`
+# generates the codecs from those inputs — a file added while the build runs is not in it, so the next check still finds
+# the build stale — and records it only once the npm build answered 0: after a missing tool, a failed step or a failed
+# build nothing is recorded. Every step is stubbed, and the two names are replaced only after a barrier proves dev.py
+# imports them: nothing here ever runs a real step, nor writes into the real `frontend/build/`.
+
+#: What the stub fingerprint answers: recognisable wherever it travels.
+TOOL_INPUTS_SENTINEL = "sentinel-fingerprint-of-the-tool-codegen-inputs"
+#: The two names dev.py imports from ``scripts.cli_base`` to record the listing.
+TOOL_CONTRACT_RECORDING = ("tool_contract_fingerprint", "record_tool_contract_inputs")
+#: The npm build ``cmd_fe_build`` runs, by its ``debug`` flag; svelte-check runs before it, its result ignored.
+NPM_BUILD_COMMANDS = {True: ["npm", "run", "build:debug"], False: ["npm", "run", "build"]}
+
+
+def require_tool_contract_recording() -> None:
+    """The barrier: a dev.py without the two names fails the test here, before anything is replaced or run."""
+    for name in TOOL_CONTRACT_RECORDING:
+        if not hasattr(dev, name):
+            pytest.fail(f"H-24r: dev.py does not import {name}")
+
+
+def stub_fe_build_steps(monkeypatch, *, failing: str | None = None) -> SimpleNamespace:
+    """Replace every step of ``cmd_fe_build`` with a recording stub, after the barrier; the step named ``failing`` returns 1.
+
+    ``events`` holds each step's name in the order it ran (svelte-check as ``"svelte-check"``, the npm build as
+    ``"npm build"``), ``fingerprinted`` the root of each fingerprint taken, ``recorded`` the arguments of each record.
+    Any other command fails the test, and so does a call that reached cli_base's own two functions around dev.py's
+    imports.
+    """
+    require_tool_contract_recording()
+    calls = SimpleNamespace(events=[], fingerprinted=[], recorded=[])
+
+    def step(name: str, result=0):
+        def run(*_args, **_kwargs):
+            calls.events.append(name)
+            return 1 if name == failing else result
+
+        return run
+
+    def tool_contract_fingerprint(project_root):
+        calls.events.append("tool_contract_fingerprint")
+        calls.fingerprinted.append(project_root)
+        return TOOL_INPUTS_SENTINEL
+
+    def record_tool_contract_inputs(project_root, fingerprint):
+        calls.events.append("record_tool_contract_inputs")
+        calls.recorded.append((project_root, fingerprint))
+
+    def run_command_live(command, *_args, **_kwargs):
+        if list(command[:2]) == ["npx", "svelte-check"]:
+            return step("svelte-check")()
+        if list(command) in NPM_BUILD_COMMANDS.values():
+            return step("npm build")()
+        pytest.fail(f"cmd_fe_build ran a command this test does not expect: {command}")
+
+    for name in TOOL_CONTRACT_RECORDING:
+        forbid(monkeypatch, cli_base, name, f"cmd_fe_build reached cli_base.{name} around dev.py's import of it", raising=False)
+    for name in ("require_frontend_dependencies", "update_js_cache", "cmd_api_sync", "generate_favicon", "_write_frontend_build_mode_marker"):
+        monkeypatch.setattr(dev, name, step(name))
+    monkeypatch.setattr(dev.i18n_catalog, "build", step("i18n_catalog.build"))
+    monkeypatch.setattr(dev, "run_command_live", run_command_live)
+    monkeypatch.setattr(dev, "tool_contract_fingerprint", tool_contract_fingerprint)
+    monkeypatch.setattr(dev, "record_tool_contract_inputs", record_tool_contract_inputs)
+    return calls
+
+
+class TestFrontendBuildRecordsTheToolContractInputs:
+    """``cmd_fe_build`` fingerprints the Tool codegen inputs before the API sync, and records it after a successful build only."""
+
+    def test_dev_records_with_the_functions_the_staleness_check_compares_with(self):
+        # One fingerprint on both sides: the check computes the current listing's with cli_base's function, so a function
+        # of dev.py's own could record a value the check never matches, and every build would look stale.
+        require_tool_contract_recording()
+
+        for name in TOOL_CONTRACT_RECORDING:
+            assert getattr(dev, name) is getattr(cli_base, name, None), f"H-24r: dev.{name} is not scripts.cli_base.{name}"
+
+    @pytest.mark.parametrize("debug", [True, False], ids=["debug-build", "production-build"])
+    def test_the_fingerprint_is_taken_before_the_api_sync_and_recorded_after_the_build(self, monkeypatch, debug):
+        calls = stub_fe_build_steps(monkeypatch)
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=debug)) == 0
+
+        # Once, after the checks that may stop the build, right before cmd_api_sync generates the codecs.
+        assert calls.events[:4] == ["require_frontend_dependencies", "update_js_cache", "tool_contract_fingerprint", "cmd_api_sync"]
+        assert calls.fingerprinted == [dev.PROJECT_ROOT]
+        # Once, that very fingerprint, after the npm build answered 0.
+        assert calls.recorded == [(dev.PROJECT_ROOT, TOOL_INPUTS_SENTINEL)]
+        assert calls.events.index("record_tool_contract_inputs") > calls.events.index("npm build")
+
+    @pytest.mark.parametrize("failing", ["update_js_cache", "cmd_api_sync", "i18n_catalog.build", "npm build"])
+    def test_a_failed_step_or_build_records_nothing(self, monkeypatch, failing):
+        calls = stub_fe_build_steps(monkeypatch, failing=failing)
+        record_errors(monkeypatch, dev)
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=True)) == 1
+
+        assert failing in calls.events, f"premise: {failing} ran, and failed"
+        assert calls.recorded == [], f"H-24r: the listing was recorded though {failing} failed: only a successful build may record it"
+
+    def test_a_missing_frontend_tool_takes_no_fingerprint_and_records_nothing(self, monkeypatch, tmp_path):
+        # The real node_modules check, on a tree without node_modules: the build stops before every step, the
+        # fingerprint and the record included.
+        require_tool_contract_recording()
+        frontend_node_bin(monkeypatch, tmp_path, installed=False)
+        recording_steps = [(dev, name) for name in (*TOOL_CONTRACT_RECORDING, "_write_frontend_build_mode_marker")]
+        forbid_steps(monkeypatch, (*FE_BUILD_STEPS, *recording_steps), "cmd_fe_build went past a failed node_modules check")
+        record_errors(monkeypatch, dev)
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=True)) == 1

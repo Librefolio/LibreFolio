@@ -5057,3 +5057,99 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 >   it again» con parole sue, senza l'ordine di H-3. Va segnalato al coordinatore.
 > - **Prove** (carico ≤ 50): `i18n check` → 4924 chiavi, rigoroso; Vitest `features/plugin-settings/` → **304/304**
 >   (nessun test confronta il testo); `mkdocs build` stretto → verde dopo la cura.
+
+**X-R22 committato ed entrato** (coordinatore, 00:38): `375d09db3` (fix) e `4576a6968` (journal), dev `618563949`, il
+mio ramo portato avanti con un fast-forward. Il coordinatore ha controllato la citazione nella pagina di H e passa a B la
+nota su `backup_restore.en.md:33`.
+
+### X-R37 — le 4 note di E su P20 ✅ (2026-10-17, 00:40–01:15; consegnato al coordinatore)
+
+**Contratto** (coordinatore 00:20, decisione notturna N61 compresa):
+1. `supportChannel(value, {githubFallback})` legge l'indirizzo già analizzato: una pagina http(s) torna come `url.href`
+   normalizzato, così `https:host` non si risolve più sull'istanza; un indirizzo con utente o password conta come
+   mancante.
+2. **N61**: il ripiego sulla issue pubblica di GitHub solo con la configurazione letta e il profilo `selfhosted`. Su
+   `managed` senza un indirizzo valido, o con `/system/instance` non letto, la riga della segnalazione non compare: una
+   issue pubblica pubblicherebbe `managed`, i codici dei provider e gli identificativi. Un indirizzo valido funziona sui
+   due profili.
+3. Utente o password nell'indirizzo → mancante (punto 1).
+4. La doc dice che in modifica il rapporto porta anche gli identificativi dell'asset, la sua valuta e il suo tipo.
+
+> **Note implementazione**:
+> - **I rossi** (test-author, scritti alle 00:20–00:39):
+>   - `assetSearchReport.test.ts`: il blocco di `supportChannel` riscritto, da 44 a 56 casi, ognuno con e senza
+>     ripiego, più la coppia che mostra il difetto (`https:host` come href si risolve su un percorso dell'istanza);
+>   - `AssetSearchAutocomplete.test.ts`: 11 casi nuovi (ASA-S1–S8): managed senza indirizzo in ogni stato,
+>     configurazione non letta (richiesta fallita, oppure non ancora arrivata), utente e password, la modalità a sezioni
+>     senza canale (il pulsante della community subito dopo la sezione Premium), `https:help.example.org/assets`;
+>   - `AssetModal.test.ts`: i 5 casi P20 resi deterministici con lo store vero (`instanceConfig.load({force: true,
+>     fetchConfig})` in `beforeEach`, i valori predefiniti in `afterEach`);
+>   - E2E: un test nuovo (managed senza indirizzo: nessuna riga, nessun link a `github.com`), e il primo test di
+>     F21/P20 ora instrada `profile: 'selfhosted'` in modo esplicito.
+> - **Rosso confermato** (00:41, carico 48): **56 rossi, 128 verdi (184)**, esattamente i 47 + 9 attesi.
+> - **Il codice** (`files/checks/xr37_code.py`, 5 + 7 sostituzioni contate):
+>   - `supportChannel` con `SupportChannelOptions` restituisce `SupportChannel | null`;
+>   - il componente calcola `githubFallback` dallo store;
+>   - `reportPlacement` è `null` senza canale; lo snippet `reportRow` riceve il canale come parametro.
+> - **CHANGELOG**: la riga «Let us know» ora dice che la issue di GitHub c'è solo su un'istanza self-hosted, e che su
+>   un'istanza di un provider di hosting il link compare quando il provider imposta un indirizzo.
+> - **Doc**: affidata al docs-writer: `create-edit.en.md`, la riga di `LIBREFOLIO_SUPPORT_URL` in
+>   `configuration.en.md`, il punto su `LIBREFOLIO_SUPPORT_URL` in `hosting_providers.en.md`, `search_link_finder.md`.
+> - **Verde** (00:46, carico 47): **184/184** sui tre file; `front check` → **0/0**.
+> - **⚠️ Fuori pista** (segnalato dal docs-writer): tre testi del backend dicevano ancora «the app links to GitHub
+>   issues», che su `managed` non è più vero:
+>   - la docstring di `support_url()` in `config/platform.py`;
+>   - `_DEFAULT_SUPPORT` in `services/platform/instance_links.py`, cioè la `consequence` scritta nel log d'errore: a un
+>     provider di hosting avrebbe detto una cosa falsa. Il modulo è di H, che lo rivede al checkpoint;
+>   - la descrizione OpenAPI di `support_url` in `schemas/system.py`, seguita da `api sync`.
+>   I test leggono `_DEFAULT_SUPPORT` per nome, quindi restano verdi. I testi dei test, `test_config_package.py` e
+>   `test_system_api.py:917`, li ha aggiornati il test-author di X-R35, e vanno col suo commit.
+> - **La doc** (docs-writer): `create-edit.en.md` (la issue di GitHub solo su self-hosted; su managed, o con la
+>   configurazione non letta, niente link; in modifica gli identificativi dell'asset, la sua valuta e il suo tipo);
+>   la riga di `configuration.en.md` (con «un indirizzo con utente o password conta come non impostato»); il punto di
+>   `hosting_providers.en.md` (senza la variabile la ricerca non offre «Let us know»; altri link d'aiuto, come
+>   `HelpMenu` e `FixFlaggedStep`, puntano ancora a GitHub); `search_link_finder.md` (`githubFallback` e N61).
+> - **Prove**:
+>   - `api sync`; ruff e black puliti sui tre file Python;
+>   - `mkdocs build` stretto → 0 avvisi, nessuna riga INFO su ancore; `check-links` → 97;
+>   - **slot 2** (01:03–01:11, con la ricostruzione): `front-asset asset-modal` → **21/21**, i tre test di F21/P20
+>     compresi (19, 20, 21);
+>   - `git diff --check` pulito; porta 6183 libera.
+
+**X-R37 committato ed entrato** (coordinatore, 01:12): `c7434f00c` e `983612ed5`, dev `908fe6c90`, il mio ramo
+portato avanti con un fast-forward. `instance_links.py` l'ha rivisto il coordinatore: solo testo, senza bisogno di H.
+
+### X-R35 — `env_url` rifiuta utente e password ✅ (2026-10-17, 01:00–01:23; consegnato al coordinatore)
+
+> **Note implementazione**:
+> - **I rossi** (test-author, 00:43–01:05), 28 + 4 casi, tutti con `user_info` nel nome:
+>   - `test_config_package.py`: `env_url` rifiuta l'utente nell'autorità (13 forme, IPv4 e IPv6 comprese), non cita
+>     mai utente e password nemmeno quando un'altra regola rifiuta l'indirizzo (8 righe, comprese quelle senza `//` e
+>     con la parentesi IPv6 aperta), accetta una `@` fuori dall'autorità (controlli verdi); `support_url()` fa lo
+>     stesso, ma un `mailto:` resta valido; `support_link()` non pubblica l'indirizzo e nessun record del log lo
+>     contiene;
+>   - `test_registration_service.py`: lo stesso per `public_url` e `billing_url`, e per i loro link;
+>   - via una vecchia riga che chiedeva a `env_url` di citare `mailto:help@a.example`: contraddiceva la regola nuova;
+>   - i testi N61 di tre test aggiornati (`test_config_package.py` due volte, `test_system_api.py:917`).
+> - **⚠️ Fuori pista**: la prima corsa di `config-package` (01:12:33) è caduta in un `ImportError`
+>   (`HoldingGroupGainLoss`). Il nome esiste: la corsa era partita proprio mentre il coordinatore portava avanti il mio
+>   ramo, e Python ha letto un albero aggiornato a metà. Rilanciata sull'albero fermo. Lezione: dopo un handoff, non
+>   lanciare finché il coordinatore non dice il nuovo HEAD.
+> - **Rosso confermato** (01:14): `config-package` **23 rossi, 820 verdi**; `registration` **4 rossi, 147 verdi**. Tutti
+>   i rossi sono i casi `user_info`.
+> - **Il codice** (`files/checks/xr35_code.py`): in `config/__init__.py`, `env_url` rifiuta una `@` nell'autorità
+>   (`urlsplit(value).netloc`); il `ValueError` non cita il valore se contiene una `@` da qualche parte, altrimenti resta
+>   il messaggio di oggi. ruff e black puliti.
+> - **Verde** (01:15–01:19, carico ≤ 50): `config-package` **843/843**, `registration` **151/151**, `email-links`
+>   **74/74**, `email-checks` **87/87**. Gli ultimi due passano da `links_state()`, che prende il `ValueError`.
+> - **Doc**: al docs-writer, la regola di `env_url` in `developer/architecture/settings.md` e una frase nelle righe di
+>   `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL` in `admin/configuration.en.md`. Quelle due righe sono di A: le
+>   rivede il coordinatore.
+>   - Il docs-writer ha corretto anche il paragrafo sotto la tabella (il log non mostra un valore con una `@`) e le due
+>     righe dei valori sbagliati. La nota «non mostrato» vale solo per gli indirizzi: gli errori di
+>     `LIBREFOLIO_REGISTRATION` e `LIBREFOLIO_MAX_USERS` mostrano ancora il valore.
+> - **Fuori perimetro, per E**: in `services/email/links.py` la docstring di `_usable_base` dice ancora che
+>   `public_url()` «checks the scheme only»; il suo controllo delle credenziali ora è ridondante.
+> - **Prove della doc**: `mkdocs build` stretto → 0 avvisi, nessuna riga INFO su ancore; `check-links` → 97;
+>   `git diff --check` pulito.
+> - **CHANGELOG**: niente, perché le tre variabili sono nuove della 1.3 e nessuna versione rilasciata è esposta.

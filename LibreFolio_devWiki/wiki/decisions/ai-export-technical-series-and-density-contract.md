@@ -116,11 +116,11 @@ The original real-service diagnostic probe completed all 27 Asset/Broker/Portfol
 | Reproducible diagnostic probe | `backend/test_scripts/diagnostics/ai_export_technical_density_probe.py` |
 | Real-prompt validation probe | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |
 | Central indicator sampling matrix | `backend/app/services/ai_export/temporal/policy.py` |
-| Plugin-owned temporal-class contract | `backend/app/services/signal_plugins/base.py` |
+| Plugin-owned temporal-class contract | `backend/app/services/signals/base.py` |
 | Native series, unique universe, weights, price/FX buckets | `backend/app/services/ai_export/components/technical_shared.py` |
 | Indicator and event payload contracts | `backend/app/services/ai_export/components/technical_payloads.py` |
 | Sampling and event-selection response manifests | `backend/app/services/ai_export/runtime_service.py` |
-| Observed-only crossings and epsilon policy | `backend/app/services/signal_annotations.py` |
+| Observed-only crossings and epsilon policy | `backend/app/services/signals/annotations.py` |
 | Portfolio/Broker TWRR, P&L, and flow buckets | `backend/app/services/ai_export/components/payloads/portfolio_broker.py` |
 | Public 16-analysis catalog | `backend/app/services/ai_export/analyses/catalog.py` |
 | Frontend metadata rendering | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |

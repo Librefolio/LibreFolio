@@ -101,10 +101,14 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
     - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
       an empty or blank value is `None`; otherwise the value, stripped, must be an `http://` or
-      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
-      no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
-      alone included, raises `ValueError`, which names the variable. The accessor's caller decides
-      what an invalid address costs, and logs it. `support_url()` (`platform.py`) also takes
+      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not),
+      no user info (no `@` in its authority, as in `https://user:pass@host`: the user name and the
+      password would be handed out with the address; an `@` in the path, the query or the fragment is
+      not user info) and no space, tab or line break inside, and one trailing slash is removed;
+      anything else, `https://` alone included, raises `ValueError`, which names the variable and
+      quotes the value, unless the value holds an `@` anywhere: it may carry a user name or a
+      password, so the message never quotes it. The accessor's caller decides what an invalid address
+      costs, and logs the error. `support_url()` (`platform.py`) also takes
       `mailto:` and one email address, the scheme in any case: `?`, `#`, `%`, `,`, `;`, `<`, `>`, `"`,
       `/` and any whitespace are refused before pydantic's `EmailStr` reads the address, without DNS,
       and it returns `mailto:` and the address as `EmailStr` normalizes it. `env_url()` itself stays
