@@ -1880,3 +1880,175 @@ class TestBackup:
         assert FAILED in run.output, f"expected the missing file to be reported with {FAILED}: {run}"
         assert run.returncode == 1, f"backup inspect of a missing file must exit 1: {run}"
         print_success(f"backup inspect {missing.name}: {FAILED}, exit 1")
+
+
+# ---------------------------------------------------------------------------
+# IMG-032..IMG-033e: one account per address, whatever its A–Z case (P18, workstream A)
+# ---------------------------------------------------------------------------
+
+#: Written into an account's row by the test: what an email change ends shows as NULL and as one more, what a case-only
+#: change keeps shows as itself.
+VERIFIED_ROW_STAMP = "2026-10-02 08:00:00.000000"
+ROW_SESSION_VERSION = 2
+#: Not an address, each its own way: ``EmailStr`` refuses both.
+INVALID_ADDRESSES = [
+    pytest.param("not-an-address", id="no-at-sign"),
+    pytest.param("nobody@", id="no-domain"),
+]
+#: ``set-email`` in both parsers: under ``./dev.py user`` and in ``scripts/user_cli.py`` itself.
+SET_EMAIL_COMMANDS = [
+    pytest.param(("dev.py", "user", "set-email"), id="dev.py user set-email"),
+    pytest.param((USER_CLI, "set-email"), id="user_cli.py set-email"),
+]
+#: The two commands that create an ordinary account, as IMG-030 runs them.
+ORDINARY_CREATIONS = [
+    pytest.param(("dev.py", "user", "create"), ("--role", "user"), id="user create --role user"),
+    pytest.param((USER_CLI, "create-user"), (), id="user_cli.py create-user"),
+]
+
+
+def mailbox() -> str:
+    """An address nobody has, in lower case at ``example.com``, its local part a tag of its own that no username shares."""
+    return f"box.{uuid.uuid4().hex[:12]}@example.com"
+
+
+def local_part_upper(address: str) -> str:
+    """The same address with its local part in upper case and its domain in lower case: another A–Z case, and the form ``EmailStr`` leaves as it is."""
+    local, _, domain = address.partition("@")
+    return f"{local.upper()}@{domain}"
+
+
+def email_row(db_path: Path, username: str) -> tuple[str, str | None, int] | None:
+    """``(email, email_verified_at, session_version)`` of ``username``, read from the database itself; None when it is not there."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        row = conn.execute("SELECT email, email_verified_at, session_version FROM users WHERE username = ?", (username,)).fetchone()
+    return None if row is None else (row[0], row[1], row[2])
+
+
+def address_holders(db_path: Path, address: str) -> list[tuple[str, str]]:
+    """``(username, email)`` of every account whose address SQLite's ``lower()`` folds as it folds ``address``, oldest first."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        return conn.execute("SELECT username, email FROM users WHERE lower(email) = lower(?) ORDER BY id", (address,)).fetchall()
+
+
+def verified_member(image: ImageTree, database: Database, address: str) -> str:
+    """An ordinary account of its own holding ``address``, created by the command line, then written verified at session version 2. Its username."""
+    name = unique_username()
+    assert_succeeds(run_dev(image, "user", "create", name, address, OLD_PASSWORD, "--role", "user", env=database.env))
+    with closing(sqlite3.connect(database.path)) as conn:
+        with conn:
+            changed = conn.execute("UPDATE users SET email_verified_at = ?, session_version = ? WHERE username = ?", (VERIFIED_ROW_STAMP, ROW_SESSION_VERSION, name)).rowcount
+    assert changed == 1 and email_row(database.path, name) == (address, VERIFIED_ROW_STAMP, ROW_SESSION_VERSION), f"premise: {name} holds {address}, verified, at session version {ROW_SESSION_VERSION}"
+    return name
+
+
+def line_starts_with(run: Run, mark: str) -> bool:
+    return any(line.startswith(mark) for line in run.output.splitlines())
+
+
+def assert_set_email_ran(run: Run) -> None:
+    """Presence barrier: argparse took ``set-email`` as a command; otherwise a ❌ or an exit code would say nothing about it."""
+    assert_no_crash(run)
+    assert INVALID_CHOICE not in run.output.lower(), f"red until P18: set-email is not a user command (C7: ./dev.py user set-email <username> <address>): {run}"
+
+
+class TestEmailAddressCase:
+    """One account per address, whatever its A–Z case (lot P18 of workstream A, contract C4 and C7).
+
+    Until P18 ``user_cli.py create-user`` and ``user create`` give a second account an address another account has in
+    another A–Z case — the lookup compares exactly, and these commands do not validate the address —, and no command
+    changes an address. ``./dev.py user set-email <username> <address>`` is the remedy migration 009 names for the
+    accounts it finds colliding: it validates the address (``EmailStr``), refuses an unknown user and another account's
+    address in any A–Z case, and changes the address as an email change through ``update_profile`` does — a real change
+    resets the verification and raises the session version, a case-only change of the account's own address keeps both
+    (C5). It is registered next to the link commands, so ``user_cli.py`` and ``dev.py user`` both have it.
+
+    Every address is in lower case at ``example.com``, with a local part of its own; a case variant changes the local
+    part only, so the address stored is the one given whether the command keeps it as written or as ``EmailStr`` gives
+    it back. Verification and session version are read from the database itself: no exit code tells them.
+    """
+
+    @pytest.mark.parametrize(("command", "options"), ORDINARY_CREATIONS)
+    def test_create_refuses_an_address_another_account_has_in_another_case(self, image, image_db, command, options):
+        """IMG-032 — NEW, red until P18 (✅, exit 0: a second account): an account holds an address; user_cli.py create-user, or user create --role user, of another username with that address in upper case → a line starting with ❌, exit 1, nobody created, and the address still has one account, the first, as written."""
+        label = " ".join((*command, *options))
+        print_section(f"IMG-032: {label} with an address another account has in another case, in the image")
+        first, second, address = unique_username(), unique_username(), mailbox()
+        assert_succeeds(run_dev(image, "user", "create", first, address, OLD_PASSWORD, "--role", "user", env=image_db.env))
+
+        run = run_python(image, *command, second, address.upper(), OLD_PASSWORD, *options, env=image_db.env)
+
+        assert_no_crash(run)
+        assert line_starts_with(run, FAILED) and run.returncode == 1, f"red until P18: an address another account has in another A–Z case is refused like an exact duplicate, {FAILED} and exit 1: {run}"
+        assert account(image_db.path, second) is None, f"a refused creation creates nobody, yet {second} is in the database"
+        assert address_holders(image_db.path, address) == [(first, address)], f"the address must keep its one account, {first}'s, as written: {address_holders(image_db.path, address)}"
+        print_success(f"{label}: {FAILED}, exit 1, one account for the address")
+
+    def test_set_email_changes_the_address_and_ends_the_verification_and_the_sessions(self, image, image_db):
+        """IMG-033 — NEW, red until P18 (set-email is no command: argparse's exit 2): user set-email <username> <a new address> of a verified account → a line starting with ✅, exit 0; the stored address is the new one, email_verified_at NULL, session_version one more, and the old address is nobody's."""
+        print_section("IMG-033: user set-email, a new address, in the image")
+        old, new = mailbox(), mailbox()
+        name = verified_member(image, image_db, old)
+
+        run = run_dev(image, "user", "set-email", name, new, env=image_db.env)
+
+        assert_set_email_ran(run)
+        assert run.returncode == 0 and line_starts_with(run, SUCCEEDED), f"set-email to a new address must succeed: a line starting with {SUCCEEDED}, exit 0: {run}"
+        assert email_row(image_db.path, name) == (new, None, ROW_SESSION_VERSION + 1), f"an email change stores the new address, resets the verification and ends the sessions: {email_row(image_db.path, name)}"
+        assert address_holders(image_db.path, old) == [], "the old address must be nobody's now"
+        print_success(f"{name}: the new address, unverified, session version {ROW_SESSION_VERSION + 1}")
+
+    def test_set_email_of_its_own_address_in_another_case_keeps_the_verification_and_the_sessions(self, image, image_db):
+        """IMG-033b — NEW, red until P18: user set-email <username> <its own address, the local part in upper case> → a line starting with ✅, exit 0; the stored address is the new form, email_verified_at and session_version as they were (C5: the same address)."""
+        print_section("IMG-033b: user set-email, its own address in another case, in the image")
+        address = mailbox()
+        name = verified_member(image, image_db, address)
+        written = local_part_upper(address)
+
+        run = run_dev(image, "user", "set-email", name, written, env=image_db.env)
+
+        assert_set_email_ran(run)
+        assert run.returncode == 0 and line_starts_with(run, SUCCEEDED), f"a case-only change of its own address must succeed: a line starting with {SUCCEEDED}, exit 0: {run}"
+        assert email_row(image_db.path, name) == (written, VERIFIED_ROW_STAMP, ROW_SESSION_VERSION), f"the new form is stored, the verification and the sessions kept: {email_row(image_db.path, name)}"
+        print_success(f"{name}: the new form stored, verification and session version kept")
+
+    def test_set_email_refuses_another_accounts_address_in_another_case(self, image, image_db):
+        """IMG-033c — NEW, red until P18: two verified accounts; user set-email of the first with the second's address, the local part in upper case → a line starting with ❌, exit 1, and neither account changed: address, verification, session version."""
+        print_section("IMG-033c: user set-email, another account's address in another case, in the image")
+        their_address = mailbox()
+        mine, theirs = verified_member(image, image_db, mailbox()), verified_member(image, image_db, their_address)
+        before = {name: email_row(image_db.path, name) for name in (mine, theirs)}
+
+        run = run_dev(image, "user", "set-email", mine, local_part_upper(their_address), env=image_db.env)
+
+        assert_set_email_ran(run)
+        assert line_starts_with(run, FAILED) and run.returncode == 1, f"another account's address in another A–Z case must be refused, {FAILED} and exit 1: {run}"
+        assert {name: email_row(image_db.path, name) for name in before} == before, "a refused set-email must change neither account"
+        print_success(f"{FAILED}, exit 1, both accounts as they were")
+
+    @pytest.mark.parametrize("command", SET_EMAIL_COMMANDS)
+    def test_set_email_of_an_unknown_user_fails(self, image, image_db, command):
+        """IMG-033d — NEW, red until P18 (argparse's exit 2 in both parsers): set-email of a username nobody has, through dev.py user or user_cli.py → a line starting with ❌, exit 1; nobody is created and the address is nobody's."""
+        print_section(f"IMG-033d: {' '.join(command)} of an unknown user, in the image")
+        name, address = unique_username(), mailbox()
+
+        run = run_python(image, *command, name, address, env=image_db.env)
+
+        assert_set_email_ran(run)
+        assert line_starts_with(run, FAILED) and run.returncode == 1, f"an unknown user is reported with {FAILED} and exit 1: {run}"
+        assert account(image_db.path, name) is None and address_holders(image_db.path, address) == [], "set-email of an unknown user writes nothing"
+        print_success(f"{FAILED}, exit 1, nothing written")
+
+    @pytest.mark.parametrize("invalid", INVALID_ADDRESSES)
+    def test_set_email_refuses_an_invalid_address(self, image, image_db, invalid):
+        """IMG-033e — NEW, red until P18: user set-email <username> <something that is not an address> of a verified account → a line starting with ❌, exit 1, and the account as it was."""
+        print_section(f"IMG-033e: user set-email {invalid!r}, in the image")
+        name = verified_member(image, image_db, mailbox())
+        before = email_row(image_db.path, name)
+
+        run = run_dev(image, "user", "set-email", name, invalid, env=image_db.env)
+
+        assert_set_email_ran(run)
+        assert line_starts_with(run, FAILED) and run.returncode == 1, f"an invalid address must be refused, {FAILED} and exit 1: {run}"
+        assert email_row(image_db.path, name) == before, "a refused set-email must leave the account as it was"
+        print_success(f"{invalid!r}: {FAILED}, exit 1, the account as it was")

@@ -30,6 +30,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    func,
 )
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -400,6 +401,11 @@ class User(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+# Email addresses are unique regardless of case (P18, migration 009). SQLite's lower() folds A–Z only, so letters outside
+# ASCII compare as written; user_service.email_fold() is the same rule in Python.
+Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
 
 
 class UserSettings(SQLModel, table=True):
