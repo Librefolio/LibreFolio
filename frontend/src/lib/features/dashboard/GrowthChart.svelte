@@ -1347,25 +1347,18 @@
     }
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3" data-testid="growth-chart">
+<div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3" data-testid="growth-chart">
     <!-- Header row: title + toggle -->
     <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.growth')}</h2>
+        <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.growth')}</h2>
 
         <!-- Abs / % / P&L segmented toggle -->
-        <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-            <button
-                class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => selectMode('eur')}
-                aria-pressed={viewMode === 'eur'}
-                data-testid="growth-toggle-eur"
-            >
+        <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
+            <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => selectMode('eur')} aria-pressed={viewMode === 'eur'} data-testid="growth-toggle-eur">
                 {$_('dashboard.abs')}
             </button>
             <button
-                class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pct' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {!hasPctData
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''}"
+                class="px-3 py-1 transition-colors border-l border-lf-subtle {viewMode === 'pct' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'} {!hasPctData ? 'opacity-50 cursor-not-allowed' : ''}"
                 onclick={() => hasPctData && selectMode('pct')}
                 disabled={!hasPctData}
                 title={!hasPctData ? $_('common.noData') : ''}
@@ -1374,12 +1367,7 @@
             >
                 {$_('dashboard.pct')}
             </button>
-            <button
-                class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pnl' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                onclick={() => selectMode('pnl')}
-                aria-pressed={viewMode === 'pnl'}
-                data-testid="growth-toggle-pnl"
-            >
+            <button class="px-3 py-1 transition-colors border-l border-lf-subtle {viewMode === 'pnl' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => selectMode('pnl')} aria-pressed={viewMode === 'pnl'} data-testid="growth-toggle-pnl">
                 {$_('dashboard.pnl')}
             </button>
         </div>
@@ -1403,9 +1391,9 @@
                      hardest to use. `data-testid` is deliberately identical across
                      breakpoints — a testid that changes with viewport would make every
                      E2E selector viewport-dependent. -->
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium">
                     <button
-                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 {pnlSubmode === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 {pnlSubmode === 'line' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => selectSubmode('line')}
                         title={$_('dashboard.pnlSubmodeLine')}
                         aria-label={$_('dashboard.pnlSubmodeLine')}
@@ -1416,9 +1404,7 @@
                         <span class={controlsCompact ? 'hidden' : 'inline'}>{$_('dashboard.pnlSubmodeLine')}</span>
                     </button>
                     <button
-                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'candles'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-lf-subtle/70 {pnlSubmode === 'candles' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => selectSubmode('candles')}
                         title={$_('dashboard.pnlSubmodeCandles')}
                         aria-label={$_('dashboard.pnlSubmodeCandles')}
@@ -1429,9 +1415,7 @@
                         <span class={controlsCompact ? 'hidden' : 'inline'}>{$_('dashboard.pnlSubmodeCandles')}</span>
                     </button>
                     <button
-                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-gray-200/70 dark:border-slate-600/70 {pnlSubmode === 'income'
-                            ? 'bg-libre-green text-white'
-                            : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="{controlsCompact ? 'px-2' : 'px-3'} py-1 transition-colors inline-flex items-center gap-1.5 border-l border-lf-subtle/70 {pnlSubmode === 'income' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => selectSubmode('income')}
                         title={$_('dashboard.pnlSubmodeIncome')}
                         aria-label={$_('dashboard.pnlSubmodeIncome')}
@@ -1463,16 +1447,14 @@
                  settled vocabulary. The Line submode has no selector: a line has no body
                  whose width could change. -->
             <div class="absolute right-0 z-10 flex items-center gap-1.5" style="top: {plotTopPx}px; transform: translateY(-50%)">
-                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium" data-testid="growth-candle-width">
+                <div class="flex rounded-lg border border-lf-subtle/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity text-xs font-medium" data-testid="growth-candle-width">
                     <!-- One button per drawable rung. A rung that the current geometry
                          cannot render is REMOVED, not disabled: a disabled control still
                          claims the chart could show that width, which is the same lie the
                          old silent aggregation told. -->
                     {#each availableCandleWidths as width (width)}
                         <button
-                            class="{controlsCompact ? 'px-2' : 'px-2.5'} py-1 transition-colors border-l border-gray-200/70 dark:border-slate-600/70 first:border-l-0 {candleWidth === width
-                                ? 'bg-libre-green text-white'
-                                : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            class="{controlsCompact ? 'px-2' : 'px-2.5'} py-1 transition-colors border-l border-lf-subtle/70 first:border-l-0 {candleWidth === width ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card/90 text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => selectCandleWidth(width)}
                             aria-pressed={candleWidth === width}
                             data-testid="growth-candle-width-{width.toLowerCase()}">{candleWidthLabel(width)}</button
@@ -1483,9 +1465,9 @@
         {/if}
         <!-- Skeleton / empty overlay -->
         {#if loading}
-            <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+            <div class="absolute inset-0 z-10 bg-lf-panel rounded animate-pulse"></div>
         {:else if history.length === 0}
-            <div class="absolute inset-0 z-10 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+            <div class="absolute inset-0 z-10 flex items-center justify-center text-lf-muted text-sm">
                 {$_('common.noData')}
             </div>
         {/if}
@@ -1493,13 +1475,13 @@
         <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || history.length === 0}></div>
     </div>
     {#if !loading && history.length > 0 && viewMode === 'pct' && hasPctData && !hasNonZeroPctData}
-        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1">
+        <p class="text-center text-xs text-lf-muted italic mt-1">
             {$_('dashboard.roiAllZero')}
         </p>
     {/if}
     {#if !loading && viewMode === 'pnl' && pnlSubmode === 'candles'}
         <!-- Mandatory always-visible synthetic-candle disclosure (plan §3.3): one line in the short
              register, scrolling instead of wrapping where it does not fit (R9). -->
-        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypotheticalShort')}</p>
+        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-center text-xs text-lf-muted italic mt-1" data-testid="growth-pnl-candles-hypothetical-label">{$_('dashboard.pnlCandlesHypotheticalShort')}</p>
     {/if}
 </div>

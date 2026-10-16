@@ -672,7 +672,7 @@
         {action: 'invert', icon: FlipHorizontal, key: 'invert'},
     ];
 
-    const QUICK_BUTTON = 'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700';
+    const QUICK_BUTTON = 'inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle px-2.5 py-1 text-xs font-medium text-lf-secondary hover:bg-lf-hover disabled:opacity-40';
 </script>
 
 {#snippet chip(asset: AssetOption, verdict: EligibilityView | undefined)}
@@ -688,7 +688,7 @@
     >
         {#snippet trailing()}
             <button
-                class="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-600"
+                class="rounded-full p-0.5 hover:bg-lf-hover"
                 onclick={(event) => {
                     // Removing is not asking why: the click must not also pin the chip's tooltip.
                     event.stopPropagation();
@@ -703,23 +703,19 @@
     </AssetChip>
 {/snippet}
 
-<div class="space-y-4" data-testid="asset-global-risk-panel">
-    <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
+<div class="space-y-4 text-lf-primary" data-testid="asset-global-risk-panel">
+    <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-asset-set-controls" data-selection-source={selectionSource}>
         {#if fitOffer}
             <!-- The developer's choice: a strip at the top of the card that says the chosen period
                  leaves some selected assets without prices, with the button that fixes it. The
                  period itself belongs to the page's toolbar, so the button asks the page. -->
-            <div
-                class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
-                data-testid="risk-fit-period-banner"
-                data-recoverable={fitOffer.recoverable.length}
-            >
+            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-fit-period-banner" data-recoverable={fitOffer.recoverable.length}>
                 <AlertTriangle size={14} class="shrink-0" />
                 <span class="min-w-0 flex-1">{$t('risk.assetSet.fitPeriod.banner', {values: {count: fitOffer.recoverable.length}})}</span>
                 <Tooltip text={$t('risk.assetSet.fitPeriod.hint', {values: {names: fitNames}})} position="bottom" maxWidth="360px" interactiveChild>
                     <button
                         type="button"
-                        class="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:bg-slate-800 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                        class="rounded-md border border-lf-warning-line bg-lf-card px-2.5 py-1 font-medium text-lf-warning-on-soft hover:bg-lf-warning-soft"
                         onclick={(event) => {
                             // Not up to the Tooltip wrapper: its click would pin the hint over the page.
                             event.stopPropagation();
@@ -751,7 +747,7 @@
                     {#snippet trigger({open, toggle})}
                         <button type="button" class={QUICK_BUTTON} aria-expanded={open} onclick={toggle} disabled={brokerAssetsLoading} data-testid="risk-broker-filter-button">
                             {#if brokerAssetsLoading}
-                                <RefreshCw size={13} class="animate-spin text-libre-green" data-testid="risk-broker-filter-loading" />
+                                <RefreshCw size={13} class="animate-spin text-lf-link" data-testid="risk-broker-filter-loading" />
                             {:else}
                                 <Briefcase size={13} />
                             {/if}
@@ -760,23 +756,18 @@
                         </button>
                     {/snippet}
                     {#snippet children()}
-                        <p class="border-b border-gray-100 px-3 py-2 text-[11px] leading-snug text-gray-500 dark:border-slate-700 dark:text-gray-400">{$t('risk.assetSet.preset.hint')}</p>
+                        <p class="border-b border-lf-subtle px-3 py-2 text-[11px] leading-snug text-lf-muted">{$t('risk.assetSet.preset.hint')}</p>
                         <div class="p-1">
-                            <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => choosePreset(null)} data-testid="risk-broker-option-mine">
-                                <span class="flex h-6 w-6 shrink-0 items-center justify-center"><Wallet size={15} class="text-libre-green" /></span>
+                            <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-lf-secondary hover:bg-lf-hover" onclick={() => choosePreset(null)} data-testid="risk-broker-option-mine">
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center"><Wallet size={15} class="text-lf-link" /></span>
                                 {$t('risk.assetSet.preset.allMine')}
                             </button>
                         </div>
                         {#if brokers.length > 0}
-                            <p class="border-t border-gray-100 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:border-slate-700 dark:text-gray-500">{$t('risk.assetSet.preset.byBroker')}</p>
+                            <p class="border-t border-lf-subtle px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-lf-muted">{$t('risk.assetSet.preset.byBroker')}</p>
                             <div class="max-h-60 overflow-y-auto p-1 pt-0">
                                 {#each brokers as broker (broker.id)}
-                                    <button
-                                        type="button"
-                                        class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-700"
-                                        onclick={() => choosePreset(broker.id)}
-                                        data-testid="risk-broker-option-{broker.id}"
-                                    >
+                                    <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-secondary hover:bg-lf-hover" onclick={() => choosePreset(broker.id)} data-testid="risk-broker-option-{broker.id}">
                                         <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url ?? null} portalUrl={broker.portal_url ?? null} pluginCode={broker.default_import_plugin ?? null} altText={broker.name} size="sm" />
                                         <span class="min-w-0 flex-1 truncate">{broker.name}</span>
                                     </button>
@@ -788,19 +779,19 @@
             </div>
 
             <Tooltip text={$t('risk.assetSet.selectedCountHint')} position="bottom" maxWidth="360px" wrapperClass="ml-auto">
-                <span class="cursor-help text-xs text-gray-500 underline decoration-dotted underline-offset-2 dark:text-gray-400" data-testid="risk-selected-count" data-selected={analysedIds.length} data-total={candidates.length} data-parked={parkedCount}>
+                <span class="cursor-help text-xs text-lf-muted underline decoration-dotted underline-offset-2" data-testid="risk-selected-count" data-selected={analysedIds.length} data-total={candidates.length} data-parked={parkedCount}>
                     {$t('risk.assetSet.selectedCount', {values: {selected: analysedIds.length, total: candidates.length}})}
                 </span>
             </Tooltip>
         </div>
 
         {#if brokerLoadFailed}
-            <p class="mt-2 text-xs text-red-600 dark:text-red-400" data-testid="risk-broker-filter-error">{$t('risk.states.loadFailed')}</p>
+            <p class="mt-2 text-xs text-lf-danger" data-testid="risk-broker-filter-error">{$t('risk.states.loadFailed')}</p>
         {:else if brokerLoadEmpty}
-            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-broker-filter-empty">{$t('risk.assetSet.preset.noneHeld')}</p>
+            <p class="mt-2 text-xs text-lf-warning" data-testid="risk-broker-filter-empty">{$t('risk.assetSet.preset.noneHeld')}</p>
         {/if}
         {#if eligibilityFailed}
-            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-eligibility-failed">{$t('risk.assetSet.eligibilityFailed')}</p>
+            <p class="mt-2 text-xs text-lf-warning" data-testid="risk-eligibility-failed">{$t('risk.assetSet.eligibilityFailed')}</p>
         {/if}
 
         <!-- Row 2 — what is on the table, and the "+" that adds to it. An asset the engine rules
@@ -822,10 +813,10 @@
             <LabAssetPicker {assets} selected={selectedAssetIds} {room} eligibility={eligibilityView} onadd={addAssets} />
         </div>
         {#if parkedCount > 0}
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-parked-note">{$t('risk.assetSet.parkedNote', {values: {count: parkedCount}})}</p>
+            <p class="mt-2 text-xs text-lf-muted" data-testid="risk-parked-note">{$t('risk.assetSet.parkedNote', {values: {count: parkedCount}})}</p>
         {/if}
         {#if atCapacity}
-            <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
+            <p class="mt-2 text-xs text-lf-warning">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
     </section>
 
@@ -834,9 +825,9 @@
          uses the benchmark, for beta, correlation and its dot. The help stays beside it. -->
     {#snippet benchmarkPicker()}
         <div class="mb-4 flex flex-wrap items-center gap-2" data-testid="risk-asset-set-benchmark-row">
-            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
+            <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
             <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
-                <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
+                <span class="inline-flex text-lf-muted" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
             </Tooltip>
             <div class="min-w-0 max-w-xs flex-1">
                 <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} verdicts={eligibilityView} boxClass="w-full" testid="risk-asset-set-benchmark" />
@@ -863,11 +854,11 @@
         />
         <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
-        <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
-            <RefreshCw size={20} class="mx-auto animate-spin text-libre-green" />
+        <div class="rounded-xl border border-lf-subtle bg-lf-card p-8 text-center" data-testid="risk-asset-set-seeding">
+            <RefreshCw size={20} class="mx-auto animate-spin text-lf-link" />
         </div>
     {:else}
-        <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
+        <div class="rounded-xl border border-lf-subtle bg-lf-card p-8 text-center text-sm text-lf-muted" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}
         </div>
     {/if}

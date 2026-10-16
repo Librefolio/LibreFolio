@@ -233,26 +233,21 @@
     });
 </script>
 
-<section class="min-w-0 space-y-5" data-testid="tool-host" data-state={phase} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="min-w-0 space-y-5 text-lf-primary" data-testid="tool-host" data-state={phase} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-3">
-        <a
-            href="/tools"
-            aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`}
-            class="inline-flex items-center gap-2 rounded text-sm font-medium text-libre-green focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400 dark:focus-visible:outline-green-400"
-            data-testid="tool-back"
-        >
+        <a href="/tools" aria-label={`${$t('common.back')} · ${$t('tools.title', {default: 'Tools'})}`} class="inline-flex items-center gap-2 rounded text-sm font-medium text-lf-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="tool-back">
             <ArrowLeft size={18} aria-hidden="true" />
             {$t('tools.title', {default: 'Tools'})}
         </a>
         <div class="flex min-w-0 items-center justify-between gap-3">
-            <h1 bind:this={heading} tabindex="-1" class="min-w-0 break-words text-2xl font-bold text-gray-900 outline-none dark:text-gray-100">
+            <h1 bind:this={heading} tabindex="-1" class="min-w-0 break-words text-2xl font-bold text-lf-primary outline-none">
                 {descriptor ? toolName(descriptor, $t) : $t('tools.title', {default: 'Tools'})}
             </h1>
             <div class="flex shrink-0 items-center gap-2">
                 {#if documentation}
                     <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={20} testId="tool-host-docs" />
                 {:else if descriptor}
-                    <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="tool-docs-unavailable">
+                    <span class="text-xs text-lf-muted" data-testid="tool-docs-unavailable">
                         {$t('tools.documentationUnavailable', {default: 'Documentation link unavailable'})}
                     </span>
                 {/if}
@@ -260,7 +255,7 @@
                     type="button"
                     onclick={requestReload}
                     disabled={busy || !account.authenticated}
-                    class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-green-400"
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-input bg-lf-card px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label={$t('common.refresh')}
                     data-testid="tool-host-refresh"
                 >
@@ -270,36 +265,36 @@
             </div>
         </div>
         {#if descriptor}
-            <p class="break-words text-sm text-gray-600 dark:text-gray-400">{toolDescription(descriptor, $t)}</p>
-            <p class="break-words text-xs text-gray-500 dark:text-gray-400" data-testid="tool-host-compatibility-versions">
+            <p class="break-words text-sm text-lf-secondary">{toolDescription(descriptor, $t)}</p>
+            <p class="break-words text-xs text-lf-muted" data-testid="tool-host-compatibility-versions">
                 {$t('tools.backendVersion', {default: 'Backend/API'})}
                 {descriptor.contract_version}
                 · {$t('tools.uiVersion', {default: 'UI'})}
                 {descriptor.ui.version}
             </p>
         {:else}
-            <p class="text-sm text-gray-600 dark:text-gray-400">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>
+            <p class="text-sm text-lf-secondary">{$t('tools.subtitle', {default: 'Independent calculations. No portfolio changes are written.'})}</p>
         {/if}
     </header>
 
     {#if cleanupError && cleanupCopy}
-        <p class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="tool-cleanup-error" data-error-code={cleanupError.code}>
+        <p class="rounded-xl border border-lf-danger-line bg-lf-danger-soft p-4 text-sm text-lf-danger-on-soft" role="alert" data-testid="tool-cleanup-error" data-error-code={cleanupError.code}>
             {$t(cleanupCopy.key, {default: cleanupCopy.fallback})}
         </p>
     {/if}
 
     {#if catalog && catalog.unavailable.length > 0}
-        <aside class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" role="status" data-testid="tool-host-degraded">
+        <aside class="rounded-xl border border-lf-warning-line bg-lf-warning-soft p-4 text-sm text-lf-warning-on-soft" role="status" data-testid="tool-host-degraded">
             {$t('tools.catalog.degraded', {default: 'Unavailable backend entries: {count}.', values: {count: catalog.unavailable.length}})}
         </aside>
     {/if}
 
     {#if phase === 'anonymous'}
-        <p class="text-sm text-gray-600 dark:text-gray-400" role="status" data-testid="tools-auth-required">
+        <p class="text-sm text-lf-secondary" role="status" data-testid="tools-auth-required">
             {$t('tools.authRequired', {default: 'Sign in to use tools.'})}
         </p>
     {:else if phase === 'error' && error && errorCopy}
-        <div class="space-y-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="tool-host-error" data-error-code={error.code}>
+        <div class="space-y-3 rounded-xl border border-lf-danger-line bg-lf-danger-soft p-5 text-lf-danger-on-soft" role="alert" data-testid="tool-host-error" data-error-code={error.code}>
             <h2 class="font-semibold">{$t('common.error')}</h2>
             <p class="text-sm">{$t(errorCopy.key, {default: errorCopy.fallback})}</p>
             <button type="button" onclick={retry} class="rounded-lg border border-current px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2" data-testid={errorStage === 'component' && binding ? 'tool-retry-interface' : 'tool-retry-catalog'}>
@@ -307,7 +302,7 @@
             </button>
         </div>
     {:else if phase === 'unavailable' && unavailable && unavailableCopy}
-        <div class="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" role="status" data-testid="tool-host-unavailable" data-reason={unavailable}>
+        <div class="space-y-3 rounded-xl border border-lf-warning-line bg-lf-warning-soft p-5 text-lf-warning-on-soft" role="status" data-testid="tool-host-unavailable" data-reason={unavailable}>
             <h2 class="flex items-center gap-2 font-semibold">
                 <AlertTriangle size={20} aria-hidden="true" />
                 {$t('tools.status.unavailable', {default: 'Unavailable'})}
@@ -315,7 +310,7 @@
             <p class="text-sm">{$t(unavailableCopy.key, {default: unavailableCopy.fallback})}</p>
         </div>
     {:else if busy && !warmMount}
-        <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300" role="status" data-testid={phase === 'catalog_loading' ? 'tool-host-catalog-loading' : 'tool-host-component-loading'}>
+        <div class="flex items-center gap-2 rounded-xl border border-lf-subtle bg-lf-card p-5 text-sm text-lf-secondary" role="status" data-testid={phase === 'catalog_loading' ? 'tool-host-catalog-loading' : 'tool-host-component-loading'}>
             <LoaderCircle size={20} class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
             {phase === 'component_loading' ? $t('tools.host.loadingInterface', {default: 'Loading tool interface…'}) : $t('common.loading')}
         </div>

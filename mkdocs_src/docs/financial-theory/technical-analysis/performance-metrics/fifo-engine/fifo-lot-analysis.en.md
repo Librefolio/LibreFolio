@@ -60,7 +60,7 @@ This metric excludes dividends, interest, and realized sale proceeds. It answers
     <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="WAC / Market Price chart — one bubble per lot, colored by opening broker, sized by opening value, plotted against the market price line">
 </div>
 
-The **WAC / Market Price** chart plots each lot as a bubble against the market price line: bubble color marks the broker where the lot was opened, bubble size scales with the lot's opening value. A lot valued only at cost (no live market price) is drawn with a dashed outline.
+The **WAC / Market Price** chart plots each lot as a bubble against the market price line: bubble color marks the broker where the lot was opened, bubble size scales with the lot's opening value. A lot whose current value is estimated at cost — its asset has no price at all on the end date, see [Estimated-at-Cost](#estimated-at-cost) — is drawn with a dashed outline.
 
 ---
 
@@ -219,7 +219,7 @@ Without this scaling, bond returns and valuations can be off by orders of magnit
 
 ## 🛟 Estimated-at-Cost {: #estimated-at-cost }
 
-If no live market price is available for an asset, LibreFolio does **not** fail the analysis. Instead, it temporarily values the still-open portion of the lot at cost:
+Each day, a lot is valued at the asset's mark from the [unified resolver](../portfolio-engine/price-resolution.md): a market quote, or the price of a BUY or SELL, carried forward. An adjustment is never a price, with or without a cost basis. When the asset has **no market quote at all** on or before the end date, LibreFolio does **not** fail the analysis: on each day it cannot value from a mark — no BUY or SELL on or before that day, or a trade mark whose exchange rate is missing — it values the still-open portion of a LONG lot at cost:
 
 $$
 \text{OpenValue} = \text{OpeningValue}\cdot \frac{\text{OpenQuantity}}{\text{OriginalQuantity}}
@@ -229,21 +229,25 @@ $$
 \text{MarketPnL} = 0
 $$
 
-Practical implication:
+with $\text{OpeningValue}$ the lot's original cost converted at its opening date. The cost stands in only where the asset has no price at all:
+
+- **Trades, no quote.** On the days a BUY or SELL marks the asset, its lots are valued at that trade price, not at cost. When the end date has such a mark, the lot summary reports `value_source = MARKET_PRICE`, the label of any mark, quote or trade.
+- **A quote later on.** An asset with a market quote on or before the end date gets no cost estimate at all: a lot opened before the asset's first quote, BUY or SELL — by an adjustment, for example — has no value on those days, and its value and return lines start at the first price.
+
+Practical implication, on the days valued at cost:
 
 - the lot still shows residual value
 - already realized proceeds still remain visible
 - allocated dividends or interest still remain visible
 - **unrealized volatility is temporarily understated**
-- `value_source = ESTIMATED_AT_COST`
+- `value_source = ESTIMATED_AT_COST` in the lot summary, when the end date itself is valued at cost
 - `market_pnl = 0`
-- data-quality issue code: `CURRENT_PRICE_ASSUMED_AT_COST`
 
 !!! info "Interpretation"
 
     Estimated-at-cost is conservative operational fallback. It means: _"We know what you paid, but we do not currently know what market would pay."_
 
-The corresponding data-quality warning is an **as-of valuation-date** statement. It is not a historical union of every day where an asset was ever valued at cost.
+The data-quality warning `CURRENT_PRICE_ASSUMED_AT_COST` — *"No market price available between {first transaction} and {end date} — open value estimated at cost, market P&L excluded"* — follows a broader condition than the valuation. It is raised whenever the asset has no market quote on or before the end date, for the lot summary and the value, return, price and performance histories alike, even when BUY or SELL trades price the lots: those lots are then valued at their trade prices, not at cost, despite what the message says. A single market quote on or before the end date removes it.
 
 ---
 
@@ -289,10 +293,10 @@ does on the Dashboard.
     The allocated lot amounts add back exactly to the converted income event total. Income is distributed, not created.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-custody-modal" alt="Lot detail modal — Asset Income row shows the pro-rata dividend/interest allocated to this specific lot, alongside the Estimated-at-Cost badge when no live market price is available">
+    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-custody-modal" alt="Lot detail modal — Asset Income row shows the pro-rata dividend/interest allocated to this specific lot, alongside the Estimated-at-Cost badge when the lot's current value is estimated at cost">
 </div>
 
-The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from the formula above — the pro-rata slice this specific lot received. When the lot has no live market price, the same modal also shows the **Estimated-at-Cost** badge from the previous section.
+The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from the formula above — the pro-rata slice this specific lot received. When the lot's current value is estimated at cost — its asset has no price at all on the end date —, the same modal also shows the **Estimated-at-Cost** badge from the previous section.
 
 ---
 

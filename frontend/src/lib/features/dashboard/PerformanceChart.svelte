@@ -1153,13 +1153,13 @@
     });
 </script>
 
-<div class="space-y-3" data-testid="performance-chart">
+<div class="space-y-3 text-lf-primary" data-testid="performance-chart">
     {#if chartRows.length === 0}
-        <p class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <p class="py-6 text-center text-sm text-lf-muted">
             {labels.noPeriodPnl}
         </p>
     {:else}
-        <div class="flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-gray-500 dark:text-gray-400">
+        <div class="flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-lf-muted">
             {#each legendItems as item (item.key)}
                 <div class="flex items-center gap-1.5">
                     <span class="h-2.5 w-2.5 rounded-sm" style="background-color:{item.color}"></span>

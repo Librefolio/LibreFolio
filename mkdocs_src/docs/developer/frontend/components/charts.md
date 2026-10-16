@@ -251,8 +251,9 @@ The rolling return is a backend signal. `loadChartData()` sends one
 `{signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days}}`, with `target_currency` when
 the chart is converted, and each Asset comparison gets an item of its own — `include_price: false`,
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
-so every line uses one window and one currency. A page-local wrapper,
-`queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
+so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
+sends it, and `parseAssetPriceQueryWithSignalIsolation()`
+(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
 malformed result does not discard the response.
 
 The same plugin is also in the signal catalog (see
@@ -298,7 +299,8 @@ only its own layout (page size, column widths, order and visibility) under its `
 
 #### Asset detail: page sync and comparison sync
 
-`requiredFxPairs` lists the FX pairs the page needs to convert into the chart currency: the
+`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/components/assets/detail/assetDetailFxRequirements.ts`)
+lists the FX pairs the page needs to convert into the chart currency: the
 asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
 (`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar
 **Sync** (`handleSync()`) opens the page sync modal with the main asset (when it has a provider),
