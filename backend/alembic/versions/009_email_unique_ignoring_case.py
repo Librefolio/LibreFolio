@@ -1,19 +1,51 @@
-"""Accounts: email addresses are unique regardless of case (release 1.3, workstream A, decision P18)
+"""Release 1.3: email addresses unique regardless of case (P18); the decimals of C-97 need no DDL
 
 Revision ID: 009_email_unique_ignoring_case
 Revises: 008_registration_invite_default
 Create Date: 2026-10-16
 
-Until now ``users.email`` was unique as written: ``alice@example.com`` and ``Alice@example.com`` could belong to two
-accounts. From this revision a unique index on ``lower(email)`` refuses that. SQLite's built-in ``lower()`` folds A–Z
-only, so letters outside ASCII compare as written: a documented limit (``user_service.email_fold()`` is the same rule).
+1. Email addresses are unique regardless of case (workstream A, decision P18).
 
-The upgrade reads every account first and groups the addresses with that same fold. If two accounts share an address
-apart from case, it stops before writing anything, naming the accounts by id and username, never by address (no
-address goes in a log, workstream E's rule), and how to separate them: ``./dev.py user set-email``, which works on the
-database as it is. Accounts are never merged. Otherwise it creates the index. The downgrade drops it.
+   Until now ``users.email`` was unique as written: ``alice@example.com`` and ``Alice@example.com`` could belong to
+   two accounts. From this revision a unique index on ``lower(email)`` refuses that. SQLite's built-in ``lower()``
+   folds A–Z only, so letters outside ASCII compare as written: a documented limit (``user_service.email_fold()`` is
+   the same rule).
 
-The upgrade checks before it acts, so it can be run again.
+   The upgrade reads every account first and groups the addresses with that same fold. If two accounts share an
+   address apart from case, it stops before writing anything, naming the accounts by id and username, never by
+   address (no address goes in a log, workstream E's rule), and how to separate them: ``./dev.py user set-email``,
+   which works on the database as it is. Accounts are never merged. Otherwise it creates the index. The downgrade
+   drops it.
+
+   The upgrade checks before it acts, so it can be run again.
+
+2. Quantities keep 10 decimal places and prices 12 (C-97, issue #43): no DDL, no data step.
+
+   ``transactions.quantity`` was declared ``NUMERIC(18, 6)``, and so were the ``open``,
+   ``high``, ``low``, ``close`` and ``adjusted_close`` of ``price_history``. Since
+   16/10/2026 the declarations in 001_initial read ``NUMERIC(22, 10)`` and
+   ``NUMERIC(24, 12)``; released SQLite databases keep their 18, 6, and that is
+   deliberate: the reasoning of 002 and 004 (``VARCHAR(14)``).
+
+   SQLite stores these values as a double (REAL; INTEGER for a whole value) whatever the
+   declaration says: a quantity of ``0.12345678`` has always been saved whole. The six
+   decimals were applied in Python: by the model when it read the value back
+   (``Numeric(18, 6)`` formats it with ``'%.6f'``), and by ``truncate_priceHistory`` when
+   a price was written. Both change with the code. The model now reads quantities and
+   prices through ``RealDecimal`` (``db/real_decimal.py``), which gives back the decimal
+   that was written, up to 15 significant digits, what a double keeps exactly. The input
+   refuses what the column could not give back (``db/precision.decimal_limit_issue``),
+   and provider prices are truncated to 12 decimals and 15 significant digits.
+   Rebuilding ``transactions`` and ``price_history`` on every installation to change a
+   number the engine ignores would trade a real risk for no effect, so this migration
+   performs no DDL for it.
+
+   Nothing stored is rewritten either (the developer's decision, 16/10/2026). A quantity
+   saved with more than six decimals, by 1.1, an import or the API, now reads back with
+   its digits, up to ten. A price keeps the six decimals it was truncated to when it was
+   written. A value with six decimals or fewer reads back exactly as before,
+   ``10.000000`` included. On the developer's demo data every stored quantity and price
+   reads back identical.
 """
 
 import string
