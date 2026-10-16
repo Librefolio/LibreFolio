@@ -2725,10 +2725,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       - Le prende T con `ui/display` (coordinatore, 16/10 10:58).
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
     «W5-PAC», «W5-charts» e «W6».
-- **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
-  `design-system`).
-  - `growthBrokerColor(index, dark)` (`frontend/src/lib/theme/chartPalettes.ts`) prende
-    `CATEGORY_SEQUENCE[index % 8]`: il nono broker ha il colore del primo.
+- ✅ **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
+  `design-system`). **Chiusa il 16/10** (lotto DV-8 sulla base `bf2afbba3`, in attesa del commit del coordinatore):
+  `growthBrokerColor(index, dark, poles?)` passa da `sequenceColor` dalla nona linea, con i poli della card della
+  pagina per default; `GrowthChart.svelte` e `growthChartSeries.ts` non cambiano. Test: il blocco `growthBrokerColor`
+  di `lib/theme/chartCategories.test.ts` (test-author), 10 casi.
+  - Era: `growthBrokerColor(index, dark)` (`frontend/src/lib/theme/chartPalettes.ts`) prendeva
+    `CATEGORY_SEQUENCE[index % 8]`: il nono broker aveva il colore del primo.
   - GR5 vuole, oltre la fine di una sequenza, gli stessi colori una sfumatura più in là, come già fanno la
     semi-ciambella e lo storico geografico con `sequenceColor(…, shadePoles(dark, card))`.
   - Rimedio: `growthBrokerColor` passa da `sequenceColor` con i poli della card letti da `chartRoles`. Tocca
@@ -2736,8 +2739,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «W6», passo W6-c.
 - ✅ **DV-9 · Adottare `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` quando T li aggiunge** — minimo; DV, 16/10 (W6-a,
-  regola 7 dello skill `design-system`). **Chiusa il 16/10** (lotto DV-9 sulla base `63e3a22d8`, in attesa del commit
-  del coordinatore).
+  regola 7 dello skill `design-system`). **Chiusa il 16/10**, commit `bf2afbba3` (lotto DV-9 sulla
+  base `63e3a22d8`).
   - Era: `LOSS_CLASS` di `features/risk/AssetSetLossComparisonSection.svelte` scriveva `text-lf-loss`, e le barre sotto
     il taglio di `features/risk/levels/l1/ReturnHistogram.svelte` scrivevano `bg-lf-loss/80`: i ruoli giusti, ma non
     presi dalle tabelle per significato, come vuole la regola 7.

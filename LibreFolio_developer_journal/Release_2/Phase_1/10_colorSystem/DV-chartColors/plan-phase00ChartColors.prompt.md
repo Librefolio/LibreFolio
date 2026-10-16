@@ -1216,6 +1216,45 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
   pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`.
 - [ ] W6-d, dopo l'ingresso di Y.
+- [x] ✅ (16/10/2026) DV-8, le linee dei broker dal nono in poi (coordinatore, 11:48: prima di `ui/display`, perché Y8 della 1.3 aspetta
+  DV-8 su `GrowthChart.svelte`).
+  > **Note implementazione** (16/10, 11:50–12:0x), sulla base `bf2afbba3` (DV-9).
+  > - `growthBrokerColor(index, dark, poles?)` in `lib/theme/chartPalettes.ts`: le prime 8 linee restano i primi 8 tipi
+  >   della designer. Dalla nona passa da `sequenceColor('type', CATEGORY_SEQUENCE, index, dark, poles)`, cioè gli
+  >   stessi 8 colori una sfumatura più in là a ogni giro (GR5), come la semi-ciambella e lo storico geografico.
+  > - **I poli:** se il chiamante non li passa, quelli della card della pagina, `shadePoles(dark,
+  >   chartRoles(dark).color('--lf-surface-card'))`, letti solo dalla nona linea. Il grafico della crescita sta sulla
+  >   card della pagina, senza un tema forzato. Il parametro `poles` resta per un grafico che voglia il proprio elemento.
+  > - **Più piccolo del previsto:** con i poli di default DV-8 si chiude tutto in `chartPalettes.ts`. `GrowthChart.svelte`
+  >   e `growthChartSeries.ts` non cambiano (OK della 1.3 non usato), quindi Y8 non ha incroci.
+  > - **Test:** il blocco `growthBrokerColor` di `lib/theme/chartCategories.test.ts` asseriva proprio la ripetizione (16
+  >   linee = gli stessi 8 due volte). Lo riscrive test-author: 56 colori distinti, la 57ª uguale alla nona, i poli
+  >   espliciti, la lettura dei ruoli solo dalla nona, il Lab che arriva alla sfumatura.
+  >   - **⚠️ Fuori pista:** il primo test-author è morto sul timeout della rete (11:53–11:57) senza fare nulla;
+  >     rilanciato alle 11:59.
+  > - `GrowthChart.test.ts` usa 2 broker e non cambia.
+  > - **Test di test-author** (secondo lancio, 12:00–12:10): il blocco di `chartCategories.test.ts` passa da 2 test
+  >   (3 casi) a 6 test (10 casi). Il file è 95/95, girato col carico a 40,4. Copre:
+  >   - le prime 8 linee;
+  >   - dalla nona, le sfumature con i poli della card;
+  >   - 56 colori distinti, e la 57ª uguale alla nona;
+  >   - i poli espliciti che vincono;
+  >   - la card letta solo dalla nona linea, una volta;
+  >   - il Lab che arriva alla sfumatura.
+  >
+  >   Ha anche un `afterEach` che rimette il lettore dei ruoli.
+  > - **⚠️ Fuori pista minore:** un secondo lancio di test-author, di 4 secondi sullo stesso file, è partito col carico a
+  >   53,3; l'ha dichiarato lui.
+  > - **Note di test-author sul codice, non toccato:**
+  >   - Dal nono broker in poi, ogni linea rifà `chartRoles` (un `getComputedStyle` di `<html>`), non uno per disegno. Costa
+  >     solo oltre gli 8 broker; si toglie passando i poli dal chiamante, che oggi non serve.
+  >   - In chiaro la card si legge e `shadePoles` la ignora.
+  >   - Si legge su `<html>`, non sull'elemento del grafico: va bene finché la crescita non sta in un tema forzato, come
+  >     dice il commento.
+  > - Prettier pulito sui 2 file; `git diff --check` pulito.
+  > - **Non girati per il carico (92):** `roleColors.test.ts` (il controllo dei ruoli morti: la nuova chiamata
+  >   `.color('--lf-surface-card')` legge un ruolo già letto), `chartTheme.test.ts`, `designerLabImports` e
+  >   `scanColors`. Li copre `core-unit` nello slot di W6.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
