@@ -3,6 +3,10 @@
 An item a provider's pause refused (``error_code == "RATE_LIMITED"``, whatever its status or value) is deferred:
 neither ok nor failed. The job's state counts it apart and records ``retry_at``, the end of the shortest pause, when
 the scheduler retries the job before its regular round (``scheduler.py``, release 1.3, Z7b).
+
+The history sync covers the lookback horizon, and reaches further back for an asset or a pair whose last saved value
+is older, at most ``HISTORY_CATCH_UP_MAX_DAYS``: a server that was off, asleep or blocked for longer than the horizon
+fills its gap (release 1.3, Z-5).
 """
 
 import json
@@ -10,10 +14,10 @@ import time as time_module
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetProviderAssignment, FxConversionRoute
+from backend.app.db.models import Asset, AssetProviderAssignment, FxConversionRoute, FxRate, PriceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
@@ -31,6 +35,10 @@ logger = structlog.get_logger(__name__)
 
 #: The ``error_code`` of an item a provider's pause refused: the item is deferred, neither ok nor failed.
 RATE_LIMITED = "RATE_LIMITED"
+
+#: The furthest back, in days, a history sync reaches to fill the gap of an asset or a pair behind the horizon: the
+#: lookback horizon's own maximum (``scheduler_history_sync_horizon_days``, 1–365).
+HISTORY_CATCH_UP_MAX_DAYS = 365
 
 
 def _classify_job_status(ok_count: int, total_count: int, deferred_count: int = 0) -> str:
@@ -53,6 +61,46 @@ def _retry_at(deferred: list, now: datetime) -> str | None:
     if not waits:
         return None
     return (now + timedelta(seconds=min(waits))).isoformat()
+
+
+def _history_sync_start(today: date, horizon_days: int, last_saved: date | None) -> date:
+    """Where the history sync of an asset or a pair starts (release 1.3, Z-5).
+
+    The lookback horizon, or the day after the last saved value when that is older: never more than
+    ``HISTORY_CATCH_UP_MAX_DAYS`` back, and never after the horizon. Without a saved value the horizon stays: fetching
+    a whole history remains a manual sync.
+    """
+    horizon_start = today - timedelta(days=horizon_days)
+    if last_saved is None:
+        return horizon_start
+    resume = last_saved + timedelta(days=1)
+    if resume >= horizon_start:
+        return horizon_start
+    return max(resume, min(horizon_start, today - timedelta(days=HISTORY_CATCH_UP_MAX_DAYS)))
+
+
+async def _last_price_dates(session: AsyncSession, asset_ids: list[int]) -> dict[int, date]:
+    """The date of each asset's last saved price, for the assets that have one."""
+    if not asset_ids:
+        return {}
+    statement = select(PriceHistory.asset_id, func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(asset_ids)).group_by(PriceHistory.asset_id)
+    rows = (await session.execute(statement)).all()
+    return {asset_id: last for asset_id, last in rows if last is not None}
+
+
+async def _last_fx_dates(session: AsyncSession, pairs: list[str]) -> dict[str, date]:
+    """The date of each pair's last saved rate, keyed by the slug as given.
+
+    ``FxRate`` keeps a pair in alphabetical order (``base < quote``), so ``USD-EUR`` reads the rows of ``EUR-USD``.
+    """
+    keys = {pair: tuple(sorted(parts)) for pair in pairs if len(parts := pair.split("-")) == 2}
+    if not keys:
+        return {}
+    conditions = [and_(FxRate.base == base, FxRate.quote == quote) for base, quote in sorted(set(keys.values()))]
+    statement = select(FxRate.base, FxRate.quote, func.max(FxRate.date)).where(or_(*conditions)).group_by(FxRate.base, FxRate.quote)
+    rows = (await session.execute(statement)).all()
+    last_by_key = {(base, quote): last for base, quote, last in rows if last is not None}
+    return {pair: last_by_key[key] for pair, key in keys.items() if key in last_by_key}
 
 
 async def run_current_price_refresh(state: SchedulerState) -> None:
@@ -113,15 +161,21 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
 
 
 async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> None:
-    """Sync historical prices for active assets + all FX routes."""
+    """Sync historical prices for active assets + all FX routes.
+
+    Each asset, and the FX pairs together, start at the horizon, or further back when their last saved value is older
+    (``_history_sync_start``): a server that was off, asleep or blocked for longer than the horizon fills its gap.
+    """
     t_start = time_module.monotonic()
     engine = get_async_engine()
     today = date.today()
-    start_date = today - timedelta(days=horizon_days)
+    horizon_start = today - timedelta(days=horizon_days)
 
     asset_results_list: list = []
     fx_results_list: list = []
     asset_names: dict[int, str] = {}
+    last_price_dates: dict[int, date] = {}
+    fx_starts: list[date] = []
 
     # --- Asset history sync ---
     async with AsyncSession(engine) as session:
@@ -131,12 +185,15 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
         asset_ids = [r[0] for r in rows]
         asset_names = {r[0]: r[1] for r in rows}
         asset_icons: dict[int, str | None] = {r[0]: r[2] for r in rows}
+        if asset_ids:
+            last_price_dates = await _last_price_dates(session, asset_ids)
 
+    asset_starts = {aid: _history_sync_start(today, horizon_days, last_price_dates.get(aid)) for aid in asset_ids}
     if asset_ids:
         refresh_items = [
             FARefreshItem(
                 asset_id=aid,
-                date_range=DateRangeModel(start=start_date, end=today),
+                date_range=DateRangeModel(start=asset_starts[aid], end=today),
             )
             for aid in asset_ids
         ]
@@ -165,8 +222,21 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
         if pairs_set:
             pairs_list = sorted(pairs_set)
-            fx_response = await sync_pairs_bulk(session, pairs_list, (start_date, today))
+            last_fx_dates = await _last_fx_dates(session, pairs_list)
+            fx_starts = [_history_sync_start(today, horizon_days, last_fx_dates.get(pair)) for pair in pairs_list]
+            # One call for every pair: the providers fetch by currency, so a pair behind widens the days, not the requests.
+            fx_response = await sync_pairs_bulk(session, pairs_list, (min(fx_starts), today))
             fx_results_list = list(fx_response.results)
+
+    assets_behind = sum(1 for start in asset_starts.values() if start < horizon_start)
+    fx_pairs_behind = sum(1 for start in fx_starts if start < horizon_start)
+    if assets_behind or fx_pairs_behind:
+        logger.info(
+            "Scheduler: history sync reaches back",
+            assets_behind=assets_behind,
+            fx_pairs_behind=fx_pairs_behind,
+            earliest_start=min([*asset_starts.values(), *fx_starts]).isoformat(),
+        )
 
     duration = time_module.monotonic() - t_start
     asset_deferred = [r for r in asset_results_list if _is_deferred(r)]

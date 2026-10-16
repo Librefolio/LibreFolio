@@ -1,4 +1,4 @@
-"""The test server's builds run before its startup timeout, and a tree without node_modules stops before npx (C-94).
+"""The test server's builds run before its startup timeout, a tree without node_modules stops before npx (C-94), and a failed start shows the backend's own output (H-12).
 
 ``dev.py server --test`` builds what it serves before it binds: the frontend in debug (``auto_build_frontend``, or
 ``cmd_fe_build`` under ``--rebuild``), the MkDocs site, the JS cache. ``SharedTestServer.start()`` launched it with its
@@ -6,6 +6,9 @@ output on DEVNULL and started ``STARTUP_TIMEOUT`` right after the ``Popen``, so 
 counted against the startup timeout, invisibly; the gallery's Playwright ``webServer`` had the same problem. And
 without ``frontend/node_modules`` the frontend build went on to ``npx svelte-check`` and to ``npm run generate-api``,
 which calls ``npx openapi-zod-client``: npx then fetches from the registry instead of running the locked version.
+The backend's own output stayed on DEVNULL once the builds had moved out: a start that failed said only ``Shared
+backend exited during startup (code N)`` or ``Shared backend did not answer within Ns``, and nobody could tell why
+(H-12).
 
 The contracts held here:
 
@@ -25,15 +28,32 @@ The contracts held here:
   nothing;
 * without ``--workers``, ``mkdocs gallery`` runs ``default_gallery_workers()`` browser workers, 60 % of the
   ``os.cpu_count()`` read at each call (two CPUs when it cannot tell), rounded, at least one, and sizes its server from
-  them; an explicit ``--workers`` wins.
+  them; an explicit ``--workers`` wins;
+* outside ``--verbose``, ``SharedTestServer.start()`` gives the backend a log file as its stdout, its stderr merged in
+  (a file, never a pipe): its ``log_path``, else ``shared_backend_log_path()``, ``shared-backend.log`` in the run's
+  log folder, read at ``start()``. An instance's first start on that path empties the file (a previous run's, an
+  earlier instance's) and creates its folder; a later start of the same instance on it, as when ``db create`` restarts
+  the backend mid-run (``database_file_owned_exclusively()``), appends. The runner's own handle is closed right after
+  the spawn, the path named in the info line before it. Without a run log folder (``_common.get_log_dir()`` None, as
+  in this pytest process) the backend's output stays on DEVNULL, and under ``--verbose`` on the terminal: no file is
+  written and ``log_path`` is None;
+* a start that fails, by an exit during its startup or by ``STARTUP_TIMEOUT``, prints after its error line and before
+  ``stop()`` the log's path and the last 30 lines this start wrote (fewer when it wrote fewer, ``(no output)`` when it
+  wrote none, whatever earlier starts wrote), read by ``log_tail()`` from the file's size at the open and from at most
+  its last 64 KiB, a line cut by that limit left out, bytes that are not UTF-8 replaced; without a log, under
+  ``--verbose`` and after a start that succeeds, no tail comes out.
 
 PURE — no server, no database, no network. Every seam (the build steps, ``subprocess``, ``os.execvpe``, signals,
 lsof, health, the clock, the CPU count, the build step's ``sys`` streams) is faked, the ``node_modules/.bin`` layouts
-live under ``tmp_path``, and an autouse fixture forbids every real process: one that started would build the frontend.
+and the backend's logs live under ``tmp_path`` (the run log folder set through monkeypatch only, never the real
+``.testLog``), and an autouse fixture forbids every real process: one that started would build the frontend. One case,
+in a class of its own, is the exception: it lets one real child start, through the real ``scripts/exec_unmasked.py`` —
+a one-line Python that writes to its stderr and exits, never the backend — and signals no process group but its own.
 """
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import subprocess
@@ -784,3 +804,626 @@ class TestGalleryDefaultBrowserWorkers:
 
         (args,) = parsed
         assert vars(args).get("workers", "<no workers>") == expected
+
+
+# ── Contract 7 — the backend's output goes to a log file, whose tail a failed start prints (H-12) ──
+#
+# start() gave the backend DEVNULL for its stdout and stderr: a backend that exited during its startup left "Shared
+# backend exited during startup (code N)", one that hung "Shared backend did not answer within Ns", and nothing said
+# why. Outside --verbose its output now goes to a file: log_path when given, else shared-backend.log in the run's log
+# folder (--log-dir, .testLog by default, which the runner prepares before it starts the backend), read at start().
+# A failed start prints the file's last lines. Without a run log folder the spawn stays on DEVNULL: this pytest process
+# has none (_common._LOG_DIR is None), and a fallback to <root>/.testLog would let every fake start() of these files
+# truncate the live server's log in the middle of an all-backend run.
+#
+# A restart of the same instance (db create stops the shared backend and starts it again, mid-run) appends instead of
+# emptying the file, and its failure prints only what it wrote itself: from the file's size when it opened it.
+#
+# Before H-12, SharedTestServer.__init__ has no log_path and _server neither shared_backend_log_path nor log_tail: all
+# are looked up at call time, so the contracts above still run and every case below fails on one of these barriers.
+
+#: The log's name in the run's log folder.
+SHARED_BACKEND_LOG_NAME = "shared-backend.log"
+#: What an empty log prints instead of lines: the contract's example, and the one literal of the tail pinned here.
+EMPTY_LOG_MARKER = "(no output)"
+#: The most of the log a failed start may read to find its last lines.
+TAIL_READ_LIMIT = 64 * 1024
+#: How the backend that dies during its startup exits, and today's error line for it, which the tail follows.
+EXIT_CODE_DURING_STARTUP = 3
+EXITED_LINE = f"Shared backend exited during startup (code {EXIT_CODE_DURING_STARTUP})"
+#: Bytes no UTF-8 decoder accepts: a lone continuation byte, two bytes UTF-8 never uses, a sequence cut short.
+NOT_UTF8 = b"\x80\xfe\xff\xc3"
+#: 41 lines: one of bytes that are not UTF-8, then ``line 1`` … ``line 40``, ``line 33`` ending in such bytes too. The
+#: last 30 are ``line 11`` … ``line 40``; ``line 10`` is the 31st from the end.
+FORTY_LINES_AMID_BAD_BYTES = NOT_UTF8 + b"\n" + b"".join(f"line {number}".encode() + (b" " + NOT_UTF8 if number == 33 else b"") + b"\n" for number in range(1, 41))
+#: An ANSI colour sequence: the runner colours its lines, the assertions read their text.
+ANSI_SEQUENCE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def backend_output(*numbers: int) -> bytes:
+    """What a backend printed: ``line N`` for each of ``numbers``, one per line."""
+    return b"".join(f"line {number}\n".encode() for number in numbers)
+
+
+def numbered_lines(text: str, word: str = "line") -> list[int]:
+    """The ``N`` of each ``<word> N`` in ``text``, in order: which of the backend's numbered lines came out."""
+    return [int(number) for number in re.findall(rf"\b{re.escape(word)} (\d+)\b", text)]
+
+
+def plain(text: str) -> str:
+    """``text`` without its ANSI colour sequences."""
+    return ANSI_SEQUENCE.sub("", text)
+
+
+def excerpt(text: str, size: int = 1500) -> str:
+    """``text`` for a failure message: only its two ends when it is long (one case prints a line of 64 KiB)."""
+    return text if len(text) <= 2 * size else f"{text[:size]} […] {text[-size:]}"
+
+
+def shared_backend_log_path():
+    """``_server.shared_backend_log_path()``, looked up at call time: before H-12 it does not exist."""
+    function = getattr(test_runner_server, "shared_backend_log_path", None)
+    assert callable(function), "H-12: shared_backend_log_path is missing"
+    return function()
+
+
+def log_tail(path: Path, **kwargs) -> list[str]:
+    """``_server.log_tail(path, **kwargs)``, looked up at call time, its lines without their newline: before H-12 it does not exist."""
+    function = getattr(test_runner_server, "log_tail", None)
+    assert callable(function), "H-12: log_tail is missing"
+    return [line.rstrip("\n") for line in function(path, **kwargs)]
+
+
+def logging_server(**kwargs) -> test_runner_server.SharedTestServer:
+    """``SharedTestServer(**kwargs)``, whose ``__init__`` takes H-12's ``log_path``: before H-12 it takes none."""
+    assert "log_path" in inspect.signature(test_runner_server.SharedTestServer.__init__).parameters, "H-12: SharedTestServer has no log_path"
+    return test_runner_server.SharedTestServer(**kwargs)
+
+
+def exposed_log_path(server):
+    """``server.log_path``, which ``start()`` sets in every mode: the file it wrote, None when it wrote none."""
+    assert hasattr(server, "log_path"), "H-12: SharedTestServer exposes no log_path after start()"
+    return server.log_path
+
+
+@pytest.fixture
+def run_log_dir(monkeypatch):
+    """``_common``'s run log folder, what ``--log-dir`` prepared: None to begin with, set by the test, put back after.
+
+    Only through monkeypatch, never ``set_log_dir()``: whatever the test does, the next one finds the folder this
+    process had (None in this pytest process). A case that needs one sets a folder under ``tmp_path``.
+    """
+    monkeypatch.setattr(test_runner_common, "_LOG_DIR", None)
+
+    def set_run_log_dir(path: Path | None) -> None:
+        monkeypatch.setattr(test_runner_common, "_LOG_DIR", path)
+
+    return set_run_log_dir
+
+
+class LogWritingSpawn:
+    """A fake ``Popen`` that writes ``output`` through the ``stdout`` it is given, then returns ``process``.
+
+    Through the descriptor, as the backend does: the bytes land in the file whatever the runner's handle buffers, after
+    whatever the runner left in it. ``calls`` holds each call's keywords; ``open_and_writable``, the runner's handle as
+    the spawn received it.
+    """
+
+    def __init__(self, process, output: bytes = b""):
+        self.process, self.output = process, output
+        self.calls: list[dict] = []
+        self.open_and_writable: list[bool] = []
+
+    def __call__(self, *_args, **kwargs):
+        self.calls.append(kwargs)
+        stdout = kwargs.get("stdout")
+        if hasattr(stdout, "fileno"):
+            self.open_and_writable.append(not stdout.closed and stdout.writable())
+        if self.output:
+            assert hasattr(stdout, "fileno"), f"H-12: the backend's stdout is {stdout!r}, not the log file"
+            assert os.write(stdout.fileno(), self.output) == len(self.output), "the fake backend's output was cut short"
+        return self.process
+
+    @property
+    def stdout(self):
+        """The ``stdout`` of the one spawn."""
+        (kwargs,) = self.calls
+        return kwargs.get("stdout")
+
+
+class ExitedServerProcess:
+    """The ``Popen`` of a backend that died during its startup: ``poll()`` answers its exit code at once."""
+
+    pid, returncode = SERVER_PID, EXIT_CODE_DURING_STARTUP
+
+    def poll(self):
+        return self.returncode
+
+
+class HandleWatchingProcess(FakeServerProcess):
+    """A backend that stays up and notes, at each ``poll()``, whether the runner's handle on its log is closed by then."""
+
+    def __init__(self):
+        self.spawn: LogWritingSpawn | None = None
+        self.handle_closed_at_poll: list = []
+
+    def poll(self):
+        self.handle_closed_at_poll.append(getattr(self.spawn.stdout, "closed", None))
+        return None
+
+
+class AdvancingClock(FakeClock):
+    """A ``FakeClock`` whose ``sleep`` moves ``now`` instead of waiting: a startup deadline passes in no real time."""
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+def patch_logging_start(monkeypatch, spawn, *, healthy: bool = True, holders=(), clock=None) -> None:
+    """``patch_start`` with a build step that succeeds and ``spawn`` as the backend; ``healthy=False``: it never answers."""
+    patch_start(monkeypatch, holders=holders, build=lambda *_args, **_kwargs: True, spawn=spawn, clock=clock)
+    if not healthy:
+        monkeypatch.setattr(test_runner_server, "is_healthy", lambda *_args, **_kwargs: False)
+
+
+def record_output_at_stop(monkeypatch, server, capsys) -> list[str]:
+    """Replace ``server.stop`` with a recorder of what the runner had printed (stdout, then stderr) when it called it.
+
+    One entry per call, colours removed. Whatever the runner prints after ``stop()`` stays in ``capsys``.
+    """
+    printed: list[str] = []
+
+    def stop():
+        out, err = capsys.readouterr()
+        printed.append(plain(out + err))
+
+    monkeypatch.setattr(server, "stop", stop)
+    return printed
+
+
+def printed_before_the_only_stop(printed_at_stop: list[str]) -> str:
+    """What the runner had printed when it called ``stop()``, which a failed start calls once."""
+    assert len(printed_at_stop) == 1, f"stop() ran {len(printed_at_stop)} times: a failed start stops its backend once"
+    return printed_at_stop[0]
+
+
+def assert_tail_printed(printed: str, failure_line: str, log_path: Path, expected: list[int], *, word: str = "line") -> None:
+    """``failure_line`` in ``printed``, then a line naming ``log_path``, then exactly the backend lines ``expected``.
+
+    Where a case checks that the tail comes before ``stop()``, ``printed`` is what came out before ``stop()`` ran.
+    """
+    assert failure_line in printed, f"today's error line {failure_line!r} did not come out: {excerpt(printed)!r}"
+    named_at = printed.find(str(log_path), printed.index(failure_line))
+    assert named_at >= 0, f"H-12: no line naming {log_path} after {failure_line!r}: {excerpt(printed)!r}"
+    assert numbered_lines(printed[:named_at], word) == [], f"backend lines came out before the line naming the log: {excerpt(printed)!r}"
+    assert numbered_lines(printed[named_at:], word) == expected, f"H-12: the tail brought back the backend's lines {numbered_lines(printed[named_at:], word)}, not {expected}"
+
+
+@pytest.mark.usefixtures("run_log_dir")
+class TestSharedBackendLog:
+    """Outside ``--verbose``, the backend's stdout and stderr go to one log file, emptied by an instance's first ``start()``."""
+
+    def test_the_backend_gets_the_log_file_as_stdout_and_its_stderr_merged_into_it(self, monkeypatch, tmp_path):
+        # A file, never a pipe: a backend that writes a lot never blocks on a reader that has stopped reading.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        spawn = LogWritingSpawn(FakeServerProcess(), backend_output(1, 2))
+        patch_logging_start(monkeypatch, spawn)
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        (kwargs,) = spawn.calls
+        stdout = kwargs.get("stdout")
+        assert isinstance(getattr(stdout, "name", None), (str, os.PathLike)), f"H-12: the backend's stdout is {stdout!r}, not a file"
+        assert Path(stdout.name) == log_path
+        assert spawn.open_and_writable == [True], "the runner's handle on the log was not open for writing when the backend got it"
+        assert kwargs.get("stderr") == subprocess.STDOUT
+        assert log_path.read_bytes() == backend_output(1, 2)
+        assert exposed_log_path(server) == log_path
+
+    def test_a_previous_log_is_emptied_before_the_backend_writes(self, monkeypatch, tmp_path):
+        # An instance's first start writes the file afresh: a run's log holds that run's backend, never what a previous
+        # run left (an earlier instance's leftovers: TestSharedBackendLogRestart).
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        log_path.write_bytes(b"a line of the previous run\n" * 100)
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(FakeServerProcess(), backend_output(1)))
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        assert log_path.read_bytes() == backend_output(1)
+
+    def test_a_missing_log_folder_is_created(self, monkeypatch, tmp_path):
+        log_path = tmp_path / "not" / "there" / "yet" / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(FakeServerProcess(), backend_output(1)))
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        assert log_path.read_bytes() == backend_output(1)
+
+    def test_the_runner_closes_its_handle_on_the_log_right_after_the_spawn(self, monkeypatch, tmp_path):
+        # The backend keeps its own descriptor. Closed only by stop(), the runner's would stay open for the backend's
+        # whole life; closed when start() returns, it would still be open while start() waits for the first answer.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        process = HandleWatchingProcess()
+        spawn = process.spawn = LogWritingSpawn(process)
+        patch_logging_start(monkeypatch, spawn)
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        assert spawn.open_and_writable == [True], "the runner's handle on the log was not open for writing when the backend got it"
+        assert process.handle_closed_at_poll and all(closed is True for closed in process.handle_closed_at_poll), f"H-12: the runner's handle on the log was not closed when start() polled the backend: {process.handle_closed_at_poll}"
+
+    def test_the_info_line_before_the_spawn_names_the_log(self, monkeypatch, tmp_path):
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        events: list[tuple[str, str]] = []
+        spawn = LogWritingSpawn(FakeServerProcess())
+        patch_logging_start(monkeypatch, lambda *args, **kwargs: events.append(("spawn", "")) or spawn(*args, **kwargs))
+        monkeypatch.setattr(test_runner_server, "print_info", lambda message: events.append(("info", plain(message))))
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        before_spawn = events[: events.index(("spawn", ""))]
+        assert any(kind == "info" and str(log_path) in message for kind, message in before_spawn), f"H-12: no info line names {log_path} before the spawn: {events}"
+
+    def test_without_a_log_path_the_log_is_shared_backend_log_in_the_run_log_dir_read_at_start(self, monkeypatch, tmp_path, run_log_dir):
+        # The runner prepares --log-dir before it starts the backend: the live server's log lands beside the units'
+        # logs. The folder is read by start(), not when the server is built: it is set here once the server exists.
+        server = logging_server()
+        run_log_dir(tmp_path / "run-logs")
+        expected = tmp_path / "run-logs" / SHARED_BACKEND_LOG_NAME
+        spawn = LogWritingSpawn(FakeServerProcess(), backend_output(1))
+        patch_logging_start(monkeypatch, spawn)
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert shared_backend_log_path() == expected
+        assert server.start() is True
+
+        assert Path(getattr(spawn.stdout, "name", "<not a file>")) == expected
+        assert expected.read_bytes() == backend_output(1)
+        assert exposed_log_path(server) == expected
+
+    def test_without_a_run_log_dir_the_output_stays_on_devnull_and_no_tail_comes_out(self, monkeypatch, tmp_path, capsys):
+        # This pytest process has no run log folder, like every utilities run: a fallback to <root>/.testLog would
+        # truncate the live server's log under all-backend. PROJECT_ROOT and the working directory point under
+        # tmp_path, so a fallback through either would write where this test looks, never into the real tree.
+        server = logging_server()
+        project_root, cwd = tmp_path / "project", tmp_path / "cwd"
+        for folder in (project_root, cwd):
+            folder.mkdir()
+        for module in (test_runner_server, test_runner_common):
+            monkeypatch.setattr(module, "PROJECT_ROOT", project_root)
+        monkeypatch.chdir(cwd)
+        spawn = LogWritingSpawn(ExitedServerProcess())
+        patch_logging_start(monkeypatch, spawn)
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert shared_backend_log_path() is None
+        assert server.start() is False
+
+        (kwargs,) = spawn.calls
+        assert (kwargs.get("stdout"), kwargs.get("stderr")) == (subprocess.DEVNULL, subprocess.DEVNULL)
+        assert [path for path in tmp_path.rglob("*") if path.is_file()] == []
+        assert exposed_log_path(server) is None
+        lines = [line for line in printed_before_the_only_stop(printed_at_stop).splitlines() if line.strip()]
+        assert lines and EXITED_LINE in lines[-1], f"H-12: something came out after today's error line with no log to show: {lines}"
+        assert not any(SHARED_BACKEND_LOG_NAME in line for line in lines), f"H-12: a log was named with no run log folder: {lines}"
+        assert plain("".join(capsys.readouterr())) == ""
+
+    def test_verbose_leaves_the_output_on_the_terminal_and_writes_no_log(self, monkeypatch, tmp_path, run_log_dir):
+        # As before H-12: --verbose shows the backend's output as it happens, a log_path and a run log folder given alike.
+        run_log_dir(tmp_path / "run-logs")
+        server = logging_server(verbose=True, log_path=tmp_path / "given" / SHARED_BACKEND_LOG_NAME)
+        spawn = LogWritingSpawn(FakeServerProcess())
+        patch_logging_start(monkeypatch, spawn)
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        (kwargs,) = spawn.calls
+        assert (kwargs.get("stdout"), kwargs.get("stderr")) == (None, None)
+        assert [path for path in tmp_path.rglob("*") if path.is_file()] == []
+        assert exposed_log_path(server) is None
+
+
+@pytest.mark.usefixtures("run_log_dir")
+class TestSharedBackendLogTail:
+    """A start that fails prints, after its error line and before ``stop()``, the log's path and its last 30 lines."""
+
+    def test_an_exit_during_startup_prints_the_log_path_then_its_last_30_lines(self, monkeypatch, tmp_path, capsys):
+        # FORTY_LINES_AMID_BAD_BYTES: the last 30 are line 11 … line 40, line 10 is the 31st. Its bytes that are not
+        # UTF-8 cost a replacement character, never an exception: the line before line 1 trips a strict decoder of the
+        # whole read, the end of line 33 one that decodes only the last lines.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(ExitedServerProcess(), FORTY_LINES_AMID_BAD_BYTES))
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        assert_tail_printed(printed_before_the_only_stop(printed_at_stop), EXITED_LINE, log_path, list(range(11, 41)))
+
+    def test_a_startup_timeout_prints_the_log_path_then_its_last_30_lines(self, monkeypatch, tmp_path, capsys):
+        # A backend that neither answers nor exits: the deadline passes on the fake clock, which each sleep moves on.
+        monkeypatch.setattr(test_runner_server, "STARTUP_TIMEOUT", 1)
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(FakeServerProcess(), backend_output(*range(1, 36))), healthy=False, clock=AdvancingClock())
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        assert_tail_printed(printed_before_the_only_stop(printed_at_stop), "Shared backend did not answer within 1s", log_path, list(range(6, 36)))
+
+    def test_a_log_shorter_than_the_tail_comes_out_whole(self, monkeypatch, tmp_path, capsys):
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(ExitedServerProcess(), backend_output(1, 2, 3)))
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        assert_tail_printed(printed_before_the_only_stop(printed_at_stop), EXITED_LINE, log_path, [1, 2, 3])
+
+    def test_an_empty_log_prints_the_marker_instead_of_lines(self, monkeypatch, tmp_path, capsys):
+        # A backend that died before printing anything: the marker says so, where an empty tail would say nothing.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(ExitedServerProcess()))
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        printed = printed_before_the_only_stop(printed_at_stop)
+        assert_tail_printed(printed, EXITED_LINE, log_path, [])
+        named_at = printed.index(str(log_path), printed.index(EXITED_LINE))
+        assert EMPTY_LOG_MARKER in printed[named_at:], f"H-12: no {EMPTY_LOG_MARKER!r} after the line naming the empty log: {printed!r}"
+        assert log_path.read_bytes() == b""
+
+    def test_the_tail_reads_no_more_than_the_last_64_kib_of_the_log(self, monkeypatch, tmp_path, capsys):
+        # line 1 … line 10, a line of 64 KiB, line 11 … line 20: 21 lines, all of them in the last 30 of a whole read.
+        # From the last 64 KiB the long line comes cut, and is left out, and line 1 … line 10 are out of reach: a
+        # runner that prints them read further back, as it would through a log that grew for the whole STARTUP_TIMEOUT.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        output = backend_output(*range(1, 11)) + b"x" * TAIL_READ_LIMIT + b"\n" + backend_output(*range(11, 21))
+        server = logging_server(log_path=log_path)
+        patch_logging_start(monkeypatch, LogWritingSpawn(ExitedServerProcess(), output))
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        assert_tail_printed(printed_before_the_only_stop(printed_at_stop), EXITED_LINE, log_path, list(range(11, 21)))
+
+    def test_verbose_prints_no_tail_when_the_start_fails(self, monkeypatch, tmp_path, capsys, run_log_dir):
+        # The backend's output is already on the terminal. A previous run's log sits at both paths a wrong runner could
+        # read: it stays as it was, and none of it comes out.
+        run_log_dir(tmp_path / "run-logs")
+        previous_logs = (tmp_path / "given" / SHARED_BACKEND_LOG_NAME, tmp_path / "run-logs" / SHARED_BACKEND_LOG_NAME)
+        for path in previous_logs:
+            path.parent.mkdir()
+            path.write_bytes(backend_output(1, 2, 3))
+        server = logging_server(verbose=True, log_path=previous_logs[0])
+        patch_logging_start(monkeypatch, LogWritingSpawn(ExitedServerProcess()))
+        printed_at_stop = record_output_at_stop(monkeypatch, server, capsys)
+
+        assert server.start() is False
+
+        printed = printed_before_the_only_stop(printed_at_stop) + plain("".join(capsys.readouterr()))
+        assert EXITED_LINE in printed
+        assert (numbered_lines(printed), SHARED_BACKEND_LOG_NAME in printed, EMPTY_LOG_MARKER in printed) == ([], False, False), printed
+        assert [path.read_bytes() for path in previous_logs] == [backend_output(1, 2, 3)] * 2
+        assert exposed_log_path(server) is None
+
+    def test_a_successful_start_prints_no_tail(self, monkeypatch, tmp_path, capsys):
+        # The backend printed its startup lines and answered from a port it owns: today's lines come out, the path in
+        # the info line, and nothing of the log.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        spawn = LogWritingSpawn(FakeServerProcess(), backend_output(1, 2, 3))
+        patch_logging_start(monkeypatch, spawn, holders=lambda port=None: [str(SERVER_PID)] if spawn.calls else [])
+        forbid(monkeypatch, server, "stop", "a start that is healthy at its first poll must not be stopped")
+
+        assert server.start() is True
+
+        printed = plain("".join(capsys.readouterr()))
+        assert f"Shared backend ready on port {server.port}" in printed
+        assert (numbered_lines(printed), printed.count(str(log_path)) <= 1, EMPTY_LOG_MARKER in printed) == ([], True, False), printed
+
+
+class StoppableServerProcess(FakeServerProcess):
+    """A backend that answers and stays up until the real ``stop()`` waits for it after its SIGTERM: ``wait()`` ends it."""
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        self.returncode = -int(test_runner_server.signal.SIGTERM)
+        return self.returncode
+
+
+def killpg_ending_the_fake_group(group, sig) -> None:
+    """``os.killpg`` for the real ``stop()``: the fake backend's group takes the SIGTERM, then is gone at the next look."""
+    assert group == SERVER_GROUP, f"a signal for process group {group}, which is not the fake backend's"
+    if sig == 0:
+        raise ProcessLookupError(group)
+
+
+def patch_restarts(monkeypatch) -> None:
+    """Fake what ``start()`` and the real ``stop()`` reach, for a server started more than once; each start brings its backend.
+
+    ``stop()``'s SIGTERM reaches a fake that signals nothing, after which the group is gone; its wait ends the
+    ``StoppableServerProcess``; the port is free. Nothing sleeps: ``patch_start``'s clock fails any sleep.
+    """
+    patch_start(monkeypatch, build=lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(test_runner_server.os, "killpg", killpg_ending_the_fake_group)
+
+
+def spawning(monkeypatch, process, output: bytes = b"") -> LogWritingSpawn:
+    """Make the next ``start()``'s backend ``process``, which writes ``output`` through the ``stdout`` it is given."""
+    spawn = LogWritingSpawn(process, output)
+    monkeypatch.setattr(test_runner_server.subprocess, "Popen", spawn)
+    return spawn
+
+
+def first_start_then_stop(monkeypatch, server, capsys, output: bytes) -> None:
+    """A start of ``server`` whose backend writes ``output`` and answers, then the real ``stop()``; what they print is dropped."""
+    spawning(monkeypatch, StoppableServerProcess(), output)
+    assert server.start() is True
+    server.stop()
+    assert (server.proc, server.process_group_id, server.started_here) == (None, None, False), "the real stop() did not run to its end"
+    capsys.readouterr()
+
+
+@pytest.mark.usefixtures("run_log_dir")
+class TestSharedBackendLogRestart:
+    """A restart of the same server appends to its log, and its failure shows only the lines the restart wrote.
+
+    ``database_file_owned_exclusively()`` (``db create``) stops the shared backend and starts the same instance again in
+    the middle of a run: emptied by that start, the log would lose the first server's output. The real ``stop()`` runs
+    between the starts, as there; only its signals and its wait are faked.
+    """
+
+    def test_a_restart_appends_and_its_failure_prints_only_its_own_lines(self, monkeypatch, tmp_path, capsys):
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_restarts(monkeypatch)
+        first_start_then_stop(monkeypatch, server, capsys, b"first start\n")
+        spawning(monkeypatch, ExitedServerProcess(), b"second 1\nsecond 2\nsecond 3\n")
+
+        assert server.start() is False
+
+        assert log_path.read_bytes() == b"first start\nsecond 1\nsecond 2\nsecond 3\n", "H-12: the restart did not append to the first start's log"
+        printed = plain("".join(capsys.readouterr()))
+        assert_tail_printed(printed, EXITED_LINE, log_path, [1, 2, 3], word="second")
+        assert "first start" not in printed, f"H-12: the restart's tail brought back the first start's line: {printed!r}"
+
+    def test_a_restart_that_wrote_nothing_prints_the_marker_not_the_earlier_lines(self, monkeypatch, tmp_path, capsys):
+        # The file is not empty, the restart's share of it is: the marker, read from the size at the restart's open.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        patch_restarts(monkeypatch)
+        first_start_then_stop(monkeypatch, server, capsys, b"first start\n")
+        spawning(monkeypatch, ExitedServerProcess())
+
+        assert server.start() is False
+
+        assert log_path.read_bytes() == b"first start\n", "H-12: the restart did not keep the first start's log"
+        printed = plain("".join(capsys.readouterr()))
+        assert_tail_printed(printed, EXITED_LINE, log_path, [])
+        named_at = printed.index(str(log_path), printed.index(EXITED_LINE))
+        assert EMPTY_LOG_MARKER in printed[named_at:], f"H-12: no {EMPTY_LOG_MARKER!r} for a restart that wrote nothing: {printed!r}"
+        assert "first start" not in printed, f"H-12: the restart's tail brought back the first start's line: {printed!r}"
+
+    def test_a_new_server_empties_the_log_an_earlier_server_left(self, monkeypatch, tmp_path, capsys):
+        # Appending is a restart's: another instance, as the next invocation's, starts the log afresh. A record of the
+        # logs already opened kept beyond the instance (on the class, in the module) would append here.
+        log_path = tmp_path / SHARED_BACKEND_LOG_NAME
+        earlier, later = logging_server(log_path=log_path), logging_server(log_path=log_path)
+        patch_restarts(monkeypatch)
+        first_start_then_stop(monkeypatch, earlier, capsys, b"earlier server\n")
+        spawning(monkeypatch, StoppableServerProcess(), b"later server\n")
+
+        assert later.start() is True
+
+        assert log_path.read_bytes() == b"later server\n"
+
+
+class TestLogTail:
+    """``log_tail()``: the last lines written after an offset, read from at most the file's last bytes, whole lines only."""
+
+    def test_whole_lines_after_the_offset_from_at_most_the_last_max_bytes(self, tmp_path):
+        # 76 bytes: old 1 and old 2 (12 bytes), an earlier start's, before the offset; then line 1 … line 9, 7 bytes each
+        # but line 8, which ends in a byte that is not UTF-8. The last 33 bytes begin inside line 5, at "e 5": that piece
+        # is left out. Read from the offset, nothing is cut: line 1 comes whole.
+        earlier = b"old 1\nold 2\n"
+        path = tmp_path / SHARED_BACKEND_LOG_NAME
+        path.write_bytes(earlier + backend_output(*range(1, 8)) + b"line 8\xff\n" + backend_output(9))
+        offset, size = len(earlier), path.stat().st_size
+        this_start = [f"line {number}" for number in range(1, 8)] + ["line 8\ufffd", "line 9"]
+
+        assert log_tail(path, offset=offset, lines=30, max_bytes=33) == this_start[5:]
+        assert log_tail(path, offset=offset, lines=3, max_bytes=1000) == this_start[-3:]
+        assert log_tail(path, offset=offset, lines=30, max_bytes=1000) == this_start
+        assert log_tail(path, offset=0, lines=30, max_bytes=1000) == ["old 1", "old 2", *this_start]
+        assert log_tail(path, offset=size, lines=30, max_bytes=1000) == []
+
+
+# ── Contract 7, end to end — a real child's stderr reaches the log through the real spawn ──
+
+#: The real child of the case below: what it writes to its stderr, how it exits, and the command that does both.
+CHILD_FAILURE = "boom: the configuration cannot be read"
+CHILD_EXIT_CODE = 3
+CHILD_COMMAND = (sys.executable, "-c", f"import sys; print({CHILD_FAILURE!r}, file=sys.stderr); sys.exit({CHILD_EXIT_CODE})")
+#: A bound, not a wait: the child is gone in well under a second; one that hung would fail the case in a minute, not five.
+REAL_CHILD_STARTUP_BOUND = 60
+#: The real ``Popen`` and ``os.killpg``, taken at import, before ``no_real_process`` forbids them: only the guards below call them.
+REAL_POPEN, REAL_KILLPG = subprocess.Popen, os.killpg
+
+
+def allow_one_real_child(monkeypatch, argv: list[str]) -> list:
+    """Let ``_server`` start ``argv`` for real, once, and signal only that child's process group; nothing else may start.
+
+    ``start_new_session=True`` makes the child the leader of a new group whose id is its PID, and ``os.getpgid`` is
+    pinned to that answer. The real call gives the same while the child lives, but a one-line child can be gone before
+    the runner's next line, and macOS does not report a zombie's group: a ``ProcessLookupError`` that would be this
+    test's race (the real backend takes seconds to start), not the contract's.
+    """
+    children: list = []
+
+    def popen(command, *args, **kwargs):
+        assert list(command) == argv, f"only this test's own child may start for real, not {command}"
+        assert not children, "this test's child was started twice"
+        children.append(REAL_POPEN(command, *args, **kwargs))
+        return children[-1]
+
+    def killpg(group, sig):
+        assert children and group == children[0].pid, f"a signal for process group {group}, which is not this test's child"
+        REAL_KILLPG(group, sig)
+
+    monkeypatch.setattr(test_runner_server.subprocess, "Popen", popen)
+    monkeypatch.setattr(test_runner_server.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(test_runner_server.os, "killpg", killpg)
+    return children
+
+
+@pytest.mark.usefixtures("run_log_dir")
+class TestSharedBackendLogWithARealChild:
+    """The one case of this file with a real process: the child's stderr reaches the log through the real spawn.
+
+    Outside this file's every-seam-faked rule, on purpose and alone. The child is a one-line Python started through the
+    real ``scripts/exec_unmasked.py``, never the backend and never a build: ``_command()`` is replaced and the ``Popen``
+    guard refuses any other argv. Still ``pure`` for the catalogue: no server, no database, no network, no port; the log
+    lives under ``tmp_path``; the real ``stop()`` signals no group but the child's. Only the build step, lsof and health
+    are faked, and the PGID lookup (see ``allow_one_real_child``).
+    """
+
+    def test_a_real_child_s_stderr_reaches_the_log_and_comes_back_in_the_tail(self, monkeypatch, tmp_path, capsys):
+        log_path = tmp_path / "logs" / SHARED_BACKEND_LOG_NAME
+        server = logging_server(log_path=log_path)
+        monkeypatch.setattr(server, "_command", lambda: list(CHILD_COMMAND))
+        monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(test_runner_server, "port_holders", lambda port=None: [])
+        monkeypatch.setattr(test_runner_server, "is_healthy", lambda *_args, **_kwargs: False)
+        monkeypatch.setattr(test_runner_server, "STARTUP_TIMEOUT", REAL_CHILD_STARTUP_BOUND)
+        children = allow_one_real_child(monkeypatch, [sys.executable, str(test_runner_server.UNMASKED_EXEC), *CHILD_COMMAND])
+
+        assert server.start() is False
+
+        (child,) = children
+        assert child.returncode == CHILD_EXIT_CODE
+        assert (server.proc, server.process_group_id, server.started_here) == (None, None, False), "the real stop() did not run"
+        assert CHILD_FAILURE in log_path.read_text(encoding="utf-8", errors="replace"), "the child's stderr did not reach the log"
+        printed = plain("".join(capsys.readouterr()))
+        failure_line = f"Shared backend exited during startup (code {CHILD_EXIT_CODE})"
+        assert failure_line in printed, printed
+        named_at = printed.find(str(log_path), printed.index(failure_line))
+        assert named_at >= 0, f"H-12: no line naming {log_path} after {failure_line!r}: {printed!r}"
+        assert CHILD_FAILURE in printed[named_at:], f"H-12: the tail does not bring back the child's stderr: {printed!r}"

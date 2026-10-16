@@ -242,7 +242,9 @@
       "pairAssetMismatch": "Les deux côtés d'un transfert doivent porter sur le même actif",
       "wacFxUnavailableSplit": "Les unités qui sortent sont évaluées à leur coût moyen, qui demande le taux {pairs} : synchronisez les taux FX, puis séparez de nouveau la paire.",
       "pairBrokerMismatch": "Les deux côtés d'un change de devises doivent être sur le même courtier",
-      "cashNonzero": "{type} nécessite un montant non nul"
+      "cashNonzero": "{type} nécessite un montant non nul",
+      "decimalPlacesExceeded": "Au maximum {max} décimales",
+      "significantDigitsExceeded": "Au maximum {max} chiffres significatifs"
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

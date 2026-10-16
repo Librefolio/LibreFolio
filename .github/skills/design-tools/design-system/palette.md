@@ -57,7 +57,7 @@ and in the dark theme, and when to use it. Rule numbers and open questions refer
 |---|---|---|---|---|
 | `--lf-focus` | `focus-visible:outline-lf-focus`, `focus:ring-lf-focus`, `focus:border-lf-focus` | `#236b4d` | `#429e79` | Keyboard focus, and the border of a focused field, on every neutral surface (3:1). On the sidebar, `--lf-bar-focus` |
 | `--lf-link` | `text-lf-link` | `#236b4d` | `#429e79` | Links, the active item inside a page, accent icons. The focus green: the designer's «Focus, link attivi» |
-| `--lf-selected` | `bg-lf-selected` | `color-mix(in oklab, #236b4d 12%, transparent)` | `color-mix(in oklab, #429e79 12%, transparent)` | A selected or highlighted row, option, item or date range: a quiet tint of the focus green |
+| `--lf-selected` | `bg-lf-selected` | `color-mix(in oklab, #236b4d 12%, transparent)` | `color-mix(in oklab, #429e79 12%, transparent)` | A selected or highlighted row, option, item or date range: a quiet tint of the focus green. Its text: `text-lf-primary`, `text-lf-secondary`, or `text-lf-link` except over a `panel`; never muted, a status or a sign (SKILL.md, rule 5) |
 | `--lf-checked` | `bg-lf-checked` | `#236b4d` | `#429e79` | A selected control: checkbox, radio, switch turned on, selected day or preset, active segment (D-T16) |
 | `--lf-on-checked` | `text-lf-on-checked` | `#fafbfa` | `#151b19` | The mark on a checked fill: the tick, the dot, the number of the selected day |
 | `--lf-tour-glow` | `ring-lf-tour-glow`, or `var(--lf-tour-glow)` in a shadow | `color-mix(in oklab, #236b4d 40%, transparent)` | `color-mix(in oklab, #429e79 40%, transparent)` | The glow of the guided tour around the element it shows (Q9) |

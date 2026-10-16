@@ -382,6 +382,14 @@ def services_provider_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Provider contract tests", verbose=verbose)
 
 
+def services_provider_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test where the asset providers stand in the asset search (F21): tier, priority and search order."""
+    print_section("Services: Asset Provider Policy")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER, provider_policy (tier, priority, search order), AssetSourceProvider declarations, AssetSearchService.search order (offline, no DB)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_policy.py", test_names)
+    return run_command(cmd, "Asset provider policy tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -419,6 +427,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
+def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
+    """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
+    print_section("Services: Transaction Decimal Places")
+    print_info("Testing: transaction_batch_stages.py (check_decimal_limits) + transactions/balances.py + assets/crud.py (held) + BRIMProvider._create_transaction")
+    print_info("Tests: quantities read back to 10 decimals; over the limit refused at /validate and /commit on its row, never rounded; exact balances; held set; BRIM parse does not refuse (D2)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_decimal_places.py", test_names)
+    return run_command(cmd, "Transaction decimal places tests", verbose=verbose)
 
 
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
@@ -893,6 +911,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
+
+
+def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
+    print_section("Services: Asset Digit Limits")
+    print_info("Testing: backend/app/services/assets/price_store.py, event_store.py, backend/app/api/v1/assets/events.py")
+    print_info("Tests: manual prices (12 decimals) and events (6) beyond the limit or 15 significant digits refused with nothing written, provider prices truncated, what fits read back exactly")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_digit_limits.py", test_names)
+    return run_command(cmd, "Asset digit limit tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -1520,6 +1547,16 @@ Note: No backend server required.
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
+    add_test(
+        cat,
+        "provider-policy",
+        services_provider_policy,
+        name="Provider Policy",
+        desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
+        # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
+        # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
@@ -1529,6 +1566,13 @@ Note: No backend server required.
         services_transaction_cost_basis_rule,
         name="Transaction Cost Basis Rule",
         desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
+    add_test(
+        cat,
+        "transaction-decimal-places",
+        services_transaction_decimal_places,
+        name="Transaction Decimal Places",
+        desc="C-97a: quantities keep 10 decimals; over a limit (quantity 10, cash and cost basis 6, 15 significant digits) refused at /validate and /commit on its row, never rounded; balances summed exactly; held set; BRIM parse does not refuse (D2)",
     )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
@@ -1878,6 +1922,16 @@ Note: No backend server required.
         # every event and transaction written against them are visible to all concurrent tests.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-digit-limits",
+        services_asset_digit_limits,
+        name="Asset Digit Limits",
+        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the -1 sentinel, trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
+        # WRITE-SCOPED, the category default, as asset-source: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices and events, written, read and wiped by asset id.
+        # Nothing here counts or reads a row it did not write.
     )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")

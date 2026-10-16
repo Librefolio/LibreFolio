@@ -41,6 +41,7 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
 
@@ -279,10 +280,12 @@ class AssetCRUDService:
                     or_(BrokerUserAccess.share_percentage.is_(None), BrokerUserAccess.share_percentage > 0),
                 )
                 own_broker_ids = set((await session.execute(own_brokers_stmt)).scalars().all())
-            quantity = func.sum(Transaction.quantity)
-            holdings_stmt = select(Transaction.broker_id, Transaction.asset_id).where(Transaction.asset_id.is_not(None)).group_by(Transaction.broker_id, Transaction.asset_id).having(quantity > float(QUANTITY_DUST_THRESHOLD))
-            for broker_id, asset_id in (await session.execute(holdings_stmt)).all():
-                (held_own if broker_id in own_broker_ids else held_others).add(asset_id)
+            # Summed by the layer, exactly (C-97), never with an SQL SUM of the stored doubles.
+            holdings_stmt = select(Transaction.broker_id, Transaction.asset_id, Transaction.quantity).where(Transaction.asset_id.is_not(None))
+            for broker_id, quantities in position_quantities((await session.execute(holdings_stmt)).all()).items():
+                for asset_id, quantity in quantities.items():
+                    if quantity > QUANTITY_DUST_THRESHOLD:
+                        (held_own if broker_id in own_broker_ids else held_others).add(asset_id)
 
         # Build response with identifier info
         assets = []

@@ -115,6 +115,10 @@ class InstanceConfigResponse(StrictModel):
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
     accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
     email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
+    support_url: str | None = Field(
+        default=None,
+        description="Where users ask for help, such as an asset the search does not find (LIBREFOLIO_SUPPORT_URL, workstream H): null when it is not set or not a valid http(s) address, and the app then links to the project's GitHub issues",
+    )
 
 
 class InstanceBlockResponse(StrictModel):

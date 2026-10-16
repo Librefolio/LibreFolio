@@ -92,7 +92,7 @@ These figures are general market history, not a LibreFolio measurement, and the 
     A 50% loss requires a **100% gain** to recover:
 
     $$
-    \text{Required gain} = \frac{1}{1 + MDD} - 1
+    \text{Required gain} = \frac{1}{1 + MDD} - 1 = \frac{-MDD}{1 + MDD}
     $$
 
     <div style="display: flex; justify-content: center;">
@@ -106,7 +106,11 @@ These figures are general market history, not a LibreFolio measurement, and the 
 
     </div>
 
-The table above is the general arithmetic of the asymmetry, tabulated against the depth of the **maximum** drawdown. The figure the system computes applies that same formula to the **current** drawdown instead: it answers how much gain is needed to return to the peak *from where the portfolio stands today*, which is the only version of the question that can be acted on. The two readings coincide only when the portfolio happens to be sitting at its deepest point ever — see [Current Drawdown](current-drawdown.md).
+    A total loss has no finite recovery gain: at $MDD = -100\%$ the denominator $1 + MDD$ is zero, and no gain brings back a value that has gone to nothing.
+
+The table above is the general arithmetic of the asymmetry, tabulated against the depth of the **maximum** drawdown, and the drawdown result carries that figure for the worst fall itself. Next to its depth it publishes the **trough-to-peak gain**, $-MDD / (1 + MDD)$: the gain needed to climb from the worst trough back to the peak before it — $+33.3\%$ from 90 back to 120 in the example above. The figure is given for an open episode and a recovered one alike, because it describes how deep the fall went, not whether it has been climbed back. It is zero when there was no drawdown; a total loss leaves it without a number, and the result carries a warning that says why.
+
+The same formula, computed by one function shared by both figures, is applied to the **current** drawdown as well: there it answers how much gain is needed to return to the peak *from where the portfolio stands today*, which is the only version of the question that can still be acted on. The two readings coincide only when the portfolio happens to be sitting at its deepest point ever — see [Current Drawdown](current-drawdown.md#what-it-takes-to-get-back).
 
 ---
 

@@ -16,7 +16,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import delete, event
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
@@ -1239,6 +1239,106 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
     assert last_value.income == Decimal("1250")
     last_return = _points_by_date(result.return_history)[date(2025, 3, 1)]
     assert abs(last_return.total_return - Decimal("1250") / Decimal("15000")) < Decimal("1e-9")
+
+
+@pytest.mark.asyncio
+async def test_adjustment_only_asset_is_estimated_at_cost_not_priced_by_its_adjustment(session, test_user, asset, broker):
+    """J-17: an ADJUSTMENT is never a price. An asset received only by an ADJUSTMENT-in (10 units at a
+    3000 NPR cost basis on 2025-01-10, when 1 EUR = 150 NPR) and never quoted, bought or sold has no
+    market price at all: its lot is ESTIMATED_AT_COST, open value = its cost converted at the opening
+    date (30000 / 150 = 200 EUR) on every day, market P&L 0, and the chart has no price line.
+
+    FX: EUR/NPR, a pair no other test stores (checked first, never committed).
+
+    Before J-17: MARKET_PRICE with the adjustment's 3000 NPR as the price, converted at each day's
+    rate — open value 250 EUR on 2025-03-01 (1 EUR = 120 NPR), market P&L +50, and a price line at the
+    adjustment's cost (estimated).
+    """
+    stored = (await session.execute(select(FxRate.id).where(FxRate.base == "EUR", FxRate.quote == "NPR"))).all()
+    assert stored == [], f"precondition broken: {len(stored)} EUR/NPR rate(s) stored by someone else — this case needs a pair nobody stores"
+    session.add_all(
+        [
+            FxRate(date=date(2025, 1, 10), base="EUR", quote="NPR", rate=Decimal("150"), source="TEST_J17"),
+            FxRate(date=date(2025, 3, 1), base="EUR", quote="NPR", rate=Decimal("120"), source="TEST_J17"),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency=None,
+                cost_basis_override=Decimal("3000"),
+                cost_basis_currency="NPR",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 3, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert (lot.value_source, lot.original_cost, lot.open_value, lot.market_pnl) == ("ESTIMATED_AT_COST", Decimal("200"), Decimal("200"), Decimal("0"))
+    assert result.value_history
+    off_cost = sorted((point.date, point.open_value) for point in result.value_history if point.open_value != Decimal("200"))
+    assert off_cost == [], f"days whose open value is not the 200 EUR cost: {off_cost}"
+    assert not result.price_history, f"an adjustment-only asset has no price line, got {result.price_history}"
+
+
+@pytest.mark.asyncio
+async def test_adjustment_before_the_first_quote_has_no_value_point(session, test_user, asset, broker):
+    """J-17: an asset received by an ADJUSTMENT-in (10 units at 20 EUR) on 2025-01-10 and first quoted on
+    2025-01-15 (25 EUR). Before the first quote nothing prices it (the asset has quotes, so it is not
+    estimated at cost either): the lot's value history starts on 2025-01-15, at 250.
+
+    Before J-17: the adjustment's 20 EUR priced it from 2025-01-10, so the history had points on
+    01-10..01-14 at an open value of 200.
+    """
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency=None,
+                cost_basis_override=Decimal("20"),
+                cost_basis_currency="EUR",
+            ),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("25"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 20),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["VALUE_HISTORY"],
+    )
+
+    assert result.value_history is not None
+    points = _points_by_date(result.value_history)
+    assert sorted(points) == [date(2025, 1, 15) + timedelta(days=offset) for offset in range(6)], f"value points on {sorted(points)}"
+    assert points[date(2025, 1, 15)].open_value == Decimal("250")
 
 
 @pytest.mark.asyncio

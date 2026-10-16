@@ -52,7 +52,7 @@ The full table, with the light and dark values, is in `tokens.css`.
 | Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus`; on the green sidebar `focus-visible:outline-lf-bar-focus` |
 | Brand surface: the login card header | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
 | Primary button | `bg-lf-action hover:bg-lf-action-hover text-lf-on-action` |
-| Selected item | `bg-lf-selected` |
+| Selected item | `bg-lf-selected`; its text primary, secondary or link (not over a panel), never muted (design-system rule 5) |
 | Selected control: checkbox, radio, switch on, selected day or preset, active segment (D-T16) | `bg-lf-checked` with `text-lf-on-checked` for its mark |
 | Switch (Q2) | track `bg-lf-switch-off`, on `bg-lf-checked`; knob `bg-lf-switch-knob-off border border-lf-input`, on `bg-lf-switch-knob-on` |
 | State, with X = `success`, `warning`, `danger`, `info` | `text-lf-X` (text, icon); `bg-lf-X-soft` + `border-lf-X-line` + `text-lf-X-on-soft` (alert, badge); `bg-lf-X text-lf-on-status` (solid) |
@@ -133,6 +133,8 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
      own classes under the same name order: check the caller's colours before migrating either side.
    - A colour in a component's `<style>` beats every utility, a caller's class included: keep colours a caller may
      override in the markup.
+   - The gate checks it (G5), through the classes, the `{…}`, the `class:` directives and the UPPER_CASE string
+     constants of the element, imported ones included. A class prop stays out of its sight: check its callers.
    - Details: devWiki `problems/tailwind4-same-property-utilities-sorted-by-name`.
 
 ## Gates and the baseline
@@ -140,7 +142,8 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 - `src/themeRoles.gate.test.ts`:
   - **the ratchet:** per file, m1 legacy colour classes and m2 colour literals, compared as a multiset of values, so
     swapping one colour for another fails;
-  - **the grammar:** G1 no `dark:` on a role, G2 no unknown role, G3 no mixed element, G4 no arbitrary colour.
+  - **the grammar:** G1 no `dark:` on a role, G2 no unknown role, G3 no mixed element, G4 no arbitrary colour, G5 one
+    property, one ternary (rule 8), G6 a native field names its text and placeholder roles (rule 3).
 - `src/themeTokens.gate.test.ts`: both themes declared, the utility table, the contrast pairs, no dead rule in the
   legacy remap.
 - `src/themeColorMeta.gate.test.ts`: the PWA title bar, `#1b4334` in both themes (N2, D-T17), the same in its three

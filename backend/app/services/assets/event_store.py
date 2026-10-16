@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import and_, delete, func, select, update
@@ -16,6 +17,8 @@ from backend.app.db.models import (
     Transaction,
     User,
 )
+from backend.app.db.precision import decimal_limit_issue, get_model_column_precision
+from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAEventUpsertPoint
 from backend.app.schemas.common import (
     Currency,
@@ -241,6 +244,7 @@ class EventStoreOperations:
             # Deletions first (I-10): an edit may take the date and type of an event deleted in the same save.
             deleted_ids = await EventStoreOperations._delete_item_events(session, asset_id, list(getattr(item, "delete_ids", None) or []))
             EventStoreOperations._reject_currency_mismatches(asset, item.events)
+            EventStoreOperations._reject_too_many_digits(item.events)
             points = EventStoreOperations._as_upsert_points(item.events)
             edits, new_events = EventStoreOperations._split_manual_events(points)
             if getattr(item, "mode", "upsert") == "create":
@@ -321,6 +325,35 @@ class EventStoreOperations:
                 f"EVENT_CURRENCY_MISMATCH: asset {asset.id} expects {asset.currency}, " f"got mismatched events [{mismatch_detail}]" + (f" (+{len(mismatches) - 5} more)" if len(mismatches) > 5 else ""),
                 "EVENT_CURRENCY_MISMATCH",
                 {"expected": asset.currency, "events": mismatches},
+            )
+
+    @staticmethod
+    def _reject_too_many_digits(events: Optional[list]) -> None:
+        """C-97: refuse an event whose value has more digits than its column keeps, naming each one, never rounding it.
+
+        An event value keeps 6 decimal places and 15 significant digits (``db/precision.decimal_limit_issue``).
+
+        Raises:
+            AssetSourceError(code="EVENT_TOO_MANY_DIGITS"): ``details`` holds the maxima and, per event, its index,
+                date and type.
+        """
+
+        def field(raw: object, name: str) -> object:
+            return raw.get(name) if isinstance(raw, dict) else getattr(raw, name, None)
+
+        offending: list[dict] = []
+        for index, raw_evt in enumerate(events or []):
+            value_obj = field(raw_evt, "value")
+            amount = field(value_obj, "amount") if value_obj is not None else None
+            if amount is not None and decimal_limit_issue(Decimal(str(amount)), AssetEvent, "value") is not None:
+                offending.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(field(raw_evt, "type"))})
+        if offending:
+            _precision, scale = get_model_column_precision(AssetEvent, "value")
+            shown = ", ".join(f"#{e['event_index']}={e['date']}" for e in offending[:5]) + (f" (+{len(offending) - 5} more)" if len(offending) > 5 else "")
+            raise AssetSourceError(
+                f"EVENT_TOO_MANY_DIGITS: event values keep at most {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits, got [{shown}]",
+                "EVENT_TOO_MANY_DIGITS",
+                {"max_decimal_places": scale, "max_significant_digits": REAL_SIGNIFICANT_DIGITS, "events": offending},
             )
 
     @staticmethod
