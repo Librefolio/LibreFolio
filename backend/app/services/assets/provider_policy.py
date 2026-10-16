@@ -5,9 +5,10 @@ Today: where a provider stands in the asset search (F21). The plugin declares it
 ``LIBREFOLIO_ASSET_PROVIDERS_ORDER`` (``config/plugins.py``). The variables are read at every call, never cached.
 
 - ``provider_tier(code)`` and ``provider_priority(code)``: the effective values, as ``GET /assets/provider`` shows them.
-- ``search_order(codes)``: the providers in the order the search lists them. Premium providers come first, then
-  lower priority first; ties keep the given order. With every value at its default the order is the given one, so a
-  self-hosted instance without a premium provider searches exactly as before (D-X3).
+- ``search_rank(code)``: the key the search sorts by, premium first and then lower priority. Sort with a **stable**
+  sort, so that ties, a repeated code included, keep the given order.
+- ``search_order(codes)``: the providers in the order the search lists them. With every value at its default the
+  order is the given one, so a self-hosted instance without a premium provider searches exactly as before (D-X3).
 
 A code in a variable that no registered provider has is ignored, and logged once per process.
 """
@@ -66,7 +67,13 @@ def provider_priority(code: str) -> int:
     return len(listed) + declared
 
 
+def search_rank(code: str) -> tuple[int, int]:
+    """The provider's place in the search, to sort by: ``0`` for premium and ``1`` for community, then its effective
+    priority. Use it with a stable sort (``sorted``, ``list.sort``): ties keep the given order."""
+    return (0 if provider_tier(code) == FAProviderTier.PREMIUM else 1, provider_priority(code))
+
+
 def search_order(codes: Sequence[str]) -> list[str]:
-    """``codes`` in the order the search lists them: premium first, then lower priority; ties keep the given order."""
-    keys = {code: (0 if provider_tier(code) == FAProviderTier.PREMIUM else 1, provider_priority(code)) for code in set(codes)}
-    return [code for _, code in sorted(enumerate(codes), key=lambda item: (*keys[item[1]], item[0]))]
+    """``codes`` in the order the search lists them: premium first, then lower priority; ties, a repeated code included,
+    keep the given order."""
+    return sorted(codes, key=search_rank)
