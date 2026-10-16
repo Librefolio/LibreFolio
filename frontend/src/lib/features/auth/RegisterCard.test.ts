@@ -60,15 +60,62 @@
  *     invitation, `register-invite-admin-notice` that it makes an administrator;
  *     `invite_token` goes in the body only with an invitation — no key at all
  *     otherwise.
+ *
+ * Accounts lot A6c (decision 37) takes the password rules out of the card. The
+ * backend writes them once, refuses a new password that breaks one with a 400
+ * `{detail: {error_code: "PASSWORD_TOO_WEAK", message, rules}}`, and exposes
+ * them in `GET /system/instance` (`accounts.password_rules`), where the meter,
+ * `PasswordStrength`, reads them. The card keeps no copy any more: it binds the
+ * meter's `valid`, as `ResetPasswordCard` does since A5b, and refuses to send
+ * exactly when it is false. Its old copy hard-wired eight characters and ASCII
+ * classes, so the cases of the A6c describe tell the two apart with rules only
+ * the server could have given: twelve characters asked for (the copy let eleven
+ * through), a rule set that asks only for length (the copy refused a passphrase),
+ * an answer that lands after the password was typed, a code this build does not
+ * know (never a reason to refuse: the server decides). The configuration is a
+ * fake with the real store's shape — `reactiveBox` behind getters, as in
+ * `LoginCard.test.ts` — and starts every test without `password_rules`, so every
+ * other case runs on the defaults, the five rules of before. The server's
+ * refusal is drawn like the other codes, through `describeRegistrationError`:
+ * `auth.validation.passwordTooWeak`, never the server's sentence.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
 import {readable} from 'svelte/store';
+import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // The identity translator: components render i18n keys verbatim, so the tests
 // can name the message that was chosen without naming any one language.
 vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
 vi.mock('$lib/api', () => ({zodiosApi: {register_api_v1_auth_register_post: vi.fn()}}));
+// The instance configuration the meter reads its rules from (A6c): a fake with the real store's shape, enumerable
+// getters over `$state` (`reactiveBox`), so an answer a test lands reaches the meter the way the server's does.
+const mocks = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    /** What the store holds until the server answers (`DEFAULT_INSTANCE_CONFIG`), and what a backend older than A6c answers: no `password_rules`. */
+    const BEFORE_ANSWER = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}} as InstanceConfig;
+    return {
+        BEFORE_ANSWER,
+        instance: reactiveBox<{config: InstanceConfig; loaded: boolean}>({config: BEFORE_ANSWER, loaded: false}),
+        instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
+    };
+});
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
+    DEFAULT_INSTANCE_CONFIG: mocks.BEFORE_ANSWER,
+    instanceConfig: {
+        get config() {
+            return mocks.instance.config;
+        },
+        get loaded() {
+            return mocks.instance.loaded;
+        },
+        get failed() {
+            return false;
+        },
+        load: mocks.instanceLoad,
+    },
+}));
 
 import RegisterCard from './RegisterCard.svelte';
 import {zodiosApi} from '$lib/api';
@@ -132,6 +179,34 @@ function codedRefusal(status: number, error_code: string): Error {
     });
 }
 
+/** One entry of `accounts.password_rules`, as the server sends it (A6c). */
+type RuleAnswer = {code: string; value?: number | null};
+/** The five rules of before, as a server of A6c sends them: the defaults, in their order. */
+const FIVE: RuleAnswer[] = [{code: 'min_length', value: 8}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}];
+/** The five, asking for `value` characters. */
+const withMinLength = (value: number): RuleAnswer[] => [{code: 'min_length', value}, ...FIVE.slice(1)];
+
+/** The server's answer lands: from now on the configuration carries these rules. */
+function answer(password_rules: RuleAnswer[]): void {
+    mocks.instance.config = {...mocks.BEFORE_ANSWER, accounts: {...mocks.BEFORE_ANSWER.accounts, password_rules}} as InstanceConfig;
+    mocks.instance.loaded = true;
+}
+
+/** GOOD_PASSWORD and one more digit: twelve characters, all five classes. */
+const TWELVE = 'Str0ng!pass1';
+/** Twenty-eight characters of lower case and spaces: no capital, no digit, no symbol. */
+const PASSPHRASE = 'correct horse battery staple';
+/** What the card says of a password the rules refuse, its own check or the server's. */
+const WEAK_KEY = 'auth.validation.passwordTooWeak';
+
+/** The refusal of A6c: a 400 naming the codes of the rules the password missed, the message in English. */
+function weakRefusal(rules: string[]): Error {
+    return Object.assign(new Error('Request failed with status code 400'), {
+        isAxiosError: true,
+        response: {status: 400, data: {detail: {error_code: 'PASSWORD_TOO_WEAK', message: 'An English sentence the user must not read', rules}}},
+    });
+}
+
 /** A promise this test resolves by hand, so "in flight" is a state we control. */
 function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void} {
     let resolve!: (value: T) => void;
@@ -146,6 +221,11 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; rejec
 beforeEach(() => {
     register.mockReset();
     register.mockResolvedValue({} as never);
+    // Every test starts before the server's answer: no password_rules, so the meter checks the defaults.
+    mocks.instance.config = mocks.BEFORE_ANSWER;
+    mocks.instance.loaded = false;
+    mocks.instanceLoad.mockReset();
+    mocks.instanceLoad.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -633,6 +713,91 @@ describe('RegisterCard — clearing an error', () => {
         await submit();
 
         await waitFor(() => expect(banner()).toBeNull());
+    });
+});
+
+describe("RegisterCard — the password rules are the server's, read through the meter (A6c)", () => {
+    it("refuses to send a password the server's rules refuse, though it meets the five of before: min_length 12", async () => {
+        answer(withMinLength(12));
+        mount();
+        await fillValid(); // GOOD_PASSWORD: eleven characters, all five classes — what the old copy let through
+
+        await submit();
+
+        expect(register).not.toHaveBeenCalled();
+        expect(screen.getByText(WEAK_KEY)).toBeInTheDocument();
+        // The meter under the field says which rule: one set of rules decides both.
+        expect(screen.getByTestId('password-rule-minLength')).toHaveAttribute('data-passed', 'false');
+    });
+
+    it('sends a password of the length the server asks for', async () => {
+        // The barrier of the case above: the same rules, twelve characters, and the card sends.
+        answer(withMinLength(12));
+        mount();
+        await fillValid({password: TWELVE});
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register).toHaveBeenCalledWith(expect.objectContaining({password: TWELVE}));
+    });
+
+    it("sends a password the server's rules accept though the old copy refused it: a rule set that asks only for length", async () => {
+        answer([{code: 'min_length', value: 16}]);
+        mount();
+        await fillValid({password: PASSPHRASE});
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register).toHaveBeenCalledWith(expect.objectContaining({password: PASSPHRASE}));
+        expect(screen.queryByText(WEAK_KEY)).toBeNull();
+    });
+
+    it('follows an answer that lands after the password was typed, both ways, without a remount', async () => {
+        mount();
+        await fillValid(); // eleven characters: enough for the defaults
+        answer(withMinLength(12));
+        await tick();
+
+        await submit();
+
+        expect(register, 'the answer asks for twelve').not.toHaveBeenCalled();
+        expect(screen.getByText(WEAK_KEY)).toBeInTheDocument();
+
+        // A later answer asks for eight again: the same password goes through.
+        answer(FIVE);
+        await tick();
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register).toHaveBeenCalledWith(expect.objectContaining({password: GOOD_PASSWORD}));
+    });
+
+    it('never refuses for a rule code it does not know: the server checks it', async () => {
+        answer([{code: 'no_dictionary_word'}, ...FIVE, {code: 'not_in_this_build', value: 3}]);
+        mount();
+        await fillValid();
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+    });
+
+    it("draws the server's PASSWORD_TOO_WEAK as auth.validation.passwordTooWeak, never its sentence, and lets the user retry", async () => {
+        // The meter let the password through and the server did not: its rules changed after the page had read them.
+        register.mockRejectedValue(weakRefusal(['min_length']));
+        mount();
+        await fillValid();
+
+        await submit();
+
+        await waitFor(() => expect(banner()).not.toBeNull());
+        const shown = banner()!.textContent ?? '';
+        expect(shown).toContain(WEAK_KEY);
+        expect(shown, "never the server's English").not.toContain('An English sentence the user must not read');
+        expect(screen.getByTestId('register-submit')).toBeEnabled();
+        expect(screen.getByTestId('register-password')).toBeEnabled();
     });
 });
 

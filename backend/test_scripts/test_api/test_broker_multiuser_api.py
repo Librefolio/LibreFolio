@@ -19,7 +19,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_success
+from backend.test_scripts.test_utils import print_error, print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -403,81 +403,94 @@ class TestMultiUserRoles:
         it is always (create, 0, None), the row of the broker the user may write.
         """
         print_section("MULTI-008d: Cross-broker access failure is atomic")
+        # W-B12: the test owns its two brokers and cleans them up as the V-23 tests below do, after a red too.
+        # ``_new_broker`` records each broker the moment it exists; ``_Owned.drop`` has the owner delete them with
+        # force, which takes their accesses (ON DELETE CASCADE) and any transaction a regression wrote with them.
+        # Users stay, as in the rest of this module.
+        owned = _Owned()
 
         async with (
             httpx.AsyncClient() as owner_client,
             httpx.AsyncClient() as editor_client,
         ):
-            await create_user_and_login(owner_client)
-            editable_broker_id = await create_broker(owner_client)
-            restricted_broker_id = await create_broker(owner_client)
+            try:
+                await create_user_and_login(owner_client)
+                editable_broker_id = await _new_broker(owner_client, owned, "M008dEditable")
+                restricted_broker_id = await _new_broker(owner_client, owned, "M008dRestricted")
 
-            editor_id, _ = await create_user_and_login(editor_client)
-            await add_access(
-                owner_client,
-                editable_broker_id,
-                editor_id,
-                "EDITOR",
-            )
-            if restricted_role is not None:
+                editor_id, _ = await create_user_and_login(editor_client)
                 await add_access(
                     owner_client,
-                    restricted_broker_id,
+                    editable_broker_id,
                     editor_id,
-                    restricted_role,
+                    "EDITOR",
                 )
+                if restricted_role is not None:
+                    await add_access(
+                        owner_client,
+                        restricted_broker_id,
+                        editor_id,
+                        restricted_role,
+                    )
 
-            editable_marker = unique_name("editable-create")
-            restricted_marker = unique_name("restricted-create")
-            response = await editor_client.post(
-                f"{API_BASE}/transactions/commit",
-                json={
-                    "creates": [
-                        {
-                            "broker_id": editable_broker_id,
-                            "type": "DEPOSIT",
-                            "date": date.today().isoformat(),
-                            "cash": {"code": "EUR", "amount": "100"},
-                            "description": editable_marker,
-                        },
-                        {
-                            "broker_id": restricted_broker_id,
-                            "type": "DEPOSIT",
-                            "date": date.today().isoformat(),
-                            "cash": {"code": "EUR", "amount": "200"},
-                            "description": restricted_marker,
-                        },
-                    ]
-                },
-                timeout=TIMEOUT,
-            )
-
-            assert response.status_code == 200, response.text
-            body = response.json()
-            assert body["committed"] is False
-            assert body["results"] == []
-            assert body["success_count"] == 0
-            access_issues = [issue for issue in body["issues"] if issue["code"] == "accessDenied"]
-            assert len(access_issues) == 1
-            assert access_issues[0]["params"] == {"brokerId": restricted_broker_id}
-
-            for broker_id, marker in (
-                (editable_broker_id, editable_marker),
-                (restricted_broker_id, restricted_marker),
-            ):
-                check = await owner_client.get(
-                    f"{API_BASE}/transactions",
-                    params={"broker_id": broker_id},
+                editable_marker = unique_name("editable-create")
+                restricted_marker = unique_name("restricted-create")
+                response = await editor_client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={
+                        "creates": [
+                            {
+                                "broker_id": editable_broker_id,
+                                "type": "DEPOSIT",
+                                "date": date.today().isoformat(),
+                                "cash": {"code": "EUR", "amount": "100"},
+                                "description": editable_marker,
+                            },
+                            {
+                                "broker_id": restricted_broker_id,
+                                "type": "DEPOSIT",
+                                "date": date.today().isoformat(),
+                                "cash": {"code": "EUR", "amount": "200"},
+                                "description": restricted_marker,
+                            },
+                        ]
+                    },
                     timeout=TIMEOUT,
                 )
-                assert check.status_code == 200, check.text
-                assert not any(tx.get("description") == marker for tx in check.json())
 
-            # V-23: last, so every check above has run when this one is red.
-            denial = access_issues[0]
-            assert (denial["operation"], denial["index"], denial["ref_id"]) == ("create", 1, None), f"the refusal must sit on create #1, the only row on broker {restricted_broker_id}; got {denial}"
+                assert response.status_code == 200, response.text
+                body = response.json()
+                assert body["committed"] is False
+                assert body["results"] == []
+                assert body["success_count"] == 0
+                access_issues = [issue for issue in body["issues"] if issue["code"] == "accessDenied"]
+                assert len(access_issues) == 1
+                assert access_issues[0]["params"] == {"brokerId": restricted_broker_id}
 
-            print_success("✓ Access denial returned no results or partial writes")
+                for broker_id, marker in (
+                    (editable_broker_id, editable_marker),
+                    (restricted_broker_id, restricted_marker),
+                ):
+                    check = await owner_client.get(
+                        f"{API_BASE}/transactions",
+                        params={"broker_id": broker_id},
+                        timeout=TIMEOUT,
+                    )
+                    assert check.status_code == 200, check.text
+                    assert not any(tx.get("description") == marker for tx in check.json())
+
+                # V-23: last, so every check above has run when this one is red.
+                denial = access_issues[0]
+                assert (denial["operation"], denial["index"], denial["ref_id"]) == ("create", 1, None), f"the refusal must sit on create #1, the only row on broker {restricted_broker_id}; got {denial}"
+
+                print_success("✓ Access denial returned no results or partial writes")
+            finally:
+                # drop() never raises, so a red body propagates untouched. What it could not delete is printed here,
+                # where it shows beside a red body too, and fails the test below when the body was green.
+                leftovers = await owned.drop()
+                if leftovers:
+                    print_error(f"MULTI-008d cleanup left behind: {leftovers}")
+        assert not leftovers, leftovers
 
 
 class TestEditorRestrictions:

@@ -31,7 +31,7 @@ graph TD
 
 The main entry point is `scheduler_loop()` located in `backend/app/services/platform/scheduler/scheduler.py`. Every run of the jobs goes through `run_due_jobs(reason)`, in the same module: the loop calls it, and so does the scheduled wake-up route (`backend/app/api/v1/system/wake.py`).
 
-* **Lifespan Task:** The `scheduler` startup step, the last of `STARTUP_STEPS` in `backend/app/services/platform/app_lifespan.py`, spawns it with `asyncio.create_task()`. On shutdown, the `scheduler` step, the first of `SHUTDOWN_STEPS`, sets the shutdown event and awaits the task before the providers are shut down, a run in progress included; when the shutdown deadline cuts the step, the task is cancelled (see the [lifecycle contract](../architecture/overview.md#lifecycle-contract)).
+* **Lifespan Task:** The `scheduler` startup step, followed only by `idle-monitor` in `STARTUP_STEPS` (`backend/app/services/platform/app_lifespan.py`), spawns it with `asyncio.create_task()`. On shutdown, the `scheduler` step, right after `idle-monitor` at the head of `SHUTDOWN_STEPS`, sets the shutdown event and awaits the task before the providers are shut down, a run in progress included; when the shutdown deadline cuts the step, the task is cancelled (see the [lifecycle contract](../architecture/overview.md#lifecycle-contract)).
 * **Shutdown Event:** The loop waits on `shutdown_event: asyncio.Event`, its timer and the return nudge at once, so a shutdown ends a wait immediately. The event does not interrupt a run: the loop stops once the run in progress is over, then removes its return listener.
 * **Environment Bypass:** Any non-empty value of `LIBREFOLIO_NO_SCHEDULER` keeps the loop from starting and from registering its return listener; a run asked for anyway answers `disabled`. `./dev.py server --no-scheduler` and the gallery screenshot generation set it to `1`.
 
@@ -51,7 +51,7 @@ Each run has a reason (`RunReason`), which its log line carries; any other value
 ### 🔒 One Run at a Time {: #run-lock }
 
 * **Run lock:** `run_due_jobs()` takes an `asyncio.Lock`, one per event loop, for its checks and its jobs, so two runs of the process never overlap. The second one waits, then loads the state the first one saved, and does not run again what the first one just ran.
-* **Busy work:** from its start to its end — the clock settle and the wait for the lock included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`), so that the idle suspension (sleep and wake), when it comes, never stops the machine in the middle of a run.
+* **Busy work:** from its start to its end — the clock settle and the wait for the lock included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`): for the [idle suspension](../../admin/sleep_wake.md#idle-suspend), a scheduler run is work in progress, so the idle monitor never suspends the machine in the middle of a run.
 * **Clock settle:** a `return` or `wake` run first waits `CLOCK_SETTLE_SECONDS` (2 s), before the lock and before it reads the time; `startup` and `tick` never wait. After a Fly.io resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before that: the wait lets the due checks read the corrected time.
 
 ### 🚦 Inside a Run {: #run-checks }
