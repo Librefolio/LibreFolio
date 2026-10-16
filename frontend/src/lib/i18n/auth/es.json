@@ -78,6 +78,21 @@
       "submit": "Establecer la contraseña nueva",
       "done": "Tu contraseña se ha cambiado: inicia sesión con la nueva.",
       "failed": "No se ha podido cambiar la contraseña. Inténtalo de nuevo."
-    }
+    },
+    "setup": {
+      "title": "Configura tu cuenta de administrador",
+      "intro": "Elige la contraseña de la cuenta de administrador de esta instancia.",
+      "account": "Cuenta:",
+      "submit": "Activar la cuenta",
+      "failed": "No se ha podido configurar la cuenta. Inténtalo de nuevo.",
+      "blocked": "Esta instancia está bloqueada por su proveedor: la cuenta se podrá configurar cuando se desbloquee.",
+      "newLinkHint": "Pide un enlace nuevo a tu proveedor. En tu propio servidor, ejecuta «dev.py user setup-link»."
+    },
+    "notices": {
+      "openRegistration": "El registro está abierto y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta.",
+      "openRegistrationLocked": "El registro está abierto, fijado por LIBREFOLIO_REGISTRATION, y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta. Cambia la variable para cerrarlo.",
+      "openRegistrationAction": "Cambiar quién puede registrarse"
+    },
+    "instanceBlocked": "Esta instancia está bloqueada por su proveedor: inténtalo de nuevo cuando se desbloquee."
   }
 }
