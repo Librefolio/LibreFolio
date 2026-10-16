@@ -3242,6 +3242,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
   due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
   un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
+  ✅ 16/10: MULTI-008d crea i broker con gli aiuti V-23 e li cancella in un `finally`; nessun `M008d%` resta dopo il run.
+  Dettagli: piano 04, sezione W-B12.
 - ↪ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — spostata nella sezione X
   dal coordinatore il 15/10 (spec di X).
 - **W-B14 · La docstring di `IdentifierType` cita percorsi vecchi, ed è nell'OpenAPI** — minimo, doc; W, 15/10 (W4,
@@ -3402,6 +3404,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   mentre la pagina File li salta con l'avviso `uploads.deleteSkipped` (evento `file.delete.skipped`). Cura: filtrare
   `can_delete !== false` prima del ciclo, con la stessa chiave e lo stesso evento. Dopo l'ingresso di CP-U2 di H (la
   chiave e l'evento arrivano con quello). Dettagli: messaggio di H, 16/10 00:31.
+  ✅ 16/10: `handleDeleteMultiple` salta i file con `can_delete: false` con l'avviso e l'evento della pagina File; Vitest
+  `BrokerImportFilesModal.test.ts` (4 test, 2 rossi prima). Dettagli: piano 04, sezione W-B37.
 - **W-B38 · Gli errori multipli della creazione portano i testi con `{type}` non risolto** — minimo, chiarezza; W, 16/10
   (W-B36, test-author). Con due o più violazioni `TXCreateItem.validate_transaction_rules`
   (`backend/app/schemas/transactions/transactions.py`, `multipleBusinessRuleErrors`) impacchetta per ciascuna
@@ -3419,6 +3423,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   in uscita si crea senza costo e i lotti leggono le unità come distrutte. Da decidere: il backend dà il costo Auto a un
   ADJUSTMENT −q creato che lo chiede (oggi `cost_basis_mode` non è ammesso su un ADJUSTMENT negativo: cambia i metadati),
   oppure il Bulk non scioglie in ADJUSTMENT una coppia non salvata. Dettagli: piano 04, sezione «Decisione 47».
+- **W-B41 · Altri test di `test_broker_multiuser_api.py` lasciano broker e transazioni nel DB condiviso** — minimo, test;
+  W, 16/10 (W-B12, test-author). Tutti i test di `TestMultiUserRoles` e `TestEditorRestrictions` tranne
+  `test_owner_can_delete_broker` lasciano il loro broker (`create_broker`); MULTI-007, 008b e 008c anche transazioni. Il
+  modello è quello di W-B12 (`_Owned`, `_new_broker`, cancellazione in un `finally`). Dettagli: piano 04, sezione W-B12.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -3450,6 +3458,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   («one is required since», troncata come la doc di W-B33). Il `PUT …/access` su un broker che non esiste risponde 403
   all'utente e 400 all'admin, non 404. Le docstring delle rotte finiscono nell'OpenAPI: `api sync` dopo. Da fare con
   W-B34 o in un lotto di codice. Dettagli: piano 04, sezione «Lotto di doc A-14».
+  ✅ 16/10: docstring di `list_accesses`, `bulk_update_access`, `list_broker_access` e del `PUT …/access` allineate al codice
+  (`api sync`: il client è ignorato da git); `transaction_service.py:84` con la 47. Resta il 403/400 del `PUT` su un broker
+  che non esiste (comportamento). Dettagli: piano 04, sezione W-B35.
 
 ## J · Numeri e analisi (fase 01)
 

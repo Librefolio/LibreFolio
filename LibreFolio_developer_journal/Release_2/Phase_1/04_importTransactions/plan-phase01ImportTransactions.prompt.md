@@ -2899,3 +2899,72 @@ aspetta J-17).
    > (`user/settings/profile.en.md`, `admin/users.en.md`, `architecture/users_and_brokers.md`: solo la frase sulla gamba
    > che cede). Non girati: E2E (lo split e la finestra del broker dal frontend: chiedo lo slot prima dell'ingresso),
    > `all-backend` (slot del coordinatore).
+
+> **Decisione 47 committata come checkpoint** (coordinatore 04:05: `a66bbc1a4`, `8b3e6b766`, `7d28466be`, `cb247a696`);
+> base aggiornata (merge di `dev_release2` `2c485d3d4`, dentro H CP-U2; un conflitto di sola aggiunta in
+> `LibreFolio_devWiki/log.md` risolto dal coordinatore tenendo tutte le voci) → HEAD `817a2d37c`. L'ingresso della 47
+> aspetta J-17. W-B31 + W-B36 entrati (treno 78, merge `4e69b5271`). Il testo V-3 per A lo gira il coordinatore.
+> **Coda della notte** (coordinatore 04:05), ciascuno in commit separati dalla 47 (entrano con un cherry-pick): 1. W-B37;
+> 2. la riga dell'escaper in `TransactionBulkModal.svelte:1879` (C-34 di Y) e la voce da togliere dalla sua guardia;
+> 3. W-B35 (docstring, `api sync`, `front check`); 4. W-B12. W-B29 dopo le 06:45 (slot E2E).
+
+### W-B37 — il modale dei report salta i file non cancellabili ✅ (2026-10-16) — 🧊 FROZEN
+
+**Analisi** (04:10, codice di `817a2d37c`): `handleDeleteMultiple(fileIds)` di
+`frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` manda un DELETE per ogni file selezionato e riporta i
+403 come errore; dopo CP-U2 di H `FilesTable` nasconde «elimina» sulle righe con `can_delete: false`, e la pagina File
+(`frontend/src/routes/(app)/files/+page.svelte`, `deletableSelection` e `handleBulkDeleteFiles`) salta quei file con
+`notify({name: 'file.delete.skipped', detail: {count, isBrim}, toast: {variant: 'warning', message: uploads.deleteSkipped}})`.
+`files` nel modale è tipato `BrimFile[]` (`schemas.BRIMFileInfo`, senza `can_delete`), ma la lista arriva da
+`BRIMFileListItem`, che lo porta: si legge come fa H, `(file as {can_delete?: boolean}).can_delete === false`.
+**Disegno**: in `handleDeleteMultiple` i file non cancellabili si tolgono prima del ciclo, con lo stesso avviso e lo stesso
+evento della pagina File; se non resta niente, nient'altro; il conteggio del toast di successo è quello dei cancellati.
+Nessun cambio di classi (il file non è tenuto dai colori). Rosso prima (Vitest, test-author).
+
+**Rosso** ✅ (04:25): test-author, `frontend/src/lib/components/brokers/BrokerImportFilesModal.test.ts` (nuovo, 4 test:
+selezione mista, selezione tutta bloccata, selezione tutta cancellabile, controllo del client generato), registrato in
+`front_component_unit` (`scripts/test_runner/_frontend_utility.py`, una riga dopo `BrokerCard.test.ts`; file condiviso,
+aggiunta sola). `vitest run` del file: **2 failed, 2 passed**, per il motivo atteso: i DELETE partono anche per i file
+bloccati (`expected [deletable-1, …(2)] to deeply equal [deletable-1, …(1)]`; `expected [locked-1, locked-2] to deeply
+equal []`). Log `/tmp/libreFolio_w_wb37_red.log`.
+
+**Cura** ✅ (04:32): `BrokerImportFilesModal.svelte`, in `handleDeleteMultiple`: l'insieme dei file con
+`can_delete === false` (chiave `file_id`), la selezione filtrata, l'avviso `uploads.deleteSkipped` con l'evento
+`file.delete.skipped` (`detail: {count, isBrim: true}`, come la pagina File) se qualcosa resta fuori, ritorno subito se
+non resta niente (`confirmBulkDelete` toglie comunque la selezione dopo), il ciclo e il toast di successo sui soli
+cancellabili; import di `notify`. Nessuna classe toccata, nessuna chiave i18n nuova.
+**Prove** (`nice`, carico < 60): `vitest run` del file **4/4**; `prettier --check` pulito; `front check` **0 errori,
+0 avvisi** (copre anche C-34 e il client rigenerato di W-B35); `check-orphans` (459 file Vitest raggiungibili, compreso
+il nuovo); gate dei colori pulito. Porta 6184 libera.
+
+### C-34 (di Y) — l'escaper in linea del Bulk ✅ codice (2026-10-16)
+
+`frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` (~1879), la cella `html` della descrizione
+escapava a mano `& < >`; ora `escapeHtml(row.fields.description)` da `$lib/utils/core/escapeHtml` (già importato nel
+file), che escapa anche `"` e `'`. Classi invariate (gate dei colori pulito, `prettier` ok). Le sole copie rimaste sono
+quella canonica e `inlineMath.ts` (voluta, per KaTeX). **La guardia di Y** che ammette questo file per nome non è ancora
+in `dev_release2` né nella mia base: la voce va tolta da chi entra per secondo (Y, se il mio commit entra prima).
+Prove: `front check` insieme a W-B37 ✅ (0 errori, 0 avvisi).
+
+### W-B35 — docstring superate dell'accesso ai broker ✅ codice (2026-10-16)
+
+`backend/app/services/brokers/access.py`: `list_accesses` dice che non controlla niente (decide la rotta) e che
+`user_id`/`is_superuser` non si leggono (tenuti per un controllo che la rotta potrà aggiungere, P4); i campi restituiti
+veri (con `share_percentage` e `avatar_url`). `bulk_update_access`: la regola «Cannot remove the calling user as last
+OWNER» assorbita in «At least one OWNER must remain: nobody, the caller included, can remove or downgrade the last
+one». `backend/app/api/v1/brokers.py`: la docstring di `list_broker_access` dice ciò che fa il codice (qualsiasi utente
+autenticato legge l'elenco di qualsiasi broker esistente, e-mail comprese; 404 per un broker che non esiste) e quella del
+`PUT …/access` la stessa regola dell'ultimo OWNER. `black` invariato, `ruff` pulito; `api sync` rigenera il client (ignorato
+da git: nessuna differenza tracciata). La riga «one is required since» di `transaction_service.py:84` è già nella 47.
+Restano fuori: il `PUT …/access` su un broker che non esiste (403 all'utente, 400 all'admin), comportamento e non testo.
+Prove: `api broker-access` **25 passed, 1 skipped** (docstring soltanto); `front check` con W-B37 ✅ (0 errori, 0 avvisi).
+
+### W-B12 — MULTI-008d pulisce i suoi broker ✅ (2026-10-16)
+
+test-author: `backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d (`test_cross_broker_access_failure_
+is_atomic`) crea i due broker con gli aiuti dei test V-23 (`_Owned`, `_new_broker`, nomi `M008dEditable`/`M008dRestricted`)
+e li cancella in un `finally` (con `force`: transazioni e accessi con loro); un errore di pulizia non copre l'errore del
+test e, a test verde, lo fa fallire con l'elenco dei rimasti. Asserzioni originali intatte (9 su 9). Prove (`nice`): `db
+populate`; `api broker-multiuser test_cross_broker_access_failure_is_atomic` **2/2**, poi nessun broker `M008d%` nel DB
+della corsia; `api broker-multiuser` intero **20/20**. Porta libera. Reperto: anche `TestMultiUserRoles`,
+`TestEditorRestrictions` e MULTI-007/008b/008c lasciano broker o transazioni → **W-B41**.
