@@ -9,9 +9,10 @@ will go through it on a scheduled wake-up. The contract pinned here:
     ``CLOCK_SETTLE_SECONDS`` 2.0, ``TICK_SECONDS`` 60.0, ``FIRST_RUN_DELAY_SECONDS`` 5.0, ``MISSED_SLOT_LOOKBACK_DAYS`` 7,
     ``CATCH_UP_LISTENER`` "scheduler-catch-up", ``BUSY_REASON`` "scheduler", ``JOB_NAMES`` ("current_price",
     "history_sync"). A ``RunReason`` is "startup", "tick", "return" or "wake".
-(b) ``JobOutcome(name, status, started_at=None, duration_s=None, items_ok=0, items_err=0, error=None)`` and
-    ``RunReport(reason, status, started_at, finished_at, jobs=())`` are frozen dataclasses with these fields, in this
-    order. ``utc_now()`` reads the wall clock, an aware datetime in UTC; ``settle_clock()`` is a coroutine that waits
+(b) ``JobOutcome(name, status, started_at=None, duration_s=None, items_ok=0, items_err=0, error=None, items_deferred=0,
+    retry_at=None)`` and ``RunReport(reason, status, started_at, finished_at, jobs=())`` are frozen dataclasses with these
+    fields, in this order — the last two of ``JobOutcome`` since lot Z7b, whose values ``test_scheduler_backoff.py``
+    pins. ``utc_now()`` reads the wall clock, an aware datetime in UTC; ``settle_clock()`` is a coroutine that waits
     ``CLOCK_SETTLE_SECONDS``, read at the call.
 (c) ``run_due_jobs(reason)``: an unknown reason is a ``ValueError`` before anything happens — no busy span, no
     collaborator called.
@@ -533,7 +534,7 @@ def test_job_outcome_and_run_report_are_frozen_dataclasses_with_the_contract_fie
     def shape(cls: type) -> list[tuple[str, object]]:
         return [(field.name, REQUIRED if field.default is dataclasses.MISSING else field.default) for field in dataclasses.fields(cls)]
 
-    assert shape(scheduler.JobOutcome) == [("name", REQUIRED), ("status", REQUIRED), ("started_at", None), ("duration_s", None), ("items_ok", 0), ("items_err", 0), ("error", None)]
+    assert shape(scheduler.JobOutcome) == [("name", REQUIRED), ("status", REQUIRED), ("started_at", None), ("duration_s", None), ("items_ok", 0), ("items_err", 0), ("error", None), ("items_deferred", 0), ("retry_at", None)]
     assert shape(scheduler.RunReport) == [("reason", REQUIRED), ("status", REQUIRED), ("started_at", REQUIRED), ("finished_at", REQUIRED), ("jobs", ())]
     outcome = scheduler.JobOutcome("current_price", "not_due")
     report = scheduler.RunReport("tick", "ok", WALL_START, WALL_START)
@@ -542,6 +543,7 @@ def test_job_outcome_and_run_report_are_frozen_dataclasses_with_the_contract_fie
     with pytest.raises(dataclasses.FrozenInstanceError):
         report.status = "error"
     assert (outcome.started_at, outcome.duration_s, outcome.items_ok, outcome.items_err, outcome.error, report.jobs) == (None, None, 0, 0, None, ())
+    assert (outcome.items_deferred, outcome.retry_at) == (0, None), "lot Z7b: nothing deferred, no retry, by default"
     print_success("fields in order, defaults, frozen")
 
 
@@ -875,7 +877,11 @@ async def test_a_job_that_raises_is_an_error_outcome_logged_without_its_message(
 
 @pytest.mark.asyncio
 async def test_a_save_that_raises_after_a_job_makes_that_job_an_error_and_the_next_one_runs(world: World) -> None:
-    """SCU-018 — contract (j): the save after current_price raises ``PermissionError`` with a secret in its message: current_price is "error", ``error`` "PermissionError", a float duration ≥ 0; history_sync runs and is saved; the run is "partial"; logged once for current_price; the message is nowhere in the report."""
+    """SCU-018 — contract (j): the save after current_price raises ``PermissionError`` with a secret in its message: current_price is "error", ``error`` "PermissionError", a float duration ≥ 0; history_sync runs and is saved; the run is "partial"; logged once for current_price; the message is nowhere in the report.
+
+    Since lot Z7b the failure's record is saved too, which may add a save between the two jobs: the sequence pins what
+    comes first and last, not their number (``test_scheduler_backoff.py`` pins the record).
+    """
     print_section("SCU-018: save_state raises after current_price")
     world.save_failures = [PermissionError(f"provoked: {SECRET}")]
 
@@ -886,7 +892,9 @@ async def test_a_save_that_raises_after_a_job_makes_that_job_an_error_and_the_ne
     assert (failed.status, failed.error) == ("error", "PermissionError")
     assert isinstance(failed.duration_s, float) and failed.duration_s >= 0, failed
     assert _outcome(report, "history_sync").status == "ok"
-    assert _jobs_and_saves(world) == [("job", "current_price"), ("save",), ("job", "history_sync"), ("save",)]
+    sequence = _jobs_and_saves(world)
+    assert [entry for entry in sequence if entry[0] == "job"] == [("job", "current_price"), ("job", "history_sync")], sequence
+    assert (sequence[:2], sequence[-2:]) == ([("job", "current_price"), ("save",)], [("job", "history_sync"), ("save",)]), sequence
     assert world.stored.history_sync.last_run_at == WALL_START.isoformat()
     assert report.status == "partial"
     assert SECRET not in repr(report)

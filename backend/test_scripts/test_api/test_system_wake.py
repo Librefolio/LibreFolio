@@ -31,7 +31,8 @@ Under test: ``backend/app/config/sleep_wake.py`` (``WAKE_TOKEN_VARIABLE``, ``wak
   is ``run_due_jobs("wake")``, started as a task. The body streams: a space at once, before the run ends, then one every
   ``WAKE_KEEPALIVE_SECONDS`` while it lasts, then the JSON of ``WakeSyncResponse``: ``status``, ``started_at``,
   ``finished_at`` (ISO 8601 with the UTC offset), ``error`` (null) and ``jobs``, each with ``name``, ``status``,
-  ``started_at``, ``duration_s``, ``items_ok``, ``items_err`` and ``error``, exactly these keys, holding the values of
+  ``started_at``, ``duration_s``, ``items_ok``, ``items_err``, ``error``, ``items_deferred`` and ``retry_at`` (both
+  since lot Z7b; ``retry_at`` ISO 8601 with the UTC offset, or null), exactly these keys, holding the values of
   the ``RunReport`` the run returned; its status whatever it is (``ok``, ``partial``, ``error``, ``disabled``,
   ``not_leader``, ``blocked``), always with 200.
 - WAKE-020..021, one wake-up at a time in the process (D-W1): while a run is in progress the token is still checked
@@ -82,7 +83,7 @@ import secrets
 import zlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NoReturn
@@ -122,9 +123,10 @@ UNAUTHORIZED = (401, "wake_unauthorized", True)
 UNAVAILABLE = (503, "wake_unavailable", True)
 IN_PROGRESS = (409, "wake_in_progress", True)
 
-#: The keys of ``WakeSyncResponse`` and of each of its jobs, exactly: no ``reason``, no ``next_wake_at``.
+#: The keys of ``WakeSyncResponse`` and of each of its jobs, exactly: no ``reason``, no ``next_wake_at``. A job's last
+#: two since lot Z7b.
 BODY_KEYS = frozenset({"status", "started_at", "finished_at", "error", "jobs"})
-JOB_KEYS = frozenset({"name", "status", "started_at", "duration_s", "items_ok", "items_err", "error"})
+JOB_KEYS = frozenset({"name", "status", "started_at", "duration_s", "items_ok", "items_err", "error", "items_deferred", "retry_at"})
 
 RUN_STARTED = "Wake-up run started"
 RUN_FINISHED = "Wake-up run finished"
@@ -145,12 +147,22 @@ SECRET_MESSAGE = "token=SECRET-in-message"
 STARTED_AT = datetime(2026, 10, 16, 3, 0, 0, tzinfo=UTC)
 JOB_STARTED_AT = datetime(2026, 10, 16, 3, 0, 2, tzinfo=UTC)
 FINISHED_AT = datetime(2026, 10, 16, 3, 0, 9, tzinfo=UTC)
-#: Outcomes whose every field differs from its default where it can: a mirror that drops or renames one shows.
+#: Outcomes whose every field differs from its default where it can: a mirror that drops or renames one shows. The two
+#: fields of lot Z7b stay at their defaults here; ``deferring(RAN_PARTLY)`` moves them too.
 RAN_PARTLY = JobOutcome(name="current_price", status="partial", started_at=JOB_STARTED_AT, duration_s=1.25, items_ok=7, items_err=2, error="QuotaExceeded")
 RAN_OK = JobOutcome(name="current_price", status="ok", started_at=JOB_STARTED_AT, duration_s=0.5, items_ok=12, items_err=0, error=None)
 RAN_INTO_ERRORS = JobOutcome(name="current_price", status="error", started_at=JOB_STARTED_AT, duration_s=0.75, items_ok=0, items_err=12, error="ProviderExploded")
 RAISED = JobOutcome(name="history_sync", status="error", started_at=FINISHED_AT, duration_s=3.5, items_ok=0, items_err=0, error="PermissionError")
 NOT_DUE = JobOutcome(name="history_sync", status="not_due")
+#: When the deferred items of a run may be retried (lot Z7b), in UTC and to the second.
+RETRY_AT = datetime(2026, 10, 16, 3, 5, 0, tzinfo=UTC)
+
+
+def deferring(outcome: JobOutcome) -> JobOutcome:
+    """``outcome`` with three items deferred until ``RETRY_AT`` (lot Z7b): ``deferring(RAN_PARTLY)`` has every field away
+    from its default. Built at the call, so that only the test using it needs the fields of Z7b."""
+    return replace(outcome, items_deferred=3, retry_at=RETRY_AT)
+
 
 #: What the wake module ships with, and the scheduler's own run, read at import, before any fixture replaces them.
 SHIPPED_RUN_DUE_JOBS = getattr(wake, "run_due_jobs", None)
@@ -624,7 +636,7 @@ def checked_keys(body: object) -> list[dict[str, Any]]:
     assert isinstance(body, dict) and set(body) == BODY_KEYS, f"the body holds exactly {sorted(BODY_KEYS)}: {body!r}"
     jobs = body["jobs"]
     assert isinstance(jobs, list) and all(isinstance(job, dict) and set(job) == JOB_KEYS for job in jobs), f"each job holds exactly {sorted(JOB_KEYS)}: {jobs!r}"
-    assert all(type(job[key]) is int for job in jobs for key in ("items_ok", "items_err")), f"items_ok and items_err are integers: {jobs!r}"
+    assert all(type(job[key]) is int for job in jobs for key in ("items_ok", "items_err", "items_deferred")), f"items_ok, items_err and items_deferred are integers: {jobs!r}"
     return jobs
 
 
@@ -639,7 +651,7 @@ def read_result(raw: bytes) -> dict[str, Any]:
         **body,
         "started_at": moment(body["started_at"], "started_at"),
         "finished_at": moment(body["finished_at"], "finished_at"),
-        "jobs": [{**job, "started_at": moment(job["started_at"], f"jobs[{index}].started_at", nullable=True)} for index, job in enumerate(jobs)],
+        "jobs": [{**job, "started_at": moment(job["started_at"], f"jobs[{index}].started_at", nullable=True), "retry_at": moment(job["retry_at"], f"jobs[{index}].retry_at", nullable=True)} for index, job in enumerate(jobs)],
     }
 
 
@@ -651,7 +663,7 @@ def as_body(report: RunReport) -> dict[str, Any]:
         "started_at": report.started_at,
         "finished_at": report.finished_at,
         "error": None,
-        "jobs": [{"name": job.name, "status": job.status, "started_at": job.started_at, "duration_s": job.duration_s, "items_ok": job.items_ok, "items_err": job.items_err, "error": job.error} for job in report.jobs],
+        "jobs": [{"name": job.name, "status": job.status, "started_at": job.started_at, "duration_s": job.duration_s, "items_ok": job.items_ok, "items_err": job.items_err, "error": job.error, "items_deferred": job.items_deferred, "retry_at": job.retry_at} for job in report.jobs],
     }
 
 
@@ -1073,9 +1085,10 @@ async def test_with_the_token_the_run_starts_and_the_answer_is_its_report(app, m
     """WAKE-016: with the token and no run in progress, one run of reason "wake"; 200, ``application/json``,
     ``Cache-Control: no-store``; the body starts with a space and ends with the JSON of ``WakeSyncResponse``, exactly
     its keys, the values of the ``RunReport`` returned: its status, its moments (ISO 8601, UTC), no error, and each job
-    with every field, a job not due included."""
+    with every field, a job not due included — the items deferred and their retry since lot Z7b."""
     print_section("Wake-up: the answer")
     token, bearer = with_token(monkeypatch)
+    run.jobs = (deferring(RAN_PARTLY), NOT_DUE)
 
     exchange = await send(app, authorization=bearer, never=[token])
 
@@ -1084,7 +1097,9 @@ async def test_with_the_token_the_run_starts_and_the_answer_is_its_report(app, m
     assert headers == {"content-type": "application/json", "cache-control": "no-store"}, f"the answer's headers: {headers}"
     assert (run.reasons, len(run.returned)) == (["wake"], 1), f"one run, of reason wake: {run.reasons}"
     assert exchange.response.content[:1] == b" ", f"the body starts with the space sent at once: {exchange.response.content[:40]!r}"
-    assert read_result(exchange.response.content) == as_body(run.returned[0]), f"the body is the report returned: {exchange.response.content!r}"
+    result = read_result(exchange.response.content)
+    assert result == as_body(run.returned[0]), f"the body is the report returned: {exchange.response.content!r}"
+    assert [(job["name"], job["items_deferred"], job["retry_at"]) for job in result["jobs"]] == [("current_price", 3, RETRY_AT), ("history_sync", 0, None)], f"lot Z7b: the items deferred and their retry, from each outcome: {result['jobs']}"
     print_success("200 application/json no-store; a space, then the report")
 
 
