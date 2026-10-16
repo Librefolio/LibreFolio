@@ -322,12 +322,26 @@ result already carries its `provider_params`, so it is priceable immediately.
 
 **«Can't find it? Let us know» (P20).** Once a search has finished, whatever its outcome, the
 dropdown shows a report row: at its bottom, or between the Premium and the community sections when
-they show. `assetSearchReport.ts` holds its logic: `supportChannel()` turns the instance's
-`support_url` (`GET /api/v1/system/instance`, through `instanceConfig`) into a channel and checks
-the scheme again, so that nothing but http(s) and `mailto:` with one address becomes a link —
-`mailto` (subject and CRLF body in the link), `page` (the page opens in a new tab and the body goes
-to the clipboard, with a toast either way) or `github` (a prefilled new issue, for an unset or
-invalid value). `buildSearchReport()` writes the English subject and body, `reportHref()` the link.
+they show (`reportPlacement`). `assetSearchReport.ts` holds its logic.
+`supportChannel(value, {githubFallback})` turns the instance's `support_url`
+(`GET /api/v1/system/instance`, through `instanceConfig`) into a channel, checking it again although
+the backend validated it, so that nothing but http(s) and `mailto:` with one address becomes a link:
+`mailto` (subject and CRLF body in the link), or `page` for an address that `new URL()` parses as
+http(s) with a host name and no user name or password (the page opens in a new tab and the body
+goes to the clipboard, with a toast either way). A `page` carries the parsed `url.href`, normalized
+and absolute, never the raw value: a spelling such as `https:host` would otherwise resolve, as an
+href, to a path on the instance itself. Anything else, user info included, counts as missing, like
+an unset value: `github` (a prefilled new issue) with `githubFallback`, `null` without it.
+
+N61: `AssetSearchAutocomplete.svelte` passes
+`githubFallback = instanceConfig.loaded && instanceConfig.config.profile === 'selfhosted'`, since a
+public issue would publish the profile, the provider codes and the identifiers. On a managed
+instance, or while `GET /api/v1/system/instance` has not answered on this page load (until then
+`instanceConfig` holds `DEFAULT_INSTANCE_CONFIG`, which says `selfhosted`: hence the `loaded`
+guard), a missing address gives a `null` channel: `reportPlacement` is then `null`, and the
+dropdown has no report row. A valid address works in both profiles.
+
+`buildSearchReport()` writes the English subject and body, `reportHref()` the link.
 Each queried provider's outcome comes from the stream, `provider_results` (a count) or
 `provider_error` (its `error_code`, never the `error` message), or on the REST fallback from
 `providers_queried`, `providers_with_errors` and `providers_not_configured`; a provider still silent

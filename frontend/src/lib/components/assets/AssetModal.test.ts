@@ -78,6 +78,7 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {isParametricProvider} from '$lib/utils/providerHelpers';
+import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {GITHUB_NEW_ISSUE_URL} from './assetSearchReport';
 
 /** The creation callbacks, typed from the component: the contract under test (O-20). */
@@ -1003,9 +1004,10 @@ describe('AssetModal — the description placeholder speaks the UI language', ()
 // P20 (workstream X, sub-lot 3): the report of a search carries the form. Both <AssetSearchAutocomplete> calls —
 // with the import's search badges and without — get `reportContext={{currency, assetType, identifiers}}`, the
 // identifiers being the rows with a value. The form is prefilled as the import wizard does, the search it opens
-// with (`initialSearchQuery`) finds nothing, and the report link of that search must name what the form says. This
-// file's instance has no support address (`instanceConfig` is the real one, at its defaults): the link is a new GitHub
-// issue, whose body is decoded from the href.
+// with (`initialSearchQuery`) finds nothing, and the report link of that search must name what the form says. The
+// instance is the real `instanceConfig`, answered in `beforeEach` without a request: a self-hosted instance with no
+// support address, the one that falls back to a public GitHub issue (N61). The link is that issue, whose body is
+// decoded from the href.
 //
 // What the form says, never what it merely defaults to (16/10/2026): a blank create form starts at the user's base
 // currency (EUR here: this file has no user settings) and at STOCK, and naming those hands support a hint nobody gave.
@@ -1026,6 +1028,19 @@ describe('AssetModal — the report of a search carries the form (P20)', () => {
             accepted_identifier_types: ['ISIN', 'TICKER'],
         },
     ];
+
+    // N61: with no support address the report falls back to GitHub only on a self-hosted instance whose configuration
+    // has loaded. The store's own `load`, with an answer instead of the request: no module mock, the store as it runs.
+    beforeEach(async () => {
+        await instanceConfig.load({force: true, fetchConfig: async () => ({profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}, support_url: null})});
+        expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+        expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
+    });
+
+    afterEach(async () => {
+        // The defaults again for whatever runs next. `loaded` has no way back to false; no other block of this file reads it.
+        await instanceConfig.load({force: true, fetchConfig: async () => DEFAULT_INSTANCE_CONFIG});
+    });
 
     /** The streamed search's Response, replaying `events` as SSE `data:` lines (as AssetSearchAutocomplete.test.ts does). */
     function streamedSearch(events: unknown[]) {
