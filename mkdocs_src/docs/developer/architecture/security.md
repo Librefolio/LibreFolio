@@ -111,8 +111,9 @@ not commit: the caller commits it with the change that asks for it. Six changes 
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
-Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
-password equal to it, on `change-password`; a missing or wrong current password, or an address or a username already
+Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
+[password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
+`change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
 reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
 equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
@@ -188,6 +189,64 @@ same-email guards), `./dev.py test services user-profile` (`backend/test_scripts
 `TestUpdateProfileEmailVerification`: `email_verified_at`), and for the tab
 `./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
 (`frontend/e2e/settings.spec.ts`, its «A6e» block).
+
+### 🔏 Password Rules {: #password-rules }
+
+The rules a new password must meet are written once, in `backend/app/services/accounts/password_policy.py` (decision
+37, lot A6c, release 1.3), and every way of choosing a password applies them. Before, they were written twice and
+disagreed: `validate_password()` in `scripts/user_cli.py` used Python's `str.isupper()`, `str.islower()`,
+`str.isdigit()` and a fixed list of ASCII symbols, `PasswordStrength.svelte` ASCII regular expressions and another
+list, and the API asked only for 8 characters (`min_length=8` in the request schemas).
+
+- **The rules.** `PASSWORD_RULES`, in this order: `min_length` (value `MIN_LENGTH`, 8), `uppercase`, `lowercase`,
+  `digit`, `special`. `failed_rules(password)` returns the codes of the rules a password misses, in that order; an
+  empty list means it meets them all.
+- **Unicode classes.** Each class is a Unicode general category (`unicodedata.category()`): an uppercase letter is
+  `Lu`, a lowercase one `Ll`, a digit `Nd`; a symbol, for `special`, is any character that is neither a letter
+  (`L*`), nor a number (`N*`), nor whitespace. The length counts characters, that is code points. So `É` is an
+  uppercase letter and `é` a lowercase one, `٣` (Arabic-Indic three) a digit, `€` and `_` symbols; a space is not a
+  symbol, and `²` is a number (`No`) but not a digit, so it meets neither `digit` nor `special`.
+- **Stored passwords stay valid.** The login never checks the rules: they apply only when a new password is chosen,
+  so an account whose password predates them keeps signing in with it.
+
+Each entry point checks the new password first, as soon as the request body is valid (and, for `change-password`, the
+session):
+
+| Entry point | Checked before |
+|-------------|----------------|
+| `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
+| `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
+| `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
+| `./dev.py user create`, `./dev.py user reset` | Anything in the database, the username included: `validate_password()` in `scripts/user_cli.py` is a thin wrapper over `failed_rules()` |
+
+- **The refusal.** The three routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
+  with `{"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": […]}`
+  in `detail`, `rules` being the codes missed, in the rules' order. Nothing is written: a refused change or reset
+  leaves the password, the session version and the sessions as they were. The command line prints
+  `❌ Password does not meet security requirements:`, then one line per rule missed that starts with its code
+  (`_RULE_MESSAGES`), such as `min_length: the password must be at least 8 characters long`, and exits with `1`.
+- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password` and
+  `PasswordResetRequest.new_password` (`backend/app/schemas/auth.py`) only require a non-empty string
+  (`min_length=1`): an empty password is still a `422` of the request validation, not `PASSWORD_TOO_WEAK`. The
+  length is the policy's rule.
+- **Published to the app.** `password_rules_public()` is the list `GET /api/v1/system/instance` publishes as
+  `accounts.password_rules`, `[{code, value}]` (`PasswordRuleRead`), `value` being `null` for every rule but
+  `min_length` ([Public instance configuration](settings.md#public-instance-configuration)). The app draws and checks
+  that list under every new-password field, with the same classes (`\p{Lu}`, `\p{Ll}`, `\p{Nd}`, a symbol
+  `[^\p{L}\p{N}\s]`, the length in code points) in `frontend/src/lib/features/auth/passwordRules.ts`
+  ([PasswordStrength](../frontend/components/features/auth.md#passwordstrength)), so a rule changed here reaches the
+  interface without a change of its own. A code the app does not know is not checked there: the server decides.
+
+Tests: `./dev.py test services password-policy` (`backend/test_scripts/test_services/test_password_policy.py`,
+POLICY-000 to POLICY-006: the published list, the order of `failed_rules()`, the Unicode classes, the length in code
+points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-005 and PWD-001 to PWD-008: registration
+and password change, the new password checked before the current one, a login that never checks);
+`./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
+RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
+block); `./dev.py test utils dev-cli-image` (`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
+`validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
+`./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
+(`PasswordStrength.test.ts`).
 
 ### 💻 Using curl
 
@@ -396,9 +455,9 @@ All endpoints that access or modify user data require a valid session cookie (`D
 |----------|--------|---------|
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
-| `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
+| `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
 | `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
-| `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
+| `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
@@ -707,7 +766,8 @@ tokens:
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
   and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
-  locks it, and whether the instance has no account yet ([The First-Account Flag](#first-account-open)).
+  locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
+  [password rules](#password-rules), the same on every instance.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser

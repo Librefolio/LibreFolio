@@ -55,8 +55,10 @@ Changing only your username asks for no password and signs no device out.
 The **Change Password** button (always available, no unlock needed) opens a modal requiring:
 
 1. Your **current password** (for verification)
-2. A **new password** that satisfies all the rules: minimum 8 characters, at least one uppercase letter, one lowercase letter, one number, and one special character — and it must differ from the current one
+2. A **new password** that meets every rule of the checklist under the field: at least 8 characters, an uppercase letter, a lowercase letter, a number and a special character — and it must differ from the current one
 3. **Confirmation** of the new password
+
+The checklist follows what you type, and the server applies exactly the same rules. Letters and digits of any alphabet count: `É` is an uppercase letter, `é` a lowercase one. A special character is anything that is neither a letter, a number nor a space, such as `!`, `_` or `€`. If the server still refuses the new password, the modal says *Password does not meet security requirements*, and the checklist shows which rules are missing.
 
 After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out.
 
