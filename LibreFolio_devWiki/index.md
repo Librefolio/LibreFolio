@@ -21,6 +21,7 @@
 | [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100, F-111–F-113 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107, F-110 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074, F-106 | stable |
+| [[domains/email]] | EMAIL | — (no feature code yet) | in-progress (release 1.3, workstream E; E4c and E6 open, 2026-10-16) |
 
 ---
 
