@@ -44,7 +44,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
@@ -56,7 +56,7 @@
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
     import AssetEventPicker from '../events/AssetEventPicker.svelte';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';

@@ -73,10 +73,10 @@ Delivered in `1028a1978` («fix(files): local, viewer-only PDF preview»):
 
 | Role | Path |
 |------|------|
-| Preview modal (`PDF_PREVIEW_DISABLED`, the empty-viewer close, the fallback) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
+| Preview modal (`PDF_PREVIEW_DISABLED`, the empty-viewer close, the fallback) | `frontend/src/lib/features/files/FilePreviewModal.svelte` |
 | Local engine and fonts, CDN fallback | `frontend/src/lib/utils/files/pdfViewerAssets.ts` |
 | Render state | `frontend/src/lib/utils/files/pdfPreviewState.ts` |
-| Unit tests | `frontend/src/lib/components/files/FilePreviewModal.test.ts` |
+| Unit tests | `frontend/src/lib/features/files/FilePreviewModal.test.ts` |
 | Asset tests | `frontend/src/lib/utils/files/pdfViewerAssets.test.ts` |
 | E2E (the empty viewer closes) | `frontend/e2e/files.spec.ts` |
 | Licences | `THIRD_PARTY_LICENSES.md` |
