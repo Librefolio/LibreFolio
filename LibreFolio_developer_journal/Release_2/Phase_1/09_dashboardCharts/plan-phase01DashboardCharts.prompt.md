@@ -3628,3 +3628,118 @@ vengono dal catalogo generato alle 18:27.
 >   - alla chiusura: la riga del CHANGELOG e la documentazione con `docs-writer`, cioè la sezione «Coming back and
 >     refreshing», la pagina dei broker e una pagina per sviluppatori su `pageBusy`.
 > - **Revisione con il developer**: N55, Y-18 e Y-15.
+
+### Aggiornamento della base: fusione con dev `967ddbda4` (aperta dal coordinatore alle 19:30; HEAD `aec08170f`)
+
+- Il journal con l'E2E dei passi 4 e 4b è committato: `aec08170f`.
+- La fusione porta CP-13a (J), C-97a, X-R28, O-20 di X, H-12/21, il lotto 9 di AF e DV.
+- **Un conflitto, `routes/(app)/assets/+page.svelte`**: il mio Y11 contro O-20 di X. Con O-20 la pagina non
+  sincronizza più da sola dopo una creazione: `AssetModal` sincronizza, e la pagina mostra lo spinner sulla scheda.
+  - Import: tenuti entrambi, `pageBusy` e `type AssetCreateSyncResult`.
+  - `AssetModal`: `oncreated={handleAssetCreated}` e `onsynced={handleCreatedAssetSynced}` di X, più il mio
+    `onupdated` tracciato (`assets-reload`).
+  - In `handleAssetCreated` di X il `loadAssets()` è tracciato (`assets-reload`), come nel mio `oncreated` inline.
+  - `handleCreatedAssetSynced` resta senza gettone e senza `join`. È il ricaricamento dopo una sincronizzazione che ha
+    il proprio indicatore, lo spinner della scheda; per il contratto e per P3 non tiene fermo il pulsante, come
+    `handleSyncAsset`.
+  - Il coordinatore suggeriva `join` se lo spinner della scheda dovesse tenere fermo il pulsante; per il contratto non
+    deve.
+  - Ho fatto `git add` solo di quel file; nessun conflitto rimasto.
+- **File automerged da entrambi i lati**, rivisti:
+  - `brokers-detail.spec.ts`: il `data-selected` di T (righe 392–419) accanto ai miei test Y-12;
+  - `financial_math.md`: la sezione del gate accanto alla riga di J su `required_recovery_return`;
+  - BACKLOG: le voci da Y-12 a Y-18 intatte.
+- **Prove leggere sulla revisione fusa** (`files/scripts/y11m3_light.sh`, dalle 19:33 alle 19:42, carico 35–45):
+  - `api sync` non ha cambiato file tracciati;
+  - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+  - store 93; risk-controller 102; risk-levels 499; asset-unit 880;
+  - core 6 830/6 830; component 4 099/4 099;
+  - `diff --cached --check` pulito.
+- **⚠️ Fuori pista, un gettone mancante del passo 3**: in `AssetMergeModal`, `onmerged` chiama `loadAssets()` senza
+  gettone, anche se è un ricaricamento dopo una scrittura dell'utente. La patch del passo 3 non l'aveva considerato.
+  Va nel prossimo lotto di Y11, insieme ad `assets/[id]`, e non nella fusione, che deve solo unire i due lati.
+- **E2E combinata** (`files/scripts/y11m3_e2e.sh`, slot 1, dalle 19:44, scadenza 20:25): `page-busy`, `asset-list`,
+  `asset-modal`, `front-broker detail`, `transactions-table`.
+  - **✅ 121/121 alla prima corsa**, dalle 19:43 alle 19:56. La prima spec comprende la ricostruzione del frontend,
+    circa 4,5 minuti con il carico a 116.
+    - `page-busy` 12/12; `asset-list` 28/28; `asset-modal` 18/18, che copre anche O-20 di X sulla revisione combinata;
+    - `front-broker detail` 38/38; `transactions-table` 25/25.
+  - Alle 19:56:28 la porta 6189 è libera.
+  - Queste note restano fuori dalla fusione, non in stage: vanno nel prossimo checkpoint.
+- **Per `assets/[id]`**: la fusione porta lo split della pagina di dettaglio fatto da X, con i componenti in
+  `components/assets/detail/` (per esempio `AssetDetailToolbarActions.svelte` e `AssetDetailHeader.svelte`). Prima di
+  scrivere la patch chiedo al coordinatore se FE5c e il 9b sono entrambi entrati.
+- **19:57**: il coordinatore ha committato la fusione (`ceb182ad4`), e **Y è entrato in dev** con `0c79932a7` (corsa
+  130: Y12a, Y-12 e Y11 dal passo 1 al 4b).
+  - `assets/[id]`: FE5c e il 9b sono entrati, ma X sta lavorando a C-66 sullo stesso file. Quindi prima Y12b; poi
+    `assets/[id]`, con `onmerged`, appena C-66 entra (me lo dice il coordinatore).
+
+### Y12b · P19, i guadagni di recupero dal backend (dalle 19:58, su `ceb182ad4`) — ✅ codice, test e prove leggere 20:12; E2E da fare
+
+> **Note implementazione**.
+> - **Ambito di oggi: solo P19**, con CP-13a di J (`0452e592c`) già nella base.
+>   - R17, W8, P4, P5 e V11 aspettano il resto di CP-13 di J, e P5 anche CP-7: nessuno di questi campi è nel client
+>     generato.
+> - **Cosa cambia** (`features/risk/levels/levelHelpers.ts`; patch `files/patches/y12b_levelHelpers.py`, provata a
+>   secco su una copia):
+>   - `requiredRecovery()` sparisce: la formula `1/(1−L) − 1` ora sta solo nel backend
+>     (`financial_math/returns.py::required_recovery_return`);
+>   - la riga «worst» di `buildHurtRows` legge `maximum_drawdown_trough_to_peak_ratio` così com'è arriva, solo da
+>     `drawdown_summary`. Senza riepilogo, quando la profondità viene dal KPI, il recupero è null: niente ripiego;
+>   - una profondità zero non ha niente da recuperare e resta null, come oggi;
+>   - `buildCurrentDrawdown` legge `remaining_to_peak_ratio` così com'è;
+>   - si corregge il commento su `degrades_result` (righe 137–141): oltre al ripiego per settore ora c'è anche
+>     `total_loss_no_recovery`.
+> - **L1** (`L1HowMuchItHurts.svelte`) non cambia: con il valore null la riga del recupero non compare, come succede in
+>   L1 per ogni sottomisura che manca, e come oggi per una perdita totale. La decisione parla di «—»: se il developer
+>   vuole un trattino, basta una riga del template.
+> - **Il laboratorio** (`assetSetLevels.ts:190-194`) legge già `remaining_to_peak_ratio` e non mostra un recupero dal
+>   punto peggiore: resta com'è.
+> - **E2E**: `risk-analysis.spec.ts:1922` controlla solo che `risk-l1-recovery-worst` sia visibile, e nessuna spec ne
+>   legge il valore. L'export per l'AI non usa il campo nuovo.
+> - **Documentazione**: `developer/frontend/components/features/risk-lab.md:285-287` descrive `requiredRecovery()` con
+>   righe sbagliate. La aggiorna `docs-writer` dopo il codice, con le righe definitive.
+> - **`test-author`** (dalle 19:59 alle 20:05):
+>   - in `levelHelpers.test.ts`, via il blocco `requiredRecovery` (3 test); i due test che usavano il valore calcolato
+>     ora hanno i campi nella fixture;
+>   - 17 casi nuovi:
+>     - il valore del backend letto così com'è, per la riga «worst» e per il drawdown corrente;
+>     - la perdita totale con valore null;
+>     - il ripiego dal KPI, che non porta recupero;
+>     - una profondità del riepilogo col segno sbagliato, quando subentra il KPI;
+>     - la profondità zero;
+>     - NaN, infinito, una stringa e un valore mancante, che si leggono come null.
+>   - **⚠️ Fuori pista**, trovato da `test-author`: la stub di `drawdown_summary` in `risk-analysis.spec.ts` (riga 755)
+>     non aveva il campo nuovo. Con il cambio, `risk-l1-recovery-worst` (riga 1922) sarebbe sparito. Ho aggiunto
+>     `maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913` (3 righe).
+>   - Una seconda scoperta, sulla durata che mescola le fonti, è fuori da P19 ed era già presente: è nel BACKLOG come
+>     Y-19.
+> - **Rifinitura della patch**: il recupero si legge solo quando la profondità viene dal riepilogo (`summaryDepth`). Così
+>   non può mai finire accanto alla profondità del KPI.
+> - **Rosso** (20:05, `risk-levels-unit`): **12 falliti** su 511, cioè esattamente i 12 attesi.
+> - **Verde** dopo la patch (20:06): **511/511**. Nel codice non resta nessuna chiamata a `requiredRecovery(`.
+> - **Prove leggere** (`files/scripts/y12b_light.sh`, dalle 20:07 alle 20:12, carico 40–46):
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - risk-levels-unit 511/511; risk-levels-component 273/273;
+>   - core 6 830/6 830, compreso il gate delle eccezioni della matematica finanziaria;
+>   - `git diff --check` pulito.
+> - **`docs-writer`** (dalle 20:07 alle 20:14): `risk-lab.md`, righe 279–301, +19/−11.
+>   - **Worst fall**: il recupero lo calcola il backend (`required_recovery_return()`, `returns.py:239`). Si legge così
+>     com'è arriva, e solo sulla profondità del riepilogo; non c'è ripiego dal KPI. Con una perdita totale c'è l'avviso,
+>     con un collegamento a «The Drawdown Episode» nella pagina dell'architettura del rischio. Con il valore null la
+>     riga non compare.
+>   - **Current drawdown**: `remaining_to_peak_ratio`.
+>   - Aggiornati tutti i numeri di riga del paragrafo, controllati uno per uno.
+>   - `check-links` verde (97 validi). Il collegamento nuovo l'ha controllato a mano: il file esiste e l'ancora è
+>     esplicita. Nessuna traduzione, perché le pagine per sviluppatori sono solo in inglese.
+>   - **Riferimenti scaduti fuori dal paragrafo**, lasciati com'erano e messi nel BACKLOG come **Y-20**:
+>
+>     | Riga della pagina | La pagina dice | Oggi |
+>     |---|---|---|
+>     | 302–303 | `l1Helpers.ts:136`, `holdsCut` l.92, `belowCut` l.101 | 138, 94, 103 |
+>     | 304–305 | `ReturnHistogram.svelte:51`, `title` l.79 | la regola sta nel commento alla riga 18 e in `barClass()` (40–43); `title` alla 68 |
+>     | 306 | `lossMoney()` `L1HowMuchItHurts.svelte:86` | 72 |
+>     | 309 | `RiskMetricCard.svelte:107` | 108 |
+>     | 310 | `DOC_PATHS` l.117, `TAIL_DOCS` l.127 | 103, 113 |
+>     | 119 | `riskAnalysisHelpers.ts:280`, «used at l.340» | 282; usato alle righe 321 e 342 |
+> - **E2E da chiedere**: `front-portfolio risk`, circa 5 minuti. Copre la stub aggiornata e la riga del recupero.

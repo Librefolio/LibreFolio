@@ -4899,6 +4899,21 @@ da Y il 15/10.
   - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
     indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
   - Dettagli: piano di Y, «Passo 4b».
+- **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
+  presente prima di Y12b; `test-author` di Y, 16/10.
+  - In `buildHurtRows` (`levelHelpers.ts`) la durata è `maximum_drawdown_duration_days` del riepilogo, con ripiego sul
+    KPI, mentre la profondità ha un ripiego suo.
+  - Se il riepilogo c'è ma la sua profondità ha il segno sbagliato, si mostrano la profondità del KPI e la durata del
+    riepilogo.
+  - Y12b ha legato alla stessa fonte solo il recupero (`summaryDepth`). Dettagli: piano di Y, «Y12b».
+- **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
+  `docs-writer` di Y, 16/10.
+  - Y12b ha aggiornato solo il paragrafo di L1. Restano scaduti i riferimenti delle righe 302–310 e 119 della pagina:
+    - `l1Helpers.ts` e `ReturnHistogram.svelte`;
+    - `lossMoney()` e `RiskMetricCard.svelte`;
+    - `DOC_PATHS` e `TAIL_DOCS`;
+    - `riskAnalysisHelpers.ts`.
+  - La tabella con i valori di oggi è nel piano di Y, «Y12b».
 
 ## MF · Matematica finanziaria (fase 01)
 
