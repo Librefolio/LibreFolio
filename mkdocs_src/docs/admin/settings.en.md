@@ -119,6 +119,9 @@ The scheduler keeps prices and exchange rates up to date on its own, even when n
   rates of every FX pair with a provider, over the **Lookback horizon**, to fill any gap. Pairs
   with manual rates only are skipped.
 
+If the server is off or asleep at a sync time, the history sync it missed runs as soon as the server
+is back, instead of waiting for the next sync time.
+
 ### ⚙️ Configure the schedule
 
 Unlock the tab, open **Update Job** and click **Configure…** in the **Schedule Configuration** row.
