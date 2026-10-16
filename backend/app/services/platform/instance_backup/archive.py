@@ -27,6 +27,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, BackupOrigin, ManifestDatabase, ManifestError, ManifestFile
 from backend.app.services.platform.instance_backup.paths import ARCHIVED_FOLDERS, DATABASE_ENTRY, MANIFEST_ENTRY, database_path
 from backend.app.services.platform.instance_backup.snapshot import file_digest, snapshot_database
+from backend.app.services.platform.instance_backup.totals import ledger_totals_of
 
 logger = get_logger(__name__)
 
@@ -162,6 +163,8 @@ def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: Backu
     report("database", 0, 0)
     snapshot_path = work_dir / "app.db"
     database = snapshot_database(database_path(data_dir), snapshot_path)
+    # J's totals of the ledger, read on the snapshot before it is zipped and removed; None leaves them out.
+    control_totals = ledger_totals_of(snapshot_path)
     total = database.size + sum(file.size for file in files)
     done = 0
     warnings: list[BuildWarning] = []
@@ -199,6 +202,7 @@ def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: Backu
                 integrity_check=database.integrity_check,
                 foreign_key_violations=database.foreign_key_violations,
                 tables=database.tables,
+                control_totals=control_totals,
             ),
             files=entries,
         )

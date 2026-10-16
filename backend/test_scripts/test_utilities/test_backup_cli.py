@@ -47,14 +47,18 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
     folder that existed left as it was (B1 fix 8: "the missing folders are created only when the archive gets there").
 (j) The help: ``--no-verify`` compares the entry names without reading the entries; ``--output`` is checked before the
     backup starts; a relative path starts from the project root.
-(k) ``cmd_restore`` (lot B2a): without ``--dry-run``, and for a missing file, exit 1 and nothing created in the data
-    directory. ``--dry-run`` checks the archive on a copy in ``.restore/stage/``: exit 0 for a restorable archive, its
+(k) ``cmd_restore`` (lot B2a): a missing file is exit 1 with nothing created in the data directory, with ``--dry-run``
+    and without it (the restore itself, lot B3: ``test_backup_cli_restore.py``), ``--yes`` or not. ``--dry-run`` checks the archive on a copy in ``.restore/stage/``: exit 0 for a restorable archive, its
     report printed (the backup's revision, its files, its administrators named), the copy removed and the data
     directory as it was; exit 1 with the ``StagingError`` code for a refused one (not a backup, a backup of another
     LibreFolio, an altered or added entry), with the blocker for a backup without active administrator, while another
     check runs, and when ``.restore`` is a link (named, nothing written through it). ``_print_stage_report`` of an
     upgrade lists the migrations, the tables the upgrade changed and the warnings. The script runs
-    ``restore --dry-run`` end to end; ``restore --help`` says what a dry run does.
+    ``restore --dry-run`` end to end; ``restore --help`` says what a dry run does. Lot B-13: right after «Files: …»
+    the report says what became of the ledger's totals, one line per status (verbatim, contract §5 and §7.5: totals
+    that ``differ from the backup's``), ``changed`` with its count and each difference (``—`` for a line absent on a
+    side), the first 20 then ``… and <n> more``, a currency through ``_safe``; the two warnings at the end; a dry run of
+    a backup as recorded says ``same``.
 
 Pure: data directories in ``tmp_path``. In this process a command sees a production data directory of the test through
 its environment (``LIBREFOLIO_TEST_MODE`` removed, ``LIBREFOLIO_DATA_DIR`` in ``tmp_path``, set with ``monkeypatch``
@@ -85,6 +89,7 @@ import subprocess
 import sys
 import zipfile
 from contextlib import closing
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -533,6 +538,35 @@ def test_inspect_reports_a_damaged_archive_and_exits_1(good_archive, tmp_path, c
     print_success("damaged archive → 1")
 
 
+#: Values a crafted archive may carry that a terminal would obey, and how ``inspect`` must show them: each control
+#: character as ``?`` (contract §10's ``_safe``: "values read from an archive").
+HOSTILE_MANIFEST = {
+    "app_version": ("1.2\x1b[2J\x07", "1.2?[2J?"),
+    "alembic_revision": ("004\x1b]0;owned\x07", "004?]0;owned?"),
+    "integrity_check": ("ok\x1b[31m\r", "ok?[31m?"),
+    "unexpected entry": ("custom-uploads/evil\x1b[2J\x9b.txt", "custom-uploads/evil?[2J?.txt"),
+}
+
+
+def test_inspect_prints_no_control_character_from_the_archive(good_archive, tmp_path, capsys):
+    """(d) Contract §10, ``_safe`` (found 16/10 and fixed): the manifest's version, revision and integrity, and the names
+    of the entries it lists or the zip holds, come from the archive; ``inspect`` is run on a suspect archive by
+    definition. Each character that is not printable reaches the terminal as ``?``."""
+    raw = {key: value for key, (value, _shown) in HOSTILE_MANIFEST.items()}
+    with zipfile.ZipFile(good_archive) as zf:
+        manifest = BackupManifest.from_bytes(zf.read(MANIFEST_ENTRY))
+    crafted = manifest.model_copy(update={"app_version": raw["app_version"], "alembic_revision": raw["alembic_revision"], "database": manifest.database.model_copy(update={"integrity_check": raw["integrity_check"]})})
+    archive = rebuilt(good_archive, tmp_path / "crafted.zip", swap={MANIFEST_ENTRY: crafted.to_bytes()}, add={raw["unexpected entry"]: b"not in the manifest"})
+    assert inspect(archive) == 1, "an entry the manifest does not list: exit 1"
+    out = capsys.readouterr().out
+    # Split on line feeds only: a carriage return left in the output must be seen, not taken for a line break.
+    unprintable = sorted({repr(char) for line in out.split("\n") for char in line if not char.isprintable()})
+    assert unprintable == [], f"no control character from the archive reaches the terminal: {unprintable} in {out!r}"
+    missing = [shown for _raw, shown in HOSTILE_MANIFEST.values() if shown not in out]
+    assert missing == [], f"each control character shown as ?: {missing} not in {out!r}"
+    print_success("inspect: control characters shown as ?")
+
+
 # =============================================================================
 # (e) cmd_create
 # =============================================================================
@@ -763,6 +797,25 @@ def test_backups_of_the_same_second_keep_their_own_names(tmp_path, monkeypatch, 
         assert f"✅ Backup written: {folder / name}" in out and check_archive(folder / name).ok, f"{name} is written, said, and checks ok: {out}"
     assert job_folders(root) == [], f"every job folder is removed: {job_folders(root)}"
     print_success(f"{into}: {', '.join(names)}")
+
+
+def test_create_prints_a_left_out_name_with_its_control_characters_as_question_marks(tmp_path, monkeypatch, capsys):
+    """(e) The names a backup left out are printed through ``_safe``: each control character as ``?``. The build is the
+    real one; only the list of names it left out gains one (no unreadable file is needed)."""
+    point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    real_build = jobs.build_archive
+    hostile = "custom-uploads/evil\x1b[2J\x07.txt"
+
+    def build_leaving_out_a_name(*args, **kwargs):
+        built = real_build(*args, **kwargs)
+        return replace(built, skipped=(*built.skipped, hostile))
+
+    monkeypatch.setattr(jobs, "build_archive", build_leaving_out_a_name)
+    assert create() == 0, "a backup that left a file out is still written: exit code 0"
+    lines = capsys.readouterr().out.split("\n")
+    unprintable = sorted({repr(char) for line in lines for char in line if not char.isprintable()})
+    assert unprintable == [] and "     custom-uploads/evil?[2J?.txt" in lines, f"the left-out name, its control characters as ?: {unprintable} {lines}"
+    print_success("left-out name printed with ?")
 
 
 # =============================================================================
@@ -1121,6 +1174,18 @@ WITHOUT_ADMINISTRATOR = (("bob_user", 1, 0), ("olga_former_admin", 0, 1))
 CREATED = "2026-10-15 10:15:00.000000"
 #: The last line of a dry run that found the archive restorable.
 RESTORABLE_LINE = "✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed."
+#: The one notice the report gives, under the administrators, of the invitations and links after a restore (developer decision P11): verbatim.
+ACCOUNT_LINK_LINES = ("   Invitations and links sent before the restore will have expired: send them again if needed.",)
+#: What the report says of the ledger's totals, right after «Files: …» (lot B-13, contract §5 and §7.5): verbatim.
+LEDGER_SAME = "   Ledger totals: the same as when the backup was made"
+LEDGER_ABSENT = "   Ledger totals: not recorded in this archive"
+LEDGER_OTHER_VERSION = "   Ledger totals: recorded by another version of the method, not compared"
+LEDGER_UNREADABLE = "⚠️  Ledger totals: could not be read on the copy"
+#: And among the warnings, at the end of the report.
+LEDGER_WARNINGS = {
+    "control_totals_changed": "⚠️  The ledger's totals differ from those the backup recorded (listed above)",
+    "control_totals_unreadable": "⚠️  The ledger's totals could not be read on the copy",
+}
 
 
 @pytest.fixture(scope="module")
@@ -1161,10 +1226,11 @@ def revision_in(archive: Path) -> str | None:
         return BackupManifest.from_bytes(zf.read(MANIFEST_ENTRY)).alembic_revision
 
 
-def restore(path: Path, *, dry_run: bool = True) -> int:
-    """``cmd_restore`` as ``dev.py backup restore`` runs it; an exception escaping it is a traceback for the user."""
+def restore(path: Path, *, dry_run: bool = True, yes: bool = False) -> int:
+    """``cmd_restore`` as ``dev.py backup restore`` runs it (argparse always sets ``yes``); an exception escaping it is a
+    traceback for the user."""
     try:
-        return backup_cli.cmd_restore(argparse.Namespace(test_db=False, archive=str(path), dry_run=dry_run))
+        return backup_cli.cmd_restore(argparse.Namespace(test_db=False, archive=str(path), dry_run=dry_run, yes=yes))
     except Exception as exc:
         pytest.fail(f"backup restore raised {type(exc).__name__} ({exc}): the user would get a traceback instead of a message and exit code 1")
 
@@ -1179,16 +1245,17 @@ def outside_restore(root: Path) -> list[str]:
     return [name for name in listing(root) if not name.startswith(".restore")]
 
 
-def test_restore_without_dry_run_exits_1_and_creates_nothing(tmp_path, monkeypatch, capsys, head_database):
+@pytest.mark.parametrize("yes", [False, True], ids=["without-yes", "with-yes"])
+def test_restore_without_dry_run_of_a_missing_file_exits_1_and_creates_nothing(tmp_path, monkeypatch, capsys, yes):
+    """(k) The restore itself (lot B3) refuses a missing archive before anything else, ``--yes`` or not: no check, no
+    copy, not even ``.restore``. The rest of the restore is pinned by ``test_backup_cli_restore.py``."""
     print_section("cmd_restore")
     root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
-    archive = restorable(tmp_path, head_database)
     before = listing(root)
-    assert restore(archive, dry_run=False) == 1, "without --dry-run, exit code 1"
-    out = capsys.readouterr().out
-    assert "❌ Only --dry-run is available for now" in out, f"the command says only --dry-run is available: {out}"
+    assert restore(tmp_path / "absent.zip", dry_run=False, yes=yes) == 1, "a missing archive is exit code 1"
+    assert f"❌ No file at {tmp_path / 'absent.zip'}" in capsys.readouterr().out, "the command says there is no file"
     assert listing(root) == before, f"nothing is created in the data directory, not even .restore: {sorted(set(listing(root)) - set(before))}"
-    print_success("no --dry-run → 1, nothing created")
+    print_success(f"no --dry-run, {'--yes' if yes else 'no --yes'}, missing file → 1, nothing created")
 
 
 def test_restore_of_a_missing_file_exits_1_and_creates_nothing(tmp_path, monkeypatch, capsys):
@@ -1215,11 +1282,16 @@ def test_a_dry_run_reports_what_a_restore_would_do_and_removes_its_copy(tmp_path
         f"📦 Made by LibreFolio {APP_VERSION} (cli)",
         f"   Database: revision {revision_in(archive)}, this LibreFolio's own: restored as it is",
         f"   Files: {len(FILES)}",
+        LEDGER_SAME,
         "   Instance key: not included",
         "   Administrators: ada_admin, zoe_admin",
+        *ACCOUNT_LINK_LINES,
         RESTORABLE_LINE,
     ]
     assert [line for line in said if line not in out] == [], f"the dry run says what a restore would do: {out}"
+    assert [line for line in ACCOUNT_LINK_LINES if line not in out.splitlines()] == [], f"the notice on the invitations and links, a whole line, verbatim: {out}"
+    former_lines = [line for line in out.splitlines() if any(word in line.lower() for word in ("email verification", "waiting", "activates it", "send new ones", "stop working"))]
+    assert former_lines == [], f"that one notice and nothing more (P11): neither the line on the links that stop working nor the one on the accounts waiting for their email verification comes back: {former_lines}"
     assert "… upgrading" not in out and "⚠️" not in out and "❌" not in out, f"at the head: no upgrade, nothing to warn: {out}"
     assert stages_left(root) == [], f"the copy is removed: {stages_left(root)}"
     assert (outside_restore(root), sha256_of(root / DATABASE_ENTRY)) == (before, database), "the data directory is as it was"
@@ -1312,6 +1384,10 @@ def upgrade_report(**changes) -> StagingReport:
         administrators=["ada_admin"],
         warnings=["rows_changed", "foreign_key_violations_added"],
         blockers=[],
+        # Lot B-13 (§7.6: the three have defaults, absent, [] and 0): a report of an upgrade whose totals are the same.
+        control_totals="same",
+        control_totals_differences=[],
+        control_totals_differences_count=0,
     )
     return report.model_copy(update=changes)
 
@@ -1359,6 +1435,126 @@ def test_the_tables_an_upgrade_changed_are_those_whose_rows_differ(capsys, table
     changed = [line for line in capsys.readouterr().out.splitlines() if "Changed by the upgrade" in line]
     assert changed == ([f"   Changed by the upgrade: {listed}"] if listed else []), f"{tables}: {changed}"
     print_success(f"{list(tables)}: {changed or 'no line'}")
+
+
+#: What an archive may hold that a terminal would obey (an escape sequence, a window title, a bell, a C1 control, a
+#: carriage return, a backspace), and how the report must show it: each control character as ``?``.
+HOSTILE_REPORT = {
+    "app_version": ("1.2\x1b[2J\x07", "1.2?[2J?"),
+    "alembic_revision": ("004\x1b]0;owned\x07", "004?]0;owned?"),
+    "administrator": ("ada\x1b[31m\x9b0m\r", "ada?[31m?0m?"),
+    "table": ("users\x1b[1m\x08", "users?[1m?"),
+}
+
+
+@pytest.mark.parametrize("action", ["same", "upgrade"])
+def test_the_report_prints_no_control_character_from_the_archive(capsys, action):
+    """(k) Contract §10: the backup's version and revision, its administrators' names and its tables' names come from
+    the archive, and reach the terminal only through ``_safe``: each character that is not printable becomes ``?``.
+    Both revision lines (restored as it is, upgraded) are printed through it."""
+    raw = {key: value for key, (value, _shown) in HOSTILE_REPORT.items()}
+    backup = StagedBackup(created_at=datetime(2026, 10, 15, 10, 15, tzinfo=UTC), app_version=raw["app_version"], origin="ui", alembic_revision=raw["alembic_revision"])
+    tables = {raw["table"]: TableRows(before=3, after=4), "brokers": TableRows(before=2, after=2)}
+    backup_cli._print_stage_report(upgrade_report(action=action, backup=backup, administrators=[raw["administrator"], "zoe_admin"], tables=tables))
+    out = capsys.readouterr().out
+    # Split on line feeds only: a carriage return left in the output must be seen, not taken for a line break.
+    unprintable = sorted({repr(char) for line in out.split("\n") for char in line if not char.isprintable()})
+    assert unprintable == [], f"{action}: no control character reaches the terminal: {unprintable} in {out!r}"
+    missing = [shown for _raw, shown in HOSTILE_REPORT.values() if shown not in out]
+    assert missing == [], f"{action}: each control character shown as ?: {missing} not in {out!r}"
+    assert "zoe_admin" in out and "brokers" not in out, f"{action}: the other values as they are: {out!r}"
+    print_success(f"{action}: control characters shown as ?")
+
+
+def ledger_report(status: str, differences=(), count: int | None = None, **changes) -> StagingReport:
+    """``upgrade_report`` with the ledger's totals of lot B-13: ``status``, ``differences`` (as JSON) and their count
+    (``len(differences)`` unless given). Validated as staging reads a report back, so each difference is the model the
+    report declares; a report without the fields (before lot B-13) ignores them, and prints none of their lines."""
+    data = upgrade_report(**changes).model_dump(mode="json")
+    data.update(control_totals=status, control_totals_differences=list(differences), control_totals_differences_count=len(differences) if count is None else count)
+    return StagingReport.model_validate(data)
+
+
+def cash_line(broker_id: int, currency: str, before: str | None, after: str | None) -> dict:
+    return {"kind": "cash", "broker_id": broker_id, "currency": currency, "asset_id": None, "before": before, "after": after}
+
+
+def quantity_line(broker_id: int, asset_id: int, before: str | None, after: str | None) -> dict:
+    return {"kind": "quantity", "broker_id": broker_id, "currency": None, "asset_id": asset_id, "before": before, "after": after}
+
+
+def after_files(out: str, size: int) -> list[str]:
+    """The ``size`` lines right after «Files: …», where the report says what became of the ledger's totals."""
+    lines = out.splitlines()
+    files = [index for index, line in enumerate(lines) if line.startswith("   Files: ")]
+    assert len(files) == 1, f"precondition: one «Files» line: {out}"
+    return lines[files[0] + 1 : files[0] + 1 + size]
+
+
+#: (status, differences, the lines right after «Files», the warnings of the report): contract §5 as §7.5 words
+#: ``changed``, verbatim.
+LEDGER_LINES = [
+    pytest.param("same", [], [LEDGER_SAME], [], id="same"),
+    pytest.param("absent", [], [LEDGER_ABSENT], [], id="absent"),
+    pytest.param("other_version", [], [LEDGER_OTHER_VERSION], [], id="other-version"),
+    pytest.param("unreadable", [], [LEDGER_UNREADABLE], ["control_totals_unreadable"], id="unreadable"),
+    pytest.param("changed", [cash_line(1, "EUR", "10", None)], ["⚠️  Ledger totals differ from the backup's (1 line):", "     broker 1, EUR cash: 10 → —"], ["control_totals_changed"], id="changed-one-line"),
+    pytest.param(
+        "changed",
+        [cash_line(1, "EUR", "100", "100.5"), cash_line(12, "USD", None, "-0.000001"), quantity_line(2, 7, None, "3.5"), quantity_line(2, 9, "4", "0.25")],
+        [
+            "⚠️  Ledger totals differ from the backup's (4 lines):",
+            "     broker 1, EUR cash: 100 → 100.5",
+            "     broker 12, USD cash: — → -0.000001",
+            "     broker 2, asset 7 quantity: — → 3.5",
+            "     broker 2, asset 9 quantity: 4 → 0.25",
+        ],
+        ["control_totals_changed"],
+        id="changed-cash-and-positions",
+    ),
+]
+
+
+@pytest.mark.parametrize(("status", "differences", "said", "warnings"), LEDGER_LINES)
+def test_the_report_says_what_became_of_the_ledger_s_totals_right_after_the_files(capsys, status, differences, said, warnings):
+    """(k) Lot B-13: one line per status, right after «Files: …»; ``changed`` lists each difference as the report gives
+    it (``—`` for a line absent on that side), and its count; the two warnings at the end, with the others."""
+    backup_cli._print_stage_report(ledger_report(status, differences, warnings=warnings))
+    out = capsys.readouterr().out
+    assert after_files(out, len(said)) == said, f"{status}: the lines right after «Files»: {out}"
+    others = [line for line in out.splitlines() if "Ledger totals" in line and line not in said]
+    assert others == [], f"{status}: no other line about the ledger's totals: {others}"
+    missing = [LEDGER_WARNINGS[code] for code in warnings if LEDGER_WARNINGS[code] not in out.splitlines()]
+    assert missing == [], f"{status}: the warning, verbatim: {missing}"
+    unexpected = [text for code, text in LEDGER_WARNINGS.items() if code not in warnings and text in out]
+    assert unexpected == [], f"{status}: no warning of the totals but its own: {unexpected}"
+    print_success(f"{status}: {said[0].strip()}")
+
+
+@pytest.mark.parametrize(("count", "more"), [(20, None), (21, 1), (25, 5)], ids=["20", "21", "25"])
+def test_past_20_differences_the_report_shows_20_and_says_how_many_more(capsys, count, more):
+    """(k) A report holds the first 20 differences and counts them all: the header says the count, then the 20 lines,
+    then ``… and <n> more`` for the rest; nothing more for exactly 20."""
+    differences = [cash_line(1, f"C{index:02d}", str(index + 1), None) for index in range(20)]
+    backup_cli._print_stage_report(ledger_report("changed", differences, count=count, warnings=["control_totals_changed"]))
+    out = capsys.readouterr().out
+    expected = [f"⚠️  Ledger totals differ from the backup's ({count} lines):", *(f"     broker 1, C{index:02d} cash: {index + 1} → —" for index in range(20))]
+    if more is not None:
+        expected.append(f"     … and {more} more")
+    assert after_files(out, len(expected)) == expected, f"{count} differences: the header, 20 lines, then the rest counted: {out}"
+    assert ("… and" in out) == (more is not None), f"{count} differences: «… and n more» only past 20: {out}"
+    print_success(f"{count}: 20 shown" + (f", … and {more} more" if more else ""))
+
+
+def test_a_currency_from_the_archive_reaches_the_terminal_through_safe(capsys):
+    """(k) Lot B-13: a currency of the totals comes from the archive's manifest (J reads any text as a currency): an
+    escape sequence and a bell in it are shown as ``?``."""
+    backup_cli._print_stage_report(ledger_report("changed", [cash_line(1, "EU\x1b[2J\x07R", "1", "2")], warnings=["control_totals_changed"]))
+    out = capsys.readouterr().out
+    unprintable = sorted({repr(char) for line in out.split("\n") for char in line if not char.isprintable()})
+    assert unprintable == [], f"no control character reaches the terminal: {unprintable} in {out!r}"
+    assert "     broker 1, EU?[2J?R cash: 1 → 2" in out.splitlines(), f"each control character shown as ?: {out!r}"
+    print_success("EU\\x1b[2J\\x07R → EU?[2J?R")
 
 
 def test_the_script_checks_an_archive_for_a_restore(tmp_path, head_database):
