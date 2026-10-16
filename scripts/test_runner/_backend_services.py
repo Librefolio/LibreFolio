@@ -1038,7 +1038,7 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
 def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
     """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
     print_section("Services: Profile Defaults")
-    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY)")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY; ENVIRONMENT_PROFILE_DEFAULTS and profile_default(), H-17)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
@@ -1913,7 +1913,7 @@ Note: No backend server required.
         "profile-defaults",
         services_profile_defaults,
         name="Profile Defaults",
-        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
         isolation="pure",
