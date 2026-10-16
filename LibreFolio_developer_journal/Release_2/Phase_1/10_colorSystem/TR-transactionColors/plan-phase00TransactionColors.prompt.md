@@ -403,8 +403,43 @@ deve essere vuoto.
    >   `hover:bg-lf-info-hover`, `text-lf-on-overlay`, tinte di gain e loss). Nel mio perimetro tocca solo
    >   `BACKLOG_POST_1.2.md`, in righe lontane dalla sezione TR (627, 631, 2588, 3888): niente conflitto previsto, né sul
    >   baseline né sui file dell'area.
-6. ⏳ Base merge con i ruoli nuovi; TR-5: le due conferme verdi su `bg-lf-success hover:bg-lf-success-hover
-   text-lf-on-status` (chiude il backlog TR-2).
-7. ⏳ Slot A.
-8. ⏳ Slot B.
-9. ⏳ Checkpoint finale, backlog TR-n, FROZEN.
+6. ✅ (16/10) Base merge con i ruoli nuovi; lotto 5: le due conferme verdi su `bg-lf-success hover:bg-lf-success-hover
+   text-lf-on-status` (chiude il backlog TR-2); spec `tx-wac-mode` su `aria-pressed`.
+   > **Note implementazione:**
+   > - **Il coordinatore ha committato il primo checkpoint:** codice `1a01ae733` (21 file), docs `e0b180e12`. Ha fatto
+   >   la base merge con la punta `005ebcbf9`: **HEAD `d02b0c37c`**, albero uguale alla simulazione, `--check` pulito.
+   >   La merge non tocca l'area. Porta lo skill `design-system` riscritto (`palette.md` a parte; i pulsanti di stato
+   >   pieni `bg-lf-X text-lf-on-status hover:bg-lf-X-hover`, con `on-status` su `success-hover` e `warning-hover` fra
+   >   le coppie misurate) e le regole sulla macchina condivisa nel file dell'agente.
+   > - **Decisioni del coordinatore** (12:12):
+   >   - il lotto 5 con il ramo ambra dello split su `bg-lf-warning hover:bg-lf-warning-hover`, nello stesso ternario;
+   >   - lo spec `tx-wac-mode`: l'OK della 1.3 c'era già;
+   >   - slot A+B insieme, verso le 14:45;
+   >   - la base della tinta del broker passa a T;
+   >   - il sottotitolo si sblocca con L-20.
+   > - **`api sync`** dopo la base merge: 12:18, uscita 0.
+   > - **Lotto 5:**
+   >   - `PromoteMergeModal:262` → `text-lf-on-status bg-lf-success hover:bg-lf-success-hover`;
+   >   - `TransactionActionModal:387` → `text-lf-on-status {mode === 'split' ? 'bg-lf-warning
+   >     hover:bg-lf-warning-hover' : 'bg-lf-success hover:bg-lf-success-hover'}`, un ternario solo (regola 8).
+   >   - m1: `PromoteMergeModal` 65 → 62, `TransactionActionModal` 5 → 0.
+   > - **Spec** (test-author, sola scrittura): `e2e/transactions/tx-wac-mode.spec.ts`, le righe 152, 205 e 230
+   >   `toHaveClass(/bg-libre-green/)` → `toHaveAttribute('aria-pressed', 'true')`. In più la 180 →
+   >   `toHaveAttribute('aria-pressed', 'false')`: era un `not.toHaveClass(/bg-libre-green/)` che dopo la migrazione
+   >   passava sempre. Commenti aggiornati; i `font-medium` del pulsante Manuale (177, 196, 228) restano. Precedente:
+   >   `tx-wac-unit-toggle.spec.ts:137–139`.
+   > - **Prove leggere** (12:20–12:22, `nice`, carico 35–43):
+   >   - controllo per file: G1–G4 a 0;
+   >   - Prettier: `TransactionActionModal` riformattato (le classi dei ruoli sono più lunghe, il tag supera le 300
+   >     colonne e torna su più righe; confronto senza spazi identico), poi pulito sui 2 componenti e sullo spec;
+   >   - `git diff --check` pulito; nessuna classe di colore rimasta nello spec;
+   >   - `dark_only_check.py` 0 in 21 file e `native_field_check.py` 0 in 20 file, entrambi dalla base pre-TR
+   >     `6e569084a`, dalla radice;
+   >   - `--check` pulito; **`--update`: m1 7.331 → 7.323 (−8), m2 34**; `--check` di nuovo pulito;
+   >   - gate 66/66 (uno in più col target: G-18); Vitest dei componenti `PromoteMergeModal`, `PromoteAllModal`,
+   >     `TransactionFormModal`, `WacPreviewSection`, 57/57.
+   >
+   > **⚠️ Fuori pista:** il nome «TR-5» del lotto si scontrava con la voce TR-5 del backlog (scrollbar). Il lotto si
+   > chiama «lotto 5» nel backlog e qui.
+7. ⏳ Slot A+B insieme (verso le 14:45, coordinatore).
+8. ⏳ Checkpoint finale, FROZEN.
