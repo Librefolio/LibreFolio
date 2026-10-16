@@ -385,10 +385,12 @@ catch-up is over.
 
 - **Nothing due, nothing shown.** When no job is due, the catch-up is over within seconds and no
   notice shows. The scheduler's regular check, every minute, never shows it.
-- **Afterwards.** When the catch-up has brought at least one price or rate up to date, the portfolio
-  pages, such as the Dashboard and a broker's page, ask for their figures again the next time they
-  load. A page already open keeps its figures until then: its **Refresh** button brings the new ones
-  at once.
+- **Afterwards.** When the catch-up has brought at least one price or rate up to date, a tab that
+  showed the notice brings its portfolio pages up to date. A Dashboard or a broker's page on screen
+  asks for its figures again by itself, in the background: its figures stay until the new ones
+  arrive, with no need to press **Refresh** or to leave the page. The other portfolio pages, such as
+  the broker list, and those two when they are not open, ask for their figures again the next time
+  they load.
 - **The machine can still sleep.** Without a catch-up, the app asks nothing more than usual. During
   one, it asks the server every 3 seconds whether it is over: these questions count as visits, like
   the [live prices](#idle-suspend-activity), and pause the same way, in a background tab and after
@@ -397,8 +399,8 @@ catch-up is over.
   notice may not show.
 
 The app learns of a catch-up from a header of the server's answers, `X-LibreFolio-Price-Refresh`: a
-reverse proxy that strips the response headers it does not know only loses the notice, never the
-catch-up.
+reverse proxy that strips the response headers it does not know only loses the notice, and the update
+of the portfolio pages that follows it, never the catch-up.
 
 ---
 
