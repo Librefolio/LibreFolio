@@ -17,7 +17,7 @@
     import {writeExportToClipboard} from '$lib/utils/clipboard';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, CheckCircle, CirclePause, XCircle, ClipboardList, X} from 'lucide-svelte';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -32,6 +32,8 @@
         ok: boolean;
         error?: string;
         icon_url?: string;
+        deferred?: boolean;
+        retry_after?: number | null;
     }
 
     interface LogItemHistory {
@@ -47,6 +49,8 @@
         events_changed?: number;
         errors?: string[];
         icon_url?: string;
+        deferred?: boolean;
+        retry_after?: number | null;
     }
 
     interface LogEntry {
@@ -61,7 +65,11 @@
             assets_err?: number;
             fx_ok?: number;
             fx_err?: number;
+            deferred?: number;
+            assets_deferred?: number;
+            fx_deferred?: number;
         };
+        retry_at?: string | null;
         items?: LogItemCurrentPrice[];
         assets?: LogItemHistory[];
         fx?: LogItemHistory[];
@@ -245,18 +253,23 @@
         if (entry.job === 'current_price') {
             const ok = s.ok ?? 0;
             const err = s.err ?? 0;
-            const total = ok + err;
-            if (err === 0) return `${ok}/${total} ✓`;
-            return `${ok}/${total} ✓ · ${err} ✗`;
+            const deferred = s.deferred ?? 0;
+            const parts = [`${ok}/${ok + err + deferred} ✓`];
+            if (deferred > 0) parts.push(`${deferred} ⏸`);
+            if (err > 0) parts.push(`${err} ✗`);
+            return parts.join(' · ');
         }
         // history_sync
         const aOk = s.assets_ok ?? 0;
         const aErr = s.assets_err ?? 0;
         const fOk = s.fx_ok ?? 0;
         const fErr = s.fx_err ?? 0;
+        const aDef = s.assets_deferred ?? 0;
+        const fDef = s.fx_deferred ?? 0;
         const parts = [];
-        if (aOk + aErr > 0) parts.push(`${aOk}/${aOk + aErr} assets`);
-        if (fOk + fErr > 0) parts.push(`${fOk}/${fOk + fErr} FX`);
+        if (aOk + aErr + aDef > 0) parts.push(`${aOk}/${aOk + aErr + aDef} assets`);
+        if (fOk + fErr + fDef > 0) parts.push(`${fOk}/${fOk + fErr + fDef} FX`);
+        if (aDef + fDef > 0) parts.push(`${aDef + fDef} ⏸`);
         if (aErr + fErr > 0) parts.push(`${aErr + fErr} ✗`);
         return parts.join(' · ');
     }
@@ -350,9 +363,12 @@
                                         <span class="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(entry.ts)}</span>
                                         <span class="text-xs text-gray-400 dark:text-gray-500">·</span>
                                         <span class="text-xs text-gray-400 dark:text-gray-500">{formatDuration(entry.duration_s)}</span>
+                                        {#if entry.retry_at}
+                                            <span class="text-xs text-lf-warning" data-testid="scheduler-log-retry-at">{$_('settings.global.scheduler.log.retryAt', {values: {time: formatTimestamp(entry.retry_at)}})}</span>
+                                        {/if}
                                     </div>
                                     <div class="flex items-center gap-2 mt-0.5">
-                                        <span class="text-xs font-medium {entry.status === 'ok' ? 'text-green-600 dark:text-green-400' : entry.status === 'partial' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">
+                                        <span class="text-xs font-medium {entry.status === 'ok' ? 'text-green-600 dark:text-green-400' : entry.status === 'partial' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}" data-testid="scheduler-log-summary">
                                             {summaryText(entry)}
                                         </span>
                                         <span class="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[300px]">
@@ -378,8 +394,11 @@
                                         <span class="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(entry.ts)}</span>
                                         <span class="text-xs text-gray-400 dark:text-gray-500">·</span>
                                         <span class="text-xs text-gray-400 dark:text-gray-500">{formatDuration(entry.duration_s)}</span>
+                                        {#if entry.retry_at}
+                                            <span class="text-xs text-lf-warning" data-testid="scheduler-log-retry-at">{$_('settings.global.scheduler.log.retryAt', {values: {time: formatTimestamp(entry.retry_at)}})}</span>
+                                        {/if}
                                     </div>
-                                    <span class="text-xs font-medium {entry.status === 'ok' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+                                    <span class="text-xs font-medium {entry.status === 'ok' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}" data-testid="scheduler-log-summary">
                                         {summaryText(entry)}
                                     </span>
                                 </div>
@@ -405,9 +424,11 @@
                                             </thead>
                                             <tbody>
                                                 {#each entry.items as item}
-                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50">
+                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50" data-testid="scheduler-log-item" data-deferred={item.deferred ? 'true' : 'false'}>
                                                         <td class="py-1 pr-2">
-                                                            {#if item.ok}
+                                                            {#if item.deferred}
+                                                                <span class="inline-flex text-lf-warning" data-testid="scheduler-log-item-deferred"><CirclePause size={13} /></span>
+                                                            {:else if item.ok}
                                                                 <CheckCircle size={13} class="text-green-500" />
                                                             {:else}
                                                                 <XCircle size={13} class="text-red-500" />
@@ -417,7 +438,9 @@
                                                             <span class="font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if item.ok}
+                                                            {#if item.deferred}
+                                                                <span class="text-lf-warning" title={item.error ?? undefined}>{$_('settings.global.scheduler.log.deferred')}</span>
+                                                            {:else if item.ok}
                                                                 <span class="text-green-600 dark:text-green-400">✓</span>
                                                             {:else if item.error}
                                                                 <Tooltip text={item.error} position="top" maxWidth="500px">
@@ -456,9 +479,11 @@
                                             <tbody>
                                                 {#each entry.assets as item}
                                                     {@const provIconUrl = item.provider ? getAssetProviderIconUrl(item.provider) : null}
-                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50">
+                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50" data-testid="scheduler-log-item" data-deferred={item.deferred ? 'true' : 'false'}>
                                                         <td class="py-1 pr-2">
-                                                            {#if item.status === 'ok'}
+                                                            {#if item.deferred}
+                                                                <span class="inline-flex text-lf-warning" data-testid="scheduler-log-item-deferred"><CirclePause size={13} /></span>
+                                                            {:else if item.status === 'ok'}
                                                                 <CheckCircle size={13} class="text-green-500" />
                                                             {:else}
                                                                 <XCircle size={13} class="text-red-500" />
@@ -496,7 +521,9 @@
                                                             {/if}
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if item.errors && item.errors.length > 0}
+                                                            {#if item.deferred}
+                                                                <span class="text-lf-warning" title={item.errors?.join('\n') || undefined}>{$_('settings.global.scheduler.log.deferred')}</span>
+                                                            {:else if item.errors && item.errors.length > 0}
                                                                 <Tooltip text={item.errors.join('\n')} position="top" maxWidth="500px">
                                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                                                                     <span
@@ -536,9 +563,11 @@
                                                     {@const chain = parseProviderChain(item.provider)}
                                                     {@const baseFlag = item.base ? getCurrencyInfo(item.base).flag_emoji : ''}
                                                     {@const quoteFlag = item.quote ? getCurrencyInfo(item.quote).flag_emoji : ''}
-                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50">
+                                                    <tr class="border-t border-gray-100 dark:border-slate-700/50" data-testid="scheduler-log-item" data-deferred={item.deferred ? 'true' : 'false'}>
                                                         <td class="py-1 pr-2">
-                                                            {#if item.status === 'ok'}
+                                                            {#if item.deferred}
+                                                                <span class="inline-flex text-lf-warning" data-testid="scheduler-log-item-deferred"><CirclePause size={13} /></span>
+                                                            {:else if item.status === 'ok'}
                                                                 <CheckCircle size={13} class="text-green-500" />
                                                             {:else}
                                                                 <XCircle size={13} class="text-red-500" />
@@ -576,7 +605,9 @@
                                                             {/if}
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if item.errors && item.errors.length > 0}
+                                                            {#if item.deferred}
+                                                                <span class="text-lf-warning" title={item.errors?.join('\n') || undefined}>{$_('settings.global.scheduler.log.deferred')}</span>
+                                                            {:else if item.errors && item.errors.length > 0}
                                                                 <Tooltip text={item.errors.join('\n')} position="top" maxWidth="500px">
                                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                                                                     <span

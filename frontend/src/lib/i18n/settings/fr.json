@@ -162,7 +162,9 @@
           "last6h": "Dernières 6 heures",
           "last24h": "Dernières 24 heures",
           "last7d": "Derniers 7 jours",
-          "last30d": "Derniers 30 jours"
+          "last30d": "Derniers 30 jours",
+          "deferred": "Reporté : fournisseur en pause",
+          "retryAt": "Nouvel essai à {time}"
         },
         "status": {
           "title": "État du Planificateur",
@@ -170,7 +172,9 @@
           "neverRun": "Jamais exécuté",
           "details": "Détails…",
           "configure": "Configurer…",
-          "configSummary": "Toutes les {freq}min · {times} · {days}"
+          "configSummary": "Toutes les {freq}min · {times} · {days}",
+          "retryAt": "Éléments en pause réessayés à {time}",
+          "nextAttemptAt": "Échec : nouvel essai à {time}"
         },
         "timezone": "Fuseau horaire",
         "timezoneChangeWarning": "Changer de fuseau horaire conserve ces heures et jours inchangés, mais modifie l'instant d'exécution UTC réel.",
