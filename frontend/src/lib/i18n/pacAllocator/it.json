@@ -196,7 +196,8 @@
           "weight": "Peso",
           "subtitle": "Quanto pesa oggi ciascuno di questi Asset nei Broker spuntati, contando solo questi Asset: insieme fanno il 100%. La cassa e gli altri Asset che possiedi non contano.",
           "changeColumn": "Obiettivo",
-          "confirmApply": "Sostituisci"
+          "confirmApply": "Sostituisci",
+          "valuedAtCost": "valutato al costo · nessun prezzo"
         },
         "fx": {
           "intro": "I tassi che servono al calcolo, uno per ogni coppia di valute in gioco. «Auto» usa il tasso memorizzato in LibreFolio, «Manuale» un tasso tuo.",

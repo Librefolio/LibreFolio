@@ -286,6 +286,7 @@ class AssetPositionValuationSource(StrEnum):
 
     MARKET_PRICE = "MARKET_PRICE"
     LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
+    ESTIMATED_AT_COST = "ESTIMATED_AT_COST"
     MISSING = "MISSING"
 
 

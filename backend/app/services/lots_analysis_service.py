@@ -300,7 +300,7 @@ class LotsAnalysisService:
         active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
         # The unified price resolver is the SINGLE valuation brain for this asset: fed the
-        # asset-system price rows AND every observed trade (BUY/SELL + priced ADJUSTMENT carryover)
+        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
         # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
         # none exists, to the same-day / last-observed trade mark. Both the open-lot valuation
         # (``market_prices`` -> NAV / value / return / performance) and the chart price line

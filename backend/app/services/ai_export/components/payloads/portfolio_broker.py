@@ -657,7 +657,8 @@ def map_position_row(
     *,
     currency_code: str,
 ) -> PositionRow:
-    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 else None
+    # A holding valued at cost has no price (J-17): its value per unit would be its unit cost, not a price.
+    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 and holding.valuation_source != "ESTIMATED_AT_COST" else None
     return PositionRow(
         asset_id=holding.asset_id,
         asset_name=holding.asset_name,
