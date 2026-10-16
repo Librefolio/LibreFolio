@@ -4,6 +4,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
@@ -151,7 +152,8 @@
         };
     }
 
-    async function loadBrokers() {
+    /** `force` asks the cards' report again even when its cache is fresh: only the page's Refresh does (Y-14). */
+    async function loadBrokers(force = false) {
         loading = true;
         error = null;
         try {
@@ -174,7 +176,7 @@
             // for a long-lived portfolio and was previously fetched unconditionally,
             // its JSON.parse blocking the main thread long enough to make card clicks
             // feel unresponsive while it was in flight.
-            const report = brokerIds.length > 0 ? await fetchReport(brokerIds, undefined, undefined, targetCurrency, false, false, true, false, false) : null;
+            const report = brokerIds.length > 0 ? await fetchReport(brokerIds, undefined, undefined, targetCurrency, force, false, true, false, false) : null;
 
             const breakdowns = asBrokerBreakdowns((report?.summary as {by_broker?: unknown} | null)?.by_broker);
             brokerBreakdownById = Object.fromEntries(breakdowns.map((item) => [item.broker_id, item]));
@@ -191,6 +193,15 @@
         } finally {
             loading = false;
         }
+    }
+
+    /**
+     * «Aggiorna» recalculates everything, as on the Dashboard and a broker's page: every portfolio view is marked
+     * stale, then the list and the cards' report are asked again, the report forced (Y-14). Holds the button (Y11).
+     */
+    function handleRefresh() {
+        requestPortfolioRefresh();
+        return pageBusy.track('brokers-refresh', () => loadBrokers(true));
     }
 
     function openCreateModal() {
@@ -370,14 +381,7 @@
                 </div>
             </div>
 
-            <button
-                class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50"
-                data-testid="brokers-refresh"
-                data-busy={pageBusy.busy ? 'true' : 'false'}
-                disabled={pageBusy.busy}
-                on:click={() => pageBusy.track('brokers-refresh', loadBrokers)}
-                title="Refresh"
-            >
+            <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" data-busy={pageBusy.busy ? 'true' : 'false'} disabled={pageBusy.busy} on:click={handleRefresh} title="Refresh">
                 <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={18} />
             </button>
             <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>
@@ -401,7 +405,7 @@
             </div>
             <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.error')}</h3>
             <p class="text-lf-muted mb-4">{error}</p>
-            <button on:click={loadBrokers} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
+            <button on:click={() => pageBusy.track('brokers-retry', () => loadBrokers())} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
                 {$_('common.retry')}
             </button>
         </div>

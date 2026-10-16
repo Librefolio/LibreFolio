@@ -969,7 +969,7 @@ class TestRefusalCodes:
     the sentence of D8 unchanged, its ``context`` is empty, and its code follows the cause: another extension than ``.csv``,
     ``degiro_csv_only``; a file the reader cannot read, ``file_unreadable``; fewer than two rows, ``no_movement_rows``; a CSV whose layout
     is not the Account Statement's, ``degiro_not_account_statement``. The four keys, with the generic CSV's three, are checked in
-    ``frontend/src/lib/utils/brim/defaultPluginCheck.test.ts``.
+    ``frontend/src/lib/features/transactions/import/defaultPluginCheck.test.ts``.
 
     Every input is a sample or is written in ``tmp_path``, and every code is written by hand. Red until DEGIRO gives its codes, but the guard.
     """

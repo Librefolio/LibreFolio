@@ -3067,3 +3067,153 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   `forgot-password-email`, più `auth` e `admin-users` di A, toccate dagli agganci;
 > - la galleria `settings/email`, con G, che la mette nello stesso giro di B5b e X;
 > - E-4, con l'ok di A.
+
+#### E6.12 — L'ingresso, il fast-forward, la build fuori dallo slot, l'E2E del dominio ed E-4 ✅ (2026-10-16, 21:20–22:06)
+> **E è entrato in `dev_release2`** (21:20): il merge `56759b2c8` porta dentro E4b, E6, E6.8, E4c-H, E6.9 ed E4c
+> (`devWiki/log.md` risolto per unione); il journal è `30c2459e6`. Il coordinatore ha aggiunto le tre righe salvate di
+> E4b al CHANGELOG.
+>
+> **Il CHANGELOG** (domanda del coordinatore, 21:2x): per E6, E6.8 ed E4c-H nessuna riga in più. Ho riletto le righe
+> email del capitolo in dev, e sono tutte ancora vere:
+> - la correzione di `RECIPIENT_REFUSED` sta dentro «Send by email», non ancora rilasciata;
+> - E6.8 tocca solo il finto dei test;
+> - E4c-H non cambia nessuna chiave, e la parte visibile è nella riga di P17 di H;
+> - per E4c, il cambio di sole maiuscole sta nelle righe di P18 di A.
+>
+> **Il fast-forward** (21:2x): il coordinatore ha portato il mio ramo alla punta di dev, **`102fa9ec1`** (l'ingresso, Y12b
+> e i registri), perché l'E2E del dominio controlli dev.
+>
+> **La build fuori dallo slot**, la lezione di E4b.6: `dev.py server --test --build-only`, carico sotto 50,
+> `files/tools/e6_build_e4.sh`. Fatta alle 21:31 in 359 s: frontend, documentazione e cache JS. Allo slot E2E, dopo Z
+> verso le 22:00, restano solo le spec (`files/tools/e6_e2e_slot.sh`).
+>
+> **E-4**, con il via del coordinatore (A non ha il file aperto):
+> - in `api/v1/settings.py`, le quattro righe 137, 165, 241 e 347 passano da `status.HTTP_422_UNPROCESSABLE_ENTITY` a
+>   `status.HTTP_422_UNPROCESSABLE_CONTENT`;
+> - in `backend/` non resta niente, né un filtro d'avviso, né un test che usi il nome vecchio;
+> - il backlog segna E-4 ✅.
+>
+> Prove: `ruff`, `black` e `api settings`.
+>
+> **L'E2E del dominio, come controllo su dev** (slot E2E del coordinatore, dopo Z, 21:47–22:02):
+> `files/tools/e6_e2e_slot.sh`, `--workers 2`, una spec alla volta, sulla punta di dev `102fa9ec1`. Nessuna
+> ricostruzione del frontend.
+>
+> | Spec | Esito |
+> |---|---|
+> | `front-utility email-tab` | 5 ✅ |
+> | `front-utility email-verification` | 5 ✅ |
+> | `front-utility email-send-link` | 4 ✅ |
+> | `front-utility forgot-password-email` | 3 ✅ |
+> | `front-utility auth-links` (di A) | 9 ✅ |
+> | `front-utility auth` (di A) | 34 ✅ |
+> | `front-utility admin-users` (di A) | 10 ✅ |
+> | **Totale** | **70 passati, 0 falliti** |
+>
+> La porta 6188 era libera alle 22:02:32, e l'ho detto subito al coordinatore.
+>
+> **⚠️ Fuori pista: un `.DS_Store` contava come sorgente.** Alle 21:35 il Finder ha creato `frontend/src/.DS_Store`,
+> più nuovo della build delle 21:31. Il controllo del runner (`scripts/cli_base.py:609`) passa tutti i file di
+> `frontend/src` tranne quelli generati, e allo slot avrebbe ricostruito il frontend per niente.
+> - Il file è ignorato da git e non è una sorgente: gli ho spostato indietro l'mtime (`touch -t 202610162130`), senza
+>   toccare il contenuto.
+> - L'ho segnalato al coordinatore: un filtro sui file nascosti nel runner spetta a chi tiene `cli_base.py`.
+>
+> **Le prove di E-4**: lo script si era fermato nell'attesa del carico, dopo la build-only, perché lo slot E2E non
+> condividesse la corsia. Si rifanno dopo lo slot.
+>
+> **Le prove di E-4** (`files/tools/e6_e4_checks.sh`, 22:03–22:06, carico sotto 50):
+> - `ruff` e `black` su `api/v1/settings.py`: puliti ✅;
+> - `api settings`: 98 passati ✅;
+> - nessun avviso con il nome vecchio;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Resta per E6**: lo scatto della galleria `settings/email`, che G mette nello stesso giro di B5b e X. Il dominio email
+> della 1.3 è così chiuso, salvo quello scatto e le decisioni del developer: il pulsante «Confirm», il messaggio
+> dell'email trattenuta, la revisione delle decisioni notturne.
+
+### E-10 — `/verify-email` su un'istanza bloccata (2026-10-16, sera)
+
+**Da dove viene** (la revisione di A7b fatta da H, 21:45, piano 01, punto 5, richiesta non bloccante (1)): su
+un'istanza bloccata, `POST /email/verification/confirm` è pubblico e fuori da `ALLOWED_WHEN_BLOCKED`, quindi
+`refuse_when_blocked` dà a un chiamante anonimo il 401 di `get_current_user`, e a uno con sessione il 423
+`instance_blocked`. A7b tiene le pagine anonime dei link sul 401 invece di mandarle al login (`zodios-client.ts`, non
+ancora in dev). Per `/verify-email`, però, quel 401 finisce nell'errore generico, con un «riprova» inutile.
+
+La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un lotto piccolo.
+
+#### E-10.0 — Analisi e disegno ✅ (2026-10-16, 22:10, base `56ed3587f`)
+> **Lo stato**:
+> - la pagina (`routes/verify-email/+page.svelte`) fa `status = readLinkRefusal(error) ?? 'error'`;
+> - `VerifyEmailCard.svelte` mostra `VERIFY_PAGE_KEYS[status]`, il «riprova» solo per `'error'` e il ritorno al login
+>   per ogni stato tranne `'checking'`;
+> - `readLinkRefusal()` (`verificationApi.ts`) legge solo il 400 `TOKEN_INVALID`.
+>
+> **Il disegno**, senza toccare nessun `.svelte` (quindi senza chiedere l'ok dei colori):
+> - uno stato nuovo, `'blocked'`, in `VerifyPageStatus` e in `VERIFY_PAGE_KEYS` (`emailText.ts`), con la chiave
+>   `email.verification.page.blocked` nei 4 cataloghi email. La card così mostra il testo e il ritorno al login, ma non
+>   il «riprova»;
+> - `readLinkRefusal()` restituisce `'blocked'` per un 401 (su questa rotta pubblica l'unico 401 è quello del blocco,
+>   come dice l'analisi di H) e per il 423 `instance_blocked`, quello di un browser con sessione. Il 423 lo riconosce
+>   `isInstanceBlockedError()` di H (`features/instance/instanceBlock.svelte.ts`), una casa sola, letto con
+>   `refusalBody()` di `emailApi.ts`;
+> - il testo dice che l'istanza è bloccata dal fornitore e che il link per ora non si può controllare. Il link non
+>   viene toccato, perché il blocco ferma la richiesta prima della rotta: si riapre a istanza sbloccata, e se intanto è
+>   scaduto si accede per averne uno nuovo, come per «expired».
+>
+> **Prima di A7b** un 401 manda ancora al login (l'intercettore di oggi). Lo stato `'blocked'` si vede già con il 423, e
+> con il 401 dopo A7b. Dopo A7b il commento di A cambia in «which the page receives», come ha chiesto H.
+>
+> **Prove**: Vitest (`verificationApi`, `emailText`, `VerifyEmailCard`, `routes/verify-email/page`), `i18n check`,
+> `front check`, `prettier`, `mkdocs build`. Nessuna E2E: il 401 arriva alla pagina solo con A7b.
+>
+> **Docs**: in `developer/backend/email.md`, il frontend della verifica e la tabella «Testing»; in `admin/email.en.md`,
+> l'istanza bloccata.
+
+#### E-10.1 — Test, codice, testi e docs ✅ (2026-10-16, 22:12–23:02)
+> **I test, scritti prima** dal `test-author`, in quattro file:
+> - `verificationApi.test.ts`, con VFA-19…22 nuovi:
+>   - VFA-19: ogni 401 è `blocked`, con tutti e due i portatori, AxiosError e ApiError;
+>   - VFA-20: il 423 `instance_blocked` è `blocked`;
+>   - VFA-21: gli altri 423, o il corpo del blocco sotto un altro status, danno `null`;
+>   - VFA-22: il 401 e il 423 passano dal client vero e dai suoi intercettori.
+> - `emailText.test.ts`: ETX-07 con otto stati;
+> - `VerifyEmailCard.test.ts`: `blocked` tra gli STATUSES di VEC-01, 03 e 06, più VEC-08;
+> - `routes/verify-email/page.test.ts`: VEP-11 (401 e 423 portano a `blocked`, senza riprova né navigazione) e VEP-12
+>   (dopo un errore di rete, il riprova incontra il blocco).
+>
+> Rossi attesi: 16 casi VFA, ETX-07, VEC-01/08 sul testo, e VEP-11/12.
+>
+> **Il codice**, solo `.ts`:
+> - `verificationApi.ts`: `readLinkRefusal()` dà `blocked` per un 401 e per il 423 di `isInstanceBlockedError()` di H;
+> - `emailText.ts`: lo stato `blocked` e la sua chiave.
+>
+> Nessun `.svelte` toccato.
+>
+> **Il testo** `email.verification.page.blocked` nelle 4 lingue: «This instance is blocked by its hosting provider, so
+> the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign
+> in to get a new one.»
+>
+> **Docs**:
+> - `developer/backend/email.md`: `readLinkRefusal()`, gli stati, la pagina, e nella tabella «Testing» VFA-01…22,
+>   VEC-01…08 e VEP-01…12;
+> - `admin/email.en.md`, nella verifica: un punto sull'istanza bloccata.
+>
+> **⚠️ Fuori pista: un difetto vicino, fuori dal lotto → E-11 nel backlog.**
+> - Lo stesso 401 del blocco arriva a «Send the link again» (`POST /email/verification/resend`, anche lei fuori lista),
+>   e `readResendFailure()` lo legge come `INVALID_CREDENTIALS`.
+> - I due 401 si distinguono solo dal testo di `detail`, e la configurazione pubblica non dice se l'istanza è bloccata.
+>   Le strade toccano H (`blocked` in `/system/instance`, oppure un codice nel rifiuto anonimo), quindi resta una
+>   decisione da prendere, non un pezzo di questo lotto.
+>
+> **Prove** (`files/tools/e10_checks.sh`, carico sotto 50):
+>
+> | Prova | Esito |
+> |---|---|
+> | `i18n build` e `i18n check` stretto | 4 789 chiavi ✅ |
+> | Vitest dei quattro file | 448 ✅ |
+> | `prettier` | pulito ✅ |
+> | `front check` | 0/0 ✅ |
+> | `mkdocs build` stretto | 0 ✅ (alle 23:00: il carico tra 70 e 200 l'ha fatta aspettare 25 minuti) |
+> | `check-links` | 97 ✅ |
+> | `git diff --check` | pulito ✅ |

@@ -4089,6 +4089,22 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    - Il rapporto completo: 55 voci in molte aree (5 senza riferimenti, 50 usate solo dai test), quindi non è un
      cancello attivo. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
      lint --dead-code --scope backend`, carico 31; log in `files/runs/dead-code-backend.log`.
+5. ✅ **A7b / A-13** (21:45, worktree di A, `git --no-optional-locks`): in `zodios-client.ts`, un 401 sulle pagine
+   anonime dei link (`/setup`, `/invite`, `/reset-password`, `/verify-email`) non manda più al login. **OK, nessuna
+   modifica alla logica.**
+   - Il 423 è intatto; la corrispondenza è esatta, con al più una barra finale; la query non conta.
+   - Le quattro pagine coincidono con `_TOKEN_PATHS` di `token_service.py`. Il token sta nel frammento, che
+     `loginUrl(pathname + search)` perdeva.
+   - Quelle pagine non fanno chiamate legate alla sessione: `/auth/me` è solo in `(app)/+layout` e in `/`. Gli unici
+     401 sono quindi quelli del blocco, su `register`, `setup` ed `email/verification/confirm`.
+   - Il test ha controlli positivi e ripristina `localStorage`.
+   - **Due richieste non bloccanti**: (1) il commento «which the page says itself» è falso per `/verify-email` (E).
+     Un 401 di `confirm` finisce nell'errore generico, con un «riprova» inutile: una voce per E, il 401 come testo del
+     blocco; intanto A scriva «which the page receives». (2) `LINK_PAGES` ↔ `_TOKEN_PATHS`: un commento che rimandi
+     dall'una all'altra, e un test di confronto se A vuole.
+   - Da parte, esisteva già, solo `vite dev`: `hooks.server.ts` `PUBLIC_ROUTES` non elenca le pagine di link.
+   - **Dovuto a me**: A7 è su dev (`a39b67944`), quindi la riga della docstring di `instance_block.py` per `/auth/setup`,
+     più `/email/verification/confirm`, entra al prossimo lotto, dopo l'aggiornamento della base (368 commit indietro).
 
 ### Lotto «H-22: niente funzioni di produzione solo per i test in `client_address.py`» (N58, 2026-10-16, sera) — ✅ provato
 
@@ -4164,3 +4180,107 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    l'ha dato a me. Ho applicato `files/h22/apply_backend_services_desc.py`: 4 sostituzioni, 3+/3−, coincide byte per
    byte con la prova a secco, ruff e black puliti. Prove a carico < 50: `services client-address` **122/122**, con la
    nuova riga «Testing: … (client_address, client_rate_key)»; `check-orphans` verde. Porta libera.
+
+### Mini-lotto «La docstring di `instance_block.py`: `/auth/setup` ed `/email/verification/confirm`» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (21:48), dopo la revisione di A7b. La base è portata in avanti (fast-forward) alla punta di
+> dev, `5b916aa28`, 368 commit, con A7 (`POST /auth/setup`, `a39b67944`). La nota non committata della revisione di
+> A7b è passata intatta nel fast-forward ed entra con questo checkpoint.
+
+1. ✅ **Analisi** (21:50, sola lettura).
+   - `setup_admin` (`auth.py`) e `confirm_email_verification` (`email.py:173`) non dipendono da `get_current_user` e
+     sono fuori da `ALLOWED_WHEN_BLOCKED`. Su un'istanza bloccata, quindi, `refuse_when_blocked` dà a un chiamante
+     anonimo il 401 di `get_current_user`, e a uno con sessione il 423.
+   - Il meccanismo generale, «una rotta pubblica fuori lista risponde 401 solo da bloccata», lo fissa già
+     `test_instance_block.py` con la registrazione e le letture pubbliche, e la lista è fissata: **nessun test nuovo**.
+   > **⚠️ Fuori pista**: in `test_admin_setup_api.py:31-32`, A scrive ancora che `/auth/setup` su un'istanza bloccata
+   > «aspetta una decisione del developer (A7)». La decisione P16(d) l'ha presa: resta fuori lista e risponde 401.
+   > Testo di A: lo giro al coordinatore.
+2. ✅ **Docstring** (21:51). Nel primo paragrafo: «Registration stays out, and so does the initial administrator's setup
+   (decision P16(d))». Nel secondo: `POST /auth/setup` e `POST /email/verification/confirm` tra le rotte pubbliche fuori
+   lista, e una frase sulle pagine anonime dei link (`/invite`, `/setup`, `/verify-email`): A7b le tiene sul 401
+   invece di mandarle al login (`frontend/src/lib/api/zodios-client.ts`), così la pagina può dire che l'istanza è
+   bloccata. Righe entro 120 colonne; la riga 8 da 121 c'era già. Ruff e black puliti; nessun test legge la docstring.
+3. ✅ **Prova leggera** (21:52–22:02, partita con carico 47; `files/runs/mini-docstring.sh`, log in
+   `files/runs/mini-docstring/`). `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+   test --test-port 6181 --data-dir /tmp/librefolio-r13-h api instance-block` → **62/62**; porta libera.
+   - Il passo build-only ha ricostruito frontend debug e sito in **472 s**, in primo piano e fuori dal limite d'avvio
+     (C-94).
+   - Il backend condiviso ha scritto in `.testLog/shared-backend.log` (H-12) e ha applicato la migrazione `009` senza
+     errori.
+   - **H-21 in pratica**: «⚙️ api: the test database … has no fixture user e2e_test_admin, e2e_test_user — running the
+     category setup before this action», poi il seed.
+   > **⚠️ Fuori pista**, la causa e **H-23** nel backlog. Le mie tre corse `services client-address` di H-22
+   > avevano svuotato il DB della corsia: ciascuna stampa «Removing existing test database» e `db create`.
+   > `_run_exclusive_setups()` esegue il setup esclusivo di `services` anche per una sola azione, perfino `pure`: è la
+   > causa iniziale delle corse perse da W e da J. Proposta: per una singola azione, il setup esclusivo solo se
+   > l'azione non è `pure`, oppure un `setup_needed` anche per `services`.
+
+### Lotto «H-23: un'azione `pure` da sola non ricrea il DB della corsia» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (22:08). H è scrittore del registro del runner per questo lotto, ma non tocca
+> `_frontend_transaction.py` e `_frontend_utility.py`, dove W (FE8b) cambia righe di percorso. La voce `.DS_Store`
+> che il coordinatore dice di avermi mandato diventa **H-24**, dopo H-23; il messaggio non mi è arrivato.
+
+1. ✅ **Analisi** (22:10, sola lettura; HEAD `3a482b478`, il mio commit di journal del mini-lotto, già in dev).
+   - `_run_exclusive_setups()` (`_cli.py`) gira per ogni invocazione: `_categories_in_scope()` restituisce la
+     categoria qualunque sia l'azione, e il setup esclusivo di `services` (`_services_setup` → `db_create`) parte
+     anche per un solo test `pure`.
+   - Le classi sono nel catalogo: `exclusive_because` → `write-global`, altrimenti `isolation` dell'azione,
+     altrimenti `default_isolation` della categoria (`build_inventory()` in `_inventory.py`). Senza nulla di
+     dichiarato decide `classify()` con la scansione statica.
+   - `services` ha `default_isolation="write-scoped"` e 73 azioni dichiarate `pure`: sono queste che smettono di
+     svuotare la corsia. `services` è l'unica categoria con un setup esclusivo.
+   - I test oggi nominano `_run_exclusive_setups` solo per sostituirlo o per l'ordine (`test_test_runner_cli.py:177`,
+     `test_runtime_isolation.py:1222`); la decisione del sollevamento non ha test.
+   - **Disegno**: `_inventory.declared_isolation(category, action)`, un'unica definizione della classe dichiarata,
+     usata da `build_inventory()` e dal sollevamento. In `_run_exclusive_setups()`, un'azione da sola dichiarata `pure`
+     salta il setup esclusivo, con una riga che lo dice; tutto il resto resta com'è: la categoria intera, `all`, un'azione
+     non `pure`, o non dichiarata (prudente, come `classify()`).
+   > **⚠️ Fuori pista** (fuori perimetro): il pre-passaggio parallelo (`--workers > 1`) non guarda l'azione.
+   > `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, a differenza dei pre-passaggi consolidati,
+   > che vogliono `action in (None, "all")`; con le classi server (READ, WRITE_SCOPED) chiama anche
+   > `run_category_setup("services")`. Quindi `--workers 2 services client-address` gira la categoria e ricrea il
+   > DB. Lo segnalo al coordinatore come voce a parte; H-23 copre il percorso normale.
+2. ✅ **Rossi, doc e cura a secco** (22:10–22:25, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 37 casi in 4 classi.
+     - `TestDeclaredIsolation`, 15: `exclusive_because` vince su un `pure` dichiarato; la classe propria vince sul
+       default; il default della categoria; nulla di dichiarato → `None`; categoria o azione sconosciute → `None`; il
+       registro letto al momento della chiamata.
+     - `TestBuildInventoryClassifiesThroughDeclaredIsolation`, 6: `collect_launches` sostituita da lanci finti;
+       `isolation` = `classify(engine, path, declared_isolation(…))`, e un caso in cui `declared_isolation` sostituita
+       viene davvero chiamata per nome.
+     - `TestRunExclusiveSetupsSparesASinglePureAction`, 13: dai casi (a)–(h) del contratto. Ognuno lancia prima l'azione
+       `pure` della stessa categoria, così il «gira ancora» non passa a vuoto oggi.
+     - `TestServicesClientAddressKeepsTheLaneDatabase`, 3: `client-address` è `pure` e non arriva al setup;
+       `asset-source` (default `write-scoped`) sì.
+
+     I setup veri falliscono se raggiunti: `_services_setup`, `db_create`, `subprocess.run`.
+   - **Doc** (docs-writer): la voce `setup_exclusive` di «Registry Entry Shape» in `runner_architecture.md`, con
+     l'eccezione e «with `--workers` above 1, the parallel pass may run it as well»: il passaggio parallelo non lo
+     chiama con `--no-shared-server` né con un piano di un gruppo o nessuno.
+   - **Cura** (`files/h23/apply_cure.py`): `_inventory.declared_isolation()`, che `build_inventory()` ora usa, e in
+     `_cli.py` `_single_pure_action()` più il salto con una riga. Ruff come a HEAD (4 `PLC0415` già esistenti in
+     `_inventory.py`; il mio import interno ha `noqa` con il motivo); black non tocca le righe nuove.
+   > **⚠️ Fuori pista**: il test-author ha seguito il contratto alla lettera, «un'azione sconosciuta → `None`». La mia
+   > prima cura per un'azione assente restituiva il default della categoria, perché leggeva `entry = {}`. Corretta:
+   > un'azione che il catalogo non ha non dichiara nulla, e anche `_meta` non è un'azione. Per `build_inventory()`
+   > non cambia nulla, perché i suoi lanci vengono sempre da azioni del registro.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (22:26–23:11, ogni passo a carico < 50: il carico è salito fino
+   a 204 per lavoro di altre corsie; `files/runs/h23-run.sh`, log in `files/runs/h23/`).
+   - **Rosso** (`utils test-runner-cli`): **37 failed / 66 passed**: 23 su «H-23: declared_isolation is missing», 14
+     su «H-23: the exclusive setup ran for a single pure action».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **103/103**, `utils runtime-isolation` **200/200**, `utils coverage-combine`
+     **11/11** (usa `PURE` dell'inventario), `check-orphans` verde.
+   - **Prova reale, azione `pure`** (`services client-address`): **122/122**; il DB della corsia è **invariato**
+     (inode, mtime e dimensione uguali prima e dopo: `331446094 1792180946 1314816`); stampata la riga «services:
+     client-address is pure, it opens no database: the category's setup is skipped and the lane's database is left as
+     it is».
+   - **Prova reale, azione non `pure`** (`services asset-sync-counts`, default `write-scoped`): **1/1**; il DB è
+     **ricreato** («Removing existing test database», inode nuovo), come prima.
+   - **Doc**: `mkdocs build` **exit 0**, senza avvisi: la base nuova contiene `ed500643f` per `wac.md`.
+     `check-links`: 97. Porta 6181 libera.
+4. ✅ **Backlog**: **H-24** (`.DS_Store` e test nel controllo della build vecchia, da E via coordinatore) e **H-25**
+   (il pre-passaggio parallelo solo per la categoria intera), approvate dal coordinatore alle 22:14; si fanno in
+   quest'ordine dopo H-23.

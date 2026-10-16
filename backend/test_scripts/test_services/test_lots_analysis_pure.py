@@ -12,7 +12,7 @@ by the API/e2e suites, but only over the mock dataset, which contains a single
 shape of portfolio: LONG lots, a dense daily price series, and plain BUY/SELL
 transactions. Everything the builders do for the *other* shapes a real user
 produces -- a SHORT position, an unlisted asset with no price history at all
-(``estimated_mode``), a gap in the price series, a manual ADJUSTMENT carrying a
+(valued at cost), a gap in the price series, a manual ADJUSTMENT carrying a
 cost-basis override, a share grant bought for zero, a transfer that crosses the
 analysis scope -- was never executed. These are the branches pinned below.
 
@@ -24,14 +24,16 @@ about and nothing else can drift into it.
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
 import backend.app.services.financial_math.lots.conversions as conversions_module
 import backend.app.services.financial_math.lots.histories as histories_module
+import backend.app.services.financial_math.lots.prices as prices_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotTimelineEventKind
+from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, IssueCode, LotAnalysisType, LotsAnalysisResponse, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
@@ -60,7 +62,8 @@ from backend.app.services.financial_math.lots.histories import (
     known_realized_pnl,
     lot_history_end_date,
 )
-from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
 from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
 
 # --------------------------------------------------------------------------- #
@@ -208,6 +211,21 @@ def _price(day: date, close: Decimal | None = D("11"), currency: str = "EUR") ->
     return PriceHistory(asset_id=7, date=day, close=close, currency=currency)
 
 
+def _quote(day: date, close: Decimal, currency: str = "EUR") -> PriceObservation:
+    """A market close in the home's daily price series (financial_math.price_marks): what ``price_history`` holds that day."""
+    return PriceObservation(date=day, unit_price=close, currency=currency, kind=ObservationKind.MARKET)
+
+
+def _trade(day: date, unit_price: Decimal, currency: str = "EUR") -> PriceObservation:
+    """A BUY or SELL price in the home's daily price series: the trade's amount over its quantity, in the trade's currency."""
+    return PriceObservation(date=day, unit_price=unit_price, currency=currency, kind=ObservationKind.TRADE)
+
+
+def _series(*observations: PriceObservation) -> AssetPriceSeries:
+    """The asset's daily price series, which the lots read their prices and references from since CP-7b."""
+    return AssetPriceSeries(list(observations))
+
+
 def _engine_result(
     *,
     lots: list[FifoLot] | None = None,
@@ -247,41 +265,6 @@ def _perf_context(
 
 def _days(start: date, count: int) -> list[date]:
     return [start + timedelta(days=offset) for offset in range(count)]
-
-
-# --------------------------------------------------------------------------- #
-# PriceHistoryLookup
-# --------------------------------------------------------------------------- #
-
-
-class TestPriceHistoryLookup:
-    def test_resolve_returns_none_when_asset_has_no_usable_prices(self):
-        """An unlisted asset: no PriceHistory row was ever stored for it."""
-        assert PriceHistoryLookup([]).resolve(date(2024, 3, 1)) is None
-
-    def test_resolve_returns_none_before_the_first_known_price(self):
-        """A lot opened before the asset started being quoted has nothing to fall back to."""
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1))])
-        assert lookup.resolve(date(2024, 4, 30)) is None
-
-    def test_resolve_uses_the_latest_price_at_or_before_the_query_date(self):
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10")), _price(date(2024, 5, 6), D("12"))])
-        resolved = lookup.resolve(date(2024, 5, 4))
-        assert (resolved.price, resolved.resolved_date, resolved.source) == (D("10"), date(2024, 5, 1), "fallback")
-
-    def test_resolve_marks_an_exact_date_hit_as_exact(self):
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))])
-        assert PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))]).resolve(date(2024, 5, 1)).source == "exact"
-        assert lookup.latest().resolved_date == date(2024, 5, 1)
-
-    def test_latest_returns_none_when_there_are_no_rows(self):
-        """This is exactly what puts the whole analysis into estimated_mode."""
-        assert PriceHistoryLookup([]).latest() is None
-
-    def test_rows_with_a_null_close_are_ignored(self):
-        """A PriceHistory row can carry only volume/open; it is not a usable quote."""
-        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), None)])
-        assert lookup.latest() is None
 
 
 # --------------------------------------------------------------------------- #
@@ -391,7 +374,7 @@ class TestCollectFxNeeds:
             "lots_by_id": {},
             "selected_ids": [],
             "transactions": [],
-            "price_lookup": PriceHistoryLookup([]),
+            "price_series": AssetPriceSeries([]),
             "prices": [],
             "fragments": [],
             "events": [],
@@ -432,7 +415,7 @@ class TestCollectFxNeeds:
         assert resolver._needs == []
 
     def test_lot_summary_skips_the_reference_price_when_none_can_be_resolved(self):
-        """The lot carries a reference price but the asset has no quotes at all."""
+        """The lot carries a reference price but the asset's series has no observation at all."""
         resolver = _resolver("EUR")
         lot = _lot(1, currency="EUR", reference_unit_price=D("9"))
         self._call(
@@ -440,7 +423,7 @@ class TestCollectFxNeeds:
             analyses=[LotAnalysisType.LOT_SUMMARY],
             lots_by_id={1: lot},
             selected_ids=[1],
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
         )
         assert resolver._needs == []
 
@@ -1089,7 +1072,7 @@ class TestBuildLotSummaries:
             "selected_ids": [1],
             "fx_resolver": _resolver("EUR"),
             "market_prices": {date(2024, 2, 1): D("12")},
-            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_series": _series(_quote(date(2024, 1, 10), D("10"))),
             "closures_by_lot": {},
             "income_by_lot": {},
             "fees_by_lot": {},
@@ -1264,15 +1247,16 @@ class TestBuildLotSummaries:
 
         The return history already reads it so (histories.py, build_return_history). Before CP-7a the source stayed beside
         the missing price: (None, "exact") for the lot's own USD price, (None, "fallback") for a quote in USD found on 8 Jan.
-        GUARD: a reference that converts keeps its source.
+        GUARD: a reference that converts keeps its source. CP-7b moved it to the asset's price series (the quote of 8 Jan
+        is now a market observation, the reference dated the opening day, 10 Jan): without any USD rate, the same values.
         """
         if quote is None:
-            lot, lookup = _lot(1, currency=lot_currency), PriceHistoryLookup([])
+            lot, series = _lot(1, currency=lot_currency), AssetPriceSeries([])
         else:
             lot = _lot(1, currency=lot_currency, reference_unit_price=D(quote[0]), reference_price_source="fallback")
-            lookup = PriceHistoryLookup([_price(date(2024, 1, 8), D(quote[0]), quote[1])])
+            series = _series(_quote(date(2024, 1, 8), D(quote[0]), quote[1]))
 
-        row = self._call(lot=lot, price_lookup=lookup)
+        row = self._call(lot=lot, price_series=series)
 
         assert (row.reference_unit_price, row.reference_price_source) == expected
 
@@ -1283,7 +1267,13 @@ class TestBuildLotSummaries:
 
 
 class TestBuildValueAndReturnHistory:
-    """Both builders share the same market_price-is-None ladder, so both are pinned."""
+    """Both builders share the same market_price-is-None ladder, so both are pinned.
+
+    CP-7b: ``estimated_mode`` (one flag for the whole window) became ``at_cost_until``, the last day with no observation on
+    or before it; every day up to it is valued at cost. ``_LAST_DAY`` puts the whole window at cost, as the flag did.
+    """
+
+    _LAST_DAY = date(2024, 1, 12)  # the last of the three history days the helpers use by default
 
     def _value(self, **overrides):
         lot = overrides.pop("lot", _lot(1))
@@ -1298,7 +1288,7 @@ class TestBuildValueAndReturnHistory:
             "income_prefix_by_lot": {},
             "fees_prefix_by_lot": {},
             "taxes_prefix_by_lot": {},
-            "estimated_mode": False,
+            "at_cost_until": None,
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
@@ -1311,14 +1301,14 @@ class TestBuildValueAndReturnHistory:
             "lots_by_id": {1: lot},
             "fragments_by_lot": {1: [_fragment(1)]},
             "market_prices": {},
-            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_series": _series(_quote(date(2024, 1, 10), D("10"))),
             "fx_resolver": _resolver("EUR"),
             "history_dates": _days(date(2024, 1, 10), 3),
             "closures_by_lot": {},
             "income_prefix_by_lot": {},
             "fees_prefix_by_lot": {},
             "taxes_prefix_by_lot": {},
-            "estimated_mode": False,
+            "at_cost_until": None,
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
@@ -1386,24 +1376,40 @@ class TestBuildValueAndReturnHistory:
     # -- market price missing, position still open --------------------------- #
 
     def test_an_open_lot_on_an_unpriced_day_is_valued_at_cost_in_estimated_mode(self):
-        """An unlisted holding: the only defensible mark is what it cost."""
-        points = self._value(estimated_mode=True)
+        """An unlisted holding: the only defensible mark is what it cost. No day of the window has an observation."""
+        points = self._value(at_cost_until=self._LAST_DAY)
         assert {point.open_value for point in points} == {D("1000")}
 
     def test_an_open_lot_on_an_unpriced_day_emits_nothing_when_not_estimating(self):
         """A gap in a normally-quoted series must leave a hole, not a fabricated value."""
-        assert self._value(estimated_mode=False) == []
+        assert self._value(at_cost_until=None) == []
 
     def test_an_open_short_lot_is_never_valued_at_cost(self):
-        """estimated_mode only rescues LONG lots; a short at cost would flip the sign."""
-        assert self._value(lot=_lot(1, direction="SHORT"), estimated_mode=True) == []
+        """The days at cost only rescue LONG lots; a short at cost would flip the sign."""
+        assert self._value(lot=_lot(1, direction="SHORT"), at_cost_until=self._LAST_DAY) == []
 
     def test_return_of_an_open_lot_on_an_unpriced_day_uses_the_cost_mark(self):
-        points = self._returns(estimated_mode=True)
+        points = self._returns(at_cost_until=self._LAST_DAY)
         assert {point.total_return for point in points} == {D("0")}
 
     def test_return_of_an_open_lot_emits_nothing_when_not_estimating(self):
-        assert self._returns(estimated_mode=False) == []
+        assert self._returns(at_cost_until=None) == []
+
+    def test_the_days_up_to_at_cost_until_are_at_cost_and_a_later_unpriced_day_is_a_gap(self):
+        """CP-7b, the Dashboard's per-day rule in the lots (J-17): ``at_cost_until`` 11 Jan, a window of 10–14 Jan, X priced 12 EUR on the 13th only.
+
+        (date, open value, P&L): 10 and 11 Jan have no observation on or before them, so the lot is worth its cost, 1000,
+        P&L 0; the 13th is priced, 1200. The 12th and the 14th come after the cut without a market price — in the service a
+        mark without a rate, since every day after the first observation has one — so they stay a gap, never at cost.
+        Before CP-7b ``estimated_mode`` was one flag for the whole window and there was no cut to pass (TypeError).
+        """
+        points = self._value(history_dates=_days(date(2024, 1, 10), 5), market_prices={date(2024, 1, 13): D("12")}, at_cost_until=date(2024, 1, 11))
+
+        assert [(point.date, point.open_value, point.pnl) for point in points] == [
+            (date(2024, 1, 10), D("1000"), D("0")),
+            (date(2024, 1, 11), D("1000"), D("0")),
+            (date(2024, 1, 13), D("1200"), D("200")),
+        ]
 
     # -- priced days --------------------------------------------------------- #
 
@@ -1420,7 +1426,7 @@ class TestBuildValueAndReturnHistory:
         """The asset had no quote at the opening date and the lot was booked at zero."""
         points = self._returns(
             lot=_lot(1, opening_unit_price=D("0"), original_cost=D("1000")),
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
             market_prices={date(2024, 1, 11): D("12")},
         )
         assert next(p for p in points if p.date == date(2024, 1, 11)).relative_return is None
@@ -1591,20 +1597,25 @@ class TestSmallBuilders:
         assert rows[0].target_amount == D("-500.0")
 
     def test_opening_reference_price_returns_nothing_when_no_quote_exists(self):
-        """The lot knows its reference price but the quote series is empty."""
+        """The lot knows its reference price but the asset's price series is empty."""
         lot = _lot(1, reference_unit_price=D("9"), reference_price_source="fallback")
-        price, currency, resolved_date, source = opening_reference_price(lot, PriceHistoryLookup([]))
-        assert (price, currency, resolved_date, source) == (None, None, lot.opening_date, "fallback")
+        price, currency, reference_date, source = opening_reference_price(lot, AssetPriceSeries([]))
+        assert (price, currency, reference_date, source) == (None, None, lot.opening_date, "fallback")
 
     def test_opening_reference_price_uses_the_resolved_quote_currency(self):
+        """A USD close of 8 Jan carried onto the lot's opening, 10 Jan: the reference is in USD, dated 10 Jan.
+
+        CP-7b (P21, every amount at the rate of its day): the reference is dated its opening day, so it converts at that
+        day's rate. Before CP-7b it was dated the close's own day, 8 Jan.
+        """
         lot = _lot(1, reference_unit_price=D("9"))
-        lookup = PriceHistoryLookup([_price(date(2024, 1, 8), D("9"), "USD")])
-        price, currency, resolved_date, _source = opening_reference_price(lot, lookup)
-        assert (price, currency, resolved_date) == (D("9"), "USD", date(2024, 1, 8))
+        series = _series(_quote(date(2024, 1, 8), D("9"), "USD"))
+        price, currency, reference_date, _source = opening_reference_price(lot, series)
+        assert (price, currency, reference_date) == (D("9"), "USD", date(2024, 1, 10))
 
     def test_opening_reference_price_scales_the_buy_price_by_the_quote_base(self):
         """A bond quoted per 100 units: the entry price must land on the same axis."""
-        price, _currency, _resolved, source = opening_reference_price(_lot(1, opening_unit_price=D("0.98")), PriceHistoryLookup([]), 100)
+        price, _currency, _resolved, source = opening_reference_price(_lot(1, opening_unit_price=D("0.98")), AssetPriceSeries([]), 100)
         assert (price, source) == (D("98.00"), "exact")
 
     def test_price_history_skips_days_with_no_estimated_price(self):
@@ -1977,7 +1988,7 @@ class TestPricedAdjustmentInLotCurrency:
             selected_ids=[1],
             fx_resolver=self._usd_at_090(),
             market_prices={},
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
             closures_by_lot={},
             income_by_lot={},
             fees_by_lot={},
@@ -2021,7 +2032,7 @@ class TestPricedAdjustmentInLotCurrency:
             lots_by_id={lot.lot_id: lot for lot in result.lots},
             selected_ids=[1],
             transactions=[adjustment],
-            price_lookup=PriceHistoryLookup([]),
+            price_series=AssetPriceSeries([]),
             prices=[],
             fragments=result.fragment_intervals,
             events=result.classified_events,
@@ -2161,7 +2172,7 @@ def _summary_row(rows: list[Transaction], rates: dict, market_price: Decimal):
         selected_ids=[1],
         fx_resolver=_resolver("EUR", rates),
         market_prices={_SEP_1: market_price},
-        price_lookup=PriceHistoryLookup([]),
+        price_series=AssetPriceSeries([]),
         closures_by_lot=group_closures(result.closures),
         income_by_lot={},
         fees_by_lot={},
@@ -2183,7 +2194,7 @@ def _needs_of_the_lot_analysis(analysis: LotAnalysisType, rows: list[Transaction
         lots_by_id={lot.lot_id: lot for lot in result.lots},
         selected_ids=[1],
         transactions=rows,
-        price_lookup=PriceHistoryLookup([]),
+        price_series=AssetPriceSeries([]),
         prices=[],
         fragments=result.fragment_intervals,
         events=result.classified_events,
@@ -2342,7 +2353,7 @@ class TestShortLotsSubtractTheirBuyBacks:
             income_prefix_by_lot={},
             fees_prefix_by_lot={},
             taxes_prefix_by_lot={},
-            estimated_mode=False,
+            at_cost_until=None,
             quote_base_quantity=1,
         )
 
@@ -2484,3 +2495,268 @@ class TestTheCashFlowOfASale:
         for flow in received[0]:
             net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
         assert net_by_date == {date(2025, 6, 1): D("-100"), _JUN_2: expected_sale_flow}
+
+
+# =========================================================================== #
+# CP-7b — the lots read their prices from the asset's daily price series (V1, with J-28)
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. The developer's decisions P2/J-17 («trades are prices, an adjustment
+# isn't») and P21 («every amount at the rate of its day»), then option (a) of the CP-7b amendment («the Dashboard's
+# per-day rule in the lots too: one rule in the whole app»). The lots read every price from the asset's daily price
+# series (financial_math.price_marks.AssetPriceSeries, built by build_asset_price_series): the last observation on or
+# before a day — a market close, or the average of that day's BUY/SELL prices, never an ADJUSTMENT — carried forward.
+#
+# * A lot opened by an ADJUSTMENT takes the series' mark on its opening day as its reference: ``exact`` for a close of
+#   that day, ``fallback`` for anything else (a close carried forward, a trade price, carried or not). No mark, no
+#   reference: the lot falls back to its own price, as before. A lot opened by a BUY keeps its own price.
+# * opening_reference_price(lot, price_series) hands that reference over in the currency of the opening day's mark,
+#   dated the opening day, so it converts at that day's rate; collect_fx_needs asks for that rate.
+# * The days with no observation on or before them — the run before the asset's first close, BUY or SELL — are valued
+#   at cost (last_day_without_observation gives the last of them); a later day without a market price stays a gap.
+#
+# Before CP-7b a PriceHistoryLookup read the stored closes alone: an ADJUSTMENT's lot took the last close however old,
+# dated (and so converted) at that close's own day, and the lots were at cost only when the asset had no close at all.
+#
+# The reference is decided inside get_lots_analysis, before the FIFO engine runs, so the first class drives the whole
+# service on in-memory rows: its loaders are doubles returning the test's rows, its session a double that hands over
+# the asset. Everything is in EUR, so no rate is ever asked and nothing reaches a database: the unit stays PURE. The new
+# name, last_day_without_observation, is read through its module while a test runs (prices_module), never imported at
+# module level: before CP-7b only the tests that call it fail, and the rest of the file still collects. Each docstring
+# says what its test read before CP-7b; GUARD marks a value CP-7b leaves as it was.
+
+_MAR_10 = date(2024, 3, 10)  # five days before the opening
+_MAR_12 = date(2024, 3, 12)  # three days before
+_MAR_13 = date(2024, 3, 13)  # two days before
+_MAR_15 = date(2024, 3, 15)  # transaction 2, an ADJUSTMENT +5 at 90 EUR a unit, opens the lot under test
+_MAR_17 = date(2024, 3, 17)  # two days after
+_MAR_18 = date(2024, 3, 18)  # three days after
+_MAR_20 = date(2024, 3, 20)  # the reading day of every analysis of this section
+_REFERENCE_ISSUES = {IssueCode.REFERENCE_PRICE_FALLBACK, IssueCode.REFERENCE_PRICE_UNAVAILABLE}
+
+
+def _adjustment_in_at_90(day: date = _MAR_15) -> Transaction:
+    """Transaction 2: 5 units received by an ADJUSTMENT at a cost basis of 90 EUR a unit — an inherited position."""
+    return _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=day, quantity=D("5"), amount=D("0"), currency=None, cost_basis_override=D("90"), cost_basis_currency="EUR")
+
+
+def _bought_at_120(day: date) -> Transaction:
+    """Transaction 1: 10 bought for 1200 EUR, 120 a unit."""
+    return _tx(1, tx_date=day, quantity=D("10"), amount=D("-1200"), currency="EUR")
+
+
+def _series_of(*rows: Transaction, closes: dict[date, str] | None = None) -> AssetPriceSeries:
+    """The asset's series as the service builds it (build_asset_price_series), from EUR closes and transaction rows, quoted per unit."""
+    return build_asset_price_series(
+        price_rows=[(day, D(close), "EUR") for day, close in (closes or {}).items()],
+        transactions=list(rows),
+        split_linked_tx_ids=set(),
+        asset_currency="EUR",
+        quote_base_quantity=1,
+    )
+
+
+def _loader_returning(value):
+    """A double of one of the service's async loaders: whatever it is asked, ``value``."""
+
+    async def loader(*_args, **_kwargs):
+        return value
+
+    return loader
+
+
+class _SessionWithTheAsset:
+    """The session double: get_lots_analysis asks its session for the asset directly, for everything else through a loader."""
+
+    def __init__(self, asset) -> None:
+        self._asset = asset
+
+    async def get(self, _model, _key):
+        return self._asset
+
+
+async def _analysis_on_rows(monkeypatch, *rows: Transaction, quotes: tuple[PriceHistory, ...] = ()) -> LotsAnalysisResponse:
+    """get_lots_analysis (LOT_SUMMARY, in EUR, up to 20 Mar) on in-memory rows: asset 7 in EUR quoted per unit, broker 1 alone in scope.
+
+    Each loader hands over what the database would for these rows — the transactions by date then id, the closes by
+    date (the caller passes those up to the reading day), no split, no income, no cost — and monkeypatch fails on a
+    loader the service no longer has, rather than letting the call reach the session double.
+    """
+    service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency="EUR", quote_base_quantity=1)))
+    loaded = {
+        "_get_scope_broker_ids": [1],
+        "_load_transactions": sorted(rows, key=lambda row: (row.date, row.id)),
+        "_load_split_ratios": {},
+        "_load_broker_shorting": {1: False},
+        "_load_prices": sorted(quotes, key=lambda row: row.date),
+        "_load_income_transactions": [],
+        "_load_cost_transactions": [],
+    }
+    for name, value in loaded.items():
+        monkeypatch.setattr(service, name, _loader_returning(value))
+    return await service.get_lots_analysis(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=None,
+        date_to=_MAR_20,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+    )
+
+
+def _reference_of(response: LotsAnalysisResponse, transaction_id: int) -> tuple:
+    """(reference unit price, its source, the engine's reference issues) of the lot ``transaction_id`` opened, found by that id."""
+    lots = [lot for lot in response.lots or [] if lot.opening_transaction_id == transaction_id]
+    assert len(lots) == 1, f"precondition: transaction {transaction_id} opens one lot, got {response.lots}"
+    assert response.data_quality is not None
+    issues = [str(issue.code) for issue in response.data_quality.issues if issue.code in _REFERENCE_ISSUES and issue.message_params.get("lot_id") == lots[0].lot_id]
+    return lots[0].reference_unit_price, lots[0].reference_price_source, issues
+
+
+class TestTheReferenceOfALotOpenedByAnAdjustment:
+    """The reference get_lots_analysis gives the lot transaction 2 opens — an ADJUSTMENT +5 at 90 EUR on 15 Mar — and a BUY's lot."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("closes", "buy_day", "expected"),
+        [
+            pytest.param({_MAR_15: "100"}, _MAR_15, (D("100"), "exact", []), id="GUARD-a-close-on-the-opening-day-wins-over-a-same-day-BUY"),
+            pytest.param({_MAR_12: "100"}, None, (D("100"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="GUARD-a-close-three-days-before-nothing-after"),
+            pytest.param({_MAR_10: "100"}, _MAR_13, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="a-BUY-newer-than-the-last-close"),
+            pytest.param({_MAR_10: "100"}, _MAR_15, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="a-BUY-on-the-opening-day-after-an-older-close"),
+            pytest.param({}, _MAR_13, (D("120"), "fallback", ["REFERENCE_PRICE_FALLBACK"]), id="no-close-a-BUY-before"),
+            pytest.param({_MAR_18: "100"}, _MAR_17, (D("90"), "exact", ["REFERENCE_PRICE_UNAVAILABLE"]), id="GUARD-nothing-on-or-before-the-opening-day"),
+        ],
+    )
+    async def test_the_reference_is_the_mark_of_the_opening_day(self, monkeypatch, closes, buy_day, expected):
+        """(reference unit price, source, the engine's reference issue) of the ADJUSTMENT's lot in EUR; the BUY, when there is one, is 10 at 120 EUR.
+
+        (a) A close on the opening day is the reference, ``exact`` — over a BUY of the same day too: a close wins its day.
+        (b) A close three days before, nothing after: that close, ``fallback``. (c) A BUY newer than the last close, before
+        the opening day or on it: the BUY's 120, ``fallback``; before CP-7b the older close, 100, ``fallback``. (d) No close,
+        a BUY before: the BUY's 120, ``fallback``; before CP-7b no reference (REFERENCE_PRICE_UNAVAILABLE), so the lot's own
+        90, ``exact``. GUARD: with nothing on or before the opening day (a BUY and a close after it) there is still no
+        reference, and the lot keeps its own 90.
+        """
+        rows = [_adjustment_in_at_90()] if buy_day is None else [_adjustment_in_at_90(), _bought_at_120(buy_day)]
+        response = await _analysis_on_rows(monkeypatch, *rows, quotes=tuple(_price(day, D(close)) for day, close in closes.items()))
+
+        assert _reference_of(response, 2) == expected
+
+    @pytest.mark.asyncio
+    async def test_a_lot_opened_by_a_buy_keeps_its_own_price(self, monkeypatch):
+        """GUARD: 10 bought at 120 EUR on 13 Mar, a day X closed at 100 — the BUY's lot is referenced to its own price, exact, with no issue."""
+        response = await _analysis_on_rows(monkeypatch, _bought_at_120(_MAR_13), quotes=(_price(_MAR_13, D("100")),))
+
+        assert _reference_of(response, 1) == (D("120"), "exact", [])
+
+
+class TestOpeningReferencePriceReadsTheSeries:
+    """opening_reference_price(lot, price_series): the engine's reference, in the currency of the day's mark, dated the opening day.
+
+    The price and its source are the ones the FIFO engine put on the lot, from the same series (the class above); what the
+    function adds is the currency of the opening day's mark and the date the reference converts at. Before CP-7b it read a
+    PriceHistoryLookup: handed a series, it fails on the mark, which has no ``resolved_date``.
+    """
+
+    def test_a_reference_carried_from_an_older_close_is_dated_the_opening_day(self):
+        """(e) A lot opened on 15 Mar whose reference, 64, is a USD close of 10 Mar carried forward: (64, "USD", 15 Mar, "fallback").
+
+        Dated its opening day, the reference converts at that day's rate (P21). Before CP-7b: 10 Mar, the close's own day.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("64"), reference_price_source="fallback")
+
+        assert opening_reference_price(lot, _series(_quote(_MAR_10, D("64"), "USD"))) == (D("64"), "USD", _MAR_15, "fallback")
+
+    def test_the_reference_is_in_the_currency_of_the_days_mark_a_trade_too(self):
+        """(c) X closed at 120 USD on 10 Mar, then was bought at 96 GBP on 13 Mar: on 15 Mar the mark is the BUY's, so the reference is in GBP.
+
+        The engine took the BUY's 96 as the lot's reference; the function names its currency, GBP — not the last close's
+        USD, which the lookup of the closes alone gave before CP-7b, with that close's day, 10 Mar.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("96"), reference_price_source="fallback")
+        series = _series(_quote(_MAR_10, D("120"), "USD"), _trade(_MAR_13, D("96"), "GBP"))
+
+        assert opening_reference_price(lot, series) == (D("96"), "GBP", _MAR_15, "fallback")
+
+    @pytest.mark.parametrize(
+        "series",
+        [
+            pytest.param(_series(_quote(_MAR_17, D("100"))), id="a-first-close-after-the-opening-day"),
+            pytest.param(
+                build_asset_price_series(price_rows=[(_MAR_15, None, "EUR")], transactions=[], split_linked_tx_ids=set(), asset_currency="EUR", quote_base_quantity=1),
+                id="a-price-row-without-a-close",
+            ),
+        ],
+    )
+    def test_no_mark_on_or_before_the_opening_day_hands_no_reference_over(self, series):
+        """No mark on the opening day: the first observation comes after it, or the only row has no close (volume or open only),
+        which is no quote. The reference the lot carries is not handed over: (None, None, 15 Mar, its source).
+
+        The two cases of the old closes' lookup — nothing before the first close, a null close ignored — on the series.
+        """
+        lot = _lot(1, opening_date=_MAR_15, reference_unit_price=D("9"), reference_price_source="fallback")
+
+        assert opening_reference_price(lot, series) == (None, None, _MAR_15, "fallback")
+
+
+class TestTheReferenceAsksForTheRateOfItsOpeningDay:
+    """collect_fx_needs (lots/conversions.py): the reference's rate is its mark's currency on the lot's opening day."""
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.LOT_SUMMARY, LotAnalysisType.RETURN_HISTORY])
+    def test_the_reference_needs_the_marks_currency_on_the_opening_day(self, analysis):
+        """(f) The EUR lot of 15 Mar referenced to a USD close of 10 Mar, read from 20 Mar: one need, ("USD", 15 Mar).
+
+        No market day asks for anything (no close row, no trade) and the lot's own EUR needs no rate, so the one rate asked
+        is the reference's. Before CP-7b: ("USD", 10 Mar), the close's day.
+        """
+        lot = _lot(1, opening_date=_MAR_15, currency="EUR", reference_unit_price=D("64"), reference_price_source="fallback")
+        resolver = _resolver("EUR")
+
+        collect_fx_needs(
+            fx_resolver=resolver,
+            analyses=[analysis],
+            lots_by_id={1: lot},
+            selected_ids=[1],
+            transactions=[],
+            price_series=_series(_quote(_MAR_10, D("64"), "USD")),
+            prices=[],
+            fragments=[],
+            events=[],
+            closures=[],
+            split_ratios_by_tx_id={},
+            actual_to=_MAR_20,
+            computed_from=_MAR_20,
+            asset_currency="USD",
+        )
+
+        assert resolver._needs == [("USD", _MAR_15)]
+
+
+class TestLastDayWithoutObservation:
+    """last_day_without_observation (lots/prices.py, read through the module) over 15–19 Mar: the last day valued at cost, or None.
+
+    The last of the ascending days with no observation on or before it — no close, no BUY or SELL — which the lots value at
+    cost, as the Dashboard values a holding (J-17); None when the first day already has one. Before CP-7b: no such function
+    (AttributeError), and the lots were at cost only when the asset had no close at all, then on every day.
+    """
+
+    _DAYS = _days(_MAR_15, 5)
+
+    @pytest.mark.parametrize(
+        ("build_series", "expected"),
+        [
+            pytest.param(lambda: _series_of(), date(2024, 3, 19), id="no-observation-at-all-the-last-day"),
+            pytest.param(lambda: _series_of(closes={_MAR_15: "100"}), None, id="the-first-day-observed-None"),
+            pytest.param(lambda: _series_of(closes={_MAR_10: "100"}), None, id="an-older-close-carried-onto-the-first-day-None"),
+            pytest.param(lambda: _series_of(closes={_MAR_17: "100"}), date(2024, 3, 16), id="a-first-close-mid-run-the-day-before-it"),
+            pytest.param(lambda: _series_of(_bought_at_120(_MAR_17)), date(2024, 3, 16), id="a-first-BUY-mid-run-counts-like-a-close"),
+            pytest.param(lambda: _series_of(_adjustment_in_at_90(_MAR_17)), date(2024, 3, 19), id="an-ADJUSTMENT-is-no-observation-the-last-day"),
+        ],
+    )
+    def test_the_last_day_valued_at_cost(self, build_series, expected):
+        """The series is the service's, built from rows (closes in EUR, transactions): a BUY observes like a close, an
+        ADJUSTMENT at a cost never does (J-17), and a close older than the first day is carried onto it."""
+        assert prices_module.last_day_without_observation(build_series(), self._DAYS) == expected

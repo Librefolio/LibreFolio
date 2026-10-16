@@ -90,6 +90,7 @@
         "consumed": "Este enlace ya se ha usado. Si tu cuenta está activa, inicia sesión.",
         "revoked": "Este enlace ya no funciona: inicia sesión para pedir uno nuevo.",
         "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
+        "blocked": "Esta instancia está bloqueada por su proveedor de alojamiento, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando la instancia se desbloquee; si el enlace ha caducado para entonces, inicia sesión para obtener uno nuevo.",
         "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
         "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
       },
