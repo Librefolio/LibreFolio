@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
 - `./dev.py user set-email <username> <address>` changes an account's email address from the command line (sessions ended and verification reset on a real change, as from the Profile).
 - **Faster first broker import, optional**: `LIBREFOLIO_BRIM_PREWARM=true` prepares the broker-import processes at startup, with their plugins loaded, so the first import after a start is about 4 s faster, at the cost of about 80 MB of memory and 1.4 s of CPU at every server start. Off by default.
+- **The sync window warns before you start** when the period already holds stored prices or rates: it says how many of the assets or pairs have data there, which the sync replaces with the provider's values, manual edits included. On the Assets and FX pages, and on the detail pages of an asset or a pair.
 
 ### 🔄 Changed
 
