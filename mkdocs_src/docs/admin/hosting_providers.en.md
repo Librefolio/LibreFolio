@@ -2,20 +2,22 @@
 
 This page is for whoever runs LibreFolio for other people: a hosting provider with customers, an
 association for its members, or a friend who hosts an instance for the family. On this page, all of
-them are the **hosting provider**. Two switches exist for them:
+them are the **hosting provider**. A few settings exist for them:
 
 - the **managed profile** says that the instance is run for others;
 - the **instance block** closes the app but keeps the data, for example when a subscription is not
-  paid.
+  paid;
+- the **panel token** lets your hosting panel take backups of the instance;
+- the **upload limit** caps the size of the archives uploaded for a restore.
 
-Both are set with plain environment variables, the same in every LibreFolio and documented here: they
-are not tied to any particular provider or cloud.
+All of them are set with plain environment variables, the same in every LibreFolio and documented
+here: they are not tied to any particular provider or cloud.
 
 !!! tip "🏠 Running LibreFolio for yourself?"
 
-    You need nothing on this page. Leave `LIBREFOLIO_PROFILE`, `LIBREFOLIO_BLOCKED` and
-    `LIBREFOLIO_DELETION_DATE` unset: your install is `selfhosted`, the default, and it is never
-    blocked.
+    You need nothing on this page. Leave its variables unset: your install is `selfhosted`, the
+    default, and it is never blocked. To back it up, see «Back Up the Instance» in
+    [CLI Admin Tools](cli_tools.md).
 
 ---
 
@@ -35,13 +37,14 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes three things:
+Today the profile changes four things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Listed read-only by `GET /api/v1/settings/plugins` | Not listed, and a save to it is refused as if it did not exist |
+| The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
@@ -79,6 +82,11 @@ your users sign in again after each restart. See
   [HTTPS and reverse proxies](configuration.md#session-cookie-secure).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
+- If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
+  with another instance. See [Backups for Your Hosting Panel](#panel-backups).
+- Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
+  instance's prices and exchange rates up to date on its own schedule, for example right after it
+  wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 
 ---
 
@@ -119,6 +127,10 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
 - While the instance is blocked, every start logs a warning,
   `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer`,
   with the deletion date when there is one.
+- While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
+  runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
+  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
+  (14 days by default).
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -147,13 +159,14 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
+| The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
   instance.
-- The web app itself is still served: the block covers the API only.
-- Scheduled jobs, such as the price and FX syncs, keep running: they do not go through the API.
+- The web app itself is still served: the block covers the API, not the pages of the app.
 
 The list is short on purpose, and it is fixed in the code: there is no setting to change it.
 
@@ -176,9 +189,8 @@ For a caller without a session, most of the API answers as on any other instance
   `/system/ready` do not reveal the block.
 
 A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the address
-probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`), the global
-settings (`GET /api/v1/settings/global`, also by key) and the AI Export catalogue
-(`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
+probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
+Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
 then cannot confirm a public address, and the check of your instance's address reports it as not
 verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
 more: they return no data.
@@ -191,12 +203,157 @@ every start, blocked or not, but users see it only on the block page.
 
 ---
 
+## 💾 Backups for Your Hosting Panel {: #panel-backups }
+
+Your hosting panel can back up the whole instance and download the archive, with a token instead of
+a user's session. It is the same archive as `backup create` on the [command line](cli_tools.md): the
+database, the uploaded files, the broker reports and the stress scenarios of every user.
+
+### 🔑 The Token {: #panel-token }
+
+Generate a token:
+
+```bash
+openssl rand -hex 32
+```
+
+Give it to the instance in `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, in the container's environment or in
+`.env`, then restart LibreFolio. With Docker Compose, run `docker compose up -d`:
+`docker compose restart` keeps the old values.
+
+```bash
+LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN=<the 64 characters printed by openssl>
+```
+
+- To keep the token out of `.env` and of the container's environment, put it in a file and give the
+  file's path in `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE`, as Docker mounts its secrets: see
+  «Secrets in Files» in [Environment Variables](configuration.md).
+- The token is at least 32 characters long, all of them visible ASCII characters: no space, no tab,
+  no accented letter. A space makes it unusable, even at the end: in a file, the line breaks at its
+  end are dropped, spaces are not.
+- The panel sends it in one header, `Authorization: Bearer <token>`, and never in the URL, where
+  access logs would keep it.
+- LibreFolio reads the token when the panel calls, not at startup: a token it cannot use does not
+  stop the server, but every call then answers `503` and logs an error that names the variable,
+  never the token: `The hosting panel's backup token cannot be used: its routes refuse every request`.
+- Anyone who has the token can download all the data of the instance: keep it as private as the
+  archives, and call the routes over HTTPS only.
+
+### 🔄 Start, Follow, Download, Delete {: #panel-jobs }
+
+| Step | Route | Answer |
+| --- | --- | --- |
+| Start a backup | `POST /api/v1/backup/panel/jobs` | `202`, and the job with its `job_id` |
+| Follow it | `GET /api/v1/backup/panel/jobs/{job_id}` | The job: its `status` is `running`, then `done` or `failed` |
+| Download the archive | `GET /api/v1/backup/panel/jobs/{job_id}/file` | The zip archive |
+| Delete it from the server | `DELETE /api/v1/backup/panel/jobs/{job_id}` | `204` |
+
+```bash
+TOKEN='<your LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN>'
+JOBS=https://librefolio.example.com/api/v1/backup/panel/jobs
+
+# Start a backup: the answer gives its job_id
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" "$JOBS"
+
+# Follow it until "status" is "done" (or "failed", with an "error_code")
+curl -sS -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
+
+# Download the archive
+curl -fsS -H "Authorization: Bearer $TOKEN" -o librefolio-backup.zip "$JOBS/<job_id>/file"
+
+# Delete it from the server once you have it
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
+```
+
+- ⏳ While the backup runs, the job gives its `phase` (`preparing`, `database`, `files`,
+  `finalizing`) and its progress, `done_bytes` of `total_bytes`. Once it is `done`, `file_name` and
+  `file_size` describe the archive. A `failed` job gives its `error_code`: `backup_no_space`,
+  `backup_failed` (the server's log has the cause) or `backup_interrupted` (the server stopped
+  during the backup).
+- 🚦 One backup runs at a time on an instance, whoever started it: an administrator, the
+  [command line](cli_tools.md) or your panel. While one runs, a start answers `409`: try
+  again later.
+- 🕐 The server keeps a finished job and its archive for one hour, then removes them: download the
+  archive within the hour, and delete the job as soon as you have it.
+- 👀 Your panel sees only the backups it started: any other job, such as one an administrator
+  started from the app, answers as if it did not exist.
+- 🏷️ The archive records that your panel made it: `backup inspect`, on the
+  [command line](cli_tools.md), shows `Made by LibreFolio <version> (panel)`.
+- 🗝️ Its archives never hold the instance key («The Instance Key» in
+  [Environment Variables](configuration.md)). Keep the key of each
+  instance with its archives, from `LIBREFOLIO_INSTANCE_KEY_FILE` or from its `secrets/` folder, and
+  hand it over with them: without it, what LibreFolio encrypted can no longer be read.
+- 🔒 The four routes keep answering on a [blocked instance](#instance-block): that is when you hand
+  the data back to your customer.
+
+### 🚫 When a Call Is Refused {: #panel-refusals }
+
+| Answer | When | `code` |
+| --- | --- | --- |
+| `404` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` is not set: every route answers as a path that does not exist | — |
+| `401` | No token, or not the token of this instance | `backup_panel_unauthorized` |
+| `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The log has the error | `backup_panel_unavailable` |
+| `404` | A job your panel did not start, or one that does not exist, or no longer does | `backup_job_not_found` |
+| `409` | A start while another backup runs | `backup_busy` |
+| `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
+| `409` | A delete while the job runs | `backup_job_running` |
+| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written. The log has the cause | `backup_folder_unusable`, `backup_failed` |
+
+The `code` comes in the `detail` of the answer, with a `message` in English:
+
+```json
+{"detail": {"code": "backup_panel_unauthorized", "message": "A valid panel token is required"}}
+```
+
+---
+
+## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
+
+To check an archive for a restore, an administrator uploads it to the instance
+(`PUT /api/v1/backup/restore/upload`), which then checks it on a copy, as `backup restore --dry-run`
+does on the [command line](cli_tools.md). On an
+instance you host, the administrator is your customer: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is how you
+cap the size of the archives they can upload.
+
+| `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | Largest archive accepted |
+| --- | --- |
+| Not set, or empty | No limit on a `selfhosted` instance; 500 MB in the [managed profile](#managed-profile) |
+| `0` | No limit, in both profiles |
+| A whole number, such as `2048` | That many megabytes, of 1024 × 1024 bytes each |
+
+```bash
+LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
+```
+
+- Set it in the container's environment or in `.env`, then restart LibreFolio, as for the token.
+- An archive over the limit answers `413`, with the code `backup_too_large` and the limit in
+  `limit_mb`: before anything is written when the request announces its size, otherwise as soon as
+  the upload goes past the limit. Nothing of it is kept.
+- A proxy in front of LibreFolio must let at least as much through: Nginx with
+  `client_max_body_size`, whose default is only 1 MB (`client_max_body_size 2048m;` matches the
+  example above), and your platform or CDN, if it limits the size of a request. A `413` without the
+  code `backup_too_large` comes from the proxy, not from LibreFolio.
+- A value other than a whole number, such as `500MB` or `-1`, does not stop the server: each upload
+  then answers `503` with the code `backup_upload_unavailable`, and the log has an error that names
+  the variable: `The upload limit of a restore cannot be read`.
+- The disk of the data directory needs room for the archive and, while it is checked, for its copy
+  unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
+  space, the upload answers `507` with the code `backup_no_space`, and the check refuses the archive
+  with `no_space`.
+  An upload that cannot be written for another reason answers `500` with the code
+  `backup_upload_failed`, and the log has the cause.
+- On a [blocked instance](#instance-block), the upload is refused like the rest of the app: the
+  block lets the data leave, never come in.
+
+---
+
 ## 🔗 Related
 
-- 📝 **[Environment Variables](configuration.md)** — Every variable, `LIBREFOLIO_PROFILE`,
-  `LIBREFOLIO_BLOCKED` and `LIBREFOLIO_DELETION_DATE` included
+- 📝 **[Environment Variables](configuration.md)** — Every variable, those of this page included
 - 🔐 **[Keep Users Signed In After a Restart](index.md#session-persistence)** — Generating
   `JWT_SECRET`
+- 💾 **[CLI Admin Tools](cli_tools.md)** — «Back Up the Instance»: the same archives from the
+  command line, and a restore tried on a copy
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list

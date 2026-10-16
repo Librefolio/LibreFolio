@@ -1,22 +1,25 @@
 # 📧 Email Service (SMTP)
 
 The email service sends LibreFolio's transactional emails through an SMTP server that the administrator names in
-environment variables. It can write five kinds — a password-reset link, an invitation, an address to confirm, the
-activation link of the first administrator, a test message. The service lives in `backend/app/services/email/`, its
-configuration in `backend/app/config/email.py`, and its hourly budget counts with the sliding-window limiter of
-`backend/app/utils/runtime/rate_window.py`. Its routes (`backend/app/api/v1/email.py`) give administrators the state
-of email, a test email and the emailing of the links they create; one more, held for now, will let anyone ask for a
-reset link for a forgotten password; two more spend the link of a verification email and send it again. The
-Email tab of the settings (`frontend/src/lib/features/email/`) shows the state and sends the test email; the same
-folder holds the page of a verification link and the sign-in's notice. The administrator's guide is
-[Email](../../admin/email.md).
+environment variables. It can write six kinds — a password-reset link, an invitation, an address to confirm, the
+activation link of the first administrator, a test message, and the notice that an account's email address changed.
+The service lives in `backend/app/services/email/`, its configuration in `backend/app/config/email.py`, and its
+hourly budget counts with the sliding-window limiter of `backend/app/utils/runtime/rate_window.py`. Its routes
+(`backend/app/api/v1/email.py`) give administrators the state of email, a test email and the emailing of the links
+they create; one more, held for now, will let anyone ask for a reset link for a forgotten password; two more spend
+the link of a verification email and send it again. The Email tab of the settings
+(`frontend/src/lib/features/email/`) shows the state and sends the test email; the same folder holds the page of a
+verification link and the sign-in's notice, «Send by email» and the «forgot password» form. The administrator's
+guide is [Email](../../admin/email.md).
 
-!!! note "Status: lots E1 to E3 and E5a of release 1.3"
+!!! note "Status: lots E1 to E3, E4a and E5a of release 1.3"
 
     Three emails have a caller: the test email ([`POST /api/v1/email/test`](#api-test)), an invitation or a
     password-reset link an administrator emails ([`POST /api/v1/email/links`](#api-links)), and a reset link for a
     forgotten password ([`POST /api/v1/email/password-reset`](#api-password-reset)), which is held: the route answers
-    409 `FORGOT_PASSWORD_DISABLED` ([A Forgotten Password](#flow-forgot)). No page calls the last two routes yet.
+    409 `FORGOT_PASSWORD_DISABLED` ([A Forgotten Password](#flow-forgot)). No page calls the last two routes yet:
+    «Send by email» and the «forgot password» form are written but not hosted, and nothing schedules the
+    [email change notice](#flow-email-changed) (lot E4b: [Links by Email in the Interface](#link-actions)).
     Email verification has its service, its two routes and its page, but registration does not use them yet
     ([Email Verification](#verification)): no account waits, so no verification email goes out. `build_admin_setup()`
     has no caller. See [Coming Next](#coming-next).
@@ -51,14 +54,14 @@ Email is optional (feature F04 of the release 1.3 plan). Four rules shape the wh
 | `backend/app/config/email.py` | The `LIBREFOLIO_SMTP_*` accessors and `EmailConfigError` |
 | `services/email/smtp.py` | The transport: `deliver()`, `SmtpServer`, `SmtpErrorCode`, `SmtpDeliveryError` |
 | `services/email/delivery.py` | `email_config_state()`, the hourly budget (`INSTANCE_BUDGET`, `budget_status()`), `send_email()` and the `EmailError` family |
-| `services/email/messages.py` and `templates/` | `EmailKind`, `email_language()`, the five builders and `compose_message()`; the texts in four languages and the HTML layout. Nothing here sends, reads the configuration or logs |
+| `services/email/messages.py` and `templates/` | `EmailKind`, `email_language()`, the six builders, `masked_address()` and `compose_message()`; the texts in four languages and the HTML layout. Nothing here sends, reads the configuration or logs |
 | `services/email/checks.py` | `check_smtp_configuration()`, `check_smtp_encryption()`, `check_email_links()`, `EMAIL_CONFIG_CHECKS`, which closes the platform's `CONFIG_CHECKS` |
 | `services/email/links.py` | `links_state()`, `require_links()`, `email_link()`, `email_instance_config()` and `EmailLinksUnavailableError`: every emailed link from `LIBREFOLIO_PUBLIC_URL` ([Links](#links)) |
-| `services/email/flows.py` | What an action of the application sends, to whom and in which language: the test email, a link an administrator emails, a forgotten password and its limits ([Flows](#flows)); `require_email()` and `link_ttl()`, which `verification.py` reuses |
+| `services/email/flows.py` | What an action of the application sends, to whom and in which language: the test email, a link an administrator emails, a forgotten password and its limits, the notice of an email change ([Flows](#flows)); `require_email()` and `link_ttl()`, which `verification.py` reuses |
 | `services/email/verification.py` | Email verification at sign-up (developer decision 44): the wait, the emailed link, its confirmation and «send the link again» ([Email Verification](#verification)) |
 | `backend/app/api/v1/email.py` and `backend/app/schemas/email.py` | `GET /email/status`, `POST /email/test` and `POST /email/links` for administrators, `POST /email/password-reset`, `POST /email/verification/confirm` and `POST /email/verification/resend` for anyone, and their models ([The API](#api)); `EmailInstanceConfig`, the `email` field of `GET /system/instance` |
 | `backend/app/utils/runtime/rate_window.py` | `SlidingWindowLimiter` and `RateDecision`, the [sliding-window limiter](#rate-window) |
-| `frontend/src/lib/features/email/` and `frontend/src/lib/i18n/email/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)) |
+| `frontend/src/lib/features/email/` and `frontend/src/lib/i18n/email/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)); «Send by email» and the «forgot password» form ([Links by Email in the Interface](#link-actions)) |
 | `frontend/src/routes/verify-email/+page.svelte` | The page of a verification link ([In the Frontend](#verification-frontend)) |
 
 `services/email/__init__.py` holds only the package docstring.
@@ -259,15 +262,22 @@ The three `Email*Error` classes derive from `EmailError`, which carries `code`: 
 | `Forgotten password: another request won the race, nothing sent` | `info` | `user_id`: the recount inside the write transaction |
 | `Forgotten password: no email sent` | `warning` | `reason` (the exception's class) and `code`: the configuration changed after the answer, or a refusal; a link created for it is revoked |
 | `Forgotten password: the request failed` | `error` | `error`, the exception's class, and no traceback: a database error would print its SQL parameters, the identifier among them |
+| `Email change notice sent to the previous address` | `info` | `user_id`, `language`: logged by [`email_changed_work()`](#flow-email-changed) after `Email sent` |
+| `Email change notice: email is off, nothing sent` | `info` | `user_id`: no host is set, the default of a self-hosted instance, so never a warning |
+| `Email change notice: the account no longer exists, nothing sent` | `info` | `user_id` |
+| `Email change notice: not sent` | `warning` | `user_id`, `reason` (the exception's class) and `code`: email set but unusable, a blocked instance, the hourly budget spent, an old address that is not exactly one address, a message the server did not take |
+| `Email change notice: the request failed` | `error` | `user_id`, `error`, the exception's class, and no traceback |
 
 The `Forgotten password: …` events need «forgot password» open: while it is held, the route answers before any work
 is queued. Each reset link also leaves workstream A's `Password reset link created` event (`create_password_reset()`),
-with `user_id`, `token_id` and `created_by_user_id`, `None` for a forgotten password. The events of email
-verification are listed with it: [What Is Logged](#verification-logs).
+with `user_id`, `token_id` and `created_by_user_id`, `None` for a forgotten password. The `Email change notice: …`
+events need the hook of lot E4b: nothing schedules the notice yet. The events of email verification have a table of
+their own: [What Is Logged](#verification-logs).
 
 **Never logged**: the body (text and HTML), the link it carries and its token, the SMTP password, the recipient's
-full address, the identifier of a «forgot password» request or of a «send the link again». The recipient appears as
-the domain of its address and as the `user_id` the caller passes; a link, as the `token_id` of its row.
+full address, the new address of an email change (not even its domain), the identifier of a «forgot password»
+request or of a «send the link again». The recipient appears as the domain of its address and as the `user_id` the
+caller passes; a link, as the `token_id` of its row.
 
 That holds for the server's own words too. Servers quote the address they refuse, so before `detail` reaches the
 `Email not sent` event, `_redacted()` replaces the SMTP password with `***` and the recipient's address with
@@ -281,7 +291,7 @@ error.
 
 ## ✉️ Messages (`messages.py` and `templates/`) {: #messages }
 
-### 🗂️ The Five Kinds
+### 🗂️ The Six Kinds {: #kinds }
 
 Each kind of email has a keyword-only builder that returns an `EmailContent`, a frozen dataclass with `kind`,
 `language`, `subject`, `text` (the plain-text part) and `html`:
@@ -293,6 +303,7 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
 | `email_verification` | `build_verification()` | `language`, `username`, `link`, `ttl`, `instance` | Yes |
 | `admin_setup` | `build_admin_setup()` | `language`, `username`, `link`, `ttl`, `instance` | Yes |
 | `test` | `build_test_message()` | `language`, `username`, `instance` | No |
+| `email_changed` | `build_email_changed()` | `language`, `username`, `new_address`, `instance` | No |
 
 - The four link kinds share their values with the purposes of the
   [single-use account tokens](../architecture/security.md#account-tokens), but the builders issue no token: the
@@ -301,12 +312,18 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
   `mailto:`, a relative path) is a `ValueError`. Plain `http://` is accepted for an instance on a home network.
 - An invitation opens without a name (the account does not exist yet), names the inviter only when `inviter` is
   given, and adds one sentence when `grants_admin` is true.
+- The notice of an email change shows the new address only as `***@domain`: `build_email_changed()` masks it itself
+  with `masked_address()`, which keeps only what follows the last `@` (`***@example.com`, or `***` alone when
+  nothing does), so no caller can put the whole address in the email. It goes to the old address and carries no
+  link ([An Email Address Changes](#flow-email-changed)).
 - `instance` names the instance in the body and in the footer. The test email passes the host the request was sent
   to ([`POST /email/test`](#api-test)); an email with a link passes the host of `LIBREFOLIO_PUBLIC_URL`, port
-  included (`LinksState.instance`, [Links](#links)).
+  included (`LinksState.instance`, [Links](#links)); the notice of an email change passes that host too when the
+  variable is usable, else «LibreFolio».
 
 `build_test_message()`, `build_invite()` and `build_password_reset()` have callers ([Flows](#flows));
 `build_verification()` has one in [`verification.py`](#verification-email), which no registration reaches yet;
+`build_email_changed()` has one in [`email_changed_work()`](#flow-email-changed), which nothing schedules yet;
 `build_admin_setup()` has none ([Coming Next](#coming-next)).
 
 ### 🌍 Languages
@@ -319,15 +336,15 @@ keeps its primary subtag and falls back to English: `it-IT`, `it_IT` and `IT` gi
 ### 🛡️ Rendering Rules
 
 - **Placeholders**: the texts use `string.Template` placeholders — `$username`, `$instance`, `$inviter`,
-  `$duration` — filled with `substitute()`.
+  `$duration`, `$address` — filled with `substitute()`.
 - **One line per value**: before they fill a placeholder, `_render()` puts every value on one line (`_one_line()`).
   Control characters (Unicode category `Cc`) and line and paragraph separators (`Zl`, `Zp`) become spaces, and the
   bidirectional embeddings, overrides and isolates (U+202A to U+202E, U+2066 to U+2069) are removed. A username may
   hold any character: without this it could add lines of its own to the plain-text part, or reorder the text around
   it.
 - **Escaping**: every line of the HTML part is escaped (`html.escape`) after it is filled, so a value that comes
-  from a person — a user name, the name of the instance, the inviter — stays text, never markup. The link is
-  escaped in its `href` and in the visible fallback address.
+  from a person — a user name, the name of the instance, the inviter, the domain of an address — stays text, never
+  markup. The link is escaped in its `href` and in the visible fallback address.
 - **Subjects**: the subject is the catalogue's text, never filled: no user value and no link reaches it, and it
   stays on one line. Every relay and every notification sees it.
 - **Durations**: `$duration` is `babel.dates.format_timedelta(ttl, locale=language)`, Babel's default wording:
@@ -344,7 +361,7 @@ keeps its primary subtag and falls back to English: `it-IT`, `it_IT` and `IT` gi
 `templates/en.json`, `it.json`, `fr.json` and `es.json` share one structure: a `common` section (`greeting`,
 `greeting_anonymous`, `button_fallback`, `footer`) and one section per `EmailKind` value, holding `subject`,
 `intro` and, for the link kinds, `action`, `expiry` and `ignore`; `invite` adds `intro_anonymous` and
-`admin_role`; `test` has `outro` instead.
+`admin_role`; `test` has `outro` instead, and `email_changed` `advice`.
 
 `./dev.py test services email-messages` guards the catalogue:
 
@@ -371,7 +388,7 @@ in every language, then list it in the builder (the `before` or `after` keys tha
 2. that section in the four JSON files, with a `subject` free of placeholders;
 3. a keyword-only `build_*` builder that passes the language through `email_language()`, the link through
    `_checked_link()` and the lifetime through `_duration()`, and puts user values only into body placeholders;
-4. the tests of `backend/test_scripts/test_services/test_email_messages.py`, which pin the five kinds and the
+4. the tests of `backend/test_scripts/test_services/test_email_messages.py`, which pin every kind and the
    signature of each builder.
 
 ### 📬 Composing the Message {: #composing }
@@ -499,6 +516,8 @@ content, the recipient and the language; `send_email()` checks the configuration
 | `address_key(address)` | The key of the per-address limit: an IPv4 address as is, an IPv6 one by its /64 (an IPv4-mapped one as its IPv4), anything else, a name or a socket, as written; `None` without an address |
 | `async require_email()` | The configuration (`EmailConfigState`) when email can be used now, read in a worker thread; else `EmailUnavailableError`, its code `INSTANCE_BLOCKED` while the hosting provider blocks the instance ([`sending_blocked()`](#send-email)), `EMAIL_NOT_CONFIGURED` without a host, else the problem of the configuration. The flows with a link — `send_link_email()`, the «forgot password» flow and `verification.py` — call it before they create or send anything |
 | `link_ttl(record, now)` | How long the link of a token row still works at `now`, never negative: the lifetime an email states. `verification.py` reuses it |
+| `async email_changed_work(user_id, old_address, new_address, *, engine=None)` | The notice to the address an account had before its email changed, after the answer: [An Email Address Changes](#flow-email-changed). Never raises |
+| `INSTANCE_FALLBACK` | `"LibreFolio"`: the name of the instance in an email without a link when `LIBREFOLIO_PUBLIC_URL` gives none |
 
 - `supported_email_language()` reduces `it-IT`, `it_IT` and `IT` to `it`, and gives `None` for a language the emails
   do not speak or an empty value; `email_language()` is the same with `en` instead of `None`.
@@ -536,11 +555,12 @@ created, 30 minutes for a reset link.
 
     While the constant is true, `admit_forgotten_password()` raises `ForgottenPasswordHeldError` before anything else,
     and [the route](#api-password-reset) answers 409 `FORGOT_PASSWORD_DISABLED`: no limit counts, no work is queued.
-    The coordinator held the feature after the security review of lot E3. Today an account's email can be changed with
-    the session cookie alone; with reset by email open, a moment inside someone's session (a stolen cookie, an unlocked
-    machine) would be enough to put one's own address on the account, then reset its password from it: a lasting
-    takeover. The hold is lifted with lot E4, once changing an account's email asks for the current password
-    (workstream A's lot A6e). The links an administrator emails are not affected.
+    The coordinator held the feature after the security review of lot E3: an account's email could be changed with
+    the session cookie alone, and with reset by email open, a moment inside someone's session (a stolen cookie, an
+    unlocked machine) would be enough to put one's own address on the account, then reset its password from it: a
+    lasting takeover. Since workstream A's lot A6e, changing an account's email asks for the current password
+    ([Changing the Email](../architecture/security.md#email-change)); the hold is lifted with lot E4. The links an
+    administrator emails are not affected.
 
 Once open, [`POST /api/v1/email/password-reset`](#api-password-reset) answers before it looks for the account, so that
 nothing in the answer — its status, its body, its timing — tells which accounts exist:
@@ -589,6 +609,35 @@ key, and a fresh limit, by forging the header at every request. The list must na
 (`backend/app/utils/runtime/network.py`), which takes the last `X-Forwarded-For` value whoever sent it, is advice for
 the connection indicator, never a key for a limit. Behind a proxy uvicorn does not trust, every client shares the
 proxy's address and one count; the other limits still hold.
+
+### 🔔 An Email Address Changes {: #flow-email-changed }
+
+`email_changed_work(user_id, old_address, new_address)` tells the address an account had before that its email
+address changed. It runs after the answer, as a background task with a session of its own, and never raises. Nothing
+schedules it yet: `update_profile` will, after a change of address (lot E4b,
+[Links by Email in the Interface](#link-actions)). In this order:
+
+1. The old and the new address the same, compared stripped and case-folded: nothing, not even a log line.
+2. Email off — no host set, the default of a self-hosted instance — gives the `info` event
+   `Email change notice: email is off, nothing sent`, never a warning. The configuration is read in a worker thread.
+3. An account that no longer exists: the `info` event `Email change notice: the account no longer exists, nothing sent`.
+4. Email usable now ([`require_email()`](#flows)): set but unusable, or the instance blocked, ends with the
+   `warning` event `Email change notice: not sent`.
+5. `build_email_changed()` in the [account's language](#flows), with its username, the new address (masked by the
+   builder) and the instance's name, then `send_email()` to the **old** address and the
+   `Email change notice sent to the previous address` event. The email spends a unit of the hourly budget like any
+   other; past it, or when the server does not take the message, the `warning` event says why.
+
+The email carries no link, so it does not need `LIBREFOLIO_PUBLIC_URL`: the variable, when usable, only names the
+instance (`LinksState.instance`), and `INSTANCE_FALLBACK`, «LibreFolio», does otherwise. Its own events hold neither
+address; `Email sent` gives the domain of the old one, as for any email ([What Is Logged](#logs)).
+
+Three decisions of the night of 15/10, to be reviewed:
+
+- **(a) The new address masked**: the notice shows `***@domain`, never the whole address.
+- **(b) The instance's name**: the host of `LIBREFOLIO_PUBLIC_URL`, else «LibreFolio», never the host of a request,
+  which whoever sends the request writes.
+- **(c) The old address only**: the new address gets no email.
 
 ---
 
@@ -953,20 +1002,22 @@ an `EmailInstanceConfig` (`backend/app/schemas/email.py`) with two booleans. `ge
   `default_factory=EmailInstanceConfig`, so it is optional in the schema: an answer built without it, or read from
   an older server, says that nothing can be sent.
 
-Nothing in the frontend reads it yet.
+In the frontend, only `sendByEmailVisible()` reads it (`email.links`), and nothing hosts that action yet
+([Links by Email in the Interface](#link-actions)).
 
 ---
 
 ## 🖥️ The Email Tab {: #email-tab }
 
 The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/i18n/email/`. The same folder holds
-the frontend of email verification: [In the Frontend](#verification-frontend).
+the frontend of email verification ([In the Frontend](#verification-frontend)), «Send by email» and the «forgot
+password» form ([Links by Email in the Interface](#link-actions)).
 
 | File | Role |
 |------|------|
 | `emailApi.ts` | The seam over the client that `./dev.py api sync` generates: `fetchEmailStatus()` and `sendTestEmail()` call `get_email_status_api_v1_email_status_get` and `send_test_api_v1_email_test_post`. `fetchEmailStatus()` narrows the answer into `EmailStatus`, its six keys present: the generated type of an optional field is wider than its runtime schema (`string \| null` also admits an array), so `problem` and `variable` become a string or `null`, `checks` a list, `budget` an object or `null`, and `links` an `EmailLinks` (`linksOf()`): ready only with a `base`, never a `base` when not ready, not ready when absent. `issueProbeNonce()` asks for a nonce of the address check (`issue_address_probe_api_v1_users_address_probe_post`, `POST /users/address-probe`, administrators only). `readTestFailure()` reads the `detail` of a refused test — from the `AxiosError` the generated client rejects with, or from an `ApiError` — into `{errorCode, problem, smtpCode, retryAfter}`; `errorCode` is `UNKNOWN` without a `detail` object, after a network error for one. It reads them with `refusalBody()`, `refusalStatus()`, `refusalDetail()` and `retryAfterOf()`, exported for [`verificationApi.ts`](#verification-frontend) |
 | `emailLinks.ts` | The check of the links' base from the browser (developer decision 45). `probeEmailLinks(base, {pageProtocol, issueNonce, fetchImpl?, timeoutMs?})` never throws and gives a `LinksOutcome`: `invalid` when workstream A's `normalizeBase()` refuses the base, and `insecure` when the page is `https:` and the base `http:` (a browser blocks that mixed content), both before any request; otherwise A's `checkAddress()`, its verdict mapped: `match` to `match`, `mismatch` to `otherInstance`, `unverifiable` to `unreachable`. A's helper (`settings/users/addressProbe.ts`) is imported as it is, never copied; its nonce, its CORS simple request and its 8-second timeout are in [LinkShare](../frontend/components/features/settings.md#linkshare) and [Address Probe](../architecture/security.md#address-probe) |
-| `emailText.ts` | Every code to a whole i18n key and every state to whole classes of the theme roles (`*-lf-*`), as string literals that the i18n audit and the colour gates can see: `STATE_LABEL_KEYS`, `STATE_BADGE_CLASSES`, `NOTICE_CLASSES`, `OUTCOME_CLASSES`. `problemKey()` falls back to `email.problems.unknown` (only the maps' own entries count: a code such as `constructor` finds nothing); `minutesUntil()` gives whole minutes, at least 1; `testFailureMessage()` falls back to `email.smtpErrors.SEND_FAILED` for an unknown `smtp_code` and to `email.test.errors.generic` for any other failure. For the check of the links: `LINKS_PROBE_KEYS` (each `LinksProbeState` to its `email.links.probe.*` key), `LINKS_PROBE_CLASSES` (a running check and a match as a line of text, any other outcome as a warning notice) and `linksProbeWarns()`, true for an outcome that is neither running nor a match. For email verification: `VERIFY_PAGE_KEYS` and `resendFailureMessage()` ([In the Frontend](#verification-frontend)) |
+| `emailText.ts` | Every code to a whole i18n key and every state to whole classes of the theme roles (`*-lf-*`), as string literals that the i18n audit and the colour gates can see: `STATE_LABEL_KEYS`, `STATE_BADGE_CLASSES`, `NOTICE_CLASSES`, `OUTCOME_CLASSES`. `problemKey()` falls back to `email.problems.unknown` (only the maps' own entries count: a code such as `constructor` finds nothing); `minutesUntil()` gives whole minutes, at least 1; `testFailureMessage()` falls back to `email.smtpErrors.SEND_FAILED` for an unknown `smtp_code` and to `email.test.errors.generic` for any other failure. For the check of the links: `LINKS_PROBE_KEYS` (each `LinksProbeState` to its `email.links.probe.*` key), `LINKS_PROBE_CLASSES` (a running check and a match as a line of text, any other outcome as a warning notice) and `linksProbeWarns()`, true for an outcome that is neither running nor a match. For email verification: `VERIFY_PAGE_KEYS` and `resendFailureMessage()` ([In the Frontend](#verification-frontend)). For the links by email: `linkSendFailureMessage()` and `forgotFailureMessage()` ([Links by Email in the Interface](#link-actions)) |
 | `EmailSettingsTab.svelte` | The tab body, in Svelte 5 runes |
 
 What the tab does:
@@ -1004,9 +1055,9 @@ The texts are a subsystem source of the frontend catalogue ([The Sources](../fro
 `prefixes.txt` owns `email`, and the four languages hold the same keys. They cover the tab, the states, the nine
 problem codes and `unknown`, the messages of the three checks (`email.checks.*`, the `i18n_key` values of
 `checks.py`), the base of the links and the outcomes of its check (`email.links.*`), the budget, the test email and
-its errors, the seven `SmtpErrorCode` values (`email.smtpErrors.*`), and the page and the notice of email
-verification (`email.verification.*`). The emails' own texts stay in the backend catalogue
-([The Catalogue](#catalogue)).
+its errors, the seven `SmtpErrorCode` values (`email.smtpErrors.*`), the page and the notice of email verification
+(`email.verification.*`), «Send by email» (`email.sendLink.*`) and the «forgot password» form (`email.forgot.*`).
+The emails' own texts stay in the backend catalogue ([The Catalogue](#catalogue)).
 
 `SETTINGS_TABS`, the [tab registry](../frontend/components/features/settings.md#tab-registry) of the Settings page,
 registers the tab:
@@ -1017,6 +1068,76 @@ registers the tab:
 
 Order 130 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
 administrators: a regular user never sees it in the bar, and a `?tab=email` they open is ignored.
+
+---
+
+## 📮 Links by Email in the Interface {: #link-actions }
+
+Two components of `frontend/src/lib/features/email/` put the emailed links in front of people: «Send by email» in
+the share dialogs of the Users tab, for an administrator ([`POST /email/links`](#api-links)), and the «forgot
+password» form of the sign-in, for anyone ([`POST /email/password-reset`](#api-password-reset)).
+
+!!! warning "Not wired yet: lot E4b, after workstream A's lot A6e"
+
+    Both are written and nothing hosts them yet; nothing schedules the [email change notice](#flow-email-changed)
+    either. The hooks go into workstream A's files:
+
+    - a line in `LINK_SHARE_ACTIONS`
+      ([Link-Share Actions Registry](../frontend/components/features/settings.md#link-share-actions)), with
+      `component: SendLinkByEmail` and `visible: sendByEmailVisible`;
+    - `ForgotPasswordCard` hosting `ForgotPasswordEmailForm` when `email.links` of `GET /system/instance` is true:
+      the form on top, the box of server commands kept below it (the coordinator's default, pending the developer's
+      choice);
+    - `update_profile` (`PUT /api/v1/auth/profile`) scheduling `email_changed_work()` after a change of address;
+    - `FORGOT_PASSWORD_HELD` set to false: [the hold](#flow-forgot) lifted.
+
+### 📧 Send by Email {: #send-by-email }
+
+| File | Role |
+|------|------|
+| `sendLinkApi.ts` | `tokenFromLink(link)`: the `token` parameter of the link's `#token=` fragment, `null` without one. `sendByEmailVisible()`: whether `email.links` of the instance configuration (`GET /system/instance`, read through `instanceConfig`) is true, the condition of the action. `sendLinkByEmail({purpose, token, to})` calls `send_link_api_v1_email_links_post`, with `to` only when it is given and never a `language`, and gives `{to, language}`. `readLinkSendFailure(error)` gives a `LinkSendFailure`, `{errorCode, smtpCode, retryAfter}`. A 422 without a `detail` object is the request's own validation, and the only field an administrator types is the address: it reads as `EMAIL_RECIPIENT_INVALID`, so the specific text shows. Any other failure without one (no answer) is `UNKNOWN` |
+| `SendLinkByEmail.svelte` | The action, with the props of workstream A's registry: `{link, purpose, context}` (`LinkShareActionProps`) |
+
+- **Only the token travels.** The component takes the token out of the link the dialog shows and sends it alone: the
+  email's link is built by the backend from `LIBREFOLIO_PUBLIC_URL` ([Links](#links)), whatever address the dialog
+  shows, and a line above the button says so (`email.sendLink.publicUrlHint`). Without a token in the link, the
+  button stays disabled.
+- **The recipient.** An invitation goes to the address in the field, filled with the one the dialog knows
+  (`context.email`, the address written in the invitation) and editable; left empty, the backend uses the address
+  written in the invitation. A reset link has no field: a line says that it goes to the account's address, and no
+  `to` is sent.
+- **The language**: none is sent, so an invitation goes in the instance's default language and a reset link in the
+  account's ([A Link an Administrator Emails](#flow-link)). This is intended for release 1.3, a night decision of
+  15/10: the dialog has no language selector, though `POST /email/links` accepts a `language`. A selector, to invite
+  someone who speaks another language, is backlog item E-8.
+- **The outcome** is rendered from the stored outcome, so it follows a change of language: `email.sendLink.sent`
+  with the address the email went to, or `linkSendFailureMessage()` — a text for each `error_code` of
+  [`POST /email/links`](#api-links), the `email.smtpErrors.*` text of the `smtp_code` for `EMAIL_DELIVERY_FAILED`
+  (`SEND_FAILED` for an unknown one), and `email.sendLink.errors.generic` for anything else. Each outcome is an app
+  event through `notify()`, without a toast: `email.link.sent` with `purpose` and `language`, or
+  `email.link.sendFailed` with `purpose` and the failure fields.
+- **Test hooks**: `send-link-email` (`data-purpose`, `data-busy`, `aria-busy`), `send-link-email-to` (an
+  invitation's field), `send-link-email-target` (a reset link's line), `send-link-email-button`,
+  `send-link-email-outcome` (`aria-live="polite"`, `data-outcome` `sent` or `failed`).
+
+### 🔑 The «Forgot Password» Form {: #forgot-form }
+
+| File | Role |
+|------|------|
+| `forgotPasswordApi.ts` | `requestPasswordResetEmail(identifier)` calls `request_password_reset_email_api_v1_email_password_reset_post`; `readForgotFailure(error)` gives a `ForgotFailure`, `{errorCode, retryAfter}`: `INVALID` for a 422, else the `error_code` of the `detail`, `UNKNOWN` without one |
+| `ForgotPasswordEmailForm.svelte` | The form: a username or an email address, then a reset link by email if an active account matches |
+
+- **The same answer for everyone.** The 202 never says whether an account matches, and the form shows it as
+  information (`email.forgot.accepted`, in the colours of an `info` notice), never as «sent»: check the inbox and
+  the spam folder, the link works for 30 minutes.
+- **A refusal**: `forgotFailureMessage()` gives `email.forgot.errors.FORGOT_PASSWORD_DISABLED` while the feature is
+  [held](#flow-forgot), `unavailable` for `EMAIL_UNAVAILABLE` and `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_RATE_LIMITED`
+  with the minutes, and `generic` for anything else.
+- The identifier is trimmed and at most 254 characters long; the button is disabled while it is empty or while the
+  request runs. Each outcome is an app event through `notify()`, without a toast: `email.forgot.accepted`, or
+  `email.forgot.refused` with the failure fields.
+- **Test hooks**: `forgot-email-form` (`data-busy`, `aria-busy`), `forgot-email-identifier`, `forgot-email-submit`,
+  `forgot-email-outcome` (`aria-live="polite"`, `data-outcome` `accepted` or `failed`).
 
 ---
 
@@ -1064,17 +1185,17 @@ counter of its own.
 | Selector | File (IDs) | What it pins |
 |----------|------------|--------------|
 | `./dev.py test services email-config` | `test_services/test_email_config.py` (EMC-001…019) | The accessors: blank as unset, the three modes and their ports, the port and the hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR or LF, no second address), the password exactly as `env_secret()` gives it, `EmailConfigError` naming the variable and never the password, nothing cached |
-| `./dev.py test services email-messages` | `test_services/test_email_messages.py` (EMM-001…033) | Languages and kinds, keyword-only builders, `http(s)` links only, escaping, no user value in a subject, Babel durations, the administrator invitation's extra sentence, the catalogue guard, the headers and parts of `compose_message()`, exactly one recipient; every shown value on one line in both parts (control characters and line or paragraph separators to spaces, the nine bidirectional controls removed), markup split across lines still escaped |
+| `./dev.py test services email-messages` | `test_services/test_email_messages.py` (EMM-001…038) | Languages and kinds, keyword-only builders, `http(s)` links only, escaping, no user value in a subject, Babel durations, the administrator invitation's extra sentence, the catalogue guard, the headers and parts of `compose_message()`, exactly one recipient; every shown value on one line in both parts (control characters and line or paragraph separators to spaces, the nine bidirectional controls removed), markup split across lines still escaped; the sixth kind `email_changed` in the four languages, without a link, the new address only as `***@domain` (`masked_address()`) |
 | `./dev.py test services email-delivery` | `test_services/test_email_delivery.py` (EMD-001…045) | The fake server itself and `closed_port()`; `deliver()` and its error codes (TLS never falls back to plain text, a bad `QUIT` is a success, the certificate is verified); `email_config_state()` and its one-time log; the budget; `send_email()` off the event loop; a blocked instance (or an unreadable `LIBREFOLIO_BLOCKED`) refused before anything else, `sending_blocked()`; no secret and no full recipient address in the logs |
 | `./dev.py test services email-checks` | `test_services/test_email_checks.py` (EMK-001…017) | The three checks in every state (`email.smtp`, `email.smtp_encryption` with local and public hosts, `email.links` off/ready/missing/invalid, invalid including an empty `?`, credentials and a bad port), `EMAIL_CONFIG_CHECKS`, no password in any field and no host, user or sender in a `detail`; the three checks closing the platform's `CONFIG_CHECKS` and `run_config_checks()`; the import orders, each in a fresh interpreter; the startup audit: one `email.smtp` error and no exception for an unusable configuration, one `email.smtp_encryption` warning for plain text to a public host, the `email.links` `info` and `warning`, nothing when email is off, never the password |
 | `./dev.py test utils rate-window` | `test_utilities/test_rate_window.py` (RWL-001…017) | The window edge, `peek` never counting, refused hits not recorded, `retry_after`, the per-call limit, independent keys, LRU eviction, exactly N allowed under concurrent threads |
 | `./dev.py test services email-links` | `test_services/test_email_links.py` (EML-001…012) | `links_state()` (ready, missing, invalid: no host, whitespace, a `?` or `#` even empty, an invalid port, an unclosed IPv6 bracket, credentials; an IPv6 literal and a capitalised scheme ready), `require_links()`, `email_link()` (the base plus the page path, the token in the fragment), `LinksState.instance`, `email_instance_config()` in every combination, a blocked instance included |
-| `./dev.py test services email-flows` | `test_services/test_email_flows.py` (EMF-001…042) | `supported_email_language()` and `account_language()` (the account's own language when the emails speak it, else `default_language`, else English, never creating a row, a row that no longer validates still giving its language); `send_test_email()`; `send_link_email()`: the order of its refusals, live tokens of the right purpose only, recipients and languages per purpose, a reset link of an inactive account refused, the link from `LIBREFOLIO_PUBLIC_URL` only; «forgot password»: the hold first in every state, and shipped on; `address_key()`; admission (configuration, 10 per address with an IPv6 client by its /64 and an IPv4 address sharing its count with its mapped form, 3 per identifier, the budget, no address no shared count), the background work (lookup as the login, active accounts only, nothing while an administrator's reset link is live, 3 emails an hour per mailbox, one reset every 5 minutes and 3 an hour per account, counted again inside the write transaction against a rival link made meanwhile, the link created only when the email can go and revoked when it does not, a blocked instance creating nothing, never raising, a failure logged with its type and without traceback or identifier) |
+| `./dev.py test services email-flows` | `test_services/test_email_flows.py` (EMF-001…052) | `supported_email_language()` and `account_language()` (the account's own language when the emails speak it, else `default_language`, else English, never creating a row, a row that no longer validates still giving its language); `send_test_email()`; `send_link_email()`: the order of its refusals, live tokens of the right purpose only, recipients and languages per purpose, a reset link of an inactive account refused, the link from `LIBREFOLIO_PUBLIC_URL` only; «forgot password»: the hold first in every state, and shipped on; `address_key()`; admission (configuration, 10 per address with an IPv6 client by its /64 and an IPv4 address sharing its count with its mapped form, 3 per identifier, the budget, no address no shared count), the background work (lookup as the login, active accounts only, nothing while an administrator's reset link is live, 3 emails an hour per mailbox, one reset every 5 minutes and 3 an hour per account, counted again inside the write transaction against a rival link made meanwhile, the link created only when the email can go and revoked when it does not, a blocked instance creating nothing, never raising, a failure logged with its type and without traceback or identifier); the email change notice (`email_changed_work()`: the old address only, the account's language, the public host or «LibreFolio», nothing for the same address, an `info` line with email off and a warning when configured but unusable, no address in a log, never raising) |
 | `./dev.py test api email` | `test_api/test_email_api.py` (EMA-001…048) | Admin only: 401 without a session, 403 for a member, nothing sent or spent; the status in its three states with the three checks, `links` and, when ready, the budget, never the SMTP configuration or a check's `summary`, without a connection or a name lookup; the test email (409, 422 only for `EmailRecipientError`, 429 with `Retry-After`, 502 with the `SmtpErrorCode`); `POST /email/links` with every answer, `EMAIL_ACCOUNT_INACTIVE` included; `POST /email/password-reset` held (the same 409 `FORGOT_PASSWORD_DISABLED` for any account, nothing counted, no work scheduled), and once open with every answer, the same 202 for any identifier, IPv6 clients counted by their /64; every link equal to the `LIBREFOLIO_PUBLIC_URL` one whatever Host, Origin, X-Forwarded-Host or Referer the request forges, and an unparsable `LIBREFOLIO_PUBLIC_URL` never a 500; `GET /system/instance`: `email` exactly `{available, links}`, false on a blocked instance, never a value of the configuration; both routes reading the configuration off the event loop |
 | `./dev.py test services email-verification` | `test_services/test_email_verification.py` (EMV-001…042) | The option and `links_can_go()`; `hold_for_verification()` (never the first account, the option off, 409 code when no email with a link can go, the account inactive with a hold token, nothing committed); `awaiting_verification()` (inactive with an unspent token, live or expired; not after a revocation or a use); the registration email (a token with the address replaces the hold, the link from `LIBREFOLIO_PUBLIC_URL`, the account's language, never raising); a failed email after the commit, six ways, leaving a hold that still waits, refused at confirmation without being revoked, and an immediate resend; the timeout after `DATA`; `confirm_email()` (active, `email_verified_at`, the other links revoked, a link sent to another address revoked); resend (the address limit before the password, the same refusal for an unknown account and a wrong password, active, deactivated, the per-account limits on emailed links only and recounted in the write transaction, a place again after an expired link); no token, address or identifier in a log |
 | `./dev.py test api email-verification` | `test_api/test_email_verification_api.py` (EVA-001…015) | Both routes without a session, none set; every status and body; the 401 and the 403 byte for byte the sign-in's; the 409s and the 502 without `problem` or `smtp_code`; `Retry-After` |
-| `./dev.py test front-utility core-unit` | `frontend/src/lib/features/email/emailText.test.ts` (ETX-01…10), `emailApi.test.ts` (EAP-01…11), `emailLinks.test.ts` (ELK-01…09), `verificationApi.test.ts` (VFA-01…18) | The code-to-key maps (own entries only), the minutes, the failure messages and their keys in the four catalogues, the role classes (no palette class, no hex, no `dark:`); the links' keys and classes, `linksProbeWarns()`; `fetchEmailStatus()` narrowing the answer, `links` included; `issueProbeNonce()`; `readTestFailure()` on an `AxiosError` and on an `ApiError`, with the real client and a fake transport; `probeEmailLinks()` through workstream A's real `checkAddress()` and a fake fetch: `invalid` and `insecure` before any request, the normalized base probed, every verdict mapped, a timeout, never a rejection; the exported refusal helpers; the verification page keys and `resendFailureMessage()`; `confirmEmailVerification()`, `resendEmailVerification()`, `readLinkRefusal()` and `readResendFailure()` with the real client |
-| `./dev.py test front-utility component-unit` | `frontend/src/lib/features/email/EmailSettingsTab.test.ts` (ETB-01…10 for the links), `VerifyEmailCard.test.ts` (VEC-01…07), `VerificationNotice.test.ts` (VNT-01…07), `frontend/src/routes/verify-email/page.test.ts` (VEP-01…10) | The tab in jsdom: each state, the notices, the budget, `data-busy` over every request, one email per click, the outcome after 200, 409, 422, 429, 502 and a network error, a failed read keeping the last state; the links' base checked only when ready, once per base (not after a test email), every outcome and **Check again**, an overtaken or unmounted check writing nothing, the block's own `data-busy`. jsdom pages are `http:`: the https case is pinned in `emailLinks.test.ts`. The verification card in each state; the sign-in's «send the link again» and its outcomes; the `/verify-email` page: the token out of the address bar, success to the sign-in with a message, each refusal, a missing token, a retry, `hashchange`, a late answer dropped |
+| `./dev.py test front-utility core-unit` | `frontend/src/lib/features/email/emailText.test.ts` (ETX-01…10), `emailApi.test.ts` (EAP-01…11), `emailLinks.test.ts` (ELK-01…09), `verificationApi.test.ts` (VFA-01…18), `sendLinkApi.test.ts` (SLA-01…14), `forgotPasswordApi.test.ts` (FPA-01…10) | The code-to-key maps (own entries only), the minutes, the failure messages and their keys in the four catalogues, the role classes (no palette class, no hex, no `dark:`); the links' keys and classes, `linksProbeWarns()`; `fetchEmailStatus()` narrowing the answer, `links` included; `issueProbeNonce()`; `readTestFailure()` on an `AxiosError` and on an `ApiError`, with the real client and a fake transport; `probeEmailLinks()` through workstream A's real `checkAddress()` and a fake fetch: `invalid` and `insecure` before any request, the normalized base probed, every verdict mapped, a timeout, never a rejection; the exported refusal helpers; the verification page keys and `resendFailureMessage()`; `confirmEmailVerification()`, `resendEmailVerification()`, `readLinkRefusal()` and `readResendFailure()` with the real client; `tokenFromLink()`, `sendByEmailVisible()`, `sendLinkByEmail()` and `readLinkSendFailure()` (a 422 of the request's validation read as an invalid address); `requestPasswordResetEmail()` and `readForgotFailure()`; `linkSendFailureMessage()` and `forgotFailureMessage()` |
+| `./dev.py test front-utility component-unit` | `frontend/src/lib/features/email/EmailSettingsTab.test.ts` (ETB-01…10 for the links), `VerifyEmailCard.test.ts` (VEC-01…07), `VerificationNotice.test.ts` (VNT-01…07), `frontend/src/routes/verify-email/page.test.ts` (VEP-01…10), `SendLinkByEmail.test.ts` (SLE-01…09), `ForgotPasswordEmailForm.test.ts` (FPF-01…06) | The tab in jsdom: each state, the notices, the budget, `data-busy` over every request, one email per click, the outcome after 200, 409, 422, 429, 502 and a network error, a failed read keeping the last state; the links' base checked only when ready, once per base (not after a test email), every outcome and **Check again**, an overtaken or unmounted check writing nothing, the block's own `data-busy`. jsdom pages are `http:`: the https case is pinned in `emailLinks.test.ts`. The verification card in each state; the sign-in's «send the link again» and its outcomes; the `/verify-email` page: the token out of the address bar, success to the sign-in with a message, each refusal, a missing token, a retry, `hashchange`, a late answer dropped. «Send by email» on its own (an invitation's editable address sent trimmed or not at all, a reset link without one, every failure, the busy state); the «forgot password» form on its own (the same answer as information, the hold, each refusal) |
 | `./dev.py test front-utility email-tab` | `frontend/e2e/settings/email-tab.spec.ts` | In the browser: an administrator's tab on the real backend in the `off` state, hidden from a member; the test email against a simulated API (200, 502, 429) |
 
 The backend files are under `backend/test_scripts/`. All ten backend entries are `pure` in the runner catalogue:
@@ -1118,14 +1239,12 @@ through `POST /auth/login`, over `httpx.ASGITransport`. The Settings tab registr
 
 Still open in lot E3: the activation email of the first administrator, after A's lot A7.
 
+Still open in lot E4, as lot E4b after workstream A's lot A6e: the hooks of «Send by email», of the «forgot
+password» form and of the email change notice in workstream A's files, and the lifting of [the hold](#flow-forgot)
+([Not wired yet](#link-actions)).
+
 Still open in lot E5: the hooks of email verification in workstream A's files, after A's lots A6d and A6e
 ([Not wired yet](#verification)); until then the option of the Admin tab stays a placeholder.
-
-Planned in a later lot of workstream E, not in the code yet:
-
-- **E4**, after workstream A's lot A6e: «Send by email» in the invitation and reset dialogs, and the «forgot
-  password» of the login page, which lifts [the hold](#flow-forgot) once changing an account's email asks for the
-  current password.
 
 ---
 

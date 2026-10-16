@@ -2555,3 +2555,235 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > porta 6181 è libera, `git diff --check` pulito.
 
 #### Checkpoint CP-U1 🧊 (2026-10-15, sera) — FROZEN, in attesa del coordinatore
+
+> **Committato** dal coordinatore: `b9383ecfb` (feat), `ad1aa04bb` (doc), `df672a841` (journal); merge di
+> `dev_release2` `45499dec4` pulito, HEAD `57d401a16`. CP-U1 entra da solo, scelta del coordinatore: chiude un buco
+> d'accesso, e un treno piccolo rischia meno. La pagina utente dei File si sistema con CP-U2, segnata fra le cose da
+> chiudere prima del rilascio.
+>
+> **Prove d'ingresso** sulla revisione combinata: `api sync`; `front check` 0/0; `db populate --force`; `api uploads`
+> 43 + 1 saltato; E2E `files-uploader` 8, `files` 28; Vitest `FilesTable` e `AssetPickerModal` 37.
+>
+> **Fuori pista**: `api sync` e `front check` sono partite con il carico a 106, sopra la soglia di 70: il carico lo
+> stampavo senza usarlo come soglia. Dalle prove successive un ciclo aspetta che scenda sotto 70 prima di ogni lancio.
+
+> **Ingresso**: CP-U1 è in `dev_release2` (treno 66, merge `6a3a2a1cc`, registri `84a18fb4c`), con 2 righe 🔄 e 1 🔒
+> nel CHANGELOG. La pagina utente dei File è condizione per il rilascio, e si chiude con CP-U2.
+
+#### CP-U2 — frontend: il contratto (2026-10-15, notte) — in corso
+
+> **Base**: `57d401a16`. L'aggiornamento con T+DV, la palette nuova, lo fa il coordinatore al prossimo checkpoint.
+>
+> - **Client** (`lib/utils/files/upload.ts`): `uploadFile(file, description?, scope?)` manda `scope` quando c'è;
+>   `setUploadScope(fileId, scope)` chiama `PATCH /uploads/{id}` e restituisce il file aggiornato.
+>   `UploadScope` in `lib/types/files.ts`.
+> - **Chi carica con quale scopo**: la pagina File `personal`; `ImageEditModal` ha la prop `scope`, con default
+>   `common` per i selettori d'immagine, e la pagina File gli passa lo scopo del file che modifica; `FileEditModal`,
+>   il rinomina della pagina File, tiene lo scopo dell'originale. `ProfileTab` (di A) non cambia: l'avatar passa da
+>   `ImageEditModal`, quindi è `common`.
+> - **Pagina File**:
+>   - in `FilesTable`, scheda static: colonna `scope` con un badge (condiviso `info`, personale `default`) e un filtro;
+>     azioni di riga «Condividi con tutti» e «Rendi personale», visibili solo con `can_delete`; «elimina» nascosta
+>     quando `can_delete` è falso, in tutte e due le schede;
+>   - in `FileGrid`, vista a griglia: lo stesso interruttore fra le azioni della scheda, e «elimina» nascosta come
+>     sopra;
+>   - «Rendi personale» chiede conferma con `ConfirmModal`, perché gli altri perdono l'accesso, anche dove il file fa
+>     da icona o da foto. «Condividi» no;
+>   - eventi `file.scope.changed` e `file.scope.change.failed`, con un toast;
+>   - la cancellazione multipla salta i file non cancellabili, con un avviso, invece di fermarsi al primo 403.
+> - **Selettore** (`AssetPickerModal`, D36-1): la scheda «esistenti» mostra i comuni più i miei. Un mio file
+>   personale scelto per un oggetto condiviso diventa comune con `setUploadScope`, con un avviso (evento
+>   `file.scope.shared-on-pick`); se il cambio fallisce, niente selezione e un errore.
+> - **Colori**: badge e pulsanti riusano la cella `badge` della tabella e le classi `.action-btn` della griglia:
+>   nessuna classe di colore nuova.
+>
+> **Decisioni notturne, da rivedere**: l'interruttore è un'azione di riga e un pulsante della scheda, non uno switch
+> in colonna; la conferma solo per «Rendi personale»; nella griglia nessun badge, perché lo scopo si legge
+> dall'azione e dalla vista a elenco.
+>
+> **Correzione del contratto** (dalla lettura della pagina): nella pagina File, `ImageEditModal` e `FileEditModal`
+> lavorano su file nuovi, prima o durante il caricamento, non su file già caricati. La pagina passa quindi `personal`,
+> non lo scopo di un file esistente. Il contratto dei due modali resta: `scope` con default `common`, che arriva a
+> `uploadFile`. In più, il filtro URL `scope` vale anche nella vista a griglia (`urlFilterColumns`,
+> `staticGridColumns`).
+
+##### Passo 1 — i rossi ✅ (2026-10-15, notte)
+
+> test-author, sul codice di prima: 92 Vitest in 6 file, 27 rossi nuovi per il motivo atteso, gli esistenti verdi.
+> Nuovi `FileGrid.test.ts`, registrato nel runner, e `__tests__/harness/ImageCropperStub.svelte`. Lo scenario E2E in
+> `files.spec.ts` è scritto ma non lanciato. Nessun aggancio nuovo nei componenti: le celle hanno già `data-column-id`
+> e il badge `data-badge-variant`.
+
+##### Passo 2 — la cura ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - `upload.ts`: `uploadFile(…, scope)`, `setUploadScope`; `UploadScope` in `lib/types/files.ts`.
+> - `FilesTable`: colonna `scope` (badge `info` per i comuni, `default` per i personali; filtro), azioni `share` e
+>   `makePersonal`, «elimina» con `visible` su `can_delete`. `FileGrid`: pulsanti `file-grid-scope-<id>` e
+>   `file-grid-delete-<id>`.
+> - Pagina File: caricamenti `personal`, anche dai due modali; `ConfirmModal` `files-scope-confirm` per «Rendi
+>   personale»; eventi `file.scope.changed`, `file.scope.change.failed` e `file.delete.skipped`; filtro URL `scope`
+>   anche in griglia.
+> - `AssetPickerModal`: i comuni più i miei; una mia immagine personale diventa comune prima della selezione
+>   (`file.scope.shared-on-pick`), e se il cambio fallisce non seleziona niente.
+> - i18n: 12 chiavi `uploads.scope.*` nelle 4 lingue, nel sottosistema `files`.
+>
+> **Fuori pista**: test-author ha visto che il selettore ricaricava l'elenco a ciclo quando il risultato era vuoto: la
+> condizione reattiva dipendeva da `existingFiles`, che ogni caricamento riassegna. C'era già prima del lotto, ma il
+> filtro nuovo rende vuoti più elenchi. Ora l'elenco si carica una volta per apertura, con il flag `existingLoaded`, e
+> un caso Vitest lo fissa.
+>
+> **Prove**: Vitest dei 6 file 93; `i18n check` (4645 chiavi, rigoroso); il cancello dei colori pulito; `front check`
+> 0/0. Le E2E (`files`, `files-uploader`, `files-destructive`, `files-pdf-offline`, `image-crop`) aspettano la fine della
+> finestra tranquilla delle 00:00–01:15.
+
+##### Passo 3 — doc e ritocchi ✅ (2026-10-16, notte)
+
+> **Note implementazione** (docs-writer):
+>
+> - utente: `user/files/index.en.md`, condizione per il rilascio (le tre frasi false, la sezione nuova
+>   `{: #visibility }`, i caricamenti personali, «elimina» solo dove si può); `user/misc/image-crop.en.md`;
+>   `user/settings/profile.en.md`. Debito di traduzione dichiarato: le tre pagine in it/fr/es restano indietro, e
+>   devono tenere l'ancora `#visibility`;
+> - sviluppatori: `core-ui/file-upload.md` (la sezione nuova `#scope-flow`, gli eventi, il percorso giusto di
+>   `upload.ts`), `features/brokers/modals.md`, `features/import-wizard.md`, `pages/index.md`.
+>
+> **Fuori pista** (dalle note di docs-writer):
+>
+> - l'avviso della cancellazione multipla vale anche per i report BRIM, dove i file saltati possono essere tuoi, per
+>   esempio dopo il passaggio da Editor a Viewer: la chiave diventa `uploads.deleteSkipped`, con un testo generico;
+> - «solo a te e agli amministratori» era falso quando un admin rende personale il file di un altro: il toast e il
+>   suggerimento della colonna ora dicono «chi l'ha caricato e gli amministratori»;
+> - corretti i commenti delle prop `scope` dei due modali: la pagina File passa `personal`;
+> - segnalata a W l'incoerenza della cancellazione multipla del suo `BrokerImportFilesModal`, file suo;
+> - limite noto, non coperto: incollare nella scheda URL del selettore l'indirizzo di un proprio file personale non lo
+>   condivide;
+> - le schermate della galleria `files/static-tab` e `files/static-grid` vanno rigenerate: c'è la colonna nuova.
+>
+> **Prove**: `i18n check`, `front check` 0/0, Prettier pulito. Restano le E2E e `mkdocs build --strict`, dopo la
+> finestra tranquilla.
+
+> **Prove leggere finite** (richiesta del coordinatore, 00:02): Vitest dei 6 file 93; `front-utility core-unit` 158 file
+> e 5 255 test, cataloghi e cancelli dei colori compresi; `theme-roles --check` pulito; `i18n check`; `front check` 0/0.
+
+### CP7b — analisi (2026-10-16, notte) — sola lettura
+
+> **Stato reale** (base `57d401a16`):
+>
+> - **F28**: `ImmutableStaticFiles` (`static_site.py:100-104`) mette `public, max-age=31536000, immutable` su tutto
+>   `/_app`, anche su `env.js` e `version.json`, che non hanno l'hash nel nome. Nessun codice legge `version.json` e
+>   non c'è un service worker: l'impatto oggi è basso.
+> - **F15**: nessun `Referrer-Policy`, `X-Frame-Options` o CSP; `nosniff` solo su due risposte di testo. L'unico
+>   iframe è il PDF di `FilePreviewModal`, sulla stessa origine. In `app.html` ci sono uno script inline (anti-FOUC) e
+>   uno `style=` inline.
+> - **F27/D5**: `LIBREFOLIO_PROFILE` esiste, ma non c'è un meccanismo di default del profilo. L'inattività dei
+>   worker di rischio è a 600 s.
+> - **Spegnimento**: nessuno `stop_grace_period` nei compose. Il budget predefinito di 8 s sta nei 10 s di
+>   `docker stop`, e `configuration.en.md` (righe 362-374, di Z) spiega già quando alzare lo `stop_grace_period`.
+>   I compose sono di B da CP7a.
+> - **Note di X**: non c'è `derive_key_from`; `plugin_secrets_key_status` è asincrona e vuole una sessione del DB,
+>   quindi non può stare fra i controlli di `config_audit`, che girano prima del passo `database`; `security.md`,
+>   righe 169-171 e 286-288, è superata dal `key_id`.
+>
+> **Proposta**, in due checkpoint:
+>
+> - **CP7b-1**, le intestazioni e la cache:
+>   - F28: `immutable` solo sotto `_app/immutable/`, `no-cache` per il resto di `/_app`;
+>   - F15, sempre (D5): un middleware ASGI `security_headers` in `MIDDLEWARE_STACK`, dopo l'`activity` di Z e prima
+>     di `gzip`. Mette `X-Content-Type-Options: nosniff` e `Referrer-Policy: strict-origin-when-cross-origin`, senza
+>     sovrascrivere un header già messo da una rotta;
+>   - la guardia: `utils served-content-types` esteso a ogni estensione della build e della doc (`.mjs`, `.wasm`,
+>     `.woff2`…), perché con `nosniff` un tipo MIME sbagliato blocca il file; le E2E della PWA, del PDF e della doc.
+> - **CP7b-2**, il profilo gestito:
+>   - un meccanismo generico `PROFILE_DEFAULTS` in `config/` (un default del profilo vale solo per un campo non
+>     impostato, `model_fields_set`), con un test «self-hosted invariato» per ogni campo;
+>   - F27: inattività dei worker di rischio a 60 s in `managed`;
+>   - F15 in `managed` (D5): `X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'`
+>     (applicata: tocca solo l'incorniciamento) e una `Content-Security-Policy-Report-Only` completa sull'HTML della
+>     SPA, non su `/mkdocs`. Lo script inline di `app.html` verrà segnalato finché il lotto A dei colori non lo sposta;
+>   - doc admin (`hosting_providers`, `configuration`, `.env.example`), doc per sviluppatori (`security.md`).
+> - **Le note di X** (H-14, H-15, H-16), un lotto piccolo a parte o in coda a CP7b-2:
+>   - `derive_key_from(key, purpose, length)`, con `derive_key` che la chiama;
+>   - un passo d'avvio `plugin-secrets-check` dopo `global-settings`, cioè a DB pronto: un ERROR con i totali, senza
+>     valori. In più la voce per la scheda «Sicurezza» di A, se il suo registro accetta un controllo asincrono;
+>   - le due frasi di `security.md`.
+>
+> **Via del coordinatore** (16/10, 00:09): CP7b approvato, nell'ordine CP7b-1, CP7b-2, poi le note di X. Nel worktree,
+> finché CP-U2 non è committato, solo i rossi di CP7b-1, in file di test backend nuovi, scritti e non lanciati. Per
+> H-15, il controllo asincrono nella scheda «Sicurezza» si accorda con A e X passando dal coordinatore.
+>
+> **Decisioni notturne, da rivedere**:
+>
+> - la CSP in sola segnalazione esce senza endpoint di report: le violazioni finiscono nella console del browser. Un
+>   endpoint `/system/csp-report`, con un limite, eventualmente dopo;
+> - lo `stop_grace_period` dei compose resta a B, che ne è il proprietario dopo CP7a: al più un commento che rimanda
+>   al budget. Glielo comunica il coordinatore.
+
+#### CP7b-1 — i rossi scritti (2026-10-16, notte) — non lanciati, CP-U2 ancora aperto
+
+> test-author: tre file nuovi, puri, registrati in aggiunta; scritti senza lanciarli.
+>
+> - `test_services/test_static_cache_policy.py` (`services static-cache-policy`): 26 casi, 12 rossi previsti, cioè
+>   `env.js`, `version.json` e `immutable.json` sotto `/_app`, e le loro risposte 304.
+> - `test_services/test_security_headers.py` (`services security-headers`): 15, tutti rossi finché il modulo
+>   `platform/security_headers.py` non esiste.
+> - `test_utilities/test_nosniff_content_types.py` (`utils nosniff-content-types`): 30, di cui 8 rossi su questo Mac.
+>
+> **Da sapere per la cura**:
+>
+> - `.map` non ha un tipo nella tabella di Python né in quella del sistema; i font (`.woff`, `.woff2`, `.ttf`) li dà
+>   solo `/etc/mime.types`, che l'immagine `python:3.13-slim` probabilmente non ha. Con `nosniff` il browser li
+>   rifiuterebbe. Cura: l'app registra da sé i tipi che mancano (`mimetypes.add_type`), così i test passano su ogni
+>   macchina;
+> - il 500 di Starlette nasce in `ServerErrorMiddleware`, fuori dalla pila: `security_headers` deve mandare da sé il
+>   500 con le intestazioni, se la risposta non è ancora partita, e poi rilanciare l'eccezione, che così resta nel log;
+> - un inizio di risposta senza la chiave `headers` va gestito;
+> - due test di `test_app_lifecycle.py` fissano la pila esatta: li porta Z all'ordine relativo nel suo commit; se
+>   CP7b-1 entra prima, li cambio io, dichiarati.
+>
+> **Correzione dell'analisi**: un service worker c'è, `frontend/static/sw.js`, ma dà solo la pagina offline e non mette
+> in cache `/_app`: F28 non cambia.
+
+#### CP7b-1 pronto e CP7b-2 in preparazione (2026-10-16, notte) — fuori dal worktree
+
+> **CP7b-1** è in `/tmp/librefolio-r13-h-7b1/`, non applicato: il modulo `security_headers.py`, lo script
+> `apply_cp7b1.py` provato a secco su copie dei file, e il `README.md` con le prove, la doc e il CHANGELOG. I tipi MIME
+> che mancano li registra l'app (`register_served_types()`, chiamata da `install_static_site`); il middleware manda da
+> sé il 500 con gli header.
+>
+> **CP7b-2**: test-author scrive i rossi in `/tmp/librefolio-r13-h-7b2/`, senza applicarli né lanciarli.
+>
+> **Decisioni notturne, da rivedere** (dentro D5):
+>
+> - il meccanismo `PROFILE_DEFAULTS` sta in `config/__init__.py`: un validatore di `Settings` applica il valore del
+>   profilo solo ai campi non impostati, né dall'ambiente né da `.env`;
+> - due variabili invece di una: `LIBREFOLIO_FRAME_PROTECTION` (`X-Frame-Options: SAMEORIGIN` e la CSP applicata
+>   `frame-ancestors 'self'`) e `LIBREFOLIO_CSP_REPORT_ONLY`, entrambe false in self-hosted e vere in managed. Così un
+>   self-hosted può proteggersi dall'incorniciamento senza la CSP in prova, e viceversa;
+> - gli header del profilo gestito li mette lo stesso middleware, che legge le impostazioni una volta, quando viene
+>   costruito; la CSP in sola segnalazione solo sulle risposte HTML fuori da `/mkdocs` e `/api/`.
+>
+> **I rossi di CP7b-2 sono pronti** in `/tmp/librefolio-r13-h-7b2/`, non applicati: `test_profile_defaults.py` (37
+> casi), `test_managed_headers.py` (169), `runner.diff` (si applica pulito sopra le voci di CP7b-1) e un `README.md`.
+>
+> **Da sapere per la cura**:
+>
+> - in pydantic 2.13 un `self.X = v` dentro un validatore `after` mette `X` in `model_fields_set` e salta la
+>   validazione. La cura imposta il valore del profilo con `object.__setattr__`, senza segnarlo come scelta
+>   dell'operatore; i valori della tabella li verifica il test di guardia, in modo rigoroso;
+> - un valore impostato uguale al default conta come impostato (`600`, `false`, `0`): niente confronti col default;
+> - il middleware si costruisce alla prima chiamata dell'app, quindi i test costruiscono app nuove;
+> - `content-security-policy` è un prefisso di `content-security-policy-report-only`: il controllo «header già messo
+>   dalla rotta» confronta i nomi interi, cosa che CP7b-1 fa già;
+> - `services config-env-example` diventa rosso finché i due campi nuovi non sono in `.env.example`, come righe
+>   commentate.
+
+##### Passo 4 di CP-U2 — le prove pesanti ✅ (2026-10-16, notte)
+
+> Dopo la ripresa delle 01:33: `mkdocs build --strict` senza avvisi, `check-links`, `check-orphans` puliti.
+> Slot pesante 2 (01:48–02:02), una spec alla volta, `nice`, carico sotto 70: E2E `front-utility files` 29 (con lo
+> scenario nuovo: un PNG caricato dalla pagina esce personale, poi «Condividi» e «Rendi personale» con conferma),
+> `files-uploader` 8, `files-destructive` 6, `files-pdf-offline` 1, `image-crop` 42. Porta 6181 libera.
+
+#### Checkpoint CP-U2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore

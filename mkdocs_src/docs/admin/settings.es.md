@@ -71,6 +71,9 @@ El planificador mantiene actualizados por sí solo los precios y los tipos de ca
   tipos de cada par FX con un proveedor, durante el **Horizonte de recuperación**, para rellenar cualquier hueco. Los pares
   que solo tienen tipos manuales se omiten.
 
+Si el servidor está apagado o en suspensión a una hora de sincronización, la sincronización histórica
+que se ha perdido se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora de sincronización.
+
 ### ⚙️ Configurar la programación
 
 Desbloquea la pestaña, abre **Tarea de actualización** y haz clic en **Configurar…** en la fila **Configuración del Horario**.
@@ -108,7 +111,8 @@ leer el estado y el registro.
 </div>
 
 - Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos se completaron correctamente. 🟢 **OK**: todos,
-  o nada que hacer; 🟡 **Parcial**: algunos fallaron; 🔴 **Error**: ninguno se completó correctamente.
+  o nada que hacer; 🟡 **Parcial**: algunos fallaron, o se aplazaron porque su proveedor está en pausa tras demasiadas
+  solicitudes; 🔴 **Error**: ninguno se completó correctamente y ninguno se aplazó.
 - Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios modificados (**Delta**).
   Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (mantén pulsado en un teléfono) para copiarlo.
 - Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones

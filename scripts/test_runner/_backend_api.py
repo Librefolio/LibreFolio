@@ -249,6 +249,14 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API tests", verbose=verbose)
 
 
+def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduled wake-up (POST /system/wake-sync) and its token, in an app of the test (no server reached)."""
+    print_section("System API: the scheduled wake-up")
+    print_info("Testing: LIBREFOLIO_WAKE_TOKEN(_FILE) → 404 off, 503 unusable, 401 without it; with it, one run at a time (409), a streamed 200 (spaces, then the run's report), a run left to end when its client goes (in-process app, run_due_jobs replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_wake.py", test_names)
+    return run_command(cmd, "System API wake-up tests", verbose=verbose)
+
+
 def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance block (workstream H, CP6): refuse_when_blocked, ALLOWED_WHEN_BLOCKED, GET /system/block."""
     print_section("Instance Block Tests")
@@ -291,6 +299,14 @@ def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing: LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN(_FILE) → 404 off, 503 unusable (short, not visible ASCII), 401 without it; with it, the panel's own jobs only (in-process app, jobs replaced)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_panel.py", test_names)
     return run_command(cmd, "Backup API panel token tests", verbose=verbose)
+
+
+def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the check of a backup archive before a restore (/backup/restore), in an app of the test (no server reached)."""
+    print_section("Backup API: the restore check")
+    print_info("Testing: PUT /backup/restore/upload (limit, space, links), POST/GET/DELETE /backup/restore/stage (report, refusals, one at a time, interrupted, prune) on real archives under tmp_path")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_restore.py", test_names)
+    return run_command(cmd, "Backup API restore check tests", verbose=verbose)
 
 
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
@@ -834,6 +850,18 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    add_test(
+        api,
+        "system-wake",
+        api_system_wake,
+        name="System API Wake-up",
+        desc="POST /system/wake-sync and LIBREFOLIO_WAKE_TOKEN(_FILE): wake_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, the panel token's rule value for value: anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 wake_unavailable and one error line naming the variable; missing or wrong token → 401 wake_unauthorized, WWW-Authenticate: Bearer; with it, run_due_jobs('wake') as a task, one at a time (token first, then 409 wake_in_progress until the run ends, a disconnect included, the run never cancelled); 200 application/json no-store streamed: a space at once, one per WAKE_KEEPALIVE_SECONDS, then WakeSyncResponse mirroring the RunReport, any status; a raising run → error, its class name only; started/finished/failed logged; D-W3 on the real scheduler: blocked, nothing past the switches; OpenAPI (WakeToken, WakeSyncResponse, 401/404/409/503) and the composition; through the middleware stack in flight without presence, the first gzip chunk before the run ends; the token never in an answer or the log",
+        # PURE: an app of the test holds the system router under /api/v1 (the middleware stack added where it is under
+        # test), run_due_jobs is replaced on the wake module by a fake (the real one runs once, blocked, every collaborator
+        # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or
+        # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.
     add_test(api, "instance-block", api_instance_block, name="Instance Block", desc="423 on a blocked instance but the allowed routes, 401 first for anonymous callers, GET /system/block, route guard")
@@ -857,6 +885,19 @@ Tests for REST API endpoints (server auto-started):
         # PURE: an app of the test holds backup_router under /api/v1 (require_admin overridden where called) and the four
         # functions of jobs replaced by a fake under tmp_path; the token variables are set with monkeypatch: no data
         # directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-restore",
+        api_backup_restore,
+        name="Backup API Restore Check",
+        desc="The check of an archive before a restore (/backup/restore, lot B2b): PUT /upload as a raw body (201 with its id and size, 0600, written in 1 MiB pieces off the event loop; LIBREFOLIO_BACKUP_MAX_UPLOAD_MB → 413 backup_too_large with limit_mb on the Content-Length before anything is created or at the piece past it with no partial left, none self-hosted, 500 managed, 503 when unreadable; 507 without room; 400 empty or incomplete; a newer upload replaces the older but the one a running check reads; a link or a file for .restore → 500 restore_folder_unusable); POST /stage → 202, GET → done with the report mapped from staging (same, upgrade with its migrations and warnings, no administrator) or failed with its code, the upload removed; 404 unknown ids, 422 a malformed upload id; one check at a time (409 restore_busy, 409 restore_stage_running); the end written before the lock is let go, a poll as a check ends never interrupted; restore_interrupted when nobody holds the lock; prune (ended checks after 24 h, a check left running ended, unrecorded uploads and copies only while no check runs, never through a link; a start with a link in place of a folder → 500, nothing pruned); done_bytes/total_bytes follow the unpacking; 500 backup_upload_failed on any other write failure; administrators only (403); not allowed when blocked; OpenAPI octet-stream; backup_max_upload_mb()",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
+        # of restore.py and restore_jobs.py is under tmp_path and the process's own one is a folder of the test that
+        # must stay absent; the checks run in fake threads, on real archives built under tmp_path (two alembic upgrades
+        # of new databases, in processes of their own, as test_backup_staging.py makes them): no lane data directory,
+        # DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")

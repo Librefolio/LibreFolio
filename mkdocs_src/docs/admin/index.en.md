@@ -12,7 +12,8 @@ command line, through environment variables, or in the app's **Admin** and **Use
 - 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
 - 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
-- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, and how to block an instance.
+- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, how to block an instance, backups for your hosting panel and the upload limit of a restore.
+- 💤 **[Sleep and Wake](sleep_wake.md)**: The scheduled wake-up: a hosting panel or a cron job brings prices and exchange rates up to date when the machine wakes up.
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.

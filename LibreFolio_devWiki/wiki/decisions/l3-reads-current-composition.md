@@ -38,6 +38,6 @@ risk–return line is exactly the Sharpe ratio.
 
 | Role | Path |
 |------|------|
-| L3 benchmark card (the mode and its reason) | `frontend/src/lib/components/risk/levels/L3Benchmark.svelte` |
+| L3 benchmark card (the mode and its reason) | `frontend/src/lib/features/risk/levels/L3Benchmark.svelte` |
 | Risk–return plugin | `backend/app/services/risk_plugins/asset_risk_return/plugin.py` |
 | Journal (S3) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/S3-livello-3.md` |
