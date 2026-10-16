@@ -104,8 +104,10 @@ composes one synthetic P&L candle per day:
   skipped.
 - **An `ADJUSTMENT` is never a price**, incoming or outgoing, with or without a cost basis
   (developer decision P2): its `cost_basis_override` is a cost — often the position's average
-  cost — not what the asset was worth that day. Only market quotes and `BUY`/`SELL` trades mark
-  an asset.
+  cost — not what the asset was worth that day. So is the one that takes units out at the Auto
+  cost of its own broker, as a broker deletion, a split of a `TRANSFER` pair or the
+  [lone giving legs step](../../architecture/database/index.md#lone-transfer-legs) writes it
+  (decision 47). Only market quotes and `BUY`/`SELL` trades mark an asset.
 
 ## 🧾 No observation: valued at cost {: #valued-at-cost }
 
