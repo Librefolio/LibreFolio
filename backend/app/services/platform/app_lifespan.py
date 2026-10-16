@@ -20,11 +20,13 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import ensure_data_dirs, get_settings, is_test_mode
+from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.brim_parse_pool import prewarm as prewarm_brim_parse_pool
 from backend.app.services.brim.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.files.static_uploads import seed_default_avatars
@@ -132,6 +134,19 @@ def _start_market_holiday_prewarm() -> None:
     _keep_in_background(start_market_holiday_prewarm())
 
 
+def _start_brim_parse_pool_prewarm() -> None:
+    # Opt-in (LIBREFOLIO_BRIM_PREWARM, decision N56: off by default, on in test mode): start the BRIM parse pool's
+    # forkserver with the BRIM module and its plugins preloaded, in a thread, in background: the first import of a
+    # broker file then forks a ready worker instead of starting an interpreter (W-B53)
+    try:
+        enabled = brim_prewarm_enabled()
+    except BrimConfigError as exc:
+        logger.warning("BRIM parse pool prewarm off: invalid setting", variable=exc.variable, error=str(exc))
+        return
+    if enabled:
+        _keep_in_background(asyncio.create_task(asyncio.to_thread(prewarm_brim_parse_pool)))
+
+
 def _start_scheduler() -> None:
     # Start scheduler daemon
     _scheduler.shutdown_event = get_shutdown_event()
@@ -211,6 +226,7 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("global-settings", lambda: _initialize_global_settings()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
+    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),
     Step("idle-monitor", lambda: start_idle_monitor()),
 )
