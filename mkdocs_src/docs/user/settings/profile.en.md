@@ -27,8 +27,22 @@ The avatar is saved immediately and is used across the app wherever your identit
 
 ## ✏️ Username, Email, Account Created
 
-- **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away.
+- **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away. Changing the email also asks for your current password: see [Changing Your Email](#email-change) below.
 - **Account Created** is a read-only field showing your registration date.
+
+### 📧 Changing Your Email {: #email-change }
+
+As soon as the email in the field differs from your current one, a **Current Password** field appears under the email's description, with a reminder: *To change your email, enter your current password. Your other devices will be signed out.* The email's save button, and **save all**, stay disabled until you type it.
+
+- **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
+- **Email refused for another reason**, for example because another account already uses it: the tab shows the reason, and your current email comes back.
+- **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again.
+
+Changing only your username asks for no password and signs no device out.
+
+!!! info "Why your password"
+
+    Your email address is how your account can be recovered: a password-reset link sent there lets whoever reads it choose a new password. Without this check, someone with a moment inside your open session (a computer left unlocked, a stolen session cookie) could put their own address on your account, and keep the account for good. Without your password, they cannot change the address.
 
 ## 🔐 Security
 

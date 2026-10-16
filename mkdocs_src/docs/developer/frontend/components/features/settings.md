@@ -218,12 +218,31 @@ Manages user profile information:
 - **Avatar**: Editable via `ImagePickerWrapper` → `AssetPickerModal` → crop
 - **Username** and **Email**: editable once the edit lock is open, each with its own save and undo
   (`PUT /api/v1/auth/profile`)
+- **The email's password** ([Changing the Email](../../../architecture/security.md#email-change)):
+  while the tab is unlocked and the email differs from the stored one, a password input appears
+  under the email's hint (`profile-email-password`, `autocomplete="current-password"`, placeholder
+  `settings.currentPassword`), described by `profile-email-password-hint`
+  (`settings.emailPasswordHint`). Both email Saves and `profile-save-all` stay disabled while it is
+  empty; the username's Saves do not wait for it. The email's request is
+  `{email, current_password}`, the username's never carries the password. The password is emptied
+  whenever the email is back to the stored one, after a save included
+- **Refusals**: `CURRENT_PASSWORD_REQUIRED` and `CURRENT_PASSWORD_INVALID` are worded by the tab
+  (`settings.currentPasswordRequired`, `settings.currentPasswordIncorrect`) and published on
+  `profile-error` as `data-error-code`; the typed email stays and only the password is emptied. Any
+  other refusal shows the server's `detail` when it is a sentence (*Email already registered*),
+  `settings.updateFailed` for any other `detail` (another code, a `422` list), and puts the field
+  back to the stored value. The banner clears after 5 seconds
 - **Password change**: Opens `PasswordChangeModal`
 - **Delete account**: `delete-account-button` opens the
   [`AccountDeletionDialog`](#accountdeletiondialog) in `self` mode, with
   `testIdPrefix="profile-delete"`; once the account is deleted, the tab calls `auth.logout()` and
   goes to `/`
 - Edit mode toggle to prevent accidental changes
+
+Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`),
+and the «A6e» block of `frontend/e2e/settings.spec.ts` (`./dev.py test front-utility settings`) on the
+lane's real backend, with a throwaway account and a second browser context signed in before the change,
+and signed out by it.
 
 ### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
 

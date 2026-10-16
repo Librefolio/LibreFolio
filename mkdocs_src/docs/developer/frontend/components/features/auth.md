@@ -287,6 +287,7 @@ offers to save or update the password:
 | | Current password | `currentPassword` | `current-password` | `current-password` |
 | | New password | `newPassword` | `new-password` | `new-password` |
 | | Confirm new password | `confirmPassword` | `confirm-password` | `new-password` |
+| `ProfileTab` (email change) | Current password | `profile-current-password` | `current-password` | `current-password` |
 | `ResetPasswordCard` | Hidden username, when the server named the account | — | `username` | `username` |
 | | New password | `reset-password-new` | `new-password` | `new-password` |
 | | Confirm new password | `reset-password-confirm` | `confirm-password` | `new-password` |
