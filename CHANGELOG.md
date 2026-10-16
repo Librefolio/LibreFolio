@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
 - **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
 - **Check a backup before restoring it**: `dev.py backup restore ARCHIVE --dry-run` and `/api/v1/backup/restore/*` unpack the archive into a copy, bring it to this version's schema, check it and report what a restore would do — the backup's administrators, the migrations applied, the rows — without touching the instance. Hosting providers can cap the upload with `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB by default in the managed profile).
+- **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again. A server variable can set the instance-wide ones and lock them.
+- **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
 
 ### 🔄 Changed
 
