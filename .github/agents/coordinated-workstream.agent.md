@@ -156,6 +156,26 @@ At handoff, stop any server you started and prove the port is free with:
 lsof -nP -iTCP:<YOUR_PORT> -sTCP:LISTEN
 ```
 
+### The machine is shared
+
+Your lane keeps your data apart from the others, not your CPU: many sessions run on the
+same laptop.
+
+- **Heavy runs only in a slot.** `all-backend`, a whole category, an E2E block or the
+  gallery need a slot from the coordinator, with a cut-off time. Ask for it with the list
+  of runs and their expected duration, and say when the slot is free again.
+- **Light checks wait for the load.** `front check`, single test files, linters and docs
+  builds run only while the 1-minute load (`sysctl -n vm.loadavg`) is below 50.
+- **A timeout under load is not yet a verdict.** Use `test-triage` and re-run alone at
+  normal load before calling a red product or flaky.
+- Keep scripts and logs in your session folder, not `/tmp`: a reboot wipes `/tmp`.
+
+### Real data
+
+The developer's demo data are used only through the skill `real-data-copy`, and only when
+the coordinator gives you a working copy: your own copy, its own port, never a
+`dev.py test` on it, never its values in a commit, test, fixture or journal.
+
 ## Planning and progress
 
 Create the approved plan at the full repo-relative path supplied in the kickoff,
