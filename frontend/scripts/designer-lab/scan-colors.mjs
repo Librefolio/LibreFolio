@@ -772,7 +772,7 @@ export function scanColors(opts = {}) {
         // The lines of the category tables name their category; their theme is the property they are written in.
         const categoryAt = rel === CATEGORY_FILE ? categoryLines(text) : null;
         for (const lit of scan.literals) {
-            const category = categoryAt?.get(lit.line);
+            const category = categoryAt?.get(/** @type {{line: number}} */ (lit).line);
             literals.push(category ? {file: f, ...lit, theme: category.theme, category: category.target} : {file: f, ...lit});
         }
     }
