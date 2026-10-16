@@ -3,6 +3,7 @@
  *
  * Shared by asset-event-editor-save.spec.ts and asset-event-delete.spec.ts (W-B29): a spec never
  * imports another spec, so what both need lives here. Moved unchanged from asset-event-editor-save.spec.ts.
+ * asset-data-editor.spec.ts uses the asset too (W-B43), with closes of its own choosing.
  *
  * Data. A test creates a USD asset of its own — two closes, because only a chart with prices offers
  * the editor button — its own events, noted with markers only it writes, and, for an event in use, a
@@ -21,6 +22,8 @@ import {API_BASE} from './assets-helpers';
 export const EVENTS_PATH = `${API_BASE}/assets/events`;
 
 export type OwnedAsset = {id: number; name: string};
+/** One stored close of an owned asset. */
+export type OwnedClose = {date: string; close: number};
 /** What one test created, deleted afterwards in FK-safe order. */
 export type Owned = {assetIds: number[]; brokerIds: number[]};
 export type StoredEvent = {id: number; date: string; type: string; value: {code: string; amount: string}; notes: string | null; is_auto: boolean};
@@ -31,29 +34,27 @@ export async function jsonFrom<T>(response: HttpResponse, purpose: string): Prom
     return (await response.json()) as T;
 }
 
-/** A USD asset of this test's own, with two closes so the chart — and its editor button — is drawn. */
-export async function createOwnedAsset(page: Page, owned: Owned): Promise<OwnedAsset> {
-    const name = `E2E event editor ${uniqueSuffix()}`;
+/**
+ * A USD asset of this test's own, with two closes so the chart — and its editor button — is drawn.
+ * `closes` replaces those two when the prices themselves are the subject (the stale rows of
+ * asset-data-editor.spec.ts); `label` names the asset after its test, for whoever reads a leftover.
+ */
+export async function createOwnedAsset(page: Page, owned: Owned, options: {label?: string; closes?: OwnedClose[]} = {}): Promise<OwnedAsset> {
+    const {
+        label = 'E2E event editor',
+        closes = [
+            {date: daysAgoIso(30), close: 10},
+            {date: daysAgoIso(10), close: 11},
+        ],
+    } = options;
+    const name = `${label} ${uniqueSuffix()}`;
     const response = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'USD', asset_type: 'STOCK'}]});
     expect(response.ok(), `create the owned asset: HTTP ${response.status()} ${await response.text()}`).toBe(true);
     const body = (await response.json()) as {results: Array<{asset_id: number | null; display_name: string; success: boolean; message?: string}>};
     const created = body.results.find((item) => item.display_name === name);
     if (typeof created?.asset_id === 'number') owned.assetIds.push(created.asset_id);
     if (!created?.success || typeof created.asset_id !== 'number') throw new Error(`The owned asset ${name} was not created: ${created?.message ?? 'missing result'}`);
-    await jsonFrom(
-        await page.request.post(`${API_BASE}/assets/prices`, {
-            data: [
-                {
-                    asset_id: created.asset_id,
-                    prices: [
-                        {date: daysAgoIso(30), close: 10},
-                        {date: daysAgoIso(10), close: 11},
-                    ],
-                },
-            ],
-        }),
-        'store two closes on the owned asset',
-    );
+    await jsonFrom(await page.request.post(`${API_BASE}/assets/prices`, {data: [{asset_id: created.asset_id, prices: closes}]}), `store ${closes.length} closes on the owned asset`);
     return {id: created.asset_id, name};
 }
 
