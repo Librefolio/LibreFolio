@@ -364,8 +364,8 @@ class ProviderManagementOperations:
         # The part of the provider a pause after «too many requests» applies to (the host of a scraped site)
         scope = core.cooldown_scope_for(provider, config.identifier, mapped_id_type, params)
 
-        # Provider URL (always computed, synchronous)
-        provider_url = provider.get_asset_url(config.identifier, mapped_id_type, params)
+        # Provider URL (always computed, synchronous); withheld if the plugin put a secret in it (it is shown to the user)
+        provider_url = core.public_asset_url(provider, provider.get_asset_url(config.identifier, mapped_id_type, params))
 
         # --- Build async tasks for each requested operation ---
 

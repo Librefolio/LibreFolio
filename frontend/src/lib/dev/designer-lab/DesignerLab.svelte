@@ -6,7 +6,7 @@
     import ColorEditor from './ColorEditor.svelte';
     import ContrastPanel from './ContrastPanel.svelte';
     import PickedElementPanel from './PickedElement.svelte';
-    import {appVars, editTarget, matchesSearch, paletteFamilies, valueGroups, type ValueGroup} from './catalogView';
+    import {appVars, categoryRows, editTarget, matchesSearch, paletteFamilies, valueGroups, type ValueGroup} from './catalogView';
     import {applyNow} from './client';
     import {contrastRows} from './contrast';
     import {buildExport, downloadText, parseImport, renderMarkdown, renderSummary, type LabExport} from './export';
@@ -17,10 +17,12 @@
     import {emptyState, readState, removeChange, STORAGE_KEY, upsertChange, writeState} from './store';
     import type {ChangeLayer, CvdMode, LabChange, LabSelection, LabState, Layer, PickedElement, Scope} from './types';
 
-    type Tab = 'overview' | 'element' | 'palette' | 'vars' | 'sheets' | 'charts' | 'proposals' | 'changes' | 'contrast' | 'notes';
+    type Tab = 'overview' | 'element' | 'palette' | 'vars' | 'sheets' | 'charts' | 'categories' | 'proposals' | 'changes' | 'contrast' | 'notes';
     type ValueTab = 'sheets' | 'charts' | 'proposals';
-    const TABS: Tab[] = ['overview', 'element', 'palette', 'vars', 'sheets', 'charts', 'proposals', 'changes', 'contrast', 'notes'];
-    const SEARCHABLE: Tab[] = ['palette', 'vars', 'sheets', 'charts', 'proposals'];
+    const TABS: Tab[] = ['overview', 'element', 'palette', 'vars', 'sheets', 'charts', 'categories', 'proposals', 'changes', 'contrast', 'notes'];
+    const SEARCHABLE: Tab[] = ['palette', 'vars', 'sheets', 'charts', 'categories', 'proposals'];
+    /** The groups of the Categories tab, in the order of the tables of `chartCategories.ts`. */
+    const CATEGORY_GROUPS = ['type', 'sector', 'bucket'] as const;
     const SCOPES: Scope[] = ['light', 'dark', 'both'];
     const CVD: CvdMode[] = ['none', 'protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'];
     const LAYERS: Layer[] = ['css-literal', 'chart-color', 'script', 'markup', 'static'];
@@ -47,6 +49,7 @@
 
     const families = paletteFamilies(catalog);
     const vars = appVars(catalog);
+    const categories = categoryRows(catalog);
     const withSearch = (list: ValueGroup[]) => list.map((g) => ({...g, search: [g.key, ...g.literals.map((l) => `${catalog.files[l.file]} ${l.selector ?? ''} ${l.raw}`)].join(' ')}));
     const groups: Record<ValueTab, (ValueGroup & {search: string})[]> = {
         sheets: withSearch(valueGroups(catalog, ['css-literal'])),
@@ -273,7 +276,7 @@
             {#if SEARCHABLE.includes(tab)}
                 <div class="filters">
                     <input type="search" class="search" placeholder={$labT('search')} bind:value={query} data-testid="lab-search" />
-                    {#if view}<label class="inline"><input type="checkbox" bind:checked={onlyPicked} data-testid="lab-filter-picked" /> {$labT('element.filter')}</label>{/if}
+                    {#if view && tab !== 'categories'}<label class="inline"><input type="checkbox" bind:checked={onlyPicked} data-testid="lab-filter-picked" /> {$labT('element.filter')}</label>{/if}
                 </div>
             {/if}
 
@@ -344,6 +347,24 @@
                             {#if g.alphas.length > 1 || g.alphas[0] !== 1}<span class="muted">α {g.alphas.join(' ')}</span>{/if}
                             <span class="muted">{g.themes.join(' ')}</span>
                         </button>
+                    {/each}
+                </section>
+            {:else if tab === 'categories'}
+                <section class="list" data-testid="lab-categories">
+                    {#if !categories.length}<p class="muted">{$labT('categories.none')}</p>{/if}
+                    {#each CATEGORY_GROUPS as group (group)}
+                        {@const rows = categories.filter((r) => r.kind === group && matchesSearch(query, [r.target, r.key, r.lightValue ?? '', r.darkValue ?? '']))}
+                        {#if rows.length}
+                            <h3>{$labT(`categories.${group}`)}</h3>
+                            {#each rows as r (r.target)}
+                                <button type="button" class="row" class:modified={changed.has(`category:${r.target}`)} onclick={() => select('category', r.target)} data-testid="lab-item-category-{r.target}">
+                                    <span class="swatch" style:background={r.lightValue ?? 'transparent'} title={$labT('scope.light')}></span>
+                                    <span class="swatch" style:background={r.darkValue ?? 'transparent'} title={$labT('scope.dark')}></span>
+                                    <code>{r.key}</code>
+                                    <span class="muted">{r.lightValue ?? '—'} · {r.darkValue ?? '—'}</span>
+                                </button>
+                            {/each}
+                        {/if}
                     {/each}
                 </section>
             {:else if tab === 'changes'}

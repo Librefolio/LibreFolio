@@ -7,7 +7,7 @@ holds the whole rule, so that the API and the command line apply the same one. T
 
 2. The settings registry: ``registration_mode`` replaces ``enable_registration`` — ``value_type`` ``str``, the type of
    every text setting in ``schemas/settings.py`` and the one migration 006 writes, so a new install and an upgraded one
-   hold the same row —, default ``open``, choices open, invite and disabled and nothing else;
+   hold the same row —, default ``invite`` (lot A6d, decision 36), choices open, invite and disabled and nothing else;
    ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE``; ``ENABLE_REGISTRATION`` gone.
 3. The variables, one accessor each in ``backend/app/config/accounts.py``, read at every call, each in ``.env.example``'s
    Accounts section as a commented line:
@@ -20,7 +20,7 @@ holds the whole rule, so that the API and the command line apply the same one. T
      or ``https://`` → ``ValueError``.
 4. ``registration_service``:
    - ``effective_registration_mode`` → ``RegistrationModeState(mode, locked)``: the variable when it is set, locked;
-     otherwise the row, ``open`` without one. An invalid variable closes — ``disabled``, locked —, and so does an invalid
+     otherwise the row, ``invite`` without one (A6d). An invalid variable closes — ``disabled``, locked —, and so does an invalid
      stored value — ``disabled``, not locked: the administrator fixes the row in Settings;
    - ``user_usage`` → ``UserUsage(used, max_users)``: active users plus live invitations (not consumed, not revoked, not
      expired). An invalid limit closes: ``max_users`` 0;
@@ -67,6 +67,12 @@ the token in the query string, the one log line of every invalid setting reads �
 registration stays closed until it is fixed», whatever the setting, with no ``consequence`` field; and the first
 registration of an empty instance is admitted before its token is looked at, so a valid invitation stays live and an
 invalid one is ignored.
+
+Lot A6d (decision 36) changes the default: a new install registers by invitation. ``GLOBAL_SETTINGS_DEFAULTS`` says
+``invite``, and so does ``effective_registration_mode`` without a row and without the variable; the first account stays
+creatable while the instance has none, in every mode, as the administrator. A case about something else than the
+default sets the mode it needs on the row. Red until A6d: the default of the registry, the mode without a row or a
+variable, and a second registration without an invitation on an instance without a row.
 """
 
 from __future__ import annotations
@@ -382,11 +388,11 @@ def _reported(events: list[dict[str, Any]]) -> list[tuple[Any, Any]]:
 
 
 def test_registration_mode_replaces_enable_registration_in_the_registry() -> None:
-    """Contract 2: ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE`` is the global key ``registration_mode``, a ``str`` defaulting to ``open``; ``enable_registration`` and ``ENABLE_REGISTRATION`` are gone.
+    """Contract 2: ``SETTINGS_REGISTRY.global_.REGISTRATION_MODE`` is the global key ``registration_mode``, a ``str`` defaulting to ``invite`` (lot A6d, decision 36); ``enable_registration`` and ``ENABLE_REGISTRATION`` are gone.
 
     ``str`` (review of 15/10): the documented type of every text setting in ``schemas/settings.py`` — "str", "int",
     "bool", "json" —, and the one migration 006 writes: a new install, seeded from the registry, and an upgraded one hold
-    the same row.
+    the same row. ``invite`` (A6d): a new install registers by invitation; its first account is always creatable.
     """
     print_section("Contract 2: registration_mode in the registry")
     spec = SETTINGS_REGISTRY.global_.REGISTRATION_MODE
@@ -394,10 +400,10 @@ def test_registration_mode_replaces_enable_registration_in_the_registry() -> Non
     assert (spec.key, spec.location, spec.value_type) == (MODE_KEY, "global", "str"), f"REGISTRATION_MODE must be the global str key {MODE_KEY!r}: {spec}"
     assert GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]["type"] == "str", f"a new install seeds the row from the defaults, as value_type 'str': {GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]}"
     assert spec in SETTINGS_REGISTRY.global_.all()
-    assert GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]["value"] == "open", f"registration is open by default, as enable_registration was true: {GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]}"
+    assert GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]["value"] == "invite", f"new installs register by invitation (decision 36), the first account being always creatable: the default must be 'invite', got {GLOBAL_SETTINGS_DEFAULTS[MODE_KEY]}"
     assert "enable_registration" not in GLOBAL_SETTINGS_DEFAULTS, "enable_registration must leave the defaults: a new install would seed both rows"
     assert not hasattr(SETTINGS_REGISTRY.global_, "ENABLE_REGISTRATION"), "ENABLE_REGISTRATION must leave the registry"
-    print_success("registration_mode: global, str, open; enable_registration gone")
+    print_success("registration_mode: global, str, invite; enable_registration gone")
 
 
 def test_registration_mode_accepts_its_three_choices_and_nothing_else() -> None:
@@ -538,7 +544,7 @@ def test_each_variable_is_a_commented_line_of_the_accounts_section_of_env_exampl
 @pytest.mark.parametrize(
     ("row", "variable", "mode", "locked"),
     [
-        pytest.param(None, None, "open", False, id="no-row-no-variable-is-open"),
+        pytest.param(None, None, "invite", False, id="no-row-no-variable-is-invite"),
         pytest.param("open", None, "open", False, id="row-open"),
         pytest.param("invite", None, "invite", False, id="row-invite"),
         pytest.param("disabled", None, "disabled", False, id="row-disabled"),
@@ -552,7 +558,7 @@ def test_each_variable_is_a_commented_line_of_the_accounts_section_of_env_exampl
     ],
 )
 async def test_effective_registration_mode(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, row: Optional[str], variable: Optional[str], mode: str, locked: bool) -> None:
-    """Contract 4: the variable when set, locked; otherwise the row, ``open`` without one, not locked; an invalid variable closes, locked."""
+    """Contract 4: the variable when set, locked; otherwise the row, ``invite`` without one (A6d, decision 36), not locked; an invalid variable closes, locked."""
     if row is not None:
         await _set_mode_row(engine, row)
     _set_or_unset(monkeypatch, REGISTRATION_VARIABLE, variable)
@@ -982,12 +988,33 @@ async def test_the_first_account_is_the_administrator_in_every_mode(engine: Asyn
 
 @pytest.mark.asyncio
 async def test_an_inactive_account_is_still_an_account_so_the_next_one_is_no_administrator(engine: AsyncEngine) -> None:
-    """Contract 4: "no account" means no row at all, as today (``count_users``): beside a deactivated administrator the next registration makes a regular user, never a second administrator."""
+    """Contract 4: "no account" means no row at all, as today (``count_users``): beside a deactivated administrator the next registration makes a regular user, never a second administrator. ``open`` mode, set on the row: since A6d an instance without the row is ``invite``."""
     await _add_users(engine, "dormant", active=False, admin=True)
+    await _set_mode_row(engine, "open")
 
     user = _assert_registered(await _register(engine, "newcomer"), "a registration beside an inactive account, open mode")
 
     assert user.is_superuser is False, "an instance with an account, even inactive, has had its first user: the newcomer must not become an administrator"
+
+
+@pytest.mark.asyncio
+async def test_without_a_row_the_first_account_registers_and_the_next_one_needs_an_invitation(engine: AsyncEngine) -> None:
+    """Lot A6d, C2 (decision 36): no ``registration_mode`` row and no variable — the default, ``invite`` —: the first account registers without an invitation, as the administrator; the next registration without one is ``INVITE_REQUIRED`` and creates nothing.
+
+    Barrier first: the instance has no account and no row, so the default — and only the default — decides.
+    """
+    print_section("Contract A6d: at the default, the first account registers and the next one needs an invitation")
+    async with AsyncSession(engine) as session:
+        stored_mode = await session.get(GlobalSetting, MODE_KEY)
+    accounts = await _accounts(engine)
+    assert (accounts, stored_mode) == ({}, None), f"setup: an instance with no account and no {MODE_KEY} row, got {accounts} and {stored_mode!r}"
+
+    founder = _assert_registered(await _register(engine, "founder"), "the first account, at the default, without an invitation")
+    walkin = await _register(engine, "walkin")
+
+    _assert_refused(walkin, "INVITE_REQUIRED", "a second registration without an invitation, at the default (new installs register by invitation)")
+    assert await _accounts(engine) == {"founder": (founder.id, True, True)}, "the first account must be the only one, an active administrator: the refused registration must leave nothing"
+    print_success("the first account an administrator; the next one INVITE_REQUIRED, nothing written")
 
 
 # The first account and the invitation it comes with (review of 15/10, from the docs review). An invitation can exist on
@@ -1147,8 +1174,9 @@ async def test_a_valid_invitation_gives_its_role_in_open_and_invite_mode(engine:
 
 @pytest.mark.asyncio
 async def test_open_mode_registers_a_regular_user_without_an_invitation(engine: AsyncEngine) -> None:
-    """Contract 4: ``open`` — the default without a row — registers anybody as a regular, active user, with a bcrypt hash of the password."""
+    """Contract 4: ``open``, set on the row — since A6d an instance without the row is ``invite`` —, registers anybody as a regular, active user, with a bcrypt hash of the password."""
     await _add_users(engine, "alice")
+    await _set_mode_row(engine, "open")
 
     user = _assert_registered(await _register(engine, "walkin"), "open mode, no invitation")
 
@@ -1245,8 +1273,9 @@ async def test_an_invitation_takes_the_place_it_holds_even_when_the_limit_is_ful
 @pytest.mark.asyncio
 @pytest.mark.parametrize("limit", [pytest.param("1", id="limit-reached"), pytest.param("not-a-number", id="invalid-limit-closes")])
 async def test_an_open_registration_over_the_limit_is_refused_and_leaves_no_account(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, limit: str) -> None:
-    """Contract 4: ``open``, no invitation, the limit reached (or invalid, so 0): ``USER_LIMIT_REACHED``, and the account inserted to count is rolled back — even though the caller commits after the refusal."""
+    """Contract 4: ``open`` (set on the row), no invitation, the limit reached (or invalid, so 0): ``USER_LIMIT_REACHED``, and the account inserted to count is rolled back — even though the caller commits after the refusal."""
     await _add_users(engine, "alice")
+    await _set_mode_row(engine, "open")
     monkeypatch.setenv(MAX_USERS_VARIABLE, limit)
 
     outcome = await _register(engine, "overflow")
@@ -1257,9 +1286,10 @@ async def test_an_open_registration_over_the_limit_is_refused_and_leaves_no_acco
 
 @pytest.mark.asyncio
 async def test_an_open_registration_under_the_limit_is_accepted_and_inactive_accounts_hold_no_place(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Contract 4: limit 2, one active and one inactive account: one place left — the registration goes through, the next one is refused."""
+    """Contract 4: ``open`` (set on the row), limit 2, one active and one inactive account: one place left — the registration goes through, the next one is refused."""
     await _add_users(engine, "alice")
     await _add_users(engine, "carol", active=False)
+    await _set_mode_row(engine, "open")
     monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
 
     _assert_registered(await _register(engine, "fits"), "limit 2, one active account")
@@ -1277,10 +1307,12 @@ async def test_two_registrations_racing_for_the_last_places_never_exceed_the_lim
     hashing. A limit checked before the insert would then let both through; the contract checks it after the insert, in
     the transaction, where the first writer holds SQLite's write lock and the second waits for its commit. The barrier's
     deadline only ends a failure (bcrypt on the event loop, or registrations serialised in the process before hashing,
-    which no other worker would honour). Three rounds each, the limit raised to the accounts present plus ``free``.
+    which no other worker would honour). Three rounds each, the limit raised to the accounts present plus ``free``; the
+    mode ``open``, set on the row (since A6d an instance without the row is ``invite``).
     """
     print_section(f"Contract 4: the race, {free} place(s) left")
     await _add_users(engine, "alice", "bob")
+    await _set_mode_row(engine, "open")
     barrier = threading.Barrier(2, timeout=BARRIER_SECONDS)
     real_hashpw = bcrypt.hashpw
 

@@ -101,19 +101,19 @@
     });
 </script>
 
-<div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
+<div class="lg:col-span-2 bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
     <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.allocation')}</h2>
-        <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+        <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.allocation')}</h2>
+        <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
             <button
-                class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 onclick={() => selectView('now')}
                 aria-pressed={allocationView === 'now'}
                 data-testid="allocation-view-now"
                 title={$_('dashboard.now')}><PieChart size={14} /></button
             >
             <button
-                class="px-2.5 py-1.5 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                class="px-2.5 py-1.5 transition-colors border-l border-lf-subtle {allocationView === 'history' ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 onclick={() => selectView('history')}
                 aria-pressed={allocationView === 'history'}
                 data-testid="allocation-view-history"
@@ -122,10 +122,10 @@
         </div>
     </div>
 
-    <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium self-start">
+    <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium self-start">
         {#each allocationTabs as [tab, labelKey]}
             <button
-                class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
+                class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'} {tab !== 'type' ? 'border-l border-lf-subtle' : ''}"
                 onclick={() => selectTab(tab)}
                 aria-pressed={allocationTab === tab}
                 data-testid="allocation-tab-{tab}"
@@ -137,14 +137,14 @@
 
     <div class="flex-1 min-h-0 relative">
         {#if loading || allocationHistoryLoading}
-            <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+            <div class="absolute inset-0 z-10 bg-lf-neutral rounded animate-pulse"></div>
         {/if}
         <div class="w-full h-full" class:invisible={allocationView !== 'history' || loading || allocationHistoryLoading}>
             <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={false} />
         </div>
         {#if allocationView === 'now'}
             {#if !summary}
-                <div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div class="absolute inset-0 flex items-center justify-center text-sm text-lf-muted">
                     {$_('common.noData')}
                 </div>
             {:else if allocationTab === 'type'}

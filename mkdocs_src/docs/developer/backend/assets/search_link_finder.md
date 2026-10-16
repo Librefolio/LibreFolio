@@ -102,28 +102,42 @@ graph TD
 
 ## 🎼 Orchestration (`AssetSearchService`)
 
-Both `search()` (batch) and `search_stream()` (SSE) query every eligible provider in parallel.
-Each `provider.search()` call goes through `assets.core._run_provider_in_thread()`. After a
-provider yields its L1 results, the shared augment helper decides whether to fall back to the
-external stack:
+Both `search()` (batch) and `search_stream()` (SSE) query every eligible provider in parallel, each
+a `core.configured_provider(code, user_id=…)` that carries the searching user's
+[personal settings](../../architecture/patterns/plugin_settings.md#scopes). Each `provider.search()`
+call goes through `assets.core.call_provider()`, the boundary of every provider call, which runs it
+in `_run_provider_in_thread()`. After a provider yields its L1 results, the shared augment helper
+decides whether to fall back to the external stack:
 
 ```python
 # backend/app/services/assets/search.py
-async def search(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse
-async def search_stream(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]
+async def search(query: str, provider_codes=None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> FAProviderSearchResponse
+async def search_stream(query: str, provider_codes=None, hints: Optional[list[str]] = None, *, user_id: int | None = None) -> AsyncGenerator[str]
 ```
 
 - **`_augment_with_link_finder(code, provider, query, hints=None)`** — invoked when a provider
   returns 0 items **and** `provider.supports_url_resolution` **and** `web_link_finder.is_enabled()`.
   It builds the candidate queries (see [Hints](#hints-the-two-stage-stringone)), calls
-  `find_candidate_urls`, then resolves each hit through
-  `assets.core._run_provider_in_thread()` (`resolve_url` may do sync I/O). The helper
+  `find_candidate_urls`, then resolves each hit through `assets.core.call_provider()`
+  (`resolve_url` may do sync I/O). The helper
   flattens one-item/list results, de-duplicates by `(identifier, language)`, and returns the
   non-`None` items. Any failure is caught and yields `[]` — the search always completes and
   emits `done`.
 - **`_provider_url_for_item(code, item)`** — DRY helper used during serialization so the
   `provider_url` display link is (re)computed from the item's `provider_params` on every request.
 - Results are flagged as "found via web" for the UI.
+
+The stream sends one event per provider, then a last one:
+
+| Event | Fields |
+|-------|--------|
+| `provider_results` | `provider_code`, `results` |
+| `provider_error` | `provider_code`, `error` (the message), `error_code` for every `AssetSourceError` (`NOT_CONFIGURED`, `RATE_LIMITED`, or the provider's own code), `retry_after` with `RATE_LIMITED` |
+| `done` | `total_results`, `providers_queried`, `providers_with_errors` |
+
+The batch search lists every provider that failed in `providers_with_errors`, and those not called
+because a required setting has no value also in `providers_not_configured`: see the reasons in
+[Interactive Search Stack](architecture.md#interactive-search).
 
 !!! info "Why the fallback fixes the old \"searching… hangs\" bug"
 
@@ -227,7 +241,8 @@ link-finder then skips that URL without reporting an error.
 
     The capability is generic in the base class, but **Borsa Italiana is the only provider that
     implements it** in the current pass: a fund detail page resolves to the **IT + EN pair**
-    (Italian first, with flags), each carrying the fund's `codice_fondo`.
+    (Italian first, with flags), each carrying the fund's `codice_fondo`, or to the row of the
+    searching user's preferred language alone.
 
 ---
 
@@ -297,7 +312,7 @@ preserves the legacy single-query behaviour.
 
 | Component | Prop | Role |
 |-----------|------|------|
-| `AssetSearchAutocomplete.svelte` | `hints?: string[]` | Appended as repeated `&hints=` on the SSE fetch URL (deduped client-side). |
+| `AssetSearchAutocomplete.svelte` | `hints?: string[]` | Appended as repeated `&hints=` on the SSE fetch URL (deduped client-side). It also reads why a provider did not answer: `error_code: "NOT_CONFIGURED"` on the stream, `providers_not_configured` on the REST fallback, each giving the provider a row with **Configure**. |
 | `AssetModal.svelte` | `searchHints?: string[]` | Forwarded to the autocomplete. |
 | `ImportWizardModal.svelte` | `searchHints` | Built from the extracted ISIN + symbol + all candidate report names. |
 

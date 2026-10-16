@@ -71,7 +71,8 @@ from backend.app.db import (
     UserRole,
     UserSettings,
 )
-from backend.app.db.models import UserOnboardingStepProgress
+from backend.app.db.models import GlobalSetting, UserOnboardingStepProgress
+from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.brim.brim_provider import save_uploaded_file
@@ -191,6 +192,25 @@ def _stable_seed(*parts: object) -> int:
     """Return a deterministic RNG seed independent from Python hash randomization."""
     payload = "|".join(str(part) for part in parts).encode("utf-8")
     return int(hashlib.sha256(payload).hexdigest()[:16], 16)
+
+
+def open_lane_registration(session: Session) -> None:
+    """Registration open on the test database: the API and E2E tests register accounts of their own.
+
+    A new install starts by invitation (decision 36), and the server's startup seeding creates only the rows that are
+    missing: the row written here is the one it keeps.
+    """
+    key = "registration_mode"
+    default = GLOBAL_SETTINGS_DEFAULTS[key]
+    row = session.get(GlobalSetting, key)
+    if row is None:
+        session.add(GlobalSetting(key=key, value="open", value_type=default["type"], description=default.get("description"), updated_at=utcnow()))
+    else:
+        row.value = "open"
+        row.updated_at = utcnow()
+        session.add(row)
+    session.commit()
+    print("  ✅ Registration open on the test database (registration_mode = open)")
 
 
 def cleanup_all_tables(session: Session):
@@ -3870,6 +3890,7 @@ def main():  # noqa: C901 — sequential populate step driver
     with Session(engine) as session:
         try:
             cleanup_all_tables(session)
+            open_lane_registration(session)
 
             populate_brokers(session)
             populate_broker_user_access(session)  # Associate brokers with test users

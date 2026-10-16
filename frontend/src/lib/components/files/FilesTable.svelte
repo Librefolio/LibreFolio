@@ -17,8 +17,8 @@
     import {clientSessionUserId, getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2, UserRound} from 'lucide-svelte';
-    import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
+    import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Lock, Trash2, UserRound, Users} from 'lucide-svelte';
+    import type {BrimFile, BrokerInfo, FileData, UploadedFile, UploadScope} from '$lib/types';
     import {safeNumber, safeString} from '$lib/types';
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
@@ -50,9 +50,11 @@
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
         /** Called when row selection changes (exposes selected IDs to parent) */
         onSelectionChange?: (selectedIds: string[]) => void;
+        /** Static files: called with the scope a file should get (share with everyone, or make personal) */
+        onScopeChange?: (file: UploadedFile, scope: UploadScope) => void;
     }
 
-    let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange}: Props = $props();
+    let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange, onScopeChange}: Props = $props();
 
     interface SearchUser {
         id: number;
@@ -244,6 +246,15 @@
         return `/api/v1/brokers/import/files/${(file as BrimFile).file_id}/download`;
     }
 
+    /** Whether the user may delete the file (and change a static file's scope): a row without the field keeps today's actions. */
+    function canDelete(file: FileData): boolean {
+        return (file as {can_delete?: boolean}).can_delete !== false;
+    }
+
+    function scopeLabel(scope: UploadScope): string {
+        return scope === 'common' ? $t('uploads.scope.common') : $t('uploads.scope.personal');
+    }
+
     function getFileSize(file: FileData): number {
         return type === 'static' ? (file as UploadedFile).size_bytes : (file as BrimFile).size_bytes || 0;
     }
@@ -418,6 +429,27 @@
             },
         ];
 
+        if (type === 'static') {
+            cols.push({
+                id: 'scope',
+                urlKey: 'scope',
+                header: () => $t('uploads.scope.column'),
+                headerTooltip: () => $t('uploads.scope.columnHint'),
+                cell: (row) => ({
+                    type: 'badge',
+                    text: scopeLabel((row as UploadedFile).scope),
+                    variant: (row as UploadedFile).scope === 'common' ? 'info' : 'default',
+                }),
+                type: 'enum',
+                enumOptions: [
+                    {value: 'common', label: scopeLabel('common')},
+                    {value: 'personal', label: scopeLabel('personal')},
+                ],
+                width: 120,
+                getValue: (row) => (row as UploadedFile).scope,
+            });
+        }
+
         if (type === 'brim') {
             // Add broker column for BRIM files when user has multiple brokers
             // Bug 4 fix: Show column based on broker count, not just existence
@@ -553,6 +585,26 @@
             });
         }
 
+        // Scope actions (static files of the user, or any for an admin)
+        if (type === 'static' && onScopeChange) {
+            actions.push(
+                {
+                    id: 'share',
+                    icon: Users,
+                    label: () => $t('uploads.scope.share'),
+                    onClick: (file) => onScopeChange?.(file as UploadedFile, 'common'),
+                    visible: (file) => canDelete(file) && (file as UploadedFile).scope === 'personal',
+                },
+                {
+                    id: 'makePersonal',
+                    icon: Lock,
+                    label: () => $t('uploads.scope.makePersonal'),
+                    onClick: (file) => onScopeChange?.(file as UploadedFile, 'personal'),
+                    visible: (file) => canDelete(file) && (file as UploadedFile).scope === 'common',
+                },
+            );
+        }
+
         // Download action
         actions.push({
             id: 'download',
@@ -574,6 +626,7 @@
             icon: Trash2,
             label: () => $t('common.delete'),
             onClick: (file) => onDelete(getFileId(file)),
+            visible: (file) => canDelete(file),
             variant: 'danger',
             requireConfirm: true,
             confirmMessage: () => $t('uploads.deleteConfirm'),

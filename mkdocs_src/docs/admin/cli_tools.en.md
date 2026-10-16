@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create` and `backup inspect` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create`, `backup inspect` and `backup restore --dry-run` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -65,8 +65,8 @@ pipenv run ./dev.py user create <username> <email> <password> --role user
 pipenv run ./dev.py user list
 ```
 
-- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open**, or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
-- 🔒 The password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol.
+- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open** (on a new instance, also until its first account exists), or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
+- 🔒 The password follows the same rules as in the app and the API: at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol. Letters and digits of any alphabet count, such as `É` or `é`; a symbol is any character that is neither a letter, a number nor a space, such as `!`, `_` or `€`. A password that misses a rule changes nothing: the command prints `Password does not meet security requirements:` and one line per rule missed, each starting with the rule's code, such as `digit: the password must contain a digit`, then exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `user create` warns `The instance is at its limit (LIBREFOLIO_MAX_USERS: 5 of 5 places taken): the command line creates the account anyway`, then creates it: the command line is how you go past the limit.
 
 ### ✉️ Invite Someone {: #invite }
@@ -228,7 +228,7 @@ pipenv run ./dev.py db create-clean
 
 ## 💾 Back Up the Instance {: #backup }
 
-`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
+`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds, and `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
 
 ### 📦 Create an Archive
 
@@ -296,7 +296,7 @@ Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `bac
 ??? info "📋 `manifest.json` — what it records"
 
     - the format, `librefolio-backup`, and its version;
-    - the LibreFolio version that made the archive, how (`cli` for this command) and when, in UTC;
+    - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface, `panel` for a [hosting panel](hosting_providers.md#panel-backups)) and when, in UTC;
     - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations and the rows in each table;
     - every entry, the database first, with its path, its size and its SHA-256;
     - whether the instance key is included: it is not.
@@ -316,16 +316,80 @@ pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-2026101
 - 🔎 It compares the size and SHA-256 of every entry with the manifest, and ends with `✅ Every entry matches the manifest`. `--no-verify` compares only the entry names, without reading the entries, and ends with `ℹ️ The entry names match the manifest; their contents were not read (--no-verify)`.
 - ❌ It exits with `1` when entries are missing, differ from the manifest or are not in it (it names the first five of each), and when the file is not an archive it can read: the message then ends with a code, such as `archive_unreadable` (not a zip file, or one cut short), `manifest_missing`, `manifest_unknown_format` (not a LibreFolio backup) or `manifest_newer_format` (made by a newer LibreFolio: check it with that version or a newer one).
 
+### 🧪 Try a Restore on a Copy {: #backup-restore-dry-run }
+
+```bash
+# Check an archive for a restore, on a copy: the instance stays as it is
+pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip --dry-run
+```
+
+`backup restore --dry-run` unpacks the archive into a copy, brings it up to date and checks it, then tells you what a restore would do. The copy is made in the data directory, in `.restore/stage/<id>/`, and removed at the end: the database and the files of the instance are never touched, so the server can keep running. This version only checks: without `--dry-run`, the command stops with `❌ Only --dry-run is available for now: it checks the archive on a copy and leaves the instance as it is`.
+
+The check goes through five steps, and stops at the first one that refuses the archive:
+
+1. **A LibreFolio archive.** Only an archive LibreFolio wrote, with its `manifest.json`, is accepted: a data directory zipped by hand is not. Every entry is checked before a byte is written: the manifest lists it, it is a plain file (not a folder, a link or an encrypted entry), its name appears only once, even ignoring upper and lower case, its size is the one in the manifest, and the whole fits in the free space.
+2. **Unpacked.** Each entry is written into a new file of the copy, never through a link nor over another file, and its SHA-256 is compared with the manifest's.
+3. **The revision decides.** The migration (Alembic) revision of the database, given by the manifest and confirmed by the database itself:
+    - this LibreFolio's own revision: the database is restored as it is;
+    - an older one: the copy is upgraded to this LibreFolio's revision, in a process of its own, which is stopped if it lasts more than an hour;
+    - one this LibreFolio does not know, most likely from a newer version: refused with `revision_unknown`. Update LibreFolio first: a database is never downgraded.
+
+    Then the [post-migration fixes](#post-migration-fixes) run on the copy, as at every start.
+
+4. **Checked before and after.** Before the upgrade, the copy passes SQLite's integrity check and holds exactly the rows the manifest counted. After it, the copy passes the integrity check again, at this LibreFolio's revision. A migration may change data, so rows that changed are a warning, not a refusal, and so are broken references (foreign keys), kept as they are.
+5. **Administrators.** The report names the active administrators of the backup. Without any, the restore is blocked: nobody could manage the instance after it.
+
+It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`, `… verifying`), then its report:
+
+- 📦 Who made the archive and when (`Made by LibreFolio <version> (<how>) on <date> UTC`), and what a restore does with the database: `this LibreFolio's own: restored as it is`, or `upgraded on the copy to <revision> (<n> migrations)`, followed by each migration with the first line of its description.
+- 🩹 The post-migration fixes that changed something on the copy, if any.
+- 🔢 The rows, the tables and the size of the database, then the tables whose rows the upgrade changed, as `<table> (<before> → <after>)`, with `—` for a table that did not exist.
+- 📁 The number and size of the files, and whether the instance key is included.
+- 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.`
+- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, or `The upgrade added broken references to the copy`.
+- ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
+
+It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
+
+- 💽 The copy needs free space on the disk of the data directory: everything the archive holds once unpacked, plus twice the size of its database for the upgrade, plus 64 MB. `backup inspect` shows those sizes; the archive itself is read where it is, never copied. When the space is short, the check stops before it unpacks anything, with the number of bytes it needs (`no_space`); a disk that fills up during the check stops it too.
+- 🚦 One archive is checked at a time: while another check runs, the command stops with `❌ Another archive is being checked (from the web interface or another command): try again when it ends`.
+- 🆕 It never uses the database of the instance: any installation can check an archive, a new one included, as long as its data directory exists (otherwise `❌ No data directory at <path>`). As with `-o`, a relative path starts at the project root.
+- 🔗 Keep `.restore/` and `.restore/stage/` real folders: a link, or a file, in their place stops the command with `❌ <path> is not a plain folder (a link, or a file): the copy is made in a folder of the data directory`.
+
+??? note "❌ Refusals — what the codes mean"
+
+    | Code | Why the archive is refused |
+    | --- | --- |
+    | `not_a_backup` | Not a zip, or a zip without the manifest LibreFolio writes, such as a data directory zipped by hand |
+    | `archive_unreadable`, `archive_damaged` | The file cannot be read, or the zip is damaged |
+    | `manifest_newer_format` | The archive format is newer than this LibreFolio reads: update LibreFolio first |
+    | `manifest_invalid`, `manifest_unreadable`, `manifest_too_large` | The manifest is damaged or not valid |
+    | `unexpected_entry`, `missing_entry` | The archive holds an entry its manifest does not list, or lacks entries the manifest lists |
+    | `duplicate_entry` | An entry appears twice, even when only the case of its name changes, or stands where the folder of another entry must be |
+    | `not_a_file`, `encrypted_entry`, `unsupported_entry` | An entry is a folder or a link, is encrypted, or uses a compression LibreFolio does not write |
+    | `too_many_entries` | The archive holds more than 500,000 entries |
+    | `checksum_mismatch` | An entry's size or SHA-256 differs from the manifest: the archive is damaged or was changed |
+    | `no_space` | Not enough free space for the copy |
+    | `stage_failed` | The copy could not be written: the error printed just above gives the cause |
+    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade |
+    | `manifest_mismatch` | The backup's database is not the one its manifest describes |
+    | `revision_missing` | The backup's database records no migration revision |
+    | `revision_unknown` | The backup comes from a newer LibreFolio, or not from this one: update LibreFolio, then check it again |
+    | `upgrade_failed` | The upgrade of the copy failed or lasted more than an hour (the error printed just above gives the cause), or did not reach this LibreFolio's revision |
+    | `post_migration_failed` | A post-migration fix failed on the copy: the error printed just above gives the cause |
+    | `head_unknown` | This LibreFolio cannot read its own migration scripts |
+
 ### 🚚 Use an Archive on Another Installation
 
-There is no restore command yet. To start LibreFolio on the data of an archive, by hand:
+`backup restore` only checks an archive for now. To start LibreFolio on the data of an archive, by hand:
 
 1. **Stop LibreFolio** on the installation that receives the data.
 2. **Unzip the archive into an empty [data directory](filesystem.md)** (`LibreFolio-data/` with Docker Compose): if it holds anything, move it aside first. Nothing of the old data may mix with the archive's, not even SQLite's `app.db-wal` and `app.db-shm`.
 3. **Put `secrets/` back** in the data directory, from the copy you saved separately.
 4. **Start LibreFolio**, the version that made the archive or a newer one: the pending migrations run by themselves at start.
 
-- ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive.
+- 🧪 Before step 1, check the archive on the installation that receives it, with `backup restore <archive> --dry-run` ([Try a Restore on a Copy](#backup-restore-dry-run)): without changing anything, it tells you whether that LibreFolio can take the archive, which migrations its start will apply, and which administrators you will sign in with.
+- ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive, and `backup restore --dry-run` refuses such an archive with `revision_unknown`.
 - 🧹 The `manifest.json` left at the root of the data directory is harmless: you can delete it.
 - 👤 With Docker, the container gives the data directory to its user at every start, so the owner of the unzipped files does not matter. On a host installation, unzip as the user that runs LibreFolio, so that the files belong to it.
 
@@ -337,10 +401,14 @@ docker compose exec librefolio python dev.py backup create
 
 # Check it, with its path inside the container
 docker compose exec librefolio python dev.py backup inspect /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+
+# Try a restore of it on a copy: the instance stays as it is
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --dry-run
 ```
 
 - 👤 `docker compose exec` runs as root: the command switches to the owner of the data directory, so everything it writes belongs to the server's user. If it cannot switch, it stops and asks you to run it as that user: `docker compose exec --user <uid>:<gid> librefolio python dev.py backup create`, with the numbers from the message.
-- 📂 `-o` and the archive of `inspect` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
+- 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
+- 🔑 `restore` also reads the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or the check stops with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.
 - 💻 From a source checkout, `./dev.py docker exec backup create` does the same.
 

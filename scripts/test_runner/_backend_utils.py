@@ -79,6 +79,15 @@ def utils_served_content_types(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Served content type tests", verbose=verbose)
 
 
+def utils_nosniff_content_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every file the app serves has its right type: nosniff refuses a script or a style sheet of another type."""
+    print_section("Utils: nosniff Content Types")
+    print_info("Testing: backend/app/services/platform/static_site.py (FileResponse through the /_app mount, the SPA catch-all, /mkdocs), every extension of frontend/build and mkdocs_src/site")
+    print_info("Tests: JavaScript, CSS, WASM, font, JSON/manifest and SVG types; never application/octet-stream; on this machine and without any system mime.types file (python:3.13-slim)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_nosniff_content_types.py", test_names)
+    return run_command(cmd, "nosniff content type tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -527,6 +536,17 @@ Tests for utility modules and helper functions:
         # each upload a real file and sidecar, all under tmp_path. No DB, no server, no network.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "nosniff-content-types",
+        utils_nosniff_content_types,
+        name="nosniff Content Types",
+        desc="Every file the app serves has its right type (nosniff refuses a script or a style sheet of another type; nothing goes out as application/octet-stream): .js/.mjs a JavaScript MIME type, .css text/css, .wasm application/wasm, .woff/.woff2 font/…, .json/.webmanifest a JSON MIME type, .svg image/svg+xml, any other extension never application/octet-stream; for the extensions the rules name (fake files at the SPA catch-all, the /_app mount and /mkdocs) and for every extension of frontend/build and mkdocs_src/site (skipped, with the reason, when a tree is not built; its table printed), on this machine and in an interpreter that read no system mime.types file, as on python:3.13-slim",
+        # Fresh FastAPI() apps over fake trees under tmp_path and over the real trees (read only), raw ASGI calls; one
+        # child interpreter importing backend.app.main with mimetypes.knownfiles emptied, its data directory under
+        # tmp_path. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
@@ -835,7 +855,7 @@ Tests for utility modules and helper functions:
         "backup-cli",
         utils_backup_cli,
         name="Backup CLI",
-        desc="scripts/backup_cli.py: the archive goes to <data dir>/backups/, into an existing --output folder, or to the --output file (relative to the working directory, which dev.py sets to the project root; ~ expanded), never replacing a file (-2, -3 … in a folder); --output is checked before the run and nothing is created for it until the archive moves there; an archive that cannot get there goes to backups/ (exit 1) or stays in its job folder, never lost, with no folder left behind; run as root on a data directory owned by another user it drops its groups, takes the owner's group then user, and stops with a message if it cannot; backups/ that is a link or a file, and OS errors before the run, are messages with exit 1; no subcommand exits 1; inspect exits 0 on an intact archive (--no-verify compares the entry names without reading them) and 1 on a missing file, a file that is not a zip, a zip without manifest, an altered, added or damaged entry; create exits 1 without data directory or database, writing nothing; python scripts/backup_cli.py create then inspect exit 0",
+        desc="scripts/backup_cli.py: the archive goes to <data dir>/backups/, into an existing --output folder, or to the --output file (relative to the working directory, which dev.py sets to the project root; ~ expanded), never replacing a file (-2, -3 … in a folder); --output is checked before the run and nothing is created for it until the archive moves there; an archive that cannot get there goes to backups/ (exit 1) or stays in its job folder, never lost, with no folder left behind; run as root on a data directory owned by another user it drops its groups, takes the owner's group then user, and stops with a message if it cannot; backups/ that is a link or a file, and OS errors before the run, are messages with exit 1; no subcommand exits 1; inspect exits 0 on an intact archive (--no-verify compares the entry names without reading them) and 1 on a missing file, a file that is not a zip, a zip without manifest, an altered, added or damaged entry; create exits 1 without data directory or database, writing nothing; python scripts/backup_cli.py create then inspect exit 0; restore without --dry-run or on a missing file exits 1 creating nothing, restore --dry-run exits 0 on a restorable archive (report printed, administrators named, the copy removed) and 1 with the StagingError code on a refused one, without an active administrator, while another check runs, or when .restore is a link; the script runs restore --dry-run end to end",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked
         # before each command), children with the same data directory and without LIBREFOLIO_*/COVERAGE_*, identity
         # calls replaced: no lane DB, no server, no network, no writes outside tmp_path.

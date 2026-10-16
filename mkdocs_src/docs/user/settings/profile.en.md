@@ -14,9 +14,11 @@ While unlocked, every modified field shows its own **save** / **undo** buttons, 
 
 ## 🖼️ Avatar
 
-Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image from the [Files library](../files/index.md) or upload a new one. Uploads pass through the **[Image Crop tool](../misc/image-crop.md)** with the *avatar* preset (square crop, circular preview).
+Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image from the [Files library](../files/index.md), a shared one or one of your own, or upload a new one. Uploads pass through the **[Image Crop tool](../misc/image-crop.md)** with the *avatar* preset (square crop, circular preview).
 
 The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, and collaborator lists.
+
+Since the other users see your avatar, its picture is **shared**: an image you upload here is stored shared, and one of your personal images becomes shared when you pick it, with a notice (see [Shared or personal](../files/index.md#visibility)).
 
 !!! note "Also settable from the Welcome page"
 
@@ -27,8 +29,22 @@ The avatar is saved immediately and is used across the app wherever your identit
 
 ## ✏️ Username, Email, Account Created
 
-- **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away.
+- **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away. Changing the email also asks for your current password: see [Changing Your Email](#email-change) below.
 - **Account Created** is a read-only field showing your registration date.
+
+### 📧 Changing Your Email {: #email-change }
+
+As soon as the email in the field differs from your current one, a **Current Password** field appears under the email's description, with a reminder: *To change your email, enter your current password. Your other devices will be signed out.* The email's save button, and **save all**, stay disabled until you type it.
+
+- **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
+- **Email refused for another reason**, for example because another account already uses it: the tab shows the reason, and your current email comes back.
+- **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again.
+
+Changing only your username asks for no password and signs no device out.
+
+!!! info "Why your password"
+
+    Your email address is how your account can be recovered: a password-reset link sent there lets whoever reads it choose a new password. Without this check, someone with a moment inside your open session (a computer left unlocked, a stolen session cookie) could put their own address on your account, and keep the account for good. Without your password, they cannot change the address.
 
 ## 🔐 Security
 
@@ -41,8 +57,10 @@ The avatar is saved immediately and is used across the app wherever your identit
 The **Change Password** button (always available, no unlock needed) opens a modal requiring:
 
 1. Your **current password** (for verification)
-2. A **new password** that satisfies all the rules: minimum 8 characters, at least one uppercase letter, one lowercase letter, one number, and one special character — and it must differ from the current one
+2. A **new password** that meets every rule of the checklist under the field: at least 8 characters, an uppercase letter, a lowercase letter, a number and a special character — and it must differ from the current one
 3. **Confirmation** of the new password
+
+The checklist follows what you type, and the server applies exactly the same rules. Letters and digits of any alphabet count: `É` is an uppercase letter, `é` a lowercase one. A special character is anything that is neither a letter, a number nor a space, such as `!`, `_` or `€`. If the server still refuses the new password, the modal says *Password does not meet security requirements*, and the checklist shows which rules are missing.
 
 After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out.
 

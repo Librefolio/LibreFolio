@@ -136,8 +136,9 @@ Access management is exposed via the following endpoints (`backend/app/api/v1/br
 Besides the broker roles, every account carries one system-wide flag, `users.is_superuser`: the
 *administrator* of the admin manual. It belongs to the account, not to a broker.
 
-- **Granted** to the first account registered (`POST /api/v1/auth/register` when `count_users()`
-  is 0: accepted whatever the [registration mode](#registration-modes), and an administrator even
+- **Granted** to the first account registered (`POST /api/v1/auth/register` while
+  `first_account_open()` holds, that is while `count_users()` is 0, inactive accounts counted:
+  accepted whatever the [registration mode](#registration-modes), and an administrator even
   when the invitation it spends grants a regular account), to an account registered
   with an invitation that grants it (`grants_admin`, see [Invitations](#invitations)), to an account
   created with `./dev.py user create` without `--role user` (`--role admin` is the default:
@@ -166,9 +167,16 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   commit: each device gets `401` at its next request, and signs in again with the new password.
   A [password-reset link](#reset-links) does the same when it is spent. To keep the account out
   altogether, deactivate it.
-- **CLI password rules**: `create` and `reset` call `validate_password()` in
-  `scripts/user_cli.py`: at least 8 characters, with an upper-case letter, a lower-case letter, a
-  digit and a symbol from its `special_chars` set. The API schemas only ask for 8 characters.
+- **The account's own changes** end its other sessions as well: a password change
+  (`POST /api/v1/auth/change-password`) and an email change (`PUT /api/v1/auth/profile`, which asks
+  for the current password: see [Changing the Email](security.md#email-change)). The device that
+  made the change gets a new cookie and stays signed in; a username change ends no session. Every
+  change that ends sessions is in [Session Revocation](security.md#session-revocation).
+- **Password rules**: `create` and `reset` call `validate_password()` in `scripts/user_cli.py`,
+  a thin wrapper over `password_policy.failed_rules()`: the same rules as the API and the app
+  ([Password Rules](security.md#password-rules)), checked before anything is read from the
+  database. Each rule missed prints a line that starts with its code, such as
+  `digit: the password must contain a digit`, and the command exits with `1`.
 
 The admin commands are in [Command-Line Tools](../../admin/cli_tools.md).
 
@@ -183,8 +191,17 @@ account changes in `user_service.py`, and the four variables in `backend/app/con
 
 `effective_registration_mode(session)` returns a `RegistrationModeState(mode, locked)`:
 `LIBREFOLIO_REGISTRATION` when it is set (blank counts as unset; case and surrounding spaces are
-ignored), with `locked=True`; otherwise the global setting `registration_mode`, `open` by default
+ignored), with `locked=True`; otherwise the global setting `registration_mode`
 ([Settings System](settings.md)), with `locked=False`.
+
+The default of that setting is `invite` (decision 36), and it has one source:
+`GLOBAL_SETTINGS_DEFAULTS` in `backend/app/schemas/settings.py`. The startup seeding writes it on a
+new install, and `get_setting_value()` answers it while the row is missing: the service passes no
+fallback of its own. The seeding creates only missing rows, so an existing install keeps its row,
+whatever its value. An install that holds accounts but no row has run with the earlier default,
+`open`: migration `008_registration_invite_default` writes that `open` row before the seeding runs
+([`GLOBAL_SETTING`](database/users_access.md#global-setting)), so an upgrade never closes
+registration in silence.
 
 | Mode | `POST /api/v1/auth/register` accepts |
 |------|--------------------------------------|
@@ -200,12 +217,14 @@ and its value, and `consequence`, *registration stays closed until it is fixed*.
 `functools.cache`, so each problem is logged once per process. The startup
 [configuration checks](security.md#configuration-checks) do not cover these variables.
 
-`register_user()` holds the whole rule of `POST /api/v1/auth/register` (`AuthRegisterRequest`, with
-an optional `invite_token`) and owns its transaction:
+`register_user()` holds the rule of `POST /api/v1/auth/register` (`AuthRegisterRequest`, with
+an optional `invite_token`) and owns its transaction. The route checks the password before calling
+it, so `PASSWORD_TOO_WEAK` comes first:
 
 | Situation | Outcome |
 |-----------|---------|
-| No account at all (`count_users()` is 0) | Created as an administrator, whatever the mode, the limit and the role of an invitation. Without an `invite_token`, nothing else is checked. With one, the invitation must be valid — otherwise `400` `INVITE_INVALID`, and the instance stays empty — and the registration spends it as any other does (row *A valid invitation*): its link then reads `consumed` |
+| A `password` that misses a [password rule](security.md#password-rules) | `400` `PASSWORD_TOO_WEAK`, with `rules`, the codes missed. Checked by the route before anything else — the mode, the invitation, the limit, a taken username or email — the first account included. Nothing is written, and an invitation given with it stays unspent |
+| No account at all (`first_account_open()`: `count_users()` is 0, an inactive account counts) | Created as an administrator, whatever the mode, the limit and the role of an invitation. Without an `invite_token`, nothing else is checked. With one, the invitation must be valid — otherwise `400` `INVITE_INVALID`, and the instance stays empty — and the registration spends it as any other does (row *A valid invitation*): its link then reads `consumed` |
 | Mode `disabled` | `403` `REGISTRATION_DISABLED` |
 | Mode `invite`, no `invite_token` | `403` `INVITE_REQUIRED` |
 | A token that is not a valid invitation: unknown, of another purpose, expired, used or revoked | `400` `INVITE_INVALID` |
@@ -213,13 +232,19 @@ an optional `invite_token`) and owns its transaction:
 | Mode `open`, no `invite_token` | Created as a regular account, within the [user limit](#user-limit) |
 | Username or email already taken | `400`, with the plain-string `detail` it always had |
 
-The refusals with a code answer `{"error_code": …, "message": …}` in `detail`. Two requests racing
-for one invitation cannot both spend it: `consume_token()` is one conditional `UPDATE`, and the loser
-rolls back with `INVITE_INVALID`.
+The refusals with a code answer `{"error_code": …, "message": …}` in `detail`, plus `rules` for
+`PASSWORD_TOO_WEAK`. Two requests racing for one invitation cannot both spend it: `consume_token()`
+is one conditional `UPDATE`, and the loser rolls back with `INVITE_INVALID`.
 
 `GET /api/v1/system/instance` publishes the effective state as `accounts: {registration_mode,
-registration_locked}` (`AccountsInstanceConfig`), and nothing about the users: no count, no limit
-([Public instance configuration](settings.md#public-instance-configuration)).
+registration_locked, first_account_open, password_rules}` (`AccountsInstanceConfig`). About the
+users it says one thing only, whether there is one: `first_account_open`, from
+`first_account_open(session)`, is true while the `users` table is empty, and the login page then
+offers **Register here** whatever the mode. No count, no limit
+([Public instance configuration](settings.md#public-instance-configuration); why the flag may be
+public: [The First-Account Flag](security.md#first-account-open)). `password_rules` is the list of
+the [password rules](security.md#password-rules), `[{code, value}]` (`PasswordRuleRead`), the same
+on every instance: the app checks a new password against it while the user types.
 
 ### ✉️ Invitations {: #invitations }
 
@@ -356,8 +381,10 @@ the administrator does not choose the new password: whoever spends the link does
   `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`. It
   first revokes the account's live reset links, so only the newest one works. Issuing a link ends no
   session.
-- **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public;
-  `new_password` follows the API rule, at least 8 characters. `complete_password_reset()` consumes the
+- **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public.
+  `new_password` must meet the [password rules](security.md#password-rules), checked before the
+  token is read: a weak one is `400` `PASSWORD_TOO_WEAK`, and the link is neither spent nor
+  inspected, so a valid link stays valid. `complete_password_reset()` consumes the
   token, hashes the new password with bcrypt in a worker thread, ends every session of the account and
   revokes its other live reset links, in one commit; the answer is `200`. A link that is not valid
   (used, expired, revoked, unknown or of another purpose) changes nothing: `400` `TOKEN_INVALID`.
@@ -366,7 +393,8 @@ Tests: `./dev.py test services registration`
 (`backend/test_scripts/test_services/test_registration_service.py`: the variables, the effective
 mode, the usage, invitations, every branch of `register_user()`, the limit under a race),
 `./dev.py test api registration` (`backend/test_scripts/test_api/test_registration_api.py`:
-registration by mode, inspection, the password reset, the `accounts` block, the locked setting) and
+registration by mode, inspection, the password reset, the password rules on both, the `accounts`
+block, the locked setting) and
 `./dev.py test api users-admin` (`backend/test_scripts/test_api/test_users_admin_api.py`: the
 administrator API with its guards and its logs; the deletion and its preview on the lane's server, and
 in process the protection hook replaced, the log event and an injected failure). The address probe has

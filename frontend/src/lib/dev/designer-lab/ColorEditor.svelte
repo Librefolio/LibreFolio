@@ -1,7 +1,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {colorKey, formatOklch, inSrgbGamut, parseColor, rgbaToOklch, toHex} from './color.js';
-    import {editTarget, isInlineAlias, sourceVarValue, varImpact} from './catalogView';
+    import {editTarget, isInlineAlias, sourceCategoryValue, sourceVarValue, varImpact} from './catalogView';
     import {baseVar, resolveValue, valueOpacity, withBase, withOpacity} from './colorValue';
     import {literalsOf} from './export';
     import {labT} from './i18n';
@@ -27,7 +27,8 @@
     const OCC_ROWS = 60;
     const isVar = $derived(selection.layer === 'css-var');
     const isElement = $derived(selection.layer === 'element');
-    const isLiteral = $derived(!isVar && !isElement);
+    const isCategory = $derived(selection.layer === 'category');
+    const isLiteral = $derived(!isVar && !isElement && !isCategory);
 
     function computed(name: string): string {
         void revision;
@@ -41,6 +42,7 @@
         if (existing) return existing.from;
         if (isElement) return selection.from ?? '';
         if (isVar) return sourceVarValue(catalog, selection.target, scope === 'dark' || (scope === 'both' && dark), computed(selection.target));
+        if (isCategory) return sourceCategoryValue(catalog, selection.target, scope === 'dark' || (scope === 'both' && dark));
         return selection.target;
     });
     const anchor = $derived(selection.anchor ?? existing?.anchor);
@@ -75,6 +77,15 @@
     const impact = $derived(isVar ? varImpact(catalog, selection.target) : null);
     const cssVar = $derived(impact?.variable);
     const sharedRule = $derived(selection.layer === 'css-literal' && scope !== 'both' && occurrences.some((l) => l.theme === 'both'));
+    /** A chart value that is also the fixed colour of chart categories: editing the value reaches them all at once. */
+    const valueCategories = $derived([...new Set(occurrences.map((l) => l.category).filter((c): c is string => !!c))]);
+    /** `category`: the line of each theme in the tables of `chartCategories.ts`. */
+    const categoryLines = $derived.by(() => {
+        if (!isCategory) return [];
+        const category = catalog.categories?.find((c) => c.target === selection.target);
+        if (!category) return [];
+        return (['light', 'dark'] as const).map((theme) => ({theme, lit: category[theme] === null ? undefined : catalog.literals[category[theme] as number]})).filter((x): x is {theme: 'light' | 'dark'; lit: (typeof catalog.literals)[number]} => !!x.lit);
+    });
     const topClasses = $derived(
         impact
             ? Object.entries(impact.classes)
@@ -204,6 +215,8 @@
         </label>
     {/if}
     {#if sharedRule}<p class="msg warn">{$labT('editor.sharedRule')}</p>{/if}
+    {#if valueCategories.length}<p class="msg warn" data-testid="lab-editor-category-warning">{$labT('editor.categoryValue', {list: valueCategories.join(', ')})}</p>{/if}
+    {#if isCategory}<p class="msg" data-testid="lab-editor-category-reach">{$labT('editor.categoryReach')}</p>{/if}
     {#if selection.layer === 'proposal'}<p class="msg warn">{$labT('editor.noPreview')}</p>{/if}
 
     <label class="field">
@@ -248,6 +261,18 @@
         </ul>
         {#if occurrences.length > OCC_ROWS}<p class="muted">{$labT('moreRows', {n: occurrences.length - OCC_ROWS})}</p>{/if}
         <p class="muted"><code>{colorKey(parseColor(selection.target) ?? {r: 0, g: 0, b: 0, alpha: 1})}</code></p>
+    {:else if isCategory}
+        <h3>{$labT('editor.categoryLines')}</h3>
+        <ul class="occ" data-testid="lab-editor-category-lines">
+            {#each categoryLines as x (x.theme)}
+                <li>
+                    <span class="swatch" style:background={x.lit.raw}></span>
+                    <code>{catalog.files[x.lit.file]}:{x.lit.line}</code>
+                    <span class="badge">{$labT(`scope.${x.theme}`)}</span>
+                    <code>{x.lit.raw}</code>
+                </li>
+            {/each}
+        </ul>
     {:else if anchor}
         <h3>{$labT('element.candidates')}</h3>
         <ul class="occ" data-testid="lab-editor-candidates">
