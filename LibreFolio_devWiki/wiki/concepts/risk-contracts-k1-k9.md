@@ -25,13 +25,13 @@ lives.
 |----------|---------------|----------------------|
 | K1, A→E | The underwater series and the histogram bins | `services/risk/metrics.py` (`_MAX_HISTOGRAM_BINS`), `schemas/risk.py` |
 | K2, B→G | `primaryAssetType` returns the type held, not the container (D85) | `utils/assetTypes.ts`, `charts/allocationHierarchy.ts` |
-| K3, B→E,F | The benchmark selector in sections, reusing `AssetSelect` (D50, D60, D73) | `components/risk/BenchmarkSelect.svelte` |
+| K3, B→E,F | The benchmark selector in sections, reusing `AssetSelect` (D50, D60, D73) | `features/risk/BenchmarkSelect.svelte` |
 | K4, C→E,F,H | An optional field of `PortfolioRiskScope` slices the portfolio by asset | `schemas/risk.py` (`sliced_asset_ids`) |
 | K5, D→E,F | Display primitives under `ui/display` (history; replaced by round 2's `PRIMITIVE.md`) | `components/ui/display/KpiMetricBar.svelte` |
 | K6, H→E | The simulation's mode and its cone as two separate axes | `risk_plugins/simulation/plugin.py`, `levels/SimulationProvenance.svelte` |
 | K7, I→E,F,H | Documentation slugs frozen first: a wrong slug fails only in front of the user | `components/ui/DocsLink.svelte` |
 | K8, N→E,I | KPIs acquired for L1 and L2 (effective number of assets, diversification ratio) | `risk_plugins/historical_kpi/plugin.py`, `levels/L2Diversification.svelte` |
-| K9, E→F | The historical replay apart from the hypothetical shock — superseded by D372/D376 | `components/risk/AssetSetReplaySection.svelte` |
+| K9, E→F | The historical replay apart from the hypothetical shock — superseded by D372/D376 | `features/risk/AssetSetReplaySection.svelte` |
 
 The contract files still mark K6 and K7 «agreed, not yet implemented»: the code above shows both delivered.
 
