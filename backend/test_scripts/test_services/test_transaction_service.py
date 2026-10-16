@@ -1770,6 +1770,84 @@ class TestLinkedPairValidation:
         assert response.success_count == 2
 
     @pytest.mark.asyncio
+    async def test_pairing_rejects_fx_conversion_cross_broker(self, session, test_broker, test_broker_overdraft):
+        """W-B17: red before its cure, then its guard. A FX_CONVERSION pair on two brokers is refused (pairBrokerMismatch).
+
+        TX_TYPE_METADATA wants both legs on one broker (``broker_id: equal``, a multi-currency account), and the form, the
+        promotion and the imports write them so; but ``_validate_linked_pair`` let a pair sent with a ``link_uuid`` to
+        ``POST /transactions/commit`` land on two brokers, and deleting either broker then leaves half an exchange behind.
+        Same legs as ``test_pairing_allows_fx_conversion_same_broker``, the guard that must stay green, with the USD leg
+        on a second broker.
+        """
+        service = TransactionService(session)
+        broker_a_id, broker_b_id = test_broker.id, test_broker_overdraft.id
+        # Fund the broker first.
+        funding = await create_bulk(
+            service,
+            [
+                TXCreateItem(
+                    broker_id=broker_a_id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today() - timedelta(days=1),
+                    cash=Currency(code="EUR", amount=Decimal("1000")),
+                )
+            ],
+        )
+        deposit_id = funding.results[0].transaction_id
+        # link_uuid lives only in the batch (no column): the description marks the legs for the read-back.
+        description = "W-B17 exchange across two brokers"
+        items = [
+            TXCreateItem(
+                broker_id=broker_a_id,
+                type=TransactionType.FX_CONVERSION,
+                date=date.today(),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+                link_uuid="fx-cross-broker",
+                description=description,
+            ),
+            TXCreateItem(
+                broker_id=broker_b_id,
+                type=TransactionType.FX_CONVERSION,
+                date=date.today(),
+                cash=Currency(code="USD", amount=Decimal("540")),
+                link_uuid="fx-cross-broker",
+                description=description,
+            ),
+        ]
+        # As POST /transactions/commit does: commit when the service says committed, roll back otherwise. execute_batch
+        # flushes its rows and leaves both to its caller, so a savepoint stands in for the request's transaction: the
+        # brokers and the deposit above, already written in this test's transaction, survive its rollback, and the
+        # session fixture still rolls everything back at teardown.
+        savepoint = await session.begin_nested()
+        response = await service.execute_batch(
+            creates_raw=[item.model_dump(mode="json") for item in items],
+            updates_raw=[],
+            deletes=[],
+            commit=True,
+        )
+        if response.committed:
+            await savepoint.commit()
+        else:
+            await savepoint.rollback()
+
+        issues = [(issue.operation, issue.index, issue.code, issue.params) for issue in response.issues]
+        assert response.committed is False, f"W-B17: /transactions/commit saves an exchange split across broker {broker_a_id} (EUR) and {broker_b_id} (USD) with no error; deleting either broker orphans the other half. Expected pairBrokerMismatch, got committed=True, issues {issues}"
+        mismatches = [issue for issue in response.issues if issue.code == "pairBrokerMismatch"]
+        assert len(mismatches) == 1, f"W-B17: the exchange is refused, but the user is not told that both its sides must be on one broker: expected exactly one pairBrokerMismatch issue, got {issues}"
+        mismatch = mismatches[0]
+        assert mismatch.params == {"brokerA": broker_a_id, "brokerB": broker_b_id}, f"W-B17: the refusal names brokers {mismatch.params}, not the two the user picked (brokerA={broker_a_id} for the EUR side, brokerB={broker_b_id} for the USD side)"
+        assert (mismatch.operation, mismatch.index) == ("create", 0), f"W-B17: the refusal is shown on {(mismatch.operation, mismatch.index)}, not on the exchange's first leg (create #0, the EUR side): the user sees it on the wrong row"
+
+        # Presence barrier: the read-back must still see the deposit written before the batch, or finding no exchange
+        # below would only mean it went blind.
+        deposits = await service.query(TXQueryParams(broker_id=broker_a_id, types=[TransactionType.DEPOSIT]))
+        assert deposit_id in {row.id for row in deposits}, f"scaffold: the read-back no longer sees deposit {deposit_id} written on broker {broker_a_id} before the batch, so finding no exchange below would prove nothing"
+        for broker_id in (broker_a_id, broker_b_id):
+            rows = await service.query(TXQueryParams(broker_id=broker_id, types=[TransactionType.FX_CONVERSION]))
+            written = [(row.id, row.cash) for row in rows if row.description == description]
+            assert written == [], f"W-B17: the user is told the exchange was refused, yet broker {broker_id} keeps its FX_CONVERSION rows {written}"
+
+    @pytest.mark.asyncio
     async def test_pairing_allows_deposit_withdrawal_linked(self, session, test_broker, test_broker_overdraft):
         """H.2 — DEPOSIT/WITHDRAWAL pair linked by link_uuid: allowed as intent marker."""
         service = TransactionService(session)
