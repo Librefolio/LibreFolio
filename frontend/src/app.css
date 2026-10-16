@@ -205,8 +205,7 @@ html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-800,
-html.dark .text-gray-900 {
+html.dark .text-gray-800 {
     color: var(--theme-text-primary) !important;
 }
 
@@ -326,7 +325,7 @@ html.dark .bg-libre-green {
 
 /* Reduced motion: plain colour swap communicating direction, no keyframe
    sweep. The JS-driven decay-to-neutral timer (same one used for the
-   animated case, in +page.svelte) removes the class again after the flash
+   animated case, in assetDetailLive.svelte.ts) removes the class again after the flash
    window regardless of this media query, so the colour still settles back
    on its own — just as an instant swap instead of an eased fade. */
 @media (prefers-reduced-motion: reduce) {

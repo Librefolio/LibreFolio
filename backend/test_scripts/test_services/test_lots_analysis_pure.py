@@ -485,6 +485,27 @@ class TestCollectFxNeeds:
         )
         assert resolver._needs == []
 
+    def test_a_priced_adjustment_is_no_rate_the_market_series_reads(self):
+        """J-17: only BUY and SELL mark the asset, so the market series needs the currency a BUY was
+        paid in on every day of the window, and never the cost-basis currency of an ADJUSTMENT — the
+        adjustment carries a WAC, not a price, and leaves no mark to convert.
+
+        Before J-17: the series also registered the ADJUSTMENT's cost-basis currency (GBP) on every day
+        from 2024-01-01 to 2024-06-01, to convert the adjustment's mark.
+        """
+        resolver = _resolver("EUR")
+        self._call(
+            resolver,
+            analyses=[LotAnalysisType.PRICE_HISTORY],
+            transactions=[
+                _tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("-100"), currency="USD"),
+                _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=date(2024, 2, 1), quantity=D("10"), amount=D("0"), currency=None, cost_basis_override=D("5"), cost_basis_currency="GBP"),
+            ],
+        )
+        needed = set(resolver._needs)
+        assert {("USD", date(2024, 1, 1)), ("USD", date(2024, 3, 15)), ("USD", date(2024, 6, 1))} <= needed, "guard: a BUY's currency is read on every day of the window"
+        assert {currency for currency, _day in needed} == {"USD"}, f"currencies the market series asks: {sorted({currency for currency, _day in needed})}"
+
 
 # --------------------------------------------------------------------------- #
 # collect_performance_fx_needs

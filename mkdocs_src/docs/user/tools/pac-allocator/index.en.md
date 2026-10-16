@@ -185,7 +185,9 @@ Two actions help you get there:
 
 - **Copy current distribution** reads how much each of these Assets weighs
   today in the Brokers you tick, counting only these Assets and not cash.
-  With $H_i$ the market value of Asset $i$ held there today:
+  With $H_i$ the market value of Asset $i$ held there today — what it cost
+  you, for an Asset with no price at all, whose **Valuation** reads *valued
+  at cost · no price*:
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%

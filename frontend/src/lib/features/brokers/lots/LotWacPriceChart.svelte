@@ -1780,25 +1780,19 @@
     });
 </script>
 
-<div bind:this={wrapperEl} class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="lot-wac-price-chart">
+<div bind:this={wrapperEl} class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary p-4" data-testid="lot-wac-price-chart">
     <div class="mb-3 flex items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{labels.wac} / {labels.marketPrice}</h3>
+        <h3 class="text-sm font-semibold text-lf-secondary">{labels.wac} / {labels.marketPrice}</h3>
 
         <div class="flex items-center gap-2">
             {#if displayMode === 'absolute'}
-                <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-wac-yaxis-toggle">
-                    <button
-                        type="button"
-                        class="px-3 py-1 transition-colors {!absYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        onclick={() => (absYFromZero = false)}
-                        aria-pressed={!absYFromZero}
-                        data-testid="lot-wac-yaxis-auto"
-                    >
+                <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-wac-yaxis-toggle">
+                    <button type="button" class="px-3 py-1 transition-colors {!absYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (absYFromZero = false)} aria-pressed={!absYFromZero} data-testid="lot-wac-yaxis-auto">
                         {labels.yAuto}
                     </button>
                     <button
                         type="button"
-                        class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {absYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                        class="border-l border-lf-subtle px-3 py-1 transition-colors {absYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => (absYFromZero = true)}
                         aria-pressed={absYFromZero}
                         data-testid="lot-wac-yaxis-zero"
@@ -1808,10 +1802,10 @@
                 </div>
             {/if}
 
-            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
+            <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium">
                 <button
                     type="button"
-                    class="px-3 py-1 transition-colors {displayMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    class="px-3 py-1 transition-colors {displayMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                     onclick={() => (displayMode = 'absolute')}
                     aria-pressed={displayMode === 'absolute'}
                     data-testid="lot-wac-toggle-absolute"
@@ -1820,9 +1814,7 @@
                 </button>
                 <button
                     type="button"
-                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {displayMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'} {!hasPercentData
-                        ? 'cursor-not-allowed opacity-50'
-                        : ''}"
+                    class="border-l border-lf-subtle px-3 py-1 transition-colors {displayMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'} {!hasPercentData ? 'cursor-not-allowed opacity-50' : ''}"
                     onclick={() => hasPercentData && (displayMode = 'percentage')}
                     aria-pressed={displayMode === 'percentage'}
                     disabled={!hasPercentData}
@@ -1841,7 +1833,7 @@
         </div>
 
         {#if emptyMessage}
-            <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
+            <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-lf-muted">
                 {emptyMessage}
             </div>
         {/if}

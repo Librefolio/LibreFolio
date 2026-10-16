@@ -12,7 +12,8 @@ Every user has it; what you can change there depends on
 
 Only the plugins that ask for something are listed, under **Prices** for the
 [price providers](../assets/providers/index.md) and **Exchange rates** for the
-[exchange-rate providers](../fx/providers/index.md); a heading with no such plugin is left out. Of
+[exchange-rate providers](../fx/providers/index.md), each heading after its family's icon (a column
+chart for prices, coins for exchange rates); a heading with no such plugin is left out. Of
 the plugins shipped with LibreFolio, two have a setting today, a personal search preference each:
 **JustETF** and **Borsa Italiana** (see [Search Preferences](#search-preferences)). A plugin added
 to your installation may ask for more. When no plugin asks for anything, the tab says *No installed
@@ -20,9 +21,10 @@ plugin asks for settings.*
 
 ## 🧾 One Plugin, One Form {: #form }
 
-Each plugin has a form of its own: its name, a [badge](#configured) that says whether it can work,
-then its settings. Each setting shows its name, a red **\*** when it is required, whose it is —
-**Personal** or **Whole instance** — and what it does.
+Each plugin has a form of its own: its icon and name (a puzzle piece when the plugin has no icon), a
+[badge](#configured) that says whether it can work, then its settings. Each setting shows its name,
+a red **\*** when it is required, whose it is — **Personal** or **Whole instance** — and what it
+does.
 
 - Change what you need, then click **Save** at the bottom of that plugin's form: each plugin is
   saved on its own. **Discard** drops the changes you have not saved.

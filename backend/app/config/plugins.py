@@ -9,6 +9,9 @@ API key also accepts ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``, as every secre
 The plugin settings (``services/plugin_settings/``) read their variables through ``plugin_setting_env``: the names are
 derived from the fields the plugins declare, ``LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>``, or are a field's declared
 alias.
+
+The order of the asset providers in the search (F21) has two overrides, ``asset_providers_premium()`` and
+``asset_providers_order()``; ``services/assets/provider_policy.py`` applies them.
 """
 
 import math
@@ -85,3 +88,35 @@ def plugin_setting_env_origin(name: str) -> str | None:
     """Where ``plugin_setting_env(name)`` would take its value from: ``NAME``, ``NAME_FILE (<path>)``, or ``None`` when
     neither is set. Reads no file: enough to know that a variable locks its field."""
     return env_secret_origin(name)
+
+
+def _provider_codes(name: str) -> tuple[str, ...] | None:
+    """The provider codes listed in ``name``: comma-separated, stripped, lowercased, in order, each once.
+
+    None when the variable is unset or blank, and when it lists no code at all (``,,``): then nothing is overridden.
+    """
+    codes: list[str] = []
+    for part in os.environ.get(name, "").split(","):
+        code = part.strip().lower()
+        if code and code not in codes:
+            codes.append(code)
+    return tuple(codes) or None
+
+
+def asset_providers_premium() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_ASSET_PROVIDERS_PREMIUM``: the asset providers this instance counts as premium in the search (F21).
+
+    Comma-separated provider codes, in any case. Unset or blank: None, and each provider's declared tier applies. Set:
+    exactly the listed providers are premium; a code that no provider has is ignored, and logged once.
+    """
+    return _provider_codes("LIBREFOLIO_ASSET_PROVIDERS_PREMIUM")
+
+
+def asset_providers_order() -> tuple[str, ...] | None:
+    """``LIBREFOLIO_ASSET_PROVIDERS_ORDER``: the order of the asset providers in the search (F21).
+
+    Comma-separated provider codes, in any case. Unset or blank: None, and each provider's declared priority applies.
+    Set: the listed providers come first, in that order, and the others follow by their declared priority; premium
+    providers still come before the others. A code that no provider has is ignored, and logged once.
+    """
+    return _provider_codes("LIBREFOLIO_ASSET_PROVIDERS_ORDER")

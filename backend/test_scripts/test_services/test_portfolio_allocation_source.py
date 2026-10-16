@@ -7,6 +7,7 @@ database row or process cache is mutated.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -2587,6 +2588,47 @@ async def test_current_distribution_passes_valuation_facts_through(
         "valuation_days_before_requested": 0,
         "valuation_stale": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_current_distribution_weights_an_at_cost_holding_at_its_cost(
+    monkeypatch,
+):
+    """J-17 (option A): a holding with no price observation, valued by the engine at its book cost
+    (ESTIMATED_AT_COST, market value = cost, no price), weighs its cost like any valued holding and
+    passes its valuation code through, with no reference date. Asset 11 at the market (100), asset 12
+    at cost (300): 0.25 / 0.75, complete, no issue.
+
+    Before J-17: AttributeError — ValuationSource had no ESTIMATED_AT_COST; the engine valued such a
+    holding LAST_TRADE_PRICE at its adjustment's cost, or MISSING (withholding every weight).
+    """
+    at_cost = dataclasses.replace(
+        _position(12, market_value="300", valuation_source=ValuationSource.ESTIMATED_AT_COST, reference_date=None, wac="100", cost_basis="300"),
+        valuation_effective_unit_price=None,
+        valuation_effective_currency=None,
+        valuation_reference_unit_price=None,
+        valuation_reference_currency=None,
+        unrealized_pnl=Decimal("0"),
+    )
+    response, _calls, _session = await _current_distribution_copy(
+        monkeypatch,
+        assets=[_asset(11), _asset(12)],
+        positions=(_position(11, market_value="100"), at_cost),
+    )
+    rows = {row["asset_id"]: row for row in response.model_dump(mode="json")["current_distribution"]["rows"]}
+
+    assert response.current_distribution.status == "complete"
+    assert _weights(response) == {"asset:11": Decimal("0.25"), "asset:12": Decimal("0.75")}
+    assert {key: rows["asset:12"][key] for key in CURRENT_WEIGHT_FIELDS - {"weight"}} == {
+        "weight_id": "current:asset:12",
+        "asset_id": "asset:12",
+        "held": True,
+        "valuation_source": "ESTIMATED_AT_COST",
+        "valuation_reference_date": None,
+        "valuation_days_before_requested": None,
+        "valuation_stale": False,
+    }
+    assert response.issues == []
 
 
 @pytest.mark.asyncio
