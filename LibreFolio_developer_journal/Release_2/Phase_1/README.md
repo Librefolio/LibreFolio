@@ -183,3 +183,4 @@ Sono tutti locali: la push la fa il developer.
 | 94 | 16/10 06:47 | X: X-R12 (eventi del fornitore datati oggi arrivano lo stesso giorno) + X-R13 (emoji morta dei settori nella pagina asset, primo pezzo di FE5c) | `92a0d4daf` |
 | 95 | 16/10 06:47 | W per cherry-pick: W-B41 (test multiutente puliscono i broker), W-B29 (E2E eventi con asset propri), W-B38 (messaggi delle regole impacchettate col tipo) | `5eb8e4103` `09e7d5a4e` `b89ddbba9` |
 | 96 | 16/10 06:54 | X per cherry-pick: K-16 (ETC/ETN di Borsa Italiana come `ETF_COMMODITY`) + O-9 (etichette dei parametri di justETF e css_scraper in 4 lingue) | `bfc0db8aa` |
+| 97 | 16/10 07:09 | Z: Z7c-2 (pannello dello scheduler: elementi rinviati ⏸, `retry_at`, riga di stato del nuovo tentativo; api scheduler 16, component-unit 4006) | `0dfc7cbbe` |
