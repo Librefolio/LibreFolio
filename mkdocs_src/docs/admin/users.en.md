@@ -26,8 +26,9 @@ After each change, the tab reloads its lists, so it always shows what the server
 
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
 **3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
-account [waiting for its email](#waiting) while its link is live; deactivated accounts do not. The
-limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
+account [waiting for its email](#waiting) while its link is live, and so does an
+[initial administrator](hosting_providers.md#initial-admin) still waiting for its setup link; deactivated
+accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
 [Environment Variables](configuration.md).
 
 - 💳 **Manage subscription** appears next to the count only when the server has a billing page
@@ -132,6 +133,9 @@ choose: [Getting Started](../user/getting-started.md) shows what they see.
   create a new one.
 - 📏 An invitation takes a place from the moment you create it until it is used, revoked or
   expires; the account it creates then takes that place.
+- 🔤 An e-mail address belongs to one account only, whatever its capitals (`Anna@example.com` is
+  `anna@example.com`), but only the letters A to Z are matched this way: `Émile@example.com` and
+  `émile@example.com` are two different addresses.
 
 ### 📋 Open Invitations {: #open-invitations }
 
@@ -156,6 +160,8 @@ they can also ask for one from the login page: see [Forgotten Passwords](email.m
    **Send by email** ([Send by Email](#send-by-email)); then click **Done**.
 
 - ⏱️ The link works once, for 30 minutes, and only the newest link of an account works.
+- 🔒 It also stops working as soon as the person changes their password or email address, or you
+  run `user reset` or `user set-email` on the [command line](cli_tools.md).
 - 🚪 Creating the link signs nobody out. Once the person sets the new password, their account is
   signed out of every device.
 - 🔗 The link is shown only once: if it gets lost, create a new one.

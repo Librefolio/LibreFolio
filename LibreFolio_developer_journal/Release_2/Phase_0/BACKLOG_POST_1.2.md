@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 91,9 % delle classi sui ruoli (m1 930 nel target), il resto aspetta la designer o la 1.3 |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -426,7 +426,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
   `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
   riordino. Dettagli: piano 04, §12, K2a.
-- **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** — medio, sicurezza dei
+- ✅ **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** (chiusa 16/10 dal coordinatore: H `901fa33f6`, «test lanes ignore the instance's configuration») — medio, sicurezza dei
   test; E, 15/10 (analisi). `scripts/cli_base.py:configure_test_runtime()` carica il `.env` e toglie solo
   `INSTANCE_TRUST_SECRETS` (S2 di H): ogni altra `LIBREFOLIO_*` arriva alle corsie. Con la configurazione SMTP di E i
   test spedirebbero email vere; con `LIBREFOLIO_BLOCKED` o il profilo gestito tutte le corsie cambierebbero
@@ -2485,6 +2485,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «G-18 · Guardia G3 a runtime nella galleria (16/10)».
+- **G-19 · «Asset detail rolling return» legge il selettore prima che la pagina si assesti** — basso; G, 16/10, verifica
+  FE5c.
+  - `gallery.spec.ts` 5361–5363 legge il pulsante «Rolling Return» subito dopo l'apertura e il clic su 1W, senza
+    aspettare `data-busy="false"` o `data-series-state`.
+  - Un ricaricamento in corso svuota `chartData` e smonta il selettore finché i prezzi non rispondono: il clic stesso,
+    o il ricaricamento completo del poll live su un grafico convertito.
+  - Sotto carico (richieste ferme 25 s) il test va in timeout a 20 s.
+  - Proposta (test-author, perimetro G): aspettare la pagina assestata prima di leggere il selettore.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», verifica di FE5c.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2646,7 +2657,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
     della modale, non un `contentClass`. **Approvata** (coordinatore, 16/10): `ModalBase` prende un prop di tono,
     `tone="danger"` → `border-2 border-lf-danger-line` al posto di `border-lf-raised`, in un ternario solo (regola 8), nel
-    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1).
+    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1). **Fatta** (T,
+    16/10, lotto «component tokens», parte 1): `tone` con `data-tone`; AF passa a `tone="danger"` dopo l'ingresso.
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 - **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
@@ -2675,6 +2687,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   ai ruoli toglie le classi `dark:` e rende il controllo via via giusto, ma la cura è leggere solo `html` con
   `toHaveClass(/\bdark\b/)`. Da proporre al proprietario degli spec dei file. Dettagli: piano di T, «W1-f1, W2-b, W2-d e
   W1-f2», passo 10.
+- ✅ **TC-15 · Testo muted su una riga selezionata (`bg-lf-selected`)** — basso; T, 16/10, lotto del gate; chiusa il
+  16/10 nel lotto TC-15 di T: una regola centrale nello `<style>` delle 4 select di `ui/select` (`SearchSelect`,
+  `SimpleSelect`, `TreeSelect` col passaggio, `AssetPickerPanel`), che copre anche gli snippet dei chiamanti; più
+  `FileGrid` (scheda selezionata) e `UnifiedLotsTable` (riga evidenziata) nei component tokens. Misurato col
+  risolutore del gate: sul ruolo traslucido `selected` reggono 4,5:1 solo `primary`, `secondary` e `link` (mai su un
+  `panel`, 4,09:1 in scuro). Il muted, i quattro stati e i segni scendono a 3,84–4,48:1 quasi ovunque, e schiarire la
+  tinta non basta (al 6 % il peggiore resta 4,17). Caso reale: le righe evidenziate di `ui/select/AssetPickerPanel`
+  (tipo e valuta in muted); da ripassare le altre opzioni evidenziate di `ui/select`. Cura, decisa col coordinatore: nei
+  componenti, muted → secondary mentre la riga è selezionata o evidenziata; la regola è nello skill `design-system`,
+  regola 5. Da fare in un lotto di T. Dettagli: piano di T, «Il lotto del gate», passo 4.
+- **TC-16 · `FilePreviewModal.test.ts` aspetta il visore col budget di 1 s di `waitFor`** — minimo; T, 16/10, lotto
+  «component tokens». `listening()` (riga ~597) aspetta `viewer.opened`, `failed` e `tiles` con il timeout predefinito di
+  `waitFor` (1 s) su una catena asincrona (il finto EmbedPDF). Sotto carico (41–52) due test sono caduti una volta alla
+  riga 598 (`viewer.opened` vuoto); con lo stesso codice verdi da soli (37/37, due volte) e nell'insieme dei 30 file
+  (978/979). Verdetto della triage: l'orologio (un'assunzione del test), nessun difetto del prodotto né dei miei file. Cura
+  per il proprietario dell'area dei file: un budget esplicito su quel `waitFor`. Dettagli: piano di T, «I component
+  tokens, parte 1», passo 5.
 
 ---
 
@@ -2757,16 +2786,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 - **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
   16/10 (W5-PAC, W5-charts).
-  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
-    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
-      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
-    - Serve un ruolo per la traccia (T) o una scelta della designer.
-  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
-    `DistributionDialog`:102.
+  - ✅ (16/10, W6-e) **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100
+    dark:bg-slate-700`): tutte e due su `bg-lf-neutral`, il ruolo delle tracce.
+    - Il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` passa da `bg-lf-neutral` (ΔE00 0 dalla traccia) a
+      `bg-lf-secondary`: il colore che l'obiettivo ha già nel risultato, 5,77/5,84:1 sulla traccia (coordinatore,
+      16/10).
+    - È una scelta provvisoria: il coordinatore la porta alla designer, nella raccolta al punto 27.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149 e `ResultCell`:79.
     - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
       scuro è spento sulla traccia.
     - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
-  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **La barra della distribuzione attuale** di `DistributionDialog` (la costante `FILL`, `bg-libre-green`): il peso
+    attuale di ogni asset posseduto, cioè un colore di dato, resta legacy (W6-e).
+    - In scuro è il verde fluo `#00d681`, quello che il developer ha rifiutato nel PAC (TD-1).
+    - Per TD-1 il «reale» prende il colore della categoria della riga, accanto al neutro «ideale»: qui la riga è un
+      asset, quindi sarebbe il colore del suo tipo (GR1). È un cambio di disegno: aspetta la stessa scelta delle barre
+      «dopo il piano».
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario). Restano 14 classi, cioè le 6 fasi e
+    l'attesa in coda. Il separatore dei segmenti è sui ruoli dal 16/10 (`divide-lf-card` sul contenitore, G-18).
   - **La legenda di `RiskReturnLevel`** (W6-a), 4 classi: il punto «portafoglio» cielo e il rombo «benchmark» ambra
     (riga 170), con le tinte delle righe della tabella (`--lf-cmp-risk-return-row-*` in `theme/components/table.css`).
     Sono le categorie della serie ECharts del grafico rischio/rendimento: aspettano il punto 2.5 della designer.
@@ -2825,7 +2862,37 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal`.
 > Il piano: `../Phase_1/10_colorSystem/IW-importColors/`. Gli ID di questa sezione sono `IW-n`.
 
-- (nessuna voce ancora)
+- ✅ **IW-1 · Quattro pulsanti pieni verdi e blu in attesa dei ruoli hover** — basso; IW, 16/10 (D2). Restano legacy
+  `asset-group-confirm-all`, `asset-group-confirm-{id}` (`AssetGroupStep`), `import-wizard-warning-confirm` (il ramo
+  info) e `create-primary-confirm` (`ImportWizardModal`). T ha aggiunto `hover:bg-lf-success-hover` e
+  `hover:bg-lf-info-hover` (`f043c1b58`): si convertono dopo la base merge. Dettagli: [piano IW](../Phase_1/10_colorSystem/IW-importColors/plan-phase00ImportColors.prompt.md), sezione «Restano legacy».
+  ✅ 16/10, `9c79d5b35` (checkpoint 2 di IW, passo 5 del piano): i quattro su `success`/`info` con i
+  loro hover; `create-primary-confirm` resta nei «da rivedere» (IW-7).
+- **IW-2 · Le stelle «primario» degli identificativi senza ruolo** — basso; IW, 16/10 (D6). `AssetGroupStep`,
+  `fill-amber-400 text-amber-500` su legenda e badge (6 classi): serve un ruolo «marcatore», o i categoriali.
+  Dettagli: piano IW, sezione «Restano legacy».
+- **IW-3 · Badge degli identificativi categoriali, con l'anello ambra del primario** — basso; IW, 16/10.
+  `AssetGroupStep`: classi da `KIND_TONES.identifier` più `ring-amber-400 dark:ring-offset-gray-900` sull'elemento
+  (2 classi nel file): coi categoriali di B4. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-4 · Lo `<style>` di `ImportBrokerMismatchModal` sui token `--lf-cmp-broker-mismatch-*`** — basso; IW, 16/10
+  (D3). 12 token con override `.dark` in `lib/theme/components/dialogs.css`: con W6/B5 di T, che toglie i token non
+  più letti. Dettagli: piano IW, decisione D3.
+- **IW-5 · Il chip viola del tasso implicito delle coppie** — basso; IW, 16/10. `lib/utils/transactions/pairCellHtml.ts`,
+  `text-violet-600 dark:text-violet-400`: categoriale, e rispecchia `renderDualHtml` di `TransactionBulkModal` (TR); si
+  muovono insieme. Dettagli: piano IW, sezione «Restano legacy».
+- **IW-6 · Colori passati per prop di classe ad `AssetSelect`** — basso, design; IW, 16/10. `confidenceBadgeClass`
+  (`ImportWizardModal` → `ReviewStep` → `badgeClass` di `ui/select/AssetSelect`) porta colori, ora sui ruoli; la regola 3
+  della skill comune vuole una variante (`variant="…"`). Con T. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-7 · Scelte «da rivedere» della migrazione dell'import** — basso, aspetto; IW, 16/10. Stato dei duplicati tutto
+  `warning` (D1), timeline del set, stepper e barre su `checked`, fuoco blu diventato verde, pulsanti contornati al 3:1,
+  bordi tratteggiati dei gruppi di asset sul `-line`, testi `-800` su card a `text-lf-X`, maniglia su `bg-lf-input`,
+  testo attenuato su `neutral` (~4:1), `create-primary-confirm` su `info` (è l'azione primaria del suo dialogo: forse
+  `action`). Dettagli: piano IW, «Da rivedere per il developer» e note dei lotti.
+- **IW-8 · Note di test-author su `tx-brim-import.spec.ts` e `tx-import-resolution.spec.ts`** — basso, test; IW, 16/10
+  (area W: da spostare). In T4 la guardia `if` salta l'asserzione solo quando qualcosa si rompe, e la guardia esterna usa
+  il testo tradotto `text=Resolve Assets` (c'è `import-wizard-resolve-section`); T1 non importa mai con questo campione;
+  i commenti «amber badge» di `tx-import-resolution.spec.ts` (riga 43 e IWR-001) diventano falsi dopo IW-5. Dettagli:
+  piano IW, passo 1, «Spec T4».
 
 ---
 
@@ -2879,7 +2946,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 > Workstream AF del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/assets/**`, `routes/(app)/assets/**`, `components/fx/**`, `routes/(app)/fx/**`.
-> Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) aspetta l'ingresso di X FE5c.
+> Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) è entrato dopo X FE5c, con il lotto 9.
+> **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
+> solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
+> chiudere AF-8 (conferma) e AF-10 (ruolo di T).
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -2888,9 +2958,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - l'accento viola della sezione misure;
   - le icone di sezione: segnali blu, metadati azzurro.
 
-  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e in `routes/(app)/assets/[id]` o, dopo FE5c, `components/assets/detail/`
-  (55). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la designer o T. Dettagli:
-  [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md), sezione «7. Restano legacy».
+  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e, dopo FE5c, in `routes/(app)/assets/[id]` (42: i tre interruttori)
+  e in `components/assets/detail/` (13: `AssetDetailMetadataPanel` 1, `AssetDetailMeasuresSection` 11,
+  `AssetDetailSignalsPanel` 1). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la
+  designer o T. Dettagli: [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md),
+  sezione «7. Restano legacy».
 - **AF-2 · Tipi distinti dalla tinta** — basso; AF, 16/10. Il badge `txScope` di `AssetTable` (proprio smeraldo, altri
   blu, analisi grigio; 12 classi) e l'origine dell'identificativo di `IdentifierPrimaryChooser` (fornitore blu, salvato
   verde; 7 classi) restano categoriali, come `KIND_TONES`. I test `AssetTable.test.ts:190–192, 209` e
@@ -2901,14 +2973,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **AF-4 · Bordo rosso di `AssetCurrencyChangeModal` attraverso `ModalBase.contentClass`** — medio-basso; AF, 16/10.
   Va portato con TC-10 e con la regola 9 dello skill `design-system`. Con un ruolo (`border-lf-danger-line`)
   perderebbe contro `border-lf-raised`: serve una variante di `ModalBase` (T). Intanto la catena resta legacy (2
-  classi). Dettagli: piano AF, sezione «2. Catene», C1.
+  classi). Dettagli: piano AF, sezione «2. Catene», C1. ✅ 16/10: T ha aggiunto `ModalBase tone="danger"`
+  (`4d8ae68c4`); `AssetCurrencyChangeModal` lo usa e non passa più colori in `contentClass` (checkpoint D, piano AF passo
+  13).
 - **AF-5 · Chip `<code>` sulle tinte dei banner** — minimo; AF, 16/10. In `PriceDataImportModal` (6 classi) ed
   `EventDataImportModal` (12) i chip sono `bg-white/30 dark:bg-slate-700/50` dentro `InfoBanner`. Nessun ruolo dà un
   chip su una tinta in tutti e due i temi, e `htmlSink.gate.test.ts:73` ne fissa uno alla lettera. Restano legacy fino a
   un ruolo di T. Dettagli: piano AF, sezione «2», C5.
 - **AF-6 · Velo e icona bianca sull'immagine dell'asset** — minimo; AF, 16/10. In `AssetModalDetails:104–107`
-  (`bg-black/40`, `text-white`) manca un ruolo «testo sul velo»: restano legacy (2 classi). Dettagli: piano AF,
-  sezione «7».
+  (`bg-black/40`, `text-white`) mancava un ruolo «testo sul velo». ✅ 16/10: T ha creato `text-lf-on-overlay`
+  (`f043c1b58`); il velo va su `bg-lf-overlay` e l'icona su `text-lf-on-overlay` (checkpoint AF dopo `bfd33a0f5`).
+  Da rivedere: il velo è più scuro (60 % invece del 40 %). Dettagli: piano AF, passo 12.
 - **AF-7 · Tre interruttori dell'area** — basso; AF, 16/10. `AssetModalFooter` attivo/benchmark e l'interesse di mora
   di `ScheduledInvestmentEditor` (12 classi) restano per il lotto unico degli interruttori di T, già nel suo
   inventario. Dettagli: piano di T, «Il lotto degli interruttori (Q2)».
@@ -2918,7 +2993,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   piano AF, sezione «6».
 - **AF-9 · Dettaglio asset in attesa di X FE5c** — medio; AF, 16/10. In `routes/(app)/assets/[id]/+page.svelte` (155
   classi dopo FE5c) e nei 6 componenti di `components/assets/detail/` (145) la migrazione parte dopo l'ingresso di FE5c
-  (lotto 9). Dettagli: piano AF, sezione «5. Lotti».
+  (lotto 9). Dettagli: piano AF, sezione «5. Lotti». ✅ 16/10: FE5c è entrato (`a44951cf5`) e il lotto 9 è migrato sui file
+  reali, da 300 a 55 classi (tutte AF-1; checkpoint D, piano AF passo 13).
 - **AF-10 · Un bottone secondario su una superficie `panel` non ha un ruolo** — minimo; AF, 16/10. Il piede `panel` di
   `AssetCurrencyChangeModal` ha un «Annulla» grigio che prima era due passi sopra il piede (slate-200 su slate-50). Con
   `bg-lf-panel` sparirebbe: ha preso `bg-lf-neutral hover:bg-lf-input/30`, il ruolo più vicino. È la domanda aperta 3
@@ -3025,7 +3101,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È lo stesso caso di T-W1.
 
   Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
-- **H-2 · I test del backend costruiscono frontend e MkDocs dentro i 300 s d'avvio del server condiviso** — basso; H,
+- ✅ **H-2 · I test del backend costruiscono frontend e MkDocs dentro i 300 s d'avvio del server condiviso** (chiusa 16/10 dal coordinatore: `1c67dd5d9`, il `--build-only` del runner) — basso; H,
   14/10.
   - `dev.py server --test` ricostruisce il frontend se un file di `frontend/src` è più recente della build: basta un
     `.test.ts`.
@@ -3201,6 +3277,31 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     girare ad A.
 
   Dettagli: piano H, §14 «H-3, il resto».
+- **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
+  16/10.
+  - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
+    che scrive su un file. In un `all-backend -q` il file resta fermo per mezz'ora alle righe della build: quelle
+    escono da un sottoprocesso. Le righe del runner, come «Starting shared test backend» e «Shared backend ready»,
+    arrivano solo all'uscita. Chi segue un run lungo non ne vede l'avanzamento, salvo leggere i log per unità di
+    `.testLog`.
+  - Cura possibile: `sys.stdout.reconfigure(line_buffering=True)` all'avvio del runner, oppure `PYTHONUNBUFFERED=1`
+    nei comandi documentati. Nessuna fretta: il run non ne soffre.
+
+  Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
+- **H-21 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** (W-B54) — basso, runner; W (C-97a, slot
+  API), 16/10. Assegnata ad H dal coordinatore alle 18:39.
+  - Il setup della categoria `api` (`_api_setup` in `scripts/test_runner/_backend_api.py`, `db_populate(force=True)`)
+    parte da `run_category_setup("api")` solo con la categoria intera (`api_test`) o nel passaggio consolidato. Per
+    un'azione singola, `dispatch_to_category` lo salta e usa il DB della corsia così com'è.
+  - Dopo un run che ricrea il DB vuoto (`services`, `db create`), i test che entrano come `e2e_test_admin` o
+    `e2e_test_user` cadono con 401: 6 rossi su 118 per W il 16/10, verdetto «ambiente». Oggi si evita a mano,
+    lanciando prima `db populate --force`.
+  - Cura proposta: prima di un'azione `api` singola, una lettura del DB della corsia controlla che ci siano gli utenti
+    di fixture. Se mancano, il runner chiama `run_category_setup("api")`, oppure lo dice prima di partire con il
+    comando da lanciare. Un caso di test puro per ciascun ramo: «mancano → seed» e «ci sono → niente».
+  - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
+
+  Dettagli: piano 04 di W, sezione C-97a; piano H, §14 «Lotto «H-12, il resto»», passo 14.
 
 ## A · Account e accessi (fase 01)
 
@@ -3313,6 +3414,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
     «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
     Your Email», «🔑 Change Password»), `admin/email`.
+  - Da A7a (16/10), nessun timbro: sezioni nuove in `admin/configuration` («The Initial Administrator») e
+    `admin/cli_tools` (`user setup-link`), con le ancore `#initial-admin` e `#setup-link` da tenere uguali in ogni lingua;
+    `admin/hosting_providers` (`#initial-admin`); una o due frasi in `admin/settings`, `admin/users`, `admin/index`,
+    `admin/host_installation`, `admin/docker_advanced`, `user/installation`, `user/getting-started`.
+  - Da P18 (16/10), nessun timbro: in `admin/cli_tools` due sezioni nuove, «Change the Email Address of an Account»
+    (`#set-email`) e «Two Accounts with the Same Email Address» (`#email-case-conflict`), con le ancore da tenere uguali
+    in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
+    `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
+    «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -3404,6 +3514,67 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
     inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
     password (decisione 37).
+  - In più (dal `test-author` di A-22, 16/10): uno username può contenere `@` e somigliare a un indirizzo, quindi un
+    evento di log che porta lo username («User logged in» e altri) può scrivere qualcosa che sembra un'email; e il login
+    cerca «username o email» con un solo campo, quindi uno username uguale all'indirizzo di un altro account è ambiguo.
+    Il carattere `@` va escluso con la stessa regola.
+  - **Allargata dal coordinatore** (16/10, con P18): gli username diventano unici senza distinzione di maiuscole, come gli
+    indirizzi (P18); username nuovi senza `@`, e un identificativo con `@` cerca solo l'email (oggi
+    `get_user_by_username_or_email` prende il primo dei due, senza ordine: il login e la «password dimenticata» per email
+    possono finire sull'account sbagliato, nota di E). Per gli username già salvati con `@` o con varianti di maiuscole,
+    prima un'analisi, nessun cambio silenzioso. Lotto dopo P18.
+- ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
+  (16/10); dal `test-author` di A7c (16/10).
+  - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
+    `username=request.username`; il login accetta anche l'email in quel campo, quindi un tentativo fallito con l'email
+    la scrive nel log, contro la regola di E (nessun indirizzo nei log).
+  - Cura proposta: `user_id` quando l'account esiste (password sbagliata, account disattivo), niente dell'identificativo
+    quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
+    Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
+  - Fatta così (16/10): LOGIN-027…033 in `test_auth_api.py`; dettagli nel piano, «A-22».
+- **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
+  H (H-19, tramite il coordinatore, 16/10).
+  - `POST /api/v1/users/address-probe` (`address_probe.issue_probe_nonce()`, firma il nonce con una chiave derivata dalla
+    chiave d'istanza) risponde 500 se la chiave non si può usare, mentre `GET /auth/address-probe`
+    (`verify_probe_nonce()`) lo tollera.
+  - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
+    A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
+- ✅ **A-24 · Tre test di E diventano impossibili con P18** — basso; chiusa il 16/10 (delta A-24 dopo il merge di base
+  `12cd3c2e0`, commit del coordinatore); A (16/10, dai verdi di P18).
+  - `test_email_flows.py` (`ONE_MAILBOX`, la riga 1356), `test_email_verification.py` EMV-043 (`MAILBOX_VARIANTS`, la
+    riga 166) e `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, la riga 122) creano quattro account sulla
+    stessa casella scritta in quattro forme ASCII: con l'indice `ux_users_email_lower` la seconda riga è rifiutata.
+  - Cura (decisa dal coordinatore, approvata da E, 16/10): varianti con lettere non ASCII in letterali NFC (`\u00e4`
+    precomposta), una casella per le chiavi `casefold` di E, quattro righe per l'indice A–Z. La scrive A con un
+    `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
+    ASCII dà `SEND_FAILED`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
+- **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; dal `docs-writer` di P18
+  (16/10).
+  - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
+    la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
+    P18) non chiede nulla e non chiude sessioni.
+  - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
+    `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
+    Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
+- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+  `test-author` di P18 (16/10).
+  - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
+    indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
+    indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
+  - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
+    `ux_users_email_lower` nome e SQL li fissa MIG009-003.
+- ✅ **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); chiusa il
+  16/10 (lotto A-27, commit del coordinatore); dalla revisione di E (E6.9), tramite il coordinatore (16/10).
+  - `user_service.update_profile` (cambio vero dell'indirizzo: anche `PUT /auth/profile` e `user set-email`) e la rotta
+    `POST /auth/change-password` chiudono le sessioni ma lasciano vivi i link `PASSWORD_RESET`: con la «password
+    dimenticata» aperta, chi controlla la vecchia casella chiede un link prima del cambio e lo usa dopo, entro 30 minuti.
+    Stesso buco in `user_service.reset_password` (CLI `user reset`), trovato da A.
+  - Cura: `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)` nella stessa transazione del cambio, come già fanno
+    `create_password_reset` e `complete_password_reset`; rossi prima. Lotto a sé dopo l'ingresso di P18.
+  - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
+    `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A-27».
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
@@ -3599,6 +3770,177 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
   ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
   Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
+- **X-R14 · La pagina di dettaglio dei cambi tiene copie degli helper dei segnali** — minimo, frontend; X, 16/10 (FE5c-2).
+  `fx/[pair]/+page.svelte` ha copie identiche di `parseBackendSignalResults`, `signalDataContextFingerprint` e
+  `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
+  `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
+  Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
+- **X-R15 · Due testi inglesi fissi nella pagina dell'asset** — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+  (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
+  catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
+  `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
+- **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** — basso, frontend; X, 16/10
+  (test-author del FE5c-2). In `loadChartData`, `parseBackendSignalResults` rifiuta tutta la risposta se un solo
+  segnale non è valido. Questa parte è voluta: nessun segnale del backend viene mostrato, e `signalRequestFailed` lo
+  dice.
+  - **Il difetto**: il `throw` salta anche la scrittura dei prezzi nella cache e `resolveMaxStartFromChartData()`.
+    Con «Tutto», l'inizio dell'intervallo non si risolve, e i prezzi già arrivati non entrano nella cache.
+  - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
+    test di componente o E2E che instrada un segnale non valido.
+  - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
+- **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** — basso, UX; dal test-author di
+  W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
+  (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
+  will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
+  lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
+- **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** — basso, UX; stessa origine.
+  `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
+  alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
+  `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
+  perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
+  il FE5c.
+- **X-R19 · «N assets» in inglese fisso nella conferma multipla** — minimo, i18n; stessa origine.
+  `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
+  lingue. Dopo il FE5c.
+- **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** — minimo, test; stessa origine.
+  Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
+  passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
+  oggi passano dal testo o dalla posizione. Dopo il FE5c.
+- **X-R21 · `fxRoutesStore.test.ts` va in timeout sotto carico, e il secondo caso eredita il primo** — basso, test; X,
+  16/10 (triage durante la verifica della base `fa97791f6`).
+  - **Il caso**: in `core-unit`, con la macchina a carico ~100, il file ha impiegato 7,5 s. Il primo caso è andato in
+    timeout ai 5 s di default di Vitest; il secondo ha fallito con «`listRoutes` chiamata 2 volte». Da solo il file
+    passa in 2,1 s, e il primo caso impiega 437 ms.
+  - **Verdetto del triage: assunzione (il tempo)**. Ogni caso fa `vi.resetModules()` e poi un `import()` a freddo di
+    `fxRoutesStore`, che si porta dietro tutto il grafo di `fxStoreRegistry`, dentro i 5 s di default.
+  - **La cascata**: il caricamento rimasto in sospeso chiama il mock condiviso (`vi.hoisted`) durante il caso
+    successivo.
+  - **Cura, solo nel test**:
+    - scaldare il grafo una volta sola, in un `beforeAll` con un timeout ampio, prima dei `resetModules`;
+    - dare a ogni caso il suo mock, così un timeout non si propaga.
+  - Mio, perché è nell'area del FE4. Dettagli: piano 03, sezione «CP13».
+  ✅ **Chiusa da X il 16/10**:
+  - un mock nuovo per caso, installato con `vi.doMock`, così una lettura in sospeso non viene contata nel caso dopo;
+  - il grafo dello store si scalda una volta in `beforeAll`;
+  - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
+  - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
+  - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
+- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+  testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
+  - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
+    la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
+  - La doc di H (`481a93f1c`, su `admin/configuration.md#plugin-secrets`, non ancora in `dev_release2` il 16/10 alle
+    10:35) ora dice: «If you still have the old key, put it back before anyone enters them again».
+  - **I miei due testi** dicono solo «enter it again», senza l'ordine:
+    - il suggerimento dell'interfaccia, `frontend/src/lib/i18n/pluginSettings/en.json:31` (4 lingue);
+    - la riga della tabella in `mkdocs_src/docs/user/settings/plugins.en.md:117`.
+  - **Attenzione**: la pagina di H **cita alla lettera** il testo dell'interfaccia («The tab says so under each one:
+    *Saved, but this instance's key cannot read it: enter it again.*»). Cambiando la chiave i18n va cambiata nello
+    stesso commit anche la citazione nella sua pagina, con l'ok di H.
+  - **Cura**: dopo che `481a93f1c` è nella mia base, un lotto piccolo dopo FE5c e CP13, che allinea:
+    - la chiave in 4 lingue;
+    - la riga della mia pagina utente, con il link alla sezione di H;
+    - la citazione nella pagina di H.
+- **X-R23 · Il caricamento dei dati della pagina dell'asset resta nella pagina** — medio, refactor; X, 16/10 (FE5c,
+  pezzo 9, decisione del coordinatore). Il FE5c ha tolto alla pagina `routes/(app)/assets/[id]/+page.svelte` gli
+  helper, i pannelli, la barra e il polling; restano `loadChartData` (~310 righe) e il caricamento dei confronti.
+  - **Perché non nel FE5c**: leggono e scrivono una trentina dei ~80 `$state` della pagina. Spostarli vuol dire
+    ridisegnare lo stato della pagina (una classe o uno store `.svelte.ts` con le richieste e le loro generazioni), con
+    rischio alto e conflitti con J, Y e Z.
+  - **Cura**: un lotto dopo la 1.3, con le E2E della pagina come rete. Dettagli: piano 03, sezione «FE5c», pezzo 9.
+- **X-R24 · La ricerca senza `providers` interroga anche il provider dei test** — basso, API; X, 16/10 (test-author di
+  F21, in lettura). `AssetSearchService.search` e `search_stream` (`services/assets/search.py`), quando la richiesta non
+  dice quali provider, prendono tutto `AssetProviderRegistry.list_providers()`, compreso `mockprov`, che è `test_only` e
+  sa cercare.
+  - **Effetto**: una chiamata diretta a `/assets/provider/search?q=…` senza `providers` restituisce anche i risultati
+    «Mock Asset» in produzione. L'interfaccia passa sempre `providers`, quindi l'utente non li vede.
+  - **Cura**: escludere i provider `test_only` dalla lista di default, come fa già `GET /assets/provider`. Prima va
+    controllato che nessun test, API o E2E, cerchi senza `providers` aspettandosi i risultati del mock.
+  - **Collegato, minimo**: la docstring di `services/assets/__init__.py` dice che `AssetSourceProvider` e
+    `AssetSourceError` stanno in `core.py`, ma sono in `base.py`.
+  - Dettagli: piano 03, sezione «CP13», F21.
+- **X-R25 · `test_complete_e2e_flow_justetf` va in timeout alla ricerca quando un fornitore esterno è lento** — basso,
+  test; trovato da J in `all-backend`, girato a X dal coordinatore il 16/10.
+  - **Il caso**: `backend/test_scripts/test_e2e/test_search_to_prices.py`, step 1, chiede
+    `/assets/provider/search?q=iShares Core MSCI World` **senza `providers`**, con `TIMEOUT = 30.0`. Da solo passa 3/3
+    in 18 s.
+  - **Perché**: senza `providers` la ricerca interroga tutti i fornitori in parallelo. Ognuno ha 30 s sul server
+    (`services/assets/search.py`, `timeout=30.0`), più il ripiego del link finder quando non trova niente. L'attesa
+    del test, 30 s, è uguale al budget di un solo fornitore, non a quello della richiesta. **Verdetto: assunzione
+    (il tempo)**; il prodotto è corretto.
+  - **Cura**, nel test:
+    - `providers=justetf` allo step 1, perché il test è su justETF, così non dipende dagli altri fornitori, `mockprov`
+      compreso (X-R24);
+    - un tempo di attesa per la ricerca sopra quello del server, almeno 60 s con la risoluzione degli URL.
+  - Un lotto piccolo, quando c'è tempo.
+- **X-R26 · `AssetDetailLive`: un cambio d'asset diretto confronta il primo prezzo con l'ultimo dell'asset di prima**
+  — minimo, latente; trovato dal test-author scrivendo i rossi delle correzioni dal vivo, X, 16/10.
+  - **Il caso**: l'effetto riparte quando cambia l'asset, ma tiene `#previousNative`. Il primo tick del nuovo asset
+    si confronterebbe col prezzo del vecchio, e il lampeggio sarebbe falso.
+  - **Oggi la pagina non ci arriva**: al cambio d'asset `reloadPage()` mette prima `assetInfo = null`
+    (`routes/(app)/assets/[id]/+page.svelte` ~1058). L'effetto passa così dal ramo fermo, che azzera il riferimento.
+  - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
+    esecuzione romperebbe il caso «keeps no trace of a dropped answer».
+  - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
+- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — ✅ risolto il 16/10 (lotto X-R27/28: un
+  rosso per ogni difetto, poi la chiave unica `core.asset_cache_key()`; SHA nel commit del coordinatore) — basso,
+  backend; colori (slot TR,
+  corsia 6154, 16/10 13:43), girato a X dal coordinatore il 16/10.
+  - **Il sintomo nel log**: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
+    'provider_code'`.
+  - **Perché**: il passo 4 di `services/assets/currency_change.py` (~149–161) legge `provider_code`,
+    `provider_params`, `identifier` e `identifier_type` da `Asset`. Quei campi stanno sull'assegnazione del fornitore
+    (`AssetProviderAssignment`). L'eccezione è presa e solo registrata: dopo un cambio di valuta le cache della storia
+    e del prezzo corrente restano fino alla loro scadenza (15 min e 2 min).
+  - **Cura**, con un rosso prima: leggere l'assegnazione e costruire la chiave da lì.
+- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — ✅ risolto il 16/10 (stesso
+  lotto, con la riga 🐛 nel CHANGELOG; nessuna riparazione, per decisione del developer) — **medio** (rivisto il
+  16/10 alle 17:35: tocca tutti gli investimenti programmati e scrive dati), backend; X, 16/10, trovato misurando
+  X-R27.
+  - **Il caso**: `services/assets/price_query.py:764` mette in `_asset_current_cache` la chiave `(codice,
+    identificativo, tipo, impostazioni)`. `refresh.py:229` e le invalidazioni (`provider_management.py` ~236,
+    `currency_change.py`) usano invece la chiave a cinque elementi, con l'hash dei parametri (#R3-4).
+  - **Effetti**: due assegnazioni con stesso codice, identificativo e tipo ma parametri diversi si scambierebbero il
+    prezzo corrente per 2 minuti. Nessuna invalidazione raggiunge quelle voci.
+  - **Il caso grave** (17:35): ogni investimento programmato ha l'identificativo `NULL` (`AUTO_GENERATED`,
+    `provider_management.py:119`). Quindi tutti condividono la stessa voce. In più `/assets/prices/current` salva
+    anche i risultati presi dalla cache come prezzo di oggi (`price_query.py:845`): la riga di oggi degli altri
+    riceve il valore del primo.
+    - Un giorno passato tiene il valore sbagliato **solo fino alla sincronizzazione notturna**, che lo corregge.
+      - La «resume» che avevo trovato è quella delle sincronizzazioni del frontend (`dashboard/+page.svelte:438`,
+        `AssetModal.svelte:1241`), non quella dello scheduler.
+      - La sincronizzazione notturna della storia (`run_history_sync`, `scheduler/jobs.py:163`) riscrive gli ultimi
+        14 giorni (`horizon_days`) dalla storia del fornitore, e gli investimenti programmati la espongono.
+      - Restano solo il massimo e il minimo allargati, nei giorni colpiti. Correzione del coordinatore, 17:33.
+    - **Decisione del developer (17:33)**: correzione del codice più una riga 🐛 nel CHANGELOG, senza riparazione.
+      La riga dice chi è colpito, che cosa ha visto, e che le chiusure si correggono da sole entro 2 settimane.
+    - **Risposte al coordinatore** (17:45, sola lettura):
+      1. Un aggiornamento completo rimette giusta la chiusura (upsert `bulk_upsert_prices`). Non sistema invece
+         `open`/`high`/`low` di una riga creata o allargata da un poll (F.2, F.3), perché il plugin manda solo la
+         chiusura.
+      2. Le righe sbagliate si riconoscono.
+         - Il poll scrive `source_plugin_key = 'provider:scheduled_investment'`, il refresh `'scheduled_investment'`.
+         - Fra le righe col prefisso, sono sbagliate quelle la cui chiusura è diversa dal valore del piano, che si
+           può ricalcolare.
+      3. Chi è esposto:
+         - anche lo scheduler, senza pagine aperte: `run_current_price_refresh`, `scheduler/jobs.py:81`, ogni 10
+           minuti di default;
+         - con stesso identificativo e parametri diversi: `css_scraper`, `borsa_italiana`, `justetf`.
+         - Non lo è `yahoo_finance`, che ignora i parametri.
+    - Decisione: vedi sopra (developer, 17:33).
+- **X-R29 · Sync: l'avviso di C-66 con il conteggio preciso, e quanti dati manuali** — basso; X, 16/10 (opzione B di
+  C-66, decisione del coordinatore).
+  - C-66 è stato fatto con l'opzione A: il conteggio viene dai dati che la pagina mostra.
+  - La B è un endpoint che conta le righe salvate nell'intervallo e quante sono manuali (`source_plugin_key`), per
+    asset e cambi. Così l'avviso può nominare i prezzi manuali.
+- **X-R30 · La sincronizzazione degli asset deve tenere i prezzi manuali?** — ✅ chiusa il 16/10 con la risposta del
+  developer: **vince il fornitore**, i prezzi manuali non si tengono. Basta l'avviso di C-66 (opzione A), che lo dice
+  («modifiche manuali comprese»). Domanda posta dal coordinatore il 16/10 (opzione C di C-66).
+  - Oggi la sync scrive ogni data che il fornitore restituisce, e sovrascrive anche un prezzo `MANUAL`
+    (`bulk_upsert_prices`). I cambi invece saltano le coppie solo `MANUAL`.
+  - Il rischio vero di C-66 è questo.
+  - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
+    punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
 ## W · Import e transazioni (fase 01)
 
@@ -3866,19 +4208,33 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md). Righe scritte da J
 il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 scritte il 15/10, nel checkpoint CP-1.
 
+**16/10, ripartizione con MF** (piano di MF approvato dal developer, via il coordinatore alle 13:26). Passano a MF:
+- CP-3 (U5a: B8, V2/P2, R4, B19 e il TRANSFER di P22);
+- CP-5 (U2, U6, T-B4);
+- U3 e U7 di CP-11, con O4;
+- la matematica di CP-12 (U9, T-B8);
+- CP-13 meno CP-13a (U8 lato backend);
+- i residui R6–R10 di T-U4.
+
+Le loro righe nelle altre sezioni le riconcilia il coordinatore. Restano a J: J-17, CP-13a (P19), J-24, CP-7b, J-26,
+J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dettagli: piano di MF, §2; piano J, §10.
+
 - **J-1 · Copie della matematica comune fuori dall'inventario del 43** — basso; J, 14/10 (analisi). Ognuna va nel
   lotto che unifica la sua famiglia:
   - `risk/metrics.py:741` (giorni di calendario → osservazioni, con 365) → U4a, CP-10;
   - `portfolio_service.py:824` (G/L % della posizione) → U4b, CP-4;
   - `series_preparation.py:184` (fattore di cambio ricavato dal close) → U1, CP-11;
   - `fx.py:717` (inversione del tasso nella catena delle rotte) → U1, nei file di X dopo il suo PL4 (D-J17);
-  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
+  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12; **→ MF**
+    (MF-D, 16/10);
   - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
-    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita): il
+    secondo diventa un campo del backend con P19 (CP-13a di J, 16/10), poi Y lo legge.
   - **15/10, nella revisione di V-3 per W**: la quantità per posizione a una data non ha una funzione nella casa, e oggi
     si conta in più posti: in `transactions/balances.py` (`get_asset_holdings` e la metà delle quantità di
     `_get_balances_before_date` e del replay della validazione) e nel `cumulative_qty` del motore. Da decidere se il
     registro delle quantità appartiene alla casa. La metà della cassa la rifà W come W-B19, su `native_balances`.
+    **→ MF** (MF-G, su `ledger_totals.position_quantities`, 16/10).
   - **15/10, nel piano di CP-6**: un buco nei cambi si legge in due modi. Il motore valuta i titoli e la cassa in
     transito a giorno esatto (`fx_rate_map.get`: niente cambio → valore mancante, `daily_state.py:1031`,
     `_convert`); la cassa nativa porta avanti l'ultimo cambio noto senza limite (`native_cash._rate_at`). Con un buco
@@ -4057,9 +4413,10 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     `lots_analysis_service.py:728-770` e `:1042-1045`, e di riflesso l'AI Export (`payloads/portfolio_broker.py:604-606`,
     `:775-776`);
   - duplicati senza cambio di valore: l'identità del periodo nell'AI Export (`portfolio_financial.py:489`,
-    `broker_financial.py:434`, CP-12); la G/L % in `portfolio_service.py:824`, `:939` (CP-4);
+    `broker_financial.py:434`, CP-12; **→ MF**, la matematica di CP-12, 16/10); la G/L % in `portfolio_service.py:824`,
+    `:939` (CP-4);
   - **in un file di W**: `brokers/summary.py:119-135`, terza copia della G/L %, nella valuta dell'asset: da smistare
-    dal coordinatore.
+    dal coordinatore. ✅ Fatta da CP-7a (`gain_loss_ratio`, treno 107, `4f9e94420`).
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati», «Inventario del punto 26».
 - **J-15 · La galleria ristampa l'output di Playwright senza flush** — basso, strumenti (programma colori); J, 15/10,
@@ -4086,6 +4443,11 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   non è un prezzo osservato); per quelle in entrata, segnare solo se l'asset non ha ancora una quotazione di mercato.
   Prima il rosso; serve la decisione del developer, perché cambia il comportamento dei seed. Dettagli: piano J, §10
   «CP-16».
+  **Decisione del developer** (P2, 16/10): «le rettifiche sono transazioni; portano un WAC, che può voler dire molte cose
+  e non è il prezzo dell'asset in quel momento; i prezzi si deducono solo da un acquisto»: una rettifica non è mai
+  un'osservazione di prezzo, in entrata e in uscita (per la SELL decide il developer). Caso senza prezzo, **opzione A**:
+  una posizione senza alcuna osservazione vale il suo costo storico, come stima dichiarata («valutato al costo, nessun
+  prezzo»). Lotto J-17 dopo CP-7a, disegno approvato il 16/10: piano J, §10 «J-17».
 - **J-18 · Su SQLite `Numeric(18, 6)` si salva come numero in virgola mobile** — basso, dati; trovata dal test-author di
   J il 16/10 (CP-15), con una prova su file. SQLAlchemy su SQLite non passa i Decimal al driver: li converte in `float`
   e li rilegge con 6 decimali, quindi un importo o una quantità oltre ~15 cifre significative si salva arrotondato
@@ -4141,6 +4503,11 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
   del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
   «CP-7».
+  **Decisione del developer** (P21, 16/10): «convertire nella valuta di destinazione al cambio del giorno della
+  transazione, e fare ogni calcolo nella valuta di destinazione, come nel fix appena prima della 1.2». I lotti la
+  seguono già (CP-7a); la Dashboard no: si allinea la Dashboard (la distribuzione al cambio del giorno della rettifica,
+  la differenza col costo storico nel realizzato), lotto proprio dopo J-17. La proposta (A) cade. Dettagli: piano J,
+  §10 «J-24».
 - **J-25 · Debito di traduzione di CP-7a (lotti in un'altra valuta)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`
   (sezione nuova `#lots-in-another-currency` con l'esempio D-J1), `…/fifo-engine/index` (una frase rovesciata, un
@@ -4159,6 +4526,45 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
   oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
   Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
+- **J-28 · L'avviso dei lotti «nessun prezzo di mercato, valore al costo» scatta anche quando gli scambi prezzano
+  l'asset** — basso, chiarezza; J, 16/10 (letto durante J-17). `lots_analysis_service.py:141` mette `estimated_mode` quando
+  l'asset non ha quotazioni (`PriceHistory`) fino alla fine della finestra, e `:283` aggiunge
+  `CURRENT_PRICE_ASSUMED_AT_COST` («No market price … open value estimated at cost, market P&L excluded»). Ma il valore
+  dei lotti viene dal risolutore unico, che usa anche i prezzi di BUY e SELL: un asset senza quotazioni ma con scambi è
+  valutato allo scambio (`:760`, ramo `MARKET_PRICE`), e l'avviso dice il falso. C'era già prima di J-17. Proposta:
+  l'avviso solo quando i lotti sono davvero al costo, cioè senza alcuna osservazione (né quotazione né BUY o SELL), la
+  condizione del ramo `ESTIMATED_AT_COST`; rosso prima. Nello stesso lotto la descrizione di `LotSummarySchema.value_source`
+  (`schemas/portfolio.py:829`: «MARKET_PRICE quando c'è un prezzo reale, se no ESTIMATED_AT_COST»), che è anche
+  `MARKET_PRICE` per un prezzo di scambio e `None` senza segno con l'asset quotato; `api sync`. Dopo CP-7b (V1 tocca la
+  stessa sintesi). Dettagli: piano J, §10 «J-17», rapporto degli specialisti.
+- **J-29 · Debito di traduzione di J-17 (una rettifica non è un prezzo; valore al costo)** — basso, documentazione; J,
+  16/10. Pagine EN cambiate di senso, senza stamp, tutte sotto `financial-theory/technical-analysis/`:
+  - in `performance-metrics/portfolio-engine/`: `price-resolution`, `index` (§2, §3), `nav`, `deposited-capital`,
+    `period-pnl`;
+  - `performance-metrics/fifo-engine/fifo-lot-analysis` (sezione `#estimated-at-cost` riscritta);
+  - `performance-metrics/weighted-average-cost` e `risk-metrics/data-quality`.
+
+  Pagine utente: `user/dashboard/index`, `positions`, `charts`, `kpi-cards`, e `user/tools/pac-allocator/index`.
+  `translate-validate` (16/10) dà 18 errori strutturali nuovi da J-17, su 747 del sito:
+  - 12 per il link nuovo a `index.md#3-position-state` (`price-resolution`, `nav`, `period-pnl`, `deposited-capital`);
+  - 3 per un blocco di formula nuovo in `price-resolution`;
+  - 3 per un link nuovo a `#estimated-at-cost` in `fifo-lot-analysis`.
+
+  Tradurre `index` con le quattro pagine che vi puntano, nello stesso giro. Dettagli: piano J, §10 «J-17».
+- **J-30 · Il primo parse del BRIM dopo l'avvio supera i 30 s del test sotto carico** — basso, tempo dei test e prima
+  importazione; J, 16/10 (slot 2 di J-17), da smistare dal coordinatore (area del BRIM). Il primo
+  `POST /brokers/import/files/{id}/parse` fa partire il pool dei processi (`brim_parse_pool.py`, forkserver): **48,8 s**
+  nello slot e **31,2 s** al rilancio, con carico 100–158; i parse seguenti 0,2–1 s. `test_brim_api.py::TestParseEndpoint`
+  aspetta 30 s fissi (`TIMEOUT`), quindi il primo test della classe scade. Verdetto `test-triage`: lentezza.
+  Strade possibili: scaldare il pool all'avvio del server, oppure una fixture che lo scaldi prima dei test temporizzati.
+  Allungare il tempo no. Dettagli: piano J, §10 «J-17», slot 2.
+- **J-31 · Debito di traduzione di CP-13a (il guadagno che recupera un drawdown)** — basso, documentazione; J, 16/10.
+  Pagine EN cambiate di senso, senza stamp: `financial-theory/technical-analysis/risk-metrics/max-drawdown` (dopo
+  l'avviso dell'asimmetria, in `#recovery-time`: il risultato porta il guadagno dal minimo al picco; prima diceva che il
+  sistema calcola solo la lettura corrente, e IT/FR/ES lo dicono ancora) e `…/risk-metrics/current-drawdown` (il
+  paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
+  `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
+  a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4192,9 +4598,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 - **Z-4 · Risvegli orari per singolo titolo** — medio; Z, 14/10, dalla decisione D-19 del business plan. Serve un campo
   per asset; nella 1.3 c'è solo l'intraday globale, spento di default (D8). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «4. Decisioni».
-- **Z-5 · Recupero dall'ultima data salvata invece dei 14 giorni fissi** — basso; Z, 14/10 (F07, priorità bassa). Serve
-  a un self-hosted spento per più di due settimane. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
-  sezione «2. Già fatto o contraddetto».
+- ✅ **Z-5 · Recupero dall'ultima data salvata invece dei 14 giorni fissi** — basso; Z, 14/10 (F07, priorità bassa).
+  **Chiusa il 16/10 col lotto Z-5** (il commit è del coordinatore): la sync storica copre almeno l'orizzonte e, per un
+  asset o una coppia il cui ultimo dato salvato è più vecchio, riparte dal giorno dopo, al massimo un anno indietro
+  (`_history_sync_start` in `scheduler/jobs.py`); senza dati salvati resta l'orizzonte. Era: la finestra era sempre e
+  solo l'orizzonte («Lookback horizon», 14 giorni di default), e chi restava indietro di più teneva il buco. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-5».
 - ✅ **Z-6 · Il docstring dello scheduler dice che l'elezione del leader gira in un thread** — chiusa da Z3 il 15/10:
   `run_due_jobs` chiama `am_i_leader()`, `load_state` e `save_state` con `asyncio.to_thread`, e la docstring nuova lo
   dice. Era: `services/platform/scheduler/scheduler.py:108` chiamava `am_i_leader()` (psutil) sul loop. Dettagli:
@@ -4234,10 +4643,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
   esegua i job, con lo stato riletto dentro il lock. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
-- **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10 (Z7c-2).
-  Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
-  nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
+- ✅ **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10
+  (Z7c-2). **Chiusa il 16/10 col lotto Z-12** (il commit è del coordinatore): nelle quattro lingue, a mano e senza
+  stamp, il commento dice l'ultima esecuzione e il nuovo tentativo previsto («Scheduled syncs: last run, pending
+  retry»); in `filesystem.es.md` ora è in spagnolo. Era: diceva solo «Last run of the scheduled syncs», mentre da Z7b il
+  file tiene anche i rimandati, il nuovo tentativo e l'attesa dopo i fallimenti. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z7c-2», passo 4, e «Z-12».
 - ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
   (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
   successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
@@ -4261,6 +4672,19 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
+- **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). In
+  `filesystem.es.md` gli altri nove commenti dell'albero sono ancora in inglese, e gli alberi IT, FR ed ES non hanno le
+  tre righe aggiunte dopo in inglese (`backups/`, `secrets/` e `instance.key`). La pagina ha già debito di traduzione
+  (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
+  traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
+- ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
+  docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
+  ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
+  `GLOBAL_SETTINGS_CONSTRAINTS` e risponde 422 senza scrivere nulla, e che i ripieghi del caricamento restano per i
+  valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
+  rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
 
 ## B · Backup e Docker (fase 01)
 
@@ -4436,6 +4860,8 @@ da Y il 15/10.
   con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
   quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
   «Y1 — passo 4».
+  - **Nessuna attesa** (16/10, coordinatore): DV-8 (`28f4bed75`, sul ramo di DV) tocca solo `lib/theme/chartPalettes.ts`, né
+    `GrowthChart.svelte` né `growthChartSeries.ts`. Y-2 non è in calendario.
 - **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
   `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
@@ -4497,7 +4923,8 @@ da Y il 15/10.
   - Dettagli: piano di Y, §7 «Y3».
 - **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
   passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
-  developer sulla funzione**, che porta il coordinatore.
+  developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
+  è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
     delle attese) esce in anticipo a ogni corsa: `if (!(await presentationFilter.isVisible({timeout: 5_000})…)) return`.
   - I testid che cerca, `lots-value-presentation-filter` e i tre `lots-value-*-toggle`, sono entrati in `6b28d60df`
@@ -4506,6 +4933,48 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+- **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
+  (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
+  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca.
+  - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
+    fanno `toHaveClass(/selected/)` sulla riga.
+  - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
+    (`DataTable.svelte:1098-1149`).
+  - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
+- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - `brokers-refresh` rilegge solo l'elenco (`GET /brokers?include_inaccessible=true`). Le cifre delle schede vengono
+    dalla cache dei report finché questa è fresca.
+  - Nella Dashboard e nella pagina del broker, invece, «Aggiorna» ricalcola tutto (documentazione utente, «Coming back
+    and refreshing»).
+  - Da decidere: forzare il report delle schede, oppure dire nella documentazione che lì «Aggiorna» rilegge l'elenco.
+    Dettagli: piano di Y, «Passo 4 · BK e TR».
+- **Y-15 · Il `title` di `brokers-refresh` è scritto in inglese nel codice** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - Il pulsante, solo icona, ha `title="Refresh"`, che è anche il suo nome accessibile. `common.refresh` in inglese vale
+    «Reload», mentre la pagina del broker usa `dashboard.syncData`.
+  - Quindi correggerlo vuol dire anche scegliere la chiave e la parola, nelle quattro lingue. Dettagli: piano di Y,
+    «Passo 4 · BK e TR».
+  - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
+    altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
+- **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10.
+  - Il `$effect` di `GrowthChart` (976–980) chiama `onRequestPnlCandles()`. Il caricatore parte in modo sincrono,
+    sia con `join` sia, prima, con `track`.
+  - Le sue letture (`canAsk`, `pnlCandles`, la cache dei report) diventano così dipendenze di quell'effetto. È il
+    cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
+  - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
+    Y, «Passo 4b».
+- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+  prima di Y11; `test-author` di Y, 16/10.
+  - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
+    `contribution-table`. Dettagli: piano di Y, «Passo 4b».
+- **Y-18 · Le candele non hanno un indicatore di caricamento proprio** — minimo; Y, 16/10, una conseguenza di N55 da
+  rivedere con il developer.
+  - Con N55, se l'utente passa direttamente alle Candele a pagina ferma, il pulsante della pagina non gira più.
+  - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
+    indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
+  - Dettagli: piano di Y, «Passo 4b».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -4514,5 +4983,55 @@ Workstream nato il 16/10 (decisione del developer su P21). Piano:
 punto di partenza, l'audit dello stesso giorno:
 [`Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md`](../Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md).
 
-- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Le voci per lotto le
-  scrive MF dopo la sua analisi.
+- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
+  scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
+  la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
+- **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
+  grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
+  sezione «MF-A».
+- **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
+- **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
+  `nav_weight_percent`; T-U7, W1–W5) — piccolo-medio, numeri nei casi limite; audit 16/10, Y. Decisione D-MF7.
+  Dettagli: piano MF, sezione «MF-C».
+- **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
+  senza guardia sullo zero) — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-D».
+- **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
+  aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
+- **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
+  16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
+- **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
+  audit 16/10. Dettagli: piano MF, sezione «MF-G».
+- **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
+  D-MF2. Dettagli: piano MF, sezione «MF-H».
+- **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
+  piano MF, sezione «MF-I».
+- **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
+  (J1), piccolo-medio (J2, numeri); audit 16/10. Decisione D-MF4. Dettagli: piano MF, sezione «MF-J».
+- **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
+  netti) — piccolo-medio, numeri; audit 16/10, riverifica MF (`portfolio_service.py:882`). Decisione D-MF5. Dettagli:
+  piano MF, sezione «MF-K».
+- **MF-L · `BRSummary.holdings`: togliere o valutare col motore** — piccolo/medio, API; audit 16/10. Decisione D-MF1,
+  file di W. Dettagli: piano MF, sezione «MF-L».
+- **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
+  «MF-M».
+- **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
+  16/10. Dettagli: piano MF, sezione «MF-N».
+- **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
+  sezione «MF-O».
+- **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
+  consumo è di Y) — medio; audit 16/10, Y12a. Decisione D-MF6. Dettagli: piano MF, sezione «MF-P».
+- **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
+  robustezza; test-author di MF, 16/10 (letto nel codice, non provato). Il reddito per unità somma i redditi col segno
+  (`yield_on_cost.py`, `_calculate_income_position`): se nei 365 giorni le correzioni negative superano i dividendi, il
+  risultato `AVAILABLE` ha un valore negativo che il validatore di `YieldOnCostResult` rifiuta
+  (`schemas/portfolio.py:335-340`), con un errore invece di «—». Cura proposta: `UNAVAILABLE` con un motivo nuovo
+  (`negative_net_income`) nello schema di J, poi `api sync` e l'etichetta nei 4 cataloghi; rosso prima. Dettagli: piano
+  MF, sezione «MF-F1».
+- **MF-K3 · La card e la linea del TWRR e del ROI semplice in due casi limite** — basso, numeri (proposta, da decidere);
+  test-author di MF, 16/10 (K2). (1) Come l'MWRR prima di D-MF5: la card calcola il TWRR solo con NAV > 0
+  (`portfolio_service.py`, `get_summary`), la linea (`calculate_twrr_series`) no: col portafoglio svuotato la card dice
+  «—» e la linea resta piatta a −50 %. (2) Come l'MWRR prima di N54: il ROI semplice della card
+  (`period_net_invested = Σ −flussi`) e la sua linea (`calculate_simple_roi_series`) vedono 0 di capitale quando
+  l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
+  anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
+  MF, sezione «Ondata 1b», K2.

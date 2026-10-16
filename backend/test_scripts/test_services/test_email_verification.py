@@ -162,9 +162,11 @@ MAPPED = "::ffff:198.51.100.7"
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
-#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX.
-MAILBOX_VARIANTS = ("Zq-Vic@Example.com", "zq-vic@example.com", "ZQ-VIC@EXAMPLE.COM", "zQ-vIc@eXaMpLe.CoM")
-MAILBOX = "zq-vic@example.com"
+#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX. The
+#: ways differ in the case of ``ï`` and ``ç`` alone, in NFC (one code point each): since P18 an address is unique
+#: regardless of A–Z case (``ux_users_email_lower``).
+MAILBOX_VARIANTS = ("zq-v\u00cf\u00e7@example.com", "zq-v\u00ef\u00e7@example.com", "zq-v\u00cf\u00c7@example.com", "zq-v\u00ef\u00c7@example.com")
+MAILBOX = "zq-v\u00ef\u00e7@example.com"
 START = 1_000.0
 
 POSITIONAL = inspect.Parameter.POSITIONAL_OR_KEYWORD
@@ -1757,8 +1759,10 @@ async def _issue_and_send_directly(engine: AsyncEngine, user: User, moment: date
 
 @pytest.mark.asyncio
 async def test_a_mailbox_gets_three_registration_emails_an_hour_whatever_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
-    """EMV-043 — contracts 5 and 7: four accounts registered with one mailbox written four ways (``Zq-Vic@Example.com``, ``zq-vic@…``, ``ZQ-VIC@…``, ``zQ-vIc@…``), each waiting with its hold. The registration emails of the first three go out, a minute apart; the fourth's, a minute later, does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised. That account still waits with its hold as it was — live, not revoked, no new token —; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
+    """EMV-043 — contracts 5 and 7: four accounts registered with one mailbox written four ways (``zq-vÏç@example.com``, ``zq-vïç@…``, ``zq-vÏÇ@…``, ``zq-vïÇ@…``: the case of ``ï`` and ``ç`` alone, since P18 makes an address unique regardless of A–Z case), each waiting with its hold. The registration emails of the first three go out, a minute apart; the fourth's, a minute later, does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised. That account still waits with its hold as it was — live, not revoked, no new token —; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
     print_section("EMV-043: three registration emails per mailbox")
+    assert {written.casefold() for written in MAILBOX_VARIANTS} == {MAILBOX}, "precondition: four spellings of one mailbox"
+    assert len({user_service.email_fold(written) for written in MAILBOX_VARIANTS}) == len(MAILBOX_VARIANTS), "precondition: four accounts on one mailbox: one casefold key, four addresses for the A–Z unique index (P18)"
     moment = utcnow()
     accounts = await _mailbox_accounts(engine, moment - timedelta(minutes=5))
     last, last_hold = accounts[-1]

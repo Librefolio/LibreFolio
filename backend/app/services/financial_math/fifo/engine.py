@@ -854,7 +854,8 @@ class FifoLotEngine:
 
         Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
         (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
-        function of holdings, but the two remain distinct audit groups by economic_type. A pool is
+        function of holdings, but the two remain distinct audit groups by economic_type. A pool sums the
+        signed amounts, as the Dashboard does: a negative correction lowers the income. It is
         allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
         recorded entirely as orphan income (returned to the caller for the asset-level total).
         """
@@ -874,8 +875,8 @@ class FifoLotEngine:
                 if quantity > Decimal("0"):
                     eligible.append((lot_id, quantity))
             eligible.sort(key=lambda item: item[0])
-            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
-            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
+            target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
             source_ids = tuple(sorted(event.transaction_id for event in pool_events))
             if not eligible:
                 orphan_total += target_pool

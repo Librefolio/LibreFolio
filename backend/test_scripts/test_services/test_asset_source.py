@@ -144,10 +144,10 @@ def test_price_column_precision():
     columns = ["open", "high", "low", "close", "adjusted_close"]
     for col in columns:
         precision, scale = get_model_column_precision(PriceHistory, col)
-        # Detailed logging per case
-        print_info(f"Case: column={col} | expected=(18,6) | actual=({precision},{scale})")
-        assert precision == 18, f"{col}: Expected precision 18, got {precision}"
-        assert scale == 6, f"{col}: Expected scale 6, got {scale}"
+        # Detailed logging per case (C-97a: the price columns are RealDecimal(24, 12))
+        print_info(f"Case: column={col} | expected=(24,12) | actual=({precision},{scale})")
+        assert precision == 24, f"{col}: Expected precision 24, got {precision}"
+        assert scale == 12, f"{col}: Expected scale 12, got {scale}"
         print_success(f"✓ {col}: precision OK ({precision},{scale})")
 
 
@@ -155,11 +155,12 @@ def test_truncate_price():
     """Test truncate_price_to_db_precision() helper."""
     print_section("Test 2: Price Truncation")
 
+    # C-97a: a price keeps 12 decimals, then at most 15 significant digits, both ROUND_DOWN
     test_cases = [
-        ("175.1234567890", "175.123456"),  # Truncate extra decimals
+        ("175.1234567890123", "175.123456789012"),  # Truncate extra decimals
         ("175.123456", "175.123456"),  # Already at precision
-        ("175.12", "175.120000"),  # Pad to 6 decimals
-        ("1000.9999999", "1000.999999"),  # Large number
+        ("175.12", "175.12"),  # Fewer decimals: same value
+        ("1000.99999999999999", "1000.99999999999"),  # Large number: 15 significant digits
     ]
 
     for input_str, expected_str in test_cases:

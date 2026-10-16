@@ -3627,6 +3627,14 @@ migration of saved overlays, the plugin-owned `signals.riskRollingReturn.*` keys
 Updated: [[features/F-088]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-16] file | An ADJUSTMENT is never a price; no price at all → valued at cost (J-17)
+J-17 recorded the developer's decision P2 (option A, SELL stays a price source), the valued-at-cost rule and two review
+pitfalls: the grace counted from BUY/SELL dates never applied, and a completeness check on unpriced transfers left a
+permanent capital artifact. Two pages that stated the old rule got a dated note.
+Filed: [[decisions/adjustment-is-never-a-price]]. Updated: [[entities/portfolio-engine]],
+[[problems/stale-price-banner-never-emitted]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-16] file | Domain: EMAIL — optional SMTP email of release 1.3 (workstream E, F04)
 Workstream E's lot E6 asked for the domain page of the optional email. Filed from plan 08
 (`Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`, committed at `b22747e52`, read with the uncommitted

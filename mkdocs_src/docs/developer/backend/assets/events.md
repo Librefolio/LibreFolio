@@ -140,7 +140,9 @@ The data editor saves its Events tab this way, in one request: the rows marked d
 `delete_ids`, the edited and new rows in `events`.
 
 In both modes, an event in a currency other than the asset's is refused
-(`EVENT_CURRENCY_MISMATCH`). Each result carries `event_ids`: the id of the event each point of
+(`EVENT_CURRENCY_MISMATCH`), and so is a value with more than 6 decimal places or 15
+significant digits, which is never rounded (`EVENT_TOO_MANY_DIGITS`, C-97). Each result
+carries `event_ids`: the id of the event each point of
 the item wrote, in request order. An edit keeps its id, an event matched on its date and type gets
 the id of the row it updated, and an added event the id of its new row. `deleted_ids` lists the
 ids of `delete_ids`, all deleted, in request order; `success_count` also counts an item that only
@@ -161,6 +163,7 @@ Every refusal below stops the whole request:
 | An id of `delete_ids` that is not an event of the item's asset: unknown, already gone, or another asset's | HTTP 400 `EVENT_NOT_DELETABLE`; `params.ids`: those ids |
 | An id of `delete_ids` whose event a transaction is linked to | HTTP 409 `EVENT_IN_USE`; `params.events`: one `{id, date, type, linked_transactions}` per such event, ordered by date, type and id. Counts only, no transaction id: the transactions may belong to other users |
 | An event in a currency other than the asset's | HTTP 400 `EVENT_CURRENCY_MISMATCH`; `params`: `expected` (the asset's currency) and `events`, one `{event_index, date, type, currency}` per such event of the item |
+| An event whose value has more than 6 decimal places or more than 15 significant digits, trailing zeros not counted (`_reject_too_many_digits()`, the limits of `asset_events.value`) | HTTP 400 `EVENT_TOO_MANY_DIGITS`; `params`: `max_decimal_places` (6), `max_significant_digits` (15) and `events`, one `{event_index, date, type}` per such event of the item |
 | An `id` that is unknown, belongs to another asset, or names a provider event | HTTP 400 `EVENT_NOT_EDITABLE`; `params.ids`: those ids |
 | An edit that changes its date or type (a *mover*) landing on a key another edit of the item ends on, or on a key held by a manual row the item does not edit | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: the `date` and `type` of the key |
 | An event without `id` on a key an edit of the item ends on | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: `date` and `type` |

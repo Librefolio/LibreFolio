@@ -339,22 +339,22 @@
     <InfoBanner variant="info" message={$t('importWizard.assetUnify.intro')} />
     {#if openProposalCount >= 2 && onconfirmall}
         <div class="flex justify-end">
-            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" onclick={onconfirmall} data-testid="asset-group-confirm-all">
+            <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-lf-success px-3 py-2 text-xs font-semibold text-lf-on-status hover:bg-lf-success-hover" onclick={onconfirmall} data-testid="asset-group-confirm-all">
                 <Check class="h-4 w-4" />
                 {$t('importWizard.assetUnify.confirmAll', {values: {count: openProposalCount}})}
             </button>
         </div>
     {/if}
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
-            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-solid border-emerald-400 dark:border-emerald-600/60"></span>{$t('importWizard.assetUnify.legendConfirmed')}</span>
-            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-dashed border-amber-400 dark:border-amber-500/60"></span>{$t('importWizard.assetUnify.legendProposed')}</span>
-            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border border-gray-300 dark:border-gray-600"></span>{$t('importWizard.assetUnify.legendSingle')}</span>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-lf-muted">
+            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-solid border-lf-success-line"></span>{$t('importWizard.assetUnify.legendConfirmed')}</span>
+            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border-2 border-dashed border-lf-warning-line"></span>{$t('importWizard.assetUnify.legendProposed')}</span>
+            <span class="inline-flex items-center gap-1"><span class="h-3 w-5 rounded border border-lf-subtle"></span>{$t('importWizard.assetUnify.legendSingle')}</span>
             <span class="inline-flex items-center gap-1"><Star class="h-3 w-3 fill-amber-400 text-amber-500" />{$t('importWizard.assetUnify.legendPrimary')}</span>
         </div>
         <button
             type="button"
-            class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lf-input px-3 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!touched}
             onclick={onreset}
             title={$t('importWizard.assetUnify.resetHint')}
@@ -366,7 +366,7 @@
     </div>
 
     {#if groups.length === 0}
-        <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="asset-group-empty">{$t('importWizard.assetUnify.empty')}</p>
+        <p class="text-sm text-lf-muted" data-testid="asset-group-empty">{$t('importWizard.assetUnify.empty')}</p>
     {:else}
         <!-- Uniform cards, extraction order. Same rectangle for one member or five: the eye can
              then compare them without re-measuring each one. -->
@@ -378,10 +378,10 @@
                 {@const badges = badgesOf(group)}
                 <div
                     class="flex h-full min-h-[9.5rem] flex-col rounded-lg p-3 transition-colors {proposed
-                        ? 'border-2 border-dashed border-amber-400 bg-amber-50/60 dark:border-amber-500/60 dark:bg-amber-900/10'
+                        ? 'border-2 border-dashed border-lf-warning-line bg-lf-warning-soft/60'
                         : united
-                          ? 'border-2 border-solid border-emerald-400 bg-emerald-50/50 dark:border-emerald-600/60 dark:bg-emerald-900/10'
-                          : 'border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'} {dropTarget === anchorKey ? 'ring-2 ring-blue-400' : ''}"
+                          ? 'border-2 border-solid border-lf-success-line bg-lf-success-soft/50'
+                          : 'border border-lf-subtle bg-lf-card'} {dropTarget === anchorKey ? 'ring-2 ring-lf-focus' : ''}"
                     role="group"
                     ondragover={(e) => onDragOver(e, anchorKey)}
                     ondrop={(e) => onDrop(e, anchorKey)}
@@ -396,16 +396,16 @@
                                 type="text"
                                 bind:value={renameDraft}
                                 autofocus
-                                class="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1.5 py-0.5 text-sm font-semibold text-gray-800 focus:ring-1 focus:ring-blue-400 focus:outline-none dark:bg-gray-900 dark:text-gray-100"
+                                class="min-w-0 flex-1 rounded border border-lf-focus bg-lf-field px-1.5 py-0.5 text-sm font-semibold text-lf-primary focus:ring-1 focus:ring-lf-focus focus:outline-none"
                                 onkeydown={(e) => onRenameKey(e, group)}
                                 onblur={() => commitRename(group)}
                                 data-testid="asset-group-rename-input-{group.groupId}"
                             />
-                            <button type="button" class="shrink-0 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title={$t('common.cancel')} onclick={() => (renamingId = null)} data-testid="asset-group-rename-cancel-{group.groupId}">
+                            <button type="button" class="shrink-0 rounded p-1 text-lf-muted hover:text-lf-secondary" title={$t('common.cancel')} onclick={() => (renamingId = null)} data-testid="asset-group-rename-cancel-{group.groupId}">
                                 <X class="h-3.5 w-3.5" />
                             </button>
                         {:else}
-                            <span use:scrollOnOverflow class="{overflowScrollTextClass} text-sm font-semibold text-gray-800 dark:text-gray-100" data-testid="asset-group-name-{group.groupId}">
+                            <span use:scrollOnOverflow class="{overflowScrollTextClass} text-sm font-semibold text-lf-primary" data-testid="asset-group-name-{group.groupId}">
                                 {displayNameOf(group)}
                             </span>
                         {/if}
@@ -413,35 +413,23 @@
                             {#if renamingId !== group.groupId && canRename(group)}
                                 <!-- Unbound, the name is nobody's but the files': the user must be
                                      able to settle on one, or write the one they actually use. -->
-                                <button
-                                    type="button"
-                                    class="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                                    title={$t('importWizard.assetUnify.rename')}
-                                    onclick={() => startRename(group)}
-                                    data-testid="asset-group-rename-{group.groupId}"
-                                >
+                                <button type="button" class="rounded p-1 text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary" title={$t('importWizard.assetUnify.rename')} onclick={() => startRename(group)} data-testid="asset-group-rename-{group.groupId}">
                                     <Pencil class="h-3.5 w-3.5" />
                                 </button>
                             {/if}
                             {#if !canRename(group)}
-                                <span class="inline-flex items-center gap-1 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-gray-700 dark:bg-gray-700 dark:text-gray-200" title={$t('importWizard.assetUnify.fromDbHint')}>
+                                <span class="inline-flex items-center gap-1 rounded bg-lf-neutral px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-lf-secondary" title={$t('importWizard.assetUnify.fromDbHint')}>
                                     <Database class="h-3 w-3" />
                                     {$t('importWizard.assetUnify.fromDb')}
                                 </span>
                             {/if}
                             {#if united}
-                                <span class="rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap {proposed ? 'bg-amber-200 text-amber-900 dark:bg-amber-800/60 dark:text-amber-100' : 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800/60 dark:text-emerald-100'}">
+                                <span class="rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap {proposed ? 'bg-lf-warning-line text-lf-warning-on-soft' : 'bg-lf-success-line text-lf-success-on-soft'}">
                                     {proposed ? $t('importWizard.assetUnify.stateProposed') : $t('importWizard.assetUnify.stateConfirmed')}
                                 </span>
                             {/if}
                             {#if resolvedIds[group.members[0].fakeAssetId] !== undefined && oninspect}
-                                <button
-                                    type="button"
-                                    class="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                                    title={$t('importWizard.assetUnify.inspect')}
-                                    onclick={() => oninspect?.(resolvedIds[group.members[0].fakeAssetId])}
-                                    data-testid="asset-group-inspect-{group.groupId}"
-                                >
+                                <button type="button" class="rounded p-1 text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary" title={$t('importWizard.assetUnify.inspect')} onclick={() => oninspect?.(resolvedIds[group.members[0].fakeAssetId])} data-testid="asset-group-inspect-{group.groupId}">
                                     <Pencil class="h-3.5 w-3.5" />
                                 </button>
                             {/if}
@@ -451,7 +439,7 @@
                     <!-- Identifiers. Every code the group carries, colour-coded by kind; a click
                          promotes one to lead. The star marks what the asset will be quoted under. -->
                     {#if hasChoice(badges)}
-                        <p class="mt-2 text-[10px] text-gray-500 dark:text-gray-400">{$t('importWizard.assetUnify.idsHint')}</p>
+                        <p class="mt-2 text-[10px] text-lf-muted">{$t('importWizard.assetUnify.idsHint')}</p>
                     {/if}
                     <div class="mt-1 flex flex-wrap gap-1" data-testid="asset-group-ids-{group.groupId}">
                         {#each badges as badge (badge.kind + badge.value)}
@@ -482,7 +470,7 @@
                     <div class="mt-2 grow space-y-1">
                         {#each group.members as member (memberKey(member))}
                             <div
-                                class="flex items-center gap-1.5 rounded border border-gray-200 bg-white/70 px-1.5 py-1 dark:border-gray-700 dark:bg-gray-900/40 {draggingKey === memberKey(member) ? 'opacity-50' : ''} {dropTarget === memberKey(member) ? 'ring-1 ring-blue-400' : ''}"
+                                class="flex items-center gap-1.5 rounded border border-lf-subtle bg-lf-card/70 px-1.5 py-1 {draggingKey === memberKey(member) ? 'opacity-50' : ''} {dropTarget === memberKey(member) ? 'ring-1 ring-lf-focus' : ''}"
                                 draggable="true"
                                 role="listitem"
                                 ondragstart={(e) => onDragStart(e, member)}
@@ -491,12 +479,12 @@
                                 ondrop={(e) => onDrop(e, memberKey(member))}
                                 data-testid={united ? `asset-group-member-${member.fakeAssetId}` : `asset-group-single-${member.fakeAssetId}`}
                             >
-                                <FileText class="h-3 w-3 shrink-0 text-gray-400" />
-                                <span use:scrollOnOverflow class="{overflowScrollTextClass} grow text-[11px] text-gray-600 dark:text-gray-300">{member.fileName}</span>
-                                <span class="shrink-0 font-mono text-[10px] text-gray-500 dark:text-gray-400">{member.isin ?? member.symbol ?? $t('importWizard.assetUnify.noIsin')}</span>
+                                <FileText class="h-3 w-3 shrink-0 text-lf-muted" />
+                                <span use:scrollOnOverflow class="{overflowScrollTextClass} grow text-[11px] text-lf-secondary">{member.fileName}</span>
+                                <span class="shrink-0 font-mono text-[10px] text-lf-muted">{member.isin ?? member.symbol ?? $t('importWizard.assetUnify.noIsin')}</span>
                                 <button
                                     type="button"
-                                    class="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                                    class="shrink-0 rounded p-0.5 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary"
                                     onclick={(e) => openMenu(e, member)}
                                     title={$t('importWizard.assetUnify.actions')}
                                     data-testid={united ? `asset-group-member-menu-${member.fakeAssetId}` : `asset-group-single-menu-${member.fakeAssetId}`}
@@ -510,9 +498,9 @@
                     <!-- Why the engine linked these. Naming both sides matters: "same name, 100%"
                          under a card with four codes says nothing about *which* two it means. -->
                     {#if group.links.length > 0}
-                        <div class="mt-2 space-y-0.5 border-t border-dashed border-gray-300 pt-1.5 dark:border-gray-600" data-testid="asset-group-links-{group.groupId}">
+                        <div class="mt-2 space-y-0.5 border-t border-dashed border-lf-subtle pt-1.5" data-testid="asset-group-links-{group.groupId}">
                             {#each summariseLinks(group) as summary (summary.reason)}
-                                <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                                <p class="text-[10px] text-lf-muted">
                                     {linkText(group, summary)}{#if summary.score < 1}<span> · {$t('importWizard.assetUnify.linkScore', {values: {score: Math.round(summary.score * 100)}})}</span>{/if}
                                 </p>
                             {/each}
@@ -520,22 +508,17 @@
                     {/if}
 
                     <!-- Footer: weight, and the two verbs that act on the whole group -->
-                    <div class="mt-2 flex items-center justify-between gap-2 border-t border-gray-200 pt-2 dark:border-gray-700">
-                        <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('importWizard.assetUnify.txCount', {values: {count: txCountOf(group)}})}</span>
+                    <div class="mt-2 flex items-center justify-between gap-2 border-t border-lf-subtle pt-2">
+                        <span class="text-[11px] text-lf-muted">{$t('importWizard.assetUnify.txCount', {values: {count: txCountOf(group)}})}</span>
                         <div class="flex shrink-0 items-center gap-1.5">
                             {#if proposed}
-                                <button type="button" class="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700" onclick={() => confirmGroup(group)} data-testid="asset-group-confirm-{group.groupId}">
+                                <button type="button" class="inline-flex items-center gap-1 rounded bg-lf-success px-2 py-1 text-xs font-medium text-lf-on-status hover:bg-lf-success-hover" onclick={() => confirmGroup(group)} data-testid="asset-group-confirm-{group.groupId}">
                                     <Check class="h-3.5 w-3.5" />
                                     {$t('importWizard.assetUnify.confirm')}
                                 </button>
                             {/if}
                             {#if united}
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                                    onclick={() => splitGroup(group)}
-                                    data-testid="asset-group-split-{group.groupId}"
-                                >
+                                <button type="button" class="inline-flex items-center gap-1 rounded border border-lf-input px-2 py-1 text-xs font-medium text-lf-secondary hover:bg-lf-hover" onclick={() => splitGroup(group)} data-testid="asset-group-split-{group.groupId}">
                                     <Scissors class="h-3.5 w-3.5" />
                                     {$t('importWizard.assetUnify.split')}
                                 </button>

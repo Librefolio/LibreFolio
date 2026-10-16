@@ -52,6 +52,47 @@ The database is organized into four logical subsystems. Each has its own detaile
     - Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
 3. 📦 **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.
 
+## 🔢 Decimal Columns {: #decimal-columns }
+
+SQLite keeps the value of a `NUMERIC` column as a double (`REAL`; `INTEGER` for a whole
+value) and ignores the declared precision: the model's column type decides how the value
+is read back (`backend/app/db/models.py`; C-97, issue #43).
+
+| Columns | Type | Decimal places |
+|---------|------|----------------|
+| `transactions.quantity` | `RealDecimal(22, 10)` | 10 |
+| `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 |
+| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 |
+| `fx_rates.rate` | `Numeric(24, 10)` | 10 |
+| `price_history.volume` | `Numeric(24, 0)` | 0 |
+
+- **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
+  `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
+  (`65000.123456` at scale 12 reads `65000.123456000001`). `RealDecimal`
+  (`backend/app/db/real_decimal.py`) writes the same double and reads back the shortest
+  decimal that represents it (its `repr`), at most 15 significant digits
+  (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
+  6 decimals (`READ_MIN_SCALE`) when it has fewer: `10` reads `10.000000`, as with
+  `Numeric(18, 6)`.
+- **Input limits.** A value sent in — a transaction's quantity, cash amount or manual
+  per-unit cost basis, a manual price or event value — over its column's decimal places,
+  or over 15 significant digits, is refused, never rounded (`decimal_limit_issue()` in
+  `backend/app/db/precision.py`; trailing zeros do not count): see
+  [Decimal limits](../../backend/transactions/service.md#decimal-limits),
+  [Asset Architecture](../../backend/assets/architecture.md) for prices and
+  [Asset Events](../../backend/assets/events.md) (`EVENT_TOO_MANY_DIGITS`). A provider's
+  prices are truncated instead: `truncate_priceHistory()` keeps 12 decimal places, then 15
+  significant digits, both rounded down. A BRIM plugin rounds a value it computes, never
+  one it reads from the file, with `round_computed_value()` (see
+  [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
+- **Never `SUM` in SQL.** A `SUM` adds the stored doubles, not the decimals. Sum the values
+  read back in Python, with `financial_math` (`position_quantities()`, `native_balances()`),
+  as the [balance queries](../../backend/transactions/service.md#balance-queries) do.
+- **Older databases.** `001_initial` declares `NUMERIC(22, 10)` and `NUMERIC(24, 12)`; a
+  database created before keeps `NUMERIC(18, 6)`, on purpose: SQLite ignores the
+  declaration, so both read the same. The release 1.3 migration's docstring gives the
+  reasoning.
+
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
@@ -75,6 +116,7 @@ The chain is linear:
 | `006_registration_mode.py` | `006_registration_mode` | `005_accounts_invites` | Data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting) — `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; the downgrade writes `true` for `open`, `false` for `invite` and `disabled` |
 | `007_plugin_settings.py` | `007_plugin_settings` | `006_registration_mode` | The [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables of the plugin settings, created empty; the downgrade drops them, with their values and secrets |
 | `008_registration_invite_default.py` | `008_registration_invite_default` | `007_plugin_settings` | Data only: where [`registration_mode`](users_access.md#global-setting) is missing and `users` holds at least one account, the row is written `open`, the earlier default, so an upgraded install keeps its registration while a new one seeds the new default, `invite`; an existing row is never touched, a database without accounts gets nothing, and the downgrade does nothing |
+| `009_email_unique_ignoring_case.py` | `009_email_unique_ignoring_case` | `008_registration_invite_default` | The unique index `ux_users_email_lower` on `lower(email)`: an [email address](users_access.md#user) belongs to one account whatever its A–Z case (letters outside ASCII compare as written). If two accounts already share an address apart from case, this revision stops before writing anything, naming them by id and username, never by address, with the remedy `./dev.py user set-email`; no account is changed or merged, the revisions before it stay applied (on SQLite Alembic commits each one on its own), and the next start resumes here. The downgrade drops the index |
 
 !!! warning "The revision id is the contract, not the filename"
 

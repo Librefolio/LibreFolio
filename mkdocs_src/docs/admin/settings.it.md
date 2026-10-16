@@ -68,11 +68,14 @@ Lo scheduler mantiene aggiornati prezzi e tassi di cambio da solo, anche quando 
 - 💰 **Aggiornamento Prezzi Correnti** — ogni pochi minuti, l'ultimo prezzo di ogni asset attivo che ha
   un provider di prezzi.
 - 📊 **Sincronizzazione Storico** — nei giorni e negli orari che scegli, i prezzi giornalieri di quegli asset e i
-  tassi di ogni coppia FX con un provider, nell'**Orizzonte di recupero**, per colmare eventuali lacune. Le coppie
-  con soli tassi manuali vengono saltate.
+  tassi di ogni coppia FX con un provider, almeno nell'**Orizzonte di recupero**, per colmare eventuali lacune.
+  Per un asset o una coppia il cui ultimo prezzo o tasso salvato è più vecchio, risale fino a quel giorno, al massimo
+  di un anno; un asset senza ancora prezzi salvati ha solo l'orizzonte, perché lo scheduler non scarica mai uno
+  storico intero. Le coppie con soli tassi manuali vengono saltate.
 
 Se all'orario di una sincronizzazione il server è spento o sospeso, la sincronizzazione dello storico
-che ha saltato parte appena il server torna attivo, senza aspettare l'orario successivo.
+che ha saltato parte appena il server torna attivo, senza aspettare l'orario successivo: un server spento per
+settimane colma tutta la sua lacuna.
 
 ### ⚙️ Configura la pianificazione
 
@@ -89,7 +92,7 @@ La finestra di dialogo ha il proprio pulsante **Salva**.
 | **Aggiorna ogni** | 10 minuti | Ogni quanto vengono aggiornati i prezzi correnti, da 1 a 1440 minuti. |
 | **Orari di sincronizzazione** | `06:00`, `23:00` | Quando viene eseguita la sincronizzazione storica; **Aggiungi orario** aggiunge uno slot. |
 | **Giorni di sincronizzazione** | Lun–Sab | I giorni della sincronizzazione storica. |
-| **Orizzonte di recupero** | 14 giorni | Quanti giorni passati controlla ogni sincronizzazione storica, da 1 a 365. |
+| **Orizzonte di recupero** | 14 giorni | Quanti giorni passati controlla almeno ogni sincronizzazione storica, da 1 a 365. Risale più indietro, fino a un anno, quando l'ultimo prezzo o tasso salvato di un asset o di una coppia è più vecchio. |
 
 Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storica dopo la chiusura dei mercati (ad esempio
 `22:00`) ottiene i dati più completi.

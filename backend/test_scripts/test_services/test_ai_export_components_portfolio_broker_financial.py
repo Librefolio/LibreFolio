@@ -150,7 +150,7 @@ def _required_yoc() -> YieldOnCostResult:
     )
 
 
-def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_value: object = 1000) -> PortfolioHolding:
+def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_value: object = 1000, valuation_source: str | None = None) -> PortfolioHolding:
     return PortfolioHolding(
         asset_id=asset_id,
         asset_name=f"Asset {asset_id}",
@@ -159,6 +159,7 @@ def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_va
         broker_name=f"Broker {broker_id}",
         quantity=Decimal(str(quantity)),
         current_value=Decimal(str(current_value)),
+        valuation_source=valuation_source,
         nav_weight_percent=Decimal("10"),
         yield_on_cost=_required_yoc(),
     )
@@ -1738,8 +1739,9 @@ class TestBrokerScope:
 
 class TestProvenanceComponentVersion:
     """What the Snapshot Data renderer reads off each section: the provenance envelopes say
-    component_version 2 (the WAC semantics moved to the single average cost), schema_version 1
-    (the payload shape is unchanged). No prompt wording is asserted."""
+    component_version 3, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
+    WAC semantics moved to the single average cost; version 3 (J-17): the valuation hierarchy names
+    ESTIMATED_AT_COST and an ADJUSTMENT is never a price. No prompt wording is asserted."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -1749,7 +1751,70 @@ class TestProvenanceComponentVersion:
             pytest.param("broker.provenance", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
         ],
     )
-    async def test_provenance_envelope_is_component_version_2_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+    async def test_provenance_envelope_is_component_version_3_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 2."""
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(component_id, required=True)
+
+        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 3, 1)
+        assert envelope.payload["domain"] == component_id.split(".")[0]
+
+
+# =============================================================================
+# J-17 — a holding valued at cost has no unit_price (portfolio.positions / broker.positions v2)
+# =============================================================================
+
+
+_POSITIONS_COMPONENTS = [
+    pytest.param("portfolio.positions", {}, portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio"),
+    pytest.param("broker.positions", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
+]
+
+
+class TestValuedAtCostPositions:
+    """J-17 (developer's option A, 16/10): a holding with no price at all is valued at its book cost,
+    ``valuation_source == "ESTIMATED_AT_COST"``, with no price. Its value per unit would be its unit cost,
+    not a price, so its position row exports no ``unit_price``; the rows priced at the market or at a trade
+    keep theirs (value / quantity). Both positions components move to version 2 with the same payload
+    shape (schema_version 1): what the Snapshot Data renderer reads off each section. No prompt wording is
+    asserted; rows are read by asset."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("component_id", "scope_overrides", "components"), _POSITIONS_COMPONENTS)
+    async def test_an_at_cost_row_has_no_unit_price(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: ValidationError — PortfolioHolding.valuation_source accepted MARKET_PRICE,
+        LAST_TRADE_PRICE and MISSING only. (J-17's first version exported the at-cost row's unit cost,
+        300 / 4 = 75, as its unit_price.)"""
+        scope = _scope(**scope_overrides)
+        holdings = [
+            _holding(1, 5, quantity=10, current_value=1000, valuation_source="MARKET_PRICE"),
+            _holding(2, 5, quantity=4, current_value=300, valuation_source="ESTIMATED_AT_COST"),
+            _holding(3, 5, quantity=5, current_value=450, valuation_source="LAST_TRADE_PRICE"),
+        ]
+        _patch_report(monkeypatch, _report(scope, summary=_summary(holdings=holdings)))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(component_id, required=True)
+
+        rows = {row["asset_id"]: row for row in envelope.payload["positions"]}
+        assert {asset_id: (row["valuation_source"], row["unit_price"]) for asset_id, row in rows.items()} == {
+            1: ("MARKET_PRICE", {"code": CURRENCY, "amount": "100"}),
+            2: ("ESTIMATED_AT_COST", None),
+            3: ("LAST_TRADE_PRICE", {"code": CURRENCY, "amount": "90"}),
+        }
+        assert rows[2]["current_value"] == {"code": CURRENCY, "amount": "300"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("component_id", "scope_overrides", "components"), _POSITIONS_COMPONENTS)
+    async def test_positions_envelope_is_component_version_2_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 1."""
         scope = _scope(**scope_overrides)
         _patch_report(monkeypatch, _report(scope))
         _patch_lots(monkeypatch, {})
@@ -1759,7 +1824,6 @@ class TestProvenanceComponentVersion:
         envelope = await context.resolve(component_id, required=True)
 
         assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 2, 1)
-        assert envelope.payload["domain"] == component_id.split(".")[0]
 
 
 # =============================================================================
