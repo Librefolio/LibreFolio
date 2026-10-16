@@ -2968,3 +2968,101 @@ test e, a test verde, lo fa fallire con l'elenco dei rimasti. Asserzioni origina
 populate`; `api broker-multiuser test_cross_broker_access_failure_is_atomic` **2/2**, poi nessun broker `M008d%` nel DB
 della corsia; `api broker-multiuser` intero **20/20**. Porta libera. Reperto: anche `TestMultiUserRoles`,
 `TestEditorRestrictions` e MULTI-007/008b/008c lasciano broker o transazioni → **W-B41**.
+
+> **Coda della notte entrata** (treno 89 in `dev_release2`: `7bed1bdce` W-B37, `60917185c` C-34, `d35e3c8f3` W-B35,
+> `8129f8176` W-B12, `0fc27a8b8` journal del coordinatore). Nel mio ramo gli stessi lotti sono `c8da45fc4`, `5d6965b79`,
+> `91ae33e34`, `232524cb1`, `7923ae8d4` (HEAD, verificato alle 04:40; worktree pulito). C-34 di Y9, arrivata dopo: già
+> fatta; la guardia di Y non è né in `dev_release2` né nella mia base → la voce di `TransactionBulkModal` la toglie Y nel
+> suo lotto (detto al coordinatore). Prossimi, come proposto nell'handoff: W-B41, poi W-B38.
+
+### W-B41 — gli altri test di `test_broker_multiuser_api.py` puliscono i loro broker ✅ (2026-10-16) — 🧊 FROZEN
+
+**Analisi** (04:42, codice di `7923ae8d4`): in `backend/test_scripts/test_api/test_broker_multiuser_api.py` 11 test
+creano il broker con `create_broker` e non lo cancellano: MULTI-001…005, 007, 008, 008b, 008c (`TestMultiUserRoles`),
+009 e 010 (`TestEditorRestrictions`); 007, 008b e 008c lasciano anche un DEPOSIT. MULTI-006 cancella da sé il suo broker
+(è il test della cancellazione) e resta com'è: registrarlo farebbe riportare a `drop()` un broker già cancellato.
+MULTI-008d (W-B12) e i test V-23 sono già puliti.
+**Prima della cura** (prova in corsia, `nice`, carico 40): DB della corsia 41 broker (max id 64), 3 transazioni su broker
+`Broker_%`; `api broker-multiuser` **20/20**; dopo: 52 broker (+11, id 65…80, tutti `Broker_<hex>`), 6 transazioni su
+`Broker_%` (+3). Letture con `sqlite3 "file:…/app.db?immutable=1"` a server spento (nessun `-wal`). Log
+`/tmp/libreFolio_w_wb41_before.log`. Il giro ha anche ricostruito la build debug del frontend (sorgenti cambiati dopo il
+treno 89).
+**Disegno** (decisione notturna, da rivedere): un context manager asincrono `_owning(label)` accanto a `_new_broker`, con
+il contratto del `try/finally` di MULTI-008d e dei V-23 (pulizia anche dopo un rosso, il rosso passa intatto, i rimasti
+stampati, un verde con rimasti fallisce), messo per ultimo nell'`async with` (esce a client aperti). Negli 11 test cambiano
+solo la riga dell'`async with` e `create_broker(...)` → `_new_broker(<client dell'OWNER>, owned, "MULTI00x")` (nomi
+`MULTI00x_<hex>`, riconoscibili): niente rientri, asserzioni intatte. MULTI-008d e V-23 restano col loro `try/finally`.
+test-author in corso (04:52), senza corsia.
+**Fatto** ✅ (04:56): test-author, solo `backend/test_scripts/test_api/test_broker_multiuser_api.py` (+42 −21): `import
+contextlib`; `_owning(label)` fra `_Owned` e `_new_broker`; negli 11 test la riga dell'`async with` (`_owning` per ultimo) e
+`_new_broker(<client dell'OWNER>, owned, "MULTI00x")`, anche in MULTI-003 e 009 (dove l'EDITOR tenta la cancellazione).
+`create_broker` resta solo per MULTI-006. Il test-author ha provato la semantica del context manager in un frammento a sé
+(solo stdlib, niente repo): pulizia prima della chiusura dei client, rosso intatto, verde con rimasti → fallisce, verde
+pulito → passa. Effetto collaterale voluto: `_new_broker` verifica 200 e `success` alla creazione. `black` e `ruff` puliti.
+**Prova** (05:03, `nice`, carico 55; il DB della corsia era stato ripopolato dal runner E2E di W-B29): prima 8 broker (max
+id 8) e 76 transazioni; `api broker-multiuser` **20/20**; dopo 8 broker (max id 8), 76 transazioni, zero broker
+`MULTI0%`/`M008d%`/`V23%` (prima della cura: +11 broker, +3 transazioni). Log `/tmp/libreFolio_w_wb41_after.log`.
+
+### W-B29 — `asset-event-delete.spec.ts` su asset propri ✅ (2026-10-16) — 🧊 FROZEN
+
+Slot E2E 2 dato dal coordinatore alle 04:48, **stop duro alle 05:25** (05:30–06:45 macchina ferma: nessuna prova). Build
+debug fresca (04:47, ricostruita dal runner su `7923ae8d4`). **Analisi**: lo scenario 1 trova Apple per testo della card e
+le scrive un DIVIDEND a oggi − 230 giorni (stessa chiave per desktop e mobile nello stesso giorno → il secondo upsert
+sovrascrive il primo); lo scenario 2 usa il DIVIDEND di Apple realizzato da una transazione del mock e marca le righe con
+una sonda `isVisible().catch` (un rosso cancellerebbe eventi condivisi). Il modello giusto è
+`asset-event-editor-save.spec.ts` (`createOwnedAsset`, `linkDividend`, `deleteOwned`, `afterEach`). Il rosso «prima» non si
+mostra senza far girare i due progetti insieme: la prova è statica (lo spec nomina Apple e scrive su di lei). test-author in
+corso (04:52): scenari 1 e 2 su un asset proprio, aiuti comuni in un modulo nuovo `e2e/assets/asset-events-owned.ts`, nessun
+tocco a `assets-helpers.ts` (di X); poi un solo E2E del file in corsia.
+**Fatto** ✅ (04:57): test-author.
+- Nuovo `frontend/e2e/assets/asset-events-owned.ts` (non è uno spec): gli aiuti di `asset-event-editor-save.spec.ts` spostati
+  tali e quali con `export` (`EVENTS_PATH`, `Owned`, `OwnedAsset`, `StoredEvent`, `jsonFrom`, `createOwnedAsset`,
+  `linkDividend`, `deleteOwned`, `seedEvents`, `storedEvents`, `snapshot`, `openEventsEditor`, `eventRow`, `markDeleted`);
+  importa solo `API_BASE` da `assets-helpers.ts`, che non cambia. In `asset-event-editor-save.spec.ts` gli aiuti tolti e
+  importati; i test non cambiano.
+- `asset-event-delete.spec.ts`: `afterEach` con `deleteOwned` (broker con `force`, poi l'asset), titoli invariati. Scenario
+  1: asset proprio con un DIVIDEND non collegato a oggi − 20 giorni (marcatore `uniqueSuffix()`), pagina aperta per id, riga
+  segnata per id; le asserzioni di prima più «l'evento non è più salvato» letto dall'API. Scenario 2: asset proprio con due
+  DIVIDEND, uno realizzato da una transazione su un broker proprio (`linkDividend`) e uno libero, segnati per id (via la
+  sonda `isVisible().catch`); le asserzioni di prima (409, `EVENT_IN_USE`, toast d'errore per `data-testid`) più: tutti e
+  due in `delete_ids`, in uso esattamente quello collegato, nulla cancellato (istantanee identiche). Scenari 3 e 4 restano:
+  leggono soltanto (il 3 apre il menu della card ma non cancella; ha ancora sonde `isVisible().catch` e un filtro per testo
+  → residuo, sotto). `prettier` pulito.
+**Prove** (slot 2, `nice`, carico 36–55): `front-asset asset-event-delete` **4/4** (39 s, 04:57–05:00, progetto desktop come
+fa il runner); `front-asset asset-event-editor-save` **4/4** (05:00–05:02: lo spostamento degli aiuti); `front check` **0
+errori, 0 avvisi** (05:13: il tsconfig comprende `e2e/**`, Playwright non controlla i tipi). Build debug del frontend fresca
+(nessuna build nello slot). Stop dello slot rispettato (05:20).
+**Residuo** → backlog: lo scenario 3 (`delete asset with events shows appropriate warning`) ha sonde `isVisible().catch`, un
+`.first()` senza filtro, un filtro per testo `/delete|elimina/i` e può passare senza asserire nulla; lo scenario 4 dipende
+dai collegamenti del mock (`.first()` sui pallini degli eventi). Sola lettura: nessun dato condiviso a rischio.
+
+### W-B38 — gli errori multipli della creazione arrivano renderizzati ✅ (2026-10-16) — 🧊 FROZEN
+
+**Analisi** (04:58, codice di `7923ae8d4`): `TXCreateItem.validate_transaction_rules`
+(`backend/app/schemas/transactions/transactions.py`), con due o più violazioni, impacchetta in `multipleBusinessRuleErrors`
+per ciascuna `e.message_template`: «{type} requires asset_id» arriva così in `TXValidationIssue.error` (batch, spacchettato
+in `transactions/transaction_batch_stages.py:45`) e in `BRIMValidationIssue.message` (import, `brim/brim_provider.py:564`).
+La UI traduce per codice (`transactions.errors.<code>`, `resolveValidationMessage.ts`) e mostra il testo grezzo solo come
+ripiego: la fuga si vede nelle risposte dell'API. Le regole (TX-S-108) non cambiano.
+**Rossi** ✅ (test-author; corsia, `nice`, 05:04–05:05): TX-S-109 rovesciato e rinominato `test_packed_messages_rendered`
+(i testi impacchettati renderizzati, `ctx` invariato, nessuna `{`; docstring della classe e commento di
+`VISIBLE_RULE_MESSAGES` aggiornati) → `schemas transactions` **1 failed** («the user would read ['{type} requires
+asset_id']»); nuovo G.3.13 `test_validate_create_multiple_rule_errors_rendered` in `test_transactions_validate.py` (un BUY
+senza asset e con quantità 0 su un broker proprio, cancellato in un `finally`; codici e parametri invariati, ogni `error` senza
+`{` e col tipo) → `api transactions-validate` **1 failed**, stesso motivo; `test_multiple_errors_produce_multiple_issues` in
+`test_brim_create_transaction.py` (+2 righe: ogni `message` senza `{` e col tipo SELL) → `services brim-create-transaction`
+**1 failed** («['{type} requires cash.amount > 0']»).
+**Cura** ✅ (05:06): `"msg": e.message()` al posto di `e.message_template`; il commento del blocco dice che ogni voce porta il
+testo renderizzato con i parametri in `ctx` (W-B38), e quello della regola 10 perde la parentesi «packs the template».
+`black` e `ruff` puliti. Nessuna pagina di doc nomina l'impacchettamento.
+**Verdi** (`nice`, carico < 64): `schemas transactions` **105/105** (TX-S-108 invariato); `services brim-create-transaction`
+**14/14**; `db populate --force --clean` (i `services` svuotano il DB della corsia); `api transactions-validate` **12/12**
+(05:12; il runner ha ricostruito la build debug all'avvio). Porta 6184 libera.
+
+> **Prenotazioni ricevute** (coordinatore, 05:13–05:15): T (colori) ha un lotto di sole classi verso le 07:30 sui 4 file di
+> `ui/data-editor` (`DataEditor`, `CsvEditor`, `DataImportModal`, `ErasableNumberCell`) e su tre righe di spec
+> (`e2e/assets/asset-data-editor.spec.ts:287`, `e2e/fx/fx-csv-import.spec.ts:53,56`): non toccarli finché non entra. Y applica
+> Y5/Y6 (`components/brokers/*` → `features/brokers/`, compreso `BrokerImportFilesModal`; `components/lots/*` →
+> `features/brokers/lots/`; `BrokerIcon` → `components/ui/display/`; `components/files/*` → `features/files/`; in
+> `ImportWizardModal` cambia solo una riga d'import): non toccarli fino al suo ingresso (dopo le 06:45). Nessuno dei due
+> tocca il delta di W-B41, W-B29, W-B38. 05:30–06:45 macchina ferma: nessuna prova.
