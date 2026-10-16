@@ -1209,6 +1209,8 @@ test.describe('Transactions', () => {
     // ===================================================================
     test.describe('BulkModal validation issues', () => {
         test('invalid TX in BulkModal shows issues banner with clickable error', async ({page}) => {
+            // Under load the create flow alone can use the default 30 s before any check: the budget of its neighbours (W-B45).
+            test.setTimeout(60_000);
             await openCreateFlow(page);
 
             // Use ADJUSTMENT type with qty>0 and cost_basis_mode=auto
