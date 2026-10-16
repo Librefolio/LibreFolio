@@ -57,6 +57,7 @@
     import AssetSetRiskPanel from '$lib/features/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -211,8 +212,9 @@
      * replaces them. */
     let syncModalWithData = $derived(syncModalOpen ? syncModalAssets.filter((a) => hasStoredPointInRange(getAssetPriceStore(a.id, a.currency).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)).map((a) => a.id) : []);
 
-    /** True when the date range ends today (or later) → show live prices from providers */
-    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
+    /** True when the date range ends today (or later) → show live prices from providers. Today on the user's calendar,
+     *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
+    let isHeadToday = $derived(dateEnd >= todayIso());
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
