@@ -345,7 +345,7 @@
 </script>
 
 {#if mapError}
-    <div class="flex items-center justify-center text-sm text-gray-400 dark:text-gray-500 italic" style="height: {height};">
+    <div class="flex items-center justify-center text-sm text-lf-muted italic" style="height: {height};">
         {mapError}
     </div>
 {:else}
@@ -354,7 +354,7 @@
     <div class="flex flex-col" style="height: {height};">
         <div bind:this={chartContainer} class="w-full flex-1 min-h-0"></div>
         {#if unknownPct > 0}
-            <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
+            <p class="mt-1 text-[11px] text-lf-muted italic text-center leading-snug">
                 {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
             </p>
         {/if}

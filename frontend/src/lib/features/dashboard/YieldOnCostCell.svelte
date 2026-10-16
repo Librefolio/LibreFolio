@@ -138,20 +138,20 @@
 
 {#if result.status === 'available'}
     <Tooltip text={availableTooltip(result.provenance, numericValue)} position="top" maxWidth="360px" interactiveChild={true}>
-        <button type="button" class="font-medium tabular-nums text-gray-700 dark:text-gray-200" aria-label={availableTooltip(result.provenance, numericValue)} data-testid="yield-on-cost-value">
+        <button type="button" class="font-medium tabular-nums text-lf-secondary" aria-label={availableTooltip(result.provenance, numericValue)} data-testid="yield-on-cost-value">
             {availableText}
         </button>
     </Tooltip>
 {:else if result.status === 'no_income'}
     <Tooltip text={noIncomeTooltip(result.provenance)} position="top" maxWidth="340px" interactiveChild={true}>
-        <button type="button" class="font-medium tabular-nums text-gray-500 dark:text-gray-400" aria-label={noIncomeTooltip(result.provenance)} data-testid="yield-on-cost-no-income"> - </button>
+        <button type="button" class="font-medium tabular-nums text-lf-muted" aria-label={noIncomeTooltip(result.provenance)} data-testid="yield-on-cost-no-income"> - </button>
     </Tooltip>
 {:else if result.status === 'unavailable'}
     {@const tooltip = unavailableTooltip(result.reason, result.provenance)}
-    <span class="inline-flex items-center justify-end gap-1 text-gray-500 dark:text-gray-400" data-testid="yield-on-cost-unavailable">
+    <span class="inline-flex items-center justify-end gap-1 text-lf-muted" data-testid="yield-on-cost-unavailable">
         <span aria-hidden="true">-</span>
         <Tooltip text={tooltip} position="top" maxWidth="360px" interactiveChild={true}>
-            <button type="button" class="inline-flex text-amber-500 dark:text-amber-400" aria-label={tooltip} data-testid="yield-on-cost-info">
+            <button type="button" class="inline-flex text-lf-warning" aria-label={tooltip} data-testid="yield-on-cost-info">
                 <Info size={13} />
             </button>
         </Tooltip>

@@ -178,7 +178,7 @@
         if (value == null) return '—';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency))}</span>`,
+            html: `<span class="font-medium tabular-nums text-lf-secondary">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency))}</span>`,
         };
     }
 
@@ -192,7 +192,7 @@
     }
 
     function statusCell(row: DisplayRow) {
-        const classes = row.isFullySold ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+        const classes = row.isFullySold ? 'bg-lf-panel text-lf-secondary' : 'bg-lf-success-soft text-lf-success-on-soft';
         return {
             type: 'html' as const,
             html: `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${classes}">${escapeHtml(row.statusLabel)}</span>`,
@@ -255,10 +255,10 @@
                     const nameHtml = escapeHtml(row.assetName);
                     const iconHtml = iconSrc
                         ? `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
-                        : `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-[10px] text-libre-green font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
+                        : `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-[10px] text-lf-link font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${nameHtml}">${nameHtml}</span></div>`,
+                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-lf-secondary" title="${nameHtml}">${nameHtml}</span></div>`,
                     };
                 },
             },
