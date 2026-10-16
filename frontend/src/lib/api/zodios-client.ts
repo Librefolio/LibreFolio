@@ -117,8 +117,20 @@ axiosInstance.interceptors.request.use(
 // =============================================================================
 
 /**
+ * The anonymous pages of a link — an invitation, the initial administrator's setup, a password reset, an email
+ * verification — have no session to lose: a 401 there is the instance's block (P16), which the page receives.
+ * The same pages as `_TOKEN_PATHS` in `backend/app/services/accounts/token_service.py`, the pages a link opens:
+ * `test_account_tokens.py` checks that the two lists agree.
+ */
+const LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email']);
+
+function isLinkPage(pathname: string): boolean {
+    return LINK_PAGES.has(pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname);
+}
+
+/**
  * Handle common error responses:
- * - 401 Unauthorized → redirect to login
+ * - 401 Unauthorized → redirect to login (not from `/` nor from the anonymous pages of a link)
  * - Other errors → wrap in ApiError
  */
 axiosInstance.interceptors.response.use(
@@ -130,9 +142,9 @@ axiosInstance.interceptors.response.use(
     },
     (error: AxiosError) => {
         // A 401 means the session is gone: go to the login, carrying the page to come back to.
-        // On the root the login is already there, and a failed sign-in answers 401 too.
+        // On the root the login is already there, and a failed sign-in answers 401 too; a link page has no session.
         if (error.response?.status === 401) {
-            if (browser && window.location.pathname !== '/') {
+            if (browser && window.location.pathname !== '/' && !isLinkPage(window.location.pathname)) {
                 debug.log('API', '401 Unauthorized - redirecting to login');
                 goto(loginUrl(window.location.pathname + window.location.search));
             }

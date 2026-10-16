@@ -4231,3 +4231,194 @@ Base letta: la mia HEAD `e36bc3016`. Le differenze di `dev_release2` sui file de
   > `frontend/`.
   >
   > **Backlog**: J-26 e J-27 chiuse.
+
+#### Checkpoint J-27 ✅ (2026-10-16) — tre commit del coordinatore (`7336722ad` fix, `985b10cbd` ponte, `e2a956999` journal), entrato in dev
+
+#### CP-9a — il servizio del rischio diviso per tema, con T-R1 (via del coordinatore 23:3x; base `e2a956999`)
+
+- ✅ **Passo 1 — il codice (2026-10-16)**.
+  > **Note implementazione**:
+  > - Generatore AST (`files/j/cp9a/split.py`): sposta le porzioni esatte del sorgente, cioè classi, funzioni, metodi
+  >   con decoratori e commenti sopra. I metodi diventano funzioni di modulo: `self.db` → `db`; `self._x(` → la funzione
+  >   nuova, con `db` in testa quando legge il database. Poi rinomina a confine di parola. Ogni modulo riceve tutto il
+  >   blocco d'import e `ruff --fix` toglie quelli inutili.
+  > - Risultato: `risk/service.py` passa da 1 456 a 336 righe; i moduli nuovi sono `plan.py` (47), `data_quality.py`
+  >   (~225), `scope.py` (~360), `replay.py` (152) e `results.py` (~485).
+  > - Grafo d'import aciclico: `plan` ← `data_quality` ← `replay`/`results` ← `service`; `scope` non dipende da altri.
+  > - Nomi che non oscurano le variabili locali di `execute`: `load_existing_asset_ids`,
+  >   `load_never_priced_asset_ids`, `build_execution_context`, `success_result`, `result_metadata`,
+  >   `unavailable_result`, `plan_data_quality`.
+  > - Le funzioni usate fra moduli hanno nomi pubblici; gli aiuti interni di `data_quality.py` tengono il trattino
+  >   basso.
+  > - **T-R1**: `with_asset_set_quality_issues` chiama `load_configured_fx_pair_sets(db)` della casa. L'import di
+  >   `PortfolioService` sparisce dal rischio.
+  > - `api/v1/risk.py` importa i due errori da `risk.scope`. `__all__` di `service.py` = `["RiskService"]`: nessuna
+  >   riesportazione.
+  > - Commenti e istruzioni aggiornati: `risk_plugins/asset_set_comparison/plugin.py:132` e
+  >   `.github/instructions/backend-risk.instructions.md:33-34`. L'`applyTo` `services/risk/**` copre già i moduli nuovi.
+  > - ruff (tutte le regole) e black puliti; l'import dei sei moduli riesce. `RiskService` ha `catalog`, `execute`,
+  >   `asset_eligibility` e `_every_asset_eligible`.
+  >
+  > **⚠️ Fuori pista**: il generatore spostava solo funzioni e classi, e ha perso tre assegnazioni di modulo:
+  > `_COMPOSITION_WARNING_CODES` (col suo commento), `_PRICE_EXCLUSION_REASONS` e `__all__`. Le ha segnalate ruff
+  > (F821). Rimesse a mano accanto a chi le legge: `results.py`, `data_quality.py` e `service.py`. Ripristinato l'import
+  > di `DataQualityExclusionReason`.
+- Test (test-author) e doc (`developer/backend/risk/architecture.md`, docs-writer) in parallelo, senza lanciare nulla.
+- ✅ **Passo 2 — test, doc e devWiki (2026-10-16)**.
+  > **Note implementazione**:
+  > - **Test** (test-author, nessuna esecuzione): sei file migrati; valori e asserzioni identici, nessuna asserzione
+  >   tolta.
+  >   - `test_risk_service.py`: import dai moduli nuovi; 15 `load_scope_inputs(db, …)` con un `db` locale (il servizio
+  >     teneva solo la sessione); 6 `build_execution_context`; 29 patch dall'istanza al modulo che legge il nome.
+  >   - `test_risk_asset_set.py` e `test_risk_eligibility.py`: `prepare_asset_series(db, …)` da `risk.scope`. Gli spy
+  >     condivisi (`loader_calls`, `holiday_table_plumbing`) coprono **tutti e due** i lettori, `risk.service` e
+  >     `risk.replay`.
+  >   - `test_risk_api.py`: gli errori da `risk.scope`.
+  >   - `test_risk_warnings_i18n.py`: la barriera di presenza va su `risk/{data_quality,results,scope}.py`.
+  >   - `test_data_quality_thresholds.py`: `CONSUMERS` guadagna `risk/data_quality.py`.
+  >   - Le patch nuove tengono `raising=True`: un modulo sbagliato fallisce forte.
+  >   - Io: due docstring di `test_weights.py` (il chiamante di `share_of` è ora `risk/scope`).
+  >   - ruff e black puliti sui 7 file.
+  > - **Doc** (docs-writer): `developer/backend/risk/architecture.md`.
+  >   - I 7 nomi vecchi puntano alla funzione e al modulo nuovi.
+  >   - La Source Map ha una riga per modulo; una frase dice T-R1.
+  >   - Ancore e numerazione dei passi invariate, così il link di `risk-lab.md` al passo 4 regge.
+  > - **`.github`**: in `backend-risk.instructions.md` la riga «Runtime» (:15) dice la mappa dei moduli. In
+  >   `skills/risk-tools/risk-plugin/SKILL.md:61` le decisioni legate al codice puntano a `risk/results.py` e
+  >   `risk/plan.py`.
+  > - **devWiki**: T-R1 lato rischio chiusa, nota datata in `decisions/financial-math-one-home.md` ed
+  >   `entities/portfolio-service.md`. Le righe «Source files» che mandavano comportamento spostato a `risk/service.py`
+  >   puntano al modulo nuovo, in 5 pagine. `check_source_paths.py` resta a 5 percorsi mancanti, tutti preesistenti.
+  >   Voce in `log.md`.
+  > - **Al coordinatore, non miei**:
+  >   - `TODO_FUTURI.md:141,169,178` nomina `RiskService._prepare_historical_replay_context`;
+  >   - T-R1 nella sezione T: il lato rischio è chiuso da CP-9a, resta `_compute_tx_fingerprint` di `portfolio_service`;
+  >   - `developer/api/overview.md`: «40 today», che sono 56, e l'elenco della regola 3 senza `schemas/portfolio.py` e
+  >     `schemas/tools.py`; non legato a CP-9a.
+- ✅ **Passo 3 — cancelli (2026-10-17, 00:03–00:27)**, `files/j/cp9a/runs.sh green` e `checks.sh` (corsia 6185, uno alla
+  volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi: `services risk-all` **903**, `services ai-export drawdown_context` **19**, `services financial-math`
+  >   **648**, `db populate --force`, `api risk` **15**;
+  > - `api sync`: `openapi.json` **identico byte per byte** a prima, quindi il contratto dell'API non cambia;
+  > - `mkdocs build` rigoroso e `check-links`: esito 0; `git diff --check` pulito; porta 6185 libera;
+  > - **niente perso e niente aggiunto**: per ogni file di test toccato, lo stesso numero di funzioni `test_` e di
+  >   `parametrize`/`pytest.param` della HEAD (13, 7, 33, 44, 34, 59, 6);
+  > - nessun nome vecchio rimasto in `backend/`, `scripts/`, `.github/` e doc per sviluppatori;
+  > - nessun numero cambia (riordino), quindi nessuna riga di CHANGELOG.
+
+#### Checkpoint CP-9a ✅ (2026-10-17) — committato (`b6d45f026`, journal `fab5bda53`), entrato (dev `c4eeaef14`); HEAD `67e795edb`
+
+Il coordinatore ha aggiornato `TODO_FUTURI.md` e passa T-R1, la metà di `portfolio_service`, a MF. La deriva di
+`developer/api/overview.md` (40 → 56; la regola 3 senza `schemas/portfolio.py` e `tools.py`) la correggo io nel
+prossimo checkpoint.
+
+#### CP-10 — PL1: il runtime dei segnali in `services/signals/` (analisi, 17/10 ~00:45, sola lettura; base `67e795edb`)
+
+- **Stato reale**:
+  - Il runtime sta in quattro file in cima a `services/`: `signal_service.py` (1 315 righe; `SignalService` più piano,
+    esecuzione, annotazioni, validazione), `signal_runtime.py` (45), `signal_annotations.py` (441) e
+    `signal_series_preparation.py` (479).
+  - Il contratto sta nella cartella dei plugin, `signal_plugins/base.py` (379), e `signal_plugins/__init__.py` lo
+    riesporta. È un barile che nessuno usa: solo la stringa d'esempio di `test_layer_boundaries.py:230`.
+  - `services/signals/` esiste già da PL2 di X, con `registry.py`, che importa `signal_plugins.base` ed esclude
+    `"base"` dalla scoperta.
+  - **Ciclo col rischio**: `risk/signal_helpers.py` (318) importa `signal_plugins.base`, e quattro plugin (drawdown,
+    rolling beta, rolling sharpe, rolling volatility) importano `risk.signal_helpers` e `risk.metrics`.
+  - Importatori nell'app: `api/v1/signals.py`, `api/v1/fx/currencies.py`, `api/v1/assets/prices.py`,
+    `platform/app_lifespan.py`, `ai_export/components/technical_shared.py` e `assets/price_query.py`, più i 23 plugin e
+    il registro. Nei test: 28 file.
+  - `applyTo` di `backend-signals.instructions.md`: `signal_plugins/**`, `signal_*.py`, `series_preparation.py`.
+  - Citazioni: 3 istruzioni, 2 skill (`signal-plugin`, `testing-backend`), 5 pagine per sviluppatori, 7 della devWiki.
+  - C-71 (due «Rolling Return» con lo stesso nome) è già chiusa dal vecchio CP-10a (decisione 29).
+- **Proposta**, prima la rinomina poi il taglio. Lotti CP-10b e CP-10c, perché CP-10a è già il lotto del Rolling Return.
+  1. **CP-10b — rinomina** (medio: molti importatori, lavoro meccanico). `git mv` in `services/signals/`:
+     - `signal_service.py` → `service.py`, `signal_runtime.py` → `runtime.py`, `signal_annotations.py` →
+       `annotations.py`, `signal_series_preparation.py` → `series.py`;
+     - `signal_plugins/base.py` → `base.py`: il contratto esce dai plugin;
+     - `risk/signal_helpers.py` → `risk_adapters.py`: **il ciclo sparisce**, il rischio non importa più i segnali e i
+       segnali leggono solo `risk.metrics`, in una direzione.
+     Poi:
+     - `signal_plugins/__init__.py` resta solo docstring;
+     - nel registro l'import cambia e l'esclusione di `"base"` cade, se la scoperta non la chiede più;
+     - gli importatori e le `patch` dei test (test-author);
+     - l'`applyTo` dei segnali diventa `services/signals/**`, `signal_plugins/**`, `series_preparation.py`;
+     - le citazioni in istruzioni, skill, doc e devWiki.
+  2. **CP-10c — taglio** di `signals/service.py` (medio-basso, come CP-9a). `SignalService` resta la facciata.
+     - `planning.py`: piano, dedup, preflight, l'errore di richiesta;
+     - `execution.py`: esecuzione, input preparati, metadati e avvisi del rischio, guasti a runtime;
+     - `validation.py`: errori di output, sanificazione, normalizzazione, disponibilità;
+     - gli aiuti delle annotazioni vanno in `annotations.py`.
+     Nessun numero cambia.
+- **Fuori da CP-10**:
+  - `series_preparation.py`. La sua matematica (`observed_annualization`, `_price_return_value`) è di MF-D (R6, i
+    rendimenti di prezzo). L'allineamento va in `services/market_series.py` **dopo MF-D**, con un lotto piccolo
+    (CP-10d) e l'`applyTo` delle due istruzioni.
+  - `schemas/signals.py` (1 372 righe, importa `schemas.risk`) diventa un pacchetto nella finestra quieta di 9b/9c:
+    stessa natura e stessi importatori.
+  - Il router dei segnali (PL7) è di X, dopo CP-10b.
+- **Conflitti**:
+  - MF-A tocca `technical_shared.py`: per me è una sola riga d'import.
+  - MF-D tocca `series_preparation.py` (non lo sposto), `risk_plugins/comparison.py` e forse i plugin `rolling_*`, dove
+    io cambio solo righe d'import. L'ordine con MF-D non conta per i numeri; lo decide il coordinatore.
+- **Cancelli**:
+  - servizi: le otto azioni `signal-*` (registry, runtime, contracts, service, annotations, plugins-core/close-only/ohlc);
+  - API: `signal-catalogs`, `signal-request-validation`, `signal-preview`; `schemas signals`;
+  - `services risk-all` e `services ai-export`;
+  - `services financial-math`: il prefisso vietato `services.signal` copre anche `services.signals`;
+  - `api sync` senza differenze; grep dei percorsi vecchi a zero; `check-orphans`; `mkdocs build` e `check-links`.
+- Con CP-10b: la deriva di `developer/api/overview.md`.
+- Coordinatore (00:31): via a **CP-10b**, poi CP-10c; CP-10d dopo MF-D; gli schemi nella finestra di 9b/9c. Blocco
+  leggero, annunciato a X, MF e W, sui 5 file che si spostano finché CP-10b non entra: checkpoint appena verde.
+
+#### CP-10b — la rinomina (17/10, dalle 00:32; base `67e795edb`)
+
+- ✅ **Passo 1 — spostamenti e percorsi (2026-10-17)**.
+  > **Note implementazione**:
+  > - `files/j/cp10b/rename.py`. Gli spostamenti sono `mv` semplici: niente `git mv`, perché lo stage lo fa il
+  >   coordinatore, e git riconosce le rinomine al commit con somiglianza ≥ 99,7 %.
+  >   - `signal_service.py` → `signals/service.py`, `signal_runtime.py` → `signals/runtime.py`,
+  >     `signal_annotations.py` → `signals/annotations.py`, `signal_series_preparation.py` → `signals/series.py`;
+  >   - `signal_plugins/base.py` → `signals/base.py`, `risk/signal_helpers.py` → `signals/risk_adapters.py`.
+  > - Riscritture a stringa esatta dei percorsi puntati e dei percorsi di file, in 72 file: codice, test, `.github`, doc
+  >   per sviluppatori, devWiki. Tre import di modulo-oggetto nei test tengono il nome locale (`as signal_runtime`, `as
+  >   signal_service_module`, `as signal_helpers`). `signal_plugins/__init__.py` resta solo docstring: il barile è
+  >   tolto.
+  > - Il registro di X cambia **solo** la riga d'import. La sua esclusione `{"base"}` diventa innocua; la lascio a X/PL7.
+  > - A mano:
+  >   - la porta di `test_plugin_layout_gate.py`: `ROOT_MODULES = {}`, e la regola (a) senza l'eccezione `base.py`, così
+  >     un contratto tornato nella cartella dei plugin è un modulo vagante;
+  >   - la descrizione della porta in `scripts/test_runner/_backend_utils.py` perde «(signal_plugins/base.py aside)». È un
+  >     file condiviso, ma non quello che A ha aperto;
+  >   - in `.github`: l'`applyTo` dei segnali (`services/signals/**`, `signal_plugins/**`, `series_preparation.py`), la
+  >     riga «Runtime» delle istruzioni dei segnali, la tabella di `backend.instructions.md` e la skill `signal-plugin`;
+  >   - doc: la tabella dei componenti di `signal_plugin_guide.md` e due citazioni di `signal_series_preparation.py`; la
+  >     frase di `registry_pattern.md` sul contratto alla radice della famiglia; la riga della porta in
+  >     `test-walkthrough/utils.md`;
+  >   - devWiki: la citazione storica di `plugin-folders-and-split-i18n.md` torna com'era, con una nota datata; voce in
+  >     `log.md`;
+  >   - la deriva di `developer/api/overview.md`, verificata: 56 schemi discriminati; la regola 3 aggiunge
+  >     `schemas/portfolio.py` e `schemas/tools.py`.
+  > - Fuori: la stringa di `_backend_services.py:264` («metrics.py and signal_helpers.py») va in J-37, perché A ha il file
+  >   aperto. Gli esempi sintetici di `test_layer_boundaries.py:230-231` restano: provano forme d'import, non moduli veri.
+  > - Controlli: ruff e black puliti sui 60 file Python; import dei moduli spostati riuscito; scoperta dei plugin: 22, tanti
+  >   quante le cartelle; grep dei percorsi vecchi a zero; `check_source_paths.py` a 7. Le 2 in più sono CSS del team
+  >   colori arrivati con la base, non miei.
+  >
+  > **⚠️ Fuori pista**: la prima corsa dei cancelli era lanciata con `&` in una chiamata sincrona, quindi senza notifica di
+  > fine. Era ancora in attesa del carico: l'ho fermata (`kill` del suo PID, nessun test partito) e rilanciata in modo
+  > asincrono tracciato.
+- ✅ **Passo 2 — cancelli (2026-10-17, 00:36–01:32)**, `files/j/cp10b/runs.sh green` e il resto (corsia 6185, uno alla
+  volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi, segnali: `signal-registry` 66, `signal-runtime` 6, `signal-contracts` 10, `signal-service` 65,
+  >   `signal-annotations` 25, `signal-plugins-core` 46, `signal-plugins-close-only` 62, `signal-plugins-ohlc` 75,
+  >   `signal-plugins-volume` 40, `signal-plugin-matrix` 91, `schemas signals` 477;
+  > - verdi, il resto: `utils gate-plugin-layout` 33, `risk-all` 903, `financial-math` 724, `check-orphans`;
+  > - API: `db populate`, poi `api signal-catalogs` 5, `signal-request-validation` 2, `signal-preview` 5;
+  > - `api sync`: `openapi.json` identico; `mkdocs build` rigoroso e `check-links`: esito 0; porta 6185 libera.
+  >
+  > **⚠️ Fuori pista**: `services ai-export` completo ha superato i 600 s del runner (`run_command(timeout=600)`), a
+  > carico 45–50: è lentezza, non un fallimento. Prima del taglio 858 verdi, 0 rossi. Rilanciati i tre file rimasti
+  > (`structural_invariants`, `telemetry`, `temporal`): 283 verdi in 7 min 19 s. Ogni test dell'AI Export è passato
+  > almeno una volta.

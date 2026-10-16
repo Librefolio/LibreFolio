@@ -73,7 +73,7 @@ backend/app/services/<family>/
 
 - **`plugin.py`** holds the plugin class, its registration decorator and whatever else the plugin needs.
 - **`__init__.py`** holds the plugin's docstring and re-exports nothing, e.g. `"""FX provider ``ecb``: the code is in ``plugin.py``, which the registry loads; this package re-exports nothing."""`.
-- **Helpers.** A helper private to one plugin sits beside its `plugin.py` as `_*.py`. A helper shared by several plugins stays at the family root, as `_*.py` too: `brim_providers/_brim_io.py`, `_brim_output.py` and `_scalable.py`. The signal contract, `signal_plugins/base.py`, is the only other module a family root keeps.
+- **Helpers.** A helper private to one plugin sits beside its `plugin.py` as `_*.py`. A helper shared by several plugins stays at the family root, as `_*.py` too: `brim_providers/_brim_io.py`, `_brim_output.py` and `_scalable.py`. A contract lives in its family's runtime package, not beside the plugins: the signal contract is `services/signals/base.py`, so a family root keeps only `__init__.py` and its `_*.py` helpers.
 - **Data stays with the family**: the icons in the family's `static/`, served under `/api/v1/uploads/plugin/<brim|fx|asset>/…` by `serve_plugin_static` (`backend/app/api/v1/uploads.py`), and the BRIM sample exports in `brim_providers/sample_reports/`.
 - **Translations** live in the plugin's `i18n/` fragment: see [A Plugin's Translations](#plugin-translations).
 

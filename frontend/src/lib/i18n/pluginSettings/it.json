@@ -28,7 +28,7 @@
       "set": "Impostato",
       "setOn": "Impostato il {date}",
       "unset": "Non impostato",
-      "unreadable": "Salvato, ma la chiave di questa istanza non riesce a leggerlo: inseriscilo di nuovo.",
+      "unreadable": "Salvato, ma la chiave di questa istanza non riesce a leggerlo. Se un amministratore può rimettere la vecchia chiave, va fatto prima; altrimenti inseriscilo di nuovo.",
       "replace": "Sostituisci",
       "clear": "Cancella",
       "willClear": "Sarà cancellato al salvataggio.",

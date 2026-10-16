@@ -117,8 +117,9 @@ def support_url() -> str | None:
     Two forms: an ``http(s)://`` page, by the rule of ``env_url``, or ``mailto:`` and one email address, checked by
     pydantic's ``EmailStr`` without any DNS lookup and returned as ``mailto:`` and the address as it normalizes it (the
     scheme in any case, saved lowercase). The address is public: the app shows it to every user. A hosting provider sets
-    its own. Unset or blank: ``None``, and the app links to the project's issues on GitHub. Any other value raises
-    ``ValueError``, naming the variable: the service that publishes it logs the error and leaves the default link.
+    its own. Unset or blank: ``None``: the asset search then offers a new issue on the project's GitHub on a self-hosted
+    instance, and no report link on a managed one (N61). Any other value raises ``ValueError``, naming the variable: the
+    service that publishes it logs the error and publishes ``None``.
     """
     value = os.environ.get(_SUPPORT_URL, "").strip()
     if value[:7].lower() == "mailto:":
