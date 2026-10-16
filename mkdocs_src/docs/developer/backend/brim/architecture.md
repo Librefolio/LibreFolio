@@ -166,9 +166,12 @@ reaches every file; anyone else gets 403.
 
 **The list.** `GET /api/v1/brokers/import/files` gives a regular user the files of the brokers they
 hold a role on, plus the files with no broker they uploaded; the administrator gets every file, as
-before. `broker_ids` is intersected with the user's brokers and narrows the brokers only: the files
-with no broker that the caller may see come with any filter (`brim_provider.list_files` keeps
-them). Each item is a `BRIMFileListItem`, a `BRIMFileInfo` plus `can_delete`, which says what
+before. With `broker_ids`, intersected with a regular user's brokers, the list holds only those
+brokers' files, for the administrator too: the route drops the files with no broker, which
+`brim_provider.list_files` keeps, so they come only without the filter, on the Files page. Before
+1.3 they came with any filter, and a broker's *Uploaded Reports* (`broker_ids=<its id>`) listed them
+under every broker, where its bulk delete could remove them (W-B32). Each item is a
+`BRIMFileListItem`, a `BRIMFileInfo` plus `can_delete`, which says what
 `DELETE /files/{file_id}` would answer: true for the administrator, for an EDITOR or OWNER of the
 file's broker and for the uploader of a file with no broker; false otherwise, a VIEWER included.
 
