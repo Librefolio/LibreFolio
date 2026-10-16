@@ -103,6 +103,9 @@ Conservez au moins une heure et un jour. Astuce : une synchronisation de l'histo
 ### 📜 Lire le journal du planificateur
 
 La ligne **État du planificateur** affiche le dernier rafraîchissement du prix actuel, avec un point pour son résultat.
+Quand un nouvel essai est prévu, une ligne de plus en donne l'heure : **Échec : nouvel essai à …** après un
+rafraîchissement qui n'a pas pu aboutir, sinon **Éléments en pause réessayés à …** pour les prix reportés parce que
+leur fournisseur est en pause.
 Cliquez sur la ligne (ou sur **Détails…**) pour ouvrir le **Journal d'exécution du planificateur**. Seuls les administrateurs peuvent
 lire l'état et le journal.
 
@@ -115,6 +118,9 @@ lire l'état et le journal.
   après trop de requêtes ; 🔴 **Erreur** : aucun n'a réussi et aucun n'a été reporté.
 - Cliquez sur une entrée pour voir chaque actif ou paire FX, son fournisseur et les prix modifiés (**Delta**).
   Survolez une erreur pour la lire en entier ; double-cliquez dessus (appui long sur un téléphone) pour la copier.
+- Un élément reporté affiche une icône de pause et **Reporté : fournisseur en pause** : survolez le libellé pour lire
+  le message du fournisseur. L'entrée compte les éléments reportés avec ⏸, à côté de ✓ et ✗ (par exemple
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), et **Nouvel essai à …** dans son en-tête donne l'heure prévue pour les réessayer.
 - Filtrez par tâche, statut ou période, de la dernière heure aux 30 derniers jours. Seules les exécutions les plus récentes
   sont conservées.
 
