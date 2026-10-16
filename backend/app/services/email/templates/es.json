@@ -39,5 +39,10 @@
     "subject": "Correo de prueba de LibreFolio",
     "intro": "Este es un correo de prueba enviado desde $instance.",
     "outro": "Si lo estás leyendo, LibreFolio puede enviar correos."
+  },
+  "email_changed": {
+    "subject": "La dirección de correo de tu cuenta de LibreFolio ha cambiado",
+    "intro": "La dirección de correo de tu cuenta en $instance se ha cambiado a $address. Este mensaje va a la dirección que tenía antes.",
+    "advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida si aún puedes iniciar sesión y avisa al administrador de $instance."
   }
 }

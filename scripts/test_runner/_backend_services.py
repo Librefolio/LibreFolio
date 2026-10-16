@@ -650,7 +650,9 @@ def services_account_deletion_preview(verbose: bool = False, test_names: list = 
     """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
     print_section("Services: Account Deletion Preview")
     print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
-    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+    print_info(
+        "Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
     return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
@@ -905,7 +907,7 @@ def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bo
     """Test scheduler due-check logic (due_current_price, due_history_sync)."""
     print_section("Services: Scheduler Due-Check Logic")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py")
-    print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
+    print_info("Tests: SD-001..022 — never run, overdue, wrong day, multi-slot, midnight crossing, time zones, DST, missed slots of the last 7 days (D-Z3-1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
     return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
 
@@ -926,6 +928,26 @@ def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: SLO-001..003 — both jobs due, enabled flag, state serialization roundtrip")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_loop.py", test_names)
     return run_command(cmd, "Scheduler loop integration tests", verbose=verbose)
+
+
+def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's catch-up on return and its shared lock: run_due_jobs and scheduler_loop (lot Z3)."""
+    print_section("Services: Scheduler Catch-up and Lock")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
+    print_info("Tests: SCU-001..032 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
+    return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
+
+
+def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's retry of deferred items and its backoff after a job that raises (lot Z7b)."""
+    print_section("Services: Scheduler Retry and Backoff")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (due_current_price, due_history_sync, run_due_jobs, JobOutcome)")
+    print_info(
+        "Tests: SBO-001..012 — next_attempt_at holds a job back, retry_at makes it due before its regular round, unreadable timestamps absent; a job or its save that raises: failure recorded and saved, backoff 60 s doubling to its cap, each job its own, reset by a run that ends; outcomes: items_deferred, retry_at"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
+    return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
 
 
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
@@ -1063,6 +1085,14 @@ def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool
     print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
     return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
+def services_backup_staging(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the check of a backup archive for a restore, on a copy: refusals, upgrade of the copy, report, one at a time."""
+    print_section("Services: Instance Backup Staging")
+    print_info("Testing: backend/app/services/platform/instance_backup/staging.py, paths.py (the restore's folders)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_staging.py", test_names)
+    return run_command(cmd, "Instance backup staging tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1585,7 +1615,7 @@ Note: No backend server required.
         "sleep-wake-activity",
         services_sleep_wake_activity,
         name="Sleep and Wake Activity",
-        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced, remove_return_listener: never called again, an unknown name a no-op, a blank one refused), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
@@ -1732,17 +1762,47 @@ Note: No backend server required.
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
-    add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
+    add_test(
+        cat,
+        "scheduler-state",
+        services_scheduler_state,
+        name="Scheduler State",
+        desc="Load/save/atomic write, corrupt/partial JSON recovery; the fields of lot Z7b (last_items_deferred, retry_at, consecutive_failures, next_attempt_at) saved, defaulted in an older file, a newer file's unknown keys ignored",
+    )
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
-    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
+    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(
+        cat,
+        "scheduler-catchup",
+        services_scheduler_catchup,
+        name="Scheduler Catch-up and Lock",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, not_leader, setting off, in order, without loading the state; am_i_leader/load_state/save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
+        # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
+        # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
+        # a recorder in place of run_due_jobs, and is stopped and awaited within a deadline; its worker threads are asyncio's.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-backoff",
+        services_scheduler_backoff,
+        name="Scheduler Retry and Backoff",
+        desc="Lot Z7b. Due rules first: next_attempt_at ahead holds a job back (even past its retry_at or an overdue round), else retry_at reached makes it due before its regular round (a history sync deferred at 23:00 retries at 23:0x), else today's rule; unreadable timestamps absent. run_due_jobs: a job that raises keeps its previous JobState (last_run_at too) with consecutive_failures+1, next_attempt_at now+backoff, error by class name, saved and logged; a save that raises after the job records it on the job's fresh JobState; backoff 60 s doubling, capped at 1 h for history and at the price frequency for the price; each job its own; a run that ends resets. JobOutcome items_deferred and retry_at: copied, next attempt of a failure, pending time of a job not due, whatever the reason",
+        # PURE: no DB, no server, no lane port, no network. The due functions are called as they are; for run_due_jobs every
+        # other collaborator (switches, leader, settings, state store, jobs, utc_now, settle_clock) is a fake set with
+        # monkeypatch, the state store in memory, and the process's ACTIVITY is replaced only through monkeypatch by an
+        # Activity on a fake clock. Nothing sleeps: every moment is a fake wall clock's.
+        isolation="pure",
+    )
     add_test(
         cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
-        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled); lot Z7b: RATE_LIMITED items deferred whatever their status or value, retry_at at the shortest pause, a run that ends resets the failure backoff, deferred marks and counters in the job log",
         # READ, not write-global: the three bulk entry points that rewrite prices for
         # every active asset and every FX route are replaced by doubles, so only the
         # two SELECTs reach the shared DB. The job log is redirected to a per-test
@@ -1783,9 +1843,20 @@ Note: No backend server required.
         "backup-jobs",
         services_backup_jobs,
         name="Instance Backup Jobs",
-        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks)",
         # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
         # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-staging",
+        services_backup_staging,
+        name="Instance Backup Staging",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
+        # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
+        # directory of the test configured (which must stay absent). No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
