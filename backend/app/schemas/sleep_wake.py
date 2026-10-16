@@ -3,9 +3,13 @@
 ``POST /api/v1/system/wake-sync`` (``api/v1/system/wake.py``) streams whitespace while the scheduler's jobs run, then
 ``WakeSyncResponse``. The list of jobs is generic, so a future job (notifications) is one more entry, and a field such
 as the next wake-up can be added without breaking a caller.
+
+``GET /api/v1/system/price-refresh`` (``api/v1/system/price_refresh.py``, lot Z5) answers ``PriceRefreshResponse``:
+whether the prices are catching up now, for the web app's notice «Updating prices…».
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -34,3 +38,14 @@ class WakeSyncResponse(StrictModel):
     finished_at: datetime = Field(description="When the run ended, in UTC")
     error: str | None = Field(default=None, description="The class of the error that stopped the run, never its message; null otherwise")
     jobs: list[WakeSyncJob] = Field(default_factory=list, description="Each job of the scheduler and how it ended, in the order they run")
+
+
+class PriceRefreshResponse(StrictModel):
+    """Whether the prices are catching up now (``GET /api/v1/system/price-refresh``)."""
+
+    state: Literal["idle", "starting", "running"] = Field(description="`starting` from the moment a catch-up (startup, return after a silence, scheduled wake-up) is announced, `running` while one of its jobs runs, `idle` otherwise")
+    reason: Literal["startup", "return", "wake"] | None = Field(default=None, description="Why the pending catch-up runs; null when idle")
+    job: str | None = Field(default=None, description="The job running now (`current_price` or `history_sync`); only while `running`")
+    since: datetime | None = Field(default=None, description="When the pending catch-up began, in UTC; null when idle")
+    last_finished_at: datetime | None = Field(default=None, description="When the last catch-up that ran a job ended, in UTC; null before the first")
+    last_refreshed: bool = Field(default=False, description="Whether that catch-up updated at least one item")
