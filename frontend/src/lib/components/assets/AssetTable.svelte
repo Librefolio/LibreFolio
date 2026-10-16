@@ -108,7 +108,7 @@
         if (iconSrc) {
             return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
         }
-        return `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-libre-green"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
+        return `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-lf-link"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
     }
 
     function formatDelta(val: number | null | undefined, suffix: string = ''): string {
@@ -123,7 +123,7 @@
     }
 
     function typeBadgeHtml(type: string | null | undefined): string {
-        if (!type) return '<span class="text-gray-400">—</span>';
+        if (!type) return '<span class="text-lf-muted">—</span>';
         const imgSrc = getAssetTypeIconUrl(type);
         // Badge colour follows the *content*, icon and label follow the *wrapper*.
         // The map is shared with AssetCard — see assetTypeBadgeClass().
@@ -144,10 +144,10 @@
                 header: () => $t('common.name'),
                 cell: (row) => {
                     const icon = assetIconHtml(row);
-                    const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+                    const activeDot = row.active ? '<span data-lifecycle="active" class="w-2 h-2 rounded-full bg-lf-success shrink-0"></span>' : '<span data-lifecycle="inactive" class="w-2 h-2 rounded-full bg-lf-danger shrink-0"></span>';
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-gray-800 dark:text-gray-100 ${overflowScrollTextClass}">${escapeHtml(row.display_name)}</span>${activeDot}</div>`,
+                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-lf-primary ${overflowScrollTextClass}">${escapeHtml(row.display_name)}</span>${activeDot}</div>`,
                     };
                 },
                 type: 'text',
@@ -270,7 +270,7 @@
                 header: () => $t('common.provider'),
                 cell: (row) => ({
                     type: 'html' as const,
-                    html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
+                    html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft">✏️ Manual</span>',
                 }),
                 type: 'text',
                 getValue: (row) => row.provider_code ?? '',
@@ -368,19 +368,12 @@
 </div>
 
 <style>
+    /* An inactive asset's row: the warning tint, a step stronger under the pointer — the roles follow the theme. */
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
-        background-color: #fffbeb !important;
+        background-color: var(--lf-warning-soft) !important;
     }
 
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
-        background-color: #fef3c7 !important;
-    }
-
-    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
-        background-color: rgb(120 53 15 / 0.24) !important;
-    }
-
-    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
-        background-color: rgb(120 53 15 / 0.36) !important;
+        background-color: color-mix(in oklab, var(--lf-warning-line) 50%, transparent) !important;
     }
 </style>
