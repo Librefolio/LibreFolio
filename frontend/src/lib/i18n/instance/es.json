@@ -26,6 +26,10 @@
       "logLevel": {
         "ok": "El nivel de registro es adecuado para producción.",
         "verbose": "El nivel de registro es {log_level}: el registro guarda detalles de funcionamiento; en producción basta con INFO."
+      },
+      "pluginSecrets": {
+        "ok": "Los secretos de plugins guardados se pueden leer con la clave de instancia.",
+        "unreadable": "{count, plural, one {# secreto de plugin guardado no se puede leer con la clave de instancia: vuelve a introducirlo en Configuración → Plugins o restaura la clave de instancia con la que se guardó.} other {# secretos de plugins guardados no se pueden leer con la clave de instancia: vuelve a introducirlos en Configuración → Plugins o restaura la clave de instancia con la que se guardaron.}}"
       }
     },
     "block": {

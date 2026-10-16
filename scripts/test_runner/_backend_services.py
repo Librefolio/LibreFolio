@@ -1019,6 +1019,14 @@ def services_config_audit(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Configuration checks tests", verbose=verbose)
 
 
+def services_plugin_secrets_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup check of the stored plugin secrets: its result, its log, never raising, no key generated (H-15)."""
+    print_section("Services: Plugin Secrets Check")
+    print_info("Testing: backend/app/services/platform/plugin_secrets_check.py (check_plugin_secrets, log_plugin_secrets_check)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_secrets_check.py", test_names)
+    return run_command(cmd, "Plugin secrets check tests", verbose=verbose)
+
+
 def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
     """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
     print_section("Services: .env.example Guard")
@@ -1889,6 +1897,16 @@ Note: No backend server required.
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(
+        cat,
+        "plugin-secrets-check",
+        services_plugin_secrets_check,
+        name="Plugin Secrets Check",
+        desc="H-15: platform.plugin_secrets ok without unreadable system secret, else error with detail {count: system} only, the user count nowhere; at startup ok logs nothing, not ok logged at its severity, an exception of the status one warning naming its class, never raising; on a private DB without stored secret nothing logged and no key file generated",
+        # The status is a stub on an engine never opened, or the real one on a private SQLite file under tmp_path put in
+        # place of get_async_engine; the data directory in tmp_path, the key variables removed by monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(
         cat,
