@@ -8,6 +8,9 @@ component. The Assets list fetches through a small service, `livePriceService`; 
 page calls the generated API client directly, with the service's helpers to read the answer, and
 one answer feeds both its price summary and its chart.
 
+The page also covers the notice **Updating prices…**, which the web app shows while the server
+catches up on prices, through the same helper: see [Updating prices…](#price-refresh).
+
 !!! note "No `LiveTicker` component"
 
     The `LiveTicker` badge strip this page used to describe was removed in August 2026 (commit
@@ -329,6 +332,120 @@ is paused ([Failures and provider pauses](#backoff)). Today's candle does not de
 tab: the scheduler's current-price refresh calls the same service on its own schedule
 ([Scheduler](../../../backend/scheduler.md)).
 
+## 🔄 Updating prices… {: #price-refresh }
+
+When the server catches up on prices — at its start, at the first request after a minute of
+silence, at a scheduled wake-up — the web app shows the instance notice **Updating prices…** while
+one of the catch-up's jobs runs, and marks the portfolio views stale once the catch-up has brought
+something up to date. `lib/features/price-refresh/priceRefresh.ts` does it, on the
+`startActivePolling()` of the live prices. The server's side — what a catch-up is, the header, the
+route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh); what users see, in
+[While Prices Catch Up](../../../../admin/sleep_wake.md#price-refresh).
+
+### 📥 The header {: #price-refresh-header }
+
+The response interceptor of `lib/api/zodios-client.ts` hands the headers of every successful answer
+to `priceRefresh.observe(response.headers)`, right after `notifyPortfolioMutation()`; a failed answer
+goes to the error interceptor and is not read.
+
+- `readPriceRefreshHeader(headers)` reads `x-librefolio-price-refresh` (`PRICE_REFRESH_HEADER`, in
+  lower case, as axios exposes it) through the `get()` of axios's `AxiosHeaders`, or as a key of a
+  plain object. It trims and lower-cases the value, and returns `starting`, `running` or `null` (no
+  header, or any other value).
+- `observe()` does nothing while the tracker ignores the headers after a `4xx`
+  ([After a 4xx](#price-refresh-4xx)), and nothing on `null`. On `running` it shows the notice at
+  once. On either value, when no tracking is under way, it starts one:
+  `startActivePolling({run: check, intervalMs: PRICE_REFRESH_POLL_MS})`, with its counters at 0.
+
+Every successful answer means the public ones too: the pages without a session hear the header like
+the others. They are the sign-in page, whose `LoginCard` loads the instance configuration, and the
+invitation, password-reset and email-verification pages, which send the token of their link through
+the API client; opening one on a quiet instance starts a catch-up by itself. Such a page starts a
+tracking like any other, and its first question settles it ([After a 4xx](#price-refresh-4xx)).
+
+The header reaches the web app on the answers it gets anyway, at load or later, from the moment the
+server announces a catch-up: a status asked only at load would miss one that starts later, such as a
+scheduled wake-up while the app is open. And without the header the web app asks nothing, so an
+instance with nothing to catch up can still sleep.
+
+### ⏱️ The questions {: #price-refresh-questions }
+
+`check()` asks `GET /api/v1/system/price-refresh` every 3 s (`PRICE_REFRESH_POLL_MS`) with
+`fetch(PRICE_REFRESH_STATUS_PATH, {credentials: 'same-origin', headers: {Accept: 'application/json'}})`,
+not through the API client, because of the pages without a session. There the question gets a `401`,
+and through the client that `401` would reach its error interceptor, which takes any page but `/` to
+the sign-in page: the invitation, password-reset and email-verification pages have already taken the
+token of their link out of the address, so the user would arrive there without their link. A `fetch`
+answer goes through none of the client's interceptors, nor through its Zod validation; one that is
+not ok throws `PriceRefreshStatusError`, which carries its `status`.
+
+The poller is [`startActivePolling()`](#active-polling), for the same reasons as the live prices:
+
+- the first question goes at once, from a timer; in a background tab, none goes until the tab is
+  visible;
+- the questions pause in a background tab and after two minutes without input: each one is a user's
+  request for the server's [idle suspension](../../../../admin/sleep_wake.md#idle-suspend-activity),
+  and a tab nobody uses must not keep the instance awake. Meanwhile the notice stays as it was, and
+  the question of the resume settles it;
+- after a failed question the next one waits twice as long: 6, 12, 24, then 48 s
+  ([Failures and provider pauses](#backoff)).
+
+| Answer | What the tracker does |
+|---|---|
+| `running` | Shows the notice, if it is not shown yet, and sets the `starting` count back to 0 |
+| `starting` | Counts it. The tenth `starting` answer since the tracking began, or since the last `running` (`PRICE_REFRESH_MAX_STARTING_POLLS`), ends the tracking: the run never came |
+| `idle`, or any state but those two | Ends the tracking, the notice hidden; then asks the portfolio views to refresh, when a job of this catch-up was seen running and `last_refreshed` is true |
+| A `4xx` | Ends the tracking at once, the notice hidden, without a refresh, and the headers are ignored from then on: see [After a 4xx](#price-refresh-4xx). It is not a failure |
+| A `5xx`, a network error, or a body that is not JSON | A failure: the poller waits longer. The fifth failure in a row (`PRICE_REFRESH_MAX_FAILURES`) ends the tracking, the notice hidden |
+
+Any answer sets the failure count back to 0, and an answer that lands after its tracking has ended
+changes nothing. Once a tracking has ended, the next answer that carries the header starts a new
+one.
+
+**The portfolio refresh.** "Seen running" means a `running` header or answer during this tracking:
+a catch-up with nothing due never shows one, and the `last_refreshed` read at `idle` would then be an
+older catch-up's. The refresh is `requestPortfolioRefresh()`
+(`lib/stores/portfolio/portfolioMutation.ts`), the signal of the Dashboard's **Refresh** button: the
+report, risk and lots caches mark their answers stale and keep them, and each portfolio view asks
+again the next time it loads, showing what it has meanwhile
+([Domain state](../../state/domain-state.md)). The signal reloads no page by itself: a view already
+on screen keeps its figures until it loads again.
+
+#### 🚫 After a 4xx {: #price-refresh-4xx }
+
+A `4xx` is a status from 400 to 499: the `status` of a `PriceRefreshStatusError`, or the axios-like
+`response.status` of an error that an injected `fetchStatus` throws. It means this page cannot follow
+the catch-up: it has no session (`401`), or the instance is
+[blocked](../../state/app-state.md#instance-block) (`423`). The tracker ends the tracking at once,
+hides the notice and asks no refresh; the answer does not count as a failure. Then it stops
+listening (its `suspended` flag): `observe()` ignores every header until `reset()`, at the next change
+of the signed-in account — for a page without a session, the sign-in — or until the next page load.
+`stop()` alone does not lift it. A sign-in page left open thus asks once at most, then nothing more.
+
+### 📢 The notice and the session {: #price-refresh-notice }
+
+The notice is
+`{id: 'liveUpdates.priceRefresh', severity: 'info', messageKey: 'liveUpdates.priceRefresh.running'}`
+(`PRICE_REFRESH_NOTICE_ID`, `PRICE_REFRESH_MESSAGE_KEY`), shown with `instanceNotices.show()` and
+removed with `hide()`: see [Instance notices](../../state/app-state.md#instance-notices). It is not
+dismissible: it goes away by itself, when the tracking ends. `InstanceNotices.svelte` draws it above
+every page of the app shell, with `role="status"`, `data-testid="instance-notice"`,
+`data-notice-id="liveUpdates.priceRefresh"` and `data-severity="info"`: no markup of its own, and the
+colours are the notice component's. Its text, **Updating prices…**, belongs to the `liveUpdates`
+subsystem of the [translation sources](../../i18n.md).
+
+`stop()` ends the tracking: no more questions, the notice hidden if shown, the counters at 0.
+`reset()` does the same, and also lets the headers through again after a `4xx`: the app calls it
+through `registerClientSessionReset('priceRefresh', …)` when the signed-in account changes, a sign-in
+or a sign-out, so no tracking and no notice outlive the account that saw them.
+
+`createPriceRefresh(deps)` builds a tracker with its collaborators — `fetchStatus`, `notices`,
+`refreshPortfolio` and `startPolling` — so a test can pass its own. The module exports the app's
+tracker, `priceRefresh`, built with the defaults: the `fetch` above, `instanceNotices`,
+`requestPortfolioRefresh()` and `startActivePolling()`. The defaults reach those modules when they
+are called, not when the module loads: the API client imports this module, and a test that mocks one
+of them only in part, such as the client's own tests, must still load it.
+
 ## 🧪 How it is tested {: #testing }
 
 | Test | Runner action | What it pins |
@@ -336,6 +453,7 @@ tab: the scheduler's current-price refresh calls the same service on its own sch
 | `lib/features/live-updates/activePolling.test.ts` (Vitest, node, fake timers) | `./dev.py test front-utility core-unit` | Every rule of [`startActivePolling`](#active-polling) on a clock and a tracker the test owns, [failures and provider pauses](#backoff) included, and the four numbers of `cadence.ts` |
 | `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
+| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
 
@@ -393,6 +511,12 @@ sequenceDiagram
   side: the two variables, and what each page shows during a pause
 - 🧠 [Domain state](../../state/domain-state.md) — The portfolio caches and the mutation signal
 - ⏱️ [Scheduler](../../../backend/scheduler.md) — The server-side current-price refresh
+- ⏳ [Catch-up Progress](../../../backend/scheduler.md#price-refresh) — The server's side of
+  **Updating prices…**: the tracker, the header and the route
+- 🛠️ [While Prices Catch Up](../../../../admin/sleep_wake.md#price-refresh) — What users see
+  during a catch-up
+- 📢 [Instance notices](../../state/app-state.md#instance-notices) — The registry that shows the
+  notice
 - 🎨 [Styling](../../styling.md#utility-classes) — The `.lf-price-flash-*` classes
 
 
