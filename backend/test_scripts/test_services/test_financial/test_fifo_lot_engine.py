@@ -29,6 +29,7 @@ def _tx(
     target_currency: str | None = None,
     cost_basis_override: str | None = None,
     cost_basis_currency: str | None = None,
+    currency: str | None = "EUR",
 ) -> FifoInputTransaction:
     return FifoInputTransaction(
         id=tx_id,
@@ -38,7 +39,7 @@ def _tx(
         type=tx_type,
         quantity=_d(quantity),
         amount=_d(amount),
-        currency="EUR",
+        currency=currency,
         related_transaction_id=related_transaction_id,
         target_amount=_d(target_amount) if target_amount is not None else None,
         target_currency=target_currency,
@@ -47,16 +48,16 @@ def _tx(
     )
 
 
-def _buy(tx_id: int, qty: str, price: str, dt: str = "2025-01-01", broker_id: int = 1, target_amount: str | None = None) -> FifoInputTransaction:
-    return _tx(tx_id, "BUY", broker_id=broker_id, dt=dt, quantity=qty, amount=f"-{_d(qty) * _d(price)}", target_amount=target_amount)
+def _buy(tx_id: int, qty: str, price: str, dt: str = "2025-01-01", broker_id: int = 1, target_amount: str | None = None, currency: str | None = "EUR") -> FifoInputTransaction:
+    return _tx(tx_id, "BUY", broker_id=broker_id, dt=dt, quantity=qty, amount=f"-{_d(qty) * _d(price)}", target_amount=target_amount, currency=currency)
 
 
-def _sell(tx_id: int, qty: str, price: str, dt: str = "2025-01-01", broker_id: int = 1, target_amount: str | None = None) -> FifoInputTransaction:
-    return _tx(tx_id, "SELL", broker_id=broker_id, dt=dt, quantity=f"-{qty}", amount=f"{_d(qty) * _d(price)}", target_amount=target_amount)
+def _sell(tx_id: int, qty: str, price: str, dt: str = "2025-01-01", broker_id: int = 1, target_amount: str | None = None, currency: str | None = "EUR") -> FifoInputTransaction:
+    return _tx(tx_id, "SELL", broker_id=broker_id, dt=dt, quantity=f"-{qty}", amount=f"{_d(qty) * _d(price)}", target_amount=target_amount, currency=currency)
 
 
-def _adjustment(tx_id: int, qty: str, dt: str = "2025-01-01", broker_id: int = 1, cost_basis_override: str | None = None, cost_basis_currency: str | None = None) -> FifoInputTransaction:
-    return _tx(tx_id, "ADJUSTMENT", broker_id=broker_id, dt=dt, quantity=qty, cost_basis_override=cost_basis_override, cost_basis_currency=cost_basis_currency)
+def _adjustment(tx_id: int, qty: str, dt: str = "2025-01-01", broker_id: int = 1, cost_basis_override: str | None = None, cost_basis_currency: str | None = None, currency: str | None = "EUR") -> FifoInputTransaction:
+    return _tx(tx_id, "ADJUSTMENT", broker_id=broker_id, dt=dt, quantity=qty, cost_basis_override=cost_basis_override, cost_basis_currency=cost_basis_currency, currency=currency)
 
 
 def _transfer_pair(
@@ -1237,3 +1238,110 @@ class TestEconomicConservation:
         assert _sum_allocated_income(result) + result.asset_orphan_income == _d("80")
         assert _sum_allocated_fees(result) + result.asset_orphan_fees == _d("7")
         assert _sum_allocated_taxes(result) + result.asset_orphan_taxes == _d("0")
+
+
+# --------------------------------------------------------------------------- #
+# CP-7a — developer's decision 26 (D-J1, option B): the currency of a closure
+# --------------------------------------------------------------------------- #
+
+
+class TestCloseCurrency:
+    """Every closure carries the currency of its closing price, ``close_currency``; across two currencies there is no native realized P&L.
+
+    Workstream J, CP-7a. A SELL or a BUY closes in its row's currency; an ADJUSTMENT-in closing a short in the currency of its
+    cost (``cost_basis_currency``, else the row's) when it has one, else in the row's. A closure whose currency differs from
+    its lot's — None counting as the engine's target currency, as the lots FX resolver reads it — is mixed: the engine has no
+    rates, so its native ``realized_pnl`` is None, and a LONG lot's ``realized_pnl`` and ``cumulative_proceeds`` are None from
+    then on; ``proceeds`` stay, native in the closure's currency. The lots analysis converts each leg at its own date
+    (test_lots_analysis_pure.py, CP-7a section). Before CP-7a a closure had no currency and the engine subtracted any two
+    prices. Values are asserted before ``close_currency``, so a test whose values changed fails on them; GUARD marks values
+    CP-7a leaves as they were.
+    """
+
+    @pytest.mark.parametrize(
+        "currency",
+        [
+            pytest.param("EUR", id="GUARD-values-in-the-report-currency"),
+            pytest.param("USD", id="GUARD-values-of-a-foreign-lot-sold-in-its-own-currency"),
+        ],
+    )
+    def test_a_sell_closes_in_its_own_currency_and_keeps_its_native_realized_pnl(self, currency):
+        """10 bought at 100 and 4 sold at 120, both in ``currency``, report EUR: close_currency is the SELL's, realized 80 and proceeds 480 native.
+
+        One currency, nothing mixed: the values are GUARDs. Before CP-7a: the same values, and no close_currency (AttributeError).
+        """
+        result = _run([_buy(1, "10", "100", currency=currency), _sell(2, "4", "120", dt="2025-01-10", currency=currency)], target_currency="EUR")
+        closure = next(closure for closure in result.closures if closure.transaction_id == 2)
+        lot = result.get_lot(1)
+
+        assert (closure.realized_pnl, closure.proceeds, lot.realized_pnl, lot.cumulative_proceeds) == (_d("80"), _d("480"), _d("80"), _d("480"))
+        assert closure.close_currency == currency
+
+    def test_a_lot_bought_in_eur_and_sold_in_usd_has_no_native_realized_pnl(self):
+        """1 bought at 100 EUR at broker 1, moved to broker 2, sold there at 110 USD, report EUR: the closure is in USD and mixed.
+
+        Its proceeds stay 110, native USD; its realized P&L and the lot's realized P&L and cumulative proceeds are None: 110 USD
+        less 100 EUR has no meaning without rates. Before CP-7a: realized 10 on the closure and on the lot, cumulative proceeds 110.
+        """
+        t_out, t_in = _transfer_pair(2, 3, "1", out_broker_id=1, in_broker_id=2, out_date="2025-03-03", in_date="2025-03-03")
+        result = _run([_buy(1, "1", "100", dt="2025-01-02", currency="EUR"), t_out, t_in, _sell(4, "1", "110", dt="2025-06-02", broker_id=2, currency="USD")], target_currency="EUR")
+        closure = next(closure for closure in result.closures if closure.transaction_id == 4)
+        lot = result.get_lot(1)
+
+        observed = {"closure": (closure.quantity, closure.realized_pnl, closure.proceeds), "lot": (lot.open_quantity, lot.realized_pnl, lot.cumulative_proceeds)}
+        assert observed == {"closure": (_d("1"), None, _d("110")), "lot": (_d("0"), None, None)}
+        assert closure.close_currency == "USD"
+
+    def test_after_a_mixed_closure_the_lots_native_sums_stay_unknown(self):
+        """10 bought at 100 EUR; 4 sold at 110 USD (mixed), then 6 at 120 EUR: the lot's realized P&L and proceeds stay None.
+
+        The EUR sale keeps its own native realized P&L, 6 × 20 = 120. The engine never asks which currencies a broker trades in,
+        so both sales are at broker 1. Before CP-7a: realized 4 × 10 + 120 = 160 and proceeds 440 + 720 = 1160, USD and EUR added.
+        """
+        result = _run([_buy(1, "10", "100", currency="EUR"), _sell(2, "4", "110", dt="2025-02-03", currency="USD"), _sell(3, "6", "120", dt="2025-03-03", currency="EUR")], target_currency="EUR")
+        realized_by_closure = {(closure.lot_id, closure.transaction_id): closure.realized_pnl for closure in result.closures}
+        lot = result.get_lot(1)
+
+        assert (realized_by_closure, lot.realized_pnl, lot.cumulative_proceeds) == ({(1, 2): None, (1, 3): _d("120")}, None, None)
+
+    @pytest.mark.parametrize(
+        ("buy_currency", "expected_realized"),
+        [
+            pytest.param("USD", _d("100"), id="GUARD-values-bought-back-in-the-shorts-currency"),
+            pytest.param("EUR", None, id="bought-back-in-another-currency-is-mixed"),
+        ],
+    )
+    def test_a_buy_closing_a_short_carries_the_buys_currency(self, buy_currency, expected_realized):
+        """5 sold short at 120 USD, report EUR, bought back at 100 in ``buy_currency``: the closure is in the BUY's currency.
+
+        In USD the short realizes 5 × (120 − 100) = 100, native; in EUR the closure is mixed, None. Either way the short's
+        cumulative proceeds stay its opening sale's, 600. Before CP-7a: 100 in both cases (USD less EUR), and no close_currency.
+        """
+        result = _run([_sell(1, "5", "120", currency="USD"), _buy(2, "5", "100", dt="2025-01-10", currency=buy_currency)], broker_shorting={1: True}, target_currency="EUR")
+        closure = next(closure for closure in result.closures if closure.transaction_id == 2)
+        lot = result.get_lot(1)
+
+        assert (closure.close_reason, closure.realized_pnl, lot.cumulative_proceeds) == ("BUY", expected_realized, _d("600"))
+        assert closure.close_currency == buy_currency
+
+    @pytest.mark.parametrize(
+        ("override", "override_currency", "row_currency", "expected_currency", "expected_close_price", "expected_realized"),
+        [
+            pytest.param("100", "USD", "EUR", "USD", _d("100"), _d("100"), id="a-cost-in-USD-on-a-row-in-EUR-closes-in-USD"),
+            pytest.param("100", "GBP", "USD", "GBP", _d("100"), None, id="a-cost-in-GBP-is-mixed-against-the-USD-short"),
+            pytest.param(None, None, "EUR", "EUR", _d("0"), None, id="without-a-cost-in-the-rows-currency"),
+        ],
+    )
+    def test_an_adjustment_in_closing_a_short_carries_its_costs_currency(self, override, override_currency, row_currency, expected_currency, expected_close_price, expected_realized):
+        """5 sold short at 120 USD, report EUR, then an ADJUSTMENT +5: (close price, native realized, close_currency) of its closure.
+
+        With a cost the closure is in the cost's currency — cost_basis_currency, never the row's — at the cost: in USD, the
+        short's, 5 × (120 − 100) = 100; in GBP it is mixed, None. Without a cost it closes at 0 in the row's currency, EUR here:
+        mixed, None. Before CP-7a: no close_currency, and the realized P&L read 100, 100 and 600 (5 × 120 against a price of 0).
+        """
+        adjustment = _adjustment(2, "5", dt="2025-01-10", cost_basis_override=override, cost_basis_currency=override_currency, currency=row_currency)
+        result = _run([_sell(1, "5", "120", currency="USD"), adjustment], broker_shorting={1: True}, target_currency="EUR")
+        closure = next(closure for closure in result.closures if closure.transaction_id == 2)
+
+        assert (closure.close_reason, closure.close_unit_price, closure.realized_pnl) == ("BUY", expected_close_price, expected_realized)
+        assert closure.close_currency == expected_currency
