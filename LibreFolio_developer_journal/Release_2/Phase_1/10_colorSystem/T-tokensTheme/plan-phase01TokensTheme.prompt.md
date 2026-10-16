@@ -583,8 +583,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
-| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 bozza su copie, patch pronta, ricontrollata su `72e66d1a6`; dopo l'ingresso di DV (~07:20), slot verso le 07:30 |
-| 18 | W1-f1 (modali di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 bozze su copie con i sotto-agenti; W1-f1 e W2-b nello slot delle 07:30, W2-d e W1-f2 nel successivo; la nota wiki scritta, entra nel prossimo checkpoint |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 applicato su `7646f39ee` (il ramo di DV), prove leggere verdi; checkpoint; slot dopo l'ingresso di DV (~07:35) |
+| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1, W1-g (`InfoBanner`, `SyncResultRow`) e W2-b applicati su `7646f39ee` con il lotto input, prove leggere verdi; W2-d e W1-f2 pronti su copie per lo slot dopo; la nota wiki committata (`0d5cebce7`) |
 
 ## Avanzamento
 
@@ -2091,3 +2091,40 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   `PriceDataImportModal` ed `EventDataImportModal`, il link di `TxFormBanners`) fino ai loro lotti.
 > - **⚠️ Fuori pista:** `image-crop.spec.ts` (616, 643) riconosce lo scuro da `[class*="dark"]`, che prende qualsiasi
 >   utility `dark:`: i suoi test «in scuro» oggi non sanno se il tema è scuro. Fuori perimetro, backlog TC-14.
+
+> ✅ **11 · Copie pronte** (06:46, galleria finita: nessun processo di Playwright, carico 10). Checkpoint di sola
+> documentazione committato dal coordinatore: `0d5cebce7` (pagina wiki, indice, log, regola 8 della skill, piano,
+> backlog); entra col prossimo lotto di codice. `/tmp/libreFolio_T_r2/drafts_finish.sh`: Prettier sulle copie (riformattati
+> `SyncModalBase`, `AiExportOptionsPanel`, `DataEditor`), conteggio legacy 0 e letterali 0 in tutte le copie, una patch
+> per lotto (`W1f1.patch` 2 file, `W1g.patch` 3, `W2b.patch` 2, `W2d.patch` 2, `W1f2.patch` 6), da applicare con
+> `git apply -p2`. `check_source_paths.py`: 5 percorsi inesistenti in 8 citazioni, gli stessi di prima, nessuno nella
+> pagina nuova.
+
+> ✅ **12 · Applicati il lotto input, W1-f1, W1-g e W2-b** (06:5x, base `7646f39ee`: il ramo di DV `35a55cf39`, W5-PAC e
+> W5-charts sopra `72e66d1a6`, nel mio `0d5cebce7`; DV entra nel target verso le 07:35, io dopo). Ogni file dell'albero era
+> identico alla base della sua bozza (i 4 di DV a `7d3896011`), quindi `git apply -p2 --check` e poi `git apply -p2`:
+> stesso risultato di `--3way`, senza toccare l'indice. 18 file di codice.
+> - **Prove leggere** (sotto `nice`, mentre gira lo slot di DV): Prettier `--check` verde sui 18 file; `--check` pulito,
+>   14 file sotto il loro record, nessun selettore di `app.css` orfano; Vitest `themeRoles.gate`, `themeTokens.gate` e 12
+>   file mirati (`ExactDecimalInput`, `ExactQuantityInput`, `TransactionFormModal`, `ChartSignalsSection`,
+>   `ChangelogModal`, `PageSyncModal`, `SyncModalBase`, `SyncResultRow`, `FxSyncModal`, `AssetSyncModal`,
+>   `layout.authGate`, `aiExportUi`): 14 file, 368/368. `git diff --check` pulito.
+> - **`--update`:** m1 8.833 → 8.535, m2 64 → 54. Escono 11 righe (tra cui `ChangelogModal`, `ServerUnreachable`,
+>   `InfoBanner`, `ExactDecimalInput`, `ExactQuantityInput`, i tre file di sync, `ChartSignalsSection`,
+>   `SignalParamControl`, `ui.ts`); `ChartAestheticsSection` 30 → 16, `TxFormPairSection` 96 → 93,
+>   `TxFormSingleSection` 56 → 50.
+> - Le prove pesanti nello slot dopo l'ingresso di DV: `/tmp/libreFolio_T_r2/slot3.sh`.
+
+> **Dove guardarlo** (per il developer):
+> - **Lotto input:** i campi numerici del pianificatore PAC (prezzi, quote, cambi, liquidità, regole dei broker), i campi
+>   della quantità nei form delle transazioni (il bordo rosso o verde del segno), i campi delle impostazioni dei grafici
+>   (parametri dei segnali, estetica). Da rivedere: un campo non valido resta rosso anche col fuoco.
+> - **W1-f1:** «Sincronizza tutto» nella lista dei cambi, e la sincronizzazione nelle pagine di asset, cambi e rischio:
+>   la pastiglia della testata, il campo del timeout (hover e fuoco), la barra di avanzamento, «riprova i falliti», i
+>   bottoni in fondo; in chiaro e in scuro.
+> - **W1-g:** ogni banner (informazione, avviso, errore, successo): gli errori delle impostazioni e dei broker, il banner
+>   di direzione dell'importazione CSV dei cambi, il riepilogo della sincronizzazione; nelle righe di sync l'icona
+>   «riprova» e il testo d'errore. In scuro i banner sono più accesi di prima.
+> - **W2-b:** il changelog dalla versione nella barra laterale; cercare una parola comune come «fix», in scuro: i titoli
+>   evidenziati col filo, i `mark` nel testo, le pastiglie dei risultati, la testata dei capitoli al passaggio, il codice
+>   nel testo. La pagina «server irraggiungibile» (quando `/auth/me` tace oltre 5 secondi).
