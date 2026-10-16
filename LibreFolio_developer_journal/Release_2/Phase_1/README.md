@@ -169,3 +169,4 @@ Sono tutti locali: la push la fa il developer.
 | 80 | 16/10 02:45 | A: A6d (nuove istanze su invito, primo account aperto, migrazione 008; impostazioni globali con sessione) + A6e (cambio email con password attuale, chiude le altre sessioni, `email_verified_at` a NULL) | `19dd8a96d` |
 | 81 | 16/10 02:52 | Y: Y4b (FE2b, il frontend del rischio in `lib/features/risk/`: 103 rinomine, import, runner, doc, devWiki, baseline dei colori; E2E `risk` 38 e `risk-lab` 44) | `08efa5ac3` |
 | 82 | 16/10 02:55 | B: B2 (controllo di un archivio su una copia: `staging.py`, `restore_jobs.py`, `/backup/restore/*`, CLI `restore --dry-run`, `backup_in_progress()`, limite di caricamento; decisioni 40, 42, 43; all-backend 18 359/0) | `5441b96ed` |
+| 83 | 16/10 03:00 | E: E-5 (guardia dei testi OpenAPI che il generatore incolla grezzi; regola 4 dei contratti API; 52 componenti latenti, nessuno rotto) | `01598f9ad` |
