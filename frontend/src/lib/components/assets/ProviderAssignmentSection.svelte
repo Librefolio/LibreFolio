@@ -17,7 +17,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play, SlidersHorizontal} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Info, Loader2, Play, SlidersHorizontal} from 'lucide-svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -119,6 +119,8 @@
     let testStatus: TestStatus = $derived(probe.status);
     let testResults = $derived.by(buildTestResults);
     let totalExecutionMs = $derived(probe.source === 'manual' ? (probe.response?.total_execution_time_ms ?? 0) : 0);
+    // C-90: a settled manual probe that read the history (a success or a warning) says the read covered only a few days.
+    let showScopeNote = $derived(testStatus !== 'testing' && testResults.some((result) => result.operation === 'history' && result.status !== 'error'));
     let paramsValues = $derived(providerParams ?? {});
 
     function currentConfiguration(): ProviderConfiguration {
@@ -685,6 +687,13 @@
                         </div>
                     {/if}
                 </div>
+                {#if showScopeNote}
+                    <!-- C-90: the probe reads only the last few days, creating the asset downloads its whole history. -->
+                    <p class="flex items-start gap-1.5 pl-3 text-xs text-lf-muted" data-testid="provider-test-scope-note">
+                        <Info size={12} class="mt-0.5 shrink-0" />
+                        <span>{$t('assets.probe.scopeNote')}</span>
+                    </p>
+                {/if}
             {:else if testStatus === 'not_tested' && providerCode && identifier}
                 <div class="flex items-center gap-2 text-xs text-lf-muted">
                     <Circle size={12} />
