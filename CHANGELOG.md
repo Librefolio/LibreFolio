@@ -75,6 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
 - On the Files page and in a broker's report files, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
 - **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
+- **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
+- API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
 
 #### 🎨 A new colour palette
 
@@ -162,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A new instance registers by invitation.** Its first account signs up without one and becomes the administrator; every later account needs an invitation link, unless an administrator sets «Registration» to Open. An upgraded instance keeps the mode it had.
 - `GET /api/v1/settings/global` and `/settings/global/{key}` need a signed-in session: an API client must sign in to read them.
 - `PUT /api/v1/auth/profile` with a new `email` needs `current_password`: missing → 400 `CURRENT_PASSWORD_REQUIRED`, wrong → 400 `CURRENT_PASSWORD_INVALID`.
+- `POST /api/v1/auth/register`, `/auth/change-password` and `/auth/password-reset` refuse a password that misses a rule with 400 `PASSWORD_TOO_WEAK` and the `rules` it misses, checked before anything else; until now the API asked only for 8 characters, with a 422.
 
 ---
 
