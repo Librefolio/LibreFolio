@@ -21,7 +21,7 @@ Dependencies — but **only** when running from the Docker image. Local dev
 `mkdocs_src/site/` — but never `.git/`, `Pipfile`, or the frontend's
 *source* manifest `frontend/package.json` (only the compiled static site).
 
-`backend/app/api/v1/system.py` derives all three broken fields from those
+`backend/app/api/v1/system/info.py` derives all three broken fields from those
 missing sources, and each fails via a silent `try/except: pass` (by
 design, so the endpoint never 500s) — it just silently returns empty data:
 

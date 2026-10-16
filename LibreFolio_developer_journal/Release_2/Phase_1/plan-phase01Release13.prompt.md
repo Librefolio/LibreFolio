@@ -526,6 +526,39 @@ Una sola invocazione di test per corsia. Galleria completa e run completa con co
 una alla volta fra i due programmi, sempre con avviso reciproco. Server di revisione
 fermati all'handoff, porta verificata libera.
 
+### Manuale admin: la struttura finale (decisione del developer, 16/10)
+
+Il developer, testuale nella sostanza: tutto il lavoro per LibreFolio Cloud si documenta **nel manuale admin**;
+l'alberatura va ristrutturata, e le variabili d'ambiente, che stanno crescendo, vanno divise **in più file per
+categoria o funzionalità** invece di una sola pagina grande. Oggi `admin/configuration.md` ha 533 righe e 38 variabili,
+`admin/hosting_providers.md` 385; H, A, B, E e Z le stanno ampliando.
+
+**Struttura proposta dal coordinatore** (da confermare col developer prima del lotto):
+- 🐳 **Installazione ed esposizione**: installazione sull'host, Docker avanzato, esposizione sicura, controllo delle
+  connessioni.
+- ⚙️ **Configurazione**:
+  - una pagina d'ingresso: come si legge la configurazione (`.env`, segreti `_FILE`, quale valore vince, controlli
+    d'avvio, arresto) e **una tabella di tutte le variabili**, una riga ciascuna, col link alla pagina che la spiega;
+  - una pagina per categoria: server e rete, sicurezza e segreti (chiave d'istanza, sessione), account e iscrizioni (con
+    il primo admin F02), email, dati di mercato e plugin (scheduler, impostazioni dei plugin, ricerca web), backup,
+    sospensione e risveglio.
+- ☁️ **Ospitare per altri (LibreFolio Cloud)**: il contratto fra l'istanza e il pannello di controllo, il profilo
+  gestito, il blocco, i backup per il pannello, il primo admin dal pannello, limiti e link di supporto e pagamento.
+- 👥 **Utenti e inviti**, **impostazioni globali**.
+- 🧹 **Operazioni**: backup e ripristino, strumenti CLI, struttura delle cartelle.
+
+**Quando e chi**: **un solo lotto di documentazione**, del coordinatore, eseguito dal docs-writer quando i lotti cloud
+di H, A, B, E e Z sono entrati e nessuno ha pagine admin aperte. Nello stesso lotto:
+- i link vecchi devono continuare a funzionare (redirect o pagine ponte), compresi quelli della app (`DocsLink`);
+- un controllo che ogni `LIBREFOLIO_*` letta dal codice stia in `.env.example` e in una sola pagina di categoria;
+- `.env.example` diviso con le stesse categorie.
+
+Le traduzioni (it, fr, es) si fanno dopo, su richiesta del developer, con la pipeline Aphra.
+
+**Fino ad allora, regola per i figli**: una variabile nuova si spiega per intero nella pagina della sua funzionalità
+(`email.md`, `sleep_wake.md`, `backup_restore.md`, `hosting_providers.md`…). In `configuration.md` va solo una riga
+nella tabella, col link. Così il lotto sposta pagine, non riscrive testo.
+
 ## 7. Coordinamento con il programma colori (sessione «UI color analysis»)
 
 - Il programma colori vive in `Phase_1/10_colorSystem/` (spostato da `Phase_0/55` e `56` il 14/10, su richiesta del
