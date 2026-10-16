@@ -2699,3 +2699,151 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > | `check_source_paths.py` (devWiki) | 5 mancanti, gli stessi di prima; nessuno nuovo ✅ |
 >
 > Il finto cambia per tutte le sette suite che lo usano: verdi tutte e sette.
+>
+> **Committato dal coordinatore (15:02)**:
+> - `068d3396f`, il finto e i test;
+> - `25cf29e3c`, le docs;
+> - `d66d004ab`, la devWiki;
+> - `9d27245dd`, il journal.
+>
+> **Il finto è già in `dev_release2`** con un cherry-pick, `7d51c21af`, così A adatta i miei tre test in P18; le docs
+> arrivano con il mio ramo. Ad A ho mandato lo SHA.
+>
+> **Da A (14:53)**: c'è un terzo test con lo stesso schema, EVA-016 (`test_email_verification_api.py:122`, il gemello
+> API di EMV-043). A lo adatta con gli altri due: EMV-043 e la costante `ONE_MAILBOX` di EMF.
+> EMA-036 (`api email`) resta verde: con P18 le altre grafie trovano l'account, ma il suo limite sui link le ferma.
+>
+> **La mia risposta (14:5x)**:
+> - le asserzioni leggono `rcpt_tos`, che con `SMTPUTF8` conserva la stringa esatta, quindi restano com'erano;
+> - la costante della casella è il `casefold` delle varianti, con la precondizione come in EMF-056;
+> - **EMF-056** (`OLD_MAILBOX_VARIANTS`) non va toccato: le varianti vanno a `email_changed_work` solo come vecchio
+>   indirizzo, e i quattro account sono `zq-moved-{i}@example.org`, quindi niente conflitto con `ux_users_email_lower`.
+>
+> **Dopo**: E4c aspetta A7a e P18 nella mia base. Fino ad allora, solo lavoro fuori dai file di A.
+>
+> **La metà H di E4c, proposta al coordinatore (15:0x).** P17 di H è in `dev_release2` (`b1df87bd4`, commit
+> `22d6dc84e`), e `client_rate_key` (`services/platform/client_address.py:91`) è identico byte per byte a
+> `flows.address_key` (`flows.py:66`). Lo sostituisce senza cambiare nessuna chiave.
+>
+> **Se il coordinatore aggiorna la base ora**:
+> - risolvo il conflitto sicuro in `api/v1/email.py`, tenendo `client_address(request)` di H, verso la riga 157, e la
+>   tenuta tolta da E4b;
+> - tolgo `address_key`, e uso `client_rate_key` in `flows.py:215` e in `verification.py:289` e `:366`;
+> - sistemo i 14 riferimenti nei test e le docs.
+>
+> Altrimenti resta tutto per l'arrivo di A7a e P18.
+
+#### E4c-H — La metà H di E4c, sul merge con `dev_release2` ✅ (2026-10-16, 15:11–16:33)
+> **Il via del coordinatore** (15:11): una casa sola per la chiave. Aggiorna la mia base con `dev_release2`, che
+> contiene P17 di H, e lascia il merge aperto (`git merge 26dda1a26`). HEAD è `9d27245dd`, MERGE_HEAD `26dda1a26`, la
+> base comune `44d4d7e8e`; 496 file portati dal merge.
+>
+> **Il merge**:
+> - **Un solo conflitto**, in `admin/configuration.en.md`: le mie sette righe SMTP contro le due di Z5
+>   (`LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` e `…_MAX_SECONDS`). Le ho tenute tutte, prima quelle di Z5, che come le
+>   righe di sopra rimandano a `sleep_wake.md`, poi le mie. La riga di H, `LIBREFOLIO_CLIENT_IP_HEADER` (riga 40),
+>   era già entrata da sola. Ho messo in stage solo questa risoluzione; il piano resta fuori dal merge.
+> - **Gli altri file cambiati da tutte e due le parti**, controllati uno per uno:
+>   - `api/v1/email.py`: `client_address(request)` di H alle righe 159 e 203, con il suo import, e nessuna traccia
+>     della tenuta tolta da E4b;
+>   - `api/v1/auth.py`: la riga di H in `register` (276) e le quattro aggiunte di E4b in `update_profile`;
+>   - il finto e EMD-046…049: identici a HEAD, cioè il mio commit e il cherry-pick `7d51c21af`, senza doppioni;
+>   - il runner: le registrazioni di E tutte presenti, insieme a `client-address` di H. Nel frontend cambiano solo i
+>     percorsi dei broker;
+>   - `admin/index`: la riga Email c'è ancora.
+>
+> **La metà H di E4c**, non in stage e in file fuori dal merge, come chiesto:
+> - **Codice**:
+>   - `flows.py`: `address_key()` tolto, insieme a `import ipaddress`; `client_rate_key` di H in `FORGOT_BY_ADDRESS`; il
+>     commento sull'indirizzo (`client_address()`, `LIBREFOLIO_CLIENT_IP_HEADER`, `FORWARDED_ALLOW_IPS`);
+>   - `verification.py`: `client_rate_key` in `registration_email_allowed()` e in `resend_verification()`, più il
+>     commento di `RESEND_BY_ADDRESS`.
+>   - In `backend/app` non resta nessun `address_key`. Nessun ciclo d'import: il modulo di H importa solo `config` e
+>     `logging_config`.
+> - **Test** (`test-author`):
+>   - EMF-036 cambia senso: ora fissa la casa unica (`flows.client_rate_key is client_rate_key`, nessun
+>     `address_key`), e da 12 casi diventa 1, quindi `services email-flows` raccoglie 11 test in meno;
+>   - EMV-033 è solo rinominato (`…_keyed_by_client_rate_key`);
+>   - EMF-037 ed EVK-010 usano `client_rate_key`;
+>   - le docstring dei quattro file sono aggiornate;
+>   - EMA-035 resta com'è: con la variabile vuota, il suo testo è ancora vero.
+> - **Docs**:
+>   - `developer/backend/email.md`:
+>     - via la riga `address_key` della tabella di `flows`;
+>     - «Why `request.client.host`» diventa «Which client address», con P17 e un link a
+>       `security.md#client-address`;
+>     - otto punti passano a `client_address(request)` e `client_rate_key()`, compresa la riga di EMF nella tabella
+>       «Testing».
+>   - `admin/email.en.md`, «Behind a reverse proxy»: la strada di `LIBREFOLIO_CLIENT_IP_HEADER` e quella di uvicorn,
+>     con un link a `connection_checks.md#client-address`, la pagina di H.
+>   - La devWiki `domains/email.md`: il limite «Behind a proxy» aggiornato a P17, la nota sulla casa unica e
+>     `client_address.py` tra i «Source files».
+>
+> **⚠️ Fuori pista: due file sono anche nel merge**, `security.md` (il punto «Callers» di H dice «Their key is still
+> `address_key()` … until the email feature switches») e `_backend_services.py` (le descrizioni di `email-flows` e
+> `email-verification`).
+> - Una mia modifica lì sarebbe finita sopra il merge in stage (MM). La modifica di `security.md` l'ho salvata come
+>   patch (`files/e4c/security_client_rate_key.patch`) e tolta con l'editor, senza comandi git.
+> - Tutto si applica dopo il commit del merge (`files/e4c/after_merge_todo.md`), compresa la nota per H:
+>   `test_client_address.py`, righe 33 e 771, dice ancora «today's rule of address_key».
+>
+> **Prove della revisione combinata** (`files/tools/e4ch_checks.sh`, carico sotto 50):
+> - `ruff` e `black`;
+> - `services`: `client-address`, `email-flows`, `email-verification`, `email-verification-hooks`, `email-delivery`,
+>   `registration`;
+> - `api`: `email`, `email-verification`, `email-verification-hooks`, `email-change-notice`, `auth`, `profile`,
+>   `registration`;
+> - la guardia OCT;
+> - `api sync`, `i18n`, `front check`, `theme-roles`;
+> - `lint --dead-code`;
+> - `mkdocs build` e `check-links`.
+>
+> **⚠️ Fuori pista: la build stretta è fallita alle 16:05.** `admin/email.en.md` puntava a
+> `connection_checks.md#client-address`, ma `admin/connection_checks.it.md` non ha quell'ancora: H l'ha aggiunta solo
+> in EN. La nostra pagina esiste solo in EN, quindi le build IT, FR ed ES la mostrano in inglese e risolvono il link
+> contro le pagine tradotte.
+>
+> **La cura**: la convenzione della pagina per queste sezioni, cioè il nome della sezione nel testo e il link alla
+> pagina senza ancora («*The Visitor's Address* in [Checking Connection Security](connection_checks.md)»). Il link a
+> `security.md#client-address` dalla pagina per sviluppatori va bene: il manuale per sviluppatori è solo EN.
+>
+> **Revisione combinata** (il merge in stage più la metà H di E4c fuori stage), dalle 15:22 alle 16:17, carico sotto 50:
+>
+> | Prova | Esito |
+> |---|---|
+> | `ruff`, `black` (7 file) | puliti ✅ |
+> | `services client-address` (di H) | 131 ✅ |
+> | `services email-flows` | 145 ✅ (156 meno 11: EMF-036 passa da 12 casi a 1) |
+> | `services email-verification` | 124 ✅ |
+> | `services email-verification-hooks` | 32 ✅ |
+> | `services email-delivery` | 108 ✅ |
+> | `services registration` | 147 ✅ |
+> | `api email` | 158 ✅ |
+> | `api email-verification` | 49 ✅ |
+> | `api email-verification-hooks` | 16 ✅ |
+> | `api email-change-notice` | 13 ✅ |
+> | `api auth` | 88 ✅ |
+> | `api profile` | 21 ✅ |
+> | `api registration` | 96 ✅ |
+> | guardia OCT | 78 ✅ |
+> | `api sync` | ✅ |
+> | `i18n build` e `i18n check` stretto | 4 780 chiavi ✅ |
+> | `front check` | 0/0 ✅ |
+> | `theme-roles --check` | pulito ✅ |
+> | `lint --dead-code` | in E solo il transitorio `build_admin_setup` (A7a) ✅ |
+> | `mkdocs build` stretto | rosso alle 16:05 (l'ancora, sopra); 0 dopo la cura, alle 16:17 ✅ |
+> | `check-links` | 97 ✅ |
+> | `git diff --check` e `git diff --cached --check` | puliti ✅ |
+>
+> Alla fine la porta 6188 era libera.
+>
+> **Il merge committato dal coordinatore** (16:26): `57081a85e`, con genitori `9d27245dd` e `26dda1a26`. Poi i due
+> ritocchi rimandati:
+> - `security.md`, il punto «Callers» di H: «Their key is `client_rate_key()` as well: lot E4c … removed its own copy»,
+>   dalla patch salvata;
+> - `_backend_services.py`, le descrizioni di `email-flows` ed `email-verification`: «H's client_rate_key».
+>
+> La nota su `test_client_address.py` (righe 33 e 771) la passa il coordinatore ad H.
+>
+> **Le prove dei ritocchi**: `ruff` e `black` sul runner puliti; `mkdocs build` stretto a 0 (16:33). Dove si nomina
+> ancora `address_key` lo si fa di proposito, come storia: `developer/backend/email.md:609` e `security.md:1297`.
