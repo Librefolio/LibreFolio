@@ -138,7 +138,7 @@ nessun EventSource né WebSocket, SvelteKit senza `version.pollInterval`).
 
 | # | Decisione | Proposta | Stato |
 |---|---|---|---|
-| D1 | Dove sta «Aggiornamento in pausa» | Locale, vicino al prezzo live; nell'area di H solo «Aggiornamento prezzi…» | proposta |
+| D1 | Dove sta «Aggiornamento in pausa» | Locale, vicino al prezzo live; nell'area di H solo «Aggiornamento prezzi…» | ✅ confermata (coordinatore, 16/10 ~11:29): la pillola resta locale; l'area di H è per gli avvisi dell'istanza |
 | D2 | Pausa del client per tutti | Sì, 10 minuti, 0 = mai | ✅ deciso (punto 31, 15/10): **2 minuti**, ripresa automatica, lista 60 s, dettaglio 30 s — sezione «Z1» |
 | D3 | C3 senza `isHeadToday` | Guardia aggiunta in Z1 dopo un rosso; fusione C2/C3 a X (FE5) | in Z1: la fusione la fa Z, coordinata con X dal coordinatore (punto 31) |
 | D4 | Il polling conta come presenza | Sì (evita sospensioni a raffica) | ✅ deciso (punto 32, 15/10): sì; sospensione dopo **5 minuti** senza richieste come default del cloud |
@@ -2277,7 +2277,9 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
      di `api_system_price_refresh` in `_backend_api.py` (il file era pulito a HEAD); `api sync`; `front check` 0/0;
      `i18n check` stretto, 4775 chiavi; `check-orphans`. In processo anche i tre test di H che percorrono le rotte
      (`test_instance_block.py`: ogni rotta di `/api/v1` passa prima dal blocco, l'elenco dei permessi è invariato) e
-     i due sull'ordine del router di `system` (`/system/block` resta l'ultima): 3 e 2 verdi.
+     i due sull'ordine del router di `system` (`/system/block` resta l'ultima): 3 e 2 verdi. Dopo il commit di Z5
+     (`3b016dd4e`), di H: `services app-lifecycle` 42 e `services security-headers` 15, verdi (11:20–11:37, il secondo
+     in attesa del carico sotto 50).
    - Regole del coordinatore del 16/10 ~11:0x: Z5 non scrive in nessun `.svelte` delle aree dei colori (solo `.ts`,
      JSON dell'i18n, backend, test, doc). La skill `design-system` (D-T29) l'ho letta dal suo commit
      (`git show 6e569084a:…`), non dal checkout principale, che le mie regole escludono: Z5 non ha markup, quindi
@@ -2290,6 +2292,79 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
    middleware dell'attività aggiunge le intestazioni registrate). La riga di `priceRefresh.test.ts` corrisponde ai
    blocchi `describe` del file finale. `mkdocs build` stretto 0 avvisi; `check-links` 97 validi; il diagramma
    controllato a occhio servendo il sito sulla porta della corsia per un minuto (screenshot), poi porta libera.
-5. Checkpoint FROZEN, dopo lo slot `api` breve che chiama il coordinatore: `api system-price-refresh` (i 2 casi
-   sulla corsia; il runner ripopola la data-dir svuotata dal riavvio e ricostruisce il frontend), poi `api system` e
-   `api instance-block` interi. ⏳
+5. ✅ 16/10 11:58–12:09 — Slot 2 (coordinatore), su HEAD `ac52425bc` con solo il giornale modificato,
+   `files/z5_slot.sh`: `api system` 118/118 e `api instance-block` 62/62 al primo colpo; `api system-price-refresh` 7/8,
+   poi 8/8.
+   > **⚠️ Fuori pista**: PRAPI-002 si è fermato nel setup, prima della rotta: `e2e_test_user` non poteva entrare (401
+   > «Invalid credentials»). Il riavvio delle ~10:03 aveva svuotato `/tmp/librefolio-r13-z`; all'avvio il server aveva
+   > creato un DB vuoto, e una singola azione `api` non chiama `_api_setup` (il `db populate` lo fa solo `api all`). Gli
+   > altri casi e le due suite di H registrano utenti propri, perciò erano verdi. `db populate` senza `--force` rifiuta
+   > un DB che esiste; `db populate --force` (senza `--clean`, sulla mia data-dir, come fa `_api_setup`) l'ha
+   > ripopolato, e la stessa azione è passata 8/8. Nessuna modifica al test né al codice. Porta 6186 libera.
+   Z5 pronto per l'ingresso: il delta è solo il piano.
+
+### Z-13 — dopo un recupero la pagina aperta resta indietro: analisi (16/10 ~11:35, sola lettura)
+
+> **Via all'analisi** (coordinatore, 16/10 ~11:29): «Z-13: start the read-only analysis now. Before writing anything,
+> give me the list of pages and files; I'll check them against the colour areas.» Nello stesso messaggio: Z-12 dopo lo
+> slot `api`; Z-11 e Z-10 restano nel backlog; D1 confermata (la pillola resta locale).
+
+**Stato reale** (HEAD `ac52425bc`).
+- Z5, a fine recupero con `last_refreshed`, chiama `requestPortfolioRefresh()`, cioè il segnale `{kind: 'refresh'}` del
+  bus `stores/portfolio/portfolioMutation.ts`. Lo ascoltano tre store (`portfolioStore`, `riskStore`,
+  `lotsAnalysisStore`), che alzano solo il loro contatore di freschezza, qualunque sia il segnale; l'unico componente
+  in ascolto, `AssetEventPicker.svelte`, considera solo `mutation`.
+- Nessuna pagina ascolta il bus: chiamano `requestPortfolioRefresh()` dal loro «Aggiorna» e poi ricaricano da sole
+  (dashboard `handleSync`, broker `handleRefresh`). Una pagina già aperta non sa che le sue cache sono diventate
+  stale: mostra le cifre vecchie finché non si ricarica (cache di pagina E1: al caricamento mostra ciò che ha e chiede
+  di nuovo solo ciò che è stale).
+- Le due pagine sanno già ricaricare in background: il dashboard con `loadAll()` senza force (chiede solo il report
+  stale, e le cifre restano finché arrivano le nuove) e `refreshVersion`, che fa ricaricare i pannelli di rischio e
+  dei lotti; la pagina del broker con `loadOverview()` e il suo `refreshVersion` (pagina in modalità legacy).
+
+**Disegno proposto.**
+1. `portfolioMutation.ts`: un segnale nuovo, `{kind: 'prices'}`, con `notifyPricesCaughtUp()`. Gli store lo trattano
+   come gli altri senza modifiche; `AssetEventPicker` lo ignora già.
+2. `priceRefresh.ts` (mio): il default di `refreshPortfolio` diventa `notifyPricesCaughtUp()`.
+3. Dashboard e pagina del broker: un ascoltatore del bus, registrato al montaggio e tolto alla distruzione. Con
+   `prices` fa quello che fa «Aggiorna», ma in background: `refreshVersion += 1` e `loadAll()` / `loadOverview()`
+   senza force, niente spinner, le cifre restano finché arrivano le nuove. Solo `<script>`: nessun markup, nessuna
+   classe.
+4. Fuori: la lista degli asset e la pagina di un cambio (le storie dei grafici; i prezzi dal vivo hanno già il loro
+   ciclo) e il dettaglio di un asset (di X fino a FE5c). Nel backlog, se servono.
+
+**Superfici.**
+- Aree dei colori, solo `<script>`: `routes/(app)/dashboard/+page.svelte` (DV), `routes/(app)/brokers/[id]/+page.svelte`
+  (BK).
+- Condivisa, senza markup: `lib/stores/portfolio/portfolioMutation.ts` e il suo test.
+- Mie: `lib/features/price-refresh/priceRefresh.ts` e il suo test.
+- Doc: `admin/sleep_wake.en.md` (la frase «A page already open keeps its figures…»), `live-ticker.md`,
+  `developer/frontend/state/domain-state.md` (il bus).
+
+**Test** (test-author, rossi prima): `portfolioMutation.test.ts` (il segnale nuovo arriva agli ascoltatori, gli store
+segnano stale); `priceRefresh.test.ts` (il default; i casi «app instance» mockano oggi `requestPortfolioRefresh`); un
+E2E nuovo per Z5 e Z-13 insieme: dashboard aperto, intestazione e stato stubbati (`running`, poi `idle` con
+`last_refreshed`), l'avviso compare e sparisce e il dashboard chiede di nuovo il suo report senza navigare. Lo slot E2E
+è breve.
+
+**Decisione notturna proposta**, «da rivedere»: N-Z13-1, solo dashboard e broker, in background e senza force; i
+pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
+
+**Stima**: 2–3 ore con i test, più uno slot E2E breve.
+
+> **Via al disegno** (coordinatore, 16/10 ~11:33): «The Z-13 design is fine.» **OK dei colori** (16/10 ~11:35), con tre
+> condizioni: nei due `.svelte` solo righe dentro lo `<script>` (DV e BK hanno pezzi di markup aperti in entrambi);
+> niente Prettier né riformattazioni fuori dallo `<script>`; il coordinatore dà ai colori lo SHA all'ingresso. Si parte
+> dopo lo slot `api` di Z5.
+
+**Passi.**
+1. ✅ 16/10 11:36 — Codice in bozza fuori dal repo: `files/z13-draft/apply_z13.py`, con due passi, `bus`
+   (`portfolioMutation.ts` e `priceRefresh.ts`) e `pages` (i due `.svelte`). `pages` rifiuta di scrivere se un
+   frammento non sta dentro lo `<script>`. Nelle pagine il ricaricamento parte con `queueMicrotask`, dopo che tutti gli
+   ascoltatori del bus (gli store) hanno segnato stale, senza dipendere dall'ordine di registrazione. Resa su una copia
+   temporanea: `check` a secco pulito e i quattro file interi già conformi a Prettier, quindi nessun `--write` sui
+   `.svelte`. I rossi li scrive test-author, fuori dal repo.
+2. Rossi: Vitest `core-unit`, i file del bus e di `priceRefresh`; l'E2E nuovo in uno slot. ⏳
+3. Codice: passo `bus`, poi `pages`; verdi; `front check`, Prettier solo `--check`, cancello dei colori. ⏳
+4. Doc (docs-writer): `admin/sleep_wake.en.md`, `live-ticker.md`, `developer/frontend/state/domain-state.md`. ⏳
+5. Checkpoint FROZEN; nell'handoff i due `.svelte` dichiarati per i colori. ⏳
