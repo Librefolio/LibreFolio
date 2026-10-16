@@ -8,7 +8,7 @@
  */
 import {describe, it, expect} from 'vitest';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-import {unwrapScalar, getBroker, historyKey, eventMarkerKind, groupCustodySlices, compareHistoryEvents, multiplyOrNull, type CustodyGroup} from './lotCustodyModalHelpers';
+import {unwrapScalar, getBroker, historyKey, eventMarkerKind, groupCustodySlices, compareHistoryEvents, type CustodyGroup} from './lotCustodyModalHelpers';
 
 const brokers: BrokerLike[] = [
     {id: 1, name: 'Fineco'},
@@ -211,27 +211,5 @@ describe('compareHistoryEvents', () => {
             {date: '2024-01-01', transaction_id: 4},
         ].sort(compareHistoryEvents);
         expect(sorted.map((e) => e.transaction_id)).toEqual([4, 9, 2]);
-    });
-});
-
-describe('multiplyOrNull', () => {
-    it('multiplies when both are present (&& true branch)', () => {
-        expect(multiplyOrNull(3, 4)).toBe(12);
-    });
-
-    it('returns null when the first is null (&& short-circuit branch)', () => {
-        expect(multiplyOrNull(null, 4)).toBeNull();
-    });
-
-    it('returns null when the second is null (&& right-false branch)', () => {
-        expect(multiplyOrNull(3, null)).toBeNull();
-    });
-
-    it('returns null when both are null', () => {
-        expect(multiplyOrNull(null, null)).toBeNull();
-    });
-
-    it('handles a zero factor as a real product, not null', () => {
-        expect(multiplyOrNull(0, 5)).toBe(0);
     });
 });

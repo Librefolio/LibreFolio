@@ -51,6 +51,7 @@
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -165,7 +166,7 @@
      * shared dateRangeController (owns the seed/display/isMaxPending bookkeeping
      * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
-    const dateRangeCtl = createDateRangeController(() => void loadAll());
+    const dateRangeCtl = createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()));
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
@@ -208,7 +209,7 @@
         // (or a prior currency change) is still in flight — avoids duplicate concurrent
         // fetches racing to reassign summary/history while the user may be interacting
         // with the page (e.g. clicking a card whose click depends on stable DOM state).
-        if (hadLoadedData && !reportLoading) void loadAll(true);
+        if (hadLoadedData && !reportLoading) void pageBusy.track('dashboard-currency', () => loadAll(true));
     });
 
     /**
@@ -308,7 +309,7 @@
         if (key !== lastTxLoadKey) {
             lastTxLoadKey = key;
             txCurrentPage = 1;
-            void loadTransactions();
+            void pageBusy.track('dashboard-transactions', loadTransactions);
         }
     });
 
@@ -610,7 +611,7 @@
         if (!pageAlive) return;
         invalidateFxRoutes();
         invalidate();
-        await loadAll(true);
+        await pageBusy.track('dashboard-reload', () => loadAll(true));
     }
 
     async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -691,7 +692,7 @@
         if (reloadTimer !== null) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => {
             reloadTimer = null;
-            void loadAll();
+            void pageBusy.track('dashboard-scope', () => loadAll());
         }, 2000);
     }
 
@@ -701,7 +702,7 @@
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
-            await loadAll(true);
+            await pageBusy.track('dashboard-refresh', () => loadAll(true));
         } finally {
             syncLoading = false;
         }
@@ -815,7 +816,8 @@
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void loadAiExportCompatibility();
-        void (async () => {
+        // The first load holds the Refresh button (Y11), from the reference lists to the report.
+        void pageBusy.track('dashboard-first-load', async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
             if (!pageAlive) return;
             // F2: dashboard scope = owned brokers only (share > 0). A user who owns
@@ -833,7 +835,7 @@
             } else {
                 reportLoading = false;
             }
-        })();
+        });
         return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
@@ -893,7 +895,7 @@
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
                                 writeDashboardView({targetCurrency});
-                                void loadAll();
+                                void pageBusy.track('dashboard-currency', () => loadAll());
                             }}
                         />
                     </div>
@@ -978,11 +980,12 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
                 onclick={handleSync}
-                disabled={syncLoading}
+                disabled={pageBusy.busy}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 data-testid="sync-button"
                 title={$_('dashboard.syncData')}
             >
-                <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
                 {#if showActionLabels}
                     <span>{$_('dashboard.syncData')}</span>
                 {/if}
@@ -1022,7 +1025,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
@@ -1032,7 +1035,17 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? loadContribution : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <PositionsPanel
+                {summary}
+                contribution={positionsContribution}
+                loading={summaryLoading}
+                {contributionLoading}
+                {assetsHref}
+                brokers={allBrokers}
+                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+                onAnalyze={openAssetPanel}
+                analyzedAssetId={activeAssetId}
+            />
             <LotsAnalysisPanel
                 open={activeAssetId != null}
                 assetId={activeAssetId}

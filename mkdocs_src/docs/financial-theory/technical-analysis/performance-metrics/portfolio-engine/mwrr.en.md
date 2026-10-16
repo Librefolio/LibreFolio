@@ -85,7 +85,7 @@ $$
 * It is ideal for long-term comparisons (e.g., comparing your performance with an annual bank interest rate or CAGR).
 * **Volatility Warning:** On short periods (e.g., a few days or weeks), the annualized return can be highly volatile and display extreme percentages because the math extrapolates a small-window return to a full 365-day year.
 
-LibreFolio builds MWRR cash flows from capital-baseline deltas, not cash-only deposit rows. Priced in-kind ADJUSTMENT/TRANSFER capital is therefore treated as contributed capital rather than as sudden investment performance.
+LibreFolio builds MWRR cash flows from capital-baseline deltas, not cash-only deposit rows. Priced in-kind ADJUSTMENT/TRANSFER capital is therefore treated as contributed capital rather than as sudden investment performance. An outgoing ADJUSTMENT with a cost basis returns to the investor the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ### 📊 Cumulative MWRR {: #cumulative-mwrr }
 Cumulative MWRR represents the total equivalent return over the selected period, obtained by compounding the annualized rate for the actual duration of that window.
@@ -162,6 +162,15 @@ Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**.
 * **Cumulative TWRR** (Strategy/allocation performance indicator).
 * **Cumulative MWRR** (Primary personal timing indicator).
 * **Annualized MWRR** (Shown as a secondary/comparative metric to understand the compound yearly rate).
+
+### 🚫 When No MWRR Is Shown
+
+The KPI cards and the MWRR line of the chart follow the same rule on every day of the period. A day has an MWRR only when:
+
+* the portfolio's value on that day is above zero, and
+* the period still holds **net invested capital** on that day: the value it opened with, plus the deposits, minus the withdrawals made up to that day (the capital flows described above), is above zero.
+
+Otherwise there is no rate: the card shows `—`, and the line has a gap. After net withdrawals, the gap starts on the day they take the net invested capital to zero or below, and lasts until new deposits bring it back above zero. The cards always show the line's last point, so a card without MWRR goes with a line that ends in a gap. A day also has no MWRR when no rate solves the cash-flow equation: LibreFolio never shows a rate that does not solve it.
 
 !!! tip "Analyzing the Performance Difference"
 

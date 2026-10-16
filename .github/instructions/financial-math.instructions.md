@@ -15,10 +15,12 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 | `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made, the unit cost of each movement (`movement_unit_costs`) |
 | `native_cash.py` | cash per broker and currency: balances, value in the report currency on any day, period flows, FX results |
 | `ledger_totals.py` | control totals of the transaction ledger, with no price, rate or cost: cash per broker and currency, quantity per broker and asset (`compute_control_totals`, what a backup writes and a restore checks) |
-| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`); the gain or loss a disposal realizes (`realized_gain`); the return between two prices (`price_return`); the gain that takes a value back to its peak after a drawdown (`required_recovery_return`) |
+| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; the Dashboard's MWRR rule, one for the card and every point of the line (`period_mwrr`, `period_mwrr_series`); cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`); the gain or loss a disposal realizes (`realized_gain`); the return between two prices (`price_return`); the gain that takes a value back to its peak after a drawdown (`required_recovery_return`) |
 | `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
 | `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
 | `yield_on_cost.py` | Yield on Cost of holdings, replayed from the transaction ledger |
+| `weights.py` | a part's share of a total, None on a total ≤ 0 (`share_of`, `percent_of`); the signed slices of an allocation (`slice_percents`); gross weights (`gross_weights`); concentration — largest weight and Herfindahl index (`concentration`) |
+| `splits.py` | the ADJUSTMENT rows linked to a SPLIT asset event (`load_split_links`, one query for every reader; `split_linked_ids`, the ids an average-cost replay rescales — WAC preview, broker summary, auto cost) and the rule for a usable ratio (`is_valid_split_ratio`) |
 | `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
 | `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity), `engine` |
 | `lots/` | lots analysis math: `prices`, `conversions` (`convert_closure`: a closure's legs, each in its currency at its date), `economic_events`, `histories`, `average_cost_lines` |
@@ -29,7 +31,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    calls the infrastructure it needs: `fx.convert_bulk`, the base currency from `settings_service`, the thresholds of
    `data_quality_thresholds`, the cache. It reads its own data from the database only at named points: the portfolio
    engine (`portfolio/engine.py`, and the configured FX pairs of `portfolio/data_quality.py`), the Yield on Cost
-   loaders and the ledger totals (`ledger_totals.compute_control_totals`, on the session it is given).
+   loaders, the ledger totals (`ledger_totals.compute_control_totals`, on the session it is given) and the split links
+   (`splits.load_split_links` and `splits.split_linked_ids`, the rows of the transactions it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports orchestration services
    (`portfolio_service`, `broker_service`, `transaction_service`, `lots_analysis_service`), the API, AI Export, risk,
    PAC or signals.

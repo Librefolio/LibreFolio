@@ -57,6 +57,7 @@ from backend.app.schemas.risk import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.financial_math.portfolio.data_quality import normalize_fx_pair_slug
+from backend.app.services.financial_math.weights import share_of
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import (
@@ -86,7 +87,7 @@ from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.scenario_catalog import (
     get_loaded_risk_scenario_catalog,
 )
-from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.services.series_preparation import observed_annualization, prepare_asset_series_set
 
 logger = get_logger(__name__)
 
@@ -545,7 +546,7 @@ class RiskService:
         weights: dict[int, float] = {}
         composition_error: Optional[str] = None
         if scope_value > 0:
-            weights = {asset_id: float(value / scope_value) for asset_id, value in asset_values.items() if value >= 0}
+            weights = {asset_id: float(share_of(value, scope_value)) for asset_id, value in asset_values.items() if value >= 0}
             if any(value < 0 for value in asset_values.values()):
                 composition_error = "Negative asset values are outside the current-composition contract"
         elif requested_asset_ids:
@@ -1151,7 +1152,7 @@ def _portfolio_twrr_returns(
     return_dates = tuple(point.date for point in points[1:])
     baseline = points[0].date
     calendar_days = (return_dates[-1] - baseline).days
-    annualization_factor = len(returns) * 365 / calendar_days if calendar_days > 0 else None
+    annualization_factor = observed_annualization(len(returns), baseline, return_dates[-1])[1] if calendar_days > 0 else None
     if observation_dates:
         candidates = sum(1 for quote_date in observation_dates if baseline < quote_date <= return_dates[-1])
         coverage = min(1.0, len(returns) / candidates) if candidates else 0.0

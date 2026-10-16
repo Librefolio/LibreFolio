@@ -10,7 +10,7 @@ FX service for conversions, the base currency from the settings service, the sha
 data-quality thresholds, the cache — instead of receiving values prepared by its caller.
 Where a calculation needs its own data from the database, it reads it at named points:
 the portfolio engine, with the configured FX pairs its data-quality report names, the
-Yield on Cost loaders and the ledger totals.
+Yield on Cost loaders, the ledger totals and the split links.
 
 Engines, services and API handlers call this layer; it does not depend on them. It never
 imports orchestration services (``portfolio_service``, ``broker_service``,
@@ -29,14 +29,19 @@ Modules:
 * ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or
   cost: cash per broker and currency and quantity per broker and asset, which a backup
   writes and a restore checks.
-* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
-  conversion between cumulative and annualized returns, a period's start (rebasing), the
+* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series (the
+  Dashboard's MWRR rule, one for the card and every point of the line, in
+  ``period_mwrr`` and ``period_mwrr_series``), the conversion between cumulative and annualized returns, a period's start (rebasing), the
   net return of a holding, a gain or loss as a fraction of its base, the gain or loss a
   disposal realizes, the return between two prices, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
+* ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
+  an average-cost replay marks as a rescale, and the rule for a usable split ratio.
+* ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
+  allocation, gross weights, and concentration (largest weight, Herfindahl index).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
