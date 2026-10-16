@@ -134,7 +134,7 @@ async def _transition_onboarding_endpoint(
         if request.welcome_settings is not None:
             if flow != OnboardingFlow.WELCOME or target_status != OnboardingStatus.COMPLETED:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="welcome_settings is valid only when completing the welcome flow",
                 )
             return await complete_welcome_onboarding(
@@ -162,7 +162,7 @@ async def _transition_onboarding_endpoint(
         ) from exc
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -238,7 +238,7 @@ async def _transition_onboarding_step_endpoint(
         ) from exc
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -344,7 +344,7 @@ async def bulk_update_global_settings(
     except GlobalSettingUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": exc.code, "message": str(exc), "key": exc.key}) from None
     except GlobalSettingValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from None
 
 
 @router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)

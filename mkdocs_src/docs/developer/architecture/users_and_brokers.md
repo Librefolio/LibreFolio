@@ -6,7 +6,9 @@ This section explains the authentication model, user roles, and how data is segr
 
 LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server keeps no
 record of sessions, neither in memory nor in the database: its one piece of session state is a
-counter per account, `users.session_version`, that ends all of the account's sessions at once
+version per account, `users.session_version`, raised by one to end all of the account's sessions at
+once. A restore sets every account's version to the restore time in milliseconds instead: a time,
+not a counter, which the next change still raises by one
 ([Session Revocation](security.md#session-revocation)).
 
 ### 🔄 How it Works
@@ -44,7 +46,7 @@ There are two system-level user roles in LibreFolio:
     - 🔧 Can manage the other accounts through the administrator API under `/api/v1/users`: list them, activate or deactivate, promote or demote, delete a regular account ([Deleting an Account](#account-deletion)), create a password-reset link, sign an account out everywhere, restart its onboarding, and create, list or revoke invitations. The API never sets a password: the user chooses it through the reset link. See [Registration, Invitations and the Admin API](access_control.md#registration).
     - 🔍 Can access *any* broker and transaction in the system for support purposes.
 
-Whoever has a shell on the server manages accounts with the user CLI (`./dev.py user …`), no account needed: it lists, creates, activates or deactivates, promotes or demotes accounts, sets a password directly (`user reset`), creates invitations and password-reset links, and restarts a user's onboarding. It has no command to list or revoke invitations, to sign an account out without another change, or to delete an account. See [Command-Line Tools](../../admin/cli_tools.md).
+Whoever has a shell on the server manages accounts with the user CLI (`./dev.py user …`), no account needed: it lists, creates, activates or deactivates, promotes or demotes accounts, sets a password directly (`user reset`), changes an account's email address (`user set-email`), creates invitations and password-reset links, gives the [initial administrator](access_control.md#initial-admin) a new setup link (`user setup-link`), and restarts a user's onboarding. It has no command to list or revoke invitations, to sign an account out without another change, or to delete an account. See [Command-Line Tools](../../admin/cli_tools.md).
 
 ## 🏗️ User-Broker Mapping and Data Segregation
 
@@ -130,8 +132,9 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
   V-3). Each staying half counts once, whatever broker it is on. What becomes of a staying half is the rule
   of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
   standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
-  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4) — except the giving leg of a `TRANSFER`,
-  which only loses its link. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
+  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4), and the giving leg of a `TRANSFER` an
+  `ADJUSTMENT` at the Auto cost of its own broker (decision 47); that leg only loses its link when its cost
+  needs a missing conversion. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
 - **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
   request.
 

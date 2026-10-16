@@ -93,8 +93,9 @@ If a broker has only one user with the `OWNER` role:
   EDITOR/VIEWER always succeed. An OWNER may leave when at least one other OWNER remains —
   otherwise leaving as the **last OWNER deletes the broker entirely**. Its transactions do not
   go by a database cascade: `delete_by_broker()` deletes them, and the other half of a pair held
-  on another broker stays there as a standalone row, without its link (see
-  [Broker Deletion](../backend/transactions/service.md#broker-deletion)). BRIM report files are
+  on another broker stays there without its link — as the standalone row a split of the pair
+  leaves or, for the giving leg of a `TRANSFER` whose cost needs a missing conversion, still a
+  `TRANSFER` (see [Broker Deletion](../backend/transactions/service.md#broker-deletion)). BRIM report files are
   cleaned up by the API layer.
 - ⬇️ **Self-demotion** (`update_own_role`): EDITOR → VIEWER is always allowed; OWNER →
   EDITOR/VIEWER is allowed only when another OWNER remains, and demoting from OWNER **zeroes
@@ -146,7 +147,9 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   `user_service.create_user()` with `is_superuser=True`), by `./dev.py user promote`, and by
   `PATCH /api/v1/users/{user_id}` with `is_superuser: true`. `./dev.py user create … --role user`
   maps to the internal `create-user` command instead (`is_superuser=False`): a regular account, even
-  as the first account of an empty database.
+  as the first account of an empty database. The administrator of `LIBREFOLIO_ADMIN_EMAIL` is a
+  superuser from its creation by the startup, inactive until its setup link is spent
+  ([The Initial Administrator](#initial-admin)).
 - **Promote and demote** go through `user_service.set_user_admin()` from the CLI, which refuses a
   no-op (*already an admin*, *not an admin*) and the demotion of the last active administrator, and
   through `user_service.update_user_status()` from the [administrator API](#admin-user-api). A
@@ -166,8 +169,9 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 - **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
   in a worker thread off the event loop, and ends every session of the account in the same
   commit: each device gets `401` at its next request, and signs in again with the new password.
-  A [password-reset link](#reset-links) does the same when it is spent. To keep the account out
-  altogether, deactivate it.
+  The same commit revokes the account's live [password-reset links](#reset-links) (A-27). A
+  password-reset link does the same when it is spent. To keep the account out altogether,
+  deactivate it.
 - **The account's own changes** end its other sessions as well: a password change
   (`POST /api/v1/auth/change-password`) and an email change (`PUT /api/v1/auth/profile`, which asks
   for the current password: see [Changing the Email](security.md#email-change)). The device that
@@ -185,8 +189,10 @@ The admin commands are in [Command-Line Tools](../../admin/cli_tools.md).
 
 Who may create an account, how many accounts an instance may hold, and what an administrator can do
 to the other accounts. The rules are in `backend/app/services/accounts/registration_service.py`, the
-account changes in `user_service.py`, and the four variables in `backend/app/config/accounts.py`
+account changes in `user_service.py`, and the variables in `backend/app/config/accounts.py`
 (administrator side: [Configuration](../../admin/configuration.md), section «Accounts and Sign-ups»).
+The administrator an operator creates from the environment has its own section:
+[The Initial Administrator](#initial-admin).
 
 ### 🎚️ Registration Modes {: #registration-modes }
 
@@ -238,10 +244,15 @@ The refusals with a code answer `{"error_code": …, "message": …}` in `detail
 `PASSWORD_TOO_WEAK`. Two requests racing for one invitation cannot both spend it: `consume_token()`
 is one conditional `UPDATE`, and the loser rolls back with `INVITE_INVALID`.
 
+With `LIBREFOLIO_ADMIN_EMAIL` the row *No account at all* never applies: the startup creates the
+waiting administrator before the first request, so the instance is never empty while it serves, and
+the mode decides ([The Initial Administrator](#initial-admin)).
+
 `GET /api/v1/system/instance` publishes the effective state as `accounts: {registration_mode,
 registration_locked, first_account_open, password_rules}` (`AccountsInstanceConfig`). About the
 users it says one thing only, whether there is one: `first_account_open`, from
-`first_account_open(session)`, is true while the `users` table is empty, and the login page then
+`first_account_open(session)`, is true while the `users` table is empty (never with
+`LIBREFOLIO_ADMIN_EMAIL`, whose waiting administrator is a row), and the login page then
 offers **Register here** whatever the mode. No count, no limit
 ([Public instance configuration](settings.md#public-instance-configuration); why the flag may be
 public: [The First-Account Flag](security.md#first-account-open)). `password_rules` is the list of
@@ -266,20 +277,22 @@ An invitation is an `invite` [account token](security.md#account-tokens): 7 days
   not a live invitation; it flushes and does not commit.
 - **Spent** only by `register_user()`, as above.
 
-`POST /api/v1/auth/tokens/inspect` `{token, purpose}`, with `purpose` `invite` or `password_reset`,
-is public and writes nothing. It answers `{status, purpose}`, the status being `valid`, `expired`,
-`consumed`, `revoked` or `unknown` (also for a token of the other purpose). Only a valid token adds
-`expires_at`, with `grants_admin` and `email` for an invitation, or `username` for a reset link.
+`POST /api/v1/auth/tokens/inspect` `{token, purpose}`, with `purpose` `invite`, `password_reset` or
+`admin_setup` ([The Initial Administrator](#initial-admin)), is public and writes nothing. It answers
+`{status, purpose}`, the status being `valid`, `expired`, `consumed`, `revoked` or `unknown` (also for
+a token of another purpose). Only a valid token adds `expires_at`, with `grants_admin` and `email` for
+an invitation, or `username` for a reset or setup link.
 
 ### 📏 The User Limit {: #user-limit }
 
 `LIBREFOLIO_MAX_USERS` (unset or blank: no limit) bounds the places counted by `user_usage()`: the
-active accounts (`users.is_active`), the live invitations, and the inactive accounts holding a live
-email-verification token, each once ([Email Verification](../backend/email.md#verification)). A
-deactivated or deleted account frees its place; an invitation holds one from its creation until it is
-revoked or expires, and hands it to the account it opens; an account waiting for its email
-verification holds one while its link is live. A value that is not a whole number of at least 1 is a
-limit of 0, logged like an invalid mode (`_max_users()`).
+active accounts (`users.is_active`), the live invitations, and the inactive accounts that wait: those holding a
+live email-verification token ([Email Verification](../backend/email.md#verification)) and the administrator
+waiting for its setup ([The Initial Administrator](#initial-admin)), each account counted once. A deactivated or
+deleted account frees its place; an invitation holds one from its creation until it is revoked or expires, and
+hands it to the account it opens; an account waiting for its email verification holds one while its link is
+live. A value that is not a whole number of at least 1 is a limit of 0, logged like an invalid mode
+(`_max_users()`).
 
 | Request | When `used >= max_users` |
 |---------|--------------------------|
@@ -366,8 +379,9 @@ deletion failed: nothing was deleted*. The deleted account's sessions get `401` 
 ### 🛡️ Protected Accounts {: #account-protection }
 
 `user_service.account_protection(user) -> Optional[str]` gives the reason why nobody may delete, deactivate
-or demote an account, or `None`. It is the hook of lot A7, for the administrator created from the
-environment on a managed instance, who pays for it; until then it returns `None` for every account.
+or demote an account, or `None`. It is the hook for the administrator created from the environment on a
+managed instance, who pays for it. The [initial administrator](#initial-admin) of lot A7a is not protected
+yet: the hook still returns `None` for every account.
 
 - `GET /users` reflects it in `protected` (`AdminUserRead`), as do the accounts `PATCH` returns.
 - `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account, answer
@@ -382,9 +396,12 @@ use, link `/reset-password#token=…`, bound to its account (`user_id`). Unlike 
 the administrator does not choose the new password: whoever spends the link does.
 
 - **Issued** by `user_service.create_password_reset()`, from
-  `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`. It
-  first revokes the account's live reset links, so only the newest one works. Issuing a link ends no
-  session.
+  `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`, and,
+  when email works, from **Forgot Password?** on the login page (`POST /api/v1/email/password-reset`,
+  workstream E): that link is never shown, only emailed to the account's own address, within its
+  limits, and never while an administrator's reset link is still live
+  ([A Forgotten Password](../backend/email.md#flow-forgot)). It first revokes the account's live
+  reset links, so only the newest one works. Issuing a link ends no session.
 - **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public.
   `new_password` must meet the [password rules](security.md#password-rules), checked before the
   token is read: a weak one is `400` `PASSWORD_TOO_WEAK`, and the link is neither spent nor
@@ -392,6 +409,10 @@ the administrator does not choose the new password: whoever spends the link does
   token, hashes the new password with bcrypt in a worker thread, ends every session of the account and
   revokes its other live reset links, in one commit; the answer is `200`. A link that is not valid
   (used, expired, revoked, unknown or of another purpose) changes nothing: `400` `TOKEN_INVALID`.
+- **Revoked** with the account's password or address: a password change, an email change (the same
+  address in another A–Z case is none) and `./dev.py user reset` revoke its live reset links,
+  whoever issued them, in the commit of the change (lot A-27,
+  [Session Revocation](security.md#session-revocation)).
 
 Tests: `./dev.py test services registration`
 (`backend/test_scripts/test_services/test_registration_service.py`: the variables, the effective
@@ -410,3 +431,121 @@ The web pages of the links, `/invite` and `/reset-password`, are in
 The administrator's side is in [Global Settings](../../admin/settings.md), section «Who Can Sign Up»;
 [Configuration](../../admin/configuration.md), section «Accounts and Sign-ups»; and
 [Command-Line Tools](../../admin/cli_tools.md), section «Manage Users».
+
+### 👑 The Initial Administrator (F02) {: #initial-admin }
+
+Feature F02 of the release 1.3 plan (lot A7a): an operator, such as a hosting provider or a
+scripted install, names the administrator of a new instance in the environment. The startup creates
+it, inactive, with a single-use setup link; whoever spends the link chooses the password, activates
+the account and is signed in. The variables are read in `backend/app/config/accounts.py`, the rest
+is in `backend/app/services/accounts/bootstrap_admin_service.py`. Administrator side:
+[Hosting for Others](../../admin/hosting_providers.md#initial-admin), and «The Initial
+Administrator» in [Configuration](../../admin/configuration.md).
+
+**The variables.** `admin_bootstrap_config()` returns an `AdminBootstrapConfig(email, username, token)`,
+read at every call from the process environment only, or `None` while `LIBREFOLIO_ADMIN_EMAIL` is
+unset or blank: without the variables, an install is unchanged.
+
+| Variable | Rule | Refused with (`AdminBootstrapConfigError.code`) |
+|----------|------|-------------------------------------------------|
+| `LIBREFOLIO_ADMIN_EMAIL` | An email address (pydantic `EmailStr`), surrounding spaces ignored. Turns F02 on | `ADMIN_EMAIL_INVALID` |
+| `LIBREFOLIO_ADMIN_USERNAME` | `admin` when unset (`DEFAULT_ADMIN_USERNAME`); 3 to 50 characters, the rule of registration (`ADMIN_USERNAME_MIN_LENGTH`, `ADMIN_USERNAME_MAX_LENGTH`); surrounding spaces ignored | `ADMIN_USERNAME_INVALID`; `ADMIN_USERNAME_WITHOUT_EMAIL` without the email |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or its `_FILE` ([`env_secret()`](security.md#secrets-from-files)) | Optional: the token of the setup link, given by a hosting panel; `None` for a generated one. 32 to 200 characters (`ADMIN_BOOTSTRAP_TOKEN_MIN_LENGTH`; `ADMIN_BOOTSTRAP_TOKEN_MAX_LENGTH`, the longest token the link's requests accept), each one in `ADMIN_BOOTSTRAP_TOKEN_CHARACTERS`, the unreserved characters of a URL (`A–Z a–z 0–9 - . _ ~`): it travels in `/setup#token=…` as written. Not trimmed: like every secret `env_secret()` reads, it is used as written | `ADMIN_BOOTSTRAP_TOKEN_INVALID_CHARACTERS` (a space included), `ADMIN_BOOTSTRAP_TOKEN_TOO_SHORT`, `ADMIN_BOOTSTRAP_TOKEN_TOO_LONG`; `ADMIN_BOOTSTRAP_TOKEN_WITHOUT_EMAIL` without the email. A `_FILE` that cannot give it raises `SecretFileError` |
+
+`AdminBootstrapConfigError(variable, code, message)`, a `ValueError`, names the variable in
+`variable` and in its message, never the token. `log_configuration_audit()` calls
+`admin_bootstrap_config()` ([Configuration Checks](security.md#configuration-checks)), so an unusable
+value stops the startup, on an instance with accounts too, as an unreadable `LIBREFOLIO_BLOCKED`
+does.
+
+**At startup.** The `admin-bootstrap` step, right after `global-settings`
+([Server Startup](overview.md#server-startup)), runs `startup_admin_bootstrap()`, which returns at
+once with F02 off. Otherwise `run_admin_bootstrap(session, config)` applies the variables, commits
+what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction`) says what it did:
+
+| `action` | When | What it does |
+|----------|------|--------------|
+| `off` | F02 off | Nothing |
+| `ignored` | Accounts exist and none is waiting, the setup done included | Logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts` (INFO) |
+| `created` | No account at all | In one transaction: the `registration_mode` row set to `invite` (inserted when missing, `updated_by_user_id` `NULL`); the administrator, superuser and inactive (`create_user(..., is_superuser=True, is_active=False, commit=False)`), whose password is the bcrypt hash of `secrets.token_urlsafe(32)`, a secret nobody ever sees, so no password signs in and a login attempt costs what it costs for any account; an `admin_setup` token for it, the variable's or a generated one, 72 hours. A variable's token already stored once (an instance emptied after an earlier setup) is not stored again: a token is generated instead, with a warning naming the variable. `link_token` holds the plaintext of a generated token, and only of that |
+| `rearmed` | An administrator waits, and the variable's token was never stored (`_token_known()`: no row has its hash, whatever its account or purpose) | Revokes the administrator's setup links and stores the new token, 72 hours. The token is neither logged nor emailed |
+| `pending` | An administrator waits, with a live setup link | Nothing new: no link issued, none logged |
+| `expired` | An administrator waits, with no live setup link | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set |
+
+- **The waiting administrator** is `pending_admin(session)`, built on
+  `registration_service.pending_admin_filter()`: an inactive account with at least one `admin_setup`
+  token, none of them consumed. An expired or revoked link keeps it waiting; a spent one ends the
+  wait. Before `rearmed`, `pending` or `expired`, the account follows the variables
+  (`_follow_variables()`): a different `username` or `email` is written, unless another account
+  holds it, which logs an ERROR and keeps the account's own.
+- **Registration.** The waiting administrator is a `users` row, so `first_account_open()` is false
+  from the first start, and nobody registers as the first account: `register_user()` applies the
+  mode, `invite` unless `LIBREFOLIO_REGISTRATION` pins another. The step writes `registration_mode`
+  only when it creates the administrator.
+- **Delivery**, only after `created` with a generated token. `deliver_setup_link(result, engine=…)`
+  writes the link once in the log, at WARNING:
+  `Setup link of the initial administrator, single use: open it to choose the password`, with
+  `link` (`public_link()`: the full address with `LIBREFOLIO_PUBLIC_URL`, otherwise the path, and a
+  `note` asking to put the server's address in front of it) and `expires_at`. Then, when
+  `require_email()` and `require_links()` allow it, it emails the link to the account's address with
+  `build_admin_setup()` ([Email Service](../backend/email.md#kinds)), in the instance's language
+  (`instance_language()`). The startup runs it in a background task (`asyncio.create_task()`), with a
+  session of its own, so a slow SMTP server never delays the start. It never raises: an email that
+  cannot go logs `Setup link of the initial administrator not emailed` (INFO), with the exception's
+  class in `reason`, and the link in the log still works. A token from the variable is neither
+  logged nor emailed: the panel that chose it delivers it.
+- **Several workers.** Each worker runs the step, and only one creates the administrator. SQLite
+  runs in WAL with a 30 s `busy_timeout`: a transaction whose first statement writes waits for the
+  write lock, while one that reads first and writes later can fail at once with *database is
+  locked* if another connection wrote in between. So `_create_pending_admin()` commits, which ends
+  its reads, and starts with a write, the `registration_mode` row: it holds the write lock before it
+  counts the accounts. The worker that comes second finds the account, goes on as `pending`, and
+  delivers nothing. On a restart, a worker that finds the lock taken while another re-arms or
+  renames answers `pending`, and lets that one apply the change.
+
+**The setup.** `POST /api/v1/auth/setup` `{token, new_password}` (`AdminSetupRequest`, `token` of at
+most 200 characters) is public:
+
+1. The [password rules](security.md#password-rules) come first: `400` `PASSWORD_TOO_WEAK` with
+   `rules`, as for registration, a reset and a password change. Nothing is read or written, and a
+   valid link stays valid.
+2. `complete_admin_setup(session, token, new_password)` spends the token first, with
+   `consume_token()`, as a reset link does: of two requests racing for one link, only one gets it.
+   A link that is not a live setup link (used, expired, revoked, unknown, of another purpose)
+   changes nothing: `400` `TOKEN_INVALID`. The link of an account that is already active, activated
+   another way, is refused the same way, and revoked.
+3. Otherwise, in one commit: the bcrypt hash of the new password, computed in a worker thread; the
+   account active; its sessions ended (`end_sessions()`: `session_version` + 1); the link's
+   `consumed_by_user_id` set to the account; its other setup links revoked.
+4. The answer is the login's: `200` `AuthLoginResponse`, `show_donation_popup` included, and the
+   session cookie of `_issue_session_cookie()`. The administrator is signed in.
+
+The route is not in `ALLOWED_WHEN_BLOCKED` (developer's decision P16: a blocked instance stays blocked until the
+subscription is paid): on a [blocked instance](security.md#instance-block) it answers `401`, like registration, and the
+link keeps running out its 72 hours. The pinned list of `test_instance_block.py` refuses any addition.
+
+`POST /api/v1/auth/tokens/inspect` takes `purpose: "admin_setup"`: a valid setup link answers
+`username` and `expires_at`, as a reset link does ([Invitations](#invitations)).
+
+**The command line.** `./dev.py user setup-link`, with no argument (`cmd_setup_link()` in
+`scripts/user_cli.py`): `issue_setup_link()` revokes the waiting administrator's setup links and
+issues a generated one, 72 hours, which the command prints as `reset-link` prints its link: the
+full address with `LIBREFOLIO_PUBLIC_URL`, otherwise the path and a note. It sends no email. Without
+a waiting administrator it prints `❌ No administrator account is waiting for its setup link` and
+exits with `1`.
+
+**The user limit.** `user_usage()` counts the waiting administrator (`pending_admin_filter()`)
+beside the active accounts and the live invitations, its link live or not: it holds a place from
+its creation, and keeps it once active.
+
+How the setup link is protected (stored by its hash, single use, logged once by design) is in
+[Links in Use](security.md#account-token-links).
+
+Tests: `./dev.py test services admin-bootstrap`
+(`backend/test_scripts/test_services/test_admin_bootstrap.py`, PURE, every database a private file:
+the variables and their codes, `issue_token(token=)`, every action, two engines racing for the
+creation, the expiry to the microsecond, the delivery and the logs, `complete_admin_setup()`, the
+usage, `user setup-link`, the startup step) and `./dev.py test api admin-setup`
+(`backend/test_scripts/test_api/test_admin_setup_api.py`: `POST /auth/setup` and `tokens/inspect`
+with `admin_setup`; in process on private databases for every case that needs a waiting
+administrator, and on the lane's server only refusals that write nothing).

@@ -1,9 +1,10 @@
 """Control totals of the transaction ledger: the cash of every broker in each currency and the quantity of every
 position, read from the rows alone — no price, rate, cost, date or setting.
 
-A backup writes them into its manifest, and a restore recomputes them on the restored database: a difference means
-rows lost, added or altered in broker, asset, currency, amount or quantity. So that two readings of the same ledger
-always agree, they are:
+A backup writes them into its manifest; the check of a restore recomputes them on the archive's copy, once upgraded to
+the app's schema, and compares them before the restore is confirmed. A difference means rows lost, added or altered in
+broker, asset, currency, amount or quantity; it is reported, never a refusal, since a migration may correct data. So
+that two readings of the same ledger always agree, they are:
 
 * cash: every row's amount in the currency it was recorded in, per broker — the native balances of ``native_cash``;
 * quantity: every row's quantity per broker and asset, by the portfolio engine's rule — every row with an asset and a
@@ -15,7 +16,11 @@ always agree, they are:
 * exact: summed in Python, never with ``SUM`` in SQL (a Numeric on SQLite goes through a float), in a decimal context
   that raises instead of rounding; quantities below the Dashboard's dust threshold are kept;
 * canonical: a line that sums to zero is left out (an absent line is zero), the others are sorted, and every amount is
-  written in plain decimal notation without trailing zeros, never «-0».
+  written in plain decimal notation without trailing zeros, never «-0». ``from_json`` reads back only that text: an
+  optional «-», at most 60 digits before the point and 60 after it, the precision of the exact context. A manifest
+  written by hand therefore cannot make it expand an exponent or an unbounded number (J-27). The round trip holds for
+  every total within that bound, and every ledger the database can hold stays within it: amounts are Numeric(18, 6),
+  quantities RealDecimal(22, 10).
 
 ``CONTROL_TOTALS_VERSION`` names the method: totals written by another version are not comparable.
 """
@@ -23,6 +28,7 @@ always agree, they are:
 from __future__ import annotations
 
 import decimal
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -41,6 +47,11 @@ _BLOCK_SIZE = 5000
 
 # Sums of Numeric(18, 6) amounts never need this many digits; a total that would is an error, not a rounding.
 _EXACT = decimal.Context(prec=60, traps=[decimal.InvalidOperation, decimal.DivisionByZero, decimal.Overflow, decimal.Inexact])
+
+# An amount as ``to_json`` writes it, the only text ``from_json`` reads: an optional minus, then ASCII digits — at most
+# the exact context's precision before the point and as many after it. ``Decimal`` would also take an exponent («1E+9»),
+# a «+», spaces, «_» and other scripts' digits; an exponent would then be written out in full (J-27).
+_PLAIN_AMOUNT = re.compile(rf"-?[0-9]{{1,{_EXACT.prec}}}(?:\.[0-9]{{1,{_EXACT.prec}}})?")
 
 _ZERO = Decimal("0")
 
@@ -188,12 +199,7 @@ def _as_currency(value: Any) -> str:
 
 
 def _as_amount(value: Any) -> Decimal:
-    if not isinstance(value, str):
-        raise ValueError(f"Malformed control totals: {value!r} is not decimal text.")
-    try:
-        amount = Decimal(value)
-    except decimal.InvalidOperation as exc:
-        raise ValueError(f"Malformed control totals: {value!r} is not decimal text.") from exc
-    if not amount.is_finite():
-        raise ValueError(f"Malformed control totals: {value!r} is not a finite amount.")
-    return _canonical(amount)
+    if not isinstance(value, str) or _PLAIN_AMOUNT.fullmatch(value) is None:
+        preview = repr(value[:40]) + ("…" if len(value) > 40 else "") if isinstance(value, str) else repr(value)
+        raise ValueError(f"Malformed control totals: {preview} is not plain decimal text.")
+    return _canonical(Decimal(value))

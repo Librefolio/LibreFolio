@@ -33,6 +33,12 @@ with ``ast``.
 Red first: the module is a stub with the agreed API that returns empty totals, so every test fails on a value. The
 tests marked GUARD are green today and must stay green: the value object and its constants, the empty ledger (rows
 and file) and the static guard with its self-test.
+
+Lot J-27 (16/10) narrows ``from_json``: an amount is read only as plain decimal text, of the shape ``to_json`` writes,
+an optional "-" and 1 to 60 ASCII digits, then optionally "." and 1 to 60 more (60 is ``_EXACT.prec``). ``Decimal``
+reads far more, and the canonical form writes it out digit by digit: a hand-written manifest holding "1E+50000000"
+costs 121 MB to read. Its reds are the texts ``Decimal`` reads; its GUARDs are the ones it refuses already, and plain
+text up to the bound, read back canonically as before.
 """
 
 from __future__ import annotations
@@ -598,6 +604,60 @@ MALFORMED_MANIFESTS = [
     pytest.param(_manifest_with(("quantities", 0), [1, 10, "1"]), id="quantity-entry-an-array"),
 ]
 
+#: How many digits plain decimal text may hold on each side of the point: ``_EXACT.prec``, and the bound of B-13's own
+#: check (``-?[0-9]{1,60}(\.[0-9]{1,60})?``) before it calls ``from_json``.
+PLAIN_DIGITS = 60
+#: The widest side plain decimal text may have, and one digit more.
+WIDEST_SIDE = "9" * PLAIN_DIGITS
+TOO_WIDE_SIDE = "9" * (PLAIN_DIGITS + 1)
+
+#: Where an amount sits in the manifest, by its field: the first cash line's balance, (1, EUR), and the first position's
+#: quantity, (1, 10). The sections of a manifest are named as the fields of ``ControlTotals``.
+AMOUNT_PATHS = {"balance": ("cash", 0, "balance"), "quantity": ("quantities", 0, "quantity")}
+
+#: Amounts that are not plain decimal text but that ``Decimal`` reads, so ``from_json`` takes them today: one red each.
+#: GUARD: the ones ``Decimal`` refuses already, refused today and after.
+NOT_PLAIN_TEXT = (
+    ("exponent", "1E+100"),
+    ("exponent-lowercase", "1e5"),
+    ("exponent-negative", "-2.5E-3"),
+    ("leading-plus", "+5"),
+    ("leading-space", " 5"),
+    ("trailing-space", "5 "),
+    ("trailing-newline", "5\n"),  # a pattern anchored with "$" lets it through: "$" also matches before a final newline
+    ("GUARD-inner-space", "1 000"),
+    ("underscores", "1_000"),
+    ("arabic-indic-digits", "\u0661\u0662\u0663"),  # ARABIC-INDIC DIGIT ONE, TWO, THREE: "\d" and str.isdigit() accept them
+    ("full-width-digits", "\uff11\uff12"),  # FULLWIDTH DIGIT ONE, TWO
+    ("61-integer-digits", TOO_WIDE_SIDE),
+    ("61-fraction-digits", f"0.{TOO_WIDE_SIDE}"),
+    ("61-integer-digits-led-by-zeros", "0" * PLAIN_DIGITS + "7"),  # every digit of the text counts, zeros too
+    ("61-fraction-digits-ending-in-zeros", "10.5" + "0" * PLAIN_DIGITS),
+    ("GUARD-infinity", "Infinity"),
+    ("GUARD-nan", "NaN"),
+    ("no-integer-digit", ".5"),
+    ("no-fraction-digit", "5."),
+    ("GUARD-minus-alone", "-"),
+    ("minus-and-no-integer-digit", "-.5"),
+)
+NOT_PLAIN_AMOUNTS = [
+    *(pytest.param(path, text, id=f"{case}-{field}") for case, text in NOT_PLAIN_TEXT for field, path in AMOUNT_PATHS.items()),
+    # The real case, on a balance only: today it is read as fifty million digits before the test can fail.
+    pytest.param(AMOUNT_PATHS["balance"], "1E+50000000", id="exponent-of-fifty-million-balance"),
+]
+
+#: Plain decimal text and the canonical text it is read as: the bound on each side, a sign that is not a digit, zeros.
+PLAIN_TEXT = (
+    ("60-integer-digits", WIDEST_SIDE, WIDEST_SIDE),
+    ("60-fraction-digits", f"0.{WIDEST_SIDE}", f"0.{WIDEST_SIDE}"),
+    ("60-digits-each-side", f"{WIDEST_SIDE}.{WIDEST_SIDE}", f"{WIDEST_SIDE}.{WIDEST_SIDE}"),
+    ("60-digits-each-side-negative", f"-{WIDEST_SIDE}.{WIDEST_SIDE}", f"-{WIDEST_SIDE}.{WIDEST_SIDE}"),
+    ("minus-zero", "-0", "0"),
+    ("leading-zeros", "007", "7"),
+    ("trailing-zeros", "10.500", "10.5"),
+)
+PLAIN_AMOUNTS = [pytest.param(path, text, canonical, id=f"{case}-{field}") for case, text, canonical in PLAIN_TEXT for field, path in AMOUNT_PATHS.items()]
+
 #: 1E+70 and 1E-10 on one line: the exact sum has 81 significant digits.
 INEXACT_BOOKS = [
     pytest.param([tx(1, DEPOSIT, D1, B1, currency="EUR", amount="1E+70"), tx(2, DEPOSIT, D2, B1, currency="EUR", amount="1E-10")], id="cash-line"),
@@ -831,6 +891,39 @@ class TestManifest:
         with pytest.raises(ValueError):
             ControlTotals.from_json(data)
         print_success("refused with ValueError")
+
+    @pytest.mark.parametrize(("path", "text"), NOT_PLAIN_AMOUNTS)
+    def test_l7_from_json_refuses_an_amount_that_is_not_plain_decimal_text(self, path, text):
+        """J-27: a balance or a quantity that is not plain decimal text is malformed: ``ValueError``, the one error B handles.
+
+        Plain decimal text has the shape of what ``to_json`` writes: an optional "-", 1 to 60 ASCII digits, then
+        optionally "." and 1 to 60 more (60 is ``_EXACT.prec``). ``Decimal`` reads much more, and the canonical form then
+        writes every digit out: "1E+50000000" costs 121 MB, so a hand-written manifest could exhaust memory in B's
+        restore check. Red: an exponent, a "+", a space or a newline around the digits, underscores, Arabic-Indic or
+        full-width digits, a 61st digit on either side (zeros count), a side without digits. GUARD: what ``Decimal``
+        refuses already (an inner space, "Infinity", "NaN", a lone "-").
+        """
+        print_section("L7 — an amount that is not plain decimal text")
+        with pytest.raises(ValueError):
+            ControlTotals.from_json(_manifest_with(path, text))
+        print_success(f"{path[-1]} refused with ValueError")
+
+    @pytest.mark.parametrize(("path", "text", "canonical"), PLAIN_AMOUNTS)
+    def test_l7_from_json_reads_plain_decimal_text_canonically(self, path, text, canonical):
+        """GUARD (green today, stays green): plain decimal text up to the bound is read as today, ``Decimal`` made canonical.
+
+        60 digits before the point, 60 after, both at once (120 digits, twice the precision of ``_EXACT``, kept to the
+        last one), with a "-" that is not a digit; zeros ``to_json`` never writes: "-0" is 0, "007" is 7, "10.500" is
+        10.5. The amount read is the canonical Decimal itself, the rest of the manifest is read as written, and
+        ``to_json`` writes the canonical text back.
+        """
+        print_section("L7 — plain decimal text read back")
+        section, index, _ = path
+        read = ControlTotals.from_json(_manifest_with(path, text))
+        amount = getattr(read, section)[index][2]
+        assert amount.as_tuple() == Decimal(canonical).as_tuple(), f"read as {amount!r}, not as the canonical Decimal({canonical!r})"
+        assert read.to_json() == _manifest_with(path, canonical), "written back as another manifest: the amount is not its canonical text, or another line changed"
+        print_success(f"{path[-1]} read back canonically")
 
 
 # =============================================================================

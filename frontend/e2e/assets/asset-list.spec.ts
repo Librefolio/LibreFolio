@@ -16,6 +16,8 @@ import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
+import {daysAgoIso} from '../fixtures/dates';
+import {describeShown, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 
 type SyntheticAsset = {
     id: number;
@@ -1004,5 +1006,111 @@ test.describe('Asset List Page', () => {
                 await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
             }
         }
+    });
+});
+
+// ============================================================================
+// The sync dialog's warning before it replaces stored prices (C-66, F-094)
+// ============================================================================
+
+/**
+ * «Sync all» syncs every asset with a provider over the page's period, and a sync replaces the prices stored in that
+ * period with the provider's, manual edits included. Before the start the dialog says so, in one warning for its one
+ * section: `asset-sync-modal-overwrite-warning`, `data-existing` of its `data-total` assets storing a price in the
+ * period. A day the page shows filled backward from an earlier price is not a stored row of the period, so it is never
+ * counted.
+ *
+ * Both periods are chosen by data, read through the endpoint the page reads its prices from (`storedAssetPrices`),
+ * never assumed from the seed:
+ *   · the 30 days up to yesterday, where some asset the dialog syncs stores prices — verified;
+ *   · a week starting a week from now: no day of it has happened, so nothing is stored there, while every asset with a
+ *     history shows its last stored price carried forward — filled backward. The page shows prices in that period and
+ *     must not count them: the negative is the rule, not an empty period.
+ *
+ * Neither test starts the dialog: no sync request may leave the page, so no provider is ever called.
+ */
+test.describe('Assets list — the sync dialog warns before replacing stored prices (C-66)', () => {
+    // A ceiling, never a delay: each test reads every priced asset over its period before loading the list's two waves,
+    // and a describe's timeout also covers the sign-in below — at load, more than the default 30 s leaves the dialog.
+    // Only the timeout is set: the file's parallel mode is inherited unchanged.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        // The list polls live prices whenever its period reaches today — by the page's UTC reckoning, which a local
+        // «yesterday» can still reach just after midnight — and a fresh quote is written as today's price of a shared
+        // asset. Answered here, empty: no provider is called, nothing is written. The warning reads the stored prices,
+        // never the live ones.
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    });
+
+    test('sync all over a period holding stored prices warns once, counting among the assets it syncs', async ({page}) => {
+        const period: SyncPeriod = {start: daysAgoIso(30), end: daysAgoIso(1)};
+        const targets = await storedAssetPrices(page, period);
+        if (!targets.some((target) => target.stored > 0)) {
+            throw new Error(`precondition: no asset with a provider stores a price between ${period.start} and ${period.end} (${describeShown(targets)}) — check populate_mock_data.py (populate_price_history)`);
+        }
+
+        const syncRequests = recordSyncRequests(page);
+        await goToAssetsPage(page, period);
+        await page.getByTestId('assets-sync-all-button').click();
+
+        const modal = page.getByTestId('asset-sync-modal');
+        await expect(modal).toBeVisible();
+        const scope = modal.getByTestId('sync-modal-count');
+        // The dialog syncs the page's period: the one the targets were read over.
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+        await expect(scope).toHaveAttribute('data-section-count', '1');
+
+        const warning = modal.getByTestId('asset-sync-modal-overwrite-warning');
+        await expect(warning, 'one warning: the dialog has one section').toHaveCount(1);
+        const {section, existing, total} = await overwriteCounts(warning);
+        expect(section).toBe('assets');
+        expect(total, 'counted out of every asset the dialog syncs').toBe(Number(await scope.getAttribute('data-item-count')));
+        expect(existing, 'some asset the dialog syncs stores a price in the period').toBeGreaterThanOrEqual(1);
+        expect(existing, 'only assets the dialog syncs are counted').toBeLessThanOrEqual(total);
+        // One section: the sentence alone — the catalogue's, for these counts, in the page's language.
+        await expect(warning).toHaveText(overwriteWarningSentence(await pageLanguage(page), existing, total));
+
+        // Still before the start, and closed from there: the dialog is never started.
+        await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
+        await expect(modal.getByTestId('sync-modal-results')).toHaveCount(0);
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+    });
+
+    test('sync all over a period whose prices are all filled backward does not warn', async ({page}) => {
+        // A week, starting a week from now: no day of it has happened.
+        const period: SyncPeriod = {start: daysAgoIso(-7), end: daysAgoIso(-14)};
+        const targets = await storedAssetPrices(page, period);
+        expect(
+            targets.filter((target) => target.stored > 0).map((target) => target.name),
+            'precondition: no asset stores a price on a day that has not happened',
+        ).toEqual([]);
+        if (!targets.some((target) => target.shown > 0)) {
+            throw new Error(`precondition: no asset with a provider shows a price filled backward between ${period.start} and ${period.end} (${describeShown(targets)}) — check populate_mock_data.py (populate_price_history): this test is about prices shown but not stored, not about an empty period`);
+        }
+
+        const syncRequests = recordSyncRequests(page);
+        await goToAssetsPage(page, period);
+        await page.getByTestId('assets-sync-all-button').click();
+
+        const modal = page.getByTestId('asset-sync-modal');
+        await expect(modal).toBeVisible();
+        // Presence barrier: the dialog has drawn its body before the start — this period, assets to sync, the controls
+        // a start needs — so the absence below is the rule's, not a dialog still on its way.
+        const scope = modal.getByTestId('sync-modal-count');
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+        expect(Number(await scope.getAttribute('data-item-count')), 'the dialog has assets to sync').toBeGreaterThanOrEqual(1);
+        await expect(modal.getByTestId('sync-modal-timeout')).toBeVisible();
+        await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
+        await expect(modal.getByTestId('asset-sync-modal-overwrite-warning'), 'a price filled backward is not a stored row: the sync would replace nothing in the period').toHaveCount(0);
+
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
     });
 });

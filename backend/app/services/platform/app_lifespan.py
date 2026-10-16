@@ -20,17 +20,21 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import ensure_data_dirs, get_settings, is_test_mode
+from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts.bootstrap_admin_service import startup_admin_bootstrap
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.brim_parse_pool import prewarm as prewarm_brim_parse_pool
 from backend.app.services.brim.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
+from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
@@ -46,6 +50,7 @@ from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
+from backend.app.services.transactions.lone_transfer_legs import convert_lone_giving_legs_at_startup
 from backend.app.utils.runtime.cache import close_all_caches
 from backend.app.utils.runtime.version import get_git_version
 
@@ -132,6 +137,19 @@ def _start_market_holiday_prewarm() -> None:
     _keep_in_background(start_market_holiday_prewarm())
 
 
+def _start_brim_parse_pool_prewarm() -> None:
+    # Opt-in (LIBREFOLIO_BRIM_PREWARM, decision N56: off by default, on in test mode): start the BRIM parse pool's
+    # forkserver with the BRIM module and its plugins preloaded, in a thread, in background: the first import of a
+    # broker file then forks a ready worker instead of starting an interpreter (W-B53)
+    try:
+        enabled = brim_prewarm_enabled()
+    except BrimConfigError as exc:
+        logger.warning("BRIM parse pool prewarm off: invalid setting", variable=exc.variable, error=str(exc))
+        return
+    if enabled:
+        _keep_in_background(asyncio.create_task(asyncio.to_thread(prewarm_brim_parse_pool)))
+
+
 def _start_scheduler() -> None:
     # Start scheduler daemon
     _scheduler.shutdown_event = get_shutdown_event()
@@ -197,20 +215,31 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("configuration-checks", lambda: _check_configuration()),
     Step("signal-plugins", lambda: _load_signal_plugins()),
     Step("tool-catalog", lambda: _load_tool_catalog()),
+    Step("pending-restore", lambda: asyncio.to_thread(apply_pending_restore)),
     # Ensure all data directories exist (prod or test based on mode)
     Step("data-directories", lambda: ensure_data_dirs()),
+    # Before any step reads the data: from here on a restore never swaps or undoes under this process
+    Step("serving-lock", lambda: asyncio.to_thread(hold_serving_lock)),
     Step("risk-scenarios", lambda: _load_risk_scenarios()),
     Step("default-avatars", lambda: _seed_avatars()),
     # Ensure database exists and is migrated
     Step("database", lambda: ensure_database_exists()),
     # Then the repairs that cannot be migrations, before anything else opens the database
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
+    # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
+    Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
+    Step("admin-bootstrap", lambda: startup_admin_bootstrap()),
+    # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
+    # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
+    Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
+    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),
     Step("idle-monitor", lambda: start_idle_monitor()),
 )
