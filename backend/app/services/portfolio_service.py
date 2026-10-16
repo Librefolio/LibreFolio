@@ -28,8 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -95,6 +93,7 @@ from backend.app.services.financial_math.returns import (
     realized_gain,
     rebase_to_period,
 )
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
@@ -156,11 +155,7 @@ async def compute_wac_iterative(
 
     # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
     # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
+    split_linked_row_ids = await split_linked_ids(session, db_rows)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415

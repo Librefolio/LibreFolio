@@ -7,12 +7,13 @@ from datetime import date as date_type
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Transaction, TransactionType
+from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.schemas.transactions.transactions import (
     TXCreateItem,
     TXUpdateItem,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.portfolio_service import compute_wac_iterative
 
 
@@ -73,10 +74,7 @@ class TransactionAutoCostMixin:
             # from a stored override. Writing "current WAC
             # before this tx" here — the normal auto-mode fallback — would double the
             # cost basis for a forward split (or halve it for a reverse split). Skip.
-            is_split_linked = False
-            if db_tx.asset_event_id is not None:
-                event_type = (await self.session.execute(select(AssetEvent.type).where(AssetEvent.id == db_tx.asset_event_id))).scalar_one_or_none()
-                is_split_linked = event_type == AssetEventType.SPLIT
+            is_split_linked = db_tx.id in await split_linked_ids(self.session, [db_tx])
 
             if is_split_linked:
                 db_tx.cost_basis_override = None
