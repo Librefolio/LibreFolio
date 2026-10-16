@@ -410,7 +410,7 @@ class AssetPeriodContribution(BaseModel):
     broker_id: int
     broker_name: str
     period_unrealized_delta: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L over the period")
-    period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss from SELLs in period")
+    period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss in period: SELLs, and outgoing ADJUSTMENTs with a cost basis (the value handed over, at the rate of its date, against the average cost)")
     period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
@@ -513,7 +513,7 @@ class PortfolioSummary(StrictModel):
         default_factory=list,
         description="period_unrealized_gain_loss_delta split by asset currency into the assets' own change and the exchange-rate effect on their historical cost; the rows add up to it exactly",
     )
-    period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
+    period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L in period (WAC-based): sales, and outgoing adjustments with a cost basis at the value they hand over")
     period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period, signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
     period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")

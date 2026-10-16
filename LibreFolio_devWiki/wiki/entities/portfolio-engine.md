@@ -196,6 +196,8 @@ The engine no longer owns a cost algorithm. It calls the single average-cost fun
   - `EngineEndState.wac_pool_qty` / `wac_pool_cost` hold each pool's quantity and its historical cost in the target
     currency.
 - **Capital baseline:** a priced in-kind ADJUSTMENT moves it by the cost its step added (in) or removed (out).
+  **J-24 (2026-10-16):** an outgoing one now leaves at the value it hands over, quantity × cost basis at the rate of
+  its date, and the difference from the cost removed is a realized disposal (`RealizedSale`), as in the lots.
 - **In transit:** a frozen cost (`cost_basis_override × quantity`) is converted once, at the arrival date.
 - **Removed:** `_buy_unit_cost`, `_compute_open_cost_basis_inline`, `_capital_flow_for_adjustment_in`,
   `_apply_split_rescale`.
