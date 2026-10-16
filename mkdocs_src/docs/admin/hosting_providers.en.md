@@ -154,8 +154,8 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   with the deletion date when there is one.
 - While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
-  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
-  (14 days by default).
+  catches up the history sync missed in the meantime and fills the gap the block left, going back
+  to each asset's and FX pair's last saved day, up to a year.
 
 ### 👀 What Users See {: #what-users-see }
 
