@@ -194,7 +194,8 @@
     "units": {
       "days": "jours",
       "sessions": "séances",
-      "percentPerYear": "%/an"
+      "percentPerYear": "%/an",
+      "observations": "observations"
     },
     "visual": {
       "components": "Composants",
@@ -212,12 +213,6 @@
     "comparisonAsset": {
       "placeholder": "Sélectionner l’actif de comparaison",
       "loadError": "Impossible de charger les actifs."
-    },
-    "riskRollingReturn": {
-      "name": "Rendement glissant",
-      "description": "Rendement composé du prix seul sur une fenêtre glissante.",
-      "output": "Rendement",
-      "outputDescription": "Rendement composé de la période de détention, en points de pourcentage."
     }
   }
 }

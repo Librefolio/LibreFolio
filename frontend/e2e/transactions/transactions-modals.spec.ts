@@ -1165,15 +1165,15 @@ test.describe('Transactions', () => {
             const qtyWrap = page.getByTestId('tx-form-quantity-wrap');
             await expect(qtyWrap.locator('text=(+)')).toBeVisible({timeout: 5_000});
 
-            // Enter negative value → border-color should have red hue (~25 in oklch)
+            // Enter negative value → border-color should be the danger role at 70%
             await qtyInput.fill('');
             await qtyInput.type('-5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on BUY should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on BUY should have the effective red border color');
 
-            // Enter positive value → green hue (~163 in oklch)
+            // Enter positive value → the success role at 70%
             await qtyInput.fill('');
             await qtyInput.type('5');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on BUY should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on BUY should have the effective green border color');
         });
 
         test('SELL qty positive → green border (auto-negated on save)', async ({page}) => {
@@ -1195,12 +1195,12 @@ test.describe('Transactions', () => {
             // Enter positive → green (auto-negated = correct)
             await qtyInput.fill('');
             await qtyInput.type('10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on SELL should have the effective green border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-success) 70%, transparent)', 'Positive qty on SELL should have the effective green border color');
 
             // Enter negative → red (double-negative = wrong)
             await qtyInput.fill('');
             await qtyInput.type('-10');
-            await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on SELL should have the effective red border color');
+            await expectComputedBorderColor(page, qtyInput, 'color-mix(in oklab, var(--lf-danger) 70%, transparent)', 'Negative qty on SELL should have the effective red border color');
         });
     });
 

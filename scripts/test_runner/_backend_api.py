@@ -608,7 +608,7 @@ def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) ->
     print_section("Scheduler API Tests")
     print_info("Testing REST API endpoints for scheduler state and log")
     print_info("Tests: GET /settings/scheduler/state, GET /settings/scheduler/log")
-    print_info("Tests: SAPI-001..008 — admin-only access, structure, since filter")
+    print_info("Tests: SAPI-001..014 — admin-only access, structure, since filter, lot Z7b's deferred/retry/backoff fields")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_scheduler_api.py", test_names)
@@ -948,7 +948,10 @@ Tests for REST API endpoints (server auto-started):
         desc="Cache status/clear endpoints",
         exclusive_because="clears the process-wide cache registry (clear-all and clear/{name}): entries other units populated and may assert on (fx_provider_responses, search_results, upload_metadata) would vanish mid-run",
     )
-    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the scheduler's
+    # state and log, with the users it registers; the cases that need a chosen scheduler_state.json or scheduler log (lot
+    # Z7c-2, SAPI-010..014) run in-process on the test's own tmp_path, never on the lane's files.
+    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth; lot Z7b's deferred items, retry_at and failure backoff passed through, files and entries written before it at the defaults")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")

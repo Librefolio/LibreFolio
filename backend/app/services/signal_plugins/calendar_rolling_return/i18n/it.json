@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingReturn": {
+      "name": "Rendimento mobile",
+      "description": "Rendimento del solo prezzo su una finestra mobile di giorni di calendario, ogni prezzo contro quello di tanti giorni prima.",
+      "output": "Rendimento",
+      "outputDescription": "Variazione del prezzo rispetto al prezzo precedente, in punti percentuali.",
+      "windowTooltip": "Giorni di calendario fra ogni prezzo e il prezzo precedente con cui viene confrontato."
+    }
+  }
+}

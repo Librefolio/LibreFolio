@@ -26,6 +26,7 @@
     import CachePanel from '$lib/features/settings/CachePanel.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {pendingSchedulerRetry} from '$lib/features/settings/schedulerRetry';
 
     // Props
     interface Props {
@@ -101,6 +102,7 @@
     let showConfigModal = $state(false);
     let showLogModal = $state(false);
     let schedulerState: any = $state(null);
+    const schedulerRetry = $derived(pendingSchedulerRetry(schedulerState?.current_price, Date.now()));
     let serverTz = $state('');
 
     // Language options for dropdown
@@ -798,6 +800,11 @@
                                             {$_('settings.global.scheduler.status.neverRun')}
                                         {/if}
                                     </p>
+                                    {#if schedulerRetry}
+                                        <p class="text-xs text-lf-warning mt-0.5" data-testid="scheduler-status-retry" data-kind={schedulerRetry.kind}>
+                                            {$_(schedulerRetry.kind === 'failure' ? 'settings.global.scheduler.status.nextAttemptAt' : 'settings.global.scheduler.status.retryAt', {values: {time: schedulerRetry.at.toLocaleString(uiLocale())}})}
+                                        </p>
+                                    {/if}
                                 </div>
                             </div>
                             <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button">

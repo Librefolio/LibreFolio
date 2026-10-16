@@ -3142,3 +3142,145 @@ Committato dal coordinatore: `c8d23c544` (fix, 39 file) e `3d122d28a` (journal).
 > di A6d entrato con la base. Il client generato (ignorato da git) era ancora quello di prima dell'aggiornamento:
 > `api sync`, nessun file tracciato cambiato, poi `front check` 0/0. Dopo ogni aggiornamento di base che cambia l'API,
 > `api sync` va prima di `front check`.
+
+### CP11c ed escape in `dev_release2` ✅ (2026-10-16) — treno 91
+
+- Commit sul mio ramo: `17a8b396f` (fix) e `a10af747d` (journal).
+- Merge in `dev_release2`: `2f1d77a23`. Il mio ramo è stato portato avanti alla punta, HEAD `6c03c38b8` (verificato).
+- CHANGELOG: nessuna riga 🔒, perché la funzione non è ancora uscita. La riga «Settings › Plugins» ora dice che il
+  segreto non si vede «nemmeno nel messaggio d'errore di una fonte né nell'indirizzo della pagina di un asset».
+
+### X-R12 — gli eventi del fornitore datati oggi ✅ (via del coordinatore 2026-10-16, 04:50; pronto alle 05:10)
+
+Ordine dato dal coordinatore: X-R12, poi FE5c più X-R13 (sblocca Z7c-1; da controllare con la regola dei colori
+«niente elementi misti»), poi CP13. Un commit per lotto. Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova,
+nemmeno leggera, solo scrittura.
+
+1. ✅ (04:50–04:53) La correzione, in `services/assets/refresh.py::_fetch_refresh_item`.
+   > **Note implementazione**:
+   > - Quando l'intervallo arriva a oggi, la chiamata della storia finisce **oggi** (`call_end`), non più ieri. È così
+   >   solo quando la storia è già chiesta (`start == "min" or start < today`): le stesse chiamate di prima, cambia solo
+   >   la fine.
+   > - I prezzi della storia dopo `history_end` (ieri) restano fuori dalla cache e da `prices_data`: il prezzo di oggi
+   >   resta il valore corrente.
+   > - Gli eventi fino a oggi restano.
+   > - Con un buco nella cache e `end >= today`, la chiamata va fino a oggi; la copertura si conta ancora fino a ieri.
+   > - Un intervallo passato non cambia, e `start == today` non chiama la storia.
+   > - `end_date` è inclusivo in tutti i plugin che danno la storia: Yahoo aggiunge un giorno da sé; justETF, Borsa,
+   >   scheduled_investment e mockprov filtrano con `<=`; css_scraper non ha storia.
+   > - Prova in processo (`/tmp/libreFolio_xr12_smoke.py`), tutto come atteso:
+   >   - la chiamata finisce oggi;
+   >   - il prezzo di oggi è quello corrente (11), non quello della storia (10);
+   >   - il dividendo di oggi resta;
+   >   - la cache non ha oggi.
+   > - Le suite esistenti del percorso sono verdi: `services asset-source-refresh` 12, `utils provider-core-cache` 29,
+   >   `services rate-limit-results` 23, `services scheduler-jobs` 43.
+   >
+   > **⚠️ Fuori pista**: la prima delle quattro suite è partita con il carico a 74,4, sopra 70. Il ciclo stampava il
+   > carico ma non aspettava. Le altre tre sono partite sotto 70. D'ora in poi il controllo del carico resta un passo
+   > che blocca.
+2. ✅ (05:08) I test di regressione: test-author, sei test `test_fetch_*` in
+   `test_services/test_asset_source_refresh.py`.
+   > **Note implementazione**:
+   > - **Il fornitore finto** gira in processo, registra ogni chiamata e restituisce un evento solo se l'intervallo
+   >   chiesto ne contiene la data, come uno vero.
+   > - **La data** è fissata con la fixture `xr12_today` (non autouse), che sostituisce `refresh.date_type`, l'unico
+   >   orologio di `_fetch_refresh_item`, e svuota le due cache del core prima e dopo ogni test.
+   >   - Non è autouse perché `_prepare_refresh_items` usa `date_type` in un `isinstance`.
+   > - **La chiave di cache** è ricostruita dalle stesse parti di `refresh.py`: se cambia, i test falliscono, non passano
+   >   in silenzio.
+   > - **I sei casi**:
+   >   1. intervallo fino a oggi;
+   >   2. cache fino a ieri, cioè colpo pieno senza chiamata;
+   >   3. buco nella cache: chiamata dal giorno mancante fino a oggi;
+   >   4. intervallo passato: la chiamata finisce a `end`, senza valore corrente;
+   >   5. `start == today`: nessuna chiamata della storia;
+   >   6. punti futuri del fornitore scartati.
+   > - **Prove** (ognuna dopo il controllo del carico, con `nice`):
+   >   - `services asset-source-refresh` → **18 passed**, i 12 di prima più i 6 nuovi (05:08, carico 54;
+   >     `/tmp/libreFolio_xr12_test_1.log`);
+   >   - **rosso sul codice vecchio**: con il `refresh.py` di HEAD rimesso per una sola run e poi ripristinato (`cmp`
+   >     uguale), **3 failed, 15 passed**, esattamente 1, 3 e 6, i casi previsti. Cadono per la ragione giusta: la chiamata
+   >     della storia finisce ieri (3/17) invece che oggi (3/18), e nel buco finisce al giorno mancante. 2, 4 e 5 tengono
+   >     i casi invariati (`/tmp/libreFolio_x_fe5c/xr12_red_proof.log`);
+   >   - `ruff check` e `black --check` sui due file: puliti.
+
+**Decisione notturna, da rivedere**
+- **N17.** La correzione è generica, nel refresh, senza toccare i plugin. Il costo noto è su justETF: con `end_date`
+  uguale a oggi, la sua storia aggiunge la quotazione corrente (`add_current`, solo per l'EUR), cioè una richiesta in
+  più per ETF per ora di cache del grafico, per un punto che il core poi scarta. Gli eventi di justETF vengono da righe
+  passate del grafico, quindi non ci guadagna niente.
+  - Alternativa, da decidere di giorno: la storia di justETF smette di aggiungere la quotazione corrente, perché il
+    core non usa mai un prezzo di storia datato oggi.
+
+### FE5c — il taglio della pagina dell'asset, più X-R13: analisi ⏳ (2026-10-16, 04:58)
+
+Inventario in sola lettura (agente explore): `routes/(app)/assets/[id]/+page.svelte`, 3603 righe, lo script va dalla 1
+alla 2698.
+- **Lo stato**: ~80 `$state` in un unico centro (148–371), letti e scritti da quasi tutte le regioni.
+- **Helper puri, spostabili così come sono**:
+  - `isRecord`, `parseBackendSignalResults`, `priceConversionErrorFromItem`;
+  - le tre funzioni del calendario (1191–1291), `comparisonAssetIds`, `mergeChartPointsIncremental` (2542),
+    `emptyCalendarReturnView`.
+  - Due chiedono attenzione: `calendarDataFingerprint` legge un `$derived`, `translateCalendarProblem` usa `$t`.
+- **Il markup**:
+  - poco costosi: intestazione (2707–2765), metadati e classificazione (3445–3560), scheda del rischio (3562–3583),
+    modali (3585–3603);
+  - intrecciati: la barra degli strumenti (2775–2888) e l'area del grafico (2943–3292), che ha i controlli del
+    calendario duplicati a 2973 e 3211.
+- **Colori**: zero classi `-lf-`, quindi zero elementi misti. Baseline 312 (`themeRoles.baseline.tsv:259`).
+- **X-R13**:
+  - alla riga 3496, `emoji: getSectorEmoji(name)` non lo legge nessuno: `AllocationEntry` ha solo
+    `name`/`value`/`amount`, e il grafico ricava l'emoji da sé alla riga 210;
+  - va tolto, con l'import della riga 33.
+- **Prove**:
+  - `comparisonSignalPages.test.ts:67` legge il sorgente della pagina come testo (`catalogueError(...)`, l'helper,
+    nessuna chiave con `_i18n:`): `catalogueError` e le sue chiamate restano nella pagina;
+  - una dozzina di spec E2E e la galleria selezionano i `data-testid` della pagina;
+  - nessun `vi.mock` sui moduli della pagina (D-P4 libera);
+  - l'àncora `guideAnchor('asset.detail.header')` resta.
+- **Punti caldi per i conflitti**: il polling dal vivo di Z (`74d028ec6`, ≈1486–1606), la scheda e gli import del
+  rischio di Y4b (`51aff4a12`), la barra degli strumenti dei colori.
+- **Taglio proposto**, dai pezzi meno cari:
+  1. X-R13;
+  2. gli helper puri in `.ts`, con le loro unità;
+  3. il pannello dei metadati;
+  4. la scheda del rischio e le modali;
+  5. l'intestazione;
+  6. `requiredFxPairs` e `assetDetailIssues` come funzioni pure;
+  7. i pannelli dei segnali e delle misure;
+  8. i controlli del calendario in un componente solo;
+  9. la barra degli strumenti, e il caricamento più il polling in uno stato `.svelte.ts`.
+- **Regole del taglio**: le classi si spostano con i loro elementi interi; le classi nuove solo sui ruoli; il taglio va
+  dichiarato con `theme-roles.mjs --split` nello stesso commit.
+- **Chiesto al coordinatore** che cosa serve a Z7c-1, che decide se il pezzo 9 va anticipato. Nella pausa dalle 05:30
+  alle 06:45 scrivo i pezzi 1–5; le prove partono dopo.
+
+**Risposta del coordinatore (04:59)**:
+- l'ordine resta 1→9, con il pezzo 9 per ultimo;
+- Z7c-1 non chiede il taglio: chiede solo che `pollLivePriceOnce` restituisca l'esito `{ok, notBefore}`, poche righe che Z
+  scrive nella pagina e che entrano **prima** del pezzo 9. Al pezzo 9 le sposto nello stato `.svelte.ts` così come
+  sono;
+- le righe ≈1486–1606 non si toccano fino al pezzo 9: allora il coordinatore aggiorna la base con le righe di Z;
+- un commit per pezzo, e `--split` nel commit di ogni pezzo che sposta classi;
+- J (CP-10a) aggiunge casi a `e2e/assets/asset-detail.spec.ts`, solo per `data-testid`: se un `data-testid` deve
+  cambiare, va detto al coordinatore prima del commit.
+
+#### FE5c-1 · X-R13 ✅ (2026-10-16, 05:06)
+
+> **Note implementazione**: due righe tolte da `routes/(app)/assets/[id]/+page.svelte`:
+> - `emoji: getSectorEmoji(name)` nel `map` dei settori passato ad `AllocationPieChart` (`AllocationEntry` ha solo
+>   `name`/`value`/`amount`, e il grafico legge l'emoji dal negozio dei settori);
+> - l'import ormai inutile (riga 33).
+>
+> Nessun'altra lettura di `getSectorEmoji` nella pagina (grep).
+> - Prova: `dev.py front check` → `svelte-check found 0 errors and 0 warnings` (05:06, carico 62).
+> - La pagina passa da 3603 a 3602 righe; da qui i numeri di riga dell'inventario scalano di 1 dopo la 33.
+
+> **⚠️ Fuori pista**:
+> - il primo `front check` (05:03) è uscito con 4 errori, tutti in `ui/input/PasswordStrength.svelte`
+>   (`password_rules`, di A6c). La causa era il client generato vecchio (04:46, zero `password_rules`): il ramo è
+>   avanzato fino a `6c03c38b8` e quindi `api sync` serviva ancora.
+> - L'ho lanciato **senza attendere il carico**: alla partenza la media di 1 minuto era 81, sopra la soglia di 70.
+>   Errore mio, senza danni (`api sync` è leggero ed è finito in pochi secondi).
+> - Da qui ogni prova passa da `/tmp/libreFolio_x_fe5c_check.sh`, che aspetta il carico ≤ 70 prima di partire.
