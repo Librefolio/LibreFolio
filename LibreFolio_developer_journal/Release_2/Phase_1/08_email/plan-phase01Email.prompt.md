@@ -2839,11 +2839,53 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >
 > **Il merge committato dal coordinatore** (16:26): `57081a85e`, con genitori `9d27245dd` e `26dda1a26`. Poi i due
 > ritocchi rimandati:
-> - `security.md`, il punto «Callers» di H: «Their key is `client_rate_key()` as well: lot E4c … removed its own copy»,
->   dalla patch salvata;
+> - ~~`security.md`, il punto «Callers» di H~~: **tolto su correzione del coordinatore (16:4x)**. H lo riscrive in H-12
+>   («Their key follows the rule of `client_rate_key()`»), una frase vera prima e dopo il mio passaggio. Il file è
+>   tornato uguale a HEAD;
 > - `_backend_services.py`, le descrizioni di `email-flows` ed `email-verification`: «H's client_rate_key».
 >
 > La nota su `test_client_address.py` (righe 33 e 771) la passa il coordinatore ad H.
 >
 > **Le prove dei ritocchi**: `ruff` e `black` sul runner puliti; `mkdocs build` stretto a 0 (16:33). Dove si nomina
-> ancora `address_key` lo si fa di proposito, come storia: `developer/backend/email.md:609` e `security.md:1297`.
+> ancora `address_key` lo si fa di proposito, come storia: `developer/backend/email.md:609`. Il punto di
+> `security.md` è di H, che lo riscrive in H-12.
+
+#### E6.9 — La revisione di sicurezza finale del dominio ✅ (2026-10-16, 16:36–17:0x)
+> Col via del coordinatore (16:35): in sola lettura, sulla base `d4c5121ad`, cioè E1–E6 più E4c-H. Questa volta
+> l'agente `security-review` ha risposto. Il perimetro e il modello delle minacce sono quelli del lotto, e ho elencato
+> i compromessi già decisi perché non tornassero come reperti nuovi.
+>
+> **Esito: nessuna vulnerabilità sfruttabile sopra la soglia** (CRITICAL da 6, HIGH da 7, MEDIUM da 8, LOW da 9).
+>
+> **Tre note sotto la soglia**:
+> 1. **I limiti per casella non vedono gli alias.** `victim+N@…` e i punti di Gmail fanno caselle diverse per
+>    `strip().casefold()` (`flows.py:270` e `:336`, `verification.py:233`). Con la registrazione aperta si può puntare
+>    tutto il budget orario su una casella. Ogni email porta lo username, 50 caratteri liberi, URL compresi: spam o DoS,
+>    con il tetto di `LIBREFOLIO_SMTP_MAX_PER_HOUR` per processo. → **E-9** nel backlog, dopo la release.
+> 2. **Il budget orario come oracolo d'esistenza.** L'ammissione dà 429 a budget finito (`flows.py:206`), e solo un
+>    account attivo trovato spende un'unità (`flows.py:293`): con un'unità sola, «202 per X, poi 429» dice che X esiste.
+>    Non è praticabile: in modalità invito o chiusa, prosciugare circa 50 email l'ora richiede già account noti; in
+>    modalità aperta, `/auth/register` dice già se username o email sono presi. Solo annotato.
+> 3. **I link di reset sopravvivono al cambio d'email e di password**, nel codice di A: `update_profile`
+>    (`user_service.py:479-487`) e `change_password` (`auth.py:323-349`) chiudono le sessioni ma non revocano i token
+>    `PASSWORD_RESET`.
+>    - Con il «password dimenticata» aperto, chi controlla la vecchia casella può chiedere un link prima del cambio e
+>      usarlo dopo, entro 30 minuti.
+>    - La cura sta nel codice di A: revocare i token di reset in tutti e due i punti. → Al coordinatore, per A.
+>
+> **Sani**, in breve:
+> - l'enumerazione: lo stesso 202, il lavoro dopo la risposta, la password prima del resto con un hash finto;
+> - l'injection nelle intestazioni e nell'HTML;
+> - l'avvelenamento dei link (solo `LIBREFOLIO_PUBLIC_URL`);
+> - la fuga dei token (solo hash, frammento, `no-referrer`);
+> - le corse (conteggi rifatti nella scrittura, consumo atomico);
+> - le chiavi dei limiti (/64, l'header solo quando la variabile c'è);
+> - il cambio d'email con la password;
+> - nessun aggiramento della verifica;
+> - «Spedisci per email»;
+> - i segreti, mai nell'API, nei log o nei backup;
+> - TLS senza ricaduta in chiaro;
+> - `/system/instance` con due booleani;
+> - il frontend senza `{@html}`.
+>
+> **Dopo E4c** resta una revisione delta: le due righe di `same_email`.
