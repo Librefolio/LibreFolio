@@ -50,10 +50,10 @@ test.describe('FX CSV Import', () => {
     // ========================================================================
     async function assertNoErrors(modal: import('@playwright/test').Locator) {
         // The error indicator "✗" should NOT be visible
-        const errorIndicator = modal.locator('.text-red-500:has-text("✗")');
+        const errorIndicator = modal.locator('[data-state="invalid"]:has-text("✗")');
         await expect(errorIndicator).not.toBeVisible();
         // Also check the status bar doesn't show error count
-        const errorBadge = modal.locator('.text-red-500:has-text("error")');
+        const errorBadge = modal.locator('[data-state="invalid"]:has-text("error")');
         await expect(errorBadge).not.toBeVisible();
     }
 
