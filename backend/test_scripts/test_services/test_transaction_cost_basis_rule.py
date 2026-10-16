@@ -710,16 +710,16 @@ class TestDecisionP5AnExplicitNullEmptiesTheCost:
     Elsewhere the null is ignored, and with ``cost_basis_mode`` ``auto``/``auto-detail`` too (the Auto cost is computed);
     a key left out changes nothing.
 
-    Today ``_apply_update_values`` (``batch_edits.py``) writes the cost only when it is not None, so an explicit null
-    reads as a key left out and is ignored everywhere, a side that requires a cost included:
+    Before W-B30 ``_apply_update_values`` (``batch_edits.py``) wrote the cost only when it was not None, so an explicit
+    null read as a key left out and was ignored everywhere, a side that requires a cost included:
 
-    - RED until the cure: emptying the manual cost of a TRANSFER's receiving leg, a side that needs one, is refused with
-      ``costBasisRequired`` on the update — N2's update check, once the cost is gone — and the cost stays (today the
-      update commits);
-    - guards, green today and after: a null sent on a row whose type and side take no cost — a BUY, an ADJUSTMENT −q
-      carrying the handover cost decision 47 writes on a giving leg — is ignored, the update commits and the cost stays;
-      a notes-only edit of the pair, the key left out, keeps the receiving leg's cost; an Auto update sending the null,
-      as the form does, writes the Auto cost.
+    - red before W-B30, now its guard: emptying the manual cost of a TRANSFER's receiving leg, a side that needs one, is
+      refused with ``costBasisRequired`` on the update — N2's update check, once the cost is gone — and the cost stays
+      (before W-B30 the update committed);
+    - guards, green before W-B30 and since: a null sent on a row whose type and side take no cost — a BUY, an
+      ADJUSTMENT −q carrying the handover cost decision 47 writes on a giving leg — is ignored, the update commits and
+      the cost stays; a notes-only edit of the pair, the key left out, keeps the receiving leg's cost; an Auto update
+      sending the null, as the form does, writes the Auto cost.
 
     The row that needs a cost is the receiving leg of a stored TRANSFER pair (``_store``), saved with 42 EUR; its Auto
     cost is ``source``'s average, 100 EUR (``UNIT_COST``), so "kept" and "recomputed" cannot be confused. Each test runs
@@ -729,11 +729,12 @@ class TestDecisionP5AnExplicitNullEmptiesTheCost:
 
     @pytest.mark.asyncio
     async def test_emptying_the_manual_cost_of_a_received_transfer_is_refused(self, world):
-        """RED until decision P5: ``{id, cost_basis_override: null}`` on the receiving leg is refused — one issue,
-        ``costBasisRequired`` on update 0, ``ref_id`` the leg — and the database keeps its 42 EUR.
+        """Red before W-B30 (decision P5), now its guard: ``{id, cost_basis_override: null}`` on the receiving leg is
+        refused — one issue, ``costBasisRequired`` on update 0, ``ref_id`` the leg — and the database keeps its 42 EUR.
 
         The cure clears both columns, and N2's update check (``_check_update_cost_basis``) then sees a row that needs a
-        cost and lost the one it was stored with. Today the null keeps the cost, and the update commits with no issue.
+        cost and lost the one it was stored with. Before W-B30 the null kept the cost, and the update committed with no
+        issue.
         """
         stored = await _store(world, "transfer_in", cost=STORED_COST)
         subject_id = stored.subject.id
@@ -751,7 +752,7 @@ class TestDecisionP5AnExplicitNullEmptiesTheCost:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("shape", LEGACY_SHAPES)
     async def test_a_null_where_no_cost_is_taken_is_ignored(self, world, shape):
-        """Guard, green today and after decision P5: ``{id, cost_basis_override: null}`` on a row whose type and side
+        """Guard, green before W-B30 and since: ``{id, cost_basis_override: null}`` on a row whose type and side
         take no cost basis, yet carry one, is ignored — the update commits, and ``cost_basis_override`` and
         ``cost_basis_currency`` stay as stored, 42 EUR.
 
@@ -781,7 +782,7 @@ class TestDecisionP5AnExplicitNullEmptiesTheCost:
 
     @pytest.mark.asyncio
     async def test_notes_edit_without_the_cost_key_keeps_the_cost(self, world):
-        """Guard, green today and after decision P5: a notes-only edit of the pair — what the app's diff sends, the cost
+        """Guard, green before W-B30 and since: a notes-only edit of the pair — what the app's diff sends, the cost
         key left out — commits, the notes land, and the receiving leg keeps its 42 EUR. A key left out is not a null.
 
         Both legs are edited, as the app edits them: a pair keeps one description.
@@ -802,7 +803,7 @@ class TestDecisionP5AnExplicitNullEmptiesTheCost:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", AUTO_MODES)
     async def test_auto_update_sending_a_null_writes_the_auto_cost(self, world, mode):
-        """Guard, green today and after decision P5: ``{id, cost_basis_mode: auto, cost_basis_override: null}`` — what
+        """Guard, green before W-B30 and since: ``{id, cost_basis_mode: auto, cost_basis_override: null}`` — what
         the form sends for a row in Auto (``buildUpdateDiff``, ``txPayloadHelpers.ts``) — is not refused for a missing
         cost, commits, and the receiving leg holds its Auto cost, ``source``'s average, 100 EUR: not the 42 it was saved
         with, not nothing. In Auto the null is ignored.
