@@ -5256,13 +5256,24 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
   con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
   codice» e «Z-13».
-- **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
-  (Z-13). I grafici dei prezzi e dei cambi usano cache di sessione proprie (`assetPriceStoreRegistry.ts`,
-  `fxStoreRegistry.ts`) che il bus del portafoglio non tocca. Dopo un recupero, un intervallo già caricato nella
-  sessione torna dalla cache finché non si preme «Aggiorna» su quella pagina. Il problema c'era già prima di Z5, che
-  però lo rende più visibile. Cura possibile: le due cache ascoltano `{kind: 'prices'}` e segnano stale. Il dettaglio
-  di un asset è di X fino a FE5c. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
-  sezione «Z-13», passo 4.
+- ✅ **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
+  (Z-13). **Chiusa il 17/10 col lotto Z-14** (il commit è del coordinatore): `TimeSeriesStore.markStale()` tiene i
+  punti e fa chiedere di nuovo la lettura successiva, anche dove ci sono dati (le risposte riempiono all'indietro i
+  giorni); i due registri ascoltano il bus e segnano stale tutti i negozi solo su `{kind: 'prices'}`; `lookupFxRate`
+  tratta un giorno stale come mancante. Dopo un recupero la visita successiva di una pagina dei prezzi o dei cambi, o
+  un cambio d'intervallo, chiede di nuovo, una volta. Una pagina già aperta resta com'è: Z-14b. Era: un intervallo
+  già caricato nella sessione tornava dalla cache finché non si premeva «Aggiorna» su quella pagina. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi».
+- **Z-14b · Una pagina dei prezzi o dei cambi aperta durante un recupero non si ricarica da sola** — basso, UX;
+  Z, 17/10 (Z-14). Con Z-14 i negozi dei prezzi e dei cambi diventano stale su `{kind: 'prices'}` e la lettura
+  successiva chiede di nuovo; ma una pagina già aperta (lista e dettaglio degli asset, lista e dettaglio dei cambi)
+  tiene il suo grafico finché non cambia intervallo, non si naviga o non si preme «Aggiorna», mentre Dashboard e
+  broker si ricaricano in background (Z-13). Cura possibile: un ascoltatore di `{kind: 'prices'}` nelle quattro
+  pagine e una ricarica silenziosa (niente `aria-busy` né spinner, la lezione di Z-18). Nello stesso spirito: al
+  ritorno dopo un recupero la pagina mostra il caricamento, come una prima visita, invece dei punti vecchi che il
+  negozio tiene. Decisione di UX del developer, fra le domande del mattino del coordinatore; il dettaglio asset è
+  ora di Y. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-14 — analisi», punto B.
 - **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
   16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
   `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare

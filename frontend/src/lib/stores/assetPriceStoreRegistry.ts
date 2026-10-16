@@ -8,10 +8,14 @@
  * Keys are "{assetId}:{currency}" (e.g. "42:EUR"). When target_currency conversion is
  * active, converted prices are cached separately from native-currency prices.
  *
+ * After a price catch-up on the server (`{kind: 'prices'}` on the portfolio bus) every store is marked stale: the
+ * next read of a range asks the server again, while the points stay readable (Z-14).
+ *
  * @module stores/assetPriceStoreRegistry
  */
 
 import {TimeSeriesStore} from './core/TimeSeriesStore';
+import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 import {zodiosApi} from '$lib/api';
 // AssetPricePoint/apiPricesToAssetPricePoints now live in assetPriceDerived.ts (a
 // Zodios/SvelteKit-free module, importable from a Web Worker) — re-exported here so
@@ -28,6 +32,13 @@ export {apiPricesToAssetPricePoints, type AssetPricePoint};
 // ============================================================================
 
 const stores: Map<string, TimeSeriesStore<AssetPricePoint>> = new Map();
+
+// A catch-up may have filled or corrected any range a store holds (Z-14). The live poll's writes (`kind: 'mutation'`,
+// every 30 s) and the portfolio's Refresh (`kind: 'refresh'`) leave the stores alone.
+registerPortfolioMutationListener('assetPriceStoreRegistry', (signal) => {
+    if (signal.kind !== 'prices') return;
+    for (const store of stores.values()) store.markStale();
+});
 
 function storeKey(assetId: number, currency: string): string {
     return `${assetId}:${currency.toUpperCase()}`;
