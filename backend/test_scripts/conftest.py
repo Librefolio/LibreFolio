@@ -46,7 +46,10 @@ def restore_registration_setting():
 
     The insert mirrors the app's own `initialize_global_settings()`, which is
     likewise "create only what is missing", so a suite that deliberately changes
-    a value during the session is unaffected.
+    a value during the session is unaffected. One row differs: a missing
+    `registration_mode` is inserted `open`, the lane's value, not the default — a
+    new install starts by invitation (decision 36), and that default would close
+    registration to every test that registers its own user.
 
     Being `autouse` this runs in **every** pytest process, so under `--workers N`
     all N workers reach this row within a second of each other — including the
@@ -84,9 +87,10 @@ def restore_registration_setting():
 
             with conn:
                 for key, config in missing.items():
+                    value = "open" if key == "registration_mode" else config["value"]
                     conn.execute(
                         "INSERT OR IGNORE INTO global_settings (key, value, value_type, description, updated_at) " "VALUES (?, ?, ?, ?, datetime('now'))",
-                        (key, config["value"], config["type"], config.get("description")),
+                        (key, value, config["type"], config.get("description")),
                     )
                 if registration_closed:
                     conn.execute("UPDATE global_settings SET value = 'open' WHERE key = 'registration_mode'")

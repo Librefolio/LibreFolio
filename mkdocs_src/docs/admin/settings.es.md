@@ -111,7 +111,8 @@ leer el estado y el registro.
 </div>
 
 - Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos se completaron correctamente. 🟢 **OK**: todos,
-  o nada que hacer; 🟡 **Parcial**: algunos fallaron; 🔴 **Error**: ninguno se completó correctamente.
+  o nada que hacer; 🟡 **Parcial**: algunos fallaron, o se aplazaron porque su proveedor está en pausa tras demasiadas
+  solicitudes; 🔴 **Error**: ninguno se completó correctamente y ninguno se aplazó.
 - Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios modificados (**Delta**).
   Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (mantén pulsado en un teléfono) para copiarlo.
 - Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones
