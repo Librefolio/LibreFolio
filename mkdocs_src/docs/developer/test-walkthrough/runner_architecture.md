@@ -359,6 +359,10 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   execution follows exactly the route it followed before the migration.
 - `--workers N` parallelises the isolation-safe units and leaves everything else serial — a
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
+- The parallel pass plans category by category, so it runs only for a whole backend category
+  (`<category> all`) or a whole suite (`all`, `all-backend`): naming one action, or filtering by test
+  name (pytest `-k`), keeps the serial path. The check is `_parallel_prepass_applies()`, which follows
+  the same scope rule as the consolidated pre-passes (`_backend_consolidation_scope()`).
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
 - On a **frontend** category the same flag sets Playwright's browser workers, capped at half the
@@ -730,7 +734,7 @@ A category registered in `TEST_REGISTRY` maps to a dictionary containing:
 
 * `_meta`: General information about the category (used for `--help` texts) and, when the category declares them in `make_category()`, these keys:
     * `setup`: What the category does to its environment before its units run: `services` recreates the test database empty, `api` reseeds it. `run_category_setup()` runs it once per invocation, whichever caller reaches it first.
-    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts. For one action run on its own that the catalogue declares `pure` (as `declared_isolation()` resolves it: an `exclusive_because` means `write-global`, else the action's own `isolation`, else the category's `default_isolation`), the setup is skipped, since such a unit opens no database, and one line says the lane's database is left as it is. A whole category, `all` and any action not declared `pure` (one with no declared class at all included) still run it; with `--workers` above 1, the parallel pass may run it as well.
+    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts. For one action run on its own that the catalogue declares `pure` (as `declared_isolation()` resolves it: an `exclusive_because` means `write-global`, else the action's own `isolation`, else the category's `default_isolation`), the setup is skipped, since such a unit opens no database, and one line says the lane's database is left as it is. A whole category, `all` and any action not declared `pure` (one with no declared class at all included) still run it. The skip holds at any `--workers`, since the parallel pass does not run for one action.
     * `setup_needed`: For one action run on its own, a no-argument callable that returns why the setup must run first, or `None` (a check that raises counts as a reason). With a reason, `ensure_category_setup()` prints it in one line and runs the setup. `api` returns one when the lane's test database is missing, unreadable or lacks one of its fixture users.
     * `default_isolation`: The isolation class of every unit that declares neither `isolation` nor `exclusive_because` — see [Declaring a class — and earning it](#declaring-a-class-and-earning-it).
 * A set of actions (e.g., `"decimal-precision"`, `"all"`), where each action points to:
