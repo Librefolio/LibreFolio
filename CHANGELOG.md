@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again, not even in a source's error message or in the address of an asset's page. A server variable can set the instance-wide ones and lock them.
 - **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
 - **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
+- `LIBREFOLIO_CLIENT_IP_HEADER`: behind a reverse proxy that passes the visitor's address in a header of its own (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), the per-address limits of the emails (sign-up, «send the link again», forgotten password) count each visitor on their own instead of all visitors together. Unset by default; set it only when every request crosses that proxy.
+- While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
 
 ### 🔄 Changed
 
@@ -86,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
 - Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
 - Live prices on the Assets pages: after a failed refresh the next one waits longer, up to 10 minutes, and while every provider asked about is paused after too many requests, the page waits for the pause to end instead of asking every 30–60 s. Administrators find how provider pauses work in Admin › Sleep and Wake › Provider Pauses.
+- After the server has caught up on prices, an open Dashboard or broker page shows the new figures by itself, in the background, with no need to press Refresh.
 
 #### 🎨 A new colour palette
 
@@ -174,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Short lots: P&L now subtracts the buy-backs, and the return reads against the amount sold (a short at break-even shows 0%, not −100%).
 - **Emptying a manual cost basis is no longer silently ignored**: when you edit a received transfer or an incoming adjustment and clear its manual cost, the save is refused with "cost basis required" instead of keeping the old cost without a word. API: an explicit `cost_basis_override: null` in an update removes the manual cost where the type and side take one, and is ignored elsewhere and in Auto mode.
 - **Editing a transfer, a currency exchange or a cash transfer can no longer break its type's rules**: an update that adds cash to an asset transfer, sets its quantity to zero, gives a currency exchange a quantity, or sets an exchange's or a cash transfer's amount to zero is refused, as creating one already was; a withdrawal and a deposit of zero can no longer be promoted into one. Rows saved before stay editable as long as that field doesn't change.
+- After the server was off, asleep or blocked for longer than the **Lookback horizon**, the history sync now fills the whole gap: each asset and FX pair resumes from its last saved day, up to a year back.
 
 #### 🔒 Security
 
