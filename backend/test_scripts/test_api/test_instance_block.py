@@ -150,6 +150,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.system.health.test_lane_health": ("GET", "/api/v1/system/test-lane-health"),
     "backend.app.api.v1.system.ready.get_readiness": ("GET", "/api/v1/system/ready"),
     "backend.app.api.v1.system.info.get_system_info": ("GET", "/api/v1/system/info"),
+    "backend.app.api.v1.system.wake.wake_sync": ("POST", "/api/v1/system/wake-sync"),
 }
 
 #: The routes under /api/v1 that are not API routes: FastAPI's own documentation (openapi_url, docs_url, redoc_url of

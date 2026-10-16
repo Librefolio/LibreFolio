@@ -2465,3 +2465,353 @@ cancellazione dell'account; nessun commit prima della fine della richiesta.
    > **Note implementazione**: nessun file nuovo; delta di 9 file tracciati. Non girati: `all-backend` (lo chiedo nello
    > slot se il coordinatore lo vuole), E2E (nessun cambiamento del frontend né dell'API), `api sync` (nessuno schema
    > toccato).
+> **Ingresso di W-B20** (coordinatore 23:33: committato `d6b457849` fix, `357f2cd72` docs, `81bf8204f` wiki, `d4c034936`
+> giornale; base aggiornata con `dev_release2` `4ef2fc199`, merge pulito, solo il backlog fuso da sé → HEAD `70f7ab9bc`;
+> `all-backend` **non richiesto**: `begin_writes` è nuovo e lo chiama solo `delete_bulk`, bastano mirate e mutazione).
+> Prove sulla revisione combinata (23:34–23:41, `nice -n 10`, carico sotto 70 controllato prima): `services broker`
+> **70/70**; `db populate --force --clean`; `api brokers` **34/34**; `api users-admin` **64/64** (atteso il calo del
+> carico da 71). Porta 6184 libera. Pronto all'ingresso.
+
+**Regola della notte** (coordinatore 23:33; il developer dorme fino a domattina): una decisione del developer (prodotto,
+sicurezza, comportamento visibile fuori dal piano approvato) non si aspetta: al coordinatore in 3-4 righe con la proposta
+per prima, quel punto in pausa e si passa al successivo; una scelta tecnica nel perimetro la decido io e la annoto come
+«Decisione notturna, da rivedere»; slot pesanti, una prova alla volta con `nice` e checkpoint FROZEN invariati; senza
+lavoro, lo dico subito.
+
+### Lotto di doc A-14 · W-B10 · W-B27 (chiavi) · W-B33 ✅ FROZEN (2026-10-15/16; build da girare dopo la finestra)
+
+Ordine del coordinatore (23:33): finché J non ha CP-16, il lotto di doc A-14 con W-B10, più le chiavi di W-B27 e W-B33;
+le chiavi i18n vogliono `core-unit` prima dell'handoff; dalle 00:00 alle 01:15 niente E2E.
+
+**Analisi** (23:45, codice di `70f7ab9bc`):
+- **A-14** — `mkdocs_src/docs/developer/architecture/access_control.md`, «🔒 The "Last Owner" Rule»: dice che l'ultimo OWNER
+  «cannot remove themselves» e che per andarsene deve promuovere un altro OWNER o cancellare il broker. Il codice (F4):
+  `leave_broker()` (`services/brokers/access.py`) lascia andare l'ultimo OWNER e **cancella il broker** (`delete_bulk` con
+  `force`); `update_own_role()` gli rifiuta la retrocessione («The last OWNER cannot demote themselves — promote another
+  user first»); `bulk_update_access()` (`PUT …/access`) rifiuta ogni configurazione senza OWNER («At least one OWNER is
+  required»). La sezione «🔧 Self-Management» della stessa pagina è già giusta. Cura: riscrivere la regola come «un
+  broker ha sempre almeno un OWNER: nessuno lo toglie o lo retrocede; se se ne va, il broker se ne va con lui».
+- **W-B10** — stessa pagina, «🌐 API Endpoints»: elenca `POST …/access` e `PATCH`/`DELETE …/access/{user_id}`, che non
+  esistono. Le rotte vere (`backend/app/api/v1/brokers.py:446`, `:478`, `:531`, `:557`): `GET` e `PUT
+  /brokers/{broker_id}/access` (la configurazione intera: aggiunte, ruoli, quote e rimozioni in un colpo; OWNER o admin;
+  403, 400, 422 con la lista vuota), `PATCH /brokers/{broker_id}/access/me` (retrocessione di sé), `DELETE
+  /brokers/{broker_id}/access/me` (andarsene; `broker_deleted` nella risposta).
+- **W-B27, le chiavi** — `events.deleteBlocked` ed `events.deleteNotFound` (sorgente `assets`, prefisso `events`):
+  nessun lettore nei sorgenti del prodotto, nei test, nelle E2E, nel backend, negli script né nella doc; nessuna
+  chiave `events.${…}` costruita a runtime (le sole occorrenze di `deleteBlocked` sono `brokers.deleteBlocked*` e una
+  variabile locale di `routes/(app)/brokers/+page.svelte`). Si tolgono con `dev.py i18n remove`. Il resto di W-B27 (il
+  prefisso «Save failed:» e le date ISO in `AssetDataEditorSection.svelte`) è di X e resta fuori.
+- **W-B33** — `mkdocs_src/docs/developer/backend/transactions/service.md`, «🗑️ Broker Deletion»: (1) «One is required
+  since (`costBasisRequired`)» — `costBasisRequired` è il codice d'errore del batch (`schemas/transactions/batch.py:122`)
+  che la regola `cost_basis_required()` (`schemas/transactions/type_metadata.py:378`) solleva; (2) «both helpers» → i tre
+  aiuti, che `_compute_wac_for_auto_items()` (`services/transactions/auto_cost.py:31`) usa tutti; (3) la riga di
+  `delete_bulk()` nella tabella dei chiamanti tace l'admin: `as_user_id="all"` salta il controllo, `as_user_id=<id>`
+  controlla quell'utente (solo per l'admin, 403 per gli altri: `api/v1/brokers.py`).
+- La riga di `developer/api/overview.md:82` segnalata dal coordinatore (`/brim/files/…/download`) è **già giusta**
+  (`/brokers/import/files/…/download`): niente da fare.
+
+**Superfici**: `access_control.md` è condivisa con A (le sezioni d'account): tocco solo «Last Owner» e «API Endpoints»;
+`service.md` è di W; i sorgenti i18n `frontend/src/lib/i18n/assets/{en,it,fr,es}.json` (due chiavi in meno, il catalogo
+generato è ignorato).
+
+**Passi**: 1. ✅ doc (docs-writer: A-14, W-B10, W-B33, più tre sviste della stessa pagina); 2. ✅ chiavi (`i18n
+remove`); 3. ✅ prove (`i18n check`, `utils gate-i18n-catalog`, `utils gate-i18n-usage`, `front-utility core-unit`;
+`mkdocs build` stretto e `check-links` del secondo giro **dopo la finestra**); 4. ✅ handoff (sotto).
+
+2. ✅ **Chiavi di W-B27** (2026-10-15 23:46). `dev.py i18n remove "events.deleteBlocked" -f` e `… "events.deleteNotFound"
+   -f`: tolte in EN, IT, FR ed ES dalla sorgente `frontend/src/lib/i18n/assets/` (4 file, 8 righe tolte, nient'altro; il
+   catalogo generato si rifà da sé ed è ignorato).
+   > **Note implementazione**: prove, `nice -n 10`, una alla volta col carico controllato prima: `i18n check` stretto
+   > (**4 633 chiavi**, sorgenti base 1, plugin 71, sottosistemi 21); `utils gate-i18n-catalog` **176/176**; `utils
+   > gate-i18n-usage` **195/195**; `front-utility core-unit` **166 file, 5 491 test** verdi (23:48–23:5x, prima della
+   > finestra delle 00:00).
+1. ✅ **Doc** (docs-writer, 23:50–00:05).
+   - **Primo giro** (A-14, W-B10, W-B33): `access_control.md` +28 / −11, `service.md` +12 / −10; `mkdocs build` stretto
+     0 avvisi, `check-links` 96 validi (link nuovi: `#self-management`, `wac.md#persisted-cost-basis`). Due scarti dal
+     mio brief, scritti come fa il codice:
+     - l'elenco degli accessi (`GET …/access`) lo legge **qualsiasi utente con il login, di qualsiasi broker, e-mail
+       comprese** (`get_by_id(…, as_user_id="all")`, nessun controllo in `list_accesses()`): decisione del developer per
+       l'istanza di famiglia (C-8 della 38), fissata da ACCESS-002/003;
+     - W-B33 (1): «refused with `costBasisRequired`» vale per un batch che **crea** quella metà senza costo; un'edit di
+       sole note, tag o data su una riga vecchia passa (`batch_costs.py:152-176`, N2).
+     Riformulata anche la frase «orphaned … inaccessible by anyone with admin rights» (l'admin raggiunge comunque un
+     broker senza OWNER).
+   - **Secondo giro** (stessa pagina, sezioni dei broker, trovate dal primo): L56 «OWNER defaults to 1.00» (vale per chi
+     crea il broker; un OWNER aggiunto col `PUT` senza quota ha 0), L92 «cascade over transactions» (non è una cascata
+     del DB: `delete_by_broker()`, link a `service.md#broker-deletion`), L106 `bulk_update_access()` «OWNER only» (anche
+     l'admin). Senza build: dalle 00:00 è finestra tranquilla; build e `check-links` li giro io dopo «galleria finita».
+     Applicata da me la sua quarta segnalazione, L101 «Promotions stay on the OWNER-only path» → «Promotions go through
+     the `PUT`, OWNER or administrator only». Totale: `access_control.md` +40 / −17, `service.md` +12 / −10.
+   > **⚠️ Fuori pista** — **W-B34**, decisione per il developer (inviata al coordinatore alle 23:57 secondo la regola della
+   > notte, con la proposta per prima): `GET /brokers/{broker_id}/access` solo a chi ha un ruolo sul broker e all'admin,
+   > 404 agli altri. In pausa; il lotto va avanti e la doc descrive la regola di oggi. **W-B35** nel backlog: docstring
+   > e commenti superati (`access.py:98`, `:141`, `brokers.py:455`, `:496`, `transaction_service.py:84`; le docstring
+   > delle rotte vanno nell'OpenAPI, quindi `api sync` dopo). A-14 sta nella sezione di A del backlog: la chiusura la
+   > segna il coordinatore.
+4. ✅ **Handoff FROZEN** (2026-10-16 00:1x). Delta: `mkdocs_src/docs/developer/architecture/access_control.md` (solo
+   le sezioni dei broker: «Ownership share», «Last Owner», «Self-Management», «Implementation Details», «API
+   Endpoints»; le sezioni d'account di A intatte), `mkdocs_src/docs/developer/backend/transactions/service.md`,
+   `frontend/src/lib/i18n/assets/{en,it,fr,es}.json`, backlog e piano. Nessun file nuovo, nessun codice.
+   > **Note implementazione**: non girati, per la finestra G-13 (00:00–01:15): `mkdocs build` stretto e `check-links`
+   > del secondo giro (il primo giro: 0 avvisi, 96 link validi); li giro dopo «galleria finita», o li gira il
+   > coordinatore al treno. W-B34 attende il developer.
+
+> **Lotto di doc salvato** (coordinatore 00:02: `bf66d4fe7`, `f062418e4`, `865bccb9d`, `32f8f659c`; worktree pulito). Dopo
+> le 01:15: `mkdocs build` stretto e `check-links`, poi l'ingresso. A-14 nella sezione di A la chiude il coordinatore.
+> **W-B20 entrato** (treno 69, merge `23ff56b95`, riga 🐛 nel CHANGELOG). **W-B30** alla lista di domattina: proposta
+> inviata alle 00:10 (un `null` esplicito toglie il costo manuale, la regola di N2 risponde `costBasisRequired` dove serve).
+
+### W-B31 — la regola 12 del costo letta dai metadati ⏳ (2026-10-16)
+
+Via del coordinatore (00:02): prove leggere; l'import circolare lo risolvo come preferisco, annotando la scelta.
+
+**Analisi** (00:15, codice di `32f8f659c`):
+- La regola 12 di `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py:190-205`)
+  ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, scritto a mano. I metadati
+  (`type_metadata.py`) dicono lo stesso oggi: TRANSFER `cost_basis_pair = [forbidden, required_qty_pos]`, ADJUSTMENT
+  `cost_basis_mode = required_qty_pos`, tutti gli altri `forbidden`, nessun tipo `optional`. È una copia che deriva al
+  primo cambio della tabella; il frontend legge già la tabella (`getCostBasisRule` → `cbAllowed`,
+  `frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Nessun test del backend copre la regola 12 (solo l'E2E
+  FM9 di `tx-wac-formmodal.spec.ts`: un BUY senza `costBasisModeIncompatible`).
+- Il ciclo: `type_metadata.py:18` importa `_swap_group_codes` da `transactions.py` (per riempire `swap_group`), e
+  `transactions.py` dovrebbe importare la regola da `type_metadata.py`.
+
+**Decisione notturna, da rivedere** — il ciclo si scioglie spostando i gruppi di scambio (`SWAP_GROUPS`,
+`get_swap_group`, `_swap_group_codes`, tali e quali) da `transactions.py` a `type_metadata.py`, che diventa la casa
+foglia delle regole per tipo; `transactions.py` importa da lì in testa, `services/transactions/batch_edits.py` prende
+`get_swap_group` da lì, il test di N2 (`test_transaction_cost_basis_rule.py:590-591`) patcha `type_metadata.SWAP_GROUPS`
+(regole P2: niente shim, `patch` sul percorso nuovo, grep dei vecchi a zero). Scartato l'import tardivo dentro il
+validatore: lascia la dipendenza al contrario, e le regole 5–11, anch'esse copie a mano dei metadati (`asset_mode`,
+`cash_mode`, `quantity_sign`, `cash_sign`, `event_compatible`), vorrebbero lo stesso trucco.
+
+**Disegno**:
+1. `type_metadata.py`: i gruppi di scambio spostati; `cost_basis_allowed(tx_type, quantity)` accanto a
+   `cost_basis_required()`, con la scelta del lato in comune (`_cost_basis_rule`): ammesso quando la regola del lato non è
+   `forbidden` e non è `required_qty_pos` con quantità ≤ 0 (lo stesso `cbAllowed` del frontend).
+2. Regola 12: `if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity)`; il messaggio inglese
+   perde l'elenco scritto a mano; codice e parametri invariati.
+3. `schemas/transactions/__init__.py`: la docstring dice dove stanno ora i gruppi di scambio.
+4. Rossi (test-author, `schemas transactions`): la parità su ogni tipo × segno (verde oggi), e due rossi che provano la
+   lettura dei metadati (un BUY reso `optional` deve ammettere `cost_basis_mode`; un ADJUSTMENT reso `forbidden` deve
+   rifiutarlo).
+5. Prove: `schemas transactions`, `services transaction-cost-basis-rule`, `services transaction`; dopo le 01:15 `api
+   transactions-types` e `api sync` senza differenze.
+
+**Passi**: 1. ⏳ rossi; 2. cura; 3. prove; 4. doc e handoff.
+
+1. ✅ **Rossi** (2026-10-16 00:19). test-author: sezione 1.10 `TestCostBasisModeRule12` in
+   `backend/test_scripts/test_schemas/test_transaction_schemas.py` (azione `schemas transactions`, nessuna registrazione
+   nuova): TX-S-090 la parità su 12 tipi × quantità −1/0/1 (verde), TX-S-091 senza `cost_basis_mode` mai il codice
+   (verde), **TX-S-092** un BUY reso `optional` deve ammettere `cost_basis_mode` (rosso), **TX-S-093** un ADJUSTMENT reso
+   `forbidden` deve rifiutarlo (rosso), TX-S-094 il percorso di creazione: un BUY con `cost_basis_mode` riceve
+   esattamente `costBasisModeIncompatible` con `{type, qty}` (verde, guardia di codice e parametri).
+   > **Note implementazione**: `nice -n 10 … schemas transactions TestCostBasisModeRule12` → **2 failed, 3 passed**,
+   > per il motivo atteso («still the hand-written copy»: 092 rifiutato, 093 ammesso). Log
+   > `/tmp/libreFolio_w_wb31_red1.log`.
+2. ✅ **Cura** (2026-10-16 00:22). `/tmp/libreFolio_w_wb31_fix.py --apply` (dry run prima):
+   - `backend/app/schemas/transactions/type_metadata.py`: arrivano `SWAP_GROUPS`, `get_swap_group`, `_swap_group_codes`
+     tali e quali (prima di `_build_tx_type_metadata`), via l'import da `transactions.py`; nuovo `_cost_basis_rule()` (la
+     scelta del lato, ora in comune), `cost_basis_required()` lo usa, nuovo `cost_basis_allowed()`; docstring del modulo.
+   - `backend/app/schemas/transactions/transactions.py`: importa `cost_basis_allowed` in testa; la regola 12 diventa
+     `if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity)`, il messaggio inglese senza l'elenco
+     a mano (codice e parametri invariati); tolto il blocco dei gruppi di scambio.
+   - `backend/app/services/transactions/batch_edits.py`: `get_swap_group` da `type_metadata`.
+   - `backend/app/schemas/transactions/__init__.py`: la docstring dice dove stanno i gruppi di scambio e le regole.
+   - `backend/test_scripts/test_services/test_transaction_cost_basis_rule.py`: il modulo patchato è `type_metadata`
+     (`SWAP_GROUPS`), percorso nuovo come vuole P2.
+   > **Note implementazione**: `black` (1 file riformattato), `ruff check` pulito; grep dei vecchi percorsi a zero
+   > (`transactions.transactions` con `get_swap_group`/`_swap_group_codes`/`SWAP_GROUPS`, `transaction_schemas.`). Import
+   > freschi in ogni ordine (`transactions`, `type_metadata`, `backend.app.schemas`, `batch_edits`, `backend.app.main`):
+   > nessun ciclo. `cost_basis_allowed` su 12 tipi × −1/0/1 ammette solo ADJUSTMENT +1 e TRANSFER +1, come prima; i
+   > gruppi di scambio invariati (BUY ↔ SELL, `swap_group` di BUY = `['SELL']`).
+   > Nota (test-author): a quantità 0 su un tipo appaiato il frontend legge il lato `self` (`cost_basis_mode`), il backend
+   > `cost_basis_pair[0]`; oggi tutti e due «forbidden». Divergerebbero solo con un primo lato `optional` e un modo
+   > diverso: nessuna azione.
+3. ✅ **Prove** (00:23–00:26, `nice -n 10`, una alla volta col carico controllato prima): `schemas transactions`
+   **80/80** (i 5 nuovi compresi); `services transaction-cost-basis-rule` **67/67** (con lo scambio BUY → ADJUSTMENT,
+   che fallisce se la patch di `SWAP_GROUPS` non viene letta); `services transaction` **66/66**. Dopo le 01:15: `api
+   transactions-types` e `api sync` (atteso senza differenze: OpenAPI e metadati invariati), con la build del lotto di
+   doc.
+4. ⏳ **Doc e handoff**. docs-writer (00:28–00:34, senza build per la finestra):
+   `mkdocs_src/docs/developer/backend/transactions/wac.md` +13 / −1, un paragrafo nuovo dopo quello di
+   `cost_basis_required()` (la regola 12 legge la stessa tabella con `cost_basis_allowed()`, il lato scelto da
+   `_cost_basis_rule()`, lo stesso `cbAllowed` del frontend; con la tabella di oggi ammette esattamente le righe che
+   vogliono un costo) e un rimando a `#persisted-cost-basis` nella frase della riga ~602. Nessuna traduzione. Notato e
+   non toccato: la descrizione di `cost_basis_pair` (`type_metadata.py:135`) dice «qty<0» per l'indice 0 (è ≤ 0) e usa
+   le etichette italiane «Da»/«A» in un testo dell'API (finisce nell'OpenAPI: semmai con W-B36). Backlog: W-B31 ✅,
+   **W-B36** nuova (le regole 5–11, copie a mano dei metadati).
+   > Restano per dopo le 01:15, in serie: `mkdocs build` stretto e `check-links` (anche per il lotto di doc), `db
+   > populate`, `api transactions` (copre `GET /transactions/types`), `api transactions-validate`, `api
+   > transactions-wac`, `api sync` (atteso senza differenze).
+
+> **W-B31 committato come checkpoint** (coordinatore 00:35: `b29f41e51` refactor, `d01ce77f7` giornale; worktree
+> pulito). Le prove API di W-B31 e la build del lotto di doc dopo «galleria finita», su `d01ce77f7` o oltre.
+
+### W-B36 — le regole 5–11 lette dai metadati, la parte che coincide ⏳ (2026-10-16)
+
+Via del coordinatore (00:33): la parte che coincide, dopo il commit di W-B31, con i quattro casi che non coincidono come
+eccezioni esplicite che rimandano alla decisione **P6** (lista del developer di domattina); prove leggere.
+
+**Analisi** (00:40–00:50, sola lettura, codice di `b29f41e51`), tipo per tipo contro `TX_TYPE_METADATA`:
+
+| Regola | A mano | Tabella | Esito |
+|---|---|---|---|
+| 5 asset obbligatorio | BUY, SELL, DIVIDEND, TRANSFER, ADJUSTMENT | `asset_mode == required`: gli stessi | coincide |
+| 6 asset facoltativo | nessun controllo | INTEREST, FEE, TAX `optional` | coincide |
+| asset vietato | non c'è nelle 5–11 | DEPOSIT, WITHDRAWAL, FX_CONVERSION, CASH_TRANSFER `forbidden` | in creazione le regole 3, 3b, 4; un aggiornamento non può aggiungere un asset (`TXUpdateItem` non ha `asset_id`): nessun caso raggiungibile |
+| 7 cassa obbligatoria | 10 tipi | `cash_mode == required`: gli stessi | coincide |
+| 8 cassa vietata | solo ADJUSTMENT | ADJUSTMENT **e TRANSFER** | **P6 caso 1** (TRANSFER) |
+| 9 eventi | `EVENT_COMPATIBLE_TYPES` = DIVIDEND, INTEREST, ADJUSTMENT | `event_compatible`: gli stessi | coincide (il frozenset è una seconda copia) |
+| 10 segno della quantità | BUY > 0, SELL < 0, sette tipi = 0, ADJUSTMENT ≠ 0 | `quantity_sign`: anche **FX_CONVERSION zero** e **TRANSFER nonzero** | **P6 casi 2 e 3** |
+| 11 segno della cassa | negativo BUY, WITHDRAWAL, FEE, TAX; positivo SELL, DIVIDEND, INTEREST, DEPOSIT | `cash_sign`: gli stessi; più **nonzero** per FX_CONVERSION e CASH_TRANSFER | **P6 caso 4** |
+
+I quattro casi P6 sono tutti nell'aggiornamento: la creazione li rifiuta già (regole 2, 3, 3b), l'aggiornamento
+(`batch_edits._validate_updated_final_state`) fa girare solo le 5–12. Via API passano un TRANSFER con cassa ≠ 0 (sposta il
+saldo di cassa), un FX_CONVERSION con quantità ≠ 0, un TRANSFER a quantità 0, un FX_CONVERSION o CASH_TRANSFER a cassa 0;
+Form e Bulk no (nascondono i campi vietati). Proposta al developer (P6): la tabella anche in aggiornamento, solo quando il
+campo cambia (come N2), dopo un controllo dei dati.
+
+**Disegno**: le regole 5, 7, 8, 9, 10, 11 leggono `TX_TYPE_METADATA` al momento della chiamata (accessori in
+`type_metadata.py`); i casi P6 restano com'è oggi con insiemi d'eccezione espliciti e nominati in `transactions.py`
+(commento che rimanda a P6); `EVENT_COMPATIBLE_TYPES` tolto o derivato; codici, parametri e testi resi dei messaggi
+invariati. Rossi (test-author, `schemas transactions`): la parità su tipi × asset × cassa × quantità × evento (verde oggi),
+un rosso per regola che prova la lettura della tabella, le guardie dei casi P6 (verdi oggi e dopo).
+
+**Passi**: 1. ⏳ rossi; 2. cura; 3. prove; 4. doc e handoff.
+> **Pausa delle prove** (coordinatore 00:56): da subito fino a verso l'01:40 niente prove né build di nessun tipo (la
+> galleria dei colori ha avuto rossi per il carico); leggere e scrivere file va bene. Le prove spostate all'01:15 (build
+> e `check-links` del lotto di doc, API di W-B31) e i rossi di W-B36 slittano a dopo il suo via. Cura di W-B36 pronta:
+> `/tmp/libreFolio_w_wb36_fix.py` (dry run ok).
+1. ⏳ **Rossi** (test-author, 00:40–01:10, nessuna prova lanciata). Sezione 1.11 di
+   `backend/test_scripts/test_schemas/test_transaction_schemas.py`: TX-S-095 la parità su 576 celle (12 tipi × asset
+   × 4 casse × 3 quantità × evento) con i casi P6 a parte (verde: senza le eccezioni differirebbero 64 celle, tutte dei
+   casi 1–3; il caso 4 non tocca nessuna cella, lo vede solo la sua guardia); TX-S-096…103 un rosso per regola (5, 7, 8,
+   9 aperta e chiusa, 10 positivo/negativo e zero/nonzero, 11); TX-S-104…107 le guardie dei quattro casi P6 (verdi oggi e
+   dopo); TX-S-108 codice, testo reso e parametri di 11 codici (verde). Attesi oggi 8 rossi e 16 verdi su 24 elementi.
+   I rossi si girano dopo il via del coordinatore (pausa delle prove).
+
+**Decisioni notturne, da rivedere** (00:58–01:10, dai reperti di test-author):
+- **`EVENT_COMPATIBLE_TYPES` tolto** (era la seconda copia scritta a mano di `event_compatible`): un aiuto
+  `event_compatible(tx_type)` in `type_metadata.py`, letto al momento della chiamata, lo usano la regola 9 e
+  `services/transactions/event_suggestions.py` (`skipped_reason="type_not_event_compatible"`); il test 1.9
+  `test_tx_type_metadata_event_compatible_flags` riscritto senza quel nome (test-author). Il commento di
+  `backend/app/services/files/static_uploads.py:80` (file di H) cita `EVENT_COMPATIBLE_TYPES` come esempio di frozenset:
+  lo segnalo, non lo tocco; `developer/backend/transactions/split_promote.md:120` va riallineata nella doc del lotto.
+  Resta fuori la mappa `type_map` di `event_suggestions.py` (quali tipi d'evento per tipo di transazione): un'altra
+  copia, ma di un'informazione che la tabella non ha.
+- **Testi dei messaggi invariati**: con due o più violazioni `multipleBusinessRuleErrors` impacchetta il *template*,
+  non il testo reso; i quattro messaggi che erano letterali (`qtyPositive`, `qtyNegative`, `qtyNonzero`, `cashForbidden`)
+  restano letterali per tipo (f-string), gli altri restano template. La fuga di `{type}` di oggi nei testi impacchettati
+  va nel backlog come **W-B38**.
+   > Seguito di test-author (01:10–01:25, solo ruff/black): il test 1.9 `test_tx_type_metadata_event_compatible_flags`
+   > riscritto senza `EVENT_COMPATIBLE_TYPES` (i flag della tabella, e il parametro `allowed` della regola 9 su un DEPOSIT
+   > collegato a un evento; `set(TX_TYPE_METADATA) == set(TransactionType)` al posto del conteggio); le docstring della 1.10
+   > al passato; TX-S-108 fissa anche `message_template` degli 11 codici; nuovo **TX-S-109** (un BUY senza asset e con
+   > quantità 0 in creazione: `multipleBusinessRuleErrors` con esattamente le voci `assetRequired` «{type} requires
+   > asset_id» e `qtyPositive` «BUY requires quantity > 0»). Attesi sul file intero 105 elementi: 8 rossi (TX-S-096…103),
+   > 97 verdi.
+   > **Dopo il via**, in serie: `mkdocs build` stretto e `check-links` (lotto di doc e W-B31) → ingresso del lotto di doc;
+   > rossi di W-B36 (`schemas transactions`); cura; `schemas transactions`, `services transaction`, `services
+   > transaction-cost-basis-rule`; `db populate`; `api transactions`, `api transactions-validate`, `api transactions-wac`,
+   > `api events-suggest`; `api sync`; doc di W-B36 (`split_promote.md:120`) e build; handoff di W-B31 e W-B36.
+> **File tenuti dai colori stanotte** (coordinatore 01:07): `frontend/src/lib/components/transactions/modals/
+> TransactionFormModal.test.ts` (righe 791–792, 834–838: `border-red-400` → `border-lf-danger`), `frontend/src/lib/utils/
+> currency/fxConversionHelper.ts:118–131` e `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte:321–322`
+> (Q10, tooltip sul fondo invertito). Prima di toccarli (la 47 compresa), avvisare il coordinatore.
+
+### Decisione 47 — la gamba che cede convertita al costo: analisi ⏳ (2026-10-16)
+
+Sblocco (coordinatore 01:07): J CP-16 in `dev_release2` (`240675ad1`, commit `335fb89cf`: un ADJUSTMENT negativo con
+`cost_basis_override` chiude ogni lotto FIFO che consuma a quel costo per unità, il valore come incasso; senza, resta una
+correzione a prezzo zero). Firma di J: la gamba convertita è un ADJUSTMENT −q con il costo Auto **del suo broker**
+(`compute_wac_iterative(broker della riga, data della riga, esclusa la riga)`); per un TRANSFER ancora legato
+`_auto_cost_source` sceglie il broker del partner; un promote che la riporta a TRANSFER toglie il costo dal lato che
+cede; J-17 è nella lista del developer. Analisi in sola lettura fino al via (i servizi delle transazioni di
+`dev_release2` sono identici ai miei).
+
+**Analisi** (01:10–01:35):
+1. **Cancellazione del broker** (`TransactionService.delete_by_broker`, `services/transactions/transaction_service.py`):
+   oggi la gamba che cede perde solo il link. Con la 47: `make_standalone(gamba, ADJUSTMENT)` e il costo Auto scritto con
+   `_write_auto_cost`, calcolato **prima di ogni modifica** (come quello delle gambe in entrata) con
+   `_auto_cost(gamba, (gamba.broker_id, [gamba.id], gamba.date))`, non con `_auto_cost_source`. Senza un cambio il costo
+   non si scrive: proposta tecnica, la gamba resta come oggi (TRANSFER senza link, lotti `TRANSFER_PAIR_MISSING`) invece di
+   un ADJUSTMENT −q senza costo, che leggerebbe le unità come distrutte.
+2. **«Dividi la coppia»** (`apply_splits`, `batch_edits.py`): la gamba from diventa ADJUSTMENT −q; il suo costo Auto
+   (stesso broker, data, esclusa la riga) va calcolato nello stadio WAC del batch (dopo update, create e promote dello
+   stesso batch), così vede lo stato finale, e `/validate` lo mostra.
+3. **Promote** (`apply_promotes`, `batch_creates.py`): oggi non tocca il costo; con la 47 lo toglie
+   (`cost_basis_override` e `cost_basis_currency`) dal lato in cui il tipo d'arrivo non lo ammette (`cost_basis_allowed`,
+   W-B31): copre il TRANSFER che cede.
+4. **`orphan_pair_halves`, il nodo**: la correzione (`backend/app/db/post_migration/orphan_pair_halves.py`) gira su una
+   connessione `sqlite3` sincrona dentro il framework post-migrazione (lock, backup, controlli FK e conteggi), passo
+   `post-migration-fixes` di `services/platform/app_lifespan.py` in un thread. Il costo Auto vuole `compute_wac_iterative`
+   (async, cambi, split): rifarlo lì sarebbe una seconda copia della matematica finanziaria. Proposta: un passo async
+   d'avvio subito dopo `post-migration-fixes` (una riga in `app_lifespan.py`, file di H) che chiama una funzione mia, lo
+   stesso codice della cancellazione; idempotente, mai bloccante, serializzato fra i worker con `begin_writes`; la
+   correzione sincrona continua a contarle nel dry run. Alternativa: lasciare le gambe vecchie come sono.
+5. **J-17 sì**: ogni gamba convertita (cancellazione, orfani, split) diventa un ADJUSTMENT in uscita col costo, che
+   `build_asset_price_series` (`financial_math/price_marks.py:307-309`) legge come osservazione TRADE: su un asset quotato
+   di rado il prezzo per tutti i broker diventa il costo medio di quel giorno, dove il TRANSFER non segnava nulla.
+6. **Metadati e moduli**: per l'ADJUSTMENT con quantità < 0 il costo resta non ammesso (`required_qty_pos`): Form e Bulk
+   non lo mostrano né lo mandano, un'edit lo lascia scritto, lo scrive solo il sistema. Nessun file del frontend toccato
+   (né `WacPreviewSection.svelte`, tenuto dai colori).
+7. **Testo V-3 per A**: una frase in più sulle unità mandate da un broker che resta a quello cancellato.
+8. **Rossi previsti**: BR-U-073 (oggi fissa la gamba che cede come TRANSFER) e i numeri di `services
+   orphan-transfer-numbers` cambiano; nuovi per lo split, il promote e il passo d'avvio.
+
+**Risposte del coordinatore** (01:12):
+- Punti 1–3: **via**. **Decisione notturna, da rivedere**: senza un cambio la gamba che cede resta un TRANSFER senza link
+  (com'è oggi), non un ADJUSTMENT −q senza costo.
+- Punto 4: **via al passo d'avvio async** subito dopo `post-migration-fixes`: una riga in
+  `backend/app/services/platform/app_lifespan.py`, dichiarata (con H lo schema concordato: un passo per riga), la funzione
+  nel codice di W. **Decisione notturna, da rivedere**: cambia i dati all'aggiornamento, quindi il CHANGELOG lo dice, e il
+  dry run (`python -m backend.app.db.post_migration --dry-run`) deve mostrare le gambe e il costo che prenderanno.
+- Punto 5: J-17 è P2 nella lista del developer; **la 47 non entra senza J-17**: preparo tutto, l'ingresso aspetta la sua
+  risposta di domattina (se la approva, J la fa subito e la 47 entra dopo).
+- L'ordine al via resta il mio: build e `check-links` del lotto di doc → W-B36 (rossi, cura, prove) → API di W-B31/W-B36 →
+  la 47 (rossi dei punti 1–4, cura, prove).
+
+**Cura della 47 preparata** (01:15–01:20, `/tmp/libreFolio_w_dec47_fix.py`, dry run ok su 10 file; si applica dopo i rossi):
+- `services/transactions/auto_cost.py`: `_handover_cost(db_tx)` = `_auto_cost(db_tx, (db_tx.broker_id, [db_tx.id],
+  db_tx.date))`, l'aiuto comune ai quattro punti.
+- Punto 1, `transaction_service.py` (`delete_by_broker`): i costi delle gambe che cedono calcolati con quelli delle gambe
+  in entrata, prima di ogni modifica; con il costo `make_standalone(…, ADJUSTMENT)` e `_write_auto_cost`, senza solo il
+  link (decisione notturna); docstring aggiornata e il commento «one is required since» corretto (una voce di W-B35).
+- Punto 2, `batch_edits.py` (`apply_splits` annota la gamba che cede di un TRANSFER in `context.handover_rows`,
+  campo nuovo di `transaction_batch_context.py`) e `batch_costs.py` (`compute_wac_and_fx_issues` la prezza dopo le voci
+  Auto). **Decisione notturna, da rivedere**: senza un cambio lo split è rifiutato con `WAC_FX_UNAVAILABLE` (come una
+  riga Auto), invece di lasciare un ADJUSTMENT −q senza costo; l'issue esce da un aiuto comune `_wac_fx_unavailable`,
+  identico per le voci Auto.
+- Punto 3, `batch_creates.py` (`apply_promotes`): via costo e valuta dal lato in cui il tipo d'arrivo non li ammette
+  (`cost_basis_allowed`).
+- Punto 4: nuovo `services/transactions/lone_transfer_legs.py` (`convert_lone_giving_legs(session, dry_run)`,
+  `convert_lone_giving_legs_at_startup()` che non solleva mai, `run_lone_giving_legs(db_path, dry_run)` per la riga di
+  comando, `LoneLeg.describe`); una riga in `services/platform/app_lifespan.py` (passo `lone-transfer-legs` dopo
+  `post-migration-fixes`, **file di H, dichiarata**); `db/post_migration/__main__.py` lo fa girare dopo le correzioni e
+  stampa ogni gamba col costo (anche a secco); la docstring di `orphan_pair_halves.py`.
+
+> **Ripresa delle prove** (coordinatore 01:33). **Lotto di doc verde**: `mkdocs build` stretto (uscita 0, 0 avvisi, 81 s)
+> e `check-links` (96 validi), su HEAD `d01ce77f7`; segnalato pronto all'ingresso (01:37).
+> **W-B36, passo 1 ✅** (01:40): `schemas transactions` → **8 failed, 97 passed**, per il motivo atteso (TX-S-096…103:
+> «still the hand-written copy»; la parità TX-S-095, le guardie P6, i messaggi e il test 1.9 riscritto verdi). Log
+> `/tmp/libreFolio_w_wb36_red1.log`.
+> **W-B36, passo 2 ✅** (01:42): `/tmp/libreFolio_w_wb36_fix.py --apply` su `transactions.py` (regole 5–11 dalla tabella
+> con `get_tx_type_metadata()`; insiemi d'eccezione P6 nominati; `EVENT_COMPATIBLE_TYPES` tolto; messaggi letterali per
+> tipo dove lo erano), `type_metadata.py` (`get_tx_type_metadata`, `event_compatible`, `event_compatible_types`; commenti e
+> docstring), `__init__.py` (docstring), `services/transactions/event_suggestions.py` (`event_compatible(req.type)`).
+> `black` invariato, `ruff` pulito. Unico riferimento rimasto a `EVENT_COMPATIBLE_TYPES`: il commento di
+> `backend/app/services/files/static_uploads.py:80` (file di H, da segnalare).
+> **W-B36, passo 3 ✅** (01:43–02:00, `nice -n 10`, carico controllato prima di ogni lancio): `schemas transactions`
+> **105/105**; `services transaction` **66/66**; `services transaction-cost-basis-rule` **67/67**; `db populate`; `api
+> transactions` **26/26**, `api transactions-validate` **11/11**, `api transactions-wac` **20/20**, `api events-suggest`
+> **9/9** (valgono anche come prove API di W-B31); `api sync` senza differenze tracciate. Porta 6184 libera.
+> Passo 4 in corso: doc (docs-writer: `service.md` § regole per tipo, `split_promote.md:120`), docstring della 1.11
+> (test-author).
+> **W-B36, passo 4 ✅** (02:00–02:15). docs-writer: `service.md` nuova sottosezione «📏 Per-type rules»
+> (`#per-type-rules`, 25 righe: i chiamanti, la tabella regola → campo letto → codici, i quattro punti P6) e
+> `split_promote.md` (~120: i tipi che la tabella marca `event_compatible`, con il rimando); `mkdocs build` stretto 0
+> avvisi, `check-links` 96 validi. test-author: le docstring e i messaggi della 1.11 al passato («red before W-B36, now
+> its guard»), nessuna asserzione toccata; `schemas transactions` di nuovo **105/105**. Reperti di docs-writer: il caso 4
+> di P6 si raggiunge anche con un promote (WITHDRAWAL e DEPOSIT a importo zero promossi); la descrizione di
+> `TXCreateItem.asset_event_id` è un'altra copia a mano nell'API (con quella di `cost_basis_pair`: residuo di W-B36 nel
+> backlog). Handoff FROZEN di W-B31 e W-B36 (02:15).
