@@ -18,6 +18,7 @@
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {buildIssueGroups, groupedSeverity, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Raw FIFO data-quality issues (one per lot for lot-scoped codes). */
@@ -55,13 +56,13 @@
     function severityStyles(severity: IssueSeverity) {
         if (severity === 'error' || severity === 'warning') {
             return {
-                container: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400',
-                chip: 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40',
+                container: STATUS_TONES.dataQuality.attention.container,
+                chip: STATUS_TONES.dataQuality.attention.button,
             };
         }
         return {
-            container: 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400',
-            chip: 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40',
+            container: STATUS_TONES.dataQuality.info.container,
+            chip: STATUS_TONES.dataQuality.info.button,
         };
     }
 
