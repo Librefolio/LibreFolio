@@ -215,7 +215,7 @@ describe('the scanner, on synthetic sources', () => {
     });
 
     it('m2 sees a colour inside a Tailwind arbitrary value, where `_` stands for a space', () => {
-        // OnboardingCoachmark's glow is written this way: `shadow-[0_0_0_5px_rgba(52,211,153,0.4),…]`. `\b` finds no
+        // Arbitrary shadows are written this way, as the coachmark's glow was before `--lf-tour-glow`. `\b` finds no
         // boundary between `_` and a letter, so a pattern anchored on it reads past the whole value.
         expect(m2Of(SVELTE, '<div class="ring-1 ring-[#ff0000] shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>\n<div class="shadow-[0_0_0_1px_#fff]"></div>')).toEqual(['#ff0000', '#ffffff', 'rgba(0,0,0,0.5)']);
     });
@@ -544,8 +544,8 @@ describe('the grammar of the roles, on synthetic sources', () => {
     });
 
     it('G4 sees a colour inside an arbitrary value written with `_` for spaces', () => {
-        // OnboardingCoachmark's glow is written this way. The second form hides a literal behind a role: `rolesOnly` must
-        // see the rgb() as well.
+        // Arbitrary shadows and color-mix() are written this way. The second form hides a literal behind a role:
+        // `rolesOnly` must see the rgb() as well.
         expect(caught(SVELTE, '<div class="shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>\n<div class="bg-[color-mix(in_oklab,var(--lf-card)_80%,_rgb(0,0,0))]"></div>')).toEqual(['G4 1  shadow-[0_0_4px_rgba(0,0,0,0.5)]', 'G4 2  bg-[color-mix(in_oklab,var(--lf-card)_80%,_rgb(0,0,0))]']);
     });
 
