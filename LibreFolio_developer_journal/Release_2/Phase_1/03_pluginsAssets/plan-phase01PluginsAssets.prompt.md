@@ -3284,3 +3284,331 @@ alla 2698.
 > - L'ho lanciato **senza attendere il carico**: alla partenza la media di 1 minuto era 81, sopra la soglia di 70.
 >   Errore mio, senza danni (`api sync` è leggero ed è finito in pochi secondi).
 > - Da qui ogni prova passa da `/tmp/libreFolio_x_fe5c_check.sh`, che aspetta il carico ≤ 70 prima di partire.
+
+**Commit dei primi due lotti (~05:11)**:
+- `1439491ca` X-R12, `9b58867eb` X-R13, `62726a83f` journal;
+- HEAD `62726a83f`;
+- ingresso in `dev_release2` dopo il blocco dei colori (~06:45).
+
+**Come entrano i pezzi del FE5c**: tutti toccano `+page.svelte`, quindi un pezzo si consegna solo dopo il commit del
+precedente. Nella pausa i pezzi 3–5 nascono come **file nuovi**; li innesto nella pagina uno alla volta dopo le
+06:45, e ogni innesto ha la sua prova e il suo handoff.
+
+#### FE5c-2 · gli helper puri in moduli `.ts` ✅ (2026-10-16, scritto 05:15–05:30, provato 06:46–06:48)
+
+> **Note implementazione**:
+> - `lib/charts/chartPageSignals.ts` (nuovo, **N18**): `parseBackendSignalResults`, `signalDataContextFingerprint` e
+>   `comparisonAssetIds(configs, excludeAssetId?)`.
+>   - La pagina dei cambi ne ha copie identiche (`fx/[pair]/+page.svelte:525,548,564`; il suo
+>     `comparisonAssetIds` non esclude nessun asset). Le adotta col FE4, che resta mio.
+>   - Casa neutra accanto a `loadComparisonData.ts`, che si dichiara già «condiviso dalle due pagine di dettaglio».
+> - `lib/components/assets/detail/assetDetailPriceQuery.ts` (nuovo): quello che la pagina legge dalla query dei prezzi.
+>   - `parseAssetPriceQueryWithSignalIsolation(data)`: è il corpo di `queryAssetPricesBulkWithSignalIsolation`; nella
+>     pagina resta solo la chiamata axios, in tre righe;
+>   - `priceConversionErrorFromItem`, `calendarComparisonProblemsFromResponse`,
+>     `calendarComparisonFxFailuresFromResponse` e `preserveFactualCalendarPeersForCurrentUnavailable`.
+> - `lib/components/assets/detail/assetDetailChartPoints.ts` (nuovo): `mergeChartPointsIncremental`.
+>   - Le chiamate della pagina restano uguali, compresa quella del polling di Z (riga ~2072 di prima), che non tocco.
+> - `lib/components/charts/priceChartHelpers.ts`: `emptyCalendarReturnView` era privato e diventa esportato, con lo
+>   stato `idle` di default. La pagina ne aveva una copia identica, che sparisce.
+> - **Corpi spostati alla lettera**, verificato con `diff`. Le uniche differenze:
+>   - i commenti di documentazione;
+>   - `export`;
+>   - un `responseItemFor` privato al posto di due `find` uguali;
+>   - `views` come `ReadonlyMap`;
+>   - `allAssets` e `displayCurrency` della pagina, che diventano l'argomento `context` (`{assets, displayCurrency}`),
+>     valutato nello stesso momento di prima: all'arrivo della risposta.
+> - **Nella pagina**:
+>   - `comparisonAssetIds(configs)` resta come involucro di una riga, legato a `data.assetId`, così le sue sei chiamate
+>     non cambiano;
+>   - dagli import escono `schemas`, `backendSignalSchemas` e `COMPARISON_ASSET_RUNTIME_PARAM_KEYS`.
+> - La pagina passa da 3602 a **3407 righe**. Nessun blocco del diff cade nel polling di Z (righe 1486–1606 di prima).
+> - Nessuna classe spostata, quindi niente `--split`.
+> - **Test**: un test-author in background scrive i Vitest dei tre moduli e dell'export, e li registra in `core-unit`.
+>   Non lancia niente fino al mio via, dopo le 06:45.
+> - **Da provare dopo le 06:45**:
+>   - `front check`;
+>   - i Vitest nuovi;
+>   - `comparisonSignalPages.test.ts`, che legge il sorgente della pagina;
+>   - `core-unit` e `component-unit`.
+
+> - **I test del pezzo 2** (test-author, 05:36, scritti e non lanciati), registrati in `core-unit`:
+>   - 31 in `chartPageSignals.test.ts`;
+>   - 76 in `assetDetailPriceQuery.test.ts`;
+>   - 7 in `assetDetailChartPoints.test.ts`;
+>   - +9 in `priceChartHelpers.test.ts`.
+>   - Usano gli schemi veri, senza mock; i problemi sono asseriti per `code` e `status`.
+> - **⚠️ Fuori pista**, dal suo rapporto: nessun test in node caricava i **valori** del barile `$lib/charts/signals`.
+>   - I due moduli nuovi ora importano direttamente da `signals/backendTypes`, `/ChartSignal`, `/resultMapper` e
+>     `/signalProblem`, come già fa `priceChartHelpers.ts`.
+>   - `$lib/api` invece si carica già in node in vari test (`stressBuckets`, `eligibility`, …).
+> - **Comportamenti fissati dai test, non cambiati**:
+>   - `priceConversionErrorFromItem` legge solo il primo errore;
+>   - l'avviso di valute miste conta come errore di conversione;
+>   - un ramo morto: `Array.isArray(result.error)` dopo `safeParse`.
+> - **Trovato fuori dal codice spostato**: la riga 1665 di `loadChartData`. Va nel backlog come **X-R16**; non lo
+>   correggo nel taglio.
+> - **Secondo giro di test-author** (05:45, solo scrittura):
+>   - unità di `assetDetailFxPair.ts` e di `assetDetailFxRequirements.ts`, compreso il **contratto di pigrizia** dei
+>     getter: quali chiavi si leggono in quali casi;
+>   - test di componente piccoli per `AssetChartModeToggle`, `AssetCalendarWindowControls`, `AssetDetailSignalsPanel` e
+>     `AssetDetailMeasuresSection`;
+>   - niente test di componente per intestazione e metadati: grafici, mappe e navigazione li coprono le E2E.
+
+> - **Prove** (06:46–06:48, ognuna dopo il controllo del carico, con `nice`; la macchina era libera, carico 8–21):
+>   - Prettier sui file del pezzo: ha riformattato solo `assetDetailPriceQuery.ts`, la firma su più righe;
+>   - `front check` → **0 errori, 0 avvisi**, compresi i moduli e i test dei pezzi 4 e 6, già nell'albero;
+>   - Vitest dei 6 file puri (pezzi 2, 4 e 6) → **373/373**;
+>   - `front-utility core-unit` → **177 file, 6343/6343**, compresi i cancelli dei colori e
+>     `comparisonSignalPages.test.ts`;
+>   - `git diff --check` pulito.
+> - Niente `api sync`, niente `--split`, niente E2E (le E2E della pagina arrivano alla fine, nello slot pesante).
+> - Testo aggiornato in `developer/frontend/components/charts.md`. Il `mkdocs build` gira prima dello slot E2E.
+> - **⚠️ Fuori pista**: il primo Vitest è uscito con 127, perché il wrapper fa `cd` nella radice e il percorso di
+>   `vitest` era relativo a `frontend/`. Rilanciato con `bash -c 'cd frontend && …'`. Nessun effetto.
+
+**Decisione notturna, da rivedere**
+- **N18.** Gli helper che la pagina dell'asset ha in comune con quella dei cambi vanno in un modulo neutro nuovo,
+  `lib/charts/chartPageSignals.ts`, non sotto `components/assets/`, così il FE4 li adotta senza import fra feature.
+  - Il resto va in `lib/components/assets/detail/`, una sottocartella che il rename del FE5a si porta dietro.
+  - `isRecord` resta privato, come nei sei moduli che ne hanno già una copia: nessuna utilità condivisa nuova in
+    questo lotto.
+
+#### FE5c-3/4/5 · i pezzi nuovi, scritti nella pausa ⏳ (2026-10-16, 05:20–05:30; innesti dopo le 06:45)
+
+I componenti sono generati da script (`/tmp/libreFolio_x_fe5c_piece3.py`, `…piece5.py`), copiando alla lettera il blocco
+della pagina e togliendo solo l'indentazione. La pagina **non** è ancora toccata per questi pezzi: resta al pezzo 2.
+
+- **FE5c-3** `lib/components/assets/detail/AssetDetailMetadataPanel.svelte`, dal blocco «Metadata & Classification»
+  (righe 3253–3365 della pagina al pezzo 2).
+  - Uniche differenze: `showMetadata` diventa `open` (`$bindable`), e l'azione di modifica diventa `onedit`.
+  - Tolto `disabled={!assetInfo}`: dentro `{#if assetInfo}` valeva sempre falso, e senza l'attributo il DOM è uguale. Le
+    classi `disabled:` restano com'erano.
+  - **Innesto**:
+    - al posto del blocco: `<AssetDetailMetadataPanel bind:open={showMetadata} {shortDescription} {providerExternalUrl}
+      {classificationLoaded} {sectorDistribution} {geographicDistribution} {identifiersList} {providerAssignment}
+      {providerIconUrl} {assignmentProviderName} onedit={() => { editDataForModal = buildEditData(); editModalOpen = true;
+      }} />`;
+    - `showMetadata` resta nella pagina, così sopravvive al cambio di scheda e di asset come oggi;
+    - dalla pagina escono gli import che restano inutili: `GeographyMap`, `AllocationPieChart` e forse `Info`,
+      `ChevronDown`, `currentLanguage`, `uiLocale` (da verificare uno per uno);
+    - `--split` della pagina verso la pagina e il pannello.
+- **FE5c-4** `lib/components/assets/detail/assetDetailFxPair.ts` (**N19**):
+  - `fxPairCreateDefaults(slug, assetCurrency, displayCurrency)`: i tre `{@const}` della modale delle coppie;
+  - `displayCurrencyAfterFxPairCreated(pair, assetCurrency)`: la scelta della valuta in `handleFxPairCreated`.
+  - **Innesto**: un `{@const}` al posto di tre, e due righe in `handleFxPairCreated`. Il `readonlyBase={!fxPairCreateSlug}`
+    resta nella pagina. Test con test-author.
+- **FE5c-5** `lib/components/assets/detail/AssetDetailHeader.svelte`, dal blocco dell'intestazione (righe 2514–2569).
+  - `use:guideAnchor={'asset.detail.header'}` resta sulla radice del componente.
+  - Uniche differenze:
+    - `transactionsHref` in ingresso al posto di `buildTransactionsFiltersUrl(...)`: è una funzione pura di una rotta, e
+      un componente di `$lib` non importa dalle rotte;
+    - `{assetId}` per `AssetBrowseNav`.
+  - **Innesto**: `<AssetDetailHeader assetId={data.assetId} {assetInfo} {loading} {currencyFlag} {providerIconUrl}
+    {assetProviderName} {userUrl} {providerExternalUrl} transactionsHref={assetInfo ?
+    buildTransactionsFiltersUrl({asset_id: assetInfo.id}) : ''} {liveUpdatesState} />`; dalla pagina escono gli import
+    rimasti inutili (`ArrowLeft`, `ExternalLink`, `AssetIcon`, `AssetBrowseNav`, `LiveUpdatesStatus`, …, da verificare);
+    poi `--split`.
+- **Colori**: le classi si spostano intere, senza cambiarle. Nessun `-lf-` in questi blocchi, quindi nessun elemento misto.
+  Le stringhe inglesi già scritte a mano («Provider», «✏️ Manual») si spostano così come sono; restano da tradurre.
+
+**Decisione notturna, da rivedere**
+- **N19.** Il pezzo 4 era «scheda del rischio e modali».
+  - La scheda del rischio resta nella pagina: è un solo `<AssetRiskScenariosView>` con 11 proprietà, e un componente
+    che le inoltra soltanto non toglie logica.
+  - Le modali restano nella pagina, ognuna in una riga. Esce invece la loro logica, in `assetDetailFxPair.ts`: i lati
+    proposti dalla modale delle coppie e la valuta mostrata dopo la creazione, con le sue unità.
+- **FE5c-6** `lib/components/assets/detail/assetDetailFxRequirements.ts`: `buildRequiredFxPairs(input)` e
+  `buildAssetDetailIssues(input)`, dai due `$derived.by` della pagina (`requiredFxPairs`, 125 righe; `assetDetailIssues`,
+  70). Il tipo `RequiredFxPairInfo` si sposta con loro.
+  - **La trappola della reattività**: il `$derived` di oggi legge lo stato **in modo pigro**.
+    - Per esempio, `chartData.length` solo quando la coppia principale non ha ancora una data convertita;
+      `calendarSnapshotIsCurrent` solo nella vista del calendario; `$t(...)` del nome di ripiego solo per un pari che
+      non si trova.
+    - Un oggetto letterale leggerebbe tutto subito: più dipendenze, e la lista delle coppie, il banner compreso, si
+      ricalcolerebbe a ogni punto del polling.
+    - Per questo la pagina passerà un oggetto di **getter**, e il modulo lo legge nello stesso ordine e alle stesse
+      condizioni del corpo di prima. Dipendenze identiche.
+  - **Differenze dal corpo di prima**:
+    - `assetInfo` è letto una volta in una variabile locale, nello stesso punto;
+    - la variabile del ciclo degli eventi si chiama `peer`, per non coprire la nuova locale;
+    - tolto `const parts = pair.slug.split('-')`, mai usato;
+    - `any[]` diventa `readonly unknown[]`;
+    - le due chiamate a `$t` passano per `eventsLabel` e `assetFallbackLabel(assetId)`, lette negli stessi punti.
+  - **Innesto**:
+    - `const fxRequirementsState: RequiredFxPairsInput = {get displayCurrency() {…}, get asset() {return assetInfo},
+      get pageAssetId() {return data.assetId}, get configuredFxSlugs() {return allConfiguredFxSlugs}, …, get
+      hasChartData() {return chartData.length > 0}, get eventsLabel() {return $t('events.fxBannerContext') ?? 'for
+      dividend/cash events'}, assetFallbackLabel: (id) => $t('chartSettings.signals.assetFallback', {values: {id:
+      String(id)}})}`;
+    - poi `let requiredFxPairs = $derived(buildRequiredFxPairs(fxRequirementsState))`, e lo stesso per
+      `assetDetailIssues`;
+    - restano nella pagina `fxConversionMissing`, `fxPairSlug` e `mainFxPairUrl`.
+  - **Da notare per il FE4**: `toSlug` è una copia di `createPairSlug` di `fxStoreRegistry.ts`, che però rende
+    maiuscolo. Si sposta così com'è; l'unificazione si decide col FE4.
+- **FE5c-8** (anticipato rispetto al 7, perché più semplice e senza `bind:this`). Il «doppione» dei controlli del
+  calendario è il selettore prezzi/rendimento, disegnato in due rami: quello con i dati (o col calendario) e quello
+  vuoto, che è sempre in modalità prezzi.
+  - `AssetChartModeToggle.svelte` (generato da `/tmp/libreFolio_x_fe5c_piece8.py`, dal primo ramo):
+    - una sola copia per i due rami;
+    - il tipo `AssetChartPrimaryMode` esportato dallo `<script module>`, così la pagina lo importa e toglie l'alias
+      locale.
+    - Nel ramo vuoto il bottone del calendario guadagna `disabled:opacity-40 disabled:cursor-not-allowed`, inerti
+      perché non è mai disabilitato. `aria-pressed` viene disegnato `"true"`/`"false"` come prima.
+  - `AssetCalendarWindowControls.svelte`: i preset, la durata personalizzata e il link alla doc. Ha tre `$bindable`
+    (`customAmount`, `customUnit`, `customEditing`), che restano stato della pagina perché `setPrimaryMode` e
+    `setCalendarPreset` chiudono l'editor. Il `$derived` delle opzioni di durata ci entra, perché lo usa solo lui.
+  - **Innesto**:
+    - ramo 1: `<AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} />`, e sotto `{#if primaryMode ===
+      'calendar-return'}<AssetCalendarWindowControls selection={calendarWindowSelection}
+      bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit}
+      bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} />{/if}`;
+    - ramo 2: lo stesso toggle;
+    - escono gli import inutili (`ChartLine` resta per le schede, `Percent`, `CompactDurationBadge`, `DocsLink`, e da
+      `calendarReturnWindow` quello che non serve più);
+    - poi `--split`.
+- **FE5c-7** (**N20**): i due pannelli diventano **cornici con uno snippet `children`**, generate da
+  `/tmp/libreFolio_x_fe5c_piece7.py`.
+  - Il contenuto resta nella pagina: `ChartSignalsSection` con le sue 20 proprietà, e i due `MeasurePanel` con i loro
+    `bind:this`, che la pagina usa per `addPoint`, `clearMeasures` e `stopMeasureMode`.
+  - `AssetDetailSignalsPanel.svelte`: il riquadro, il toggle (`asset-detail-signals-toggle`, che
+    `openSignalConfiguration` cerca per testid), l'intestazione e il chevron. `open` è `$bindable`, e lo stato
+    `showSignals` resta nella pagina, che lo usa anche in `savedPanelStates` e in `openSignalConfiguration`.
+    `{@render children()}` sta dentro `{#if open}`, quindi la sezione si monta e si smonta come prima.
+  - `AssetDetailMeasuresSection.svelte`: il riquadro (`data-mode`) e l'intestazione, con il distintivo «attivo»,
+    «Aggiungi misura» e il chevron.
+    - Ingressi: `mode`, `open`, `measureModeActive`, `canAddMeasure`, `ontoggle`, `onaddmeasure`.
+    - La pagina li calcola come prima: `activeMeasuresOpen()`, `activeMeasureMode()` e
+      `activeChartData.filter((point) => !point.missing).length >= 2`, valutati nel suo template, quindi con le stesse
+      dipendenze.
+    - I due pannelli delle misure sono lo snippet.
+  - **Innesto**:
+    - `<AssetDetailSignalsPanel bind:open={showSignals}><ChartSignalsSection … /></AssetDetailSignalsPanel>`;
+    - `<AssetDetailMeasuresSection mode={primaryMode} open={activeMeasuresOpen()} measureModeActive={activeMeasureMode()}
+      canAddMeasure={…} ontoggle={() => setActiveMeasuresOpen(!activeMeasuresOpen())} onaddmeasure={() => {
+      setActiveMeasuresOpen(true); activeMeasurePanel()?.addMeasureFromChartData(); }}>…i due pannelli…</AssetDetailMeasuresSection>`;
+    - escono gli import inutili (`TrendingUp`, `Ruler`, …);
+    - poi `--split`.
+
+**Decisione notturna, da rivedere**
+- **N20.** I pannelli dei segnali e delle misure diventano cornici con lo snippet, non componenti che inoltrano tutte
+  le proprietà del contenuto.
+  - L'inoltro avrebbe spostato una ventina di proprietà senza togliere logica.
+  - Avrebbe portato il `bind:this` dei pannelli delle misure dentro un componente intermedio.
+  - Con lo snippet il contenuto resta tipizzato dove vivono i suoi dati, e la cornice (le classi, il toggle e il
+    chevron) esce dalla pagina.
+- **Gli innesti, scritti in uno script** (`/tmp/libreFolio_x_fe5c_splice.py <pezzo> [--apply]`, uno per pezzo).
+  - Sostituisce il blocco con la chiamata, aggiunge l'import, e toglie solo gli import che nessuna riga fuori dagli
+    import usa più, compresi i nomi dentro gli import su più righe.
+  - **Prova a secco** su una copia in `/tmp` (05:28): la catena 3→8 si applica tutta sulla pagina al pezzo 2, da
+    3408 a **2996 righe**.
+  - Gli import tolti sono solo quelli rimasti inutili. `Ruler`, `ChartLine` e `currentLanguage` restano, perché la
+    pagina li usa ancora.
+- **`--split` per pezzo**, dentro `frontend/src`. Serve solo ai pezzi che spostano classi: 3, 5, 7 e 8. I pezzi 2, 4 e 6
+  sono TypeScript puro.
+  - Pezzo 3: `node frontend/scripts/theme/theme-roles.mjs --split 'routes/(app)/assets/[id]/+page.svelte:routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte'`.
+  - Gli altri allo stesso modo, con i loro file.
+
+### K-16 e O-9 — un lotto piccolo, scritto nella pausa ⏳ (2026-10-16, 05:30–05:40; prove dopo le 06:45)
+
+Sono le due voci backend del dominio che il piano mette «in un treno qualunque» (§9, punto 8). Nessun file in comune con
+il FE5c, quindi un commit separato.
+
+- **K-16** (D-X7): in `borsa_italiana/plugin.py`, `"etc/etn"` passa da `AssetType.ETF` a `AssetType.ETF_COMMODITY`, con
+  una riga di commento.
+  - Borsa Italiana usa la stessa etichetta per ETC ed ETN, e quasi sempre sono su una materia prima.
+  - Test: un'asserzione in `test_borsa_italiana_errors.py::test_map_asset_type` (azione `services provider-errors`).
+- **O-9**: i parametri di justETF e del CSS scraper si vedevano col nome della chiave (`current_css_selector`), perché
+  i due `params_schema` non avevano `label`, e le descrizioni erano solo in inglese.
+  - Nei due `params_schema` c'è ora un `label` inglese, come in Borsa Italiana: è il ripiego quando manca la
+    traduzione.
+  - Frammenti `assets.providerParams.<codice>.{label,description}.<chiave>` in 4 lingue: aggiunti al `justetf/i18n/`
+    esistente (che aveva solo `pluginSettings`), e un `css_scraper/i18n/` nuovo.
+  - Nessuna modifica al frontend: `ProviderAssignmentSection.paramText` legge già quelle chiavi.
+  - I `placeholder` restano non tradotti: sono valori d'esempio.
+- **Test** (test-author, 05:50, scritti e non lanciati):
+  - K-16: due asserzioni in `test_map_asset_type` (`"ETC/ETN"` e `" etc/etn "` danno `ETF_COMMODITY`), con `"ETF"`
+    che resta `ETF`.
+  - O-9: tre test in `test_provider_contracts.py::TestAssetProviderContract`, un file già registrato (`services
+    provider-contracts`):
+    - **le traduzioni dei parametri coprono esattamente il modulo**, per ogni provider asset che ne ha, in tutte le
+      lingue del catalogo: niente chiavi mancanti né vecchie, testi non vuoti;
+    - **un controllo positivo**, perché il test di sopra non passi senza controllare niente;
+    - **ogni campo del modulo ha un `label` inglese**, per Borsa, CSS scraper e justETF.
+- **Effetto di K-16 sugli asset esistenti**:
+  - `_map_asset_type` serve anche alla ricerca e a `fetch_asset_metadata`, quindi un ETC già salvato come `ETF`
+    diventa `ETF_COMMODITY` al primo «Aggiorna metadati».
+  - Lo fa **solo su richiesta dell'utente**: `refresh_assets_from_provider` è chiamato solo da
+    `api/v1/assets/providers.py:387`, mai dallo scheduler. Il risultato mostra il vecchio e il nuovo valore.
+- **Trovato da test-author, corretto nel lotto** (stesso tema di O-9): la descrizione di `codice_fondo` di Borsa
+  Italiana nel backend aveva guadagnato «when the fund is not on the XMIL market API», e le 4 traduzioni no. In
+  interfaccia vinceva la traduzione, quindi si leggeva il testo vecchio. Ora le 4 lingue sono allineate.
+- **Da provare dopo le 06:45**:
+  - `services provider-errors` e `services asset-source`;
+  - `utils gate-plugin-i18n-ownership` e `gate-plugin-layout`;
+  - `i18n check`;
+  - ruff e black sui due plugin.
+
+### CP13 — F21, C-90 e C-66: analisi preliminare (2026-10-16, 05:40, sola lettura; da mandare al coordinatore con l'ultimo pezzo del FE5c)
+
+**F21 nella specifica** («Feature SaaS Readiness», righe 127–130):
+- ogni provider ha `priority` e `tier`;
+- la ricerca mostra prima i `premium` (badge «Premium»), poi le azioni «Non lo trovi? Segnalacelo» e «Prezzo manuale /
+  import», e in fondo una sezione chiusa «Fonti non premium (community)»;
+- alla prima apertura della sezione compare un avviso («fonte di terzi, configurata da te, nessuna garanzia»), e la
+  scelta vale solo per quell'asset: nessuna cache condivisa;
+- la specifica ha un terzo livello `advanced`. Il perimetro approvato ne ha due, e resto su due (§3).
+
+**Disegno** (approvato in §4.6, D-X3 e D-X8):
+- **Backend**:
+  - nella base dei provider asset, `tier: ClassVar` (`premium` | `community`, default `community`) e
+    `search_priority: ClassVar[int]`;
+  - livello e priorità effettivi letti a ogni chiamata, con la sovrascrittura `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` /
+    `…_ORDER` (non impostate = come dichiarato);
+  - `FAProviderInfo` espone `tier` e `priority`, poi `api sync`;
+  - la ricerca non in streaming ordina per gruppo e priorità **solo se almeno un premium è permesso**: altrimenti
+    l'ordine resta quello di oggi.
+- **Frontend** (`AssetSearchAutocomplete`): con almeno un premium attivo:
+  - la sezione Premium col badge;
+  - le due azioni;
+  - la sezione community chiusa, con l'avviso alla prima apertura e la scelta per quell'asset soltanto.
+  - Senza premium, niente cambia (D-X3). Oggi nessun provider è premium, quindi il self-hosted resta identico.
+- **Prove**:
+  - pytest in processo per la sovrascrittura (`monkeypatch` dell'ambiente);
+  - Vitest dei gruppi;
+  - E2E con le risposte dei provider instradate, per avere un premium senza toccare l'ambiente del server;
+  - uno scatto in galleria, da concordare con G.
+- **C-90**: in `ProviderAssignmentSection`, accanto all'esito di «Testa configurazione», la nota «prova sugli ultimi
+  giorni: alla creazione LibreFolio scarica tutto lo storico». Una chiave i18n in `assets`.
+- **C-66**: l'avviso nel dialogo di sync quando l'intervallo copre dati già presenti. Parte dal file finale di T
+  (`SyncModalBase`, `PageSyncModal`, ~07:30).
+
+**Domande per il coordinatore**, con le mie proposte:
+1. **L'indirizzo di «Segnalacelo»**. Proposta: `LIBREFOLIO_SUPPORT_URL`, costruita come `LIBREFOLIO_BILLING_URL` (A,
+   `config/accounts.py`, helper `_url`) e pubblicata in `GET /system/instance`. Non impostata, il link va alle issue
+   di GitHub, che `HelpMenu` e `FixFlaggedStep` già usano.
+   - Il nome e il proprietario li decide il coordinatore: potrebbe interessare anche `HelpMenu`, che non è mio.
+2. **«Prezzo manuale / import» dentro la modale di creazione**. Proposta: un'azione «Continua senza fonte», che chiude
+   la ricerca e lascia l'asset senza provider (la modale lo sa già fare), con una riga «i prezzi si aggiungono a mano
+   o da un file». Niente salto all'import wizard da dentro la modale.
+
+**Peso**: backend piccolo; frontend medio (ricerca, i18n, Vitest, E2E, galleria). C-66 dopo il lotto di T.
+- **Il secondo giro di test** (test-author, 06:05, scritti e non lanciati), 130 test:
+  - `assetDetailFxPair.test.ts` 24, con ogni caso confrontato con una copia alla lettera delle righe di prima;
+  - `assetDetailFxRequirements.test.ts` 78: ordine, slug canonici, ogni stato, salti dei pari, eventi con forme vere
+    di `FAAssetEventPointOut`, e il contratto di pigrizia (quali chiavi si leggono, ognuna col suo caso contrario);
+  - componenti: `AssetChartModeToggle` 5, `AssetCalendarWindowControls` 10, `AssetDetailSignalsPanel` 4 (con
+    l'imbracatura `src/__tests__/harness/AssetDetailSignalsPanelHarness.svelte`, che lega `open` come la pagina, nel
+    commit del pezzo 7), `AssetDetailMeasuresSection` 9.
+  - Rilettura del codice spostato: nessun difetto. Solo rami innocui ereditati dalla pagina, per esempio l'`if
+    (input.displayCurrency)` attorno agli eventi, sempre vero.
+- **In attesa fuori dall'albero** (06:08, `/tmp/libreFolio_x_fe5c_hold/`), con il loro percorso:
+  - i componenti dei pezzi 3, 5, 7 e 8;
+  - i loro 4 test di componente;
+  - l'imbracatura.
+- **Un commit per pezzo, con le sue registrazioni.**
+  - **Il cancello dei colori** (`core-unit`) legge l'albero di lavoro: un `.svelte` nuovo e non tracciato, con classi di
+    tavolozza, lo fa fallire. Per questo i componenti dei pezzi 3, 5, 7 e 8, con i loro test, aspettano in
+    `/tmp/libreFolio_x_fe5c_hold/` e rientrano solo al loro innesto, nello stesso commit del `--split`.
+  - I moduli `.ts` puri dei pezzi 4 e 6 restano al loro posto: non hanno classi, e `front check` li controlla subito.
+  - **Le righe del runner**: test-author non registra il secondo giro; ogni riga entra col suo pezzo.

@@ -3189,6 +3189,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
   ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
   Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
+- **X-R14 · La pagina di dettaglio dei cambi tiene copie degli helper dei segnali** — minimo, frontend; X, 16/10 (FE5c-2).
+  `fx/[pair]/+page.svelte` ha copie identiche di `parseBackendSignalResults`, `signalDataContextFingerprint` e
+  `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
+  `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
+  Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
+- **X-R15 · Due testi inglesi fissi nella pagina dell'asset** — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+  (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
+  catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
+  `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
+- **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** — basso, frontend; X, 16/10
+  (test-author del FE5c-2). In `loadChartData`, `parseBackendSignalResults` rifiuta tutta la risposta se un solo
+  segnale non è valido. Questa parte è voluta: nessun segnale del backend viene mostrato, e `signalRequestFailed` lo
+  dice.
+  - **Il difetto**: il `throw` salta anche la scrittura dei prezzi nella cache e `resolveMaxStartFromChartData()`.
+    Con «Tutto», l'inizio dell'intervallo non si risolve, e i prezzi già arrivati non entrano nella cache.
+  - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
+    test di componente o E2E che instrada un segnale non valido.
+  - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
 
 ## W · Import e transazioni (fase 01)
 
