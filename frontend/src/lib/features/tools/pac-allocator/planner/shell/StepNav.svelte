@@ -48,13 +48,13 @@
 {#snippet marker(step: PlannerStep)}
     {@const value = stepState(step)}
     {#if value === 'current'}
-        <CircleDot class="h-4 w-4 shrink-0 text-libre-green" aria-hidden="true" />
+        <CircleDot class="h-4 w-4 shrink-0 text-lf-link" aria-hidden="true" />
     {:else if value === 'problem'}
-        <CircleAlert class="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        <CircleAlert class="h-4 w-4 shrink-0 text-lf-warning" aria-hidden="true" />
     {:else if value === 'visited'}
-        <CircleCheck class="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <CircleCheck class="h-4 w-4 shrink-0 text-lf-success" aria-hidden="true" />
     {:else}
-        <Circle class="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+        <Circle class="h-4 w-4 shrink-0 text-lf-muted" aria-hidden="true" />
     {/if}
 {/snippet}
 
@@ -65,9 +65,9 @@
             <li>
                 <button
                     type="button"
-                    class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-60 {value === 'current'
-                        ? 'bg-emerald-50 font-semibold text-gray-900 dark:bg-emerald-900/30 dark:text-white'
-                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'}"
+                    class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-60 {value === 'current'
+                        ? 'bg-lf-selected font-semibold text-lf-primary'
+                        : 'text-lf-secondary hover:bg-lf-hover'}"
                     aria-current={value === 'current' ? 'step' : undefined}
                     {disabled}
                     data-testid="pac-planner-nav-step"
@@ -91,13 +91,13 @@
             <p class="text-sm font-medium" data-testid="pac-planner-nav-position">
                 {$t('tools.pacAllocator.planner.nav.position', {default: '{index}/{total} {step}', values: {index: index + 1, total: steps.length, step: label(current)}})}
             </p>
-            <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-sm dark:border-gray-600" aria-expanded={open} aria-controls="pac-planner-nav-list" {disabled} data-testid="pac-planner-nav-toggle" onclick={() => (open = !open)}>
+            <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-lf-input px-2 py-1 text-sm" aria-expanded={open} aria-controls="pac-planner-nav-list" {disabled} data-testid="pac-planner-nav-toggle" onclick={() => (open = !open)}>
                 {$t('tools.pacAllocator.planner.nav.steps', {default: 'Steps'})}
                 {#if open}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
             </button>
         </div>
-        <div class="mt-2 h-1.5 w-full rounded bg-gray-200 dark:bg-gray-700" aria-hidden="true">
-            <div class="h-1.5 rounded bg-libre-green motion-safe:transition-[width]" style:width={progress}></div>
+        <div class="mt-2 h-1.5 w-full rounded bg-lf-neutral" aria-hidden="true">
+            <div class="h-1.5 rounded bg-lf-checked motion-safe:transition-[width]" style:width={progress}></div>
         </div>
         {#if open}
             <div id="pac-planner-nav-list" class="mt-2" data-testid="pac-planner-nav-list">{@render list(false)}</div>
