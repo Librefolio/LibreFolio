@@ -1,4 +1,16 @@
 {
+  "assets": {
+    "providerParams": {
+      "justetf": {
+        "label": {
+          "currency": "Divisa del precio"
+        },
+        "description": {
+          "currency": "Divisa del precio. EUR = cotización en tiempo real + histórico. USD/CHF/GBP = último precio diario + histórico (convertidos por JustETF)."
+        }
+      }
+    }
+  },
   "pluginSettings": {
     "asset": {
       "justetf": {
