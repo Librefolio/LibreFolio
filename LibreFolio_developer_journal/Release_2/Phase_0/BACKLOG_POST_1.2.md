@@ -3041,8 +3041,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   righe 392–419 (spec della 1.3): la regex prenderebbe anche un ruolo `bg-lf-selected` quando `DataTable` (T, W6) migra;
   meglio leggere `aria-selected`. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   sezione «Stato attuale».
-- **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
-  16/10); poi migrazione dalla versione di Y, 205 → 20. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+- ✅ **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
+  16/10); poi migrazione dalla versione di Y, 205 → 20. Chiusa il 16/10 sera nel checkpoint L4 di BK, con il misto di
+  G-18 (`contentClass` tolto); restano i 20 di BK-2. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
   passo S7.
 
 ---
