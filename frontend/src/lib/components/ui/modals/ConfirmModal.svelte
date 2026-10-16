@@ -13,7 +13,6 @@
     import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import '$lib/theme/components/dialogs.css';
 
     interface Props {
         /** Whether modal is open */
@@ -156,30 +155,23 @@
 </ModalBase>
 
 <style>
-    /* No backdrop styles needed — handled by ModalBase */
+    /* No backdrop styles needed — handled by ModalBase. The colours are the roles of lib/theme/tokens.css, the same
+       in both themes by name: no `.dark` rule. */
 
     .modal-header {
         display: flex;
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--lf-cmp-confirm-border);
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: var(--lf-cmp-confirm-border-dark);
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .modal-title {
         flex: 1;
         font-size: 1.125rem;
         font-weight: 600;
-        color: var(--lf-cmp-confirm-title-text);
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: var(--lf-cmp-confirm-title-text-dark);
     }
 
     .close-btn {
@@ -191,19 +183,14 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: var(--lf-cmp-confirm-close-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background: var(--lf-cmp-confirm-hover-bg);
-        color: var(--lf-cmp-confirm-title-text);
-    }
-
-    :global(.dark) .close-btn:hover {
-        background: var(--lf-cmp-confirm-hover-bg-dark);
-        color: var(--lf-cmp-confirm-title-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .modal-body {
@@ -212,24 +199,16 @@
     }
 
     .message {
-        color: var(--lf-cmp-confirm-message-text);
+        color: var(--lf-text-secondary);
         line-height: 1.6;
         margin: 0;
     }
 
-    :global(.dark) .message {
-        color: var(--lf-cmp-confirm-message-text-dark);
-    }
-
     .description {
-        color: var(--lf-cmp-confirm-muted-text);
+        color: var(--lf-text-muted);
         font-size: 0.8125rem;
         line-height: 1.5;
         margin: 0.5rem 0 0;
-    }
-
-    :global(.dark) .description {
-        color: var(--lf-cmp-confirm-muted-text-dark);
     }
 
     .results-list {
@@ -246,11 +225,7 @@
         align-items: center;
         gap: 0.5rem;
         font-size: 0.8125rem;
-        color: var(--lf-cmp-confirm-result-item-text);
-    }
-
-    :global(.dark) .result-item {
-        color: var(--lf-cmp-confirm-result-item-text-dark);
+        color: var(--lf-text-primary);
     }
 
     .result-label {
@@ -258,35 +233,23 @@
     }
 
     .result-detail {
-        color: var(--lf-cmp-confirm-muted-text);
+        color: var(--lf-text-muted);
         font-size: 0.75rem;
-    }
-
-    :global(.dark) .result-detail {
-        color: var(--lf-cmp-confirm-muted-text-dark);
     }
 
     .result-action {
         margin-left: auto;
-        color: var(--lf-cmp-confirm-result-action-text);
+        color: var(--lf-link);
         font-size: 0.75rem;
         font-weight: 500;
         white-space: nowrap;
     }
 
-    :global(.dark) .result-action {
-        color: var(--lf-cmp-confirm-result-action-text-dark);
-    }
-
     .items-section {
         margin-top: 1rem;
-        border: 1px solid var(--lf-cmp-confirm-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 8px;
         overflow: hidden;
-    }
-
-    :global(.dark) .items-section {
-        border-color: var(--lf-cmp-confirm-border-dark);
     }
 
     .items-toggle {
@@ -295,25 +258,18 @@
         justify-content: space-between;
         width: 100%;
         padding: 0.625rem 0.875rem;
-        background: var(--lf-cmp-confirm-items-toggle-bg);
+        background: var(--lf-surface-panel);
         border: none;
-        color: var(--lf-cmp-confirm-muted-text);
+        color: var(--lf-text-muted);
         font-size: 0.875rem;
         cursor: pointer;
         transition: background 0.15s;
     }
 
+    /* On a panel the hover is `neutral` (open question 3), where the muted text falls under 4.5:1: secondary. */
     .items-toggle:hover {
-        background: var(--lf-cmp-confirm-hover-bg);
-    }
-
-    :global(.dark) .items-toggle {
-        background: var(--lf-cmp-confirm-items-toggle-bg-dark);
-        color: var(--lf-cmp-confirm-muted-text-dark);
-    }
-
-    :global(.dark) .items-toggle:hover {
-        background: var(--lf-cmp-confirm-hover-bg-dark);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
     .items-list {
@@ -322,24 +278,16 @@
         padding: 0.5rem 0;
         max-height: 200px;
         overflow-y: auto;
-        background: var(--lf-cmp-confirm-items-list-bg);
-    }
-
-    :global(.dark) .items-list {
-        background: var(--lf-cmp-confirm-items-list-bg-dark);
+        background: var(--lf-surface-field);
     }
 
     .item {
         padding: 0.375rem 0.875rem;
         font-size: 0.8125rem;
-        color: var(--lf-cmp-confirm-message-text);
+        color: var(--lf-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-
-    :global(.dark) .item {
-        color: var(--lf-cmp-confirm-message-text-dark);
     }
 
     .modal-footer {
@@ -347,11 +295,7 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid var(--lf-cmp-confirm-border);
-    }
-
-    :global(.dark) .modal-footer {
-        border-top-color: var(--lf-cmp-confirm-border-dark);
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn {
@@ -365,47 +309,38 @@
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-confirm-hover-bg);
-        color: var(--lf-cmp-confirm-btn-secondary-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-secondary);
     }
 
     .btn-secondary:hover {
-        background: var(--lf-cmp-confirm-btn-secondary-hover-bg);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-confirm-hover-bg-dark);
-        color: var(--lf-cmp-confirm-btn-secondary-text-dark);
-    }
-
-    :global(.dark) .btn-secondary:hover {
-        background: var(--lf-cmp-confirm-btn-secondary-hover-bg-dark);
+        background: var(--lf-surface-neutral);
     }
 
     .btn-primary {
-        background: var(--lf-cmp-confirm-btn-primary-bg);
-        color: var(--lf-cmp-confirm-on-fill-text);
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background: var(--lf-cmp-confirm-btn-primary-hover-bg);
+        background: var(--lf-action-hover);
     }
 
     .btn-danger {
-        background: var(--lf-cmp-confirm-btn-danger-bg);
-        color: var(--lf-cmp-confirm-on-fill-text);
+        background: var(--lf-danger-solid);
+        color: var(--lf-on-danger-solid);
     }
 
     .btn-danger:hover {
-        background: var(--lf-cmp-confirm-btn-danger-hover-bg);
+        background: var(--lf-danger-hover);
     }
 
     .btn-warning {
-        background: var(--lf-cmp-confirm-btn-warning-bg);
-        color: var(--lf-cmp-confirm-on-fill-text);
+        background: var(--lf-warning);
+        color: var(--lf-on-status);
     }
 
     .btn-warning:hover {
-        background: var(--lf-cmp-confirm-btn-warning-hover-bg);
+        background: var(--lf-warning-hover);
     }
 </style>
