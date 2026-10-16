@@ -142,6 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
 - The image picker no longer reloads its list over and over when it has nothing to show.
 - **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
+- **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
 
 #### 🔒 Security
 
