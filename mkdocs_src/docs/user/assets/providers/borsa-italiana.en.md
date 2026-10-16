@@ -9,8 +9,9 @@ history and instrument details from its public website — no account or API key
   today.
 - **History**: daily open, high, low, close and volume. Mutual funds have no past series: each NAV
   is saved at its own date, so the history grows from the day you add the fund.
-- **Search**: by name or ISIN. Each instrument appears twice, 🇮🇹 and 🇬🇧: the flag sets the
-  language of its name and description. Indices are left out, as you cannot buy them. No result?
+- **Search**: by name or ISIN. Each instrument appears twice, 🇮🇹 and 🇬🇧 — or only in your
+  [preferred language](#preferred-language): the flag sets the language of its name and
+  description. Indices are left out, as you cannot buy them. No result?
   LibreFolio also looks for a matching Borsa Italiana page on the web, unless your administrator
   has turned this off.
 - **Details**: name, type, currency, a sector and a description (market, issuer, maturity, coupon);
@@ -69,6 +70,18 @@ ExtraMOT, EuroTLX) and closed-end funds (MIV) — plus mutual funds and SICAVs.
     For example, the US Treasury bond `US912810TU25` on EuroTLX works once **Market MIC** is
     `ETLX` and **Platform** is `TLX`; its prices are in USD.
 
+### 🌐 Your Preferred Language {: #preferred-language }
+
+Always pick the same language in search? Choose it once as **Preferred language**, under **Borsa
+Italiana** in **Settings › Plugins**, or with **Configure** next to the provider in the asset
+dialog. Your searches then show each instrument once, 🇮🇹 Italian or 🇬🇧 English. **Both
+languages**, the default, shows both, Italian first. The website is searched the same way whatever
+you choose.
+
+It is a personal setting: it changes only your own searches, never a price or an asset you already
+have, and the **Language** of an asset you set up by hand stays yours to pick. See
+[Plugin Settings](../../settings/plugins.md#search-preferences).
+
 ## 🧾 Mutual Funds and NAV
 
 A fund's NAV is published once a day, with a delay. LibreFolio saves each NAV at the date it
@@ -90,4 +103,5 @@ the fund's page shows it.
 - 📋 **[Assets Overview](../index.md)** — Manage your asset library
 - 🏦 **[Asset Providers](./index.md)** — Other data sources
 - 📡 **[justETF](./justetf.md)** — Alternative source for ETF data
+- 🧩 **[Plugin Settings](../../settings/plugins.md)** — Your preferred language in search
 - 🛠️ **For developers: [Borsa Italiana Provider](../../../developer/backend/assets/provider_borsa_italiana.md)** — Requests, page parsing and field mapping
