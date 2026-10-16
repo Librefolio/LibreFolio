@@ -1889,3 +1889,127 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > - dietro un proxy non fidato (`FORWARDED_ALLOW_IPS`) tutti i client hanno lo stesso indirizzo, quindi dopo 10
 >   registrazioni in un'ora ogni email di registrazione è trattenuta. Vale come per gli altri limiti per indirizzo, ma
 >   qui senza un rifiuto visibile.
+
+### Dopo E4b — analisi di E6 (2026-10-16, notte, sola lettura)
+
+Su invito del coordinatore (05:25), durante il fermo della macchina. Base `bf1586ddb`: E5b salvato in quattro commit
+(`207dfbafd`, `6d6965293`, `33da05e31`, `bf1586ddb`), prove dopo le 06:45. Il pacchetto di E4b resta in `/tmp` finché
+le prove di E5b non sono verdi.
+
+#### Prima, E4b (dal pacchetto `/tmp/libreFolio_e4b/`, README aggiornato)
+1. `git apply --check` di `e4b_hooks_A.patch`, `e4b_mine.patch` e delle patch dei test sulla base del momento.
+   - Dopo A6e e A6c vanno rivisti `ForgotPasswordCard` e `LINK_SHARE_ACTIONS`.
+   - `fixtures/instance-email.ts` c'è già, uguale byte per byte: non va ricreato.
+2. L'aggancio in `update_profile` (`a6e_hook/e4b_update_profile_hook.patch`, pronto):
+   - `background` dopo `http_request`;
+   - `old_email` letto prima di `user_service.update_profile`;
+   - `email_changed_work` accodato solo al cambio d'email.
+
+   I suoi test sono da scrivere (`test-author`): solo al cambio d'email, non per il solo username né per lo stesso
+   indirizzo in casefold, risposta e cookie invariati, nessun indirizzo nei log della rotta.
+3. Le E2E ESL-E (`email-send-link.spec.ts`) e FPE-E (`forgot-password-email.spec.ts`) nello slot.
+4. Le docs:
+   - da rifare sul testo di A6e: `admin_email_e4b.md` (il riquadro «Held for now» e il punto di sicurezza «Forgotten
+     passwords are held»);
+   - `user/getting-started.en.md`, modifiche 4–6, che sono debito per la pipeline;
+   - `user/settings/profile.en.md`, la modifica 5, file di A con la frase di A6e;
+   - la riga Email di `admin/index.en.md`, nella forma «entrambi i lotti».
+5. La riga del CHANGELOG di E4b, il testo per il coordinatore.
+6. Una revisione di sicurezza mirata (`security-review`): il «password dimenticata» aperto, cioè la tenuta tolta, e
+   l'avviso al vecchio indirizzo.
+
+#### E6, cosa resta (dal §7 e dal §8)
+
+| # | Voce | Stato oggi | Proposta |
+|---|---|---|---|
+| 1 | **Galleria**: lo scatto `settings/email` | preparato in E2b, mai eseguito: due giri con il diff vuoto, nello slot del coordinatore | slot della galleria; senza `links` lo scatto non cambia (E3p) |
+| 2 | **`all-backend`** con i conteggi della base più i nuovi | mai eseguito su E intero | slot pesante, dopo E4b |
+| 3 | **E2E del dominio**: `email-tab`, `email-verification`, le due di E4b, più `auth` e `auth-links` di A (le card toccate) | `email-tab` verde in E2b; le altre da eseguire | uno slot, `--workers 2` |
+| 4 | **`lint --dead-code --scope backend`** | in E1, 7 reperti di passaggio, poi chiamati da E2/E3/E5 | rifarlo: nessun reperto nuovo |
+| 5 | **`TODO_FUTURI.md`**, la sezione «📧 Server email… (da P2-1)» | ferma: dice «FUTURO» e il segnaposto | segnarla consegnata nella 1.3 con un rimando, e lasciare come futuro E-7 (il segno «in attesa»), E-8 (la lingua dell'invito), le notifiche (F19), il pulsante «Conferma» se rimandato, i limitatori per processo (più worker), il messaggio dell'email trattenuta |
+| 6 | **devWiki**: non c'è `wiki/domains/email.md` | il grafo nel worktree non c'è | pagina di dominio, decisioni D-E1…D-E14, problemi risolti (`MissingGreenlet` dopo il rollback, `address_key` IPv4, il blocco della verifica con i token senza indirizzo, i backtick di E-5), con `project-historian`; `index` e `log` sono condivisi, decide il coordinatore |
+| 7 | **CHANGELOG** | righe di E5 consegnate (handoff E5b) | il testo complessivo di E per il coordinatore, con E4b |
+| 8 | **Docs finali** | `admin/email.en.md` solo EN per scelta; `getting-started` e le pagine di A/H con debito | un giro di coerenza su `admin/email` (ordine delle sezioni, limiti, log); l'elenco del debito di traduzione per la pipeline; tradurre `admin/email` nella 1.3 lo decide il developer |
+| 9 | **Revisione di sicurezza finale** del dominio | E3s, E5b (questa notte) | E4b mirata, poi una lettura d'insieme |
+
+#### Il backlog E aperto, proposta per la 1.3
+- **E-4**, il nome deprecato del 422 in `api/v1/settings.py`: è un rinomina di 4 righe in un file di A. Si può fare in
+  E6, con l'ok di A.
+- **E-2**, i tipi del generatore, **E-3**, `ApiError` nel client condiviso, ed **E-6**, il registro delle schede: tutti
+  e tre toccano file condivisi (generatore, client, registro di A/B/X). Proposta: 1.4, salvo un via esplicito.
+- **E-7**, il segno «in attesa»: fuori dalla 1.3 per decisione. **E-8**, la lingua dell'invito: lista del mattino, poi
+  1.4.
+
+#### Decisioni del developer che toccano E6 (lista del mattino)
+- Il pulsante «Conferma» su `/verify-email`: se va nella 1.3 è un lotto piccolo (card, i18n, test, E2E).
+- Il messaggio dopo un'email trattenuta: serve un campo nella risposta, oppure una frase che nomini il nuovo invio.
+- **Il proxy, priorità del coordinatore per il cloud**: su Fly l'indirizzo del client arriva dal proxy, quindi senza
+  `FORWARDED_ALLOW_IPS` (o la sua forma per Fly) ogni limite per indirizzo vale per tutta l'istanza. Tocca anche il
+  limitatore del login di A. Va documentato nella pagina «Hosting for Others» (di H) e, forse, nel profilo `managed`.
+- Le email uniche senza distinzione di maiuscole: codice e indice di A, alla fonte del flood.
+
+#### Ordine proposto
+1. Le prove di E5b, alle 06:45.
+2. L'E2E di E5b nello slot.
+3. L'handoff finale di E5b.
+4. E4b, come sopra.
+5. E6: prima le scritture (docs, `TODO_FUTURI`, backlog, testo del CHANGELOG), poi gli slot (`all-backend`, E2E del
+   dominio, galleria), la revisione di sicurezza finale e la devWiki, se il coordinatore la apre.
+>
+> **Risposte del coordinatore (05:27)**:
+> - la devWiki `domains/email.md` sì, in E6; `index.md` e `log.md` li fonde lui all'ingresso;
+> - `TODO_FUTURI.md` sì, ma solo la sezione «📧 Server email»;
+> - E-4 in E6, dopo l'ok di A, che chiede lui;
+> - E-2, E-3 ed E-6 rimandate alla 1.4, annotato nel backlog;
+> - il proxy: il limitatore del login di A è stato aggiunto a P17; la pagina «Hosting for Others» e il profilo
+>   `managed` aspettano la decisione del developer;
+> - i tre slot di E6 (la galleria `settings/email`, `all-backend` e l'E2E del dominio) sono annotati, dopo E5b.
+>
+> **Da A, tramite il coordinatore (06:14), per E6 dopo l'ingresso di A7a (non prima)**: A7a dà un chiamante a
+> `build_admin_setup()`.
+> - In `developer/backend/email.md` diventano false: «`build_admin_setup()` has no caller», «three emails have a
+>   caller», la riga di «Coming Next» e «Never logged… the link». Il link di attivazione generato va nel log una volta,
+>   per scelta (P16, da rivedere).
+> - In `admin/email.en.md`, nelle sezioni «Emails with a Link» e nei `kind` di «Email sent» manca `admin_setup`.
+
+#### E5b.11 — Le prove leggere dopo il fermo ✅ (2026-10-16, 06:48–07:11)
+> Base `bf1586ddb`, con lo script `/tmp/libreFolio_e5b_final_checks.sh`: una prova alla volta, `nice -n 10`, carico
+> sotto 70. Tra `api registration` e `api users-admin` si è aspettato 5 minuti, con il carico tra 97 e 112.
+>
+> | Prova | Esito |
+> |---|---|
+> | `services email-verification` | 124 ✅ (con EMV-043…048) |
+> | `services email-verification-hooks` | 32 ✅ (con EVK-009 e 010) |
+> | `services user-profile` | 42 ✅ |
+> | `api email-verification` | 49 ✅ (con EVA-016) |
+> | `api email-verification-hooks` | 16 ✅ (con EVH-011…013) |
+> | `api auth` | 88 ✅ |
+> | `api registration` | 96 ✅ (un avviso: E-4) |
+> | `api users-admin` | 64 ✅ |
+> | `tsc -p tsconfig.e2e.json` | solo i 2 errori di base (`onboarding-tour.spec.ts:863`, `files.ts:9`, come in E2b): nessuno nuovo dalla spec né dalla fixture |
+> | `prettier --check` sui file E2E | ✅ |
+> | `check-orphans` | ✅ (353 file backend raggiungibili) |
+> | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
+> | `check-links` | 96 ✅ |
+>
+> Resta l'E2E `front-utility email-verification`: è la terza della coda degli slot pesanti del coordinatore.
+
+#### E5b.12 — E2E ✅ (2026-10-16, slot 2 del coordinatore, 07:59–08:01)
+> `dev.py test --test-port 6188 --data-dir /tmp/librefolio-r13-e --workers 2 front-utility email-verification` su
+> `bf1586ddb`: EVE-E-01…05, 5 passati in 56,6 s; il giro intero dalle 07:59:38 alle 08:01:29
+> (`/tmp/libreFolio_e5b_e2e.log`). La porta 6188 è libera dopo, e lo slot l'ho restituito alle 08:01. L'avviso SSL di
+> MathJax è esterno e innocuo.
+
+### Checkpoint E5b, finale 🧊 (2026-10-16) — FROZEN, pronto per l'ingresso
+> **Base**: HEAD `bf1586ddb`, sopra il merge con A6c (`f33836892`). Il lotto è in quattro commit del coordinatore:
+> `2d954624e` e `98812863f` (il checkpoint intermedio), poi `207dfbafd`, `6d6965293`, `33da05e31` e `bf1586ddb`. Da
+> salvare restano solo questo piano e il backlog (E-2, E-3 ed E-6 rimandate alla 1.4).
+>
+> **Prove sulla base**:
+> - leggere: E5b.11, tutte verdi;
+> - E2E: E5b.12, 5 su 5;
+> - prima del merge, sulla base `c47d02a28`: E5b.5;
+> - dopo il merge con A6c: E5b.6.
+>
+> Il CHANGELOG lo scrive il coordinatore all'ingresso. Il testo gli arriva con l'handoff: le due righe di E5a ed E5b,
+> più la frase sui limiti per casella e per rete e quella sull'attivazione o disattivazione che revoca il link.
