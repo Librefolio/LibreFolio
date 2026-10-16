@@ -37,9 +37,10 @@ from backend.app.services.accounts.auth_service import verify_password_or_dummy
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, send_email
-from backend.app.services.email.flows import account_language, address_key, link_ttl, require_email
+from backend.app.services.email.flows import account_language, link_ttl, require_email
 from backend.app.services.email.links import email_link, links_state, require_links
 from backend.app.services.email.messages import build_verification
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -48,7 +49,8 @@ logger = structlog.get_logger(__name__)
 VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 
 #: «Resend», per client address, before the password is checked: 10 requests every 15 minutes, an IPv6 client by its
-#: /64 (``flows.address_key``). The route checks a password: without it, it would be a guessing oracle the login has not.
+#: /64 (workstream H's ``client_rate_key()``). The route checks a password: without it, it would be a guessing oracle the
+#: login has not.
 RESEND_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: Per account, counted on the verification links already emailed: one every 5 minutes, 3 an hour.
 VERIFICATION_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
@@ -286,7 +288,7 @@ def registration_email_allowed(address: str | None) -> bool:
     10 an hour per client address (``REGISTRATION_EMAILS_BY_ADDRESS``, an IPv6 client by its /64). A request without
     an address is not limited here: the mailbox and the hourly budget still are.
     """
-    key = address_key(address)
+    key = client_rate_key(address)
     return key is None or REGISTRATION_EMAILS_BY_ADDRESS.hit(key).allowed
 
 
@@ -363,7 +365,7 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
     ``send_email`` raises.
     """
     moment = now or utcnow()
-    key = address_key(address)
+    key = client_rate_key(address)
     if key is not None:
         decision = RESEND_BY_ADDRESS.hit(key)
         if not decision.allowed:
