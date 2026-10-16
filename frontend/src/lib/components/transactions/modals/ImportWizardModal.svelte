@@ -4783,7 +4783,7 @@ ${arrow}<span>${label}</span></span>`,
         <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showWarningConfirm = false)}>
             {$t('common.cancel')}
         </button>
-        <button type="button" class="px-4 py-2 text-sm rounded-lg {step3HasWarningSeverity ? 'bg-amber-500 hover:bg-amber-600' : 'bg-sky-500 hover:bg-sky-600'} text-white transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
+        <button type="button" class="px-4 py-2 text-sm rounded-lg {step3HasWarningSeverity ? 'bg-lf-warning hover:bg-lf-warning-hover' : 'bg-lf-info hover:bg-lf-info-hover'} text-lf-on-status transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
             {$t('importWizard.warningConfirmOk')}
         </button>
     </div>
@@ -4886,7 +4886,7 @@ ${arrow}<span>${label}</span></span>`,
                 <button type="button" class="rounded border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => (createAssetForFakeId = null)} data-testid="create-primary-cancel">
                     {$t('assets.identifiers.primaryChooser.cancel')}
                 </button>
-                <button type="button" class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" onclick={confirmCreatePrimary} data-testid="create-primary-confirm">
+                <button type="button" class="rounded bg-lf-info px-3 py-1.5 text-sm font-medium text-lf-on-status hover:bg-lf-info-hover" onclick={confirmCreatePrimary} data-testid="create-primary-confirm">
                     {$t('assets.identifiers.primaryChooser.confirm')}
                 </button>
             </div>
