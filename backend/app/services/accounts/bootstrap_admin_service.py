@@ -146,7 +146,8 @@ async def _follow_variables(session: AsyncSession, user: User, config: AdminBoot
         else:
             logger.error("LIBREFOLIO_ADMIN_USERNAME belongs to another account: the waiting administrator keeps its username", user_id=user.id)
     if user.email != config.email:
-        if await user_service.get_user_by_email(session, config.email) is None:
+        # The same address in another case is this account's (decision P18): it takes the variable's form.
+        if user_service.same_email(user.email, config.email) or await user_service.get_user_by_email(session, config.email) is None:
             user.email, changed = config.email, True
         else:
             logger.error("LIBREFOLIO_ADMIN_EMAIL belongs to another account: the waiting administrator keeps its address", user_id=user.id)

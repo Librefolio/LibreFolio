@@ -1279,3 +1279,147 @@ class TestOnTheLane:
         assert with_new.status_code == 200, f"the new password must sign in: {with_new.status_code} {with_new.text}"
         assert other.json().get("status") == "revoked", f"the account's other reset link must be revoked: {other.text}"
         print_success("inspected, reset, signed out, the other link revoked")
+
+
+# ============================================================================
+# 6b. ON THE LANE'S SERVER — AN ADDRESS IS UNIQUE WHATEVER ITS A–Z CASE (P18, LIVE-004 to LIVE-006)
+# ============================================================================
+# Developer decision P18 (release 1.3, workstream A; contract approved by the coordinator): two addresses are the same
+# when they match once A–Z are folded to a–z, as SQLite's lower() folds them; letters outside ASCII compare as written, a
+# documented limit not tested here. Until P18 users.email is unique exactly and every lookup by address is exact:
+# alice@example.com and Alice@example.com can be two accounts. EmailStr lowercases the domain and never the local part,
+# so an address whose domain alone differs in case is already the same text to the server: the red cases vary the case
+# of the local part, with the domain or without it. They run on the lane's server, whose database the migrations build,
+# under the rules of TestOnTheLane: the lane in open mode, an account already there, accounts of their own (unique
+# usernames, example.com addresses with random hex) deleted at teardown, after a red too — the second account a red lets
+# through included —, no setting written. These helpers serve TestUniqueAddressWhateverItsCase only, so they live next
+# to it.
+
+#: The plain ``detail`` of POST /auth/register for an address another account has: ``ACCOUNT_EXISTS`` is not among the
+#: coded refusals (``auth_api._REGISTRATION_REFUSALS``), so it keeps the plain 400 an exact duplicate gets today.
+EMAIL_TAKEN = "Email already registered"
+
+
+def _p18_address() -> str:
+    """An address nobody has, in lower case, as the contract writes it: ``alice.<random hex>@example.com``."""
+    return f"alice.{uuid.uuid4().hex[:12]}@example.com"
+
+
+def _written(address: str, way: str) -> str:
+    """``address``, in lower case as registered, written ``way``: ``as-registered``, ``domain-in-capitals``
+    (``alice.<hex>@EXAMPLE.COM``), ``local-part-in-capitals`` (``ALICE.<HEX>@example.com``), ``all-in-capitals``
+    (``ALICE.<HEX>@EXAMPLE.COM``) or ``capitalised`` (``Alice.<hex>@Example.com``)."""
+    local, _, domain = address.rpartition("@")
+    return {
+        "as-registered": address,
+        "domain-in-capitals": f"{local}@{domain.upper()}",
+        "local-part-in-capitals": f"{local.upper()}@{domain}",
+        "all-in-capitals": address.upper(),
+        "capitalised": f"{local.capitalize()}@{domain.capitalize()}",
+    }[way]
+
+
+def _plain_detail(response: httpx.Response) -> Any:
+    """``detail`` of an answer as it came — the plain string of a duplicate, the mapping of a coded refusal —; the text when the body is not JSON."""
+    try:
+        body = response.json()
+    except ValueError:
+        return response.text
+    return body.get("detail") if isinstance(body, dict) else body
+
+
+def _signed_in_user_id(response: httpx.Response) -> Optional[int]:
+    """The id of the account a POST /auth/login answer signed in; None for any answer but a 200 carrying its user."""
+    if response.status_code != 200:
+        return None
+    user = response.json().get("user")
+    return user.get("id") if isinstance(user, dict) else None
+
+
+async def _lane_accounts_exist(*usernames: str) -> dict[str, bool]:
+    """Whether each of ``usernames`` is an account of the lane's database, read fresh."""
+    async with AsyncSession(_lane_engine()) as session:
+        return {username: await user_service.get_user_by_username(session, username) is not None for username in usernames}
+
+
+async def _register_own_account(lane: _LaneRows, prefix: str) -> tuple[str, str, int]:
+    """An account of this test, registered on the lane's server with a new lower-case address: (username, address, id).
+
+    The lane must already hold an account (``_assert_lane_has_an_account``), or this one would be its first, hence its
+    administrator.
+    """
+    await _assert_lane_has_an_account()
+    username, address = lane.new_username(prefix), _p18_address()
+    registered = await _live_register(username, email=address)
+    assert registered.status_code == 201, f"setup: {username} must register with a new address: {registered.status_code} {registered.text}"
+    user = registered.json()["user"]
+    assert user["email"] == address, f"setup: a lower-case address must be stored as written: sent {address}, stored {user['email']}"
+    return username, address, user["id"]
+
+
+async def _assert_the_address_again_is_refused(lane: _LaneRows, way: str) -> None:
+    """The case of LIVE-004 and LIVE-005: an account of this test holds ``alice.<hex>@example.com``; a second
+    registration, under a new username, with that address written ``way`` is refused as a duplicate — 400, ``detail``
+    exactly «Email already registered» — and creates no account: the second username does not exist after, while the
+    first, read the same way, does."""
+    holder, address, _ = await _register_own_account(lane, "live_p18_holder")
+    again = _written(address, way)
+    assert again.lower() == address, f"setup: {again} must be {address} up to the A–Z case"
+    newcomer = lane.new_username("live_p18_again")
+
+    response = await _live_register(newcomer, email=again)
+
+    assert (response.status_code, _plain_detail(response)) == (400, EMAIL_TAKEN), f"{way}: {again} is the address of {holder} up to the A–Z case: expected 400 {EMAIL_TAKEN!r}, as for an exact duplicate, got {response.status_code} {response.text}"
+    exist = await _lane_accounts_exist(holder, newcomer)
+    assert exist == {holder: True, newcomer: False}, f"{way}: the refused registration must create no account — {newcomer} must not exist, while {holder}, read the same way, does: {exist}"
+
+
+class TestUniqueAddressWhateverItsCase:
+    """P18 on the lane's server: POST /auth/register refuses an address another account has in another A–Z case as it
+    refuses an exact duplicate, and POST /auth/login finds an account by its address whatever its A–Z case.
+
+    «NEW, red until P18» marks the contract: today an address is unique exactly and looked up exactly, so a variant
+    registers a second account (201) and signs nobody in (401). «GUARD» marks what holds today and must keep holding:
+    the exact address, and the address with its domain alone in capitals (EmailStr folds the domain), are refused already.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("way", ["local-part-in-capitals", "all-in-capitals", "capitalised"])
+    async def test_an_address_in_another_case_is_refused_like_a_duplicate(self, lane: _LaneRows, way: str) -> None:
+        """LIVE-004 — NEW, red until P18 (today 201: the two addresses are different text, so a second account): an
+        address another account has, differing only in the A–Z case of its local part — the domain as it is, or in
+        another case too —, is refused as an exact duplicate is: 400, ``detail`` the plain string «Email already
+        registered»; no account is created, so the second username does not exist after."""
+        print_section(f"LIVE-004: another account's address, {way}")
+        await _assert_the_address_again_is_refused(lane, way)
+        print_success(f"✓ {way}: 400 «{EMAIL_TAKEN}», no second account")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("way", ["as-registered", "domain-in-capitals"])
+    async def test_the_same_address_is_refused(self, lane: _LaneRows, way: str) -> None:
+        """LIVE-005 — GUARD, green today and after: the answer LIVE-004 must equal. Another account's address, written as
+        registered or with its domain alone in capitals (EmailStr lowercases the domain: the same text to the server), is
+        refused: 400, ``detail`` the plain string «Email already registered»; no account is created."""
+        print_section(f"LIVE-005: the same address, {way}")
+        await _assert_the_address_again_is_refused(lane, way)
+        print_success(f"✓ {way}: 400 «{EMAIL_TAKEN}», no second account")
+
+    @pytest.mark.asyncio
+    async def test_an_account_signs_in_with_its_address_in_another_case(self, lane: _LaneRows) -> None:
+        """LIVE-006 — NEW, red until P18 (today 401: the lookup by address is exact): an account registered as
+        ``alice.<hex>@example.com`` signs in with ``ALICE.<HEX>@EXAMPLE.COM`` and with ``Alice.<hex>@Example.com``: 200,
+        the same user id. The login field is a plain string, not an EmailStr: the domain reaches the server in capitals
+        too.
+
+        Barrier first: the address as registered signs the account in (200, its id), so a red can only be the case.
+        """
+        print_section("LIVE-006: signing in with the address in another case")
+        _, address, user_id = await _register_own_account(lane, "live_p18_login")
+        as_registered = await _live_sign_in(address, PASSWORD)
+        assert (as_registered.status_code, _signed_in_user_id(as_registered)) == (200, user_id), f"barrier: account {user_id} must sign in with its address as registered: {as_registered.status_code} {as_registered.text}"
+
+        answers = {way: await _live_sign_in(_written(address, way), PASSWORD) for way in ("all-in-capitals", "capitalised")}
+
+        seen = {way: (response.status_code, _signed_in_user_id(response)) for way, response in answers.items()}
+        assert seen == dict.fromkeys(answers, (200, user_id)), f"account {user_id} must sign in with its address in another A–Z case: (status, user id) by way of writing it, {seen}"
+        print_success(f"✓ in capitals and capitalised: 200, user {user_id}")

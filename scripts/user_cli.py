@@ -36,6 +36,7 @@ import argcomplete
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import set_test_mode
@@ -183,6 +184,33 @@ async def cmd_setup_link():
         username, expires_at = waiting.username, issued.record.expires_at
         await session.commit()
         _print_link(f"Administrator setup for '{username}'", token_service.token_path(AccountTokenPurpose.ADMIN_SETUP, issued.token), expires_at)
+        return True
+
+
+async def cmd_set_email(username: str, address: str):
+    """Change the email address of an account, as a change of address in its profile (decision P18).
+
+    The address must be free regardless of case. A change ends the account's sessions and its address is not verified
+    any more; the same address in another case only changes how it is written. It also separates two accounts that
+    share an address apart from case, which stops migration 009: it works on the database as it is.
+    """
+    try:
+        email = TypeAdapter(EmailStr).validate_python(address)
+    except ValidationError:
+        print("❌ Not an email address")
+        return False
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is None:
+            print(f"❌ User '{username}' not found")
+            return False
+        updated, error = await user_service.update_profile(session, user.id, email=email)
+        if updated is None:
+            print(f"❌ {error}")
+            return False
+        print(f"✅ Email address of '{username}' changed")
         return True
 
 
@@ -353,7 +381,11 @@ Examples:
 
 
 def _add_link_commands(subparsers) -> None:
-    """The commands that print a single-use link or restart an onboarding: the same names here and in dev.py."""
+    """The commands that print a single-use link, change an address or restart an onboarding: the same names here and in dev.py."""
+    p = subparsers.add_parser("set-email", help="Change the email address of a user (unique regardless of case)")
+    p.add_argument("username", help="Username")
+    p.add_argument("email", help="The new email address")
+
     p = subparsers.add_parser("invite", help="Create an invitation link")
     p.add_argument("--admin", action="store_true", help="The account it creates is an administrator")
     p.add_argument("--email", default=None, help="Who it is for (kept for reference, not enforced)")
@@ -388,6 +420,7 @@ def _dispatch_user_command(args):
         "invite": lambda: cmd_invite(args.admin, args.email),
         "reset-link": lambda: cmd_reset_link(args.username),
         "setup-link": cmd_setup_link,
+        "set-email": lambda: cmd_set_email(args.username, args.email),
         "reset-onboarding": lambda: cmd_reset_onboarding(args.username, args.flow),
     }
     command = commands.get(args.command)

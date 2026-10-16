@@ -378,7 +378,8 @@ async def update_profile(
     if request.username is None and request.email is None:
         return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
 
-    email_changes = request.email is not None and request.email != current_user.email
+    # The same address in another case is no change (decision P18): no password, no session ended.
+    email_changes = request.email is not None and not user_service.same_email(request.email, current_user.email)
     if email_changes:
         if request.current_password is None:
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})

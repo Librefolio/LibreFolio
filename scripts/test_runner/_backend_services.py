@@ -483,6 +483,16 @@ def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Initial administrator tests", verbose=verbose)
 
 
+def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
+    """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
+    print_section("Services: Email Addresses Regardless of Case (P18)")
+    print_info("Testing: user_service.email_fold/same_email, the index ux_users_email_lower, get_user_by_email and get_user_by_username_or_email, create_user, register_user, update_profile, the F02 bootstrap")
+    print_info("Tests: A–Z folded and nothing else, the index refusing a case variant through the ORM and plain SQL, lookups in any case, case-only changes of one's own address, the non-ASCII limit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_case.py", test_names)
+    return run_command(cmd, "Email case tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -1545,6 +1555,15 @@ Note: No backend server required.
         desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
         # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
         # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-case",
+        services_email_case,
+        name="Email Addresses Regardless of Case (P18)",
+        desc="email_fold and same_email fold A–Z only, the unique index on lower(email), lookups in any case, case variants refused on create and register, a case-only change of one's own address keeps sessions and verification, F02, the non-ASCII limit",
+        # PURE: every database is a private file under tmp_path built with create_all; variables removed with monkeypatch.
         isolation="pure",
     )
     add_test(
