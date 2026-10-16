@@ -23,7 +23,16 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     step, and a test of its own constraint with ``assert_in_relative_order``, without touching this file's tests;
     ``FINALLY_STEPS`` is the tool executor alone; the BRIM parse pool is released off the event loop under a deadline.
     A step reaches its function through the module's name when it runs, so
-    ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it.
+    ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it. W-B53 (red before its cure: no such step): the
+    ``brim-parse-pool`` startup step stands after ``market-holidays`` and before ``scheduler`` (relative order) and runs
+    ``brim_parse_pool.prewarm`` — replaced by a stand-in wherever the step can reach it — in a worker thread, as a task
+    kept in ``app_lifespan._background_tasks``, while the startup moves on without it. N56 (red before its cure: the step
+    always prewarms): the warm-up is opt-in, ``LIBREFOLIO_BRIM_PREWARM`` read by ``config/brim.py``, set explicitly in each
+    test. On (``1``, or unset in test mode) the step prewarms as above; off (``0``, or unset in production) it starts no
+    task and never calls the prewarm; invalid, it logs a warning naming the variable and starts nothing, and the startup
+    goes on. The test mode is set through ``LIBREFOLIO_TEST_MODE`` as the input, and each case's premise checked through
+    ``is_test_mode()``, its one reader, never by reading the variable again. Each "nothing" has its presence barrier: the
+    same step, switched on, calls the stand-in.
 (e) Middleware: GZip outside CORS, with their options, checked in relative order so that a workstream adds an entry,
     and a test of its own constraint, without touching this file's tests; ``install_middleware`` adds any stack with
     its first entry outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
@@ -64,7 +73,8 @@ from starlette.routing import Mount
 from structlog.testing import capture_logs
 
 import backend.app.main as app_main
-from backend.app.config import API_V1_PREFIX
+from backend.app.config import API_V1_PREFIX, is_test_mode
+from backend.app.services.brim import brim_parse_pool
 from backend.app.services.platform import app_lifespan, lifecycle, static_site
 from backend.app.services.platform.lifecycle import MIN_STEP_SECONDS, Step, current_step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.middleware import MIDDLEWARE_STACK, MiddlewareEntry, install_middleware
@@ -91,6 +101,14 @@ CORE_STARTUP_ORDER = (
 #: The shutdown steps of CP2b, in their order, kept the same way.
 CORE_SHUTDOWN_ORDER = ("scheduler", "providers", "brim-parse-pool", "quant-pools", "market-holidays", "caches")
 
+#: The startup step of W-B53 (J-30): it starts the BRIM parse pool's forkserver, preloaded, in the background.
+BRIM_PREWARM_STEP = "brim-parse-pool"
+#: N56: the setting that turns that warm-up on, written out (``config/brim.py`` reads it), and the test mode it follows when
+#: unset; an invalid value of it.
+BRIM_PREWARM_VARIABLE = "LIBREFOLIO_BRIM_PREWARM"
+TEST_MODE_VARIABLE = "LIBREFOLIO_TEST_MODE"
+INVALID_BRIM_PREWARM = "maybe"
+
 #: A deadline this close has passed before a stuck step ends: the step gets ``MIN_STEP_SECONDS``, then it is cut.
 SHORT_SECONDS = 0.05
 #: Far more than any step of these tests takes: under it nothing is cut.
@@ -101,6 +119,7 @@ THREAD_HOLD_SECONDS = 10.0
 FAILED_EVENT = "Shutdown step failed"
 CUT_EVENT = "Shutdown step cut by the deadline"
 LOG_CANARY = "app-lifecycle test: canary through the runner's logger"
+LIFESPAN_LOG_CANARY = "app-lifecycle test: canary through app_lifespan's logger"
 
 #: A value a step returns that is not awaitable, as a ``shutdown-watchdog`` startup step returns the watchdog it installs:
 #: the runners ignore it, at startup and at shutdown, under a deadline or not, blocking or not.
@@ -167,6 +186,117 @@ async def _until_collected(ref: weakref.ref[Any], what: str) -> None:
         assert time.monotonic() < deadline, f"{what} was still alive {GENEROUS_SECONDS}s later"
         gc.collect()
         await asyncio.sleep(0.01)
+
+
+async def _within(awaitable: Coroutine[Any, Any, Any], what: str) -> None:
+    """Await ``awaitable``, or a red naming ``what`` after ``GENEROUS_SECONDS``: a hang fails the test, not the run."""
+    try:
+        await asyncio.wait_for(awaitable, GENEROUS_SECONDS)
+    except TimeoutError:
+        pytest.fail(f"{what}: not done within {GENEROUS_SECONDS}s")
+
+
+class _HeldPrewarm:
+    """Stands in for ``brim_parse_pool.prewarm``. In a worker thread it holds until released, ``THREAD_HOLD_SECONDS`` at
+    most; on the event loop's thread it returns at once and counts it: holding there would hold the test with it."""
+
+    def __init__(self, loop_thread: int) -> None:
+        self.loop_thread = loop_thread
+        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.on_the_loop = 0
+        self.started, self.release, self.finished = threading.Event(), threading.Event(), threading.Event()
+
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
+        self.calls.append((args, kwargs))
+        if threading.get_ident() == self.loop_thread:
+            self.on_the_loop += 1
+        else:
+            self.started.set()
+            self.release.wait(timeout=THREAD_HOLD_SECONDS)
+        self.finished.set()
+
+
+def _replace_brim_prewarm(monkeypatch: pytest.MonkeyPatch, replacement: _HeldPrewarm) -> list[str]:
+    """``replacement`` in place of ``brim_parse_pool.prewarm`` wherever a step can reach it when it runs: the module's
+    attribute, and every name ``app_lifespan`` imported it under, which are returned for the messages."""
+    original = brim_parse_pool.prewarm
+    monkeypatch.setattr(brim_parse_pool, "prewarm", replacement)
+    aliases = sorted(name for name, value in vars(app_lifespan).items() if value is original)
+    for name in aliases:
+        monkeypatch.setattr(app_lifespan, name, replacement)
+    return aliases
+
+
+def _set_variable(monkeypatch: pytest.MonkeyPatch, name: str, value: str | None) -> None:
+    """``None`` unsets ``name``; any string sets it."""
+    if value is None:
+        monkeypatch.delenv(name, raising=False)
+    else:
+        monkeypatch.setenv(name, value)
+
+
+def _set_the_mode_and_the_setting(monkeypatch: pytest.MonkeyPatch, test_mode: str, in_test_mode: bool, setting: str | None) -> None:
+    """The case's input, ``LIBREFOLIO_TEST_MODE`` and ``LIBREFOLIO_BRIM_PREWARM``; its premise checked through
+    ``is_test_mode()``, the one reader of the mode, never by reading the variable again."""
+    _set_variable(monkeypatch, TEST_MODE_VARIABLE, test_mode)
+    _set_variable(monkeypatch, BRIM_PREWARM_VARIABLE, setting)
+    assert is_test_mode() is in_test_mode, f"barrier: with {TEST_MODE_VARIABLE}={test_mode!r}, is_test_mode() is {is_test_mode()}, not {in_test_mode}: the case would test another mode"
+
+
+@contextmanager
+def _lifespan_log() -> Iterator[list[dict[str, Any]]]:
+    """What ``app_lifespan`` logs inside the block, behind a barrier: a canary through its own logger must arrive first."""
+    with capture_logs() as events:
+        app_lifespan.logger.debug(LIFESPAN_LOG_CANARY)
+        assert any(event.get("event") == LIFESPAN_LOG_CANARY for event in events), f"barrier: app_lifespan's logger does not reach capture_logs, so what this test reads of the log proves nothing: {events}"
+        yield events
+
+
+class _TaskWatch:
+    """The tasks started on the event loop since it was made, kept by ``app_lifespan`` or not; and, when a test ends, the
+    stand-in released and every one of them awaited: no thread left held, no task left to the next test."""
+
+    def __init__(self) -> None:
+        self._pending_before = asyncio.all_tasks()
+        self._kept_before = set(app_lifespan._background_tasks)
+        self.seen: set[asyncio.Task[Any]] = set()
+
+    def kept(self) -> set[asyncio.Task[Any]]:
+        """The tasks started since that ``app_lifespan._background_tasks`` keeps."""
+        found = set(app_lifespan._background_tasks) - self._kept_before
+        self.seen |= found
+        return found
+
+    def started(self) -> set[asyncio.Task[Any]]:
+        """Every task started since and not done yet, kept or not."""
+        found = (asyncio.all_tasks() - self._pending_before) | self.kept()
+        self.seen |= found
+        return found
+
+    async def settle(self, prewarm: _HeldPrewarm) -> None:
+        prewarm.release.set()
+        pending = self.started() | self.seen
+        if pending:
+            await asyncio.wait(pending, timeout=GENEROUS_SECONDS)
+
+
+async def _startup_goes_on_past(step: Step) -> None:
+    """``step``, then a marker step, through ``run_startup_steps``: the startup reaches the marker, nothing raised."""
+    ran: list[str] = []
+    try:
+        await _within(run_startup_steps((step, Step("next", lambda: ran.append("next")))), f"run_startup_steps(({step.name!r}, 'next'))")
+    except Exception as exc:  # noqa: BLE001 - reported: an error here is the very thing under test
+        pytest.fail(f"the startup stopped at {step.name!r}: {exc!r}. A setting that cannot be used is logged, never fatal")
+    assert ran == ["next"], f"the startup did not go on past {step.name!r}: {ran}"
+
+
+async def _switched_on_the_step_calls_the_stand_in(monkeypatch: pytest.MonkeyPatch, step: Step, prewarm: _HeldPrewarm, watch: _TaskWatch) -> None:
+    """The presence barrier of a test where the step starts nothing: switched on, the same step calls the stand-in in a
+    worker thread. So the stand-in is what the step reaches when it runs, and its silence switched off proved something."""
+    monkeypatch.setenv(BRIM_PREWARM_VARIABLE, "1")
+    await _within(run_startup_steps((step,)), f"run_startup_steps(({step.name!r},)) with {BRIM_PREWARM_VARIABLE}=1")
+    watch.started()
+    assert await asyncio.to_thread(prewarm.started.wait, GENEROUS_SECONDS), f"barrier: switched on ({BRIM_PREWARM_VARIABLE}=1), the step never called the stand-in in a worker thread, so its silence switched off proves nothing: {prewarm.calls}"
 
 
 # =============================================================================
@@ -594,6 +724,98 @@ def test_the_brim_parse_pool_is_released_off_the_event_loop_under_a_deadline() -
     # shutdown_pool(wait=True) joins the workers: under a deadline it must run in a thread for the deadline to hold.
     assert _step(app_lifespan.SHUTDOWN_STEPS, "brim-parse-pool").blocking is True
     print_success("✓ blocking=True")
+
+
+def test_the_brim_parse_pool_is_prewarmed_after_the_market_holidays_and_before_the_scheduler() -> None:
+    print_section("W-B53: the brim-parse-pool startup step, after market-holidays and before the scheduler")
+    assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("market-holidays", "brim-parse-pool", "scheduler"), "STARTUP_STEPS")
+    print_success("✓ market-holidays, brim-parse-pool, scheduler")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("test_mode", "in_test_mode", "setting"),
+    [
+        pytest.param("1", True, "1", id="on-in-test-mode"),
+        pytest.param("0", False, "1", id="on-in-production"),
+        pytest.param("1", True, None, id="unset-in-test-mode"),
+    ],
+)
+async def test_the_brim_parse_pool_step_prewarms_in_a_worker_thread_while_the_startup_moves_on(test_mode: str, in_test_mode: bool, setting: str | None, monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section(f"W-B53/N56: {TEST_MODE_VARIABLE}={test_mode!r}, {BRIM_PREWARM_VARIABLE}={setting!r}: the step prewarms in the background")
+    _set_the_mode_and_the_setting(monkeypatch, test_mode, in_test_mode, setting)
+    step = _step(app_lifespan.STARTUP_STEPS, BRIM_PREWARM_STEP)
+    prewarm = _HeldPrewarm(threading.get_ident())
+    aliases = _replace_brim_prewarm(monkeypatch, prewarm)
+    watch = _TaskWatch()
+    try:
+        await _within(run_startup_steps((step,)), f"run_startup_steps(({BRIM_PREWARM_STEP!r},)) with the prewarm held: the startup waits for the prewarm")
+        scheduled = watch.kept()
+
+        assert prewarm.on_the_loop == 0, "the step ran prewarm() on the event loop's thread: the startup, and every request after it, waits for it"
+        assert not prewarm.finished.is_set(), "the startup step returned once the prewarm had finished: it waited for it"
+        assert scheduled, f"the warm-up is on ({TEST_MODE_VARIABLE}={test_mode!r}, {BRIM_PREWARM_VARIABLE}={setting!r}), yet the step kept no task in app_lifespan._background_tasks, as _keep_in_background does: a task nobody holds may vanish before the prewarm ends"
+        assert await asyncio.to_thread(prewarm.started.wait, GENEROUS_SECONDS), f"the prewarm never started in a worker thread: does the step reach brim_parse_pool.prewarm as it is when the step runs, through the module or a name app_lifespan imported it under ({aliases})?"
+    finally:
+        await watch.settle(prewarm)
+
+    assert prewarm.calls == [((), {})], f"the step runs prewarm() once, without arguments: {prewarm.calls}"
+    assert all(task.done() and not task.cancelled() and task.exception() is None for task in watch.seen), f"the background prewarm must end once released, neither cancelled nor raising: {watch.seen}"
+    print_success("✓ the startup moved on; the prewarm ran in a worker thread, held by a background task")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("test_mode", "in_test_mode", "setting"),
+    [
+        pytest.param("0", False, None, id="production-default"),
+        pytest.param("1", True, "0", id="off-in-test-mode"),
+    ],
+)
+async def test_the_brim_parse_pool_step_starts_nothing_when_the_warm_up_is_off(test_mode: str, in_test_mode: bool, setting: str | None, monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section(f"N56: {TEST_MODE_VARIABLE}={test_mode!r}, {BRIM_PREWARM_VARIABLE}={setting!r}: the step starts nothing")
+    _set_the_mode_and_the_setting(monkeypatch, test_mode, in_test_mode, setting)
+    step = _step(app_lifespan.STARTUP_STEPS, BRIM_PREWARM_STEP)
+    prewarm = _HeldPrewarm(threading.get_ident())
+    _replace_brim_prewarm(monkeypatch, prewarm)
+    watch = _TaskWatch()
+    try:
+        await _startup_goes_on_past(step)
+        started = watch.started()
+        assert not started, f"N56: with {TEST_MODE_VARIABLE}={test_mode!r} and {BRIM_PREWARM_VARIABLE}={setting!r} the warm-up is off, yet the step started {started}: the warm-up is opt-in, on only when the variable or, unset, the test mode says so"
+        assert prewarm.calls == [], f"the step called the prewarm with the warm-up off: {prewarm.calls}"
+        await _switched_on_the_step_calls_the_stand_in(monkeypatch, step, prewarm, watch)
+    finally:
+        await watch.settle(prewarm)
+
+    assert prewarm.calls == [((), {})], f"only the step switched on called the prewarm, once: the run switched off left no call behind: {prewarm.calls}"
+    print_success("✓ nothing started, nothing called; switched on, the same step prewarms")
+
+
+@pytest.mark.asyncio
+async def test_the_brim_parse_pool_step_logs_an_invalid_setting_starts_nothing_and_the_startup_goes_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section(f"N56: {BRIM_PREWARM_VARIABLE}={INVALID_BRIM_PREWARM!r}: a warning, nothing started, the startup goes on")
+    # In test mode, where the warm-up would be on by default: falling back to the default would prewarm.
+    _set_the_mode_and_the_setting(monkeypatch, "1", True, INVALID_BRIM_PREWARM)
+    step = _step(app_lifespan.STARTUP_STEPS, BRIM_PREWARM_STEP)
+    prewarm = _HeldPrewarm(threading.get_ident())
+    _replace_brim_prewarm(monkeypatch, prewarm)
+    watch = _TaskWatch()
+    try:
+        with _lifespan_log() as events:
+            await _startup_goes_on_past(step)
+        started = watch.started()
+        assert not started, f"N56: {BRIM_PREWARM_VARIABLE}={INVALID_BRIM_PREWARM!r} cannot be used, yet the step started {started}: a setting that cannot be used starts nothing, whatever the default"
+        assert prewarm.calls == [], f"the step called the prewarm with an invalid setting: {prewarm.calls}"
+        warnings = [event for event in events if event.get("log_level") == "warning"]
+        assert warnings, f"{BRIM_PREWARM_VARIABLE}={INVALID_BRIM_PREWARM!r}: no warning logged, so nobody learns the setting is ignored: {events}"
+        assert any(BRIM_PREWARM_VARIABLE in repr(event) for event in warnings), f"the warning does not name {BRIM_PREWARM_VARIABLE}, the setting to fix: {warnings}"
+        await _switched_on_the_step_calls_the_stand_in(monkeypatch, step, prewarm, watch)
+    finally:
+        await watch.settle(prewarm)
+
+    assert prewarm.calls == [((), {})], f"only the step switched on called the prewarm, once: the run with the invalid setting left no call behind: {prewarm.calls}"
+    print_success("✓ a warning naming the variable; nothing started; the startup went on")
 
 
 @pytest.mark.parametrize(
