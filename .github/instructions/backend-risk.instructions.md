@@ -16,7 +16,7 @@ applyTo: "backend/app/services/risk/**,backend/app/services/risk_plugins/**,back
   runs the analytics and builds the results; `risk/analytic_helpers.py` reads the prepared context; `risk/metrics.py`
   holds the series statistics; `risk/quant/` holds the simulation and optimization workers.
 - **API**: `api/v1/risk.py` (`GET /catalog` and the bulk query). The frontend asks for analytics through
-  `buildBaseAnalytics()` and on-demand runs (`frontend/src/lib/components/risk/`).
+  `buildBaseAnalytics()` and on-demand runs (`frontend/src/lib/features/risk/`).
 
 ## Rules
 

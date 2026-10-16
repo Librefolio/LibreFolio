@@ -58,8 +58,10 @@ Profile pictures open with **Avatar**, broker icons with **Icon** and Files-page
 
 ## ✅ Confirm or Cancel
 
-- **Crop & Upload** saves the picture and uses it. On the Files page, **Crop** puts it in the upload
-  list instead (**Restore original** ↺ brings the original back), and **Upload** sends the list.
+- **Crop & Upload** saves the picture and uses it. The picture is **shared**: every user can see it,
+  as your avatar or as the icon you chose. On the Files page, **Crop** puts it in the upload list
+  instead (**Restore original** ↺ brings the original back), and **Upload** sends the list: those
+  files are personal (see [Shared or personal](../files/index.md#visibility)).
 - **Cancel** or **✕** closes the tool — after asking, if you have unsaved changes
   (**Discard & Close**). From the image picker, you go back to the picker.
 

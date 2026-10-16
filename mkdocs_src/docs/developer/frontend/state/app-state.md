@@ -96,16 +96,18 @@ and readable without a session (backend side:
   next `load()` retries. Only the latest request writes its answer (a generation counter), so a forced
   reload outruns an older request.
 - **The default**: a self-hosted instance where anyone may register,
-  `{profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}}`. So
-  until the answer, and when there is none, the login page offers **Register here**; a registration
-  the server refuses gets its own message.
+  `{profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}}`, without
+  the optional `first_account_open`: `LoginCard` treats anything but `true` as false. So until the
+  answer, and when there is none, the login page offers **Register here**; a registration the server
+  refuses gets its own message. On an instance that registers by invitation, the link shows for a
+  moment, until the answer withdraws it (backlog A-19).
 - **Getters**: `config`; `loaded`, true once the server answered on this page load; `failed`, true when
   the last request failed.
 - **Type**: `InstanceConfig` is `z.infer<typeof schemas.InstanceConfigResponse>` from the generated
   client, so a field added to the backend response appears after `./dev.py api sync`.
-- **Readers of `accounts`**: `LoginCard` (**Register here** only while `registration_mode` is
-  `open`), the `/invite` page (`closed` while it is `disabled`) and `GlobalSettingsTab` (the select
-  locked, showing the mode in force, while `registration_locked`).
+- **Readers of `accounts`**: `LoginCard` (**Register here** while `registration_mode` is `open` or
+  `first_account_open` is true), the `/invite` page (`closed` while it is `disabled`) and
+  `GlobalSettingsTab` (the select locked, showing the mode in force, while `registration_locked`).
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -114,6 +116,7 @@ await instanceConfig.load();
 instanceConfig.config.profile; // 'selfhosted' | 'managed'
 instanceConfig.config.accounts.registration_mode; // 'open' | 'invite' | 'disabled'
 instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REGISTRATION pins it
+instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)
 ```
 
 ## 📢 Instance notices {: #instance-notices }

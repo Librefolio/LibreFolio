@@ -9,6 +9,7 @@ files, the broker reports and the risk scenarios, with a manifest. It holds ever
 Usage:
     ./dev.py backup create [--output PATH]     Write an archive (default: <data dir>/backups/)
     ./dev.py backup inspect ARCHIVE            Check an archive and show what it holds
+    ./dev.py backup restore ARCHIVE --dry-run  Check an archive for a restore, on a copy: the instance stays as it is
     ./dev.py backup --test-db create           Use the test data directory
 
 A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py.
@@ -178,7 +179,7 @@ def _place_archive(source: Path, target: Path, data_dir: Path) -> tuple[Path, st
     return source, problem
 
 
-def _data_dir_for(args) -> Path | None:
+def _data_dir_for(args, *, need_database: bool = True) -> Path | None:
     """The data directory the command works on, once checked and once this process runs as its owner."""
     from backend.app.config import get_data_dir, set_test_mode  # noqa: PLC0415 — keep dev.py's start light
     from backend.app.services.platform.instance_backup.paths import database_path  # noqa: PLC0415
@@ -194,7 +195,7 @@ def _data_dir_for(args) -> Path | None:
     if problem:
         print(f"❌ {problem}")
         return None
-    if not database_path(data_dir).is_file():
+    if need_database and not database_path(data_dir).is_file():
         print(f"❌ No database at {database_path(data_dir)}: nothing to back up")
         return None
     return data_dir
@@ -310,11 +311,93 @@ def cmd_inspect(args) -> int:
     return 0
 
 
+_STAGE_WARNINGS = {
+    "rows_changed": "The upgrade changed the rows of some tables (listed above)",
+    "foreign_key_violations": "The backup's database has broken references: they are kept as they are",
+    "foreign_key_violations_added": "The upgrade added broken references to the copy",
+}
+_STAGE_BLOCKERS = {
+    "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
+}
+
+
+def _print_stage_report(report) -> None:
+    backup = report.backup
+    print(f"📦 Made by LibreFolio {backup.app_version} ({backup.origin}) on {backup.created_at:%Y-%m-%d %H:%M:%S} UTC")
+    if report.action == "same":
+        print(f"   Database: revision {backup.alembic_revision}, this LibreFolio's own: restored as it is")
+    else:
+        print(f"   Database: revision {backup.alembic_revision}, upgraded on the copy to {report.head_revision} ({len(report.migrations)} migration{'s' if len(report.migrations) != 1 else ''}):")
+        for migration in report.migrations:
+            print(f"     - {migration.revision}: {migration.message}")
+    if report.post_migration_fixes:
+        print(f"   Post-migration fixes applied to the copy: {', '.join(report.post_migration_fixes)}")
+    changed = [f"{name} ({rows.before if rows.before is not None else '—'} → {rows.after if rows.after is not None else '—'})" for name, rows in report.tables.items() if (rows.before or 0) != (rows.after or 0)]
+    rows = sum(table.after or 0 for table in report.tables.values())
+    print(f"   Rows: {rows} in {sum(1 for table in report.tables.values() if table.after is not None)} tables, {_human(report.database_size)}")
+    if changed:
+        print(f"   Changed by the upgrade: {', '.join(changed[:10])}{' …' if len(changed) > 10 else ''}")
+    print(f"   Files: {report.files}, {_human(report.files_size)}")
+    print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
+    if report.administrators:
+        print(f"   Administrators: {', '.join(report.administrators)}")
+        print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
+    for code in report.warnings:
+        print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
+    for code in report.blockers:
+        print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
+
+
+def cmd_restore(args) -> int:
+    """Check an archive for a restore on a copy (``--dry-run``), and say what a restore would do."""
+    from backend.app.services.platform.instance_backup.paths import BackupPathError, stages_dir  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingError, remove_stage, stage_archive  # noqa: PLC0415
+
+    if not args.dry_run:
+        print("❌ Only --dry-run is available for now: it checks the archive on a copy and leaves the instance as it is")
+        return 1
+    path = Path(args.archive).expanduser()
+    if not path.is_file():
+        print(f"❌ No file at {path}")
+        return 1
+    data_dir = _data_dir_for(args, need_database=False)
+    if data_dir is None:
+        return 1
+
+    shown: list[str] = []
+
+    def progress(phase: str, done: int, total: int) -> None:
+        if not shown or shown[-1] != phase:
+            shown.append(phase)
+            print(f"   … {phase}")
+
+    print(f"🔎 Checking {path} on a copy, in {stages_dir(data_dir)}")
+    try:
+        report = stage_archive(path, data_dir, progress=progress)
+    except StagingBusyError:
+        print("❌ Another archive is being checked (from the web interface or another command): try again when it ends")
+        return 1
+    except StagingError as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return 1
+    except BackupPathError as exc:
+        print(f"❌ {exc.path} is not a plain folder (a link, or a file): the copy is made in a folder of the data directory")
+        return 1
+    try:
+        _print_stage_report(report)
+    finally:
+        remove_stage(data_dir, report.stage_id)
+    if not report.restorable:
+        return 1
+    print("✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.")
+    return 0
+
+
 def register_subparser(parent_subparsers):
     """Register ``backup`` as a command group of dev.py."""
     parser = parent_subparsers.add_parser(
         "backup",
-        help="💾 Instance backup (create, inspect)",
+        help="💾 Instance backup (create, inspect, restore --dry-run)",
         description="Backup of the whole instance: database, uploaded files, broker reports and risk scenarios",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -323,6 +406,9 @@ Examples:
   ./dev.py backup create -o /mnt/nas/          Write it into another folder
   ./dev.py backup inspect /mnt/nas/librefolio-backup-20261015-101500.zip
                                                Check an archive and show what it holds
+  ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip --dry-run
+                                               What a restore would do: unpacked, upgraded and checked
+                                               on a copy, then removed
   ./dev.py backup --test-db create             Use the test data directory
 
 A relative path starts from the project root, like every path given to dev.py.
@@ -339,6 +425,11 @@ A relative path starts from the project root, like every path given to dev.py.
     inspect.add_argument("archive", help="The backup archive (.zip)")
     inspect.add_argument("--no-verify", action="store_true", help="Compare the entry names with the manifest without reading the entries (faster)")
     inspect.set_defaults(backup_func=cmd_inspect)
+
+    restore = commands.add_parser("restore", help="Check an archive for a restore on a copy (--dry-run): what a restore would do")
+    restore.add_argument("archive", help="The backup archive (.zip)")
+    restore.add_argument("--dry-run", action="store_true", help="Unpack the archive into a copy, upgrade and check it, report, then remove the copy; the instance is left as it is")
+    restore.set_defaults(backup_func=cmd_restore)
 
     parser.set_defaults(func=_dispatch)
     return parser

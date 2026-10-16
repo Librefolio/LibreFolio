@@ -650,7 +650,9 @@ def services_account_deletion_preview(verbose: bool = False, test_names: list = 
     """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
     print_section("Services: Account Deletion Preview")
     print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
-    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+    print_info(
+        "Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
     return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
@@ -1083,6 +1085,14 @@ def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool
     print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
     return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
+def services_backup_staging(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the check of a backup archive for a restore, on a copy: refusals, upgrade of the copy, report, one at a time."""
+    print_section("Services: Instance Backup Staging")
+    print_info("Testing: backend/app/services/platform/instance_backup/staging.py, paths.py (the restore's folders)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_staging.py", test_names)
+    return run_command(cmd, "Instance backup staging tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1833,9 +1843,20 @@ Note: No backend server required.
         "backup-jobs",
         services_backup_jobs,
         name="Instance Backup Jobs",
-        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks)",
         # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
         # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-staging",
+        services_backup_staging,
+        name="Instance Backup Staging",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
+        # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
+        # directory of the test configured (which must stay absent). No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

@@ -4,28 +4,36 @@
  *
  * This modal wraps a canvas cropper (`cropperjs` v2, a Web Component that paints to
  * a `<canvas>`). In jsdom the wrapped image never loads and the canvas never paints,
- * so the cropper never reports ready. The modal deliberately gates its whole editing
- * surface behind that readiness — `editReady` only flips ~500 ms after the cropper's
- * first change event (see the `handleCropperChange` init dance) — which means the
- * output-size maths, quality/preset/aspect handlers, the crop→upload flow and the
- * discard-changes dialog are all unreachable without a real cropper. Those live in
- * the `image-crop` E2E suite, where a browser actually paints the canvas.
+ * so the real cropper never reports ready. The modal deliberately gates its whole
+ * editing surface behind that readiness — `editReady` only flips ~500 ms after the
+ * cropper's first change event (see the `handleCropperChange` init dance). The
+ * output-size maths, quality/preset/aspect handlers and the discard-changes dialog
+ * live in the `image-crop` E2E suite, where a browser actually paints the canvas.
  *
- * What a component test CAN pin down here, and does below, is everything the modal
- * derives and decides *before* the cropper is in play: the not-ready gate the user
- * sees, the filename/format it infers from the incoming File, which preset rows it
- * offers, and the two exits (cancel / close) that stay live throughout. Those are the
- * parts a translation change or a refactor could silently break, and none of them
- * needs the canvas.
+ * What a component test CAN pin down here is everything the modal derives and
+ * decides *before* the cropper is in play: the not-ready gate the user sees, the
+ * filename/format it infers from the incoming File, which preset rows it offers, and
+ * the two exits (cancel / close) that stay live throughout. Those are the parts a
+ * translation change or a refactor could silently break, and none of them needs the
+ * canvas.
  *
- * The upload endpoint is mocked purely so importing the module never reaches the
- * network; the crop→upload path that would call it is out of reach here anyway.
+ * The cropper is therefore a stub (`$test/harness/ImageCropperStub.svelte`) with the
+ * real one's surface, which reports a selection only when a test clicks it: until
+ * then the modal sees what it saw with the real cropper in jsdom, one that never
+ * reports. The last block clicks it, waits for the state the modal publishes
+ * (`data-edit-ready`) and so reaches the crop → upload path, to pin which scope the
+ * upload carries (decision 36): the `scope` prop, `common` unless the parent says
+ * otherwise, as the third argument of `uploadFile`. The upload and the canvas crop
+ * (`getCroppedImageFromCropper`) are spies; the rest of `imageCrop` is real.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
-vi.mock('$lib/utils/files/upload', () => ({uploadFile: vi.fn().mockResolvedValue('/uploads/cropped.png')}));
+const media = vi.hoisted(() => ({uploadFile: vi.fn(), crop: vi.fn()}));
+vi.mock('$lib/utils/files/upload', () => ({uploadFile: media.uploadFile}));
+vi.mock('$lib/utils/files/imageCrop', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/utils/files/imageCrop')>()), getCroppedImageFromCropper: media.crop}));
+vi.mock('./ImageCropper.svelte', async () => ({default: (await import('$test/harness/ImageCropperStub.svelte')).default}));
 
-import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {PresetName} from '$lib/utils/files/imageCrop';
 import ImageEditModal from './ImageEditModal.svelte';
 
@@ -33,7 +41,7 @@ function imageFile(name: string, type = 'image/png'): File {
     return new File(['binary'], name, {type});
 }
 
-function mount(props: {file?: File | null; open?: boolean; preset?: PresetName; allowPresetChange?: boolean; uploadOnComplete?: boolean} = {}) {
+function mount(props: {file?: File | null; open?: boolean; preset?: PresetName; allowPresetChange?: boolean; uploadOnComplete?: boolean; scope?: 'common' | 'personal'} = {}) {
     const complete = vi.fn();
     const cancel = vi.fn();
     const error = vi.fn();
@@ -151,6 +159,52 @@ describe('ImageEditModal', () => {
 
             await rerender({open: false, file: imageFile('holiday.photo.png'), preset: 'custom'});
             expect(screen.queryByTestId('image-edit-modal')).toBeNull();
+        });
+    });
+
+    describe('the scope the cropped image is uploaded with (decision 36)', () => {
+        beforeEach(() => {
+            media.uploadFile.mockReset().mockResolvedValue('/uploads/cropped.png');
+            media.crop.mockReset().mockResolvedValue(new Blob(['cropped'], {type: 'image/png'}));
+        });
+
+        /**
+         * Let the cropper report, wait for the modal to say edits now count (`data-edit-ready`, after its own init
+         * pass), crop and upload: the arguments `uploadFile` got.
+         */
+        async function cropAndUpload(): Promise<unknown[]> {
+            const modal = screen.getByTestId('image-edit-modal');
+            await fireEvent.click(screen.getByTestId('image-cropper-stub-report'));
+            await waitFor(() => expect(modal).toHaveAttribute('data-edit-ready', 'true'), {timeout: 5_000});
+            const confirm = screen.getByTestId('image-edit-confirm');
+            expect(confirm).not.toBeDisabled();
+            await fireEvent.click(confirm);
+            await waitFor(() => expect(media.uploadFile).toHaveBeenCalledTimes(1));
+            // The crop went through the cropper the stub handed over: the path is the real one, only the canvas is not.
+            expect(media.crop).toHaveBeenCalledTimes(1);
+            expect(media.crop.mock.calls[0][0]).toEqual({stub: 'image-cropper'});
+            return media.uploadFile.mock.calls[0];
+        }
+
+        it('uploads as common when the parent says nothing: the image pickers share what they upload', async () => {
+            const {complete} = mount();
+
+            const [uploaded, , scope] = await cropAndUpload();
+
+            expect((uploaded as File).name).toBe('holiday.photo.png');
+            expect(scope).toBe('common');
+            await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
+            expect(complete.mock.calls[0][0].detail.url).toBe('/uploads/cropped.png');
+        });
+
+        it('uploads as personal when the parent passes scope="personal"', async () => {
+            const {complete} = mount({scope: 'personal'});
+
+            const [uploaded, , scope] = await cropAndUpload();
+
+            expect((uploaded as File).name).toBe('holiday.photo.png');
+            expect(scope).toBe('personal');
+            await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
         });
     });
 });

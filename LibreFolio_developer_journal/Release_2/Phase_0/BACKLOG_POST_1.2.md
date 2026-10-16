@@ -2915,8 +2915,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
     e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
     «A6d.1».
-- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+- ✅ **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; chiusa in A6d (15/10); da E tramite il coordinatore
   (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
+- **A-21 · Lo username accetta qualsiasi testo, e finisce nel saluto delle email** — basso; dal coordinatore (15/10,
+  dalla revisione di sicurezza di E3).
+  - Oggi `username` ha solo una lunghezza (3–50): passano anche frasi intere, link e testo che imita un messaggio
+    del sistema, e le email di E lo mettono nel saluto.
+  - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
+    inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
+    password (decisione 37).
+- **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
+  verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -3295,6 +3304,39 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
   import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
   Dettagli: piano 04, sezione N2.
+  ✅ 16/10 (W-B31): la regola 12 chiede `cost_basis_allowed()` (`type_metadata.py`, legge `TX_TYPE_METADATA` al momento
+  della chiamata, lo stesso `cbAllowed` del frontend); il ciclo sciolto spostando i gruppi di scambio (`SWAP_GROUPS`,
+  `get_swap_group`) in `type_metadata.py` (decisione notturna, da rivedere). Rossi TX-S-092/093. Dettagli: piano 04,
+  sezione W-B31.
+- **W-B36 · Le regole 5–11 del batch sono copie scritte a mano dei metadati dei tipi** — minimo, codice; W, 16/10
+  (W-B31). `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`) scrive a mano
+  quali tipi vogliono l'asset (regola 5) e la cassa (7), la cassa vietata all'ADJUSTMENT (8), i tipi collegabili a un
+  evento (9, con `EVENT_COMPATIBLE_TYPES`), i segni di quantità (10) e di cassa (11); `TX_TYPE_METADATA` ha già
+  `asset_mode`, `cash_mode`, `quantity_sign`, `cash_sign`, `event_compatible`, che il frontend legge. Dopo W-B31 il ciclo
+  d'import non c'è più: si possono leggere dalla tabella, con un test di parità per tipo e segno come TX-S-090. Da
+  verificare prima che le semantiche coincidano (per esempio «free», l'asset facoltativo di INTEREST, FEE e TAX).
+  Dettagli: piano 04, sezione W-B31.
+  ◐ 16/10 (W-B36): la parte che coincide letta dalla tabella (regole 5, 7, 8, 9, 10, 11; `EVENT_COMPATIBLE_TYPES` tolto),
+  rossi TX-S-095…109; i quattro casi in cui la tabella è più severa restano com'è oggi, eccezioni esplicite che
+  rimandano alla decisione **P6** del developer (lista del 16/10); il caso 4 si raggiunge anche con un promote (un
+  WITHDRAWAL e un DEPOSIT a importo zero promossi). Restano due copie scritte a mano nei testi dell'API (OpenAPI, quindi
+  `api sync`): la descrizione di `TXCreateItem.asset_event_id` «(DIVIDEND/INTEREST/ADJUSTMENT only)» e quella di
+  `cost_basis_pair` (`type_metadata.py`: «qty<0» per l'indice 0, che vale ≤ 0, ed etichette italiane «Da»/«A»).
+  Dettagli: piano 04, sezione W-B36.
+- **W-B37 · Il modale dei report del broker cancella in blocco anche i file non cancellabili** — minimo, chiarezza; W,
+  16/10 (H, CP-U2, docs-writer). Dopo CP-U2 `FilesTable` nasconde «elimina» sulle righe con `can_delete: false` in
+  tutte e due le schede, quindi anche nel modale; ma `handleDeleteMultiple`
+  (`frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte:168`) manda tutti i selezionati e riporta i 403,
+  mentre la pagina File li salta con l'avviso `uploads.deleteSkipped` (evento `file.delete.skipped`). Cura: filtrare
+  `can_delete !== false` prima del ciclo, con la stessa chiave e lo stesso evento. Dopo l'ingresso di CP-U2 di H (la
+  chiave e l'evento arrivano con quello). Dettagli: messaggio di H, 16/10 00:31.
+- **W-B38 · Gli errori multipli della creazione portano i testi con `{type}` non risolto** — minimo, chiarezza; W, 16/10
+  (W-B36, test-author). Con due o più violazioni `TXCreateItem.validate_transaction_rules`
+  (`backend/app/schemas/transactions/transactions.py`, `multipleBusinessRuleErrors`) impacchetta per ciascuna
+  `e.message_template`, non `e.message()`: il testo arriva in `TXValidationIssue.error` (batch) e in
+  `BRIMValidationIssue.message` (import) come «{type} requires asset_id». Cura: `e.message()` (i parametri restano in
+  `ctx`); cambia testi visibili nelle risposte (in meglio). W-B36 tiene apposta i testi di prima (letterali per tipo dove
+  lo erano). Dettagli: piano 04, sezione W-B36.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -3699,6 +3741,15 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
+- **B-11 · Debito di traduzione delle pagine admin di B2 e B8** — piccolo, doc; B, 15/10 (B2). Pagine inglesi scritte
+  da docs-writer, senza timbro. In it, fr ed es mancano:
+  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»;
+  - in `configuration`, le righe nuove di «Main Options» e di «Secrets»;
+  - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
+
+  `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
+  `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
+  §13, «B2b — l'API della prova su copia».
 
 ## E · Email (fase 01)
 
@@ -3729,13 +3780,22 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
   Dettagli: piano 08, «E2.4».
-- **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
+- ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
   (`TypeError: "…" is not a function`), e con lui ogni pagina. Successo con `EmailInstanceConfig` (corretto: docstring
   su una riga). Le docstring di `backend/app/schemas` hanno 131 tratti tra doppi backtick: da sfuggire in
   `api sync` (un passo come `fix-openapi-discriminators.mjs`) o da vietare con un test sullo schema.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2b.4».
+  - 16/10, E: chiusa con una guardia; il generatore non si tocca (decisione del coordinatore, nessun caso oggi). Il
+    rischio è più stretto del previsto. Un testo esce solo in quattro forme, ognuna con i suoi caratteri vietati:
+    `.describe()` su più righe e su una riga, le descrizioni Handlebars, il JSDoc. La docstring di un modello esce
+    solo quando un campo è tipizzato direttamente con lui. Oggi nessun testo rompe il client, e 49 componenti sono
+    latenti: basta un loro uso diretto come campo per romperlo.
+    La guardia è `schemas openapi-client-text`
+    (`test_openapi_client_text.py`, OCT-001…032). Legge `app.openapi()`, fallisce nominando campo, forma e
+    carattere, e scatta se cambiano la versione o le opzioni del generatore. La regola 4 di «Contract Rules» è in
+    `developer/api/overview.md`. Dettagli: piano 08, «E-5.0»…«E-5.3».
 - **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
@@ -3811,3 +3871,15 @@ da Y il 15/10.
   - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
     o rinviata come le etichette.
   - Dettagli: piano di Y, §7 «Y8 — passo 3».
+- **Y-9 · Il layout del PAC da telefono, da rivedere sugli scatti mobile dopo Y7** — basso; Y, 15/10 (Y7), per la
+  decisione 50 del developer. Y7 fa scorrere con la tabella le colonne di selezione e azioni sotto i 768 px (D-Y17).
+  Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
+  la tabella supera i 500 px). Va giudicato sugli scatti mobile `pac-step-targets` e `pac-step-review` della galleria
+  d'ingresso di Y7, insieme alle altre note del developer. Dettagli: piano di Y, §4 «Y7».
+- **Y-10 · Su un telefono la maniglia di ridimensionamento è invisibile** — minimo, UX; `test-author` di Y, 15/10 (Y7).
+  - Dopo Y7 un dito ridimensiona una colonna (D-Y18). Ma la maniglia
+    (`table/DataTableColumnHeader.svelte`, `.resize-handle`) resta trasparente finché la cella non è in hover, e un dito
+    non fa hover: sul telefono funziona, ma non si vede.
+  - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
+    `--lf-cmp-datatable-resize-handle-bg` c'è già.
+  - Dettagli: piano di Y, §7 «Y7».

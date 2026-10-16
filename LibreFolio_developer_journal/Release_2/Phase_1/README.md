@@ -162,3 +162,11 @@ Sono tutti locali: la push la fa il developer.
 | 73 | 16/10 01:44 | Z: Z3 (`run_due_jobs` con lock e `busy("scheduler")`, recupero al ritorno, slot perso fino a 7 giorni, istanza bloccata senza job; Z-6 chiusa) | `c0dbc98a0` |
 | 74 | 16/10 01:46 | J: CP-15 (totali di controllo del registro per il backup: `financial_math/ledger_totals.py`, versione 1, somme esatte; nessun chiamante ancora) | `fd41a0996` |
 | 75 | 16/10 01:48 | E: E4a (parti solo di E: «Invia per email», modulo «password dimenticata», avviso al vecchio indirizzo; non raggiungibili fino a E4b) | `73a68d95f` |
+| 76 | 16/10 01:53 | Y: Y7 (tabelle su telefono: colonne di selezione e azioni scorrono sotto 768 px, D-Y17; ridimensionamento con Pointer Events e `min-width`, D-Y18/C-62; galleria mobile 11/11 contro G-13, 174 scatti cambiati, tutti di Y7) | `a613a217c` |
+| 77 | 16/10 01:57 | Z: Z4 (`POST /system/wake-sync` con `LIBREFOLIO_WAKE_TOKEN`, 409 `wake_in_progress`, risposta in streaming, ammessa su istanza bloccata; pagina admin «Sleep and Wake»; security-review pulita) | `2980e2a00` |
+| 78 | 16/10 02:08 | W: W-B31 + W-B36 (le regole 5–12 leggono `TX_TYPE_METADATA`; tolto `EVENT_COMPATIBLE_TYPES`; i 4 casi di P6 restano eccezioni esplicite; messaggi invariati) | `4e69b5271` |
+| 79 | 16/10 02:31 | H: CP-U2 (decisione 36, frontend: colonna Visibilità, condividi/rendi personale, «elimina» solo con `can_delete`, il selettore condivide un'immagine personale scelta; pagina utente dei file aggiornata) | `2d1eee33a` |
+| 80 | 16/10 02:45 | A: A6d (nuove istanze su invito, primo account aperto, migrazione 008; impostazioni globali con sessione) + A6e (cambio email con password attuale, chiude le altre sessioni, `email_verified_at` a NULL) | `19dd8a96d` |
+| 81 | 16/10 02:52 | Y: Y4b (FE2b, il frontend del rischio in `lib/features/risk/`: 103 rinomine, import, runner, doc, devWiki, baseline dei colori; E2E `risk` 38 e `risk-lab` 44) | `08efa5ac3` |
+| 82 | 16/10 02:55 | B: B2 (controllo di un archivio su una copia: `staging.py`, `restore_jobs.py`, `/backup/restore/*`, CLI `restore --dry-run`, `backup_in_progress()`, limite di caricamento; decisioni 40, 42, 43; all-backend 18 359/0) | `5441b96ed` |
+| 83 | 16/10 03:00 | E: E-5 (guardia dei testi OpenAPI che il generatore incolla grezzi; regola 4 dei contratti API; 52 componenti latenti, nessuno rotto) | `01598f9ad` |

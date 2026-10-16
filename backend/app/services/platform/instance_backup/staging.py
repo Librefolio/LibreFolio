@@ -1,0 +1,518 @@
+"""Checking a backup archive for a restore (lot B2): unpacked into a folder of its own, its database brought to the
+app's schema on the copy, and described in a report. The live data directory is never touched.
+
+The steps, each refusing with a stable ``code`` (``StagingError``):
+
+1. **A LibreFolio backup.** The archive is a zip whose manifest LibreFolio wrote: a copy of a data directory made by
+   hand is not restored from here (decision 42: it is put back by pointing the server at it). Every entry is checked
+   before a byte is written: the manifest lists it, it is a plain file (no folder, link or encrypted entry), its name
+   is unique even ignoring case, its size is the manifest's, and the whole fits in the free space.
+2. **Unpacked.** Each entry is written below ``.restore/stage/<id>/data/`` into a new file — never through a link,
+   never over another — and its SHA-256 compared with the manifest's as it is written.
+3. **The revision decides**, the manifest's, which the copy's ``alembic_version`` must confirm. Unknown to this
+   LibreFolio's migrations, so newer, most likely: refused, update LibreFolio first — never a downgrade. The app's
+   head: restored as it is. Older: ``alembic upgrade head`` on the copy, in a process of its own. The post-migration
+   fixes then run on the copy in either case, as at every start.
+4. **Checked before and after.** Before the upgrade, the copy passes its integrity check and holds exactly the rows its
+   manifest counted. After, it passes its integrity check again, at the head; its rows and foreign keys are compared
+   with those before: a migration may change data, so a difference is a warning, not a refusal.
+5. **Administrators** (decision 40): after a restore, one signs in with an account of the backup, with its password
+   of then; the report names the copy's active administrators. With none, the restore is blocked.
+
+The report is written beside the copy (``report.json``). A confirmed restore (lot B3) moves the copy into place; the
+copy of an archive nobody confirms is removed after ``STAGE_LIFETIME``.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import shutil
+import sqlite3
+import stat
+import subprocess
+import sys
+import unicodedata
+import zipfile
+import zlib
+from collections import Counter
+from collections.abc import Callable, Iterable
+from contextlib import closing
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Literal
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from backend.app.config import PROJECT_ROOT, get_version
+from backend.app.db.post_migration import run_post_migration_fixes
+from backend.app.logging_config import get_logger
+from backend.app.services.platform.instance_backup.archive import read_manifest
+from backend.app.services.platform.instance_backup.jobs import _out_of_space, _RunLock
+from backend.app.services.platform.instance_backup.manifest import BackupManifest, BackupOrigin, ManifestError, ManifestFile
+from backend.app.services.platform.instance_backup.paths import (
+    DATABASE_ENTRY,
+    MANIFEST_ENTRY,
+    STAGE_DATA_FOLDER,
+    STAGE_LOCK_FILE,
+    STAGE_REPORT_FILE,
+    BackupPathError,
+    ensure_private_dir,
+    is_plain_dir,
+    restore_dir,
+    stage_dir,
+    stages_dir,
+)
+from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
+
+logger = get_logger(__name__)
+
+ALEMBIC_INI = PROJECT_ROOT / "backend" / "alembic.ini"
+#: How long a checked archive waits for its confirmation before its copy is removed.
+STAGE_LIFETIME = timedelta(hours=24)
+#: An archive LibreFolio writes holds far fewer entries: a hundred thousand files make a 15 MB manifest.
+MAX_ENTRIES = 500_000
+#: An upgrade of the copy that has not ended after an hour is stopped, and the check fails.
+UPGRADE_TIMEOUT_SECONDS = 3600
+#: Room kept free beyond the copy and its upgrade.
+_SPACE_MARGIN = 64 * 1024 * 1024
+_CHUNK = 1024 * 1024
+_ZIP_MAGIC = b"PK\x03\x04"
+_ZIP_READ_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError)
+
+StagePhase = Literal["checking", "unpacking", "upgrading", "verifying"]
+StageProgress = Callable[[StagePhase, int, int], None]
+#: What a restore does to the backup's database: nothing (it is at this LibreFolio's head), or an upgrade.
+RevisionAction = Literal["same", "upgrade"]
+
+
+class StagingError(RuntimeError):
+    """The archive cannot be restored, or not checked: ``code`` says why, in a stable word. The message holds no path."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class StagingBusyError(RuntimeError):
+    """Another archive is being checked in this data directory."""
+
+
+class TableRows(BaseModel):
+    """The rows of one table in the copy, before and after its upgrade; ``None`` where the table does not exist."""
+
+    model_config = ConfigDict(frozen=True)
+
+    before: int | None
+    after: int | None
+
+
+class AppliedMigration(BaseModel):
+    """A migration the upgrade of the copy applied: its revision, and the first line of its description."""
+
+    model_config = ConfigDict(frozen=True)
+
+    revision: str
+    message: str
+
+
+class StagedBackup(BaseModel):
+    """What the manifest says of the backup."""
+
+    model_config = ConfigDict(frozen=True)
+
+    created_at: datetime
+    app_version: str
+    origin: BackupOrigin
+    alembic_revision: str
+
+
+class StagingReport(BaseModel):
+    """What a restore of the checked archive would do: the report a confirmation shows, kept beside the copy.
+
+    ``warnings`` and ``blockers`` are stable codes. A warning is shown and lets the restore go on: ``rows_changed`` (the
+    upgrade changed the rows of a table), ``foreign_key_violations`` (the backup's database has broken references, kept
+    as they are), ``foreign_key_violations_added`` (the upgrade added some). A blocker forbids it: ``no_administrator``.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    stage_id: str
+    staged_at: datetime
+    expires_at: datetime
+    backup: StagedBackup
+    app_version: str
+    head_revision: str
+    action: RevisionAction
+    migrations: list[AppliedMigration]
+    post_migration_fixes: list[str]
+    tables: dict[str, TableRows]
+    foreign_key_violations_before: int = Field(ge=0)
+    foreign_key_violations_after: int = Field(ge=0)
+    files: int = Field(ge=0)
+    files_size: int = Field(ge=0)
+    database_size: int = Field(ge=0)
+    instance_key_included: bool
+    administrators: list[str]
+    warnings: list[str]
+    blockers: list[str]
+
+    @property
+    def restorable(self) -> bool:
+        return not self.blockers
+
+
+def new_stage_id() -> str:
+    """A new stage id: 32 lowercase hexadecimal digits, as the backup jobs make theirs."""
+    return uuid4().hex
+
+
+def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None) -> StagingReport:
+    """Check the archive at ``archive_path`` for a restore into ``data_dir``, on a copy, and return the report.
+
+    The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
+    is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused.
+    ``lock``: the lock of the checks, already held by the caller (``restore_jobs``, which takes it in the request and
+    checks in a thread). The caller keeps it and releases it itself, once the check's end is recorded: until then, a
+    reader must find it held. Without one, the lock is taken and released here.
+    """
+    stage_id = stage_id or new_stage_id()
+    owned = lock is None
+    if owned:
+        ensure_private_dir(stages_dir(data_dir), data_dir)
+        lock = _RunLock(stages_dir(data_dir) / STAGE_LOCK_FILE)
+        if not lock.try_acquire():
+            raise StagingBusyError("Another archive is being checked")
+    try:
+        root = stage_dir(data_dir, stage_id)
+        root.mkdir(mode=0o700)
+        try:
+            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress)
+        except BaseException:
+            shutil.rmtree(root, ignore_errors=True)
+            raise
+    finally:
+        if owned:
+            lock.release()
+    logger.info("Backup archive checked for a restore", stage_id=stage_id, action=report.action, migrations=len(report.migrations), restorable=report.restorable, warnings=report.warnings)
+    return report
+
+
+def read_report(data_dir: Path, stage_id: str) -> StagingReport:
+    """The report of a checked archive. ``FileNotFoundError`` when there is none (never checked, refused or removed)."""
+    path = stage_dir(data_dir, stage_id) / STAGE_REPORT_FILE
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(path, flags), "rb") as handle:
+        raw = handle.read()
+    try:
+        return StagingReport.model_validate_json(raw)
+    except ValidationError:
+        raise FileNotFoundError(f"No readable report for stage {stage_id}") from None
+
+
+def remove_stage(data_dir: Path, stage_id: str) -> None:
+    """Remove the copy of a checked archive and its report; nothing when there is none. A link is removed, never followed,
+    and nothing is removed while ``.restore`` or its ``stage`` folder is not a plain folder."""
+    root = stage_dir(data_dir, stage_id)
+    if not (is_plain_dir(restore_dir(data_dir)) and is_plain_dir(stages_dir(data_dir))):
+        return
+    try:
+        mode = root.lstat().st_mode
+    except FileNotFoundError:
+        return
+    if stat.S_ISDIR(mode):
+        shutil.rmtree(root, ignore_errors=True)
+    else:
+        root.unlink(missing_ok=True)
+
+
+# =============================================================================
+# The steps
+# =============================================================================
+
+
+def _no_progress(phase: StagePhase, done: int, total: int) -> None:
+    return None
+
+
+def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress) -> StagingReport:
+    data_root = root / STAGE_DATA_FOLDER
+    progress("checking", 0, 0)
+    with _open_archive(archive_path) as archive:
+        manifest = _read_manifest(archive)
+        entries = _checked_entries(archive, manifest)
+        _check_space(root, manifest)
+        _unpack(archive, manifest, entries, root, data_root, progress)
+
+    database = data_root / DATABASE_ENTRY
+    before = describe_database(database)
+    _check_against_manifest(before, manifest)
+    action, migrations, head = _revision_plan(manifest.alembic_revision)
+    if action == "upgrade":
+        progress("upgrading", 0, len(migrations))
+        _upgrade(database)
+        progress("upgrading", len(migrations), len(migrations))
+    fixes = _post_migration_fixes(database, data_root)
+
+    progress("verifying", 0, 0)
+    after = describe_database(database)
+    if after.integrity_check != "ok":
+        raise StagingError("database_damaged", "The copy of the backup's database fails its integrity check after its upgrade")
+    if after.alembic_revision != head:
+        raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
+    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database))
+    _write_report(root, report)
+    return report
+
+
+def _open_archive(path: Path) -> zipfile.ZipFile:
+    """The archive, opened: a zip, by its first bytes as by its directory."""
+    try:
+        with path.open("rb") as handle:
+            magic = handle.read(len(_ZIP_MAGIC))
+    except OSError:
+        raise StagingError("archive_unreadable", "The archive cannot be read") from None
+    if magic != _ZIP_MAGIC:
+        raise StagingError("not_a_backup", "The file is not a LibreFolio backup")
+    try:
+        return zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError):
+        raise StagingError("archive_damaged", "The archive is damaged") from None
+
+
+def _read_manifest(archive: zipfile.ZipFile) -> BackupManifest:
+    """The manifest. Without one, or with one LibreFolio did not write, the archive is not a LibreFolio backup."""
+    try:
+        return read_manifest(archive)
+    except ManifestError as exc:
+        code = "not_a_backup" if exc.code in ("manifest_missing", "manifest_unknown_format") else exc.code
+        raise StagingError(code, str(exc)) from None
+
+
+def _checked_entries(archive: zipfile.ZipFile, manifest: BackupManifest) -> dict[str, zipfile.ZipInfo]:
+    """Every entry of the archive, checked against the manifest before anything is written; by path."""
+    infos = archive.infolist()
+    if len(infos) > MAX_ENTRIES + 1:
+        raise StagingError("too_many_entries", f"The archive holds more than {MAX_ENTRIES} entries")
+    if _repeated(info.filename for info in infos) or _repeated(entry.path for entry in manifest.files) or _nested(entry.path for entry in manifest.files):
+        raise StagingError("duplicate_entry", "An entry appears twice in the archive, with only its case changed, or as the folder of another")
+    expected = {entry.path: entry for entry in manifest.files}
+    entries: dict[str, zipfile.ZipInfo] = {}
+    for info in infos:
+        if info.filename == MANIFEST_ENTRY:
+            continue
+        entry = expected.get(info.filename)
+        if entry is None:
+            raise StagingError("unexpected_entry", "The archive holds an entry its manifest does not list")
+        _check_entry(info, entry)
+        entries[info.filename] = info
+    missing = len(expected) - len(entries)
+    if missing:
+        raise StagingError("missing_entry", f"{missing} entr{'y' if missing == 1 else 'ies'} of the manifest missing from the archive")
+    return entries
+
+
+def _name_key(name: str) -> str:
+    """A name as a file system that ignores case, or the Unicode form of a letter, may see it."""
+    return unicodedata.normalize("NFC", name).casefold()
+
+
+def _repeated(names: Iterable[str]) -> bool:
+    """Whether a name comes twice, its case and Unicode form ignored: where they are, the second would overwrite the first."""
+    return max(Counter(_name_key(name) for name in names).values(), default=0) > 1
+
+
+def _nested(paths: Iterable[str]) -> bool:
+    """Whether a path is also the folder of another (``a/x`` and ``a/x/y``): unpacked, one would stand where the other's
+    folder must."""
+    keys = {_name_key(path) for path in paths}
+    return any("/".join(parts[:depth]) in keys for parts in (key.split("/") for key in keys) for depth in range(1, len(parts)))
+
+
+def _check_entry(info: zipfile.ZipInfo, entry: ManifestFile) -> None:
+    """One entry is a plain file, stored or deflated, unencrypted, of the size its manifest gives."""
+    mode = info.external_attr >> 16
+    if info.is_dir() or (mode and not stat.S_ISREG(mode)):
+        raise StagingError("not_a_file", "An entry of the archive is not a plain file: a folder or a link")
+    if info.flag_bits & 0x1:
+        raise StagingError("encrypted_entry", "An entry of the archive is encrypted")
+    if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+        raise StagingError("unsupported_entry", "An entry of the archive uses a compression LibreFolio does not write")
+    if info.file_size != entry.size:
+        raise StagingError("checksum_mismatch", "An entry of the archive differs from its manifest: the archive is damaged or was changed")
+
+
+def space_needed(manifest: BackupManifest) -> int:
+    """What a check needs free: every entry unpacked, room for the upgrade to rewrite the database, a margin."""
+    return sum(entry.size for entry in manifest.files) + 2 * manifest.files[0].size + _SPACE_MARGIN
+
+
+def _check_space(root: Path, manifest: BackupManifest) -> None:
+    needed = space_needed(manifest)
+    if shutil.disk_usage(root).free < needed:
+        raise StagingError("no_space", f"Not enough free space to check the archive: {needed} bytes are needed")
+
+
+def _unpack(archive: zipfile.ZipFile, manifest: BackupManifest, entries: dict[str, zipfile.ZipInfo], root: Path, data_root: Path, progress: StageProgress) -> None:
+    """Write every entry below ``data_root``, as it is in a data directory, checking each against the manifest."""
+    total = sum(entry.size for entry in manifest.files)
+    done = 0
+    progress("unpacking", done, total)
+    for entry in manifest.files:
+        target = data_root.joinpath(*entry.path.split("/"))
+        try:
+            ensure_private_dir(target.parent, root)
+        except BackupPathError:
+            # Only the archive put anything below the copy: a file stands where another entry's folder must be.
+            raise StagingError("duplicate_entry", "An entry of the archive stands where the folder of another must be") from None
+        _write_entry(archive, entries[entry.path], entry, target)
+        done += entry.size
+        progress("unpacking", done, total)
+
+
+def _write_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo, entry: ManifestFile, target: Path) -> None:
+    """Write one entry into the new file ``target``, never reading it beyond its manifest size; compare its SHA-256."""
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        with os.fdopen(fd, "wb") as out, archive.open(info) as source:
+            while size <= entry.size and (chunk := source.read(min(_CHUNK, entry.size + 1 - size))):
+                out.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
+    except FileExistsError:
+        raise StagingError("duplicate_entry", "An entry appears twice in the archive") from None
+    except _ZIP_READ_ERRORS:
+        raise StagingError("archive_damaged", "An entry of the archive cannot be read: the archive is damaged") from None
+    except OSError as exc:
+        if _out_of_space(exc):
+            raise StagingError("no_space", "Not enough free space to check the archive") from None
+        logger.error("A restore copy could not be written", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise StagingError("stage_failed", "The copy of the archive could not be written: the log of the server has the details") from None
+    if size != entry.size or digest.hexdigest() != entry.sha256:
+        raise StagingError("checksum_mismatch", "An entry of the archive differs from its manifest: the archive is damaged or was changed")
+
+
+def _check_against_manifest(before: DatabaseDescription, manifest: BackupManifest) -> None:
+    """The copy's database, before any upgrade, is the one the manifest describes, and an intact one."""
+    if before.integrity_check != "ok":
+        raise StagingError("database_damaged", "The backup's database fails its integrity check: it cannot be restored")
+    if before.alembic_revision != manifest.alembic_revision or before.tables != manifest.database.tables:
+        raise StagingError("manifest_mismatch", "The backup's database is not the one its manifest describes")
+
+
+def _revision_plan(revision: str | None) -> tuple[RevisionAction, list[AppliedMigration], str]:
+    """What the backup's revision asks for: nothing, or the migrations from it to the head, oldest first; and the head."""
+    from alembic.config import Config  # noqa: PLC0415 — keep alembic out of the app's import scope
+    from alembic.script import ScriptDirectory  # noqa: PLC0415
+
+    try:
+        script = ScriptDirectory.from_config(Config(str(ALEMBIC_INI)))
+        head = script.get_current_head()
+        history = list(script.walk_revisions("base", head)) if head else []
+    except Exception as exc:
+        logger.error("The migration scripts cannot be read for a restore", error=str(exc))
+        raise StagingError("head_unknown", "This LibreFolio's migration scripts cannot be read") from None
+    if head is None:
+        raise StagingError("head_unknown", "This LibreFolio's migration scripts cannot be read")
+    if revision is None:
+        raise StagingError("revision_missing", "The backup's database records no revision")
+    if revision == head:
+        return "same", [], head
+    newer: list[AppliedMigration] = []
+    for script_revision in history:
+        if script_revision.revision == revision:
+            return "upgrade", list(reversed(newer)), head
+        newer.append(AppliedMigration(revision=script_revision.revision, message=_first_line(script_revision.doc) or script_revision.revision))
+    raise StagingError("revision_unknown", "The backup comes from a newer LibreFolio, or not from this one: update LibreFolio first, then restore it")
+
+
+def _first_line(text: str | None) -> str:
+    return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+
+
+def _upgrade(database: Path) -> None:
+    """``alembic upgrade head`` on the copy, in a process of its own: the app's own engine never sees the copy."""
+    command = [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "-x", f"sqlalchemy.url=sqlite:///{database.resolve()}", "upgrade", "head"]
+    try:
+        result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=UPGRADE_TIMEOUT_SECONDS, check=False)
+    except subprocess.TimeoutExpired:
+        logger.error("The upgrade of a restore copy did not end in time", seconds=UPGRADE_TIMEOUT_SECONDS)
+        raise StagingError("upgrade_failed", "The upgrade of the copy did not end in time") from None
+    except OSError as exc:
+        logger.error("The upgrade of a restore copy could not start", error=str(exc))
+        raise StagingError("upgrade_failed", "The upgrade of the copy could not start") from None
+    if result.returncode != 0:
+        logger.error("The upgrade of a restore copy failed", returncode=result.returncode, stderr=result.stderr[-4000:])
+        raise StagingError("upgrade_failed", "The upgrade of the copy failed: the log of the server has the details")
+
+
+def _post_migration_fixes(database: Path, data_root: Path) -> list[str]:
+    """The post-migration fixes, on the copy, as at every start; the ids of those that changed something."""
+    report = run_post_migration_fixes(database, data_root)
+    if report.failed:
+        logger.error("A post-migration fix failed on a restore copy", errors=report.errors)
+        raise StagingError("post_migration_failed", "A post-migration fix failed on the copy: the log of the server has the details")
+    return sorted(fix_id for fix_id, outcome in report.outcomes.items() if outcome == "applied")
+
+
+def _administrators(database: Path) -> list[str]:
+    """The user names of the copy's active administrators, in order."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        rows = conn.execute("SELECT username FROM users WHERE is_superuser = 1 AND is_active = 1 ORDER BY username").fetchall()
+    return [str(row[0]) for row in rows]
+
+
+def _report(
+    stage_id: str,
+    manifest: BackupManifest,
+    before: DatabaseDescription,
+    after: DatabaseDescription,
+    action: RevisionAction,
+    migrations: list[AppliedMigration],
+    head: str,
+    fixes: list[str],
+    administrators: list[str],
+) -> StagingReport:
+    tables = {name: TableRows(before=before.tables.get(name), after=after.tables.get(name)) for name in sorted(set(before.tables) | set(after.tables))}
+    warnings = []
+    # A table the upgrade creates empty, or drops empty, changes no row: only counts that differ, an absent table
+    # counting as empty, make the warning.
+    if any((rows.before or 0) != (rows.after or 0) for rows in tables.values()):
+        warnings.append("rows_changed")
+    if after.foreign_key_violations > before.foreign_key_violations:
+        warnings.append("foreign_key_violations_added")
+    elif after.foreign_key_violations:
+        warnings.append("foreign_key_violations")
+    files = manifest.files[1:]
+    staged_at = datetime.now(UTC)
+    return StagingReport(
+        stage_id=stage_id,
+        staged_at=staged_at,
+        expires_at=staged_at + STAGE_LIFETIME,
+        backup=StagedBackup(created_at=manifest.created_at, app_version=manifest.app_version, origin=manifest.origin, alembic_revision=manifest.alembic_revision or ""),
+        app_version=get_version(),
+        head_revision=head,
+        action=action,
+        migrations=migrations,
+        post_migration_fixes=fixes,
+        tables=tables,
+        foreign_key_violations_before=before.foreign_key_violations,
+        foreign_key_violations_after=after.foreign_key_violations,
+        files=len(files),
+        files_size=sum(entry.size for entry in files),
+        database_size=after.size,
+        instance_key_included=manifest.instance_key.included,
+        administrators=administrators,
+        warnings=warnings,
+        blockers=[] if administrators else ["no_administrator"],
+    )
+
+
+def _write_report(root: Path, report: StagingReport) -> None:
+    fd = os.open(root / STAGE_REPORT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(report.model_dump_json(indent=2))
+        handle.write("\n")
