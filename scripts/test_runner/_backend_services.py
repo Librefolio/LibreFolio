@@ -1039,6 +1039,14 @@ def services_config_audit(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Configuration checks tests", verbose=verbose)
 
 
+def services_plugin_secrets_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup check of the stored plugin secrets: its result, its log, never raising, no key generated (H-15)."""
+    print_section("Services: Plugin Secrets Check")
+    print_info("Testing: backend/app/services/platform/plugin_secrets_check.py (check_plugin_secrets, log_plugin_secrets_check)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_secrets_check.py", test_names)
+    return run_command(cmd, "Plugin secrets check tests", verbose=verbose)
+
+
 def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
     """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
     print_section("Services: .env.example Guard")
@@ -1050,7 +1058,7 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
 def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
     """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
     print_section("Services: Profile Defaults")
-    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY)")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY; ENVIRONMENT_PROFILE_DEFAULTS and profile_default(), H-17)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
@@ -1168,7 +1176,7 @@ def services_backup_staging(verbose: bool = False, test_names: list = None) -> b
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
+    """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
     print_info("Testing: backend/app/logging_config.py (mask_query_credentials, _QueryCredentialFilter, configure_logging)")
     print_info("Tests: the rule (decoded names, nested URL, encoded-value limit), every string arg masked in place, the message without args, format strings never rewritten, uvicorn's h11/httptools access and WebSocket handshake lines with negative controls, one filter per logger after two calls")
@@ -1932,13 +1940,23 @@ Note: No backend server required.
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(
+        cat,
+        "plugin-secrets-check",
+        services_plugin_secrets_check,
+        name="Plugin Secrets Check",
+        desc="H-15: platform.plugin_secrets ok without unreadable system secret, else error with detail {count: system} only, the user count nowhere; at startup ok logs nothing, not ok logged at its severity, an exception of the status one warning naming its class, never raising; on a private DB without stored secret nothing logged and no key file generated",
+        # The status is a stub on an engine never opened, or the real one on a private SQLite file under tmp_path put in
+        # place of get_async_engine; the data directory in tmp_path, the key variables removed by monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(
         cat,
         "profile-defaults",
         services_profile_defaults,
         name="Profile Defaults",
-        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
         isolation="pure",
@@ -2024,11 +2042,11 @@ Note: No backend server required.
         "logging-access-filter",
         services_logging_access_filter,
         name="Credentials in uvicorn's Request Lines",
-        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature, judged percent-decoded, masked in any case; a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error",
+        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature, judged percent-decoded, masked in any case; a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error; H-9: configure_logging closes every handler it takes off the root, a second call's log file included",
         # PURE: uvicorn's protocol objects get one request or handshake in memory through a fake transport, no socket
         # and no server; records go to private loggers or to the real uvicorn loggers inside a block that puts every
-        # logger and structlog's configuration back (configure_logging with file logging off). No DB, no network, no
-        # file written.
+        # logger and structlog's configuration back (configure_logging with file logging off, except section (e), whose
+        # log files go under tmp_path). No DB, no network, no file written outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
