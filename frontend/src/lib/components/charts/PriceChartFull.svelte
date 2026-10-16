@@ -11,6 +11,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
@@ -518,7 +519,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             // Expose the instance for gallery/E2E tooling (deterministic tooltip control
             // without simulating a pixel-perfect hover on a scatter marker).
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
@@ -805,14 +806,14 @@
 
         const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
             const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${escapeHtml(marker.type)}` : `${dot}${escapeHtml(marker.type)}`;
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
-                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.currencyFlag ?? '')} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
                 html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
                 if (isConverted) {
-                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.originalCurrencyFlag ?? '')} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
                     html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
@@ -1010,7 +1011,7 @@
                                     overlayLabel = ghostParts.name;
                                     if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
                                 } else if (sigInfo.currency) {
-                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${escapeHtml(sigInfo.currencyFlag || '')} ${escapeHtml(sigInfo.currency)})</span>`;
                                 }
                                 labelHtml = signalLabelToHtml({...sigInfo, label: overlayLabel}, undefined, {inline: true});
                                 if (sigInfo.isGhost) isGhostRow = true;
@@ -1019,10 +1020,10 @@
                                 let mainLabel: string;
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(displayCurrencyFlag ?? '')} ${escapeHtml(displayCurrencyProp ?? '')}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${escapeHtml(mainCurrencyFlagProp || '')} ${escapeHtml(mainCurrencyProp)})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }

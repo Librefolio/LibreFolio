@@ -12,6 +12,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {ExternalLink, Layers, RotateCcw} from 'lucide-svelte';
     import {goto} from '$app/navigation';
@@ -546,7 +547,7 @@
         applyTouchScrollHint();
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer);
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME);
             attachChartReady(chartInstance, chartContainer, 'exposure-treemap');
             needsInitialLayoutStabilityPass = true;
             zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {

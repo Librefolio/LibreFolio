@@ -35,6 +35,7 @@
      */
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
 
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
@@ -116,7 +117,7 @@
     function render(): void {
         if (!container) return;
         if (!chart) {
-            chart = echarts.init(container);
+            chart = echarts.init(container, CHART_INIT_THEME);
             attachChartReady(chart, container, testId);
             scheduleFirstRenderStabilityFix(chart, container);
             // Once per instance: `render()` runs on every option change, and a listener
