@@ -214,7 +214,7 @@ the current password and ends the account's other sessions. No other route chang
   change carries on, and every other session gets `401` at its next request. A username-only change ends no session,
   nor does a refused one.
 - **The notice.** After a change of address, the route queues workstream E's `email_changed_work()` with the address
-  read before the change: a notice to that address, after the answer, with the new one masked
+  read before the change: a notice to that address, after the answer, showing nothing of the new one (decision N62)
   ([An Email Address Changes](../backend/email.md#flow-email-changed)). It changes neither the answer nor the cookie;
   with email off, nothing is sent.
 - **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
