@@ -9,7 +9,7 @@ from typing import Iterable, Mapping, Sequence
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
     DataQualityReport,
@@ -51,6 +51,7 @@ from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, 
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.financial_math.returns import cumulative_to_annualized
+from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
@@ -299,7 +300,7 @@ class LotsAnalysisService:
         active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
         # The unified price resolver is the SINGLE valuation brain for this asset: fed the
-        # asset-system price rows AND every observed trade (BUY/SELL + priced ADJUSTMENT carryover)
+        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
         # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
         # none exists, to the same-day / last-observed trade mark. Both the open-lot valuation
         # (``market_prices`` -> NAV / value / return / performance) and the chart price line
@@ -574,12 +575,7 @@ class LotsAnalysisService:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
-        split_candidate_ids = [tx.id for tx in transactions if tx.id is not None and tx.asset_event_id is not None]
-        if not split_candidate_ids:
-            return {}
-        stmt = select(Transaction.id, AssetEvent.value).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_candidate_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        rows = (await self.db.execute(stmt)).all()
-        return dict(rows)
+        return {link.transaction_id: link.ratio for link in await load_split_links(self.db, transactions)}
 
     async def _load_broker_shorting(self, scope_broker_ids: Sequence[int]) -> dict[int, bool]:
         stmt = select(Broker.id, Broker.allow_asset_shorting).where(Broker.id.in_(scope_broker_ids))

@@ -10,9 +10,14 @@
 > [`theme-roles`](../../../../../.github/skills/design-tools/theme-roles/SKILL.md) (tabella classe → ruolo, baseline).
 > Backlog: sezione «AF · Colori di asset e cambi» di [`BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md),
 > voci `AF-n`.
-> **Stato:** analisi del 16/10 mattina inviata al coordinatore; piano approvato il 16/10 alle 11:1x (uscita dal plan
-> mode nella sessione AF). Decisioni chieste al coordinatore e ancora aperte: OK sui test della zona X (lotto 3), chi
-> parte prima per i lotti 4–6, conferma della regola per le tinte ambigue, AF-8, sotto-agenti in parallelo.
+> **Stato (16/10, 18:30): area migrata, tutto nel target** (`c179a5144`). Dettagli nel passo 15.
+> - **Lotti 1–8:** A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, fix G6 `5cdf4c307`.
+> - **AF-6:** `8dc5b864c`. **Lotto 9 e AF-4:** `8aa3904a6`.
+> - **Docs:** `15f31f12e`, `830a805a3`, `8347b7713`.
+> - **Area AF:** da m1 1.946 e m2 6 a **170 e 0**. Restano solo classi annotate: AF-1 109, AF-2 23, AF-3 8, AF-5 18,
+>   AF-7 12.
+> - **Aperte:** AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 (da
+>   confermare), AF-10 (ruolo di T).
 
 ## 0. Dati di partenza (verificati il 16/10, 10:41–11:30)
 
@@ -524,3 +529,191 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
    >   verificati identici.
    >
    > **Ruoli nuovi di T** (`f043c1b58`, arrivano con la base merge): `text-lf-on-overlay` risolve AF-6.
+9. ✅ (16/10, 12:01–12:43) **Slot pesante H1+H2** sulla base `5e759bc9b` (A, B, C committati dal coordinatore, merge
+   del target `f77743d47`).
+   > **Ambiente:** corsia 6157 + `/tmp/librefolio-r2-af`, 1 worker (carico fra 36 e 165).
+   > Script `/tmp/libreFolio_af_slotH12.sh`, che non avvia nessun passo nuovo dopo le 12:43; log in
+   > `/tmp/libreFolio_af_slotH12/`.
+   >
+   > **Preparazione e unità:**
+   >
+   > | Passo | Esito |
+   > |---|---|
+   > | `api sync` | rc 0 |
+   > | `front build --debug` | rc 0 (4 min) |
+   > | `mkdocs build` | rc 0 |
+   > | `front check` | 0 errori, 0 avvisi |
+   > | `front-utility component-unit` | 154 file, 4.027/4.027 |
+   >
+   > **E2E, 151/151** (nessun rosso né flaky):
+   >
+   > | Spec | Test |
+   > |---|---:|
+   > | asset-list | 28 |
+   > | asset-modal | 17 |
+   > | asset-data-editor | 26 |
+   > | asset-merge | 3 |
+   > | asset-mobile-layout | 21 |
+   > | asset-classification | 4 |
+   > | asset-browse | 8 |
+   > | fx-list | 12 |
+   > | fx-detail | 17 |
+   > | fx-add-pair | 11 |
+   > | fx-editor | 4 |
+   >
+   > **Saltati per il taglio:** fx-csv-import, fx-bulk, fx-sync-mock, live-pause, asset-name-xss, recuperati nella coda
+   > del passo 10. Porta libera alla fine.
+   >
+   > **⚠️ Fuori pista:** fra le 11:53 e le 11:57 la rete è caduta e il turno della sessione AF si è chiuso con un errore;
+   > il worktree era pulito. G, che occupava la corsia pesante, è morto con la sua sessione, e il coordinatore ha
+   > anticipato il via.
+10. ✅ (16/10, 12:45–13:00) **Coda breve** sulla base `0ff61e8c0`: merge di `be911db7e`, con W-B43 (spec di
+    `asset-data-editor` e `fx-csv-import` più strette), G-18 e la correzione dello scanner di T (`18824449c`, i commenti
+    nelle espressioni del markup).
+    > Niente `api sync`: la base non toccava componenti né API.
+    > - **Gate:** `--check` pulito; Vitest `themeRoles` + `themeTokens` 71/71 (prima 65: c'è il test nuovo dello scanner).
+    > - **E2E, 70/70:** asset-data-editor 26 e fx-csv-import 22 (gli spec nuovi di W-B43), fx-sync-mock 5, fx-bulk 7,
+    >   live-pause 8, asset-name-xss 2.
+    > - Totale dei due slot: **221 E2E verdi**. Log in `/tmp/libreFolio_af_queueB/`.
+11. ✅ (16/10, 13:02) **Ritocco G6** (la regola nuova di T per i campi nativi, `a317392d4`).
+    > Il G6 trovava un solo caso nell'albero AF: in `ScheduledInvestmentEditor.svelte:1295` il campo note degli eventi
+    > (`placeholder="optional"`) prende `placeholder:text-lf-placeholder`.
+    > - **Prove:** `--check`, Prettier, Vitest dei gate 71/71, `git diff --check`. Gli E2E non vanno rifatti
+    >   (coordinatore).
+    > - **Commit** `5cdf4c307`, poi nel target con A+B+C: **`bfd33a0f5`**.
+12. ✅ (16/10, 13:05) **AF-6**: il velo sull'immagine dell'asset (`AssetModalDetails:104–107`). `bg-black/40` passa a
+    `bg-lf-overlay` (tabella di `theme-roles`: i fondali neri al 40–50 % vanno su `overlay`), e l'icona `Upload` da
+    `text-white` a `text-lf-on-overlay`, il ruolo nuovo di T «icona sul velo».
+    > - **Conteggi:** `AssetModalDetails` da 2 a 0 classi legacy; il target da m1 6.734 a 6.732 (`--update`).
+    > - **Prove:** `--check` pulito, Prettier ok, `dark_only_check` 0 casi; Vitest dei gate e `AssetModal.test.ts`
+    >   103/103.
+    > - **Da rivedere:** il velo passa dal 40 % di nero al 60 % del fondale (`#0D1110`), quindi è più scuro.
+    >   `on-overlay` è provvisorio (domanda aperta 5 dello skill).
+13. ✅ (16/10, 16:53–17:06) **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (`a44951cf5`; base merge
+    `10bcf4486`). Conteggio sui file reali: 300 classi, cioè 123 della pagina e 177 dei 7 componenti di `detail/`. Si
+    scende a **55**, tutte AF-1: i tre interruttori della barra del grafico nella pagina (42); l'icona dei metadati, le
+    tre viola delle misure e l'icona dei segnali (13).
+    > **Note implementazione:**
+    > - **Analisi breve:**
+    >   - nessun ramo locale ha commit fuori dal target su quei file;
+    >   - nessun test legge i loro colori (i 6 test di `detail/`, `AssetCurrencyChangeModal.test.ts`, `asset-detail.spec.ts`,
+    >     le fixture della galleria);
+    >   - analisi approvata dal coordinatore alle 17:0x.
+    > - **Bozze:** due sotto-agenti in parallelo, uno sulla pagina e uno sui 7 componenti, riletti da me.
+    >   - Pagina:
+    >     - radice `text-lf-primary`;
+    >     - banner d'errore ambra e cornice dell'editor sul set `warning`, come la pagina dei cambi;
+    >     - spinner `text-lf-link`; primari `action`; secondari `bg-lf-panel hover:bg-lf-neutral`.
+    >   - Componenti:
+    >     - card `bg-lf-card shadow-lf-shadow-card border-lf-subtle`;
+    >     - pallino di stato `bg-lf-success`/`bg-lf-danger`;
+    >     - chip del tipo `bg-lf-neutral`; badge del fornitore sul set `success`, «Manual» sul set `warning`;
+    >     - segmenti prezzi/rendimento e preset delle finestre su `checked`;
+    >     - bottoni della barra `bg-lf-card border-lf-subtle hover:bg-lf-hover`.
+    > - **AF-4, fatta da me:** `AssetCurrencyChangeModal` passa a `<ModalBase tone="danger">` (T, `4d8ae68c4`), senza più
+    >   il `contentClass` di colore; da 2 classi a 0.
+    > - **Modifiche non di colore:**
+    >   - `tone="danger"`;
+    >   - `text-lf-primary` sulla radice della pagina;
+    >   - tolta la classe morta `dark:hover:bg-slate-750` (`AssetDetailMeasuresSection:30`: la tonalità 750 non esiste);
+    >   - Prettier ha cambiato solo spazi e a capo in 5 file.
+    > - **Prove:**
+    >   - `--check` pulito, regola 8 a 0, `dark_only_check` 0 su 9 file, `native_field_check` 0 su 10 file;
+    >   - compilazione 9/9, Prettier verde, `git diff --check` pulito;
+    >   - Vitest dei gate 101/101 dopo C4 (sotto); i Vitest dei componenti li copre `component-unit` nello slot.
+    > - **Baseline** (`--update`): m1 da 1.183 a 936, m2 resta 2.
+    >
+    > **⚠️ Fuori pista — C4:** il lotto ha tolto l'ultimo uso di `text-gray-800` in tutto il frontend, e il gate C4
+    > (`themeTokens.gate.test.ts`) ha chiesto di togliere la regola `html.dark .text-gray-800` da `app.css`. L'ho tolta,
+    > come prevede il mandato (unica eccezione su `app.css`). Nessun test la leggeva.
+    >
+    > **Da rivedere:**
+    > - il link «Transazioni (n)» passa dal blu al verde dei link (`text-lf-link`, lo skill; OK del coordinatore, nella
+    >   raccolta per la designer);
+    > - il chip del tipo è più scuro in chiaro;
+    > - in scuro i segmenti e i preset attivi hanno il testo scuro sul verde;
+    > - in scuro le cornici ambra tornano visibili: prima il rimappaggio di `.rounded-xl` le rendeva grigie;
+    > - il bottone di chiusura del banner ha l'hover sulla linea ambra;
+    > - in scuro i secondari si staccano poco dalla card (domanda aperta 3);
+    > - la nota dell'editor è su `-on-soft/70`.
+14. ✅ (16/10, 17:53–18:25) **Slot pesante del lotto 9** sulla base `dc360b486`: lotto 9 e AF-4 committati dal
+    coordinatore (codice `8aa3904a6`, docs `8347b7713`), più la merge del target `ce5954329` con J-17.
+    > Corsia 6157 + `/tmp/librefolio-r2-af`; taglio alle 18:40, nessun passo nuovo dopo le 18:35. Script
+    > `/tmp/libreFolio_af_slotD.sh`, log in `/tmp/libreFolio_af_slotD/`. I worker: 2 per ogni spec partita col carico a
+    > 1 minuto sotto 60, altrimenti 1.
+    >
+    > | Passo | Esito |
+    > |---|---|
+    > | `api sync` | rc 0 |
+    > | `front build --debug` | rc 0 |
+    > | `front check` | 0 errori, 0 avvisi |
+    > | `front-utility component-unit` | 158 file, 4.092/4.092 |
+    >
+    > **E2E, 102/102** (nessun rosso né flaky; fra parentesi i worker):
+    >
+    > | Spec | Test |
+    > |---|---|
+    > | `front-asset` asset-detail | 34 (1) |
+    > | `front-designer-lab` picker | 4 (1) |
+    > | asset-browse | 8 (2) |
+    > | live-pause | 8 (1) |
+    > | asset-modal | 17 (2) |
+    > | asset-event-delete | 4 (2) |
+    > | asset-event-editor-save | 4 (2) |
+    > | `front-portfolio` risk-asset-detail | 5 (2) |
+    > | `front-transaction` tx-import-asset-inspector | 5 (2) |
+    > | `front-fx` fx-settings | 3 (2) |
+    > | fx-destructive | 10 (2) |
+    >
+    > Porta libera alla fine.
+    >
+    > **⚠️ Fuori pista — `designer-lab picker` aggiunto dal coordinatore:** il lotto aveva tolto `html.dark .text-gray-800`
+    > (C4), che era il soggetto del test dell'override scuro di L-20. Lo spec sceglie dal CSSOM la regola, senza
+    > nominarla, ed è passato da solo a un'altra classe ancora rimappata: 4/4.
+15. ✅ (16/10, 18:27) **Ingresso nel target: `c179a5144`.** La base merge è `c403534c7`, con la punta `ccfabfd6d`; il
+    frontend è identico a quello validato (`dc360b486`), con i gate a 119/119. Target m1 936.
+    > **Definition of done (§10):**
+    > - lotti 1–9 migrati; l'area scende da m1 1.946 a **170**, tutte con la loro voce AF-n; m2 da 6 a **0**;
+    > - `--check` pulito, baseline stretto a ogni checkpoint;
+    > - prove leggere e pesanti verdi in tutti gli slot: **323 E2E** (151 + 70 + 102), `component-unit` a ogni slot;
+    > - nessun elemento misto nuovo; catene ricontrollate (C1 chiusa con `tone="danger"`); porta libera;
+    > - journal e backlog aggiornati, «dove guardarlo» nella sezione 12.
+    >
+    > **Residuo dell'area, per voce:**
+    >
+    > | Voce | Classi | Dove |
+    > |---|---:|---|
+    > | AF-1 | 109 | `fx/[pair]` 54; `assets/[id]` 42; `detail/` 13 |
+    > | AF-2 | 23 | `AssetTable` 12; `IdentifierPrimaryChooser` 11 |
+    > | AF-3 | 8 | `assets/+page` 4; `fx/+page` 4 |
+    > | AF-5 | 18 | `PriceDataImportModal` 6; `EventDataImportModal` 12 |
+    > | AF-7 | 12 | `AssetModalFooter` 8; `ScheduledInvestmentEditor` 4 |
+
+## 12. Dove guardarlo (per il developer)
+
+- **A, lotti 1–3:**
+  - `/fx` in griglia e lista: card (hover, fuoco, %, «Manual», icone, sync disabilitata), segmenti assoluto/%, stati
+    vuoto, errore e caricamento;
+  - `/fx/<coppia>`: banner ambra, cornice di «Modifica tassi», nessun dato (manuale e non). Gli interruttori della barra
+    non cambiano (AF-1);
+  - modali «Aggiungi coppia» e import CSV dei cambi;
+  - `/assets`: card attive e inattive (superficie ambra, hover, lampeggio dei prezzi), riga inattiva della lista,
+    pallini di stato, ‹ n/N › del dettaglio;
+  - il riepilogo del prezzo nella pagina del dettaglio.
+- **B, lotti 4–7:**
+  - modale asset: campi, quantità di base non valida, avvisi d'importazione, fornitore, identificativi, velo
+    sull'icona (AF-6);
+  - ricerca (chip dei fornitori, tendina), test del fornitore, confronto con il fornitore, scelta dell'identificativo
+    primario, anche dentro il wizard d'importazione;
+  - cambio valuta, unione di asset, taglio o eliminazione delle date, import CSV di prezzi ed eventi;
+  - editor dell'investimento programmato, col segnaposto delle note (G6).
+- **C, lotto 8:** la barra di `/assets` (ricerca, filtri attivi e inattivi, tipo, pastiglie delle valute, segmenti).
+- **Galleria:** le scene `fx-*`, `assets*`, `asset-modal*`, `asset-detail-*`.
+- **D, lotto 9:**
+  - il dettaglio asset `/assets/<id>`: intestazione (pallino di stato, chip del tipo, link «Transazioni (n)» ora verde,
+    badge del fornitore o «Manual», ‹ n/N ›);
+  - la barra delle azioni; i segmenti prezzi/rendimento; i preset delle finestre del rendimento;
+  - il banner d'errore, la cornice «Modifica dati», i pannelli segnali, misure e metadati;
+  - nessun dato: i bottoni sincronizza e inserisci a mano;
+  - la modale del cambio valuta, ora con la cornice `tone="danger"`.
+- I «da rivedere», lotto per lotto, sono nei passi 2–8, 12 e 13.

@@ -196,7 +196,8 @@
           "weight": "Peso",
           "subtitle": "Cuánto pesa hoy cada uno de estos activos en los brókeres marcados, contando solo estos activos: juntos suman el 100 %. El efectivo y los demás activos que tienes no cuentan.",
           "changeColumn": "Objetivo",
-          "confirmApply": "Reemplazar"
+          "confirmApply": "Reemplazar",
+          "valuedAtCost": "valorado al coste · sin precio"
         },
         "fx": {
           "intro": "Los tipos que necesita el cálculo, uno por cada par de divisas en juego. «Auto» usa el tipo guardado en LibreFolio, «Manual» un tipo propio.",

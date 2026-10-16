@@ -37,13 +37,15 @@ Environment Variables (see .env):
         (default: unset, the connection's address; no profile sets it)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
-env_secret(). Every variable the code reads is listed in .env.example.
+env_secret(). Addresses (LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, ...) follow one rule: see env_url(). Every
+variable the code reads is listed in .env.example.
 """
 
 import os
 import re
 from pathlib import Path
 from typing import Literal, cast
+from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -173,6 +175,29 @@ def env_secret_origin(name: str) -> str | None:
     if file_name.strip():
         return f"{name}{SECRET_FILE_SUFFIX} ({_secret_file_path(file_name)})"
     return None
+
+
+def env_url(name: str) -> str | None:
+    """The http(s) address in the variable ``name``, from the process environment only, never from ``.env``.
+
+    - An empty or blank value counts as unset: ``None``.
+    - Otherwise the value, stripped, must be an ``http://`` or ``https://`` address (the scheme in any case) with a host
+      name, and no space, tab or line break inside. One trailing slash is removed, so a path can be appended to it;
+      nothing else changes, the case included.
+    - Any other value raises ``ValueError``, which names the variable and the value: the caller decides what an invalid
+      address costs, and logs it.
+    """
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    try:
+        # urlsplit drops tabs and line breaks before parsing: the whitespace check reads the raw value.
+        valid = not any(character.isspace() for character in value) and value.lower().startswith(("http://", "https://")) and bool(urlsplit(value).hostname)
+    except ValueError:  # a malformed address, such as an unclosed IPv6 bracket
+        valid = False
+    if not valid:
+        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address with a host name")
+    return value[:-1] if value.endswith("/") else value
 
 
 def _secret_file_path(file_name: str) -> Path:

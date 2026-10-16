@@ -2,7 +2,9 @@
 Database models for LibreFolio.
 
 All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
-- Decimal columns use Numeric(18, 6) for precision
+- Decimal columns: Numeric(18, 6) for amounts and event values; RealDecimal(22, 10) for quantities and
+  RealDecimal(24, 12) for prices and the per-unit cost basis, read back as the decimal written (C-97,
+  db/real_decimal.py); Numeric(24, 10) for FX
 - Timestamps in UTC (created_at, updated_at, fetched_at)
 - Daily-point policy: one record per day for prices and FX rates
 - Foreign keys enforced with PRAGMA foreign_keys=ON
@@ -30,9 +32,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    func,
 )
 from sqlmodel import Field, Relationship, SQLModel
 
+from backend.app.db.real_decimal import RealDecimal
 from backend.app.utils.asset.identifier import normalize_other_identifiers
 from backend.app.utils.datetime_utils import utcnow
 
@@ -400,6 +404,11 @@ class User(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+# Email addresses are unique regardless of case (P18, migration 009). SQLite's lower() folds A–Z only, so letters outside
+# ASCII compare as written; user_service.email_fold() is the same rule in Python.
+Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
 
 
 class UserSettings(SQLModel, table=True):
@@ -877,7 +886,7 @@ class Transaction(SQLModel, table=True):
     # Signed values: + in, - out. Default 0, NOT NULL for SUM calculations
     quantity: Decimal = Field(
         default=Decimal("0"),
-        sa_column=Column(Numeric(18, 6), nullable=False, default=0),
+        sa_column=Column(RealDecimal(22, 10), nullable=False, default=0),
         description="Asset quantity delta (+ in, - out)",
     )
     amount: Decimal = Field(
@@ -932,7 +941,7 @@ class Transaction(SQLModel, table=True):
     # - Can be manually overridden (e.g., Exit Tax, inheritances use market value)
     cost_basis_override: Optional[Decimal] = Field(
         default=None,
-        sa_column=Column(Numeric(18, 6), nullable=True),
+        sa_column=Column(RealDecimal(24, 12), nullable=True),
         description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN / opening ADJUSTMENT. Multiplied by quantity to get the total cost basis. Overrides calculated cost basis.",
     )
 
@@ -994,12 +1003,12 @@ class PriceHistory(SQLModel, table=True):
     asset_id: int = Field(foreign_key="assets.id", nullable=False)
     date: date_type = Field(nullable=False)
 
-    open: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    high: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    low: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
-    close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
+    open: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    high: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    low: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
+    close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
     volume: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(24, 0)))
-    adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 6)))
+    adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
 
     currency: str = Field(nullable=False)  # ISO 4217
     source_plugin_key: str = Field(nullable=False)

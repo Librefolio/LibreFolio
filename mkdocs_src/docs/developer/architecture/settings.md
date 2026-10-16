@@ -76,10 +76,12 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
-      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`) — are
+      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
+      of the asset providers in the search (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`,
+      `LIBREFOLIO_ASSET_PROVIDERS_ORDER`) — are
       read in `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
@@ -95,19 +97,29 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
       `scripts/cli_base.py`), like the rest of the instance's configuration: see
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
+    - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
+      an empty or blank value is `None`; otherwise the value, stripped, must be an `http://` or
+      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
+      no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
+      alone included, raises `ValueError`, which names the variable. The accessor's caller decides
+      what an invalid address costs, and logs it.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
-      `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
-      topic, owned by the workstream of that area. Six exist today: `platform.py` (H:
-      `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
+      `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
+      go into one section module per topic, owned by the workstream of that area. Six exist today:
+      `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
-      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
+      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
-      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
+      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`, and
+      `admin_bootstrap_config()`, the [initial administrator](access_control.md#initial-admin), its
+      token also as `_FILE`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
-      `web_link_finder_max_results()`, and `plugin_setting_env()` and `plugin_setting_env_origin()`
-      for the [plugin settings](patterns/plugin_settings.md#environment)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      `web_link_finder_max_results()`, `plugin_setting_env()` and `plugin_setting_env_origin()`
+      for the [plugin settings](patterns/plugin_settings.md#environment), and
+      `asset_providers_premium()` and `asset_providers_order()` for the
+      [search order](patterns/asset_plugin_guide.md#search-order)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
       `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)),
       `sleep_wake.py` (Z: the pauses a provider gets after answering HTTP 429,
@@ -125,7 +137,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first
       two, the bare path or no billing link for the URLs
-      ([Registration Modes](access_control.md#registration-modes)).
+      ([Registration Modes](access_control.md#registration-modes)). An invalid
+      `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
+      (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
+      `support_url: null`, so the app keeps its link to the project's GitHub issues. An unusable
+      `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
@@ -215,7 +231,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | Key | Type | Default | In the Admin tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
-| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
+| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. The startup that creates the [initial administrator](access_control.md#initial-admin) writes `invite` too. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification**: every account created by `POST /auth/register` but the first waits for an emailed link ([Email Verification](../backend/email.md#verification)). It turns on only while an email with a link can go out: the switch is disabled while its saved value is off and `email.links` of `GET /system/instance` is false, and `PATCH /settings/global/bulk` refuses an off-to-on change with 409 `EMAIL_VERIFICATION_UNAVAILABLE` (`GlobalSettingUnavailableError`). Turning it off always works |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |

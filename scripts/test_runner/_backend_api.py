@@ -2,6 +2,11 @@
 Backend API endpoint tests and E2E tests.
 """
 
+import sqlite3
+from contextlib import closing
+
+from backend.test_scripts.test_db_config import get_test_db_path
+
 from . import _common
 from ._backend_db import db_populate
 from ._common import (
@@ -545,6 +550,17 @@ def api_auth(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Auth API tests", verbose=verbose)
 
 
+def api_admin_setup(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of the initial administrator's setup link (F02): POST /auth/setup, tokens/inspect admin_setup."""
+    print_section("Initial Administrator Setup API Tests")
+    print_info("Testing POST /auth/setup and POST /auth/tokens/inspect with purpose admin_setup")
+    print_info("In-process on private databases for every case with a waiting administrator; on the lane's server only refusals that write nothing")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_admin_setup_api.py", test_names)
+    return run_command(cmd, "Initial administrator setup API tests", verbose=verbose)
+
+
 def api_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Run the registration API tests: modes, invitations, inspect, password reset, the public accounts block, the locked setting."""
     print_section("Registration API Tests")
@@ -665,6 +681,7 @@ def api_session_revocation(verbose: bool = False, test_names: list[str] | None =
     print_section("Session Revocation API Tests")
     print_info("Testing POST /auth/change-password: session version +1, the device that changed it gets a new cookie")
     print_info("Tests: other devices and the old cookie refused, other accounts untouched, refusals end nothing")
+    print_info("A-27: a password change or a real address change kills the account's live reset links; capitals only and refusals keep them")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_session_revocation_api.py", test_names)
@@ -784,6 +801,36 @@ def _api_setup() -> bool:
     return False
 
 
+#: The users the API units sign in as, seeded by ``db populate`` (``test_user_defs`` in
+#: ``backend/test_scripts/test_db/populate_mock_data.py``).
+API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+
+
+def _api_fixture_users_missing() -> str | None:
+    """Why one ``api`` action must reseed first: the lane's test database lacks a fixture user. None when it has them.
+
+    The category's ``setup_needed`` (H-21, W-B54). It never writes the database file: opened ``mode=ro``, never
+    created. On a WAL database SQLite may create the empty ``-wal``/``-shm`` companions, as any reader does; while
+    the shared backend runs they exist already. A database that cannot be read counts as one to reseed.
+    """
+    db = get_test_db_path()
+    if not db.is_file():
+        return f"no test database at {db}"
+    placeholders = ", ".join("?" * len(API_FIXTURE_USERS))
+    try:
+        with closing(sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)) as conn:
+            rows = conn.execute(f"SELECT username FROM users WHERE username IN ({placeholders})", API_FIXTURE_USERS).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            return f"the test database {db} cannot be read ({exc})"
+        rows = []
+    except sqlite3.Error as exc:
+        return f"the test database {db} cannot be read ({exc})"
+    found = {username for (username,) in rows}
+    missing = [username for username in API_FIXTURE_USERS if username not in found]
+    return f"the test database {db} has no fixture user {', '.join(missing)}" if missing else None
+
+
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
     if _common.nothing_left_to_run("api"):
@@ -844,6 +891,8 @@ Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
         setup=_api_setup,
+        # One action alone reseeds only when the fixture users are missing (H-21).
+        setup_needed=_api_fixture_users_missing,
         # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
         # backend across two full runs with 4 workers — 579 tests, zero reds —
         # before this line was written. They are scoped because each creates its
@@ -970,6 +1019,9 @@ Tests for REST API endpoints (server auto-started):
     # Write-scoped, no exclusive_because: the mode, the limit, the public and billing URLs and «the last administrator» are
     # tested in-process on private databases; on the lane's server each case acts only on accounts it registers (its
     # administrator promoted through user_service) and on their tokens, never counts the lane, and deletes them afterwards.
+    add_test(api, "admin-setup", api_admin_setup, name="Initial Administrator Setup API", desc="POST /auth/setup (password rules first, TOKEN_INVALID, the login's cookie), tokens/inspect admin_setup")
+    # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
+    # lane's server only refusals that write nothing.
     add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
@@ -999,7 +1051,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
     # The category's write-scoped holds: each test registers its own two users, reads only their rows and deletes them;
     # a password change ends the sessions of that account alone.
-    add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing")
+    add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing; A-27: a password or address change kills the live reset links (REVOKE-003…007)")
     # Write-scoped (the category default), no exclusive_because: a nonce is stateless, nothing is stored and no setting or
     # global row is written; the one write is the login counters of e2e_test_admin / e2e_test_user, which no unit asserts.
     # The instance key is switched in this process only (monkeypatch), never while the lane's server is asked.
