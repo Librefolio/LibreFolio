@@ -7,7 +7,7 @@ and ``ALLOWED_WHEN_BLOCKED``) and the block page ``GET /api/v1/system/block`` (`
 
 (a) Blocked (``LIBREFOLIO_BLOCKED``). An anonymous caller of a protected refused route gets the 401 of
     ``get_current_user``, the same status and body as on an instance that is not blocked. A public route outside the
-    allow-list (registration, the ``utilities`` lists, the global settings, the AI Export catalogue) answers that 401
+    allow-list (registration, the ``utilities`` lists, the AI Export catalogue) answers that 401
     only while blocked, and its usual answer otherwise: the known limit stated in ``instance_block.py``, documented as it
     is by one test. A refused registration creates no account. A signed-in caller gets ``423`` with exactly
     ``{"detail": {"code": "instance_blocked", "message": ...}}``, before the body is validated: an invalid body gets
@@ -113,6 +113,7 @@ BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instan
 REFUSED_READS = [
     pytest.param("/brokers", id="brokers"),
     pytest.param("/settings/user", id="user-settings"),
+    pytest.param("/settings/global", id="global-settings"),
     pytest.param("/system/connection", id="system-connection"),
     pytest.param("/system/plugin-diagnostics", id="plugin-diagnostics"),
 ]
@@ -121,7 +122,6 @@ REFUSED_READS = [
 PUBLIC_READS_OUTSIDE_THE_LIST = [
     pytest.param("/utilities/sectors", id="utilities-sectors"),
     pytest.param("/utilities/currencies", id="utilities-currencies"),
-    pytest.param("/settings/global", id="global-settings"),
     pytest.param("/ai-export/catalog", id="ai-export-catalog"),
     pytest.param("/auth/address-probe", id="address-probe"),
 ]
