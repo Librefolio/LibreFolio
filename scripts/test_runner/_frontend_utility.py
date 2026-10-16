@@ -63,19 +63,19 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/core/__tests__/clearTimer.test.ts",
             "src/lib/utils/__tests__/text.test.ts",
             "src/lib/types/__tests__/safeAccessors.test.ts",
-            "src/lib/utils/transactions/importDedup.test.ts",
-            "src/lib/utils/transactions/importMerge.test.ts",
-            "src/lib/utils/transactions/importCompare.test.ts",
-            "src/lib/utils/transactions/resolveValidationMessage.test.ts",
-            "src/lib/utils/transactions/resolveValidationMessage.decimals.test.ts",
-            "src/lib/utils/transactions/commitRefusal.test.ts",
-            "src/lib/utils/transactions/resolveBrimNotice.test.ts",
-            "src/lib/utils/transactions/eventTypes.test.ts",
-            "src/lib/utils/transactions/signHintColor.test.ts",
-            "src/lib/utils/transactions/importResolutionHelpers.test.ts",
-            "src/lib/utils/transactions/importRowState.test.ts",
-            "src/lib/utils/transactions/importDuplicateResolver.test.ts",
-            "src/lib/utils/transactions/txFormFields.test.ts",
+            "src/lib/features/transactions/import/importDedup.test.ts",
+            "src/lib/features/transactions/import/importMerge.test.ts",
+            "src/lib/features/transactions/import/importCompare.test.ts",
+            "src/lib/features/transactions/resolveValidationMessage.test.ts",
+            "src/lib/features/transactions/resolveValidationMessage.decimals.test.ts",
+            "src/lib/features/transactions/commitRefusal.test.ts",
+            "src/lib/features/transactions/resolveBrimNotice.test.ts",
+            "src/lib/features/transactions/events/eventTypes.test.ts",
+            "src/lib/features/transactions/form/signHintColor.test.ts",
+            "src/lib/features/transactions/import/importResolutionHelpers.test.ts",
+            "src/lib/features/transactions/import/importRowState.test.ts",
+            "src/lib/features/transactions/import/importDuplicateResolver.test.ts",
+            "src/lib/features/transactions/form/txFormFields.test.ts",
             "src/lib/components/charts/echartsTooltipHelpers.test.ts",
             "src/lib/components/charts/echartsAnimationConfig.test.ts",
             "src/lib/components/charts/echartsZoomPan.test.ts",
@@ -114,8 +114,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/detail/assetDetailFxRequirements.test.ts",
             "src/lib/components/assets/detail/assetDetailLive.svelte.test.ts",
             "src/lib/components/table/dataTableLogic.test.ts",
-            "src/lib/components/transactions/shared/resolveFormItems.test.ts",
-            "src/lib/components/transactions/events/eventSaveError.test.ts",
+            "src/lib/features/transactions/resolveFormItems.test.ts",
+            "src/lib/features/transactions/events/eventSaveError.test.ts",
             "src/lib/utils/files/imageCrop.test.ts",
             "src/lib/utils/files/pdfPreviewState.test.ts",
             "src/lib/utils/files/pdfViewerAssets.test.ts",
@@ -203,6 +203,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/auth/registrationErrors.verification.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
+            "src/lib/features/backup/restoreFlow.test.ts",
+            "src/lib/features/backup/restoreI18n.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
@@ -302,13 +304,13 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/files/FilePreviewModal.test.ts",
             "src/lib/features/files/FilesTable.test.ts",
             "src/lib/features/files/FileGrid.test.ts",
-            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
-            "src/lib/components/transactions/modals/TransactionCompareModal.test.ts",
-            "src/lib/components/transactions/modals/TransactionFormModal.test.ts",
-            "src/lib/components/transactions/TransactionsTable.privacy.test.ts",
-            "src/lib/components/transactions/wac/WacPreviewSection.test.ts",
-            "src/lib/components/transactions/events/EventExistsPanel.test.ts",
-            "src/lib/components/ui/display/CompactCashCell.test.ts",
+            "src/lib/features/transactions/import/ImportWizardModal.test.ts",
+            "src/lib/features/transactions/import/TransactionCompareModal.test.ts",
+            "src/lib/features/transactions/form/TransactionFormModal.test.ts",
+            "src/lib/features/transactions/TransactionsTable.privacy.test.ts",
+            "src/lib/features/transactions/wac/WacPreviewSection.test.ts",
+            "src/lib/features/transactions/events/EventExistsPanel.test.ts",
+            "src/lib/features/transactions/form/CompactCashCell.test.ts",
             "src/lib/components/ui/display/KpiMetricBar.test.ts",
             "src/lib/components/ui/display/KpiDivergingFlowBar.test.ts",
             "src/lib/components/ui/display/RiskMetricCard.test.ts",
@@ -360,8 +362,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/dashboard/OtherPeriodEffectsTable.test.ts",
             "src/lib/features/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
-            "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
-            "src/lib/components/transactions/import/ReportSetCard.escape.test.ts",
+            "src/lib/features/transactions/import/FixFlaggedStep.test.ts",
+            "src/lib/features/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
@@ -388,6 +390,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/email/VerificationNotice.test.ts",
             "src/lib/features/email/SendLinkByEmail.test.ts",
             "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
+            "src/lib/features/email/linkShareRegistration.test.ts",
+            "src/lib/features/auth/ForgotPasswordCard.email.test.ts",
             "src/lib/features/auth/LoginCard.verification.test.ts",
             "src/lib/features/auth/RegisterCard.verification.test.ts",
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
@@ -406,6 +410,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             "src/lib/features/backup/BackupDownloadCard.test.ts",
+            "src/lib/features/backup/RestoreCard.test.ts",
+            "src/lib/features/backup/RestoreReportModal.test.ts",
+            "src/lib/features/backup/RestartOverlay.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -453,7 +460,7 @@ def front_onboarding_component_unit(
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
-            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+            "src/lib/features/transactions/import/ImportWizardModal.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -774,6 +781,26 @@ def front_email_verification(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("auth-email-verification.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_email_send_link(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «send by email» E2E tests (Settings › Users share dialogs, GET /system/instance and POST /email/links simulated)."""
+    print_section("Frontend Send Link by Email Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/email-send-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_forgot_password_email(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «forgot password» by email E2E tests (the sign-in page's card, GET /system/instance and POST /email/password-reset simulated)."""
+    print_section("Frontend Forgot Password by Email Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("auth-forgot-password-email.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
     print_section("Frontend Backup Settings Tests")
@@ -879,7 +906,7 @@ def populate_registry(registry: dict) -> None:
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
-            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+            "src/lib/features/transactions/import/ImportWizardModal.test.ts",
         ),
     )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
@@ -1025,6 +1052,24 @@ def populate_registry(registry: dict) -> None:
         desc="E5b (developer decision 44), signed out on simulated answers: a 201 with verification_required goes back to the sign-in with a success line of its own and signs nobody in; a 409 EMAIL_VERIFICATION_UNAVAILABLE stays on the register card with words of its own; a 403 EMAIL_NOT_VERIFIED draws the verification notice instead of the danger box, and «send the link again» goes with the typed credentials (email.verification.resent). As e2e_test_admin with GET /system/instance simulated: the require_email_verification switch of Settings › Admin disabled with email.links false (not the lock: the sibling switch usable; no placeholder badge), usable with true; nothing saved",
         prereq="Admin user + test users; no SMTP server on the lane; require_email_verification saved off",
         tests="auth-email-verification.spec.ts",
+    )
+    add_test(
+        cat,
+        "email-send-link",
+        front_email_send_link,
+        name="Send Link by Email E2E",
+        desc="«Send by email» in Settings › Users (workstream E, lot E4b): the invitation and reset dialogs on the lane's backend, GET /system/instance answered with the real response and email.links true or false, POST /email/links on a simulated server: offered only with links, an invitation prefilled with its address posting {purpose, token, to}, a reset link posting {purpose, token} without to, «sent» and email.link.sent, a 429 with its wait in email.link.sendFailed; every invitation and disposable account it creates removed after it",
+        prereq="Admin user + test users; registration open on the lane; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
+        tests="settings/email-send-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "forgot-password-email",
+        front_forgot_password_email,
+        name="Forgot Password by Email E2E",
+        desc="«Forgot password» on the sign-in page (workstream E, lot E4b), signed out: GET /system/instance answered with the real response and email.links true or false, POST /email/password-reset on a simulated server; with links the card shows E's form in the warning's place beside the commands, two identifiers get the same accepted notice and go once each, trimmed, a 429 is «failed» with its wait in email.forgot.refused; without links the warning (forgot-email-unavailable) instead of the form, the card and its commands there; nothing written",
+        prereq="Test users created; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
+        tests="auth-forgot-password-email.spec.ts",
     )
     add_test(
         cat,

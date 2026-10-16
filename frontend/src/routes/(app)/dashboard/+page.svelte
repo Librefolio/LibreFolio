@@ -75,8 +75,11 @@
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
-    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
@@ -107,6 +110,9 @@
     let contributionLoading = $state(false);
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
     let contributionRefreshing = $state(false);
+    /** The same refresh after a price catch-up (Z-18): it guards against a second request like `contributionRefreshing`,
+     *  but the root's `aria-busy` does not read it. Never rendered, so not reactive. */
+    let contributionInBackground = false;
     let reportLoading = $state(true);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
@@ -554,10 +560,12 @@
      * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
      * not — and only a stale or missing one is asked again, in background: the figures stay up and
      * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
+     * With `background` (after a price catch-up, Z-18) the page does not say it is busy either: neither
+     * `reportLoading` nor `contributionRefreshing` turns on, so the root's `aria-busy` stays off.
      */
     let loadSeq = 0;
 
-    async function loadAll(force = false, propagateError = false) {
+    async function loadAll(force = false, propagateError = false, {background = false}: {background?: boolean} = {}) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || !brokersReady) return;
@@ -575,13 +583,13 @@
         const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
         if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
         const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
-        if (showCachedContribution()) void loadContribution();
+        if (showCachedContribution()) void loadContribution({background});
         if (!request) {
             reportLoading = false;
             return;
         }
 
-        reportLoading = true;
+        if (!background) reportLoading = true;
         try {
             const report = await request;
             if (!current() || load !== loadSeq) return;
@@ -623,10 +631,11 @@
     /**
      * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
      * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
-     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`).
+     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`). With `background`
+     * (after a price catch-up, Z-18), `contributionInBackground` instead, which the root's `aria-busy` does not read.
      */
-    async function loadContribution() {
-        if (!canAsk || contributionLoading || contributionRefreshing) return;
+    async function loadContribution({background = false}: {background?: boolean} = {}) {
+        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground) return;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
         const start = dateRangeCtl.start || undefined;
@@ -638,7 +647,8 @@
             setContribution(cached.report);
             return;
         }
-        if (cached) contributionRefreshing = true;
+        if (cached && background) contributionInBackground = true;
+        else if (cached) contributionRefreshing = true;
         else contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
@@ -653,6 +663,7 @@
         } finally {
             contributionLoading = false;
             contributionRefreshing = false;
+            contributionInBackground = false;
         }
     }
 
@@ -711,12 +722,13 @@
     /**
      * The server caught up on prices and updated something (Z5, Z-13): the stale report is asked again in background,
      * without force, and the figures stay until the new ones land. `refreshVersion` and `requestPortfolioRefresh()` are
-     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Run after the
+     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Nor does the
+     * page say it is busy (Z-18): a screen reader would announce «busy» for a simple price refresh. Run after the
      * dispatch, so every store has marked its answers stale first.
      */
     function reloadAfterPriceCatchUp() {
         if (!pageAlive) return;
-        void loadAll();
+        void loadAll(false, false, {background: true});
     }
     onMount(() =>
         registerPortfolioMutationListener('dashboard:prices', (signal) => {

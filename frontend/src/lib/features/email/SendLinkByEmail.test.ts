@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * SendLinkByEmail — «send by email» next to a shared link (workstream E, lot E4a), tested standalone: A's registry line
- * that hosts it in the share dialogs comes with lot E4b.
+ * SendLinkByEmail — «send by email» next to a shared link (workstream E, lot E4a), tested standalone; its registration
+ * in A's share dialogs (`LINK_SHARE_ACTIONS`, lot E4b) is tested in `linkShareRegistration.test.ts`.
  *
  * The contract under test:
  *   - an invitation (`data-purpose="invite"`) shows the address field (`send-link-email-to`), labelled and prefilled with

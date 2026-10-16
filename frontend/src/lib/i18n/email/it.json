@@ -90,6 +90,7 @@
         "consumed": "Questo link è già stato usato. Se il tuo account è attivo, accedi.",
         "revoked": "Questo link non funziona più: accedi per chiederne uno nuovo.",
         "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
+        "blocked": "Questa istanza è bloccata dal suo fornitore di hosting, quindi il link non può essere verificato ora. Aprilo di nuovo quando l'istanza sarà sbloccata; se intanto il link è scaduto, accedi per averne uno nuovo.",
         "missing": "Questo link è incompleto: riaprilo dall'email.",
         "error": "Non è stato possibile verificare il link: riprova."
       },
@@ -129,6 +130,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un link di reset va solo all'indirizzo del suo account.",
         "EMAIL_RECIPIENT_INVALID": "Questo non è un solo indirizzo email valido.",
         "EMAIL_RATE_LIMITED": "Il limite orario di email è raggiunto: riprova tra {minutes} min.",
+        "RECIPIENT_REFUSED": "Il server SMTP ha rifiutato l'indirizzo del destinatario.",
         "generic": "Non è stato possibile spedire l'email."
       }
     },
@@ -138,7 +140,6 @@
       "sending": "Invio…",
       "accepted": "Se un account attivo corrisponde, il suo proprietario riceve un'email con un link per scegliere una nuova password. Controlla la posta, anche nello spam: il link funziona per 30 minuti.",
       "errors": {
-        "FORGOT_PASSWORD_DISABLED": "Il reset della password per email non è ancora disponibile su questa istanza: chiedi al suo amministratore.",
         "unavailable": "Ora questa istanza non può spedire email: chiedi al suo amministratore.",
         "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
         "generic": "Non è stato possibile inviare la richiesta: riprova."
