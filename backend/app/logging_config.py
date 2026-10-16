@@ -121,7 +121,7 @@ def _compress_rotated_file(source: str, dest: str) -> None:  # pragma: no cover
 #: in another parameter's value is read parameter by parameter too.
 _QUERY_PARAMETER = re.compile(r"([?&])([^=&#?\s]*)=([^&#?\s]*)")
 #: A word that makes a parameter name a credential's, in any case.
-_CREDENTIAL_WORD = re.compile(r"token|secret|password|passwd|api[-_]?key|signature", re.IGNORECASE)
+_CREDENTIAL_WORD = re.compile(r"token|secret|password|passwd|api[-_]?key|signature|ticket", re.IGNORECASE)
 
 
 def _is_credential_name(name: str) -> bool:
@@ -134,7 +134,8 @@ def mask_query_credentials(text: str) -> str:
     """``text`` with the value of every credential-like query parameter replaced by ``***``; the rest unchanged.
 
     A credential-like parameter is named exactly ``code``, or its name holds token, secret, password, passwd,
-    api_key/apikey/api-key or signature, in any case and once percent-decoded. A value is not decoded: a URL encoded
+    api_key/apikey/api-key, signature or ticket (the restore's outcome ticket, lot B5c), in any case and once
+    percent-decoded. A value is not decoded: a URL encoded
     inside another parameter's value is not read.
     """
     return _QUERY_PARAMETER.sub(lambda match: f"{match[1]}{match[2]}=***" if _is_credential_name(match[2]) else match[0], text)

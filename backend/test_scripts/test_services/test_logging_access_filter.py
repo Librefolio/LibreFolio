@@ -8,10 +8,13 @@ Under test: ``backend/app/logging_config.py``. uvicorn logs each HTTP request on
 (a) ``mask_query_credentials(text)`` reads every query parameter after ``?`` or ``&``; a value ends at ``&``, ``#``,
     ``?`` or a blank, so a URL nested unencoded in a value is read parameter by parameter. It replaces with ``***`` the
     value of every parameter whose name, percent-decoded as the app reads it, is exactly ``code`` or holds ``token``,
-    ``secret``, ``password``, ``passwd``, ``api_key``/``apikey``/``api-key`` or ``signature``, in any case; the name
-    stays as written. Everything else is kept: other parameters, one whose value says ``token``, the path, a fragment.
-    An empty credential value shows ``***``. A text with no query comes back as it is. A limit, pinned: a value is not
-    decoded, so a URL encoded inside another parameter's value is not read.
+    ``secret``, ``password``, ``passwd``, ``api_key``/``apikey``/``api-key``, ``signature`` or ``ticket``, in any case;
+    the name stays as written. ``ticket`` since workstream B's lot B5c: the one-time ticket of a restore's outcome
+    (``outcome_ticket`` in the restart's answer) travels in a header, and one typed by hand into a URL must not reach the
+    log in clear either. Everything else is kept: other parameters, one whose value says ``token`` or ``ticket``, a
+    ``ticker`` (a word of this finance app that only looks like it), the path, a fragment. An empty credential value
+    shows ``***``. A text with no query comes back as it is. A limit, pinned: a value is not decoded, so a URL encoded
+    inside another parameter's value is not read.
 (b) ``_QUERY_CREDENTIAL_FILTER`` lets every record through. With a tuple of args it masks every string argument where it
     stands, at any position and for any number of args, so they keep their number and order; the other args are the
     same objects, a non-string one (bytes, ``None``, an int) is not read, and with nothing to mask the args object itself
@@ -91,7 +94,7 @@ WEBSOCKET_NONCE = base64.b64encode(b"sixteen-byte-key").decode("ascii")
 # ── (a) the rule ─────────────────────────────────────────────────────────────
 
 #: Parameter names whose value is masked: every word, as a whole name, inside a longer one, in another case, with a hyphen.
-MASKED_NAMES = ["token", "reset_token", "TOKEN", "api_key", "apikey", "API_KEY", "api-key", "API-KEY", "client_secret", "password", "passwd", "signature", "code", "CODE"]
+MASKED_NAMES = ["token", "reset_token", "TOKEN", "api_key", "apikey", "API_KEY", "api-key", "API-KEY", "client_secret", "password", "passwd", "signature", "code", "CODE", "ticket", "outcome_ticket", "TICKET", "Restore-Ticket"]
 
 #: Where a parameter sits: right after ``?``, or after ``&`` between two ordinary parameters that must be kept.
 POSITIONS = [
@@ -117,6 +120,7 @@ def test_the_value_of_a_credential_parameter_is_masked(name, position):
         pytest.param("tok%65n", id="token"),
         pytest.param("api%5Fkey", id="api_key"),
         pytest.param("c%6Fde", id="code"),
+        pytest.param("tick%65t", id="ticket"),
     ],
 )
 def test_a_percent_encoded_name_is_judged_decoded_and_kept_as_written(name, position):
@@ -135,6 +139,8 @@ def test_a_percent_encoded_name_is_judged_decoded_and_kept_as_written(name, posi
         pytest.param("currency%5Fcode=EUR", id="code-ends-the-decoded-name"),
         pytest.param("codes=a,b", id="code-starts-the-name"),
         pytest.param("q=token", id="the-value-says-token"),
+        pytest.param("q=ticket", id="the-value-says-ticket"),
+        pytest.param("ticker=AAPL", id="ticker-is-not-ticket"),
         pytest.param("sort=name", id="sort"),
     ],
 )
