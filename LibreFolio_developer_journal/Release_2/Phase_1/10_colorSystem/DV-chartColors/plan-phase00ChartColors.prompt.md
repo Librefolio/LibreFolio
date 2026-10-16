@@ -1255,6 +1255,44 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > - **Non girati per il carico (92):** `roleColors.test.ts` (il controllo dei ruoli morti: la nuova chiamata
   >   `.color('--lf-surface-card')` legge un ruolo già letto), `chartTheme.test.ts`, `designerLabImports` e
   >   `scanColors`. Li copre `core-unit` nello slot di W6.
+- [x] ✅ (16/10/2026) `ui/display`: `KpiMetricBar`, `KpiDivergingFlowBar` e `RiskMetricCard` (52 classi), passati da T a
+  DV con i loro chiamanti (coordinatore, 11:48). OK della 1.3 alle 11:5x.
+  > **Note implementazione** (16/10, 11:55–12:20), sulla base `28f4bed75` (DV-8).
+  > - Il convertitore ha cambiato 19 stringhe. I chiamanti (`KpiSection`, i livelli L1 e L2, `RiskCardGrid`) passano solo
+  >   layout o ruoli (`SIGN_*`, `POLARITY_TONES`), tranne `KpiSection`.
+  >
+  > **Ritocchi a mano, per significato** (skill `design-system`):
+  > - **Tracce delle barre** (`KpiMetricBar`, le due metà di `KpiDivergingFlowBar`) → `bg-lf-neutral`. Lo skill mette
+  >   le tracce sul `neutral`; il convertitore le avrebbe messe su `panel`.
+  > - **Divisorio di 1 px** al centro di `KpiDivergingFlowBar` → `bg-lf-input`, per restare visibile sulla traccia
+  >   `neutral` (come la linea di `RiskAnalysisPanel`).
+  > - **Barra di default** di `KpiMetricBar` (`bg-slate-400`, nessun chiamante la usa) → `bg-lf-input`, che per contratto
+  >   fa 3:1 su card e pannello.
+  > - **Triangolo del marcatore** (`border-b-gray-600`) → `border-b-lf-secondary`.
+  >   - **⚠️ Fuori pista:** il convertitore non riconosce le classi di un lato solo (`border-b-*`), che il gate invece
+  >     conta. Qui era il solo caso, e in W6 i conteggi tornavano esatti.
+  > - **Scheletri** di `RiskMetricCard` → `bg-lf-neutral`.
+  > - **`RiskMetricCard`** è una card di pagina: `text-lf-primary` (regola 3) e `shadow-lf-shadow-card` (regola 9).
+  > - **`KpiSection`**: la catena `valueColor`@354 (`font-bold text-gray-800 dark:text-gray-100`) → `font-bold
+  >   text-lf-primary`.
+  >
+  > **Restano legacy come categorie** (coordinatore, 12:07, scelta (a), regola 11 dello skill), 4 classi in
+  > `KpiSection`:
+  > - le barre @405 «valore contabile» (`bg-blue-500`) e @417 «liquidità» (`bg-emerald-500`) sono colori d'identità di
+  >   due misure, non segni né stati;
+  > - un ruolo di stato o di controllo non si usa per il suo colore;
+  > - l'elemento della barra prende solo `barColor`, quindi non resta misto. In DV-7, con una riga per la designer.
+  >
+  > **In più (coordinatore, 12:1x):** i due campi di `ChartAestheticsSection`:217 e 233, migrati dal lotto input di T,
+  > avevano un segnaposto senza ruolo. Ora hanno `placeholder:text-lf-placeholder`, perché `app.css` colora i campi
+  > nativi solo se non hanno classi `-lf-`.
+  > - Il controllo del coordinatore (`native_field_check.py --all`) non trova più nulla nella mia area.
+  > - Nel resto dell'app restano 2 casi, di T: `ui/input/TagInput.svelte`:214 e `ui/select/TreeSelect.svelte`:357.
+  >
+  > - Prettier pulito, compilatore 5 file 0 avvisi, regola 4 a 0 casi, `dark:` senza metà chiara a 0, `git diff --check`
+  >   pulito.
+  > - `--update`: m1 6.853 → 6.799 (−54 = 52 + 2), m2 54 invariato. I tre componenti escono, `KpiSection` passa da 6 a
+  >   4; poi `--check` pulito.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
