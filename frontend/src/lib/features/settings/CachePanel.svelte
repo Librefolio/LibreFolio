@@ -132,26 +132,26 @@
     }
 </script>
 
-<div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3" data-testid="cache-panel">
+<div class="bg-lf-panel text-lf-primary rounded-lg px-4 py-3" data-testid="cache-panel">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
-            <Database size={16} class="text-gray-500 dark:text-gray-400 shrink-0" />
+            <Database size={16} class="text-lf-muted shrink-0" />
             <div class="min-w-0">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <span class="text-sm font-medium text-lf-secondary">
                     {$t('settings.cache.title')}
                 </span>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <p class="text-xs text-lf-muted mt-0.5">
                     {$t('settings.cache.description')}
                 </p>
             </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1" type="button" data-testid="cache-refresh" disabled={loading || clearing} onclick={loadStatus}>
+            <button class="text-xs text-lf-link hover:text-lf-link/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1" type="button" data-testid="cache-refresh" disabled={loading || clearing} onclick={loadStatus}>
                 <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
                 {$t('settings.cache.refresh')}
             </button>
             {#if canEdit && caches.length > 0}
-                <button class="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="cache-clear-all" disabled={clearing} onclick={() => (confirmTarget = 'all')}>
+                <button class="text-xs text-lf-danger hover:text-lf-danger/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="cache-clear-all" disabled={clearing} onclick={() => (confirmTarget = 'all')}>
                     {$t('settings.cache.clearAll')}
                 </button>
             {/if}
@@ -163,26 +163,26 @@
             <LoadingSpinner size="sm" />
         </div>
     {:else if caches.length === 0}
-        <p class="text-xs text-gray-500 dark:text-gray-400 py-3" data-testid="cache-empty">
+        <p class="text-xs text-lf-muted py-3" data-testid="cache-empty">
             {$t('settings.cache.empty')}
         </p>
     {:else}
         <div class="mt-3 overflow-x-auto">
             <table class="w-full text-xs">
                 <thead>
-                    <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-700">
+                    <tr class="text-left text-lf-muted border-b border-lf-subtle">
                         <th class="pb-1.5 font-medium">
-                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer" data-testid="cache-sort-name" onclick={() => toggleSort('name')}>
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-lf-secondary cursor-pointer" data-testid="cache-sort-name" onclick={() => toggleSort('name')}>
                                 {$t('settings.cache.colName')}{sortKey === 'name' ? (sortAsc ? ' ▲' : ' ▼') : ''}
                             </button>
                         </th>
                         <th class="pb-1.5 font-medium text-right">
-                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer ml-auto" data-testid="cache-sort-size" onclick={() => toggleSort('size')}>
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-lf-secondary cursor-pointer ml-auto" data-testid="cache-sort-size" onclick={() => toggleSort('size')}>
                                 {$t('settings.cache.colSize')}{sortKey === 'size' ? (sortAsc ? ' ▲' : ' ▼') : ''}
                             </button>
                         </th>
                         <th class="pb-1.5 font-medium text-right">
-                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer ml-auto" data-testid="cache-sort-ttl" onclick={() => toggleSort('ttl')}>
+                            <button type="button" class="inline-flex items-center gap-0.5 hover:text-lf-secondary cursor-pointer ml-auto" data-testid="cache-sort-ttl" onclick={() => toggleSort('ttl')}>
                                 {$t('settings.cache.colTtl')}{sortKey === 'ttl' ? (sortAsc ? ' ▲' : ' ▼') : ''}
                             </button>
                         </th>
@@ -193,17 +193,17 @@
                 </thead>
                 <tbody>
                     {#each sortedCaches as cache (cache.name)}
-                        <tr class="border-b border-gray-100 dark:border-slate-700/50 last:border-0" data-testid="cache-row-{cache.name}">
-                            <td class="py-1.5 pr-2 font-mono text-gray-700 dark:text-gray-300 break-all">{cache.name}</td>
-                            <td class="py-1.5 pr-2 text-right text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        <tr class="border-b border-lf-subtle last:border-0" data-testid="cache-row-{cache.name}">
+                            <td class="py-1.5 pr-2 font-mono text-lf-secondary break-all">{cache.name}</td>
+                            <td class="py-1.5 pr-2 text-right text-lf-secondary whitespace-nowrap">
                                 {cache.current_size} / {cache.maxsize}
                             </td>
-                            <td class="py-1.5 pr-2 text-right text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                            <td class="py-1.5 pr-2 text-right text-lf-secondary whitespace-nowrap">
                                 {formatTtl(cache.ttl_seconds)}
                             </td>
                             {#if canEdit}
                                 <td class="py-1.5 text-right">
-                                    <button class="text-red-500 hover:text-red-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1" type="button" data-testid="cache-clear-{cache.name}" disabled={clearing} onclick={() => (confirmTarget = cache.name)}>
+                                    <button class="text-lf-danger hover:text-lf-danger/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1" type="button" data-testid="cache-clear-{cache.name}" disabled={clearing} onclick={() => (confirmTarget = cache.name)}>
                                         <Trash2 size={12} />
                                         {$t('settings.cache.clear')}
                                     </button>
