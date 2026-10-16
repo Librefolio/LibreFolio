@@ -93,22 +93,39 @@ def read_entries(since: str | None = None) -> list[dict[str, Any]]:  # noqa: C90
     return entries
 
 
+#: The ``error_code`` of an item a provider's pause refused: deferred, neither ok nor failed (release 1.3, Z7b).
+RATE_LIMITED = "RATE_LIMITED"
+
+
+def _mark_deferred(item: dict[str, Any], result: object) -> bool:
+    """Flag ``item`` as deferred when ``result`` was refused by a provider's pause; True when it was."""
+    if getattr(result, "error_code", None) != RATE_LIMITED:
+        return False
+    item["deferred"] = True
+    retry_after = getattr(result, "retry_after", None)
+    if retry_after is not None:
+        item["retry_after"] = retry_after
+    return True
+
+
 def build_current_price_entry(
     results: list,
     asset_names: dict[int, str],
     duration_s: float,
     status: str,
     asset_icons: dict[int, str | None] | None = None,
+    retry_at: str | None = None,
 ) -> dict[str, Any]:
-    """Build a JSONL entry for a current-price refresh run."""
+    """Build a JSONL entry for a current-price refresh run; deferred items are neither ok nor failed."""
     icons = asset_icons or {}
     items = []
     for r in results:
         item: dict[str, Any] = {
             "asset_id": r.asset_id,
             "name": asset_names.get(r.asset_id, "?"),
-            "ok": r.value is not None,
         }
+        deferred = _mark_deferred(item, r)
+        item["ok"] = r.value is not None and not deferred
         if icons.get(r.asset_id):
             item["icon_url"] = icons[r.asset_id]
         if r.error:
@@ -116,12 +133,14 @@ def build_current_price_entry(
         items.append(item)
 
     ok_count = sum(1 for i in items if i["ok"])
+    deferred_count = sum(1 for i in items if i.get("deferred"))
     return {
         "ts": datetime.now().astimezone().isoformat(),
         "job": "current_price",
         "duration_s": duration_s,
         "status": status,
-        "summary": {"ok": ok_count, "err": len(items) - ok_count},
+        "summary": {"ok": ok_count, "err": len(items) - ok_count - deferred_count, "deferred": deferred_count},
+        "retry_at": retry_at,
         "items": items,
     }
 
@@ -133,8 +152,9 @@ def build_history_sync_entry(
     duration_s: float,
     status: str,
     asset_icons: dict[int, str | None] | None = None,
+    retry_at: str | None = None,
 ) -> dict[str, Any]:
-    """Build a JSONL entry for a history-sync run."""
+    """Build a JSONL entry for a history-sync run; deferred items are neither ok nor failed."""
     icons = asset_icons or {}
     assets = []
     for r in asset_results:
@@ -143,6 +163,7 @@ def build_history_sync_entry(
             "name": asset_names.get(r.asset_id, "?"),
             "status": str(r.status),
         }
+        _mark_deferred(item, r)
         if icons.get(r.asset_id):
             item["icon_url"] = icons[r.asset_id]
         if r.errors:
@@ -160,6 +181,7 @@ def build_history_sync_entry(
             "pair": r.pair,
             "status": str(r.status),
         }
+        _mark_deferred(item, r)
         if len(pair_parts) == 2:
             item["base"] = pair_parts[0]
             item["quote"] = pair_parts[1]
@@ -170,8 +192,10 @@ def build_history_sync_entry(
         item["points_changed"] = r.points_changed
         fx.append(item)
 
-    asset_ok = sum(1 for a in assets if a["status"] == "ok")
-    fx_ok = sum(1 for f in fx if f["status"] == "ok")
+    asset_ok = sum(1 for a in assets if a["status"] == "ok" and not a.get("deferred"))
+    fx_ok = sum(1 for f in fx if f["status"] == "ok" and not f.get("deferred"))
+    asset_deferred = sum(1 for a in assets if a.get("deferred"))
+    fx_deferred = sum(1 for f in fx if f.get("deferred"))
 
     return {
         "ts": datetime.now().astimezone().isoformat(),
@@ -180,10 +204,13 @@ def build_history_sync_entry(
         "status": status,
         "summary": {
             "assets_ok": asset_ok,
-            "assets_err": len(assets) - asset_ok,
+            "assets_err": len(assets) - asset_ok - asset_deferred,
+            "assets_deferred": asset_deferred,
             "fx_ok": fx_ok,
-            "fx_err": len(fx) - fx_ok,
+            "fx_err": len(fx) - fx_ok - fx_deferred,
+            "fx_deferred": fx_deferred,
         },
+        "retry_at": retry_at,
         "assets": assets,
         "fx": fx,
     }

@@ -199,10 +199,10 @@
         box-shadow: 0 0 0 2px var(--lf-cmp-compact-cash-cell-input-focus-shadow);
     }
     .compact-cash.sign-ok .amount-input {
-        border-color: var(--lf-cmp-compact-cash-cell-sign-ok-border); /* emerald-500 */
+        border-color: color-mix(in oklab, var(--lf-gain) 70%, transparent);
     }
     .compact-cash.sign-bad .amount-input {
-        border-color: var(--lf-cmp-compact-cash-cell-sign-bad-border); /* red-500 */
+        border-color: color-mix(in oklab, var(--lf-loss) 70%, transparent);
     }
     .amount-input:disabled {
         color: var(--lf-cmp-compact-cash-cell-input-disabled-text); /* gray-400 */
