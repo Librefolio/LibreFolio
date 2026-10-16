@@ -191,21 +191,19 @@
   - È citato in `.github/instructions/frontend.instructions.md`: non c'è un agente frontend in `.github/agents/`, e
     quelle istruzioni sono il file che il lavoro sul frontend segue. È citato anche nella riga dei colori di
     `.github/copilot-instructions.md`.
-- **Esito del 16/10, sera.** 19 ingressi nel target fra le 11:02 e le 19:10, ognuno con l'albero uguale alla
+- **Esito del 16/10, sera.** 21 ingressi nel target fra le 11:02 e le 20:26, ognuno con l'albero uguale alla
   simulazione: T (skill, ruoli, scanner, resto della UI), G (G-18, builder, record), AF (lotti 1–9, AF-4, AF-6), IM,
-  L-20, DV (W6, C4, TC-15, G-18 di `BackendTimingBar`, W6-e), BK, TR, IW. Cronaca nel
+  L-20, DV (W6, C4, TC-15, G-18 di `BackendTimingBar`, W6-e, W6-d), BK (lotto dei broker, L4), TR, IW. Cronaca nel
   [registro](coordination/registro.md).
-  - **m1 8.249 → 930 nel target** alle 19:10: è migrato il 91,9 % delle 11.435 classi della v1.2. m2 54 → 2. Ogni ramo
-    committato è nel target.
-  - **Il resto non è migrazione 1:1:**
-    - 541 classi sono colori di categoria;
-    - 253 sono in file riservati alla 1.3: `LotCustodyModal` 205, poi L4 di BK; `PositionsPanel` ed `ExposureTable`
-      48, dopo W7 di Y;
+  - **m1 8.249 → 697 nel target** alle 20:26: è migrato il 93,9 % delle 11.435 classi della v1.2. m2 54 → 2. Ogni ramo
+    committato è nel target, e nessun file riservato alla 1.3 ha più classi da migrare.
+  - **Il resto non è migrazione 1:1 e aspetta la designer:**
+    - 561 classi sono colori di categoria;
     - 109 sono interruttori;
     - 27 non hanno ancora un ruolo.
   - Il resto aspetta la designer o la 1.3. Nella cartella di sessione del coordinatore:
     - i motivi, file per file: `designer/colori-residui-motivi.csv`;
-    - le domande per lei: `designer/domande-per-la-designer.md`, 27 punti.
+    - le domande per lei: `designer/domande-per-la-designer.md`, 30 punti.
 - **Regole nuove del 16/10:**
   - **Gate prima di ogni ingresso, sul merge col target:** `--check` più i tre gate Vitest dei colori
     (`tools/pre_entry_gates.sh`, nella cartella di sessione del coordinatore).
@@ -244,11 +242,11 @@
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo sulla punta `81bc305b9` (16/10, 18:53; m1 934), worktree `preview-colori`, DB nuovo (`001_initial.py` cambiato da C-97a), shell staccata `preview6160j` |
 | T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al resto della UI** (`4d8ae68c4`, 16/10): skill comune `design-system` (`6e569084a`, D-T29), ruoli (`f043c1b58`), scanner e regola dei campi nativi (`be911db7e`), gate G5/G6, token di componente 1, 2a, 2b e 2c, TC-15. Ferma: il lotto degli interruttori e i ruoli di categoria aspettano la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6-e** (`e3d85fdc8`, 16/10): W6 (`adbc2a4b7`: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`), fix C4 (`1c7b9def2`), TC-15 e G-18 di `BackendTimingBar` (`81bc305b9`), binari del PAC con `pacTargetBar.unknown` su `secondary` (W6-e). In attesa W6-d (`PositionsPanel`, `ExposureTable`), dopo W7 di Y. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6-d** (`3805bf2ca`, 16/10): W6 (`adbc2a4b7`: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`), fix C4 (`1c7b9def2`), TC-15 e G-18 di `BackendTimingBar` (`81bc305b9`), binari del PAC (W6-e, `e3d85fdc8`), `PositionsPanel` ed `ExposureTable` con `aria-pressed` (W6-d; `AllocationPanel` resta su `action`, TD-3). Restano categorie, TD-1 e DV-7: aspettano la designer. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
 | IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | **chiuso**, integrato (`e9b4ac6b0`, 16/10): `components/transactions/import/**`, `wizard/**` e le modali dell'import |
 | TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | **chiuso**, integrato (`e402d3b87`, 16/10). Categorie, interruttore e scrollbar aspettano la designer |
 | AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **tecnicamente completo**, tutto nel target (`c179a5144` e docs `5eaf67ff1`, 16/10): lotti 1–9, AF-4 (`ModalBase` `tone="danger"`), AF-6, `app.css` C4. Area m1 1.946 → 170, m2 6 → 0; 323 E2E verdi in 3 slot. Restano AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (punti 26 e 12 della raccolta). Revisione del developer da fare (piano AF, sezione 12) |
-| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **integrato** (`939e4998a`, 16/10): `features/brokers/**`, lotti compresi. Aperta L4 (`LotCustodyModal`, con la prop mista di G-18) dopo Y |
+| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **area chiusa** (`979d0a151`, 16/10): lotto dei broker (`939e4998a`) e L4 `LotCustodyModal` (205 → 20, con la prop mista di G-18 tolta). Area m1 1.153 → 159, tutte annotate: BK-1 69, BK-2 84, BK-3 4, BK-5 2, più i `<style>` di T (BK-6); aspettano la designer o il lotto degli interruttori di T |
 | IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | **chiuso**, integrato (`1248b7908`, 16/10) |
 
 Superfici condivise e relativi proprietari:
