@@ -46,7 +46,7 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
-    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
+    import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
     import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/utils/brim/defaultPluginCheck';
