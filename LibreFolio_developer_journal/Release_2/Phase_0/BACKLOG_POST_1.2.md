@@ -2799,7 +2799,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   nello stesso ternario) restano legacy e interi: manca un `success-hover`. Serve un ruolo di T, oppure una decisione:
   `bg-lf-action`, o il ramo ambra su `bg-lf-warning hover:bg-lf-warning-hover text-lf-on-status`. Dettagli: piano di
   TR, sezione «Cosa resta, e perché».
-  ✅ 16/10, lotto 5 di TR (secondo checkpoint): con i ruoli nuovi di T (`f043c1b58`), le due conferme passano a
+  ✅ 16/10, `70bae91b4` (lotto 5 di TR, secondo checkpoint): con i ruoli nuovi di T (`f043c1b58`), le due conferme passano a
   `bg-lf-success hover:bg-lf-success-hover text-lf-on-status`, e il ramo dello split a `bg-lf-warning
   hover:bg-lf-warning-hover`, nello stesso ternario (OK del coordinatore, 12:12).
 - **TR-3 · Lo `<style>` di `TransactionsTable` tiene 13 letterali** — basso; TR, 16/10. Sono:
