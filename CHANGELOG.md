@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
 - `LIBREFOLIO_CLIENT_IP_HEADER`: behind a reverse proxy that passes the visitor's address in a header of its own (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), the per-address limits of the emails (sign-up, «send the link again», forgotten password) count each visitor on their own instead of all visitors together. Unset by default; set it only when every request crosses that proxy.
 - While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
+- `./dev.py user set-email <username> <address>` changes an account's email address from the command line (sessions ended and verification reset on a real change, as from the Profile).
 
 ### 🔄 Changed
 
@@ -91,6 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After the server has caught up on prices, an open Dashboard or broker page shows the new figures by itself, in the background, with no need to press Refresh.
 - **An adjustment is no longer a price.** An asset's value comes from its market quotes and from the prices of its buys and sells only; an adjustment (an opening position, a succession, a transfer from a broker LibreFolio does not track) sets the cost and nothing else. A position with no price at all — no quote, no buy or sale, not even an old one — is valued at its book cost and marked «valued at cost»: an estimate, with no unrealized gain or loss, until its first price. An asset with a price provider that still has no price two weeks after it was acquired is listed in a «valued at cost» warning. The PAC planner weighs such a holding at its cost, labelled «valued at cost · no price», and the AI Export declares it the same way, with no unit price.
 - API: Risk Analysis drawdown results (`drawdown_summary`, `asset_set_drawdown`) carry the gain needed to climb back from the worst fall to the peak before it, `maximum_drawdown_trough_to_peak_ratio` (a 50 % fall needs +100 %); `remaining_to_peak_ratio` is null for a total loss, with a warning that says why, where the analysis used to fail.
+- Signing in and «Forgot password» with your email address work whatever capitals you type.
+- Rewriting your own address with other capitals is not an address change: no device is signed out and the address stays verified.
+- API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
 
 #### 🎨 A new colour palette
 
@@ -197,6 +201,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
 - **Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.** Fonts and source maps are served with their own type, also without the system's MIME table.
 - `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`, off by default: frame protection (`X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'`) and a report-only Content-Security-Policy on the web app's pages, which blocks nothing and lists in the browser console what an enforced policy would block.
+- **Changing your email address or your password, or an administrator setting a new password with `./dev.py user reset`, now cancels every password-reset link still open for the account**: a link asked for before the change no longer works.
+- A failed sign-in no longer writes the username or email address that was typed into the server log: the log names the account by its id when it exists, and nothing otherwise.
+- Updating your profile no longer writes your email address into the server log: the log notes only whether the address changed.
 
 #### 📚 Documentation
 
@@ -213,6 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GET /api/v1/settings/global` and `/settings/global/{key}` need a signed-in session: an API client must sign in to read them.
 - `PUT /api/v1/auth/profile` with a new `email` needs `current_password`: missing → 400 `CURRENT_PASSWORD_REQUIRED`, wrong → 400 `CURRENT_PASSWORD_INVALID`.
 - `POST /api/v1/auth/register`, `/auth/change-password` and `/auth/password-reset` refuse a password that misses a rule with 400 `PASSWORD_TOO_WEAK` and the `rules` it misses, checked before anything else; until now the API asked only for 8 characters, with a 422.
+- **Email addresses are unique regardless of capitals.** An address another account already uses with other capitals (A–Z) is refused like an exact duplicate: `400 Email already registered`, or `ACCOUNT_EXISTS` at registration. If two existing accounts share an address apart from capitals, the upgrade stops at that step and names them by id and username, with no account changed: give all but one of them another address with `./dev.py user set-email <username> <address>`, then start again. Restoring an older backup that holds two such accounts fails its check the same way (`upgrade_failed`): separate them on the instance that made the backup, then back it up again. No account is ever merged. Letters outside A–Z still compare as written.
 
 ---
 
