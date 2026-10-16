@@ -340,9 +340,10 @@ const NEUTRAL_READS: Readonly<Record<string, NeutralRead>> = {
 };
 
 /**
- * A colour of its own for every role the charts read, none of them a stand-in: a neutral drawn in one of them names the
- * role it read, through the reader. All `#rrggbb`, the one notation `chartRoles` takes as it is where there is no canvas
- * to resolve the others; the last two digits number the role.
+ * A colour of its own for every role of `ChartRole`, none of them a stand-in: a neutral drawn in one of them names the
+ * role it read, through the reader. The roles no neutral reads are listed too, the record being complete; their colours
+ * only have to collide with no other. All `#rrggbb`, the one notation `chartRoles` takes as it is where there is no
+ * canvas to resolve the others; the last two digits number the role, in hex.
  */
 const INJECTED_COLOURS: Readonly<Record<ChartRole, string>> = {
     '--lf-surface-card': '#1e0001',
@@ -359,6 +360,14 @@ const INJECTED_COLOURS: Readonly<Record<ChartRole, string>> = {
     '--lf-warning': '#1e000c',
     '--lf-danger': '#1e000d',
     '--lf-info': '#1e000e',
+    '--lf-surface-field': '#1e000f',
+    '--lf-surface-hover': '#1e0010',
+    '--lf-focus': '#1e0011',
+    '--lf-selected': '#1e0012',
+    '--lf-checked': '#1e0013',
+    '--lf-action': '#1e0014',
+    '--lf-on-action': '#1e0015',
+    '--lf-mark-bg': '#1e0016',
 };
 
 /** What the neutral `read` draws in a theme when every role answers its injected colour. */
