@@ -1358,3 +1358,131 @@ Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli aggan
 > i18n `email.sendLink.*`, `email.forgot.*` × 4. Test (EMM-034…038, EMF-043…052, SLA, FPA, ETX-11…14, SLE, FPF);
 > doc `developer/backend/email.md`; runner (voci mie); backlog E-8; questo piano. Nessun file di A. I pacchetti E5b ed
 > E4b stanno fuori dal worktree (`/tmp/libreFolio_e5b/`, `/tmp/libreFolio_e4b/`, copie nella cartella della sessione).
+
+### E-5 — la guardia sui testi che `api sync` non sfugge (lotto senza A, 2026-10-16)
+
+Via del coordinatore (01:45): prima la diagnosi del caso esatto. Se un caso rompe oggi `generated.ts`, la cura
+nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest puro di guardia; se no, solo il pytest.
+
+#### E-5.0 — Diagnosi ✅ (2026-10-16)
+> Su `openapi-zod-client` 1.18.3 con i flag di `generate-api` (`--export-types --with-docs --with-description`).
+> Fonte: il codice del generatore (`getZodChain`, `default.hbs`, `generateJSDocArray`), poi tre matrici isolate in
+> `/tmp/libreFolio_e5_bt/` (`matrix.py`: 14 posizioni × 18 testi; `matrix2.py` e `matrix3.py`: 26 casi su JSDoc,
+> parametri `$ref`, ordine, risposte d'errore, corpo). Ogni caso è un OpenAPI con un solo testo in una sola posizione,
+> generato e letto dal parser di TypeScript (errori di sintassi, template taggati, sostituzioni).
+>
+> **Dove il generatore scrive un testo, e cosa lo rompe**
+>
+> | Dove | Forma | Cosa la rompe |
+> |---|---|---|
+> | `.describe()` di una proprietà, di `items` e `additionalProperties` in linea, di un parametro | testo con un a capo → template literal crudo | `` ` `` (sintassi; il doppio ``` `` ``` dà un template taggato, il `TypeError` all'import di E2b), `${` (sostituzione), `\` (sintassi con `\x`, `\u`, `\` finale; altrimenti testo alterato) |
+> | idem | testo di una riga → `"…"` crudo | `"`, `\` |
+> | descrizione dell'endpoint, delle risposte non 2xx (anche senza contenuto), del corpo | Handlebars `` `{{…}}` ``, che sfugge ``& < > " ' ` =`` | `${`, `\` |
+> | JSDoc dei campi in linea dei tipi esportati | `/** … */` | `*/` (anche in `pattern`, `enum`, `default`, `example(s)`) |
+>
+> - Una proprietà `$ref` porta il testo **del componente**, anche se il campo ha una descrizione sua (quella non esce).
+> - Mai scritti: membri `$ref` di `anyOf`, `items` `$ref`, corpo e risposte `$ref`, la definizione del componente, le
+>   descrizioni delle risposte 2xx e di `default`.
+> - La descrizione del parametro passa da `trim()`. Un parametro `$ref` sovrascrive la descrizione del componente
+>   condiviso (vuota se il parametro non ne ha): se il testo del componente arrivi a una proprietà dipende allora
+>   dall'ordine in cui il generatore visita gli endpoint (GET: no; POST con il corpo che lo contiene: sì).
+>
+> **Oggi** (HEAD `8915c1b85`, `openapi.json` e `generated.ts` di `api sync` delle 01:39): il client si legge con 0
+> errori di sintassi, 0 template taggati, 0 sostituzioni. Il modello delle regole sul documento conta 3 627 punti
+> (1 449 tra virgolette, 63 template, 310 Handlebars, 1 805 JSDoc), nessuno con un carattere vietato; copre ogni testo
+> distinto del client (0 mancanti; 6 in più, i parametri ripetuti che il generatore raccoglie in una `const`).
+> **Latenti**: 49 componenti con backtick in una descrizione su più righe (`AssetType`, i `BRIM*`, `Risk*`…), oggi mai
+> referenziati direttamente come proprietà. Basta un campo `x: QuelComponente` perché `api sync` rompa il client.
+>
+> **Esito**: nessun caso oggi → solo la guardia. `fix-openapi-discriminators.mjs` non si tocca (detto al coordinatore).
+>
+> **Decisioni notturne, da rivedere**:
+> - (d) la guardia fissa la versione del generatore letta da `frontend/package-lock.json` (1.18.3) e i suoi flag: a
+>   ogni aggiornamento le regole vanno riverificate prima di spostare la costante;
+> - (e) la guardia è prudente: ignora l'effetto d'ordine dei parametri `$ref` e controlla sempre il testo del
+>   componente; può segnalare un testo che il client di oggi non porterebbe, non ne perde nessuno;
+> - (f) sta in `test_schemas` (categoria `schemas`) e legge `backend.app.main.app.openapi()`, la stessa fonte di
+>   `api sync`;
+> - (g) il controllo di `*/` è globale: ogni nodo di schema del documento, per ogni chiave che il JSDoc scrive. Oggi
+>   `*/` non compare da nessuna parte, quindi costa zero e non perde i nodi dove il JSDoc arriva davvero.
+>
+> **⚠️ Fuori pista**: la quarta matrice (`matrix4.py`, 10 casi), fatta per verificare il «non ne perde nessuno» prima
+> di consegnare il modello, ha trovato due buchi nel primo modello (già passato al test-author, corretto con
+> `write_agent`):
+> - `items` e `additionalProperties` che sono un `$ref` **con** una `description` accanto scrivono quel testo in
+>   `.describe()` (sintassi rotta, verificato). È il contrario delle proprietà, dove il testo accanto al `$ref` si
+>   ignora ed esce quello del componente. Senza testo accanto, non esce niente;
+> - il JSDoc non sta solo sulle proprietà: il generatore dei tipi lo mette anche su `items` e sui membri di
+>   `anyOf`/`oneOf`/`allOf` dentro un tipo esportato (`*/` lì: sintassi rotta, verificato). Da qui la decisione (g).
+>
+> Confermato: la `.describe()` non scrive la descrizione dei membri in linea di `anyOf`/`oneOf`/`allOf`, ma solo quella
+> delle loro proprietà e dei loro `items`. I 49 latenti si referenziano solo come elementi di liste (23), membri di
+> `anyOf` (10), risposte (6), membri di `oneOf` (6) e corpi (4).
+
+#### E-5.1 — Il pytest di guardia ✅ (2026-10-16)
+> `test-author`: `backend/test_scripts/test_schemas/test_openapi_client_text.py`, 78 test in 15 funzioni.
+> - OCT-001: versione e opzioni del generatore. Il lock fissa la 1.18.3; `generate-api` lo lancia una volta sola, con
+>   esattamente `--export-types --with-description --with-docs` (il percorso di uscita a parte).
+> - OCT-010…018: il modello su documenti piccoli, un caso per ogni verdetto delle matrici. Coprono le forme, i campi,
+>   `items` e `additionalProperties` (anche con un `$ref` e un testo accanto), i membri di unione, i parametri e il
+>   `trim()` di JavaScript, Handlebars, `*/` su ogni nodo, le forme non verificate e il messaggio d'errore.
+> - OCT-020 e 021: FastAPI e Pydantic. `Inner` come campo è segnalato; in `list[Inner]` e in `Inner | None` no, ed è
+>   latente.
+> - OCT-030…032: il documento vero, `backend.app.main.app.openapi()`. Nessun punto segnalato; le quattro forme sono
+>   presenti (una barriera contro un walker che smette di leggere); ci sono solo forme verificate.
+>
+> Registrato in `scripts/test_runner/_backend_schemas.py`, con la voce additiva `openapi-client-text`, nella classe di
+> default della categoria (`write-scoped`): importare `backend.app.main` apre il log della corsia (`configure_logging`).
+>
+> **Decisioni del test-author, accolte (notturne, da rivedere)**:
+> - OCT-001 scatta anche per un'opzione in più o per una seconda esecuzione;
+> - OCT-017 e 032 fanno fallire le forme mai verificate invece di saltarle (FastAPI oggi non ne scrive);
+> - il `trim()` usa l'insieme di spazi di JavaScript (`str.strip()` ne toglie di più);
+> - l'estratto del messaggio è centrato sul primo carattere vietato.
+>
+> **⚠️ Fuori pista**: `utils static-route-confinement` importa la stessa app ma è dichiarato `pure`. L'incoerenza non
+> è nel mio perimetro: la segnalo al coordinatore.
+>
+> Osservazione fuori perimetro: anche i valori stringa di `enum` escono crudi, in `z.enum(["…"])` e `z.literal("…")`.
+> Oggi sono 884, nessuno con `"`, `\` o un a capo. La guardia non li copre. Il client degli strumenti
+> (`generate-tools-client.mjs`) genera con `withDescription: false` e `withDocs: false`, quindi le descrizioni non lo
+> toccano.
+
+#### E-5.2 — La regola nella documentazione ✅ (2026-10-16)
+> La regola 4 di «📜 Contract Rules» in `developer/api/overview.md` (pagina solo inglese) è scritta da `docs-writer`, poi
+> rivista da me su questi punti:
+> - il nome della colonna da «Breaks the client» a «Must not contain», perché un `\d` non rompe, cambia il testo;
+> - liste e dizionari al posto di `items`/`additionalProperties`, e la frase sul loro verso opposto;
+> - il JSDoc «dentro un tipo esportato (campi, elementi, membri di unioni)»;
+> - «unions» al posto di «optional unions», perché i latenti stanno anche nei `oneOf`;
+> - `*/` vietato in «any schema».
+>
+> L'introduzione della sezione ora dice «Four rules», e solo le prime tre rompono la build. Una tagged template passa
+> `vite build`, e `front build` ignora l'uscita di `svelte-check`.
+
+#### E-5.3 — Prove ✅ (2026-10-16)
+> Sulla base `a2f658097` (A6d e A6e), arrivata con un fast-forward che non ha toccato i file di E-5. Una prova alla
+> volta, con `nice -n 10` e il carico sotto 70.
+> - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_newbase.log`). Sul documento di oggi ci sono 4 447
+>   punti (2 606 JSDoc, 1 463 tra virgolette, 63 template, 315 Handlebars), 157 campi tipizzati con un componente e 49
+>   latenti.
+> - **Mutazione E2b**, temporanea e poi annullata (verificato con `git diff --quiet`): la docstring di
+>   `EmailInstanceConfig` riportata su più righe con ``` ``GET /system/instance`` ```.
+>   - Il risultato: rosso solo OCT-030 (1 fallito, 77 passati), sul punto
+>     `InstanceConfigResponse.email -> EmailInstanceConfig`, forma template, carattere `` ` ``, con la cura nel
+>     messaggio (`/tmp/libreFolio_e5_mutation.log`).
+> - `ruff check` e `black --check` (`--config pyproject.toml`) puliti sui due file Python; `git diff --check` pulito.
+> - `check-orphans`: tutti i file sono registrati e raggiungibili da `all` (342 file di backend).
+> - `mkdocs build` stretto: uscita 0, nessun WARNING o ERROR, 3 068 URL risolti. `check-links`: 96 link validi. La
+>   regola 4 esce con la tabella di 4 righe, lo span dei doppi backtick e il blockquote.
+
+### Checkpoint E-5 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `a2f658097`. I file:
+> - nuovo `backend/test_scripts/test_schemas/test_openapi_client_text.py`;
+> - `scripts/test_runner/_backend_schemas.py`, 19 righe aggiunte;
+> - `mkdocs_src/docs/developer/api/overview.md`, la regola 4;
+> - il backlog, con E-5 chiuso;
+> - questo piano.
+>
+> Nessun codice dell'applicazione, nessun file di A; `fix-openapi-discriminators.mjs` non è toccato. Le prove della
+> diagnosi stanno in `/tmp/libreFolio_e5_bt/`, con una copia nella cartella della sessione (`files/e5_bt/`).
