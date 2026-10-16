@@ -2894,6 +2894,55 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Verifiche della doc** (08:31-08:34): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63.
 > - **Backlog**: B-13 chiusa ✅.
 
+### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — rossi in scrittura
+
+> - **B-13 committato** dal coordinatore: `c374313c0` feat, `36bccad06` docs, `1ca7a52c6` journal (HEAD); entra con B3.
+> - **Via per B5** (coordinatore, 08:35): le tre raccomandazioni di P8, ognuna «da rivedere» e facile da cambiare;
+>   markup nuovo solo con i ruoli `-lf-`, nessun elemento misto; `BackupDownloadCard` resta dov'è, senza props
+>   obbligatorie (lo monta H nella pagina di blocco); prima i Vitest, prove leggere con carico sotto 50.
+> - **Contratto** (`files/b5b-contract.md` della sessione), dopo aver letto il codice di B5a e le basi:
+>   - API: le otto rotte del ripristino con gli alias zodios già generati; il caricamento come corpo grezzo
+>     (`requestFormat: 'binary'`) con `onUploadProgress`; la sonda del server (`/system/ready`) e l'esito
+>     (`GET /backup/restore/status`) con `fetch` semplice, mai zodios, il cui intercettore dei 401 porterebbe via la
+>     pagina;
+>   - un controllore `RestoreFlowController` sul modello di `BackupJobController` (stati `loading`, `idle`,
+>     `uploading`, `checking`, `report`, `confirming`, `pending`, `in_progress`, `cancelling`, `restarting`, `failed`;
+>     generazioni contro le risposte vecchie; ripresa dopo un ricaricamento da `sessionStorage`);
+>   - tre componenti nuovi (`RestoreCard`, `RestoreReportModal` su `ModalBase`, `RestartOverlay`), gli eventi
+>     `backup.restore.*`, i18n `backup.restore.*` in quattro lingue;
+>   - le tre scelte di P8 in un punto ciascuna: l'esito solo nella scheda; `AFTER_RESTORE_PATH =
+>     '/settings?tab=backup'` con il `loginUrl()` che c'è già; la parola tradotta, confrontata senza maiuscole e spazi.
+> - **Il riavvio**, deciso nel contratto: l'overlay aspetta il server visto giù e poi su (`/system/ready`), poi legge
+>   l'esito: un 401 vuol dire sessioni chiuse, cioè ripristino committato (accedi di nuovo); un 200 `rolled_back` mostra
+>   il motivo; un 200 `pending` dice che non è stato applicato. Un riavvio troppo veloce per vederlo giù: dopo 30 s
+>   si legge l'esito lo stesso; dopo 60 s senza server, «avvia di nuovo LibreFolio».
+> - **Rossi**: test-author `96c0577d` (Vitest: controllore, API, tre componenti, completezza i18n), solo scrittura; le
+>   prove le lancio io. Chieste al coordinatore quattro righe in `_frontend_utility.py` (liste core-unit e
+>   component-unit, file seguito dal programma colori).
+> - **09:05**: via del coordinatore alle quattro righe del runner e alle tre scelte di P8 come descritte. Contratto
+>   §2b: l'API pubblica del controllore, i nomi comuni a test e codice.
+> - **09:20-10:32, STOP del developer**: tutto fermo (nessuna prova in corso, porta libera); il test-author non aveva
+>   ancora scritto niente. Worktree lasciato com'era (solo questo piano modificato).
+> - **10:32, ripresa. P11 deciso dal developer**: al ripristino si revocano tutti i link monouso, come fatto; verso
+>   l'utente **solo un avviso**: inviti e link scaduti, da rimandare se serve, **niente di più**. Quindi:
+>   - il report della prova (CLI) dà una riga sola: «Invitations and links sent before the restore will have expired:
+>     send them again if needed.», al posto delle due (i link che smettono di funzionare e gli account in attesa di
+>     verifica);
+>   - la citazione in `cli_tools.en.md` allineata; in `security.md` la frase sul report («gives one notice only»);
+>   - la spiegazione degli account in attesa di verifica resta nella doc (comportamento reale e risoluzione dei
+>     problemi: `cli_tools` «After the restore», `backup_restore` «What the Next Start Does» e «After a Restore»),
+>     detto al coordinatore;
+>   - nella scheda (B5b) la stessa riga sola (`restore-report-links`), contratto §3 aggiornato.
+>   - I due test-author di prima non esistevano più dopo lo stop: uno nuovo (`3d0a7a3b`) ripara le righe fissate nei
+>     test della CLI, un altro (`a30e058d`) riparte con i rossi di B5b. Contratto §2c: l'annullamento di una prova
+>     ancora in corso (409 `restore_stage_running`: si aspetta la fine, poi si toglie).
+> - P7, P8 e P12: in attesa del developer, niente cambia.
+> - **P11, prove** (10:50-11:00; `/tmp` era stato cancellato al riavvio delle 10:03, con il mio script e la cartella
+>   dati della corsia: lo script ora sta nella cartella della sessione, `files/scripts/b_green.sh`, con i log in
+>   `files/logs/`, regola del coordinatore): `utils backup-cli` 102, `utils backup-cli-restore` 46 (la riga sola, e
+>   nessuna delle due vecchie, guardate anche con «send new ones» e «stop working»), `mkdocs build` stretta 0 avvisi,
+>   `check-links` 96, `utils gate-docs-links` 63. Porta libera.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
