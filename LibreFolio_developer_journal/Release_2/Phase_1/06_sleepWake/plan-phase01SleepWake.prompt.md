@@ -1961,6 +1961,14 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    - ✅ 16/10 ~05:12: `front-utility component-unit Z7c-2` 26/26; cancello dei colori pulito; `i18n check` stretto;
      ruff, black e Prettier puliti.
    - ⏳ Dopo il fermo: `api scheduler` (ricostruisce il frontend), `component-unit` intero, `api sync`.
+   - ✅ 16/10 07:08, al via del coordinatore («Blocco finito, go», slot 1 fino alle 07:05), uno alla volta con `nice`
+     e il carico sotto 70 (`/tmp/libreFolio_z7c_run.sh`), sulla revisione combinata `8aeabc41b`:
+     - `api scheduler` 16/16 (SAPI-001…014; SAPI-009 compreso, sul backend della corsia), 10 min 42 s con la
+       ricostruzione del frontend e del sito;
+     - `front-utility component-unit` intero: 150 file, 4006 test, 5 min 36 s;
+     - `api sync`: nessun file tracciato cambiato;
+     - `mkdocs build` stretto: 0 avvisi, 3076 URL relativi risolti; `mkdocs check-links`: 97 validi, 8 risolti a
+       runtime. Porta 6186 libera dopo ogni prova.
 4. ✅ 16/10 ~05:22 — Doc (docs-writer, in sola scrittura durante il fermo; ogni frase verificata da me sul codice):
    - `admin/settings.en.md`, «Read the scheduler log»: la riga in più sotto la riga di stato, con le due etichette, e
      una voce nuova nell'elenco: l'icona, «Deferred: provider paused» col messaggio del fornitore al passaggio del
@@ -1979,3 +1987,104 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    ricostruiscono: elenco dei percorsi inviato, FROZEN sui file di Z7c-2. Dopo le 06:45, al via del coordinatore:
    `api scheduler`, `component-unit` intero, `api sync`, `mkdocs build`, `check-links`; un rosso si corregge in un
    commit a sé. Z7c-1 si prepara intanto fuori dal repo (`files/z7c1-draft/` della sessione), senza prove.
+   > **Salvato** (coordinatore, 16/10 ~05:30): `00b2c25d2` feat, `3e17e19ed` journal; poi il merge di `dev_release2`
+   > (`72e66d1a6`), senza conflitti: HEAD `8aeabc41b`, albero pulito.
+   > **Regola dei colori** (inoltrata dal coordinatore, 16/10 ~06:13): le classi di ruolo `-lf-` solo su elementi nuovi
+   > o con soli ruoli, mai su un elemento che ha già classi di tavolozza, perché `app.css` toglie il vecchio
+   > rimappaggio scuro dagli elementi con una classe `-lf-`. Verificato su `00b2c25d2`: i 9 usi di Z7c-2 sono tutti su
+   > `<span>`/`<p>` nuovi, accanto solo a `text-xs`, `inline-flex`, `mt-0.5`. Z7c-1 e Z-9 non hanno markup.
+
+### Z7c-1 — il polling dal vivo rallenta sugli errori e rispetta le pause
+
+> **Via** (coordinatore, 16/10 ~05:00 e ~05:30): un lotto a sé dopo Z7c-2, con gli helper, i loro test e le poche
+> righe delle due pagine che restituiscono l'esito. Nella pagina di dettaglio solo `pollLivePriceOnce`, più la riga
+> d'import: niente spostamenti né rinomine nel blocco del polling, che X sposterà così com'è. Le mie righe entrano
+> prima del pezzo 9 di X. Dopo le 06:45 vengono prima le prove di Z7c-2, poi Z7c-1. Disegno: «Z7c · Frontend», sopra.
+
+**Contratto** (dato a test-author prima del codice; bozze in `files/z7c1-draft/` della sessione).
+- `cadence.ts`: `LIVE_UPDATES_MAX_BACKOFF_MS`, 10 min.
+- `activePolling.ts`:
+  - `PollOutcome {ok?, notBefore?}`; `run` restituisce `PollOutcome | void`; opzione `maxBackoffMs`;
+  - fallisce solo un `run` che solleva o restituisce `{ok: false}`; tutto il resto è un successo;
+  - l'attesa, contata dall'inizio del giro, è `intervalMs` senza fallimenti, poi
+    `max(intervalMs, min(intervalMs × 2^k, maxBackoffMs))`; il primo successo la riporta all'intervallo;
+  - il giro dopo parte a `max(inizio + attesa, notBefore)`. `notBefore` viene dall'ultimo esito, e un esito che non
+    lo porta lo toglie. Un giro che arriva dopo quell'ora non ne compra uno in più: il prossimo va al passo seguente
+    della stessa cadenza, `inizio + n × attesa`, come la regola 3 di Z1 (partito a 0, 30 s, arrivato a 65 s → 90 s);
+  - la ripresa dopo una pausa rispetta attesa e `notBefore`, e parte subito se l'ora è passata; `pollNow` li ignora,
+    e il suo esito conta.
+- `livePriceService.ts`: `errorCode` e `retryAfter` nei risultati (`toLivePriceResult`), `livePollOutcome` e
+  `livePollFailure`.
+- Le due pagine: `fetchLivePrices` e `pollLivePriceOnce` restituiscono l'esito.
+
+> **Decisioni notturne, da rivedere**:
+> - N-Z7c1-1: tutti gli asset in pausa con `retry_after` noto → successo con `notBefore` alla fine della prima pausa
+>   (l'attesa è nota: niente raddoppio); tutti in pausa ma almeno uno senza attesa → fallimento, cioè raddoppio.
+> - N-Z7c1-2: l'attesa non scende mai sotto `intervalMs`: un ciclo più lento del tetto non accelera sugli errori.
+> - N-Z7c1-3: un'eccezione del codice della pagina dopo la richiesta (riepilogo, testa del grafico) conta anch'essa
+>   come giro fallito. Niente `try` in più, per toccare il meno possibile il blocco del polling che X sposterà.
+> - N-Z7c1-4: `Retry-After` si legge solo con 429 e 503, in secondi (anche decimali) o come data HTTP futura.
+> - N-Z7c1-5: `pollNow` con un giro in volo non ne avvia un secondo; quando quel giro arriva, il prossimo segue il suo
+>   inizio e il suo esito, e la ripartenza dal clic viene sostituita: quel giro è l'aggiornamento chiesto. Z1 lasciava
+>   il caso aperto di proposito (il suo test: «Whatever the poller does once the run lands»). Segnalato da docs-writer.
+
+**Passi.**
+1. ✅ 16/10 ~06:12 — Bozze fuori dal repo, senza prove (fermo). Il codice e `apply_z7c1.py`, che applica a passi
+   (`e2e`, `unit`, `code`, `docs`) e solo se ogni file è ancora al blob di partenza e ogni frammento compare una volta.
+   I rossi di test-author (previsti leggendo il codice, non misurati):
+   - `activePolling.test.ts`, versione intera: 92 casi; i 26 di Z1 invariati tranne `errors (rule 9)` (2 casi,
+     riscritti: giri a 0, 60 e 180 s); 64 nuovi, fra cui quattro per `pollNow` con un giro in volo. Previsti 38 rossi;
+   - `livePriceService.test.ts`, nuovo, ambiente node: 75 casi, previsti 64 rossi;
+   - `asset-live-pause.spec.ts`: (a)–(f) invariati; (g) sul dettaglio (risposte 500: intervalli 60, 120, 240, 480,
+     600, 600 s; timeout suo di 150 s), (h) sulla lista (tutti `RATE_LIMITED` con `retry_after` 300: niente per 300 s
+     dall'arrivo della risposta). Endpoint stubbato con `page.route`, solo orologio della pagina, solo desktop;
+   - `_frontend_utility.py`: la riga in core-unit; tre ritocchi facoltativi delle descrizioni in `RUNNER.md`.
+   Le sue domande aperte coincidono con la bozza del codice (`false` è un successo; nessuna chiave `notBefore`
+   quando manca; `Retry-After: 0` dà `now`; `AxiosHeaders.get` senza distinzione di maiuscole).
+   > **⚠️ Fuori pista**: lo `svelte-check` della ricostruzione del frontend è solo diagnostico (`dev.py`, il suo esito
+   > non è letto), quindi dei rossi nel worktree non fermerebbero la build. Tengo comunque Z7c-1 fuori finché le
+   > prove di Z7c-2 non sono finite, come chiesto dal coordinatore, perché quelle prove restino pulite.
+   > **⚠️ Fuori pista**: la prima stesura della regola sull'arrivo di un giro («ora passata → subito») contraddiceva
+   > la regola 3 di Z1, verificata da un suo test: un arrivo in ritardo non compra un giro in più. Corretta nella bozza
+   > (`nextAfterLanding`, al passo seguente; `dueAt` resta per la ripresa) e mandata a test-author mentre scriveva.
+   - 16/10 ~06:11: la bozza di `live-ticker.md` (docs-writer) è verificata da me sulla bozza del codice: tabella delle
+     attese, arrivo in ritardo, `pollNow` in volo (N-Z7c1-5), esito su ogni ramo. Nessun `Retry-After` dal nostro
+     backend su questa rotta (solo le rotte email lo mandano). Aggiunto il passo `docs` ad `apply_z7c1.py`; `check`
+     a secco: tutti i passi applicabili, bozze di test-author comprese. La tabella dei test della pagina si incolla
+     dopo i verdi (righe pronte nel README di docs-writer).
+2. Rossi: passo `e2e` → `front-asset live-pause` ((g) e (h) rossi, il resto verde); passo `unit` →
+   `front-utility core-unit`. ⏳
+3. Codice: passo `code` → i verdi; `front check`, Prettier, cancello dei colori; `front-asset asset-detail` sul
+   lampo del prezzo, che passa da `pollLivePriceOnce`. ⏳
+4. Doc: la bozza di `live-ticker.md` (docs-writer, verificata il 16/10 ~06:11) entra col passo `docs`; la tabella
+   «How it is tested» si aggiorna dopo i verdi. ⏳
+5. Checkpoint FROZEN, con la riga di `_frontend_utility.py` dichiarata (il coordinatore avvisa i colori). ⏳
+
+### Z-9 — la doc delle pause dei fornitori (lotto di sola doc, dopo Z7c-1)
+
+> **Via** (coordinatore, 16/10 ~05:39): «Yes: Z-9 as a draft outside the repo now, applied after Z7c-1, docs-only
+> lot in a separate commit.» La parte di sviluppo l'ha già scritta X (`developer/backend/assets/architecture.md`
+> `#provider-pauses`, `developer/backend/fx/configuration.md` `#paused-providers`); manca il lato admin.
+
+- `admin/sleep_wake.en.md` (solo EN): una sezione «Provider Pauses» con le due variabili, il default acceso
+  (decisione 34), chi rispetta la pausa e cosa si vede (⏸ del pannello, prezzo dal vivo, prova della configurazione,
+  ripiego FX), la memoria per processo, la sospensione.
+- `admin/configuration.en.md`: due righe accanto a quelle di Z2b e Z4, solo in EN come loro (debito di traduzione già
+  presente, nessuno stamp).
+- Facoltativo, solo link, nelle pagine di X che rimandano a `.env.example`: superficie condivisa da dichiarare.
+- Già verificato: la primitiva usa l'orologio di parete (`utils/runtime/cooldown.py`), quindi una pausa iniziata prima
+  di una sospensione è finita al risveglio se il suo tempo è passato.
+
+**Passi.**
+1. ✅ 16/10 ~06:11 — Bozza di docs-writer in `files/z9-draft/` della sessione, senza prove (fermo), verificata da me
+   sul codice: le quattro righe di log, i limiti (MAX sotto BASE è un valore non valido), la chiamata di prova di 60 s,
+   il jitter, l'azzeramento della serie, la prova della configurazione che passa con ⚠️ (`SOFT_FAIL_CODES`), i link.
+   - `admin/sleep_wake.en.md`: la sezione `#provider-pauses` con quattro sottosezioni (durata, chi aspetta e cosa si
+     vede, memoria e sospensione, log), una frase d'apertura e due voci in «Related».
+   - `admin/configuration.en.md`: le due righe, solo EN.
+   - Pagina di X `developer/backend/assets/architecture.md`, righe 337–339: un link in più, il rimando a
+     `.env.example` resta (superficie condivisa, da dichiarare).
+   - Più due link miei, in `apply_z9.py`: `developer/backend/scheduler.md` (lo stesso rimando a `.env.example`) e
+     «Related» di `live-ticker.md`, che esiste solo dopo Z7c-1: `check` a secco fallisce solo lì, come previsto.
+2. Applicazione dopo l'ingresso di Z7c-1; `mkdocs build`, `check-links`. ⏳
+3. Checkpoint FROZEN; Z-9 chiusa con ✅ nel backlog. ⏳
