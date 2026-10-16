@@ -3644,3 +3644,20 @@ il FE5c, quindi un commit separato.
 >   - `git diff --check` pulito; porta 6183 libera.
 > - Le E2E del pannello (`asset-detail.spec.ts:327`, `onboarding-guides`, la galleria) girano alla fine, nello slot
 >   pesante.
+
+FE5c-3 committed: `7c27785ae` + journal `89ef3e1e9`.
+
+#### FE5c-4 · la logica della modale delle coppie ✅ (2026-10-16, 07:00–07:07)
+
+> **Note implementazione**:
+> - `/tmp/libreFolio_x_fe5c_splice.py 4 --apply`: tre `{@const}` diventano uno solo,
+>   `fxCreateDefaults = fxPairCreateDefaults(…)`, e in `handleFxPairCreated` la scelta della valuta passa da
+>   `displayCurrencyAfterFxPairCreated` (`!== null`, che copre anche il caso di un lato vuoto). `readonlyBase` resta
+>   nella pagina.
+> - Registrato `assetDetailFxPair.test.ts` in `core-unit`.
+> - Prettier: nessuna modifica.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - `core-unit` → **178 file, 6367/6367**, cioè +1 file e +24 test, quelli del modulo.
+>   - Il wrapper ha aspettato che il carico scendesse da 113 a 55 prima di partire.
+>   - `git diff --check` pulito.
