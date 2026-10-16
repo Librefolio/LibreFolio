@@ -280,6 +280,7 @@ class YieldOnCostUnavailableReason(StrEnum):
     MISSING_FX = "missing_fx"
     MISSING_WAC = "missing_wac"
     NON_POSITIVE_WAC = "non_positive_wac"
+    NEGATIVE_NET_INCOME = "negative_net_income"
 
 
 class YieldOnCostFxProvenance(StrictModel):

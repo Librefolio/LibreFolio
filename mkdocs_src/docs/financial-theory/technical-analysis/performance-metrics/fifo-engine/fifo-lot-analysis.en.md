@@ -279,6 +279,9 @@ The **D-1** rule keeps the day of record clean: a purchase made *on* the income 
 distribution, and a lot sold the day before does not either. Larger eligible lots receive a larger share;
 lots held at other brokers, or not yet (or no longer) eligible, receive nothing.
 
+Income keeps its sign: a negative correction of a dividend or interest payment lowers the lot's income, as it
+does on the Dashboard.
+
 !!! warning "Changed in FIFO v5"
 
     Earlier versions used the income date itself with **all** brokers ($\text{OpenQty}_i(t)$ over every lot).

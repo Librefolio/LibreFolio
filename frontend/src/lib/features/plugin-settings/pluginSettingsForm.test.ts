@@ -4,6 +4,8 @@
  * `PluginSettingsForm.svelte` only draws what these functions decide, so the rules are pinned here, once:
  *   - `groupByFamily`: the entries by family, the price sources (`asset`) before the exchange-rate sources (`fx`)
  *     whatever the order of the answer, each family in the answer's order, a family without entries left out;
+ *   - `FAMILY_ICONS`: one icon per family of `FAMILY_ORDER`, no more and no fewer, the one the family has on the
+ *     documentation's home — lucide's `ChartColumn` for the price sources, `Coins` for the exchange-rate sources;
  *   - the texts: `fieldLabel`, `fieldDescription` and `optionLabel` say the plugin's key when it is translated and the
  *     plugin's English text otherwise (a key answered with itself, or with nothing, is no translation), and never ask
  *     for a key the plugin did not declare; `displayValue` writes the value in force of a field the caller cannot
@@ -29,6 +31,7 @@
  * function must leave what it is given as it was: a mutation throws instead of passing.
  */
 import {describe, expect, it, vi} from 'vitest';
+import {ChartColumn, Coins} from 'lucide-svelte';
 import type {PluginSettingsEntry, PluginSettingWriteResult, SettingField, SettingOption} from './pluginSettingsApi';
 import {
     chosen,
@@ -37,6 +40,7 @@ import {
     draftOf,
     draftProblems,
     EMPTY_FORM,
+    FAMILY_ICONS,
     FAMILY_ORDER,
     FAMILY_TITLE_KEYS,
     fieldDescription,
@@ -93,7 +97,7 @@ function field(over: Partial<SettingField> & Pick<SettingField, 'key'>): Setting
 }
 
 function entry(fields: SettingField[], over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', configured: true, fields, ...over};
+    return {family: 'asset', plugin_code: 'mockprov', plugin_name: 'Mock provider', icon_url: null, configured: true, fields, ...over};
 }
 
 const REGION_OPTIONS: SettingOption[] = [
@@ -154,6 +158,21 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
     it('names both families, asset first, each with a whole key for its title', () => {
         expect(FAMILY_ORDER).toEqual(['asset', 'fx']);
         expect(FAMILY_TITLE_KEYS).toStrictEqual({asset: 'pluginSettings.families.asset', fx: 'pluginSettings.families.fx'});
+    });
+
+    it('has one icon per family of FAMILY_ORDER, no more and no fewer: a new family adds its row', () => {
+        expect(Object.keys(FAMILY_ICONS).sort(), 'a row for each family, and for nothing else').toEqual([...FAMILY_ORDER].sort());
+        for (const family of FAMILY_ORDER) expect(FAMILY_ICONS[family], `${family}: a component, not an empty row`).toBeTypeOf('function');
+    });
+
+    it('gives each family the icon of the documentation’s home: lucide’s ChartColumn to the price sources, Coins to the exchange-rate sources', () => {
+        // The premise: two different icons that exist, so that neither identity below can hold between two undefined.
+        expect(ChartColumn, 'premise: lucide exports ChartColumn').toBeTypeOf('function');
+        expect(Coins, 'premise: lucide exports Coins').toBeTypeOf('function');
+        expect(ChartColumn).not.toBe(Coins);
+
+        expect(FAMILY_ICONS.asset).toBe(ChartColumn);
+        expect(FAMILY_ICONS.fx).toBe(Coins);
     });
 });
 

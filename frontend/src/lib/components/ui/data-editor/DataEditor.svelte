@@ -668,7 +668,7 @@
             {#if selectedIds.length > 0}
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-lf-selected text-lf-link font-medium hover:bg-lf-checked/20 transition-colors"
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-lf-selected text-lf-link font-medium hover:bg-lf-checked/20 hover:text-lf-primary transition-colors"
                     onclick={() => {
                         dataTableRef?.clearSelection();
                         selectedIds = [];
