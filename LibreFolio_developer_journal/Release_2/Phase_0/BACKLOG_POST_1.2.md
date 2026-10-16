@@ -3438,8 +3438,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     (`verify_probe_nonce()`) lo tollera.
   - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
     A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
-- **A-24 · Tre test di E diventano impossibili con P18** — basso, blocca il verde completo di P18; A (16/10, dai verdi di
-  P18).
+- ✅ **A-24 · Tre test di E diventano impossibili con P18** — basso; chiusa il 16/10 (delta A-24 dopo il merge di base
+  `12cd3c2e0`, commit del coordinatore); A (16/10, dai verdi di P18).
   - `test_email_flows.py` (`ONE_MAILBOX`, la riga 1356), `test_email_verification.py` EMV-043 (`MAILBOX_VARIANTS`, la
     riga 166) e `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, la riga 122) creano quattro account sulla
     stessa casella scritta in quattro forme ASCII: con l'indice `ux_users_email_lower` la seconda riga è rifiutata.
@@ -3463,6 +3463,14 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
   - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
     `ux_users_email_lower` nome e SQL li fissa MIG009-003.
+- **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); dalla
+  revisione di E (E6.9), tramite il coordinatore (16/10).
+  - `user_service.update_profile` (cambio vero dell'indirizzo: anche `PUT /auth/profile` e `user set-email`) e la rotta
+    `POST /auth/change-password` chiudono le sessioni ma lasciano vivi i link `PASSWORD_RESET`: con la «password
+    dimenticata» aperta, chi controlla la vecchia casella chiede un link prima del cambio e lo usa dopo, entro 30 minuti.
+    Stesso buco in `user_service.reset_password` (CLI `user reset`), trovato da A.
+  - Cura: `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)` nella stessa transazione del cambio, come già fanno
+    `create_password_reset` e `complete_password_reset`; rossi prima. Lotto a sé dopo l'ingresso di P18.
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
