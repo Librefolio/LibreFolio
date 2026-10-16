@@ -43,12 +43,12 @@
 
     /** Same shade weights in both tones; blue and `Info` as the app's `InfoBanner` pairs them. */
     const TONE_CLASSES = {
-        info: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300',
-        warning: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
+        info: 'border-lf-info-line bg-lf-info-soft text-lf-info-on-soft',
+        warning: 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft',
     } as const;
     const CHIP_CLASSES = {
-        info: 'border-blue-200 bg-white/70 dark:border-blue-900/60 dark:bg-slate-900/40',
-        warning: 'border-amber-200 bg-white/70 dark:border-amber-900/60 dark:bg-slate-900/40',
+        info: 'border-lf-info-line bg-lf-card/70',
+        warning: 'border-lf-warning-line bg-lf-card/70',
     } as const;
 
     let title = $derived(partial.length === 0 ? $t('risk.levels.notice.notesTitle') : tone === 'info' ? $t('risk.levels.notice.noPriceSourceTitle') : $t('risk.levels.notice.partialTitle'));
