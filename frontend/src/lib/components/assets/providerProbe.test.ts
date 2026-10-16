@@ -14,6 +14,12 @@
  * ISO or the house notation), so they hold before and after that cure. The last
  * describe boots svelte-i18n to word the caller's labels from the catalogue, and
  * switches the interface language as the selector does (`currentLanguage`).
+ *
+ * The tooltip is rendered as HTML, and a failure's detail is the provider's text (an
+ * external site's error, a reason phrase): `buildProbeTooltipHtml` escapes the detail,
+ * on a failure and on the success fall-through, while the tables keep their markup
+ * (security review of CP10–CP11). The escaped oracles are written by hand, never
+ * computed with `escapeHtml`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
@@ -38,7 +44,7 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
-import {SOFT_FAIL_CODES, isSoftProbeFailure, isRealProbeError, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml, type ProbeTooltipLabels} from './providerProbe';
+import {SOFT_FAIL_CODES, isSoftProbeFailure, isRealProbeError, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml, type ProbeTooltipLabels, type ProbeTooltipResult} from './providerProbe';
 
 /** The labels a caller passes the tooltip — `close` among them, as `ProbeTooltipLabels` reads after T-ISO. */
 type CallerLabels = ProbeTooltipLabels & {close: string};
@@ -183,8 +189,9 @@ describe('providerProbe — buildProbeTooltipHtml', () => {
     // The English labels; `close` heads the history's price column after T-ISO — the word the module writes today.
     const labels: CallerLabels = {date: 'Date', currentPrice: 'Current Price', close: 'Close'};
 
-    it('returns the raw detail (or Error) for a failed result', () => {
+    it('returns the detail escaped (or Error) for a failed result', () => {
         expect(buildProbeTooltipHtml({success: false, detail: 'boom'}, labels)).toBe('boom');
+        expect(buildProbeTooltipHtml({success: false, detail: `401 <b>"key"</b> isn't valid & expired`}, labels)).toBe('401 &lt;b&gt;&quot;key&quot;&lt;/b&gt; isn&#39;t valid &amp; expired');
         expect(buildProbeTooltipHtml({success: false}, labels)).toBe('Error');
     });
 
@@ -229,6 +236,76 @@ describe('providerProbe — buildProbeTooltipHtml', () => {
         expect(buildProbeTooltipHtml({success: true, detail: 'metadata ok'}, labels)).toBe('metadata ok');
         expect(buildProbeTooltipHtml({success: true}, labels)).toBe('—');
         expect(buildProbeTooltipHtml({success: true, samplePrices: []}, labels)).toBe('—'); // empty array → fallthrough
+    });
+
+    describe('the detail is escaped (security review of CP10–CP11)', () => {
+        /*
+         * The tooltip renders HTML, and DOMPurify stops a script, not an image that calls home or a form asking for the
+         * key: markup in the provider's detail must read as text. The tables keep their markup: their labels are the
+         * caller's, their cells a validated currency, days and numbers.
+         */
+        const IMAGE = '<img src=//x.example/a onerror=alert(1)>';
+        const FORM = '<form action=//x.example>';
+        /** Both again, quoted, beside an ampersand: every character `escapeHtml` replaces. */
+        const QUOTED = `401 for "MSFT": <img src="//x.example/a" onerror='alert(1)'> & <form action='//x.example'><input name="key"></form>`;
+
+        /** Each detail, and the text the tooltip shows instead: written by hand, the `&` escaped first (no `&amp;lt;`). */
+        const ESCAPED: Array<[label: string, detail: string, shown: string]> = [
+            ['an image that calls home', IMAGE, '&lt;img src=//x.example/a onerror=alert(1)&gt;'],
+            ['a form asking for the key', FORM, '&lt;form action=//x.example&gt;'],
+            ['both, quoted, beside an ampersand', QUOTED, '401 for &quot;MSFT&quot;: &lt;img src=&quot;//x.example/a&quot; onerror=&#39;alert(1)&#39;&gt; &amp; &lt;form action=&#39;//x.example&#39;&gt;&lt;input name=&quot;key&quot;&gt;&lt;/form&gt;'],
+        ];
+
+        const SAMPLES = [
+            {date: '2024-01-01', close: 10},
+            {date: '2024-01-02', close: 11},
+        ];
+
+        /** How many cells each row of a tooltip table has. */
+        const widthsOf = (html: string): number[] => rowsOf(html).map((cells) => cells.length);
+
+        it.each(ESCAPED)('a failure shows %s as text', (_label, detail, shown) => {
+            const html = buildProbeTooltipHtml({success: false, detail}, labels);
+
+            expect(html).toBe(shown);
+            expect(html, 'no tag can open or close, no quoted attribute can end').not.toMatch(/[<>"']/);
+        });
+
+        it.each(ESCAPED)('the success fall-through, with no price and no sample, shows %s as text', (_label, detail, shown) => {
+            const results: ProbeTooltipResult[] = [
+                {success: true, detail},
+                {success: true, detail, samplePrices: []},
+            ];
+
+            for (const result of results) {
+                const html = buildProbeTooltipHtml(result, labels);
+
+                expect(html, `samples: ${JSON.stringify(result.samplePrices)}`).toBe(shown);
+                expect(html).not.toMatch(/[<>"']/);
+            }
+        });
+
+        it('a detail without markup is shown as it is, on a failure and on the fall-through', () => {
+            const plain = 'HTTP 404: /v1/quote?symbol=MSFT — fonds introuvable, réessayez dans 60 s';
+
+            expect(buildProbeTooltipHtml({success: false, detail: plain}, labels)).toBe(plain);
+            expect(buildProbeTooltipHtml({success: true, detail: plain}, labels)).toBe(plain);
+        });
+
+        it('the tables keep their markup, and a detail beside a price or a sample never reaches them raw', () => {
+            const tables = {
+                price: buildProbeTooltipHtml({success: true, detail: QUOTED, priceValue: 12.5, priceCurrency: 'USD', priceDate: '2024-01-02'}, labels),
+                history: buildProbeTooltipHtml({success: true, detail: QUOTED, priceCurrency: 'EUR', samplePrices: SAMPLES}, labels),
+            };
+
+            expect(widthsOf(tables.price), 'price: a header row and a price row, two cells each').toEqual([2, 2]);
+            expect(widthsOf(tables.history), 'history: a header row and a row per sample, two cells each').toEqual([2, 2, 2]);
+            for (const [name, html] of Object.entries(tables)) {
+                expect(html.startsWith('<table') && html.endsWith('</table>'), `${name}: one table`).toBe(true);
+                expect(html, `${name}: nothing in it escaped`).not.toContain('&lt;');
+                expect(html, `${name}: none of the detail's tags`).not.toMatch(/<(img|form|input)\b/);
+            }
+        });
     });
 });
 
