@@ -3352,6 +3352,32 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
 
   Dettagli: piano H, §14, mini-lotto «La docstring di `instance_block.py`».
+  - Cura fatta il 16/10 (lotto «H-23», piano H §14): `_inventory.declared_isolation()` e, in `_run_exclusive_setups()`,
+    il salto per un'azione da sola dichiarata `pure`, con una riga. Provata: `services client-address` lascia il DB
+    invariato (inode, mtime, dimensione), `services asset-sync-counts` lo ricrea come prima.
+- **H-24 · Un `.DS_Store` o un test cambiato in `frontend/src` fanno ricostruire il frontend** — basso, runner; E,
+  via coordinatore, 16/10.
+  - `check_frontend_needs_build()` (`scripts/cli_base.py` ~609) confronta con la build ogni file sotto `frontend/src`
+    (`rglob("*")`): un `.DS_Store` del Finder fa sembrare la build più vecchia dei sorgenti, e parte una ricostruzione
+    di minuti. E ha dovuto riportare indietro a mano la mtime del file. Lo stesso vale per i 504 file
+    `*.test.*`/`*.spec.*` di Vitest, che Vite non impacchetta e nessun codice dell'app importa.
+  - Cura proposta: la scansione salta i percorsi con una parte nascosta (il nome inizia con `.`) e i file di test; tiene
+    tutto il resto, `prefixes.txt` del catalogo i18n compresi, perché una build creduta fresca a torto costa più di
+    una ricostruzione in più. Con un test.
+  - Residuo da dire: `_tool_contract_sources()` conta anche le mtime delle cartelle (`backend/app/schemas`,
+    `services/tools`, `tool_plugins`) per accorgersi di un file tolto. Un `.DS_Store` creato lì cambia la mtime della
+    cartella, e non si può escludere senza perdere quel rilevamento.
+
+  Dettagli: piano H, §14, lotto «H-23», passo 4.
+- **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
+  basso, runner; H (analisi di H-23), 16/10.
+  - `_run_parallel_prepass()` → `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, non l'azione
+    indicata, a differenza dei pre-passaggi consolidati, che girano solo con `action in (None, "all")`. Con le classi
+    server (READ, WRITE_SCOPED) chiama anche `run_category_setup(scope)`: `--workers 2 services client-address` gira
+    i test parallelizzabili di `services` e ricrea il DB della corsia.
+  - Cura proposta: il pre-passaggio parallelo solo per la categoria intera, come i consolidati. Con un test.
+
+  Dettagli: piano H, §14, lotto «H-23», passo 1.
 
 ## A · Account e accessi (fase 01)
 
