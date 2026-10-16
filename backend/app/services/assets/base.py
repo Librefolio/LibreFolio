@@ -15,7 +15,7 @@ import functools
 import re
 from abc import ABC, abstractmethod
 from datetime import date as date_type
-from typing import Dict, Literal, Optional
+from typing import ClassVar, Dict, Literal, Optional
 
 from backend.app.db.models import (
     IdentifierType,
@@ -29,7 +29,9 @@ from backend.app.schemas import (
 )
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.provider import (
+    DEFAULT_SEARCH_PRIORITY,
     FAProviderKind,
+    FAProviderTier,
     FAVolumeKind,
 )
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
@@ -176,6 +178,19 @@ def _wrap_history_ohlc_guard(func):
     return wrapper
 
 
+def _validate_search_declarations(cls: type) -> None:
+    """Check a provider class's ``tier`` and ``search_priority`` when it is defined, so a wrong declaration stops the
+    import instead of reaching the search: ``tier`` an ``FAProviderTier`` (a valid string is normalised),
+    ``search_priority`` a whole number of at least 0."""
+    try:
+        cls.tier = FAProviderTier(cls.tier)
+    except ValueError:
+        raise TypeError(f"{cls.__name__}.tier must be one of {[tier.value for tier in FAProviderTier]}, not {cls.tier!r}") from None
+    priority = cls.search_priority
+    if isinstance(priority, bool) or not isinstance(priority, int) or priority < 0:
+        raise TypeError(f"{cls.__name__}.search_priority must be a whole number of at least 0, not {priority!r}")
+
+
 class AssetSourceProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for asset pricing providers (plugins).
@@ -238,6 +253,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
     Optional overrides:
     - settings_fields: the settings the plugin needs (plugin_settings/fields.py), read with self.settings
     - test_only: True for a provider that exists for the tests, never listed to users
+    - tier, search_priority: where the provider stands in the asset search (F21; see below)
     - get_icon(): Provider icon URL
     - supports_history: False if provider cannot fetch historical data
     - search(): Search for assets by query
@@ -246,6 +262,16 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
     Providers auto-register via @register_provider(AssetProviderRegistry) decorator.
     """
+
+    #: Where the provider stands in the asset search (F21). ``premium``: a source the instance vouches for, such as
+    #: licensed data; when at least one is available, the search lists its results first. ``community`` (the default):
+    #: every other source. An instance overrides it with LIBREFOLIO_ASSET_PROVIDERS_PREMIUM
+    #: (``services/assets/provider_policy.py``). A valid string (``"premium"``) is accepted and normalised.
+    tier: ClassVar[FAProviderTier] = FAProviderTier.COMMUNITY
+
+    #: The provider's place in the search inside its tier, lower first: a whole number of at least 0. An instance
+    #: overrides it with LIBREFOLIO_ASSET_PROVIDERS_ORDER.
+    search_priority: ClassVar[int] = DEFAULT_SEARCH_PRIORITY
 
     def __init_subclass__(cls, **kwargs):
         """Wrap each concrete ``get_history_value`` with a post-execution OHLC guard.
@@ -258,6 +284,7 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
         candle bounds around ``open``/``close`` instead of dropping real prices.
         """
         super().__init_subclass__(**kwargs)
+        _validate_search_declarations(cls)
         impl = cls.__dict__.get("get_history_value")
         if impl is None or getattr(impl, "_ohlc_guarded", False):
             return
