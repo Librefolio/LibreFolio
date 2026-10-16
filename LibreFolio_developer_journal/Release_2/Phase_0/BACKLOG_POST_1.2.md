@@ -2767,17 +2767,55 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       scuro è spento sulla traccia.
     - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
   - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **La legenda di `RiskReturnLevel`** (W6-a), 4 classi: il punto «portafoglio» cielo e il rombo «benchmark» ambra
+    (riga 170), con le tinte delle righe della tabella (`--lf-cmp-risk-return-row-*` in `theme/components/table.css`).
+    Sono le categorie della serie ECharts del grafico rischio/rendimento: aspettano il punto 2.5 della designer.
   - **I 4 interruttori di `ChartAestheticsSection`** (W5-charts), 16 classi: traccia e manopola alle righe 111/119,
     133/141, 155/162 e 176/184.
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
       della skill), così in scuro non ce n'è uno diverso dagli altri.
+  - **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
+    classi: `bg-blue-500` e `bg-emerald-500` con le loro metà scure). Sono colori d'identità di due misure, non segni né
+    stati: restano categorie (coordinatore, 16/10 12:07, regola 11 dello skill `design-system`).
+    - **Per la designer:** quando decide il punto 2.2, la barra della liquidità potrebbe leggere il colore della
+      categoria Liquidità dei grafici: lo stesso salvia, e la stessa misura in tutta l'app.
+    - Il valore contabile resta da decidere insieme alle altre categorie.
   - **Non di DV**, annotati per non perderli:
-    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
-    - i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi) vanno anche loro col lotto di T
-      sull'input: `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237, `SignalParamControl`:79 e 93;
-    - `ExposureMaps` (4) aspetta Y9.
+    - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
+    - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
+    - ✅ `ExposureMaps` (4): migrato da DV in W6-c, `5d2c1ce62` (16/10), dopo Y9;
+    - ✅ `KpiSection` (W6-b), le catene verso `KpiMetricBar`: `ui/display` è passato da T a DV (coordinatore, 16/10
+      11:48) e il lotto `ui/display` di DV le ha chiuse (`valueColor`@354 → `text-lf-primary`). Restano solo le due
+      barre di categoria, alla riga sopra.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
-    «W5-PAC» e «W5-charts».
+    «W5-PAC», «W5-charts» e «W6».
+- ✅ **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
+  `design-system`). **Chiusa il 16/10** (lotto DV-8 sulla base `bf2afbba3`, in attesa del commit del coordinatore):
+  `growthBrokerColor(index, dark, poles?)` passa da `sequenceColor` dalla nona linea, con i poli della card della
+  pagina per default; `GrowthChart.svelte` e `growthChartSeries.ts` non cambiano. Test: il blocco `growthBrokerColor`
+  di `lib/theme/chartCategories.test.ts` (test-author), 10 casi.
+  - Era: `growthBrokerColor(index, dark)` (`frontend/src/lib/theme/chartPalettes.ts`) prendeva
+    `CATEGORY_SEQUENCE[index % 8]`: il nono broker aveva il colore del primo.
+  - GR5 vuole, oltre la fine di una sequenza, gli stessi colori una sfumatura più in là, come già fanno la
+    semi-ciambella e lo storico geografico con `sequenceColor(…, shadePoles(dark, card))`.
+  - Rimedio: `growthBrokerColor` passa da `sequenceColor` con i poli della card letti da `chartRoles`. Tocca
+    `chartPalettes.ts`, `features/dashboard/growthChartSeries.ts` e i loro test; è logica, non classi, quindi dopo W6.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «W6», passo W6-c.
+- ✅ **DV-9 · Adottare `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` quando T li aggiunge** — minimo; DV, 16/10 (W6-a,
+  regola 7 dello skill `design-system`). **Chiusa il 16/10**, commit `bf2afbba3` (lotto DV-9 sulla
+  base `63e3a22d8`).
+  - Era: `LOSS_CLASS` di `features/risk/AssetSetLossComparisonSection.svelte` scriveva `text-lf-loss`, e le barre sotto
+    il taglio di `features/risk/levels/l1/ReturnHistogram.svelte` scrivevano `bg-lf-loss/80`: i ruoli giusti, ma non
+    presi dalle tabelle per significato, come vuole la regola 7.
+  - T ha aggiunto le voci nel suo lotto dei ruoli (`f043c1b58`), con `SIGN_BADGE`.
+  - **Fatto:**
+    - `LOSS_CLASS` → `SIGN_TEXT.riskTable.loss`;
+    - le barre → `SIGN_BAR.histogram.loss`;
+    - i badge «Income» e «Cost» di `features/dashboard/OtherPeriodEffectsTable.svelte` → `SIGN_BADGE.gain` e
+      `SIGN_BADGE.loss`, che escono dal baseline.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «W6», passi W6-a e DV-9.
 
 ---
 
