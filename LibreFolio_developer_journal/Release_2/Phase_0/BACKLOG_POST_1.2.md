@@ -3101,6 +3101,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     di `filesystem` e `docker_advanced` rimanda a `cli_tools.md#backup` e `#backup-docker`, ancore che
     `cli_tools.{it,fr,es}.md` non hanno finché non si chiude B-7. Va tradotto insieme a B-7 o dopo, altrimenti la build
     rigorosa IT/FR/ES non trova le ancore. L'ancora `#what-to-back-up` c'è già nelle 4 lingue.
+  - 16/10, P17: la sottosezione nuova «🧭 The Visitor's Address» (`#client-address`) e l'ultimo paragrafo riscritto dei
+    «Limits» in `connection_checks`, e una riga in `configuration` che punta a `connection_checks.md#client-address`.
+    **Ordine**: `configuration` va tradotta insieme a `connection_checks` o dopo, che deve tenere
+    `{: #client-address }`; altrimenti la build rigorosa di quella lingua non trova l'ancora.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -4264,12 +4268,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
   nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
-- **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10 (Z5).
-  A fine recupero il frontend chiama `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio
-  (`portfolioStore.invalidate()` alza solo un contatore non reattivo): la pagina già sullo schermo mostra le cifre nuove
-  al prossimo caricamento o con «Aggiorna». Cura possibile: le pagine del portafoglio ascoltano il segnale e ricaricano
-  in background se visibili. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
-  «Z5 — codice».
+- ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
+  (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
+  successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
+  di un broker sullo schermo chiedono di nuovo il loro report in background, senza force e senza passare
+  dall'«Aggiorna» dell'utente. I pannelli di rischio e dei lotti restano a Z-15. Era: a fine recupero il frontend
+  chiamava `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio (`portfolioStore.invalidate()`
+  alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
+  con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
+  codice» e «Z-13».
+- **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
+  (Z-13). I grafici dei prezzi e dei cambi usano cache di sessione proprie (`assetPriceStoreRegistry.ts`,
+  `fxStoreRegistry.ts`) che il bus del portafoglio non tocca. Dopo un recupero, un intervallo già caricato nella
+  sessione torna dalla cache finché non si preme «Aggiorna» su quella pagina. Il problema c'era già prima di Z5, che
+  però lo rende più visibile. Cura possibile: le due cache ascoltano `{kind: 'prices'}` e segnano stale. Il dettaglio
+  di un asset è di X fino a FE5c. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-13», passo 4.
+- **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
+  16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
+  `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
+  l'icona (`pageBusy`). I pannelli di rischio e dei lotti già sullo schermo tengono le cifre vecchie, segnate stale,
+  finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
+  `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
 
 ## B · Backup e Docker (fase 01)
 
