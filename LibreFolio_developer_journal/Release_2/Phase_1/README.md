@@ -167,3 +167,4 @@ Sono tutti locali: la push la fa il developer.
 | 78 | 16/10 02:08 | W: W-B31 + W-B36 (le regole 5–12 leggono `TX_TYPE_METADATA`; tolto `EVENT_COMPATIBLE_TYPES`; i 4 casi di P6 restano eccezioni esplicite; messaggi invariati) | `4e69b5271` |
 | 79 | 16/10 02:31 | H: CP-U2 (decisione 36, frontend: colonna Visibilità, condividi/rendi personale, «elimina» solo con `can_delete`, il selettore condivide un'immagine personale scelta; pagina utente dei file aggiornata) | `2d1eee33a` |
 | 80 | 16/10 02:45 | A: A6d (nuove istanze su invito, primo account aperto, migrazione 008; impostazioni globali con sessione) + A6e (cambio email con password attuale, chiude le altre sessioni, `email_verified_at` a NULL) | `19dd8a96d` |
+| 81 | 16/10 02:52 | Y: Y4b (FE2b, il frontend del rischio in `lib/features/risk/`: 103 rinomine, import, runner, doc, devWiki, baseline dei colori; E2E `risk` 38 e `risk-lab` 44) | `08efa5ac3` |
