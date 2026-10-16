@@ -4343,3 +4343,93 @@ vengono dal catalogo generato alle 18:27.
 >   - `app-state.md`: dev cambia solo la riga 326 (il percorso di FE8b); le mie aggiunte sono alla 20 e dalla 454.
 >   - `domain-state.md`: dev cambia la 121 (Z-B), io la 84.
 >   - Nella sostanza, i test di T nel blocco ricevono anche loro i 90 s.
+
+### Y-21 · seconda corsa, sulla revisione combinata (slot 2, 23:50–00:03; HEAD `a49a86a7b`) — 36/38, ✅ per Y-21
+
+> **Note implementazione**.
+> - **Il checkpoint di Y-21** l'ha committato il coordinatore: `92e04271d` (spec), `0025383b4` (documentazione),
+>   `dc68fc64b` (journal).
+> - **La fusione** con dev `c91bd41b2` è `a49a86a7b`, pulita. L'ho verificata con `files/scripts/y21_after_merge.sh`:
+>   i genitori, `api sync` a rc 0, il budget a `:1920`, `L4_OFFER_DEADLINE_MS` a `:2802`, `roleBackground()` di T a
+>   `:3527`.
+> - **Corsa**: `files/scripts/y21_e2e_rerun.sh`. Il carico era 94 alla partenza e 115 durante la build. Risultato
+>   36/38 in 4,5 min; log in `files/logs/y21_e2e_risk_rerun.log`.
+>   - **D377 è verde** (`:2820`, 22,2 s).
+>   - **D378 (`:4025`) e il benchmark condiviso (`:4488`) sono verdi**: quello che il budget del blocco doveva fare.
+>   - Tutta la corsa è andata 2–3× più lenta delle corse di Y12b: i primi test 11–19 s contro 5–8.
+> - **⚠️ Fuori pista: due rossi nuovi, d'altro tipo.** Non sono nelle righe di T né nelle mie. Artefatti copiati in
+>   `files/logs/y21_reds_rerun/`.
+>   - `:3736`, la tabella di L3: `hoverUntilHelpOpens` non apre l'aiuto del «—» entro 10 s (`HELP_OPEN_DEADLINE_MS`).
+>     La fotografia mostra L3 completa e l'aiuto chiuso. **Verdetto: un'assunzione sull'orologio** (una scadenza scelta
+>     a carico normale).
+>   - `:2871`, il benchmark scelto sulla Dashboard: `option.click()` (`:1476`) resta in «waiting for element to be
+>     visible, enabled and stable» fino alla fine dei 90 s. L'opzione si era risolta un attimo prima: è eleggibile ed
+>     evidenziata, e `toBeVisible` era passato. **Nessun verdetto**: manca fotografia e manca traccia, e un'attesa così
+>     lunga non si spiega con l'orologio.
+>     - Prossimo passo: quel test da solo con `--trace on`.
+>     - Ipotesi da guardare, §1.4: il `.first()` su tutta la pagina.
+>   - Va nel backlog: **Y-22**.
+> - **I riferimenti della mia sezione `#page-busy`** dopo la fusione: 26 su 48 si sono spostati (Dashboard, broker, FX,
+>   asset, transazioni, `page-busy.spec.ts`). Erano previsti, perché vengono da Z-B e da FE8b.
+>   - Corretti con `files/scripts/y11_docrefs_fix.py`: 18 sostituzioni su 17 righe, ognuna legata al suo file e unica.
+>   - Il caso ambiguo del controllo, a 666–678, l'ho risolto a mano: è quello della Dashboard.
+>   - `y11_docrefs.py`, i riferimenti aggiornati e ricatturati: ogni riga contiene il codice che il testo dice. Lo
+>     verifica `files/logs/y11_docrefs_capture2.log`.
+>   - Sono solo numeri dentro codice in linea, quindi nessun link cambia.
+> - **Y-21 ✅** nel backlog, **Y-22** aperto.
+
+### Y-22 · traccia di `:2871` da solo (slot 2, dalle 00:08 del 17/10; HEAD `a49a86a7b`, Y-21 entrato in dev `149157025`)
+
+> **Note implementazione**.
+> - Il runner non ha `--grep`, quindi lancio Playwright direttamente, con `files/scripts/y22_trace.sh`:
+>   - prima `dev.py server --test --build-only`;
+>   - poi `pipenv run npm run test:e2e -- … -g "<titolo>" --trace on --repeat-each 4 --workers 2`. Il `webServer` della
+>     configurazione avvia `dev.py server --test` su `TEST_PORT`/`LIBREFOLIO_TEST_DATA_DIR`, cioè la corsia;
+>   - `--repeat-each 4`: un solo verde non spiega il rosso.
+>   - **`LF_SETUP_DONE=1` è obbligatorio**: senza, `global-setup.ts` lancia `populate_mock_data --force` sul DB della
+>     corsia, che non è autorizzato.
+> - **⚠️ Fuori pista: ho lanciato lo script mentre lo modificavo** (00:08). Bash l'ha letto a metà modifica: la riga
+>   del controllo della porta è uscita storpiata, e l'`export` della corsia non è stato eseguito. Il passo di Playwright
+>   sarebbe partito sulla porta 6041 e sul DB predefinito.
+>   - L'ho fermato durante il `--build-only`, prima di Playwright.
+>   - Verificato: 6041 e 6189 libere; `backend/data/test` del worktree intatto, con solo `.gitkeep` e `logs` del 15/10;
+>     nessun mio processo rimasto. Il server senza corsia visibile in `ps` è di `e-alfy-congenial-spoon`.
+>   - Rimedio: ora lo script, prima di Playwright, si ferma se porta e cartella non sono quelle della corsia. In più,
+>     da qui in poi non modifico mai uno script nello stesso blocco in cui lo lancio.
+> - **Traccia di `:2871`** (00:08:58–00:10:44; carico 52–57): **4/4 verdi**, ciascuno 36–38 s. Senza traccia erano
+>   8–16 s, quindi la traccia circa raddoppia il tempo; col vecchio budget di 30 s sarebbero tutti rossi.
+>   - Lettura con `/tmp/libreFolio_y22_trace_parse.py`, log in `files/logs/y22_trace_parse.log`. In tutti e quattro
+>     `option.click()` è subito eseguibile: da «waiting for element to be visible, enabled and stable» a «click action
+>     done» passano 0,04–0,29 s.
+>   - Il tempo si distribuisce su login, navigazione e i18n (fino a 12 s per l'aggancio del login), non su un singolo
+>     passo.
+>   - **Verdetto per `:2871`: ambiente, non riprodotto.** Nella corsa rossa (carico 94–115) il clic è rimasto in attesa
+>     di eseguibilità per decine di secondi; a carico 55, quattro su quattro passano subito.
+>     - Il sintomo è quello di un renderer affamato (ricordo che le mie corse girano con `nice 10`). Nella stessa corsa
+>       anche `:3736` ha un predicato che non torna in 10 s.
+>     - Il test resta com'è. Se ricompare, la prossima volta serve una traccia del caso rosso. La configurazione traccia
+>       solo `on-first-retry`, e in locale non ci sono tentativi ripetuti.
+> - **`:3736`**: `test-author` (`5833dce5`) allarga `HELP_OPEN_DEADLINE_MS` da 10 a 20 s, e valuta `HELP_REST_MS`.
+>   Poi si verifica quel test da solo, ×4, con `files/scripts/y22_verify3736.sh`, più svelte-check e Prettier.
+> - **`:3736`, la scadenza** (`test-author`, 00:1x):
+>   - `HELP_OPEN_DEADLINE_MS` da 10 a 20 s, e `HELP_REST_MS` da 2 a 3 s. Il motivo, nel codice: `handlePointerLeave`
+>     del Tooltip disarma il ritardo pendente a ogni tentativo, quindi un ritardo arrivato tardi deve stare in un solo
+>     riposo, e la scadenza compra solo più tentativi.
+>   - I due chiamanti (`:3733`, `:3783`) restano sensati. Commenti aggiornati con la misura del 17/10.
+>   - Il test rosso era finito a 24,2 s; con 10 s in più resta dentro i 90 s, quindi un rosso dice ancora il suo nome.
+>   - **Verifica**: `files/scripts/y22_verify3736.sh`, il test da solo (ora `:3748`), ×4, 2 lavoratori, carico 55:
+>     **4/4** in 11–20 s. Log in `files/logs/y22_verify3736.log`.
+> - **Y-23**, un rosso mio trovato da A in dev (coordinatore, 00:15). `ec018afdf` (Y11 passo 2) importa `onNavigate`
+>   in `(app)/+layout.svelte`, ma i mock locali di `$app/navigation` in `layout.gate.test.ts` e
+>   `layout.authGate.test.ts`, che sono di H, non lo esportano.
+>   - **Rosso riprodotto**: `front-utility onboarding-component-unit` 20 rossi (9 + 11), tutti «No "onNavigate" export
+>     is defined on the "$app/navigation" mock», nient'altro rosso.
+>   - **Rimedio** (`test-author`): `onNavigate: vi.fn()` nei due mock.
+>   - **Verde**: 454/454, 15 file.
+>   - Il mock globale (`src/__mocks__/$app/navigation.ts`) lo esportava già. Nessun altro file importa `onNavigate`:
+>     `pageBusy` lo nomina solo in un commento.
+>   - **⚠️ Fuori pista**: nelle prove leggere del passo 2 di Y11 mancava `onboarding-component-unit`, che copre i test
+>     del layout. Da qui in poi, quando tocco `routes/(app)/+layout.svelte`, la includo.
+> - **Prove leggere finali** (00:29): svelte-check 0/0 (`files/logs/y22_front-check.log`); Prettier pulito sulla spec
+>   e sui due test; `git diff --check` pulito.
+> - **Y-22 ✅, Y-23 ✅** nel backlog. Checkpoint di seguito mandato al coordinatore.
