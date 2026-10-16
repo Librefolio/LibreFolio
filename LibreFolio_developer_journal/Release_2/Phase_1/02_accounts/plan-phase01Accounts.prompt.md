@@ -3884,3 +3884,89 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   sul worktree con A6e aperto. Porta 6182 libera; `git diff --check` pulito.
 > - **Handoff**: A6d può entrare (`ce4acff6c`); il checkpoint di A6e con i suoi file, i rossi di A6c esclusi. Stato
 >   FROZEN fino al commit; poi A6c (implementazione sulle bozze in `/tmp/libreFolio_a6c/`).
+
+#### A6d + A6e — Base aggiornata e prove sulla revisione combinata ✅ (2026-10-16, 02:12–02:40)
+> - **Merge** di `dev_release2` (`57802d827`) → `340ddc848` (genitori `675f21493` e `57802d827`). Un solo conflitto,
+>   `security.md` § «Private Endpoints»: unione dei due lati (le impostazioni globali lette con la sessione, e le due rotte
+>   con token Bearer di Z4). Rilette le fusioni automatiche (`instance_block.py`, `test_instance_block.py`,
+>   `configuration`, `hosting_providers`, `settings.en.md`, `access_control.md`, `email.md`, `_backend_services.py`):
+>   coerenti. Nessuna migrazione nuova: la testa resta la 008 sopra la 007.
+> - **Prove**, una alla volta con `nice` e il carico sotto 70 (script `/tmp/libreFolio_a6e/combined.sh`, log in
+>   `/tmp/libreFolio_a6e/logs/combined/`): `api sync` ✅ (nessun file tracciato cambiato); `api settings` ✅ 97;
+>   `api profile` ✅ 21; `api instance-block` ✅ 62; `db migration-008` ✅ 23; `mkdocs build` ✅; `check-links` ✅.
+> - **Rossi: tutti e solo di A6c**, classificati uno per uno dal corpo della traccia:
+>   - `front check`: 2 errori, entrambi in `passwordRules.test.ts` (importa `./passwordRules`, che non esiste ancora);
+>   - `core-unit`: 5900 ✅ e 4 ❌, tutti in `registrationErrors.test.ts` (`PASSWORD_TOO_WEAK`);
+>   - `api registration`: 59 ✅ e 37 ❌: 18 perché `accounts` non ha ancora `password_rules` (INSTANCE-001/002,
+>     FIRST-001…005, URL-001), 19 perché l'API non risponde ancora `PASSWORD_TOO_WEAK` (RESET-004 ×5, RESET-006 ×5,
+>     RULES-001/002/003);
+>   - `api auth`: 64 ✅ e 24 ❌, tutti `PASSWORD_TOO_WEAK` (REG-004, CHPWD-005, PWD-001 ×10, PWD-003 ×10, PWD-004, PWD-007);
+>   - `api system`: 113 ✅ e 5 ❌, tutti per `password_rules` (2 live, 3 in-process).
+> - Le bozze di A6c (`/tmp/libreFolio_a6c/`) combaciano ancora sulla base nuova (dry run pulito, backend e frontend).
+> - Porta 6182 libera. **Esito**: A6d e A6e possono entrare insieme da `340ddc848`.
+
+#### A6c.2 — Registrazioni nel runner e rossi osservati ✅ (2026-10-16, 02:41–02:53)
+> - **Runner**: `services password-policy` (isolamento `pure`: funzioni pure, niente DB, server né variabili) in
+>   `_backend_services.py`; `passwordRules.test.ts` nella lista di `core-unit` (`_frontend_utility.py`), accanto a
+>   `registrationErrors.test.ts`. Nessun altro catalogo da aggiornare.
+> - **Rossi osservati**, tutti per le ragioni attese (log in `/tmp/libreFolio_a6c/logs/`):
+>   - `services password-policy`: errore di raccolta, `password_policy` non esiste ancora;
+>   - `utils dev-cli-image`: 78 ✅ / 7 ❌, tutti IMG-031 (`€` simbolo, `²` non cifra, messaggi col codice della regola,
+>     `user create` con `Écrire12€`, `user reset` con `Ecrire²²!`);
+>   - Vitest (6 file): 195 ✅ / 26 ❌ e un errore: `PasswordStrength` 9, `RegisterCard` 4, `ResetPasswordCard` 4,
+>     `PasswordChangeModal` 5, `registrationErrors` 4, `passwordRules.test.ts` non si carica (modulo mancante). L'errore
+>     non gestito è il difetto vero già annotato: `detail.toLowerCase is not a function` con un `detail` a oggetto.
+>   - Già visti sulla revisione combinata: `api auth` 24, `api registration` 37, `api system` 5, `front check` 2.
+> - I file toccati solo per tenere valide le password esistenti (`test_session_revocation_api.py`,
+>   `test_users_admin_api.py`, i tre BRIM): una cifra in più o `TestPass123!`; restano verdi prima e dopo.
+
+#### A6c.3 — Implementazione e verdi ✅ (2026-10-16, 02:53–03:41)
+> - **Bozze applicate** (`/tmp/libreFolio_a6c/apply_a6c_backend.py` e `apply_a6c_frontend.py`, combaciavano):
+>   `password_policy.py` nuovo; schemi «non vuota»; `PasswordRuleRead` e `accounts.password_rules`;
+>   `_refuse_weak_password()` in testa a register, reset e change-password; `/system/instance` pubblica le regole; la
+>   CLI su `password_policy`; `passwordRules.ts` nuovo; `PasswordStrength` ai runes; `RegisterCard` e
+>   `PasswordChangeModal` legano `valid`; `PASSWORD_TOO_WEAK` in `registrationErrors` e nel reset; l'etichetta della
+>   lunghezza ICU `{value}` in 4 lingue. `ruff` e `black` puliti (una riga vuota di troppo in `user_cli.py`, tolta).
+> - **Verdi** (una alla volta, `nice`, log in `/tmp/libreFolio_a6c/logs/greens/`): `api sync` ✅; `services
+>   password-policy` ✅ 53; `utils dev-cli-image` ✅ 85; Vitest dei 6 file ✅ 283; `i18n check` ✅; `theme-roles --check`
+>   ✅; `api auth` ✅ 88; `api registration` ✅ 96; `api system` ✅ 118; `api session-revocation` ✅ 3; `api users-admin`
+>   ✅ 64; `api brim-scalable` ✅ 2; `e2e brim-e2e` ✅ 4; `api brim` ✅ 116 (alla seconda, vedi sotto).
+> - **Fuori pista — il tipo generato**: dopo `api sync`, `front check` ha dato 1 errore in `PasswordStrength.svelte`:
+>   il generatore scrive un `Optional[int]` con descrizione come `number | null | Array<number | null>` (108 campi così
+>   in `generated.ts`; lo schema Zod è giusto). **Decisione notturna, da rivedere**: `PasswordStrength` normalizza
+>   `value` a numero o null dove legge le regole servite; il generatore non si tocca.
+> - **Fuori pista — `api brim` rosso, verdetto: ambiente** (skill test-triage): 5 casi con la premessa
+>   «`e2e_test_admin` … 401». Il setup della categoria `services`, anche per un'unità pura, ha cancellato e ricreato il
+>   DB della corsia (log: «Removing existing test database», «Create database via Alembic migrations»), e io non ho
+>   rilanciato `db populate --force` prima delle unità `api`: nel DB 173 utenti dei test, nessun `e2e_test_*`. Dopo
+>   `db populate --force`: ✅ 116. Nessun cambio di codice.
+> - **Doc** (`docs-writer`, 9 pagine EN, nessun comando): utente `settings/profile` («🔑 Change Password»), admin
+>   `cli_tools` (il punto 🔒); dev `security` (sezione nuova «🔏 Password Rules»), `access_control` (`PASSWORD_TOO_WEAK`
+>   prima riga della tabella della registrazione, `accounts.password_rules`, il reset), `settings`,
+>   `frontend/components/features/auth.md`, `core-ui/atoms.md`, `features/settings.md`, `state/app-state.md`. Corretti
+>   anche due scarti vecchi: la barra di robustezza ha 3 colori da D-T13, non 5; `UsersTab` fra i lettori di `accounts`.
+>   Debito di traduzione in A-10: `user/settings/profile` e `admin/cli_tools`. Nessuna frase falsa nelle pagine di E.
+> - **Fuori pista — il reset non caricava le regole del server** (trovato dal `docs-writer`): `/reset-password` non
+>   chiama mai `instanceConfig.load()` (lo fanno `LoginCard` e `/invite`), quindi un link aperto in una scheda nuova
+>   controlla le regole predefinite; nella 1.3 le due liste coincidono, ma il contratto C3 dice che il reset legge
+>   quelle del server. **Decisione notturna, da rivedere**: il reset chiede la configurazione al montaggio senza
+>   aspettarla (`void instanceConfig.load()`): `PasswordStrength` la segue da solo, e una richiesta lenta o fallita
+>   non ritarda il modulo. Rosso scritto da un `test-author` in `routes/reset-password/page.test.ts`.
+> - **Limite noto, lasciato** (dal `docs-writer`): se il server mandasse solo codici che la UI non conosce, `valid`
+>   sarebbe vero per qualsiasi password; decide comunque il server, che rifiuta.
+> - **Il reset, rosso e verde**: il caso 1 nuovo di `routes/reset-password/page.test.ts` (la pagina chiede la
+>   configurazione al montaggio) rosso prima della cura, il caso 2 (il modulo si apre anche se la richiesta non risponde
+>   mai) verde prima e dopo. Cura: `void instanceConfig.load()` nell'`onMount` di `/reset-password`. Corrette le due
+>   frasi della doc che descrivevano il comportamento vecchio (`state/app-state.md`, `features/auth.md`).
+> - **Prove finali leggere** (log in `/tmp/libreFolio_a6c/logs/final/`): Vitest dei 7 file ✅ 303; i 19 file che
+>   montano `PasswordStrength` di riflesso, più i cancelli sui sorgenti, ✅ 463; `front check` ✅ 0 errori; colori ✅;
+>   Prettier ✅; `mkdocs build` ✅; `check-links` ✅; `git diff --check` pulito; porta 6182 libera.
+> - **Non lanciati** (slot pesante): `core-unit` e `component-unit` interi; E2E `auth`, `auth-links`, `settings`,
+>   `layout/theme-roles` e `layout/header-scroll` (leggono la lista delle regole e il modulo di registrazione);
+>   `all-backend`.
+
+#### A6c.4 — Handoff FROZEN 🧊 (2026-10-16, 03:42)
+> - Delta: 42 file modificati e 4 nuovi su `340ddc848`. Fuori: il client generato (ignorato), i log, il DB della corsia.
+> - **Per la revisione del mattino** (decisioni notturne): le classi Unicode; le chiavi della UI di oggi con la mappa
+>   `RULE_UI_KEYS`; `PasswordStrength` ai runes; la lista vuota vale «quelle di oggi»; la normalizzazione di `value` per il
+>   tipo generato; il reset che chiede la configurazione senza aspettarla.
