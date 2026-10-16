@@ -379,8 +379,6 @@
   },
   "events": {
     "deleteSuccess": "{n} evento(s) eliminado(s)",
-    "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
-    "deleteBlocked": "No se puede eliminar: {n} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
     "fxBannerContext": "para eventos dividendo/efectivo",
     "exists": {
       "title": "Este evento ya existe",

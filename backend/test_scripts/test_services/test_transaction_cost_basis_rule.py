@@ -82,7 +82,7 @@ setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.schemas.transactions.transactions as transaction_schemas
+import backend.app.schemas.transactions.type_metadata as type_metadata
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
@@ -587,8 +587,8 @@ class TestUpdatesThatChangeWhatTheRuleReads:
         ADJUSTMENT has none; cash is not one of the changes the rule reads.
         """
         session = world.session
-        other_groups = [group for group in transaction_schemas.SWAP_GROUPS if TransactionType.BUY not in group]
-        monkeypatch.setattr(transaction_schemas, "SWAP_GROUPS", [frozenset({TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT}), *other_groups])
+        other_groups = [group for group in type_metadata.SWAP_GROUPS if TransactionType.BUY not in group]
+        monkeypatch.setattr(type_metadata, "SWAP_GROUPS", [frozenset({TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT}), *other_groups])
         bought = _stored_row(world, broker=world.dest, tx_type=TransactionType.BUY, quantity=Decimal("3"), amount=Decimal("-300"), currency=EUR)
         session.add(bought)
         await session.flush()
