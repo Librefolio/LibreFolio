@@ -4654,3 +4654,31 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 #### A-27.4 — Handoff FROZEN 🧊 (2026-10-16, 18:56)
 > - HEAD `e4811dab3`, nessun merge aperto; delta di A-27 + la D5 di W + giornale, `git diff --check` pulito.
 > - Prossimo, dopo il commit del coordinatore: A-25 (ProfileTab), brief dei rossi in `work/a25_brief_reds.md`.
+
+#### A-27.5 — A-27 committato, secondo aggiornamento di base (2026-10-16, 18:55–)
+> - **Commit del coordinatore**: `cf6b03b8f` (fix), `2d8f1b449` (docs), `9e9e62175` (009 D5), `546295d77` (giornale).
+> - **Merge aperto dal coordinatore**: `dev_release2` `0d20399cc` (C-97a, X-R28, H-12, CP-13a, AF, DV…), MERGE_HEAD
+>   `81bc305b9`. Due conflitti, risolti tenendo le due parti:
+>   - `backend/app/config/accounts.py`: X ha tolto `_url` per `env_url` (più severo) in `public_url`/`billing_url`; il mio
+>     lato aveva il blocco F02 subito dopo `billing_url`. Risoluzione: `billing_url` di X (`env_url`) più tutto F02; i due
+>     import da `backend.app.config` uniti in una riga. Nessuna chiamata a `_url` rimasta. `LIBREFOLIO_SUPPORT_URL` sta
+>     in `config/platform.py` (di X), non qui. `ruff`/`black` puliti.
+>   - `developer/architecture/settings.md`: la frase di X su `LIBREFOLIO_SUPPORT_URL` («does not either») dopo quella
+>     delle variabili che non fermano l'avvio, poi la mia sulle `LIBREFOLIO_ADMIN_*` che lo fermano.
+> - **Fusi da soli, controllati**: `db/models.py` (`func` e `ux_users_email_lower` accanto ai `RealDecimal` di C-97a),
+>   `db_schema_validate.py` (la mia lettura da `sqlite_master` in `test_indexes`), `database/index.md` (riga 009 e
+>   C-97), `.env.example` (nessuna variabile doppia), i registri del runner (nessuna unità doppia; `utils real-decimal`
+>   c'è). Alembic: una testa, 009. In stage solo le due risoluzioni.
+> - **Controlli leggeri** della lista del coordinatore (`work/merge_0d20_checks.sh`, log in `work/merge_0d20/`): in corso.
+> - **Esito** (18:57–19:44): `services` `session-version` 54, `user-profile` 47, `email-case` 67, `admin-bootstrap`
+>   156, `app-lifecycle` 44; `db` `create`, `validate` 17, `migration-005…009` 25/37/29/23/11 (con la 001 di C-97a),
+>   `populate`; `api` `auth` 95, `registration` 102, `profile` 28, `users-admin` 64, `admin-setup` 42, `email` 160;
+>   `utils real-decimal` 92; `mkdocs build --strict` ✅, `check-links` ✅ 97: tutto ✅.
+>   **⚠️ Fuori pista**: `utils dev-cli-image` di nuovo fermato al tetto di 600 s (83/94 passati, nessun rosso) su
+>   `TestBackup::test_create_then_inspect`, con il carico salito da 28 a 176 durante la corsa. Verdetto (test-triage):
+>   lentezza dell'ambiente; il merge non tocca il file del test, `user_cli.py`, `dev.py` né il Dockerfile, e la stessa
+>   unità era 94/94 alle 16:55. Rifatta da sola sotto carico 40. «Combinata verde» detta al coordinatore (19:46) con
+>   questa riserva.
+> - **Merge committato** dal coordinatore: `71a92cec9` (genitori `546295d77` + `81bc305b9`). **`utils dev-cli-image`
+>   rifatto** su `71a92cec9` (avvio 19:53, carico 32): **94/94 in 336 s** ✅. Porta libera. Revisione combinata tutta
+>   verde; pronta per l'ingresso (la simulazione del coordinatore su dev, con MF, O-20, H-21, è pulita).
