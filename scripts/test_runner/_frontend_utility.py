@@ -106,6 +106,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/detail/assetDetailPriceQuery.test.ts",
             "src/lib/components/assets/detail/assetDetailChartPoints.test.ts",
             "src/lib/components/assets/detail/assetDetailFxPair.test.ts",
+            "src/lib/components/assets/detail/assetDetailFxRequirements.test.ts",
             "src/lib/components/table/dataTableLogic.test.ts",
             "src/lib/components/transactions/shared/resolveFormItems.test.ts",
             "src/lib/components/transactions/events/eventSaveError.test.ts",

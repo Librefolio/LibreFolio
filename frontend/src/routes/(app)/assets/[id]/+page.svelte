@@ -74,7 +74,7 @@
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {comparisonAssetIds as comparisonPeerAssetIds, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {computeDirection} from '$lib/services/livePriceService';
@@ -89,6 +89,7 @@
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
     import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
     import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
+    import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
     import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
     import {
         CALENDAR_RETURN_PRESETS,
@@ -598,215 +599,84 @@
         return `/fx/${fxPairSlug}?start=${urlDateStart}&end=${urlDateEnd}`;
     });
 
-    /**
-     * All FX pairs required by the page (main + comparison signals).
-     * Each entry has slug, label, forAsset, and status.
-     */
-    interface RequiredFxPairInfo {
-        slug: string;
-        label: string;
-        forAsset: string;
-        forAssetIconUrl?: string | null;
-        forAssetType?: string | null;
-        status: 'ok' | 'missing' | 'no-data' | 'partial-gap';
-        firstDate?: string;
-    }
+    /** The page state the required FX pairs and the banner issues read, through getters: the same reads, in the same order, as the former derived blocks. */
+    const fxRequirementsState: RequiredFxPairsInput = {
+        get displayCurrency() {
+            return displayCurrency;
+        },
+        get asset() {
+            return assetInfo;
+        },
+        get pageAssetId() {
+            return data.assetId;
+        },
+        get configuredFxSlugs() {
+            return allConfiguredFxSlugs;
+        },
+        get fxFirstConvertedDate() {
+            return fxFirstConvertedDate;
+        },
+        get hasChartData() {
+            return chartData.length > 0;
+        },
+        get hasFxDataGap() {
+            return hasFxDataGap;
+        },
+        get signals() {
+            return signals;
+        },
+        get assets() {
+            return allAssets;
+        },
+        get primaryMode() {
+            return primaryMode;
+        },
+        get calendarSnapshotIsCurrent() {
+            return calendarSnapshotIsCurrent;
+        },
+        get calendarComparisonFxFailures() {
+            return calendarComparisonFxFailures;
+        },
+        get calendarComparisonProblems() {
+            return calendarComparisonProblems;
+        },
+        get events() {
+            return events;
+        },
+        get comparisonEvents() {
+            return comparisonEvents;
+        },
+        get eventsLabel() {
+            return $t('events.fxBannerContext') ?? 'for dividend/cash events';
+        },
+        assetFallbackLabel: (assetId) => $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
+    };
 
-    let requiredFxPairs: RequiredFxPairInfo[] = $derived.by(() => {
-        if (!displayCurrency) return [];
-        const pairs: RequiredFxPairInfo[] = [];
-        const seenSlugs = new Set<string>();
+    let requiredFxPairs: RequiredFxPairInfo[] = $derived(buildRequiredFxPairs(fxRequirementsState));
 
-        // Helper to compute canonical slug
-        const toSlug = (a: string, b: string) => {
-            const [lo, hi] = a < b ? [a, b] : [b, a];
-            return `${lo}-${hi}`;
-        };
-
-        // Main asset FX pair
-        if (assetInfo && displayCurrency !== assetInfo.currency) {
-            const slug = toSlug(assetInfo.currency, displayCurrency);
-            const missing = !allConfiguredFxSlugs.includes(slug);
-            let status: RequiredFxPairInfo['status'];
-            if (missing) {
-                status = 'missing';
-            } else if (!fxFirstConvertedDate && chartData.length > 0) {
-                status = 'no-data';
-            } else if (hasFxDataGap && fxFirstConvertedDate) {
-                status = 'partial-gap';
-            } else {
-                status = 'ok';
-            }
-            pairs.push({
-                slug,
-                label: slug.replace('-', '/'),
-                forAsset: assetInfo.display_name,
-                forAssetIconUrl: assetInfo.icon_url,
-                forAssetType: assetInfo.asset_type,
-                status,
-                firstDate: fxFirstConvertedDate ?? undefined,
-            });
-            seenSlugs.add(slug);
-        }
-
-        // Comparison signal FX pairs
-        for (const cfg of signals) {
-            if (cfg.signalType !== 'asset-comparison') continue;
-            const targetId = Number(cfg.params.assetId);
-            if (!targetId || targetId === data.assetId) continue;
-            const targetAsset = allAssets.find((a) => a.id === targetId);
-            if (!targetAsset?.currency || targetAsset.currency === displayCurrency) continue;
-            const slug = toSlug(targetAsset.currency, displayCurrency);
-            if (seenSlugs.has(slug)) continue;
-            seenSlugs.add(slug);
-
-            const missing = !allConfiguredFxSlugs.includes(slug);
-            let status: RequiredFxPairInfo['status'];
-            if (missing) {
-                status = 'missing';
-            } else if (primaryMode === 'calendar-return' && calendarSnapshotIsCurrent) {
-                status = calendarComparisonFxFailures.has(targetId) || calendarComparisonProblems.get(targetId)?.code === 'fx_conversion_unavailable' ? 'no-data' : 'ok';
-            } else {
-                const convFailed = Boolean(cfg.params._conversionFailed);
-                const hasData = Boolean(cfg.params._resolvedData);
-                status = convFailed || !hasData ? 'no-data' : 'ok';
-            }
-            pairs.push({
-                slug,
-                label: slug.replace('-', '/'),
-                forAsset: targetAsset.display_name,
-                forAssetIconUrl: targetAsset.icon_url,
-                forAssetType: targetAsset.asset_type,
-                status,
-            });
-        }
-
-        // E.8 — Event currencies: if any event is in a currency ≠ displayCurrency,
-        // add its pair to the required list. This surfaces the same banner + CTA
-        // already used for prices (asset native + comparison signals), without
-        // duplicating detection code. `forAsset` uses an i18n-aware "for events"
-        // label so the user understands the context.
-        if (displayCurrency) {
-            const eventSources: Array<{
-                values: any[];
-                forAsset: string;
-                forAssetIconUrl?: string | null;
-                forAssetType?: string | null;
-            }> = [
-                {
-                    values: events,
-                    forAsset: $t('events.fxBannerContext') ?? 'for dividend/cash events',
-                },
-                ...[...comparisonEvents].map(([assetId, values]) => {
-                    const asset = allAssets.find((candidate) => candidate.id === assetId);
-                    return {
-                        values,
-                        forAsset: asset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
-                        forAssetIconUrl: asset?.icon_url,
-                        forAssetType: asset?.asset_type,
-                    };
-                }),
-            ];
-            for (const source of eventSources) {
-                for (const event of source.values) {
-                    const dependency = getComparisonEventFxDependency(event, displayCurrency);
-                    if (!dependency) continue;
-                    const slug = toSlug(dependency.sourceCurrency, displayCurrency);
-                    const missing = !allConfiguredFxSlugs.includes(slug);
-                    const existing = pairs.find((pair) => pair.slug === slug);
-                    if (existing) {
-                        if (missing) existing.status = 'missing';
-                        else if (dependency.failed && existing.status === 'ok') existing.status = 'no-data';
-                        continue;
-                    }
-                    seenSlugs.add(slug);
-                    pairs.push({
-                        slug,
-                        label: slug.replace('-', '/'),
-                        forAsset: source.forAsset,
-                        forAssetIconUrl: source.forAssetIconUrl,
-                        forAssetType: source.forAssetType,
-                        status: missing ? 'missing' : dependency.failed ? 'no-data' : 'ok',
-                    });
-                }
-            }
-        }
-
-        return pairs;
-    });
+    const assetDetailIssuesState: AssetDetailIssuesInput = {
+        get asset() {
+            return assetInfo;
+        },
+        get rangeStartsBeforeData() {
+            return rangeStartsBeforeData;
+        },
+        get loading() {
+            return loading;
+        },
+        get error() {
+            return error;
+        },
+        get firstDataDate() {
+            return firstDataDate;
+        },
+        get requiredFxPairs() {
+            return requiredFxPairs;
+        },
+    };
 
     /** Build DataQualityIssue[] from page state for unified banner rendering */
-    let assetDetailIssues: DataQualityIssue[] = $derived.by(() => {
-        const issues: DataQualityIssue[] = [];
-
-        // Archived banner
-        if (assetInfo && assetInfo.active === false) {
-            issues.push({
-                domain: 'asset',
-                code: 'ASSET_ARCHIVED',
-                severity: 'warning',
-                message_i18n_key: 'dataQuality.archivedAsset',
-            });
-        }
-
-        // Range starts before first data
-        if (rangeStartsBeforeData && !loading && !error && assetInfo) {
-            issues.push({
-                domain: 'asset',
-                code: 'RANGE_BEFORE_FIRST_DATA',
-                severity: 'info',
-                message_i18n_key: 'dataQuality.rangeBeforeData',
-                message_params: {date: firstDataDate ?? ''},
-            });
-        }
-
-        // FX pair issues
-        if (!loading && !error) {
-            for (const pair of requiredFxPairs.filter((p) => p.status !== 'ok')) {
-                const parts = pair.slug.split('-');
-                if (pair.status === 'missing') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_MISSING',
-                        severity: 'warning',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairMissing',
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'add_fx_pair',
-                        cta_target: pair.slug,
-                    });
-                } else if (pair.status === 'no-data') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_NO_DATA',
-                        severity: 'warning',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairNoData',
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'navigate_fx',
-                        cta_target: pair.slug,
-                    });
-                } else if (pair.status === 'partial-gap') {
-                    issues.push({
-                        domain: 'forex',
-                        code: 'FX_PAIR_PARTIAL_GAP',
-                        severity: 'info',
-                        group_key: pair.slug,
-                        message_i18n_key: 'dataQuality.fxPairPartialGap',
-                        message_params: {date: pair.firstDate ?? ''},
-                        affected_fx_pairs: [pair.slug],
-                        affected_asset_names: [pair.forAsset],
-                        cta_action: 'navigate_fx',
-                        cta_target: pair.slug,
-                    });
-                }
-            }
-        }
-
-        return issues;
-    });
+    let assetDetailIssues: DataQualityIssue[] = $derived(buildAssetDetailIssues(assetDetailIssuesState));
 
     function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'add_fx_pair' && target) {
