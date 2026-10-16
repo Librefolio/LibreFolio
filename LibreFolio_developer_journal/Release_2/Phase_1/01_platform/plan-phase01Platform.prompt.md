@@ -3737,3 +3737,215 @@ come voce H, con il triage prima di tutto.
 > **Verdetto confermato**: assumption, il tempo; curato nel test.
 
 #### Checkpoint TC-16 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: TC-16 committato (`03e06e3bd`, `91cfe34b3`) e fuso in dev (merge `65fc63e7e`).
+
+### Cosa resta del piano H — analisi (2026-10-16, pomeriggio) — sola lettura
+
+Richiesta del coordinatore (16:14): proporre un lotto con quello che resta del piano, dire cosa serve dal developer per
+CP7a, e dire lo stato di C-96. HEAD `91cfe34b3`.
+
+- **C-96 è chiusa**: `901fa33f6` (15/10, «fix(cli): test lanes ignore the instance's configuration»), provata, poi
+  verificata anche con le variabili di A5. Nel backlog la riga è nella sezione C del coordinatore e non ha ancora la ✅.
+- **H-2 è chiusa da altri**: `1c67dd5d9` (15/10, «fix(test-runner): build test server before timeout»). Il runner fa
+  `dev.py server --build-only` prima del conto alla rovescia, e i log di `all-backend` di oggi lo mostrano («Server
+  prerequisites ready (--build-only)»). La chiudo con ✅ nella mia sezione.
+- **CP7a**: il codice è entrato. Manca solo la prova a runtime dell'immagine (avvio, healthcheck, `docker exec` come
+  uid:gid, versione nella barra laterale). Il 15/10 il build si è fermato a `pip install`, perché il proxy della rete
+  aziendale ri-firma il TLS (H-11). Cosa serve dal developer, una delle due:
+  - (a) un build fuori dalla VPN, il suo o quello di un'immagine fatta dalla CI, e lo smoke a runtime: lo script c'è
+    già nella cartella della sessione (`files/docker-test/run.sh` e `cleanup.sh`);
+  - (b) H-11 prima: un secret di build facoltativo con una CA in più per pip (`RUN --mount=type=secret,id=extra_ca,
+    required=false`), mai copiato nell'immagine, documentato in `admin/docker_advanced`. Poi la prova dentro la VPN,
+    con la CA aziendale esportata dal developer. Il `Dockerfile` è di B dopo CP7a, quindi serve il suo OK; per la prova
+    servono il daemon acceso e uno slot pesante.
+- **H-12, metà**: la porta del server conta già solo i listener (`dev.py:84`). Resta il motivo di un avvio fallito: in
+  `scripts/test_runner/_server.py:318-319` stdout e stderr del server condiviso vanno su `DEVNULL`, se non c'è
+  `--verbose`, quindi il runner stampa solo «Shared backend exited during startup (code N)» o «did not answer within
+  300s».
+- **H-7** (`tzdata` nel Pipfile): finestra delle dipendenze, la fa il developer. **H-8** (`ForgotPasswordCard`): il
+  file è di A, nell'area T. **TS1**: P23. **H-3 opzione A**: P24. **H-5**: traduzioni, solo su richiesta del developer.
+  **H-18**: sezione C. **H-19**: ad A. **La riga di `instance_block.py` per `/auth/setup`**: con A7. **La revisione
+  di B5c**: all'handoff di B.
+
+**Lotto proposto: «H-12, il resto»** (runner e un test, nessuna area dei colori, niente Docker):
+
+- `_server.py`: l'output del server condiviso va in un file di log della corsia, `<log dir>/shared-backend.log`,
+  troncato a ogni avvio, al posto di `DEVNULL`. Un file e non una pipe, così un server che scrive molto non si blocca.
+  Se l'avvio fallisce (il processo esce, oppure scadono i 300 s) il runner stampa le ultime 30 righe e il percorso del
+  file. Con `--verbose` resta tutto com'è oggi;
+- un test puro (test-author): un server finto che esce subito scrivendo un errore, e il messaggio del runner che ne
+  mostra la coda; un server che non risponde, con un limite di avvio piccolo iniettato; con `--verbose`, nessun file;
+- la doc developer del runner, una riga; la chiusura di H-2 e H-12 nel backlog;
+- superficie condivisa: `scripts/test_runner/_server.py`, quindi mi serve l'assegnazione di scrittore;
+- prove: il test nuovo, `utils runtime-isolation` e i test del runner già esistenti per `_server.py`, poi un
+  `all-backend` (il server condiviso lo usano tutte le corsie).
+
+### Lotto «H-12, il resto» e la prova Docker di CP7a (2026-10-16, pomeriggio) — H-12 ✅ provato; CP7a ⏳ (daemon spento)
+
+> **Via** del coordinatore (16:16): H è lo scrittore di `scripts/test_runner/_server.py` per questo lotto; prima i
+> rossi col test-author, poi l'`all-backend` in uno slot organizzato da lui. Il ✅ di C-96 e H-2 nel backlog lo mette
+> lui. Alle 16:30 due aggiunte: (1) **CP7a**, il developer è a casa senza VPN: build dell'immagine e smoke a runtime
+> **nello slot 1** quando MF lo libera (~16:55), prima che H-12 prosegua; (2) la nota di E: il commento di
+> `test_client_address.py` (righe 33 e 771) nomina ancora `address_key`, da correggere in H-12.
+
+1. ✅ **Contratto e rossi affidati** (16:20). Il test-author scrive i casi nuovi in
+   `backend/test_scripts/test_utilities/test_test_server_preparation.py` (selettore `utils test-server-preparation`,
+   già registrato), senza eseguire nulla.
+   > **Note implementazione**: il contratto. `SharedTestServer(log_path=None)`. `start()` risolve `self.log_path`:
+   > `log_path` se dato, altrimenti `shared_backend_log_path()`; `None` sotto verbose. Con un percorso: file aperto in
+   > scrittura (troncato, cartella creata), `stdout` sul file e `stderr=STDOUT`, handle del runner chiuso subito dopo
+   > lo spawn. Su un avvio fallito (il processo esce, oppure scade `STARTUP_TIMEOUT`) stampa il percorso e le ultime
+   > 30 righe, lette dagli ultimi 64 KiB con `errors="replace"`, oppure «(no output)»; poi `stop()` come oggi. La
+   > riga info nomina il file.
+   > **⚠️ Fuori pista** (16:25, contratto corretto prima che il test-author finisse): il primo contratto ripiegava
+   > su `PROJECT_ROOT/.testLog/shared-backend.log` quando il runner non ha una log dir. Ma `--log-dir` vale
+   > `.testLog` per default e `_activate_log_dir()` lo prepara prima di `shared_backend_for()`: il server vivo scrive
+   > proprio `<root>/.testLog/shared-backend.log`. Nel pytest dei test di utilità `_common._LOG_DIR` è `None`, quindi
+   > ogni `start()` finto già esistente (`test_runtime_isolation.py`, `test_test_server_preparation.py`) avrebbe
+   > troncato il log del server vivo a metà di un `all-backend`. Regola corretta: `shared_backend_log_path()` è
+   > `get_log_dir()/shared-backend.log`, oppure `None` senza log dir; con `None` lo spawn resta su `DEVNULL` come oggi.
+   > Così i test esistenti non cambiano e `_cli.py` non si tocca. L'unico test che tocca `_LOG_DIR` lo mette a `None`
+   > via monkeypatch (`test_runtime_isolation.py:1240`).
+2. ✅ **Cura provata a secco** (16:28, `files/h12/apply_cure.py`, 13 sostituzioni su ancore uniche, applicata a una
+   copia): ruff verde. Black segnala gli stessi 6 blocchi del file a HEAD, cioè codice già esistente, nessuno nuovo.
+   La complessità di `start()` resta 8, il cancello è 10.
+   > **Note implementazione**: `SHARED_BACKEND_LOG_NAME`, `STARTUP_LOG_TAIL_LINES = 30`,
+   > `STARTUP_LOG_TAIL_BYTES = 64 KiB`. Tre funzioni: `shared_backend_log_path()`; `log_tail()`, che scarta la prima
+   > riga se il seek l'ha tagliata; `_open_backend_log()`, che su un `OSError` avvisa e scarta l'output, perché il log
+   > non deve mai rompere un run. Il context manager `_spawn_output()` dà `stdout`, `stderr` ed `env`: con il file
+   > aggiunge `PYTHONUNBUFFERED=1`, così le righe di dev.py arrivano in ordine e sopravvivono al SIGTERM di
+   > `stop()`, come già `-u` per la build. Sta sulla stessa riga `with` di `_publish_spawn_ownership()`: il blocco
+   > dello spawn non si re-indenta. `_report_startup_log()` è chiamato sui due fallimenti. Docstring di
+   > `build_server_prerequisites` aggiornata.
+   > **⚠️ Fuori pista**: `shared_backend_for()` passa sempre `verbose=False`, quindi il runner non ha un percorso
+   > «verbose». La proposta diceva «con `--verbose` resta com'è»: vale solo per chi costruisce la classe a mano. La
+   > doc non lo nomina.
+3. ✅ **Commento di E e frase gemella** (16:33): in `test_client_address.py` (f) e `RATE_KEYS` non nominano più
+   `address_key`. La stessa frase stantia stava nel mio testo P17 di `developer/architecture/security.md` (~1290):
+   affidata al docs-writer, con una formula valida prima e dopo il passaggio di E. Ho segnalato al coordinatore che E
+   non deve toccarla.
+4. ⏳ **Doc** (docs-writer, senza eseguire nulla): la riga di `_server.py` in `runner_architecture.md`, quella di
+   `--log-dir` in `test-walkthrough/index.md`, la frase di `security.md`.
+   > **⚠️ Fuori pista** (16:38, segnalato dal docs-writer): `database_file_owned_exclusively()` ferma e riavvia **la
+   > stessa istanza** a metà run, attorno a `db create` in `all-backend`. «Troncato a ogni avvio» avrebbe cancellato
+   > l'output del primo server. **Cura v2**: il primo avvio dell'istanza svuota il file, un riavvio lo apre in append.
+   > `self._log_offset` registra dove comincia l'avvio corrente; la coda di un avvio fallito legge solo da lì, quindi
+   > con un avvio che non ha scritto nulla stampa «(no output)» e non le righe dei precedenti. `log_tail(path,
+   > offset)`: con il taglio dei 64 KiB legge dal byte prima del taglio e scarta la riga tagliata, tenendola solo se è
+   > l'unica. Provata a parte in `files/h12/check_log_tail.py`: 9 casi, tra cui la riga tagliata, il taglio esatto a
+   > inizio riga, nessun a capo, l'offset e i byte non UTF-8. Il primo tentativo leggeva un byte di troppo senza a
+   > capo: corretto con `partition`. Ruff verde, `start()` resta a complessità 8. Emendamento 2 al test-author: casi
+   > «il riavvio aggiunge» e «il riavvio senza output nuovo». Dimensione: il file tiene l'output del server per tutto
+   > il run; il log dell'app nella corsia è cresciuto di 3 MB in tutti i verdi di P17, e l'archivio usa xz preset 1,
+   > veloce sul testo.
+5. ✅ **CP7a, script pronti** (16:40): `files/docker-test/run.sh` e `cleanup.sh`, aggiornati rispetto al 15/10 (le
+   versioni vecchie sono in `.bak`). Log e snapshot vanno in `files/docker-test/run-1610/`, perché `cleanup.sh` ne ha
+   bisogno anche dopo un riavvio; in `/tmp` restano solo i dati usa e getta del container. In più: il controllo che
+   il daemon sia acceso e `docker compose version`; `instance`, `block` e la versione confrontata con VERSION; la
+   rimozione di `LibreFolio-data/`, se il run l'ha creata. Dal 15/10 `Dockerfile` e compose hanno cambiato solo
+   commenti. Si lancia solo al via del coordinatore.
+6. ✅ **Rossi** (16:49, carico 37). Il test-author ha consegnato 20 casi nuovi in 5 classi:
+   - `TestSharedBackendLog`, 8 casi;
+   - `TestSharedBackendLogTail`, 7;
+   - `TestSharedBackendLogRestart`, 3;
+   - `TestLogTail`, 1;
+   - `TestSharedBackendLogWithARealChild`, 1: un figlio Python di una riga, lanciato davvero tramite
+     `exec_unmasked.py`. Le guardie lasciano partire solo quell'argv e segnalare solo il suo gruppo.
+
+   I nomi nuovi si leggono al momento della chiamata, e `_LOG_DIR` è sempre ripristinato via monkeypatch. Ruff
+   verde; black lascia il file invariato.
+   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py test --test-port 6181 --data-dir
+   /tmp/librefolio-r13-h utils test-server-preparation` → **20 failed, 63 passed**: 19 su «H-12: SharedTestServer has
+   no log_path», 1 su «H-12: log_tail is missing». Log in `files/runs/h12-red.log`.
+7. ✅ **Cura applicata e verdi leggeri** (16:50). `files/h12/apply_cure.py` applicata in posto; il risultato coincide
+   byte per byte con la prova a secco e ruff è verde. Risultati, ciascuno col suo log in `files/runs/h12-*.log`:
+   - stesso selettore: **83/83**;
+   - poi, uno alla volta con `files/runs/h12-greens-related.sh`: `utils runtime-isolation` **200/200**, `utils
+     dev-port-check` **5/5**, `services shutdown-budget` **188/188**.
+
+   Il carico è salito a 60–96 durante il run, per lavoro di altre corsie; i miei comandi sono leggeri.
+   > **Note implementazione**: il test-author ha segnalato che `patch_clock` di `test_runtime_isolation.py`
+   > sostituisce `_server.time` con un oggetto che ha solo `time` e `sleep`. La cura non aggiunge chiamate a `time`:
+   > confermato dai 200 verdi.
+8. ✅ **Descrizione del selettore** (`scripts/test_runner/_backend_utils.py`, superficie condivisa). **OK del
+   coordinatore alle 16:54**, solo per il testo di `test-server-preparation`, attorno alle righe 343 e 737. Anche W ha
+   il file aperto (C-97a: una funzione dopo la riga 26 e un blocco di catalogo dopo la ~483); i suoi hunk sono
+   disgiunti dai miei. Patch applicata alle 16:54: coincide byte per byte con la prova a secco, ruff verde. La docstring, le due righe info e il `desc` del catalogo parlano solo di C-94. Il commento
+   d'isolamento dice «every real process and signal forbidden», non più vero per il caso con il figlio reale; la
+   classe resta `pure`. Patch pronta e provata a secco in `files/h12/apply_backend_utils.py`: 5 sostituzioni, ruff
+   verde.
+9. ⏳ **Prove leggere dopo l'OK** (16:54, `files/runs/h12-light-2.sh`, uno alla volta con carico < 50; log in
+   `files/runs/h12-light-2/`). Il daemon Docker è ancora spento, quindi il coordinatore ha anticipato queste prove.
+   - `dev.py mkdocs build`: exit 1, solo per l'avviso già noto. `wac.md` linka
+     `split_promote.md#transfer-giving-leg`, corretto su dev da `ed500643f`, che non è nella mia base. Le mie tre pagine
+     non ne aggiungono: lo strict interrompe dopo aver elaborato tutte le pagine. `check-links`: **97 link validi**.
+   - `utils test-server-preparation`: **83/83**, con le righe info nuove.
+   - **Prova reale del timeout, 1 s** (`LIBREFOLIO_TEST_STARTUP_TIMEOUT=1 … api system-wake`, 16:55–17:00; 4 min e
+     23 s, quasi tutti del passo build-only, che ha ricostruito frontend debug e sito). La riga info nomina
+     `.testLog/shared-backend.log`; poi «Shared backend did not answer within 1s», l'intestazione della coda con
+     «(no output)» e «shared test backend failed to start». File di 0 byte: in 1 s dev.py non stampa nulla e il
+     SIGTERM arriva prima. Porta 6181 libera dopo `stop()`.
+   - La prova a 6 s, per vedere righe vere nella coda, aspettava che il carico scendesse sotto 50: è salito a 165.
+     **Fermata alle 17:22** su richiesta del coordinatore, la galleria completa dei colori è in corso: niente prove
+     nuove fino al suo via, verso le 17:45. Lo script era solo nel `sleep` d'attesa, senza figli di test; porta
+     libera, verificato.
+10. ✅ **Prova reale a 6 s** (17:53, carico 15, dopo la fine della pausa alle 17:52; `files/runs/h12-timeout-6.sh`,
+    log in `files/runs/h12-light-2/api-timeout-6s.log`). Sequenza stampata: «Shared backend did not answer within
+    6s», «Shared backend output, last 30 line(s): …/.testLog/shared-backend.log», poi le righe vere di dev.py: la
+    cache JS, «Starting LibreFolio API server (TEST MODE)...», database, host, porta 6181, «Log Level: DEBUG»,
+    scheduler disabilitato, endpoint, «Frontend build found», infine «shared test backend failed to start». File di 35
+    righe e 1563 byte, porta libera dopo `stop()`.
+    > **Note implementazione**: il server di test gira a DEBUG, quindi in un `all-backend` il file conterrà tutto il
+    > log della console per l'intero run. Lo misuro dopo il run.
+11. ⏳ Dopo il via del coordinatore:
+   - l'`all-backend` nello slot 1 (~18:05, limite 18:45, poi A), con `files/runs/h12-allbackend.sh`. Prova il log
+     vero dall'inizio alla fine del run, compreso l'append al riavvio di `db create`, in
+     `.testLog/shared-backend.log`.
+     > **⚠️ Fuori pista** (17:58): il controllo dell'orario manda SIGINT al runner, ma una shell non interattiva
+     > avvia i comandi con `&` ignorando SIGINT: un Python nato così non installa `KeyboardInterrupt`, e il segnale
+     > si sarebbe perso. Verificato con un processo finto: senza `set -m`, sleep fino alla fine; con `set -m`,
+     > KeyboardInterrupt e rc 130. Lo script ora usa `set -m` e `kill -INT -- -$RUNNER`: tutto il gruppo del runner,
+     > figli pytest compresi, come un Ctrl-C. Il backend condiviso ha la sua sessione e lo ferma `stop()`.
+   - la prova Docker di CP7a, se il developer accende il daemon (slot 1), con `files/docker-test/run.sh` e poi
+     `cleanup.sh`. Dopo la build di produzione dell'immagine, il prossimo run di test ricostruisce il frontend debug;
+   - poi l'handoff FROZEN (bozza in `files/h12/handoff-draft.md`).
+12. ✅ **Revisione di B5c** (18:30, durante lo slot, senza interromperlo). Su richiesta esplicita del coordinatore
+    l'ho fatta **nel worktree di B**: un'eccezione alla regola d'isolamento concessa da lui. Sola lettura con `git
+    --no-optional-locks`, limitata alle due righe dei miei file, alla rotta che espongono, al servizio `outcome.py` e
+    allo schema `RestoreOutcome`. La decisione N53 l'ho letta dall'oggetto git `57564d321`, cioè dal journal di B già
+    committato. **OK, nessuna modifica**:
+    - in `instance_block.py`: l'import, la voce `backup_restore.get_restore_outcome` con il suo commento, la frase
+      del docstring. In `test_instance_block.py`: `("GET", "/api/v1/backup/restore/outcome")`;
+    - la rotta: biglietto solo nell'header, mai nell'URL; 256 bit, di cui si conserva solo l'SHA-256;
+      `hmac.compare_digest` dopo il controllo del formato; un 404 identico per ogni biglietto che non dà l'esito; un
+      biglietto sbagliato non cambia nulla; risposta con soli `{state, reason, waiting}` e `extra="forbid"`;
+      `no-store`; endpoint `def` sincrono, per I/O leggero;
+    - su un'istanza bloccata, chi non ha il biglietto riceve lo stesso 404 di un'istanza sbloccata, quindi la voce
+      non rivela il blocco. Solo chi ha il biglietto legge `waiting: "instance_blocked"`.
+    > **⚠️ Fuori pista**: la mia condizione «monouso», cioè una sola lettura, è superata da **N53** (decisione del
+    > coordinatore, 17:20, da rivedere col developer): «un ripristino, un biglietto», un esito finale rileggibile
+    > finché il biglietto non scade, entro un'ora. Accettata: con una lettura sola, se la risposta finale si perde la
+    > pagina resta senza esito. Il rischio resta limitato: tre enum, un'ora, solo per chi ha 256 bit.
+13. ✅ **`all-backend` nello slot 1** (18:01:29 → 18:33:33, carico 41 → 26; `files/runs/h12-allbackend.sh`, log in
+    `files/runs/h12-allbackend/`, copia di `.testLog` in `testlog/`). Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc
+    nice -n 10 pipenv run python dev.py test -q --fresh-run --workers 2 --log-file … --test-port 6181 --data-dir
+    /tmp/librefolio-r13-h all-backend`. **exit 0: 18 487 passed, 7 skipped, 0 failed.** Il limite delle 18:45 non è
+    scattato.
+    - Il runner: «Starting shared test backend … — log: …/.testLog/shared-backend.log», «ready». Poi, per `db
+      create`, «Pausing the shared backend — creating a clean test database…», un secondo «Starting …» con lo stesso
+      file, «ready», «Shared backend resumed».
+    - **`shared-backend.log`**: 2 433 490 byte, 15 793 righe. Due avvii: «Starting LibreFolio API server» alle righe
+      14 e 15717. Due volte «Application startup complete» e due volte «Finished server process», prima [41600] e
+      poi [69888]. **Il riavvio ha aggiunto in coda**: le righe del primo server restano intere, fino al suo
+      spegnimento pulito su SIGTERM («Shutting down», «Finished server process»), quindi l'output non bufferizzato
+      sopravvive allo `stop()`. Nel log d'accesso il token della sonda della corsia è mascherato (`token=***`). Le 4
+      righe «Traceback» vengono tutte da `MOCKFX_FAIL: simulated provider failure for testing`: due episodi indotti
+      dai test, ciascuno registrato due volte (campo JSON e traceback in chiaro).
+    - **Dimensione**: 2,4 MB per un `all-backend` intero, a livello DEBUG. Molto meno delle «decine di MB» stimate;
+      il run successivo lo archivia con i log per unità.
+    - Porta 6181 libera alla fine; `git diff --check` pulito.
+    > **⚠️ Fuori pista** (fuori perimetro, **H-20** nel backlog): lo stdout del runner rediretto su un file, sia con
+    > `>` sia con `--log-file`, è bufferizzato a blocchi. Alle 18:12 `allbackend.log` era fermo da 10 minuti alle
+    > righe della build, che escono da un sottoprocesso; le righe del runner sono arrivate solo all'uscita. Il
+    > comportamento c'era già prima di H-12, e il run non ne soffre.
