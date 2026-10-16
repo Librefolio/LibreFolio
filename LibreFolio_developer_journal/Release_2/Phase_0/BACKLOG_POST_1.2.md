@@ -4539,6 +4539,16 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `translate-validate` (16/10): da 882 a 891 errori strutturali, tutti in `fifo-lot-analysis`: 24 righe nuove e 15
   sparite. Sono l'ammonimento nuovo, che sposta il tipo dei seguenti, e il link nuovo ad `adjustment`. La pagina aveva
   già debito (J-25, J-29, J-32): tradurla in un giro solo. Dettagli: piano J, §10 «CP-7b — codice».
+- **J-37 · Il testo del catalogo di `lots-analysis-pure` non dice più cosa prova l'unità** — minimo, test; J, 16/10
+  (test-author di CP-7b).
+  - Dove: `scripts/test_runner/_backend_services.py`, unità `lots-analysis-pure`. Tre testi descrivono ancora i test di
+    prima: `print_info` (~:893), `desc` (~:1894) e il commento di `isolation="pure"` (~:1897-1898), che parla solo dei
+    due casi asincroni con `convert_bulk` finto.
+  - Da CP-7b l'unità prova anche i giorni al costo e il riferimento, con casi che guidano `get_lots_analysis` su loader
+    finti e una sessione finta; resta pura.
+  - Testo proposto nel passaggio di CP-7b.
+  - Quando: il file è condiviso e A ce l'ha aperto (A7b). Lo scrive J dopo l'ingresso di A, su indicazione del
+    coordinatore (16/10 22:22).
 - **J-35 · Un lotto aperto da una rettifica senza costo vale 0 nei giorni al costo, la Dashboard lo lascia senza
   valore** — basso, numeri; J, 16/10 (docs-writer di CP-7b).
   - Il motore FIFO apre il lotto a costo zero («a zero-cost quantity correction»). Il costo medio della Dashboard invece
