@@ -138,7 +138,7 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
 
     # Rule 10: the quantity sign quantity_sign asks for, but FX_CONVERSION's "zero" and TRANSFER's "nonzero" (P6, cases 2
     # and 3).
-    # Messages: the texts of before W-B36, literal per type where they were (multipleBusinessRuleErrors packs the template).
+    # Messages: the texts of before W-B36, literal per type where they were.
     quantity_sign = meta.quantity_sign if meta is not None and tx_type not in _P6_QUANTITY_SIGN_UNCHECKED else "free"
     if quantity_sign == "positive" and quantity <= zero:
         errors.append(PydanticCustomError("qtyPositive", f"{t} requires quantity > 0", {"type": t}))
@@ -324,7 +324,9 @@ class TXCreateItem(StrictModel):
         # When there are multiple business-rule errors, we pack them ALL into
         # one PydanticCustomError with type "multipleBusinessRuleErrors" and
         # the full list serialised in ctx.errors.  The frontend unpacks this
-        # special type back into separate per-issue messages.
+        # special type back into separate per-issue messages. Each entry carries
+        # the rendered message, the text batch validation and broker import show,
+        # with its params still in ctx (W-B38: the template leaked "{type}").
         if errors:
             if len(errors) == 1:
                 raise errors[0]
@@ -336,7 +338,7 @@ class TXCreateItem(StrictModel):
                     "errors": [
                         {
                             "code": e.type,
-                            "msg": e.message_template,
+                            "msg": e.message(),
                             "ctx": e.context or {},
                         }
                         for e in errors

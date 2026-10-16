@@ -35,6 +35,7 @@ from backend.app.services.accounts import address_probe, registration_service, t
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
+from backend.app.services.email import verification as email_verification
 
 logger = get_logger(__name__)
 
@@ -86,7 +87,7 @@ def _invite_read(invite: AccountToken) -> InviteRead:
     return InviteRead(id=invite.id, grants_admin=invite.grants_admin, email=invite.email, created_at=invite.created_at, expires_at=invite.expires_at, created_by_user_id=invite.created_by_user_id)
 
 
-def _admin_user_read(user: User) -> AdminUserRead:
+def _admin_user_read(user: User, *, holds_place: bool = False) -> AdminUserRead:
     return AdminUserRead(
         id=user.id,
         username=user.username,
@@ -95,6 +96,7 @@ def _admin_user_read(user: User) -> AdminUserRead:
         is_superuser=user.is_superuser,
         created_at=user.created_at,
         protected=user_service.account_protection(user) is not None,
+        holds_place=holds_place,
     )
 
 
@@ -158,7 +160,9 @@ def issue_address_probe(admin: Annotated[User, Depends(require_admin)]) -> Addre
 async def list_accounts(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AdminUserListResponse:
     """Every account, oldest first, with the usage of the instance."""
     users = await user_service.list_users(session)
-    return AdminUserListResponse(items=[_admin_user_read(user) for user in users], usage=_usage_read(await registration_service.user_usage(session)))
+    # The waiting accounts whose live verification link already holds their place: Reactivate needs no free one (workstream E)
+    holders = await email_verification.place_holders(session)
+    return AdminUserListResponse(items=[_admin_user_read(user, holds_place=user.id in holders) for user in users], usage=_usage_read(await registration_service.user_usage(session)))
 
 
 @router.patch("/{user_id}", response_model=AdminUserRead, summary="Activate, deactivate, promote or demote an account (admin)")
@@ -166,7 +170,8 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     """Change whether an account is active and an administrator, all or nothing.
 
     The last active administrator can be neither deactivated nor demoted (409 ``LAST_ADMIN``); a reactivation needs a
-    free place (409 ``USER_LIMIT_REACHED``). Deactivating or demoting ends every session of the account.
+    free place (409 ``USER_LIMIT_REACHED``), except for an account waiting for its email verification with a live link,
+    which already holds one. Deactivating or demoting ends every session of the account.
     """
     user = await _user_or_404(session, user_id)
     deactivate = request.is_active is False and user.is_active
@@ -175,12 +180,14 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
         raise refusal
     if request.is_active is True and not user.is_active:
         usage = await registration_service.user_usage(session)
-        if usage.full:
+        # An account waiting for its email verification already holds its place while its link is live (workstream E).
+        if usage.full and not await email_verification.holds_place(session, user):
             raise _limit_reached(usage)
     if await user_service.update_user_status(session, user, is_active=request.is_active, is_superuser=request.is_superuser) == "LAST_ADMIN":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "LAST_ADMIN", "message": "The last active administrator can be neither deactivated nor demoted"})
     logger.info("Account updated by an administrator", user_id=user.id, admin_id=admin.id, is_active=user.is_active, is_superuser=user.is_superuser)
-    return _admin_user_read(user)
+    # The answer replaces the row in the Users tab: it carries the same flag as the list (workstream E).
+    return _admin_user_read(user, holds_place=await email_verification.holds_place(session, user))
 
 
 @router.get("/{user_id}/deletion-preview", response_model=AccountDeletionPreviewRead, summary="What deleting an account would take with it (admin)")
