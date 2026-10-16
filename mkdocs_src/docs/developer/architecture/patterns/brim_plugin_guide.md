@@ -530,6 +530,12 @@ Restart the app: the `BRIMProviderRegistry` finds the folder, loads `plugin.py` 
   plugins, whose `plugin.py` files hold only their properties (the string literals R13 reads among
   them) and calls to it. A helper only your plugin uses goes in its folder, as `_*.py` beside
   `plugin.py`.
+- **Importing the plugin starts nothing**: no thread, no process and no connection at module
+  level, in `plugin.py` or in a helper it imports. Discovery also runs inside the BRIM parse pool's
+  forkserver, and every parse worker is a fork of it
+  ([Preload and warm-up](../../backend/brim/architecture.md#parse-pool-warm-up)): a thread there is
+  how deadlocks start, and the single-thread guard of `./dev.py test services brim-parse-pool`
+  fails when it finds one; a process or a connection would be inherited by every worker.
 - **Import and patch** the plugin's names from its `plugin` module,
   `backend.app.services.brim_providers.broker_mybroker.plugin`: the package re-exports nothing, so
   a test that patches the package fails ([Importing and Patching a Plugin](registry_pattern.md#plugin-imports)).
