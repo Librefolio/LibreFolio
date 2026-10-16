@@ -86,8 +86,9 @@ def derive_key_from(key: str, purpose: str, length: int = 32) -> bytes:
     """The key that ``derive_key(purpose, length)`` gives on an instance whose instance key is ``key``.
 
     For a key that is not this instance's: a restore re-encrypts what the instance of a backup encrypted with its own
-    key (workstream B), reading that key from the backup's ``secrets/instance.key`` with ``read_secret_file()``, as this
-    module reads its own. It reads neither the environment nor the data directory and never creates the key file.
+    key (workstream B). The archive leaves that key out: it comes from the administrator's copy of the old
+    ``secrets/instance.key``, read with ``read_secret_file()`` as this module reads its own, or from the old
+    ``LIBREFOLIO_INSTANCE_KEY``. It reads neither the environment nor the data directory and never creates the key file.
     ``key`` is the text of the key, at least ``INSTANCE_KEY_MIN_LENGTH`` characters. Raises ``ValueError`` for an
     invalid purpose or length, before looking at the key, ``TypeError`` for a key that is not a text and
     ``InstanceKeyError`` for a key too short; no message holds the key.
