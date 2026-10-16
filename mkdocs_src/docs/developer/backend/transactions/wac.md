@@ -410,9 +410,10 @@ page explains how both reach the Dashboard.
   `(date_from, date_to]` whose proceeds and cost are both known; realized =
   Σ (proceeds − cost). A disposal left out is reported instead (its pair, or the
   cost basis its pool lacks). There is no per-sale WAC query.
-- **Period-boundary cost** (positions contribution). `_boundary_cost()` reads
-  `state_at(day).cost_report_for(qty)` and returns `None` while the pool is
-  incomplete that day, so no partial cost enters an unrealized figure.
+- **Period-boundary values** (positions contribution). Each row reads the engine's
+  `position_states_start` / `position_states_end`: the end cost only when `cost_complete`,
+  and `unrealized_pnl` is `None` while the cost is incomplete, so no partial cost enters an
+  unrealized figure.
 - **Holdings.** `wac_per_unit` is the historical WAC already in the report currency
   (`None` while incomplete). It is also the Yield on Cost denominator, which
   therefore needs no conversion at the end date.

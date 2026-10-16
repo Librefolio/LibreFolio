@@ -410,7 +410,10 @@ class AssetPeriodContribution(BaseModel):
     asset_type: str
     broker_id: int
     broker_name: str
-    period_unrealized_delta: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L over the period")
+    period_unrealized_delta: Optional[SafeDecimal] = Field(
+        None,
+        description="Change in unrealized P&L over the period, from the portfolio's own valuation at the two boundaries; an internal transfer that leaves and arrives inside the period splits it between the two brokers at the value on arrival (P22). None when a boundary the position is held at has an unknown unrealized (no rate, incomplete cost)",
+    )
     period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss in period: SELLs, and outgoing ADJUSTMENTs with a cost basis (the value handed over, at the rate of its date, against the average cost)")
     period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
@@ -419,8 +422,14 @@ class AssetPeriodContribution(BaseModel):
     annualized_return: Optional[SafeDecimal] = Field(
         None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
     )
-    start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
-    end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
+    start_value: Optional[SafeDecimal] = Field(
+        None,
+        description="Position value at the end of the period's start day, as the portfolio values it (market quote, trade price, split adjustment, estimate at cost) at that day's rate; 0 if there was no opening position, None if it cannot be valued",
+    )
+    end_value: Optional[SafeDecimal] = Field(
+        None,
+        description="Position value at period end, as the portfolio values it (the holding's current_value) at that day's rate; 0 if the position was closed by period end, None if it cannot be valued",
+    )
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
     oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
