@@ -19,7 +19,7 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "run",
         "src/lib/utils/__tests__/brokerHelpers.test.ts",
         "src/lib/utils/broker/__tests__/brokerIconChain.test.ts",
-        "src/lib/components/brokers/BrokerIcon.test.ts",
+        "src/lib/components/ui/display/BrokerIcon.test.ts",
         "src/lib/utils/broker/__tests__/assetPanelUrl.test.ts",
         "src/lib/utils/url/__tests__/tabUrl.test.ts",
     ]
