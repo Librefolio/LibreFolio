@@ -3482,3 +3482,615 @@ modello di `pairAssetMismatch`). **Verdi**: `services transaction` **67/67** (08
 > 10:47): ciò che serve di nuovo (patch, lavoro parcheggiato, script, log) va nella cartella della sessione; i log di W-B17 sono
 > copiati lì (`files/logs/`). Regola nuova anche per i colori: prima di scrivere in un `.svelte` delle aree IW, TR, AF, BK, IM,
 > DV o T, avvisare il coordinatore; backend, test fuori da quelle cartelle e doc no.
+
+> **W-B17 committato** (coordinatore, 10:49): `926a5c422` sul ramo, cherry-pick `4647c4af4` in `dev_release2` (treno 106),
+> CHANGELOG con la riga proposta; il journal resta sul ramo con la 47. **Base aggiornata**: merge di `dev_release2` (`b82e7765f`,
+> dentro il lotto `ui/data-editor` di T, `eb4040cd1`) senza conflitti → HEAD `8c930d5de` (verificato, worktree pulito). Via a
+> W-B43: i test e la cura nei due spec, scrittura prima; lo slot E2E quando se ne libera uno. W-B46 resta nel backlog.
+
+### W-B43 — tre debolezze in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`: codice ⏳ (2026-10-16)
+
+**Dopo il lotto di T** (codice di `8c930d5de`): `CsvEditor.svelte` dà `data-state="valid"` alla ✓ di ogni riga (~551),
+`data-state="invalid"` alla ✗ (~557, ~560) e al distintivo d'errore della barra di stato (~510); `DataEditor.svelte` dà
+`data-editor-stale-count` al contatore delle righe stantie (~641). T ha già portato i due spec sui nuovi selettori (`eb2adb37b`):
+- test 21 (`asset-data-editor.spec.ts`, «stale toggle is visible in toolbar»): il contatore per `data-editor-stale-count`, ma
+  tutto ancora dentro `if (await staleToggle.isVisible({timeout: 3000}).catch(() => false))`, su Apple (dato condiviso);
+- «price CSV import: invalid rows show error indicators» (~279): `[data-state="invalid"].first()`, che può essere il
+  distintivo e non una ✗ di riga;
+- `assertNoErrors` (`fx-csv-import.spec.ts:51-58`): `[data-state="invalid"]:has-text("✗")` e `…:has-text("error")` (la parola).
+Altri reperti dello stesso tipo: `fx-csv-import.spec.ts:233` asserisce il testo «Header currencies don't match» (il valore EN di
+una chiave i18n); `{hasText: /Import \(3\)/}` in `asset-data-editor.spec.ts`. Nel prodotto, la barra di stato di `CsvEditor`
+(«N valid rows», «• N errors», «• duplicate …s») è inglese scritta a mano → **W-B47** (file dell'area T dei colori: prima di
+scriverci, avvisare il coordinatore).
+**Da dove vengono le righe stantie** (verificato): `AssetDataEditorSection.svelte:144` (`staleDays` =
+`backward_fill_info.days_back`); `price_query.py:62-104` (`_build_backward_filled_series`) emette una riga per giorno di
+calendario in `[start, end]`, i giorni senza prezzo dopo il primo prezzo noto portati avanti con `days_back`, quelli prima
+saltati: un asset con prezzi solo in D e D+3, aperto su `[D, D+3]`, ha due righe stantie.
+**Disegno** (test-author, in corso 10:52, nessun E2E, nessun codice di prodotto): test 21 su un asset proprio coi prezzi in D e
+D+3 → interruttore visibile, contatore 2, e la guardia negativa (intervallo senza righe stantie → interruttore assente); nel
+test delle righe non valide, esattamente tre ✗ di riga (`[data-state="invalid"]` con ✗, glifo e non parola) più il
+distintivo; in `fx-csv-import` un test nuovo con una riga valida e una non valida (una ✗, le ✓ contate, il distintivo), così le
+verifiche negative di `assertNoErrors` hanno un controllo positivo che ne prova il selettore; `assertNoErrors` senza parole:
+`[data-state="invalid"]` con conteggio 0; la riga 233 senza testo (visibile, nessuna `{`). **Nessun rosso di prodotto**: il
+prodotto è giusto, i test erano vuoti; la prova della loro vacuità è statica (il ramo `if`, le sole verifiche negative), e i test
+nuovi la superano con asserzioni positive (il conteggio 2 e l'assenza a zero, la ✗ contata).
+Slot: `files/scripts/w_slot.py` nella cartella della sessione (regola delle 10:47: niente `/tmp`), `--step
+ade=front-asset/asset-data-editor/420 --step fx=front-fx/fx-csv-import/240`, dry run pulito; il primo avvio ricostruisce la
+build debug (la base è cambiata).
+> **P4 decisa dal developer** (coordinatore, 11:11): `GET /brokers/{id}/access` **non si restringe** (W-B34): «gli utenti devono
+> sapere che esistono altri broker, per capire perché un nome non si può riusare e a chi chiedere». Nessun lotto; scritta nel
+> backlog come decisione, col motivo.
+> Conseguenza della P4 (11:14): la docstring di `list_accesses` (`backend/app/services/brokers/access.py:96`, scritta in W-B35)
+> diceva che `user_id`/`is_superuser` erano «kept for a check the route may add»; ora dice che non si leggono perché ogni utente
+> autenticato può leggere l'elenco, con la decisione e il suo motivo. Nessuna pagina della doc prometteva una restrizione futura
+> (grep). `black`/`ruff` puliti; file identico in `dev_release2`. Commit a sé, da proporre col prossimo handoff.
+**Scritti** (11:12, test-author, nessun E2E): `frontend/e2e/assets/asset-events-owned.ts` (`createOwnedAsset(page, owned,
+options = {})` con `label` e `closes` facoltativi, `OwnedClose`; i valori di serie sono quelli di prima: i due spec degli eventi
+invariati), `asset-data-editor.spec.ts` (+95 −…: `owned` per describe, `afterEach(deleteOwned)`, aiuti `openOwnPricesEditor` e
+`priceRowIds`; test 16 e 21 riscritti), `fx-csv-import.spec.ts` (`assertNoErrors(modal, validRows?)`, un test nuovo, il test 10).
+Titoli invariati.
+- Test 21: asset proprio («E2E stale rows», USD) con chiusure in D = oggi − 20 e D+3; su `[D, D+3]` le righe sono esattamente D,
+  D+1, D+2, D+3, l'interruttore è visibile, il contatore legge `/^\D*2\D*$/`; la guardia su `[D+3, D+3]`: una riga sola, il
+  pulsante d'import della barra (`fx-data-import-btn`, del `DataEditor` comune) visibile, poi l'interruttore assente. `prices/current`
+  servito in locale. 60 s.
+- Test 16 (Apple, non scrive): esattamente 3 ✗ di riga (`[data-state="invalid"]` con ✗), ciascuna visibile, e il distintivo
+  (`[data-state="invalid"]` senza ✗) visibile.
+- Nuovo test FX «an invalid data row is marked ✗ and the others ✓» (non scrive): una riga valida e una con `not-a-rate` → una ✓,
+  una ✗, il distintivo.
+- `assertNoErrors`: `[data-state="invalid"]` a 0, e per i chiamanti con righe di dati (test 7, 17, 20) prima 2 `[data-state="valid"]`.
+- Test 10: il messaggio d'errore dell'intestazione visibile, non vuoto, senza `{`, al posto del testo inglese.
+**Prove leggere**: `prettier` pulito; `front check` **0 errori, 0 avvisi** dopo un `api sync`.
+> **⚠️ Fuori pista**: il primo `front check` (11:13) dava 1 errore in `frontend/src/lib/features/auth/RegisterCard.svelte:100`
+> («`verification_required` does not exist on type `AuthRegisterResponse`»): codice del workstream E arrivato con la base, e il
+> mio client generato (ignorato da git) era di prima. `api sync` (nessuna differenza tracciata) → `front check` 0/0. Non è un
+> difetto del ramo: dopo ogni aggiornamento della base va rigenerato il client.
+**Residui** → **W-B48** (altri selettori per testo e un altro `if` vuoto negli stessi due spec) e **W-B47** allargata (anche il
+piede di `DataImportModal`, «• N error(s)» e «• duplicates», in inglese e senza `data-state`).
+
+> **P5 e P6 decise dal developer** (coordinatore, 11:19), lotti separati dopo W-B43, rossi prima, `api sync` dove serve:
+> - **P5 (W-B30)**: «se lo svuoto attivamente vuol dire che lo voglio cancellare»: un `cost_basis_override: null` esplicito in un
+>   update toglie il costo manuale; un campo assente lo lascia; con `cost_basis_mode: 'auto'` il null si ignora; sui lati che il
+>   costo lo richiedono, `costBasisRequired`;
+> - **P6 (W-B36)**: la tabella dei tipi vale anche negli update, **solo quando cambia il campo interessato** (come N2); prima un
+>   controllo dei dati esistenti, per sapere quante righe vecchie sono fuori regola.
+
+### W-B30 (P5) — un costo manuale svuotato si toglie: analisi ✅ (2026-10-16)
+
+Codice di `c25c3f8b4`, sola lettura:
+- `_apply_update_values` (`backend/app/services/transactions/batch_edits.py:252-265`): `if item.cost_basis_override is not
+  None:` → un `null` esplicito e un campo assente sono la stessa cosa: il costo resta, in silenzio. Pydantic v2 li distingue con
+  `item.model_fields_set`.
+- Il frontend il `null` lo manda già: il form (`txPayloadHelpers.ts:303`, `:322`: in modo manuale, campo vuoto → `null`) e il
+  Bulk (`:355-359`); in modo auto manda `cost_basis_mode: 'auto'` col valore o `null` (`:268`, `:320-323`). La cura è solo nel
+  backend.
+- Il controllo N2 sugli update (`_check_update_cost_basis`, `batch_costs.py`) confronta già `cost_fields` con quelli salvati:
+  togliere il costo su un lato che lo richiede dà `costBasisRequired` senza altro codice.
+- La tabella oggi (`cost_basis_allowed`/`cost_basis_required`, verificati per ogni tipo e segno): un costo manuale è ammesso
+  **solo** dove è richiesto (ADJUSTMENT e TRANSFER a quantità positiva). Quindi nella UI l'effetto è: svuotare un costo richiesto
+  è rifiutato con un messaggio (prima restava in silenzio); il «si toglie» vale per righe vecchie con un costo dove non è ammesso
+  (via API).
+**Disegno**: in `_apply_update_values`, `elif "cost_basis_override" in item.model_fields_set and item.cost_basis_mode not in
+("auto", "auto-detail")` → `cost_basis_override` e `cost_basis_currency` a `None` (decisione tecnica: «auto-detail» è un modo
+auto come «auto»); la descrizione di `TXUpdateItem.cost_basis_override` (OpenAPI → `api sync`). Rossi (test-author,
+`services transaction-cost-basis-rule`, accanto ai test di N2): `null` su un TRANSFER ricevuto con costo manuale →
+`costBasisRequired`, niente cambia (oggi passa e il costo resta); `null` su una riga vecchia con un costo dove non è richiesto
+(scritta con l'ORM) → costo tolto (oggi resta); guardie: campo assente → invariato; `null` con `auto` → il costo Auto.
+Doc (docs-writer): form utente e regole degli update per sviluppatori. CHANGELOG 🐛.
+
+### W-B36b (P6) — la tabella dei tipi anche negli update, quando il campo cambia: analisi ✅ (2026-10-16)
+
+I quattro casi (sezione W-B36): 1 un TRANSFER con cassa ≠ 0, 2 un FX_CONVERSION con quantità ≠ 0, 3 un TRANSFER a quantità 0,
+4 un FX_CONVERSION o CASH_TRANSFER a cassa 0 (raggiungibile anche con un promote di WITHDRAWAL e DEPOSIT a importo zero). La
+creazione li rifiuta già (regole 2, 3, 3b); in `validate_transaction_business_rules` (comune a creazione e update) restano gli
+insiemi d'eccezione `_P6_CASH_FORBIDDEN_UNCHECKED`, `_P6_QUANTITY_SIGN_UNCHECKED` e la regola 11 che non legge «nonzero».
+**Disegno proposto**: un parametro della funzione con i campi che l'update cambia (`None` per la creazione, che resta com'è: le
+sue regole 2, 3, 3b fanno già il lavoro, e così non si doppiano i messaggi); in un update i quattro punti valgono quando cambia il
+loro campo (cassa per 1 e 4, quantità per 2 e 3) o il tipo; il promote, che cambia il tipo, applica la tabella intera alle righe
+che produce (caso 4). Rossi prima (`schemas transactions` e `services transaction`). Le righe vecchie fuori regola restano
+modificabili per le note, i tag e la descrizione (come N2).
+**Il controllo dei dati, prima** (in sola lettura): `files/scripts/p6_legacy_rows.sql` nella cartella della sessione, quattro
+conteggi più il totale, da far girare con `sqlite3 "file:<…>/app.db?mode=ro" < p6_legacy_rows.sql` su una copia a server fermo. Nel DB
+della corsia dopo lo slot di W-B43 (il mock); sul DB del developer solo lui.
+> **Disegni approvati** (coordinatore, 11:25): W-B30 con `model_fields_set`, W-B36b coi campi cambiati; non serve il numero
+> vero per partire: rossi e avanti. Il developer autorizza **una copia del suo DB demo** per i controlli dei figli: il
+> coordinatore la prepara con la procedura per farsene una copia; allora `p6_legacy_rows.sql` sulla mia copia e il risultato
+> qui. Rossi in scrittura (11:26), nessuna prova fino allo slot: W-B30 (test-author, `test_transaction_cost_basis_rule.py`) e
+> W-B36b (test-author, `test_transaction_service.py` e `test_transaction_schemas.py`; il codice nuovo `cashNonzero` per il caso
+> 4). Ordine delle cure: W-B30 prima (committato), poi W-B36b: tutte e due toccano `batch_edits.py`.
+**W-B30, rossi scritti** (11:38, test-author, non eseguiti): classe `TestDecisionP5AnExplicitNullEmptiesTheCost` in
+`backend/test_scripts/test_services/test_transaction_cost_basis_rule.py`, dopo `TestEditsOfARowWithCost` di N2; la riga che chiede
+un costo è la gamba ricevente di un TRANSFER (`_store(world, "transfer_in", cost=…)`), il cui costo Auto è quello che gli altri
+test Auto del file si aspettano. Il test-author ha segnalato un caso fuori dal disegno: con la 47 la gamba che cede è un
+ADJUSTMENT −q con un costo **scritto dal sistema**; un `null` via API lo cancellerebbe e per CP-16 le unità uscirebbero a prezzo
+0 (numeri). **Decisione del coordinatore (B)** (11:42, da rivedere dal developer): il `null` toglie il costo solo dove il tipo e il
+lato lo prendono (`cost_basis_allowed` sul tipo e la quantità finali della riga), altrove si ignora come oggi: è la lettera della
+P5 («il costo **manuale**») e i costi di consegna della 47 restano. Con la tabella di oggi i lati ammessi sono anche obbligatori:
+il `null` dà sempre `costBasisRequired`, non toglie mai niente; resta la differenza da oggi: il costo non è più tenuto in silenzio.
+I rossi `[buy]` e `[adjustment_out]` diventano guardie (il costo resta); il rosso del lato obbligatorio resta. Cura aggiornata
+(`files/scripts/wb30_cure.py`, dry run pulito): l'import di `cost_basis_allowed`, la condizione su `model_fields_set`, il modo e
+`cost_basis_allowed`, la docstring di `_apply_update_values` e la descrizione di `TXUpdateItem.cost_basis_override`.
+
+**W-B43, slot 2** ✅ (11:30–11:47, carico 68–147; `files/scripts/w_slot.py --no-load-gate`, slot dato col carico già alto):
+`front-asset asset-data-editor` **26/26** (3,3 min, con la ricostruzione della build debug; i test 16 e 21 riscritti passano);
+`front-fx fx-csv-import` **21/22**: rosso il test 19 «swap after less-than syntax rewrites header with greater-than» (non toccato),
+tempo del test (30 s) scaduto nel setup, nella navigazione di `goToFxDetailPage` (`e2e/fx/fx-helpers.ts:64`), prima di ogni
+asserzione. **Triage** (skill `test-triage`): §1 e §3 non si applicano (nessun dato asserito, niente stato spostato); §2 nessuna
+attesa a orologio, condizioni giuste, gli altri 21 test con lo stesso setup passati; rilanciato da solo (11:49, carico 49) →
+**passato in 3,1 s**. **Verdetto: ambiente** (macchina satura dalle prove delle altre sessioni); se si ripete a carico normale, il
+rimedio è il tempo dello spec (come W-B45). Porta libera. FROZEN, handoff alle 11:59. > **⚠️ Fuori pista**: un errore del
+servizio (~11:55) ha interrotto il mio turno e fatto cadere il test-author di W-B36b (DNS) dopo 417 righe in
+`test_transaction_service.py`, non verificate: un test-author nuovo le rivede e aggiunge la puntina di `cashNonzero`.
+
+**P6, il controllo dei dati** ✅ (12:01, carico 43; skill `real-data-copy`, `git show baa1b6e7e:…`): copia di lavoro
+`/tmp/librefolio-r2-w-realdata` dalla copia di riferimento del coordinatore (demo del developer, Alembic 008, prezzi di oggi, solo
+EUR, un utente), `umask 077`, nessun marcatore di produzione, `go-rwx`; `sqlite3 "file:…/app.db?mode=ro" < p6_legacy_rows.sql`
+(sola lettura, nessun server). **Risultato: caso 1 = 0, caso 2 = 0, caso 3 = 0, caso 4 = 0** righe fuori regola. Copia
+**cancellata** alle 12:01 (`lsof +D` vuoto, `rm -rf`, `ls`: «No such file or directory»); nessun file derivato tenuto.
+
+**W-B43 committato** (coordinatore, 12:02): `d6a260c89` sul ramo (HEAD, verificato), cherry-pick `a59593570` in `dev_release2`
+(treno 109); triage del test 19 accettato (ambiente).
+
+**W-B30, rossi** ✅ (12:01, carico 49): `services transaction-cost-basis-rule TestDecisionP5AnExplicitNullEmptiesTheCost` →
+**1 fallito, 5 passati**: rosso `test_emptying_the_manual_cost_of_a_received_transfer_is_refused` («emptying the manual cost of a
+received TRANSFER is saved, and the receiving leg … holds 42.000000 EUR — that leg needs a cost basis…»); guardie verdi:
+`test_a_null_where_no_cost_is_taken_is_ignored[buy|adjustment_out]` (decisione B), `test_notes_edit_without_the_cost_key_keeps_the_cost`,
+`test_auto_update_sending_a_null_writes_the_auto_cost[auto|auto-detail]`. **Cura** ✅ (12:02, `files/scripts/wb30_cure.py
+--apply`; `black` ha unito la condizione in una riga). **Verdi**: `services transaction-cost-basis-rule` **80/80**; `services
+transaction` **67/67** (con `-k "not TestUpdateTypeTableRules"`: i rossi di W-B36b restano fuori); `black`/`ruff` puliti; `api
+sync` senza differenze tracciate; `front check` **0/0**. Doc: docs-writer in corso.
+> **⚠️ Fuori pista — cherry-pick**: la simulazione (`git merge-file`, base HEAD, nostra `dev_release2`, loro il worktree) dà
+> `batch_edits.py` e `transactions.py` puliti, ma **3 conflitti** nel file dei test: le aggiunte di W-B30 stanno accanto a quelle
+> della 47 (che `dev_release2` non ha) nella docstring del modulo, nella riga d'import e nelle costanti, e il test usava il nome
+> `cost_basis_allowed` importato proprio dalla riga della 47. Il test-author (12:20) sposta le aggiunte (costanti accanto alla
+> classe, il paragrafo P5 nella docstring della classe, `type_metadata.cost_basis_allowed` dall'alias che `dev` ha, `import …
+> transactions as transaction_schemas` in ordine isort) perché W-B30 entri senza la 47; poi di nuovo simulazione e prove.
+
+**W-B36b, rossi** ✅ (12:21, carico 33): il test-author caduto aveva lasciato 417 righe giuste e complete; quello nuovo ha corretto
+due docstring, aggiunto la puntina TX-S-110 `test_cash_nonzero_message_on_an_update_changing_the_cash` e passato `black`/`ruff`.
+`services transaction TestUpdateTypeTableRules` → **7 falliti, 22 passati**: rossi i cinque casi d'update (1 TRANSFER con
+cassa, 2 FX_CONVERSION con quantità, 3 TRANSFER a quantità 0, 4 FX_CONVERSION e CASH_TRANSFER a cassa 0) e i due promote a
+importo zero (CASH_TRANSFER, FX_CONVERSION), tutti «… was saved» (oggi passano); guardie verdi (note e tag su coppie fuori regola,
+modifiche che lasciano il campo com'è salvato, valori rimandati identici). `schemas transactions <puntina>` → **1 fallito**
+(`TypeError: … unexpected keyword argument 'changed_fields'`, rosso atteso per una parola chiave nuova). Il promote è
+raggiungibile (WITHDRAWAL e DEPOSIT a 0 si salvano: la regola 11 giudica solo un importo non zero). La cura dopo il commit di
+W-B30 (gli stessi due file di prodotto); la chiave i18n `cashNonzero` da aggiungere (4 lingue).
+
+**W-B30, il file dei test senza la 47** ✅ (12:40, test-author): le aggiunte spostate lontano dalle righe della 47, comportamento
+e nomi dei test invariati: `import backend.app.schemas.transactions.transactions as transaction_schemas` prima dell'alias
+`type_metadata` (isort), `transaction_schemas.TXUpdateItem` e `type_metadata.cost_basis_allowed` (l'alias che `dev` ha già); le
+costanti (`LEGACY_SHAPES`, `LEGACY_LABELS`, `AUTO_MODES`) sopra la classe; il paragrafo P5 dentro la docstring della classe;
+nella docstring del modulo resta solo il punto «Not covered» riscritto (diventava falso). Due dipendenze dalla 47 trovate e
+tolte: il nome nudo `cost_basis_allowed` e `select` (dalla riga d'import della 47, in `_stored_cost`: ora
+`session.get(Transaction, id, populate_existing=True)`, che emette sempre la sua SELECT). **Simulazione del cherry-pick**
+(`git merge-file`, base HEAD `d6a260c89`, nostra `dev_release2`, loro il worktree; file in `files/sim/`): **0 conflitti su tutti
+i 9 file** del lotto; sui tre `.py` risultanti `ruff` e `black --check` puliti (`--stdin-filename` col percorso vero: nessun
+nome indefinito, quindi nessuna dipendenza nascosta dalla 47), nessun marcatore della 47 nel file dei test risultante.
+**Doc** ✅: docs-writer in inglese (`user/transactions/form.en.md:40`, la frase sulla modifica di una transazione salvata;
+`developer/backend/transactions/wac.md`, il paragrafo «An explicit `null` in an update»; `service.md:66`, la riga 5 della
+tabella degli stadi); IT/FR/ES a mano alla riga 39, dopo la frase del **Manuale**, coi termini della pagina (IT «costo di
+carico», FR «prix de revient», ES «coste base»); **nessuno stamp**: la pagina ha già un debito di traduzione (il punto «Missing
+event?» manca in IT/FR/ES). `mkdocs build` (strict) **exit 0** (12:30, carico 36).
+> **⚠️ Fuori pista — le due osservazioni del docs-writer, verificate sul codice** → **W-B49**: (1) ogni modifica passa dalla
+> Bulk (`handleEditRow` → `openBulk({action: 'edit'})`), che apre il modulo; il controllo dal vivo del modulo su una coppia
+> (`collectDualUpdates` → `diffDualItem`) non manda il costo svuotato, perché la gamba ricevente di `buildDualCreatePayloads` non
+> ha la chiave quando il campo è vuoto; il «Salva tutto» della Bulk (`buildUpdateDiff`) manda il `null` e W-B30 lo rifiuta:
+> il costo non resta in silenzio, ma il rifiuto arriva tardi. La frase della guida utente («il salvataggio è rifiutato») resta
+> vera. (2) Il tooltip `transactions.costBasisOverride.tooltip` e la riga «Normal transfer» di
+> `financial-theory/…/adjustment.{en,it,fr}.md` dicono ancora «vuoto = calcolato in automatico». Fuori dal lotto: W-B49.
+
+**W-B30 committato** (coordinatore, 12:47): `949da55f8` sul ramo (HEAD, verificato), cherry-pick `54880598b` in `dev_release2`
+(treno 111) con la riga 🐛 del CHANGELOG; il cancello `services transaction-cost-basis-rule` e `services transaction` sul
+risultato lo gira il coordinatore. Numerazione: **W-B50** alle quattro note di IW-8 (test del wizard di import), scritto nel
+BACKLOG. Le note non mi erano arrivate: lette nella cronologia del coordinatore (10:22) e verificate sugli spec.
+
+### W-B36b (P6) — la tabella dei tipi anche negli update, quando il campo cambia: cura ✅ (2026-10-16)
+
+**Cura** ✅ (12:50; `files/scripts/wb36b_cure.py`, dry run pulito poi `--apply`, 18 modifiche in 6 file; `black` invariato,
+`ruff` pulito):
+- `backend/app/schemas/transactions/transactions.py`: `validate_transaction_business_rules(…, changed_fields=None)`; `None` è
+  la chiamata di CREATE, che resta com'è (le sue regole 2, 3 e 3b); `cash_changed` e `quantity_changed`, un tipo cambiato
+  vale per tutti i campi; regola 8 sul TRANSFER e regola 10 su FX_CONVERSION e TRANSFER solo col campo cambiato; regola 11
+  col codice nuovo `cashNonzero` («{type} requires cash.amount != 0»); i set rinominati `_P6_CASH_FORBIDDEN_WHEN_CHANGED` e
+  `_P6_QUANTITY_SIGN_WHEN_CHANGED` (il vecchio «UNCHECKED» diventava falso); commento del modulo e docstring;
+- `transaction_batch_context.py`: `stored_rule_values`, `rule_values()` (tipo, quantità, importo, valuta) e
+  `changed_rule_fields()`, che confronta per valore con la riga salvata prima del batch: un valore rimandato com'è salvato non
+  è un cambiamento; senza fotografia, nessun cambiamento (come prima di P6);
+- `transaction_batch_stages.py`: la fotografia in `_load_existing_transactions`, accanto a `stored_cost_fields` di N2;
+- `batch_edits.py`: `apply_updates` passa `changed_rule_fields(…)` a `_validate_updated_final_state`;
+- `batch_creates.py`: `_promoted_state_issues` passa `changed_fields=frozenset({"type"})` (un promote cambia il tipo);
+- la docstring di `TestUpdateTypeTableRules`: tolti i nomi vecchi dei set («regole 8, 10 e 11»);
+- i18n `transactions.errors.cashNonzero` nelle 4 lingue (`dev.py i18n add`, sorgente `i18n/transactions/<lang>.json`).
+> **⚠️ Fuori pista — disegno**: il piano voleva una costante `PROMOTED_FIELDS` importata in `batch_creates.py`, ma quella riga
+> d'import sta subito sopra la riga della 47 (`cost_basis_allowed`, riga 16 di HEAD): il cherry-pick avrebbe dato conflitto.
+> Scelta: il promote passa `{"type"}`, e un tipo cambiato giudica ogni campo; `changed_rule_fields` riporta anche il tipo,
+> come `cost_fields` di N2. Nessun update può cambiare un tipo verso o da TRANSFER, FX_CONVERSION o CASH_TRANSFER
+> (`SWAP_GROUPS`), quindi per gli update di oggi non cambia nulla.
+
+**Verdi** ✅ (12:52–12:55, carico 37–47): `services transaction TestUpdateTypeTableRules` **29/29** (i 7 rossi verdi, 22
+guardie); puntina TX-S-110 **1/1**; `services transaction` **96/96**; `schemas transactions` **106/106**; `services
+transaction-cost-basis-rule` **80/80**; `services broker` **76/76**; `services brim-create-transaction` **14/14** (la via di
+CREATE); `i18n audit` exit 0, nessuna traduzione mancante (`transactions.errors` è un prefisso dinamico). Porta libera.
+**Simulazione del cherry-pick** su `dev_release2` `34e1e8092`: **0 conflitti** sugli 11 file; sui `.py` risultanti `ruff` e
+`black` puliti, i JSON validi; `_find_promote_rule_match`, usato dal test del promote, c'è in `dev`. Nessuna superficie
+dell'API cambiata (niente `api sync`). Doc: docs-writer in corso (`developer/backend/transactions/service.md`, solo la sezione
+«Per-type rules», lontano dalle righe della 47).
+
+**W-B36b, doc** ✅ (13:05, docs-writer): `developer/backend/transactions/service.md`, sezione «Per-type rules»: `cashNonzero` nella
+riga «10, 11» della tabella, e il paragrafo «Until the developer's pending decision P6…» sostituito dal comportamento deciso
+(i quattro punti coi loro codici, solo sul campo cambiato, confronto per valore con `stored_rule_values`, il promote li
+controlla tutti, CREATE con le sue regole 2, 3 e 3b; rimando a N2, `wac.md#persisted-cost-basis`). Due hunk, lontani dalle
+righe della 47. Pagina solo inglese, niente stamp. `i18n check` (strict) exit 0, 4776 chiavi; `mkdocs build` (strict)
+**exit 0** (13:08–13:11, carico 44); `check-links` **97 validi**.
+> **⚠️ Fuori pista — testi dei test rimasti al prima**: il docs-writer ha segnalato, e ho verificato, che la cura rende falsi
+> dei testi nei test: `_P6_PENDING` e `TestRules5To11P6Pending` (TX-S-104…107) dicono «P6 pending … flip this guard», e i
+> rossi di W-B36b (e TX-S-110) dicono «RED until W-B36b… Today … is saved». Restano verdi (TX-S-104…107 chiamano la funzione
+> senza `changed_fields`, cioè come CREATE), ma la convenzione del progetto è «red before W-B31, now its guard» (TX-S-092/093).
+> Lo stesso difetto l'ho lasciato nel lotto W-B30, già committato: la classe P5 dice ancora «Today … / RED until the cure».
+> Verificata la funzione su tutti i casi e tutte le combinazioni di `changed_fields` (None, cash, quantity, type): esatta.
+> Test-author (13:06) per tre file: (A) `test_transaction_schemas.py`, il blocco P6 riallineato alla decisione (rinomine),
+> `_run_rules` con `changed_fields`, e in TX-S-104…107 le metà della decisione a livello di funzione (il campo → il codice;
+> l'altro campo → niente; `{"type"}` → il codice), TX-S-110 da rosso a guardia; (B) `test_transaction_service.py`, solo prosa
+> nel blocco di W-B36b; (C) `test_transaction_cost_basis_rule.py`, solo prosa nella classe P5: **commit a parte**, seguito di
+> W-B30, lontano dalle righe della 47.
+
+**Test riallineati** ✅ (13:21, test-author; `black`/`ruff` puliti, nessun test girato): (A) `_P6_PENDING` → `_P6_ON_A_CHANGE`,
+`TestRules5To11P6Pending` → `TestRules5To11P6OnAChange`, TX-S-104…107 rinominati («…refused_only_when_the_… changes»), ognuno
+con la metà senza `changed_fields` (`[]`) e tre metà nuove (il campo → il codice; l'altro campo → `[]`; `{"type"}` → il
+codice); `_run_rules` con `changed_fields`; TX-S-110 «red before W-B36b, now its guard». (B) e (C) **solo prosa**, verificato
+confrontando gli AST senza docstring (B con la copia del worktree delle 12:57 in `files/sim/`, C con HEAD); gli hunk di C tutti
+dentro la classe P5 (748–841).
+
+**⏸️ PAUSA del developer** (~13:25): nessun comando né specialista in corso, nessun merge aperto, porta 6184 libera. HEAD
+`949da55f8`. **Alla ripresa**: rileggere le metà nuove di TX-S-104…107 (lettura iniziata); poi, col carico sotto 50, `schemas
+transactions`, `services transaction`, `services transaction-cost-basis-rule` (A ha asserzioni nuove, non ancora girate);
+nuova simulazione del cherry-pick (A, B e C cambiati dopo quella delle 12:57; C contro `dev_release2` da solo); `git diff
+--check`; handoff FROZEN con **due commit**: W-B36b (5 file backend, 4 JSON i18n, `service.md`, i due file di test) e il seguito
+di W-B30 (solo `test_transaction_cost_basis_rule.py`, prosa); il journal resta sul ramo.
+
+**▶️ Ripresa** (14:14, via del coordinatore). Rilette le metà nuove di TX-S-104…107: coincidono con i ritorni della funzione
+verificati alle 13:05 (`[]` senza `changed_fields`; il codice sul campo del caso; `[]` sull'altro campo; il codice con
+`{"type"}`). **Verdi sui test riallineati** ✅ (14:14–14:19, carico 43–46): `schemas transactions` **106/106**; `services
+transaction` **96/96**; `services transaction-cost-basis-rule` **80/80**. Porta libera. **Simulazione del cherry-pick** su
+`dev_release2` `04dcf3a37`: commit 1 (W-B36b, 12 file) **0 conflitti**, commit 2 (seguito di W-B30, 1 file) **0 conflitti**;
+sui `.py` risultanti `ruff`/`black` puliti, JSON validi, nessuna riga della 47 nei file risultanti. `git diff --check` pulito.
+**Handoff FROZEN** (14:2x): due commit, il journal resta sul ramo.
+
+**W-B36b committato** (coordinatore, 14:30): `7ad5a8849` (fix) e `05c0f647b` (test come guardie) sul ramo (HEAD `05c0f647b`,
+verificato), in `dev_release2` coi cherry-pick `277d26cd0` e `b51bb3663`; il cancello lo gira il coordinatore.
+
+### C-97 — più cifre decimali per quantità e prezzi (issue #43): analisi ✅ (2026-10-16)
+
+> Assegnata dal coordinatore (13:23); testo nel BACKLOG, sezione C (`b171c058e`). Già deciso: quantità **10** decimali, prezzi
+> (`price_history`) **12**, importi **restano 6**; oltre il limite si **rifiuta** con un messaggio che dice il massimo, **mai
+> arrotondare in silenzio**. Analisi in sola lettura (HEAD `05c0f647b`): inventario con due explore (backend, frontend), le
+> affermazioni chiave verificate o misurate da me (SQLAlchemy 2.0.52, SQLite 3.54, Pydantic 2.13).
+
+**Stato reale**
+1. *Lettura*: `Numeric(18, 6)` in `backend/app/db/models.py` (`transactions.quantity` :880, `amount` :885,
+   `cost_basis_override` :935; `price_history` open/high/low/close/adjusted_close :997–1002; `asset_events.value` :1043; i cambi
+   `Numeric(24, 10)` :1095). Nessun adapter (`db/session.py` imposta solo i PRAGMA): il `Decimal` si scrive come float (REAL,
+   misurato con `typeof`) e si rilegge con `'%.6f'`. Misurato: `0.12345678` → `0.123457`; `0.0000034573` → `0.000003`.
+2. *I prezzi sono troncati anche in scrittura* (correzione al BACKLOG: «il valore intero resta nel file» vale per quantità,
+   importi ed eventi, non per i prezzi): ogni upsert di `price_history`, manuale, CSV o provider, passa da
+   `truncate_priceHistory` (`services/assets/price_store.py:179–182` → `db/precision.py:114–124`, `ROUND_DOWN` alla scala del
+   modello). Le cifre oltre la sesta dei prezzi salvati sono perse; un refresh le riscrive solo per le date che il provider rimanda.
+3. *Nessun limite di decimali in input*: `SafeDecimal` e `Currency` (`schemas/common.py`), `TXCreateItem`/`TXUpdateItem`, la
+   promozione, `FAPricePoint`/`FAUpsert` (`schemas/prices.py:89, :169`), gli eventi (`schemas/assets/events.py`): nessun
+   `decimal_places`, nessun codice d'errore. Oggi le cifre in più si accettano e poi si arrotondano (lettura) o troncano
+   (scrittura), sempre in silenzio.
+4. *Uscita JSON*: `SafeDecimal` serializza con `format(v, "f")`: tutte le cifre, mai notazione scientifica (un `Decimal` sotto
+   `1e-6` ha `str` scientifico, `3.4573E-7`: verificato).
+5. *Somme in SQL*: `services/transactions/balances.py:132–133, :169` (i saldi della convalida e le posizioni),
+   `services/assets/crud.py:282`, `services/pac_allocator/source/loaders.py:21, :94`: somme di REAL rilette col tipo della
+   colonna; il `'%.6f'` di oggi nasconde il rumore del double (misurato: `0.1 + 0.2 − 0.3` = `2.8e-17`).
+6. *Frontend, input*: `ExactQuantityInput maxFractionDigits={6}` in `TxFormSingleSection.svelte:176, :224` e
+   `TxFormPairSection.svelte:192` (TR). Il componente (`ui/input/ExactQuantityInput.svelte`, default 12) segna il valore non valido
+   senza troncarlo, ma **nessuno mostra un messaggio** (nessun consumer di `digitsValid`, nessuna chiave i18n);
+   `ExactDecimalInput.svelte:344` ha un `maxlength` che può tagliare un incolla. Senza limite e via `Number()`: l'editor dei dati
+   e il CSV (`ui/data-editor/DataEditor.svelte:221–236`, `CsvEditor.svelte:83–103`, `ErasableNumberCell.svelte:65`, T; colonne
+   dei prezzi a `step 0.01` in `AssetDataEditorSection.svelte:73–76`, AF), il passo di correzione dell'import
+   (`FixFlaggedStep.svelte:770, :865`, IW), il Bulk (`TransactionBulkModal.svelte:187, :190, :2213`, il segno girato passando da
+   `Number`, TR). L'evento creato al volo **arrotonda in silenzio a 8** (`EventCreateMiniModal.svelte:84–87`, `toFixed`, TR).
+7. *Frontend, visualizzazione*: quantità tagliate a 6 (`components/transactions/shared/txDisplayHelpers.ts:21`,
+   `utils/transactions/resolveValidationMessage.ts:198`, `features/brokers/lots/unifiedLotsTableHelpers.ts:64`,
+   `lotGanttChartHelpers.ts:108, :119`, `features/dashboard/ExposureTable.svelte:155` DV) o a 8 (`LotWacPriceChart.svelte:493`,
+   `LotCustodyModal.svelte:78` BK; `GapFixStep.svelte:72`, `FixFlaggedStep.svelte:426` IW). Prezzi a 2–4 decimali, un prezzo
+   PEPE si legge `0,00` o `0,0000`: `AssetTable.svelte:221`, `AssetPriceSummary.svelte:99, :112`, `AssetCard.svelte:226, :233`,
+   `ProviderAssignmentSection.svelte:379` (AF); `providerProbe.ts:124, :135`; `charts/candlestickChartHelpers.ts:94–97`,
+   `priceChartHelpers.ts:605`; `PriceChartFull.svelte:814, :817, :882`, `LineChart.svelte:737–739, :819`,
+   `MeasurePanel.svelte:300–301` (DV); `LotWacPriceChart.svelte:507, :516` (BK); `WacPreviewSection.svelte:559–568` (TR). Test
+   che fissano i 6: `lotGanttChartHelpers.test.ts`, `unifiedLotsTableHelpers.test.ts`, `ExactQuantityInput.test.ts:36`,
+   `ExactDecimalInput.test.ts:89, :142, :219`; nessuno spec E2E.
+8. *BRIM*: i parser leggono esatto (`Decimal` da stringa; `_brim_io._coerce_number` passa da `str(float)`, esatto fino a 15
+   cifre). I duplicati confrontano le quantità con `QUANTITY_TOLERANCE = 0.0001` (`services/brim/brim_provider.py:2156`): a
+   quantità da satoshi due acquisti diversi coincidono sulla quantità (resta l'importo a 0,01).
+9. *Matematica (J)*: `services/financial_math/yield_on_cost.py:37`, tolleranza `1e-6` sulle quantità dello split: una quantità
+   sotto il milionesimo conta come zero.
+
+**Il limite del REAL, misurato**: alzare solo la scala mostra il rumore del double: a scala 10 `12345678.9` torna
+`12345678.9000000004`, a scala 12 `65000.123456` torna `65000.123456000001` (un prezzo BTC in euro con cifre false). Un double
+garantisce 15 cifre significative: `1234567.123456789` (16) non torna uguale.
+
+**Proposta**
+1. *Un tipo di colonna* (`TypeDecorator` in `backend/app/db/`) per quantità e prezzi: scrive il float come oggi; **rilegge il REAL
+   come il decimale più corto che lo rappresenta** (`repr`), portato a 15 cifre significative, al più alla scala della colonna,
+   **mai sotto i 6 decimali** (la forma di oggi: `10.000000` resta `10.000000`; API, golden come
+   `fixtures/native_cash_guard/eur_only_golden.json` con 48 quantità, e test non cambiano per i valori a ≤ 6 decimali).
+   Prototipo misurato: `0.0000034573`, `12345678.9`, `65000.123456`, `99999.1234567891` tornano esatti; `0.1 + 0.2 − 0.3` torna 0;
+   `func.sum` passa dal tipo; `db/precision.py` legge `precision`/`scale` dal tipo; DDL `NUMERIC(22, 10)`. Quantità
+   (`transactions.quantity`) `(22, 10)`, prezzi (`price_history` open/high/low/close/adjusted_close) `(24, 12)`: le cifre intere
+   restano 12. Importi (`amount`, `cost_basis_override`) e `asset_events.value` restano `Numeric(18, 6)`.
+2. *Limiti in input, rifiuto col massimo*: quantità ≤ 10 decimali, prezzi ≤ 12, e ≤ 15 cifre significative in tutto (D1).
+   Codici col parametro `{max}`: per le transazioni come issue del batch (codice, parametri, campo:
+   `schemas/transactions/batch.py:150–151`), per i prezzi un 422 dello schema. Fonte unica: la scala del modello, già letta da
+   `get_model_column_precision` (`db/precision.py`).
+3. *Prezzi*: l'input dell'utente (upsert manuale, CSV) è rifiutato dallo schema prima di `price_store`; il
+   `truncate_priceHistory` resta per i prezzi dei provider (float lunghi, non digitati), ora a 12.
+4. *Migrazione: nessun DDL, nessun passo sui dati* (precedenti 002 e 004): su SQLite la dichiarazione non limita ciò che si salva
+   e l'arrotondamento è del modello Python, che cambia col codice. Per le installazioni nuove (D3): (a) solo il modello, `001`
+   dichiara ancora `NUMERIC(18, 6)`, innocuo su SQLite; (b) come 004 per `VARCHAR(14)` → `(32)`: `001_initial.py` dichiara il vero
+   e la ragione va nel docstring della migrazione della release. La regola di `backend-db.instructions.md` vieta di toccare 001
+   per tabelle già rilasciate; 004 l'ha fatto per una dichiarazione che SQLite ignora. Da aggiornare comunque la convenzione
+   «`Numeric(18, 6)`» nelle istruzioni DB, nel docstring di `models.py:5` e in `test_db/db_schema_validate.py:10`.
+5. *Per chi ha già dati*: quantità salvate con più cifre (1.1, import, API) tornano visibili fino a 10 decimali; i prezzi no
+   (troncati in scrittura). I valori a ≤ 6 decimali restano identici, anche nella forma. Posizioni, costi e P&L di chi ha quantità
+   con più cifre cambiano di poco: il FIFO/WAC (J) riceve le cifre vere.
+
+**Decisioni**
+- **D1** — oltre 15 cifre significative il valore non torna uguale: rifiutarlo (coerente con «mai in silenzio»)? Proposta: sì.
+- **D2** — righe BRIM oltre il limite (una quantità a 12 decimali nel file): rifiutate alla conferma, col messaggio nel wizard?
+  Proposta: sì (i broker ne mostrano 6–8).
+- **D3** — migrazione (a) o (b). Proposta: (b), nota nel docstring della migrazione della 1.3 (la 009 di A se A è d'accordo,
+  altrimenti una 010 di sola documentazione).
+- **D4** — i `.svelte` sono in TR, IW, BK, AF, DV e T: servono i via dei colori, lotto per lotto.
+
+**Lotti proposti** (ognuno coi rossi prima della cura)
+- **C-97a, backend** (nessuna area): il tipo di colonna, i limiti in input coi codici e le chiavi i18n, `price_store`, la
+  migrazione secondo D3, le istruzioni DB. Rossi: quantità a 8 e 10 decimali rilette uguali (create e update), il prezzo
+  `0.0000034573` riletto uguale, i rifiuti a 11 e 13 decimali e a 16 cifre, la somma senza rumore, la forma `10.000000`
+  invariata. `api sync` se l'OpenAPI cambia. Riga 🐛 del CHANGELOG e doc utente con questo lotto.
+- **C-97b, input** (TR, T, IW, AF): `maxFractionDigits={10}` nei due `TxForm*`; il messaggio del massimo in
+  `ExactQuantityInput`/`ExactDecimalInput` e il `maxlength`; editor dei dati e CSV dei prezzi come stringhe col limite; il passo
+  di correzione dell'import; i `Number()` del Bulk; l'evento al volo limitato a 6 col messaggio.
+- **C-97c, visualizzazione** (TR, BK, AF, DV): le quantità a 10 (prima i `.ts`, poi `ExposureTable`); un formatter dei prezzi a
+  cifre significative (almeno 2 decimali; sotto 1, abbastanza per 4 cifre significative; al più 12) nei punti del punto 7.
+- **Fuori lotto**: la tolleranza dei duplicati BRIM → W-B51 (mia); a J la tolleranza `1e-6` di `yield_on_cost.py:37` e il
+  confronto `!= 0` su una somma di REAL in SQL (`assets/crud.py:282`, lotto G); importi oltre 6 decimali ancora arrotondati in
+  lettura (fuori da C-97 per decisione).
+
+**Rischi**: il tipo di colonna tocca ogni lettura di quantità e prezzi (posizioni, saldi, FIFO, export): «mai sotto i 6» tiene
+fermi i valori di oggi, e `services`, `api` e `financial_math` lo provano. Un prezzo sopra 999 con 12 decimali supera le 15 cifre:
+in input lo rifiuta D1; dai provider si legge a 15 cifre.
+
+> **⚠️ Fuori pista — W-B30 ha rotto la build strict di `dev_release2`** (coordinatore, 14:31): il paragrafo «An explicit `null`
+> in an update» di `developer/backend/transactions/wac.md` (docs-writer) linka `split_promote.md#transfer-giving-leg`, un'ancora
+> che esiste solo sul mio ramo (decisione 47). La mia simulazione del cherry-pick controllava conflitti, lint e JSON, non la
+> build della doc sul risultato. Il coordinatore ha corretto `dev` con `ed500643f` (il link senza l'ancora). **All'ingresso della
+> 47: rimettere l'ancora** in `wac.md` (al merge le due versioni di quella riga si incontrano: tenere quella con l'ancora).
+> **Procedura da ora**, prima di ogni handoff con cherry-pick: `files/scripts/sim_cherry_pick.sh <target> [--docs] <file>…`
+> (cartella di sessione) esporta l'albero del target con `git archive`, ci scrive il merge a tre vie di ogni file del lotto (base
+> HEAD, nostra il target, loro il worktree), passa `ruff`/`black` sui `.py` e `json.load` sui `.json`, e se il lotto ha un `.md`
+> lancia `dev.py mkdocs build` (strict) e `check-links` **dentro l'albero simulato**, col carico sotto 50. Validata sul caso vero
+> (14:33): su `ed500643f^` (= `04dcf3a37`, lo stesso target della simulazione di W-B36b) → **FAILED**, con l'avviso esatto
+> dell'ancora mancante; build in circa 70 s; albero rimosso a fine prova.
+
+### C-97a — quantità a 10 e prezzi a 12 decimali, backend: disegno ⏳ (2026-10-16)
+
+> **Decisioni del developer** (coordinatore, 15:33): il disegno dell'analisi approvato. Salvataggio **REAL** (niente testo,
+> niente ricostruzione di tabelle); la colonna rilegge il decimale esatto più corto, al più 15 cifre significative. **D1 sì**
+> (oltre 15 cifre significative: rifiuto con messaggio chiaro); **D2 sì** (una riga BRIM oltre il limite: rifiutata alla
+> conferma, col messaggio nel wizard); **D3**: `001_initial` dichiara il tipo vero, la ragione nel docstring della migrazione
+> della 1.3, **nessuno script dopo l'avvio**; nota nella 009 di A se A è d'accordo, altrimenti una 010 di sola doc. Limiti:
+> quantità 10, prezzi 12, importi 6; i prezzi dei provider troncati a 12. **Nessuna pulizia** dei dati salvati («quel che è
+> fatto è fatto»). **Le somme in SQL passano in Python** (`Decimal`, esatte): miei `transactions/balances.py` e
+> `assets/crud.py:282`; i loader del PAC li fa MF (lotto G1, dopo J-17). Da valutare nel lotto i 3 confronti a zero in SQL e i
+> 2 filtri `func.abs(amount)`. D4 (aree dei colori) lo segue il coordinatore. Ordine: C-97a prima (rossi, CHANGELOG, doc),
+> poi input e visualizzazione.
+> **Accordo con MF** (15:4x): la casa delle somme esiste ed è pura, nessuna funzione nuova:
+> `financial_math/ledger_totals.position_quantities(rows, as_of=None)` per le quantità,
+> `financial_math/native_cash.native_balances` con `cash_movement_from_transaction` per la cassa; righe leggere (solo le
+> colonne); i filtri restano nella query, la soglia di polvere al chiamante. Verificata l'unica differenza:
+> `position_quantities` salta le righe a quantità 0 (i dividendi), dove la somma SQL dava una riga a 0; i tre lettori leggono
+> una riga mancante come zero (`brokers/summary.py:89`, `brim/brim_gap_fix.py:76`, il replay `.get(…, 0)`).
+
+**Contratto** (rossi e cura lo seguono alla lettera)
+1. *Il tipo di colonna*: `backend/app/db/real_decimal.py`, `RealDecimal(precision, scale)` (`TypeDecorator` su `Numeric`,
+   `cache_ok`). Scrive come oggi (il `Decimal` diventa float, REAL). Rilegge il REAL (o l'INTEGER, che SQLite tiene per un
+   valore intero) come il decimale più corto che lo rappresenta (`repr` del double), portato a `REAL_SIGNIFICANT_DIGITS = 15`
+   cifre significative, arrotondato alla scala se ne ha di più, **completato a 6 decimali se ne ha meno** (la forma di oggi:
+   `10` torna `10.000000`). Colonne: `Transaction.quantity` → `RealDecimal(22, 10)`; `PriceHistory` open, high, low, close,
+   adjusted_close → `RealDecimal(24, 12)`. Gli importi (`amount`, `cost_basis_override`), `asset_events.value`, `volume` e i
+   cambi restano come sono.
+2. *`db/precision.py`*: `get_model_column_precision` accetta il `TypeDecorator` (oggi `isinstance(…, Numeric)` lo rifiuta);
+   `truncate_to_db_precision` su una colonna `RealDecimal`: alla scala e poi a 15 cifre significative, sempre `ROUND_DOWN`,
+   così il valore scritto è quello che si rilegge (`refresh.py:423–424` confronta il nuovo col vecchio). Nuova
+   `decimal_limit_issue(value, model, column) -> tuple[str, int] | None`: `("decimalPlacesExceeded", scala)` se i decimali,
+   senza gli zeri finali, superano la scala della colonna; altrimenti `("significantDigitsExceeded", 15)` oltre 15 cifre
+   significative; `None` se va bene. Una sola fonte: la scala del modello.
+3. *Transazioni* (D2: alla conferma, non al parse del BRIM): una fase `check_decimal_limits(context)` subito dopo
+   `parse_inputs` (`transaction_batch_stages.py`, chiamata da `execute_batch`), su create e update: `quantity` (campo
+   `quantity`, scala 10), `cash.amount` (campo `cash.amount`, 6), `cost_basis_override.amount` (campo `cost_basis_override`,
+   6). Un issue per campo: `code` `decimalPlacesExceeded` o `significantDigitsExceeded`, `params` `{"max": N}`, `field`,
+   `ref_id` l'id dell'update, `error` in inglese col campo («Quantity: at most 10 decimal places»). La riga resta nel batch
+   (la coppia non si rompe); il batch non si salva. I due codici entrano in `TXValidationCode`
+   (`GET /transactions/types` → `validation_codes`).
+4. *Prezzi*: `bulk_upsert_prices` con `source_plugin_key == "MANUAL"` (l'API) rifiuta prima di scrivere, come il cambio di
+   valuta: `ValueError` → HTTP 400, con l'asset, i massimi (12 decimali, 15 cifre) e le date; i provider troncano (punto 2).
+   `FAPricePoint` e `FAUpsert` non cambiano: li costruiscono anche i provider (`refresh.py:533`).
+5. *Eventi*: `bulk_upsert_events` (solo l'API) rifiuta un valore oltre 6 decimali o 15 cifre come il cambio di valuta:
+   `AssetSourceError("EVENT_TOO_MANY_DIGITS", …)`, 400 in `_REFUSAL_STATUS`, `params` coi massimi e gli eventi.
+6. *Somme in Python*: `_get_balances_before_date` (e quindi `get_balances_at_end_of`) con una sola query di righe leggere
+   per cassa e quantità; `get_asset_holdings`; `assets/crud.py` (`held_own`/`held_others`: `position_quantities`, poi
+   `> QUANTITY_DUST_THRESHOLD`).
+7. *Confronti in SQL, valutati*: `lots_analysis_service.py:557` (`amount != 0`), `portfolio_service.py:151–152`
+   (`quantity != 0`), `transactions/queries.py:79, :81` (`func.abs(amount)` tra due limiti): tutti per riga, senza
+   aritmetica, sul REAL salvato: un REAL che vale 0 è 0, e un limite passa per lo stesso float del valore. Nessun rumore,
+   C-97 non li cambia: nessuna modifica.
+8. *Messaggi*: `transactions.errors.decimalPlacesExceeded` «At most {max} decimal places» e
+   `transactions.errors.significantDigitsExceeded` «At most {max} significant digits» (4 lingue); il risolutore
+   (`frontend/src/lib/utils/transactions/resolveValidationMessage.ts`, file `.ts`, nessuna area) mette davanti
+   l'etichetta del campo per questi due codici: «Quantity: At most 10 decimal places».
+9. *Migrazione (D3)*: `001_initial.py` dichiara `NUMERIC(22, 10)` per la quantità e `NUMERIC(24, 12)` per i cinque prezzi; la
+   ragione (la dichiarazione che SQLite ignora, come 002 e 004; la lettura del modello) nel docstring della migrazione 1.3.
+10. *Istruzioni e doc*: `backend-db.instructions.md` («Decimal columns»), il docstring di `models.py`,
+   `test_db/db_schema_validate.py:10`; doc developer `developer/architecture/database/` (index, assets_pricing,
+   brokers_transactions); doc utente: il modulo delle transazioni e l'editor dei prezzi; riga 🐛 del CHANGELOG.
+
+**Rossi** (test-author, prima della cura): il tipo su un motore in memoria (8 e 10 decimali, `0.0000034573`, `65000.123456`
+a scala 12, `12345678.9` a scala 10, `10` → `10.000000`, un double a 17 cifre → 15); `get_model_column_precision` e
+`truncate_priceHistory` a 12 e 15 cifre; `decimal_limit_issue`; create e update di quantità a 8 e 10 decimali rilette uguali;
+i rifiuti (11 decimali, 16 cifre, importo e costo a 7 decimali) col codice, `{"max"}` e il campo; gli zeri finali non contano
+(guardia); due acquisti di `99999.1234567891` danno esattamente `199998.2469135782` in `get_asset_holdings` e
+`get_balances_at_end_of` (oggi `199998.246914`; con la sola colonna e la somma in SQL sarebbe `199998.2469135780`); il prezzo
+manuale `0.0000034573` riletto uguale e 13 decimali rifiutati senza scrivere nulla; un prezzo del provider a 14 decimali
+troncato a 12; un evento manuale a 7 decimali rifiutato; una riga BRIM a 12 decimali presente dopo il parse (guardia D2);
+Vitest del risolutore.
+
+**Prove e definizione di fatto**: rossi visti; verdi `db`, `utils`, `services transaction`, `services transaction-cost-basis-rule`,
+`services broker`, `services financial-math`, `services portfolio-engine`, `services lots-analysis-pure`, `services brim-*`
+toccati, le suite dei prezzi e degli eventi; `schemas transactions`; `api sync` (OpenAPI: forse solo le descrizioni); `front
+check` e il Vitest; `i18n check`; sulla copia dei dati del developer (sola lettura, solo conteggi): quante quantità hanno più di
+6 decimali (tornano visibili) e che ogni altra si rilegge identica a oggi; la simulazione del cherry-pick con
+`files/scripts/sim_cherry_pick.sh` e la build strict sul risultato; due commit (lettura e somme; limiti e messaggi) se la
+differenza lo consiglia.
+
+**C-97a, rossi in scrittura** (15:50): due test-author in parallelo, file distinti: (1) colonna, `db/precision.py`, prezzi ed
+eventi; (2) transazioni (rilettura, rifiuti con codice, `{"max"}` e campo, guardie), somme esatte, guardia BRIM D2, membri di
+`TXValidationCode`, Vitest del risolutore. Regola data loro: un rosso cade al momento del test, mai alla raccolta (i nomi
+nuovi raggiunti come attributi del modulo, o attraverso i modelli). **Cura pronta** (`files/scripts/c97a_cure.py`, dry run
+pulito alle 15:52: 38 modifiche in 14 file e il modulo nuovo `backend/app/db/real_decimal.py`; non applicata prima dei rossi).
+Verificato prima: `TypeDecorator.impl_instance` c'è (SQLAlchemy 2.0.52); `isinstance(…, Numeric)` è falso per il tipo nuovo,
+quindi `get_model_column_precision` lo scarta; un valore intero SQLite lo salva come INTEGER; un confronto `!= 0` sulla colonna
+nuova funziona; il `repr` di serie porta `asdecimal=False`, che l'autogenerate di Alembic copierebbe: il tipo ha il suo.
+
+**C-97a, i dati del developer** ✅ (15:53, carico 38; skill `real-data-copy`; copia di lavoro dalla copia di riferimento,
+Alembic 008, nessun marcatore di produzione, sola lettura, `files/scripts/c97_realdata_counts.py`; solo conteggi): con la
+lettura di C-97 **tutte le 216 quantità e tutti i 52 658 prezzi** (477 open, high e low; 51 227 close) **si rileggono identici a
+oggi**, forma compresa: nessuna quantità salvata ha più di 6 decimali, e i prezzi erano troncati in scrittura. Le **15
+posizioni** e i **2 saldi di cassa** sommati in Python sono uguali alle somme SQL di oggi. Per questo utente C-97a non cambia
+nessun numero. Copia cancellata (`lsof +D` vuoto, `rm -rf`, `ls`: «No such file or directory»).
+
+> **D3 deciso** (coordinatore, 16:04): la nota va nella **009 di A**, nessuna 010. Paragrafo scritto e mandato ad A (16:0x),
+> nello stile della nota `VARCHAR(14)` della 004: la dichiarazione che SQLite ignora, la lettura del modello, nessun DDL,
+> nessuna riscrittura dei dati, l'effetto per chi ha già dati (e i dati del developer identici). La modifica di
+> `001_initial.py` resta in C-97a; se C-97a entra prima della 009, la nota segue con la 009. **FE8b**: IW e TR sono in `dev`
+> (`e9b4ac6b0`); aspetta l'ingresso di T (~16:45), lo dice il coordinatore.
+> **A** (16:05): la nota è nella 009, parola per parola, come punto 2 («Quantities keep 10 decimal places and prices 12 (C-97,
+> issue #43): no DDL, no data step.»), accanto al punto 1 di A (P18); la prima riga della 009 nomina C-97. Entra nel prossimo
+> commit di A (con A-24); `ruff`, `black` e Alembic puliti, una testa.
+
+**C-97a, rossi** ✅ (16:22–16:25, carico 35–40; i conteggi coincidono con quelli che i test-author avevano previsto leggendo il
+codice):
+- `utils real-decimal` (nuovo, `test_utilities/test_real_decimal.py`, isolamento `pure`) **48 falliti, 23 passati**;
+- `utils decimal-precision` **6 falliti** (i test che fissavano `(18, 6)`, riallineati), 15 passati;
+- `services asset-source test_price_column_precision test_truncate_price` **2 falliti** (riallineati);
+- `services asset-digit-limits` (nuovo, `test_services/test_asset_digit_limits.py`) **19 falliti, 13 passati**;
+- `services transaction-decimal-places` (nuovo, `test_services/test_transaction_decimal_places.py`) **31 falliti, 11 passati**;
+- `front-utility core-unit` (nuovo `resolveValidationMessage.decimals.test.ts`) **18 falliti**, 6408 passati.
+Tutti i rossi cadono su un `AssertionError` che dice cosa vede l'utente («a BTC buy of 0.12345678 reads back as 0.123457»,
+«a PEPE close of 0.0000034573 EUR reads back as 0.000003 EUR»); nessun errore di raccolta o di setup; tutte le guardie verdi.
+Registro dei test: solo aggiunte in `scripts/test_runner/_backend_services.py`, `_backend_utils.py`, `_frontend_utility.py`
+(superfici condivise; verificato che la registrazione di `portfolio-engine`, toccata per un attimo, è intatta).
+> **⚠️ Fuori pista — segnalazioni dei test-author**: (1) `test_db/test_numeric_truncation.py` scopre le colonne con
+> `isinstance(…, Numeric)` e dopo la cura salterebbe in silenzio le sei colonne nuove: riparazione chiesta al test-author;
+> (2) i rossi del caso «coppia con una gamba oltre il limite» sono rossi, non guardie: oggi la coppia si salva intera;
+> (3) bug esistente, fuori lotto: −1 su `low` e `high` insieme fa scattare il controllo OHLC (→ backlog); (4) gli eventi dei
+> provider restano arrotondati a 6 in lettura (importi: fuori da C-97 per decisione).
+
+**C-97a, cura** ✅ (16:29, `files/scripts/c97a_cure.py --apply`: 38 modifiche in 14 file e `backend/app/db/real_decimal.py`;
+`black` ha riformattato un file, `ruff` pulito; `prettier --check` pulito sul risolutore). Chiavi i18n con `dev.py i18n add`
+(sorgente `i18n/transactions/<lang>.json`): `transactions.errors.decimalPlacesExceeded` («At most {max} decimal places» /
+«Al massimo {max} decimali» / «Au maximum {max} décimales» / «Como máximo {max} decimales») e
+`transactions.errors.significantDigitsExceeded` («At most {max} significant digits» / «Al massimo {max} cifre significative» /
+«Au maximum {max} chiffres significatifs» / «Como máximo {max} cifras significativas»). Il test-author ha riparato
+`test_db/test_numeric_truncation.py`: la scoperta delle colonne legge anche un `TypeDecorator` su `Numeric` (guardia su una
+tabella sonda) e un valore a tutta larghezza esercita il taglio a 15 cifre.
+
+**C-97a, verdi** ✅ (16:30–17:0x, carico 33–49, in corsia, uno alla volta): i cinque file dei rossi `utils real-decimal` **71/71**,
+`utils decimal-precision` **21/21**, `services asset-source` **61/61**, `services asset-digit-limits` **32/32**, `services
+transaction-decimal-places` **42/42**; `front-utility core-unit` **6426/6426**; `db all` **exit 0** (tutte le azioni; il nuovo
+`numeric-truncation` vede le sei colonne `RealDecimal`, «Helper OK»; il contratto 3 `create_all` = migrazioni passa);
+`schemas transactions` **106**, `schemas assets` **70**; services `transaction` **96**, `transaction-cost-basis-rule` **80**,
+`broker` **76**, `financial-math` **405**, `portfolio-engine` **40**, `lots-analysis-pure` **129**, `roi-fifo-utils` **727**,
+`brim-gap-fix` **99**, `brim-create-transaction` **14**, `brim-report-sets` **259**, `brim-provider-base` **39**,
+`asset-event-store` **61**, `asset-source-refresh` **18**, `asset-sync-counts` **1**, `current-price-bootstrap` **8**,
+`portfolio-allocation-source` **89**, `backup-archive` **141** (1 skip), `synthetic-yield` **16**, `asset-source-guards` **29**;
+`utils gate-i18n-catalog` **176**. Tutti al primo giro. Porta libera. API: slot 2 del coordinatore (~17:10–17:40),
+`files/scripts/c97a_api_slot.sh` (16 azioni, dry run pulito).
+
+**C-97a, doc** ✅ (16:50, docs-writer; nessuna build, link verificati a mano): `developer/backend/transactions/service.md`
+(riga 1 della tabella degli stadi, sezione nuova «🔢 Decimal limits» `#decimal-limits` dopo «Per-type rules», «⚖️ Balance
+Queries»; righe 63–105 identiche a HEAD), `developer/architecture/database/index.md` (sezione nuova «🔢 Decimal Columns»),
+`brokers_transactions.md`, `assets_pricing.md`, `developer/backend/assets/events.md` (`EVENT_TOO_MANY_DIGITS`),
+`developer/backend/assets/architecture.md` (prezzi manuali e del provider), `developer/backend/transactions/balance_validation.md`
+(il replay somma in Python); utente: `user/transactions/import/how-to.en.md`, una frase in «💾 Save in the bulk workspace»
+(nessun debito di traduzione prima: da specchiare in IT/FR/ES).
+> **⚠️ Fuori pista — due correzioni al contratto, chieste al coordinatore (17:0x)**: (1) **`cost_basis_override` è un prezzo per
+> unità**, non un importo (`financial_math/average_cost.py:322` lo moltiplica per la quantità; il prezzo del lotto FIFO,
+> `fifo/engine.py:229–234`; la descrizione del modello: «Frozen PER-UNIT cost basis»): a 6 decimali il costo di un PEPE
+> ricevuto a `0.0000034573` resta `0.000003` (−13% sulla base di costo). **Proposta D5**: con i prezzi, `RealDecimal(24, 12)`,
+> limiti 12 e 15. (2) **Gli import Intesa sarebbero rifiutati**: `broker_intesa/plugin.py:370` calcola il costo per unità come
+> `cost / qty` (1000/3 ha 25 decimali): con C-97a com'è, rifiuto a «Salva tutto» (prima il database arrotondava in silenzio);
+> anche a 12 decimali. Crédit Agricole (`price / 100` per le obbligazioni) sta nei 12; nessun altro plugin calcola costi o
+> importi. **Proposta D6**: un valore **calcolato** dal plugin si arrotonda nel plugin alla colonna, esplicitamente, con un
+> aiuto di `db/precision.py`; i valori letti dal file restano sotto D2. (3) Il docs-writer ha misurato che il rumore di una
+> somma SQL non sopravvive alla lettura a 10 decimali in 2000 gruppi a somma zero nei limiti: la doc dice solo ciò che è
+> verificato (la somma SQL somma i double; la lettura a 6 nascondeva l'errore; Python dà lo zero esatto).
+
+> **D5 e D6 decisi** (coordinatore, 17:05, nella lista «da rivedere» del developer): **D5** `cost_basis_override` con i prezzi,
+> `RealDecimal(24, 12)`, 12 decimali e 15 cifre, `001` dichiarato così; **D6** un valore **calcolato** dal plugin si arrotonda
+> nel plugin, esplicitamente, con un solo aiuto in `db/precision.py` (12 decimali, 15 cifre, `ROUND_HALF_EVEN`), documentato
+> nella guida dei plugin BRIM; i valori **letti dal file** restano sotto D2. Prima dello slot. Delta della cura
+> `files/scripts/c97a_d5d6_cure.py` (dry run pulito alle 17:06: 14 modifiche in 8 file): il modello e `001`,
+> `round_computed_value(value, model, column)` in `db/precision.py`, Intesa (`cost / qty`) e Crédit Agricole (`price / 100`
+> per le obbligazioni) lo chiamano, docstring e istruzioni DB. In corso: i due test-author (aspettative della base di costo a
+> 12; rosso PEPE per unità; l'aiuto e i due plugin; sette colonne `RealDecimal`) e il docs-writer (D5 nelle pagine scritte,
+> sottosezione «Decimal places» nella guida BRIM). **A** (17:05): la frase su D5 nella 009, nel suo prossimo checkpoint (A-27,
+> commit a parte: la 009 era già committata in `bbe6c35da` col testo precedente).
+
+**C-97a, D5 e D6: rossi, cura, verdi** ✅ (17:10–17:16, nella finestra dello slot, senza il cancello del carico, 90–145): rossi
+`services transaction-decimal-places` **6 falliti** (il costo per unità oltre il limite atteso `{"max": 12}`, oggi 6; il costo
+PEPE `0.0000034573` rifiutato), `utils real-decimal` **16 falliti** (colonna, precisione, troncamento, `decimal_limit_issue`
+sul costo; `round_computed_value` assente), `external brim-providers TestComputedValuesAreRounded` **2 falliti** (Intesa
+1000/3 a 25 decimali; Crédit Agricole `95,123456789087 / 100`); la guardia D2 (un prezzo di fondo letto dal file passa com'è
+letto) verde; `db numeric-truncation` 4/4 (segue il modello). Delta applicato (`files/scripts/c97a_d5d6_cure.py --apply`, 14
+modifiche in 8 file; `black`/`ruff` puliti). **Verdi**: `utils real-decimal` **92**, `utils decimal-precision` **21**, `db
+numeric-truncation` **4**, `external brim-providers TestComputedValuesAreRounded intesa` **18**, `services
+transaction-decimal-places` **44**, `services transaction-cost-basis-rule` **80**, `services asset-digit-limits` **32**.
+**Doc** (docs-writer, 2° giro): D5 nelle pagine del 1° giro; nuova sottosezione «🔢 Decimal places» `#decimal-places` nella
+guida dei plugin `developer/architecture/patterns/brim_plugin_guide.md` (la pagina che la skill indica), e la ricetta
+`quantize(Decimal("0.000001"))` dell'avviso «per unità» sostituita da `round_computed_value`. Frase utente specchiata a mano
+in `user/transactions/import/how-to.{it,fr,es}.md` (IT «costo di carico», FR «prix de revient», ES «coste base»; etichette e
+testi del messaggio come nel catalogo); nessun debito prima → **stamp** (`mkdocs translate-stamp --file
+user/transactions/import/how-to.en.md`, MD5 6477f124→5b0c1e75). Skill `brim-plugin`, regola 7: il quoziente con
+`round_computed_value` (D6) e i limiti con D2. **Slot API** avviato alle 17:17 (`files/scripts/c97a_api_slot.sh`, cut-off 17:45).
+
+**C-97a, slot API** ✅ parziale (slot 2, 17:17–17:44, carico 35–170, `--no-load-gate`; la prima azione ha ricostruito la build
+debug, ~10 min, con l'`api sync` dell'avvio): **11 azioni verdi, 229 test**: `api transactions-validate` **12**, `transactions`
+**26**, `tx-balance-walk` **9**, `assets-price` **18**, `prices-currency-coherence` **5**, `assets-events` **45**, `assets-crud`
+**35**, `brokers` **34**, `batch-split-promote` **36**, `transfer-promotion` **3**, `prices-sync-delta` **5**. Saltate al taglio:
+`current-price-persistence`, `brim`, `backup-restore`, `portfolio`, `portfolio-wac` (chiesto un altro slot). Porta libera;
+nessun file tracciato nuovo dall'`api sync`. **Fermo** sulle prove leggere fino al via del coordinatore (galleria dei colori,
+carico 130–170): restano `utils gate-i18n-usage`, `front check`, `check-orphans` e la simulazione del cherry-pick con la build
+strict sull'albero simulato.
+
+> **FE8b libero** (coordinatore, 17:45): T è entrato (`4d8ae68c4`), il lavoro dei colori su `components/transactions/**` è
+> tutto in `dev`. **Ordine (scelta di W)**: C-97a (handoff), poi **FE8b**, poi C-97b e C-97c: FE8b sposta e divide i moduli
+> delle transazioni (moduli condivisi e `features/transactions/index.ts`) che C-97b tocca (`TxForm*Section.svelte`, gli
+> input), così C-97b scrive sui file nella loro casa nuova. FE8b parte dall'analisi, sulla base aggiornata dopo C-97a.
+
+**C-97a, secondo slot API** ✅ (17:53–18:12): `api current-price-persistence` **5**, `backup-restore` **114**, `portfolio`
+**51**, `portfolio-wac` **12**; `api brim` al primo giro **6 falliti, 112 passati**, tutti sulla premessa «`e2e_test_admin` … signs
+in: 401». **Triage** (skill `test-triage`, §4): nel DB della corsia 415 utenti creati dai test e nessuno dei due di fixture: un'azione
+`api` da sola non esegue il setup della categoria (`_api_setup` → `db_populate(force=True)`), e le mie prove `services` avevano
+ricreato il DB vuoto. **Verdetto: ambiente.** Rimedio: `dev.py test … db --force populate` sulla mia corsia (il passo del setup
+della categoria; il populate senza `--force` rifiuta un DB esistente), **passato col codice di C-97a** (7096 record, controlli del
+portafoglio puliti, «All TRANSFER/ADJUSTMENT(qty>0) have cost_basis_override set»): anche i dati mock stanno nei limiti nuovi.
+`api brim` di nuovo: **118/118**. → **W-B54** (il runner, superficie di H). **Tutte le 16 azioni `api` verdi.**
+
+**C-97a, prove leggere e simulazione** ✅ (18:13–18:19, carico 39–47): `utils gate-i18n-usage` **195**, `front check` **0 errori,
+0 avvisi**, `check-orphans` (ogni file di test registrato). **Simulazione del cherry-pick** (`files/scripts/sim_cherry_pick.sh
+dev_release2 --docs`, 46 file del lotto, il journal escluso): **0 conflitti**; `ruff`/`black` puliti sui `.py` risultanti tranne
+`scripts/test_runner/_backend_utils.py`, il cui `black --check` fallisce già su HEAD e su `dev_release2` (una riga del banner
+del Designer Lab, non mia; le mie righe sono solo l'aggiunta di `real-decimal`); JSON validi; **`mkdocs build` strict exit 0 e
+`check-links` exit 0 sull'albero simulato**. `git diff --check` pulito; porta libera. **Handoff FROZEN** (18:2x): un commit.
