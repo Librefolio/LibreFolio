@@ -90,6 +90,7 @@
         "consumed": "Questo link è già stato usato. Se il tuo account è attivo, accedi.",
         "revoked": "Questo link non funziona più: accedi per chiederne uno nuovo.",
         "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
+        "blocked": "Questa istanza è bloccata dal suo fornitore di hosting, quindi il link non può essere verificato ora. Aprilo di nuovo quando l'istanza sarà sbloccata; se intanto il link è scaduto, accedi per averne uno nuovo.",
         "missing": "Questo link è incompleto: riaprilo dall'email.",
         "error": "Non è stato possibile verificare il link: riprova."
       },
