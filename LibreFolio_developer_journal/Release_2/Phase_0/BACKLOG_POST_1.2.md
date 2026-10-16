@@ -185,7 +185,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   - ✅ **Ricerca inversa chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`):
     `GET /transactions?asset_event_id=`, nei broker che l'utente vede (C-65b nel piano 04). Resta aperta la modale al
     cambio di provider (C-65a, X e W).
-- **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** — basso; W (C-64), 12/10. Il dialogo c'è già ed è
+- ✅ **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** (chiusa 16/10 dal coordinatore: X `32c64bbd9`, entrata `4b2e0df80`; il developer: il fornitore vince, basta l'avviso; X-R29/X-R30) — basso; W (C-64), 12/10. Il dialogo c'è già ed è
   comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
   (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
   copre dati che esistono già, per i cambi come per gli asset. Dettagli: [F-094](../../../LibreFolio_devWiki/wiki/features/F-094.md).
