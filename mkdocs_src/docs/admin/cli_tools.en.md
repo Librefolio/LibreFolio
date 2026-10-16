@@ -101,6 +101,7 @@ pipenv run ./dev.py user activate <username>
 ```
 
 - ⏱️ A reset ends the sessions already open: every device signed in to the account is signed out at its next request. To lock someone out for good, deactivate the account: it is refused from its next request, and activating it again does not bring its old sessions back.
+- 🔗 A reset also cancels any password-reset link still open for the account, whoever created it.
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
@@ -114,7 +115,7 @@ pipenv run ./dev.py user reset-link <username>
 
 Instead of choosing a new password for someone with `user reset`, send them this link: they open it and choose the new password themselves ([what they see](../user/getting-started.md#password-reset-link)).
 
-- ⏱️ The link works once, for 30 minutes. A new link for the same account cancels the earlier ones.
+- ⏱️ The link works once, for 30 minutes. A new link for the same account cancels the earlier ones; a change of the account's password or email address — in the user's Profile, or with `user reset` or `user set-email` — cancels them all.
 - 🚪 Once the new password is set, every device signed in to the account is signed out, as with `user reset`. Creating the link signs nobody out.
 - 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/reset-password#token=…`) when it is not.
 
@@ -140,7 +141,7 @@ pipenv run ./dev.py user set-email <username> <new_email>
 The same change as a new email in the user's [Profile](../user/settings/profile.md#email-change), without their password: use it when someone cannot change their address themselves, or to separate two accounts that share one ([below](#email-case-conflict)).
 
 - 🔤 An address belongs to one account only, whatever its capitals: `Anna@example.com` and `anna@example.com` are the same address. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
-- 🚪 A new address signs the account out of every device, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
+- 🚪 A new address signs the account out of every device, cancels any password-reset link still open, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
 - ❌ An address another account already has, in any capitals, is refused: the command stops with the error `Email already registered` and exits with `1`, changing nothing. So does an address that is not valid (`Not an email address`) or an unknown username (`User '<username>' not found`).
 
 ### 👑 Grant or Remove Administrator Rights
