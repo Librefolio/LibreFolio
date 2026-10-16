@@ -1146,6 +1146,8 @@ def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, app_lifespa
     monkeypatch.setattr(app_lifespan, "_initialize_global_settings", first_connection)
     monkeypatch.setattr(app_lifespan, "_prewarm_provider_caches", nothing)
     monkeypatch.setattr(app_lifespan, "start_market_holiday_prewarm", prewarm)
+    # W-B53: the BRIM parse pool's forkserver, started in the background by the cure; raising=False: absent before it
+    monkeypatch.setattr(app_lifespan, "prewarm_brim_parse_pool", lambda: None, raising=False)
     monkeypatch.setattr(app_lifespan, "get_shutdown_event", lambda: shutdown_event)
     monkeypatch.setattr(app_lifespan, "scheduler_loop", scheduler)
     monkeypatch.setattr(app_lifespan, "shutdown_tool_executor", nothing)
