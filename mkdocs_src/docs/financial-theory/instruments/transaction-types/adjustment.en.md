@@ -64,13 +64,13 @@ Adjustments with negative quantity **decrease** the position. In the FIFO lots t
 
 !!! example "Two lots, one outgoing adjustment"
 
-    Buy 10 units at 10, then 10 units at 20: the average cost is 15. An adjustment of −10 units with a cost basis of 15 consumes the first lot (FIFO) and closes it at 15: the lot realizes $10 \times (15 - 10) = +50$ and hands over $10 \times 15 = 150$. The second lot stays open at 20, so at a price $p$ the lots total $50 + 10 \times (p - 20) = 10 \times (p - 15)$ — the Dashboard's P&L on 10 units with an average cost of 15.
+    Every amount is in the report currency. Buy 10 units at 10, then 10 units at 20: the average cost is 15. An adjustment of −10 units with a cost basis of 15 consumes the first lot (FIFO) and closes it at 15: the lot realizes $10 \times (15 - 10) = +50$ and hands over $10 \times 15 = 150$. The second lot stays open at 20, so at a price $p$ the lots total $50 + 10 \times (p - 20) = 10 \times (p - 15)$ — the Dashboard's P&L on 10 units with an average cost of 15.
 
     With a single lot the realized part is zero: buy 10 units at 20, adjust −4 at 20, price 30 — the 6 remaining units gain $6 \times (30 - 20) = 60$, on the Dashboard and in the lots alike.
 
 !!! note "Currency of an outgoing cost basis"
 
-    The cost basis applies to a lot only when it is in that lot's currency: a lot without a currency counts in the report currency, a cost basis without a currency counts in the lot's. A lot in another currency hands its units over at its own FIFO cost, realizing neither gain nor loss — a declared fallback, until closures carry their own currency.
+    The cost basis applies to every lot the adjustment consumes, whatever its currency: a cost basis without a currency counts in the lot's, a lot without a currency in the report currency. In the report currency the two sides convert each at its own date — the value handed over, $q \times \text{CostBasis}$, from the cost basis's currency at the adjustment's date, the lot's cost from the lot's currency at its opening date — and the lot realizes their difference, the exchange-rate move between the two dates included (see [Lots in Another Currency](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#lots-in-another-currency)).
 
 ### 🏦 Automatic Cost Basis on Transfers and Seeds
 
