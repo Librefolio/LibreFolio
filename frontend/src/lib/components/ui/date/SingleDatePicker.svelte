@@ -365,20 +365,20 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}" data-testid="{tid}-root" data-open={calendarOpen ? 'true' : 'false'} data-invalid={typedInvalid ? 'true' : 'false'}>
+<div class="relative sdp-trigger text-lf-primary {inputStyle ? 'block w-full' : 'inline-block'}" data-testid="{tid}-root" data-open={calendarOpen ? 'true' : 'false'} data-invalid={typedInvalid ? 'true' : 'false'}>
     <!-- The date is typed, not only picked: the calendar is one click away but is
          the slow path for anything more than a few months from today. -->
     <div
         bind:this={triggerEl}
-        class="flex items-center gap-1.5 rounded-lg border bg-white transition-colors dark:bg-slate-800 {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {typedInvalid
-            ? 'border-red-400 dark:border-red-500'
+        class="flex items-center gap-1.5 rounded-lg border bg-lf-field transition-colors {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {typedInvalid
+            ? 'border-lf-danger'
             : calendarOpen
-              ? 'border-libre-green ring-1 ring-libre-green'
-              : 'border-gray-200 hover:border-libre-green/50 dark:border-slate-600'} {disabled ? 'opacity-60' : ''}"
+              ? 'border-lf-focus ring-1 ring-lf-focus'
+              : 'border-lf-input hover:border-lf-input-hover'} {disabled ? 'opacity-60' : ''}"
     >
         <button
             type="button"
-            class="flex-shrink-0 text-libre-green disabled:cursor-not-allowed"
+            class="flex-shrink-0 text-lf-link disabled:cursor-not-allowed"
             data-testid="{tid}-calendar-button"
             {disabled}
             aria-label={$_('datePicker.openCalendar')}
@@ -391,7 +391,7 @@
         >
             <Calendar size={inputStyle ? 14 : compact ? 12 : 14} />
         </button>
-        {#if label}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">{label}</span>{/if}
+        {#if label}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-lf-muted uppercase">{label}</span>{/if}
         <input
             bind:this={inputEl}
             type="text"
@@ -399,7 +399,7 @@
             autocomplete="off"
             spellcheck="false"
             {disabled}
-            class="min-w-0 flex-1 border-none bg-transparent font-mono text-gray-700 outline-none dark:text-gray-200 {inputStyle ? 'text-sm' : compact ? 'text-[11px]' : 'text-xs'} {typedInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+            class="min-w-0 flex-1 border-none bg-transparent font-mono outline-none placeholder:text-lf-placeholder {inputStyle ? 'text-sm' : compact ? 'text-[11px]' : 'text-xs'} {typedInvalid ? 'text-lf-danger' : 'text-lf-primary'}"
             style={inputStyle ? undefined : 'width: 6.5rem'}
             value={shown}
             placeholder="YYYY-MM-DD"
@@ -432,7 +432,7 @@
         {#if clearable && shown}
             <button
                 type="button"
-                class="flex-shrink-0 rounded text-gray-400 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed dark:hover:text-gray-200"
+                class="flex-shrink-0 rounded text-lf-muted hover:text-lf-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/70 disabled:cursor-not-allowed"
                 {disabled}
                 aria-label={$_('common.clear')}
                 title={$_('common.clear')}
@@ -445,7 +445,7 @@
     </div>
 
     {#if calendarOpen}
-        <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle} data-testid="{tid}-popover">
+        <div class="sdp-popover bg-lf-card rounded-xl shadow-2xl shadow-lf-shadow border border-lf-raised p-4 w-[280px]" style={popoverStyle} data-testid="{tid}-popover">
             <CalendarMonth year={calYear} month={calMonth} {weekdayLabels} {monthLabels} onDayClick={handleDayClick} onPrevMonth={prevMonth} onNextMonth={nextMonth} onSetMonth={setMonth} onSetYear={setYear} onGoToToday={goToToday} highlights={{selected: previewIso}} {disabledDates} {allowFuture} />
         </div>
     {/if}

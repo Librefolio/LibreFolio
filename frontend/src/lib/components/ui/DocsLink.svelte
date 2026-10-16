@@ -30,7 +30,7 @@
 
 <Tooltip {math} interactiveChild maxWidth="320px" position="top" text={label}>
     <button
-        class="inline-flex items-center gap-2 rounded p-0.5 text-gray-500 transition-colors hover:text-libre-green focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 dark:text-gray-400"
+        class="inline-flex items-center gap-2 rounded p-0.5 text-lf-muted transition-colors hover:text-lf-link focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/70"
         onclick={() => window.open(getDocsUrl(), '_blank', 'noopener')}
         type="button"
         aria-label={label}

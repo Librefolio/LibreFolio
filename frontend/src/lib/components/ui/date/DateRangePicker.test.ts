@@ -14,7 +14,7 @@
  * `data-invalid`, `data-active`, the `calendar-day` grid's `data-iso`). Never a
  * translated label — the row shows "1W/1M…" but the section headings, the
  * From/To captions and the formatted dates are i18n/locale output — and never a
- * Tailwind class: the field turns red through `text-red-600`, and matching on
+ * Tailwind class: the field turns red through `text-lf-danger`, and matching on
  * that would test the palette.
  *
  * Dates that must be "in the past whatever today is" are hardcoded in 2024;
@@ -931,9 +931,13 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
 // about "all of history", so it drops MAX, whose min/max sentinels it has no
 // way to resolve. Both are additive. Every existing caller passes neither and
 // must keep exactly the picker it renders today, so the default paths are
-// pinned: the frame token by token (`FRAME`, transcribed from the template at
-// the k5a baseline) in each state its classes depend on, and the row button by
+// pinned: the frame token by token (`FRAME`, transcribed from the template on
+// the colour roles) in each state its classes depend on, and the row button by
 // button in each layout a caller mounts.
+//
+// The roles brought one rule of their own, pinned here as well: an open frame
+// draws the focus border instead of its closed one, never beside it (`FRAME`
+// says why).
 //
 // As in the F17 block above, the class is the contract here, so it is read;
 // elements are still found by testid and by their place in the render. Date is
@@ -944,23 +948,41 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
 /** The k5a contract, typed here so this file compiles before the props exist. */
 type K5aProps = {fieldsClass?: string; excludePresets?: readonly QuickPreset[]};
 
-/** Today's frame around the two fields, token by token, as the template composes it at the k5a baseline. */
+/**
+ * Today's frame around the two fields, token by token, as the template composes it on the colour
+ * roles of `$lib/theme/tokens.css`: what every existing caller renders. A role utility follows the
+ * theme through its variable, so no token has a `dark:` half. The border follows the calendar:
+ * `closedBorder` while it is closed, `open` while it is open — instead of the closed one, never
+ * beside it.
+ *
+ * Tailwind 4 emits two utilities that set the same property under the same variants in the
+ * alphabetical order of their names, so on an element carrying both the later name wins; a `hover:`
+ * utility comes after every base one. `border-lf-focus` sorts before `border-lf-input`: an open
+ * frame that kept its closed border would draw that one, and under the pointer its hover border.
+ * So the template puts the two borders in the two branches of one ternary, and every open state
+ * below pins it.
+ */
 const FRAME = {
-    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-white', 'dark:bg-slate-800', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-slate-600', 'overflow-hidden', 'hover:border-libre-green/50', 'transition-colors'],
+    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-lf-field', 'rounded-xl', 'border', 'overflow-hidden', 'transition-colors'],
     /** Every size but compact. */
     shadow: ['shadow-sm'],
     stacked: ['flex-col'],
-    /** While the calendar is open. */
-    open: ['ring-1', 'ring-libre-green', 'border-libre-green'],
+    /** While the calendar is closed. */
+    closedBorder: ['border-lf-input', 'hover:border-lf-input-hover'],
+    /** While the calendar is open, in place of `closedBorder`. */
+    open: ['ring-1', 'ring-lf-focus', 'border-lf-focus'],
 };
 
 /** The frame in each state its classes depend on: size, stacking, and whether the calendar is open. */
 const FRAME_STATES: {state: string; props: Record<string, unknown>; open: boolean; classes: string[]}[] = [
-    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow]},
-    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base]},
-    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow]},
+    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.closedBorder]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base, ...FRAME.closedBorder]},
+    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow, ...FRAME.closedBorder]},
     {state: 'calendar open', props: {}, open: true, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.open]},
 ];
+
+/** Every state in which the calendar is open: where `FRAME.closedBorder` must be absent. */
+const OPEN_FRAME_STATES = FRAME_STATES.filter(({open}) => open);
 
 /** Today's quick-range row, in drawing order: the centred row and the toolbar's alike, since jsdom measures no room for the "jolly" fill. */
 const QUICK_ROW = ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd', 'max', 'custom'].map((key) => `date-preset-${key}`);
@@ -1060,6 +1082,19 @@ describe('DateRangePicker — the caller’s class for the fields’ frame (k5a)
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it.each(OPEN_FRAME_STATES)('draws the focus border instead of the closed one, never beside it: $state', async ({props, open}) => {
+        const {frame} = await frameInState(props, open);
+        const tokens = classesOf(frame);
+
+        // Presence first: on a frame that lost its border colour altogether, the absence below would hold as well. And the
+        // closed states above carry `FRAME.closedBorder`, so the absence is checked for names the template really writes.
+        expect(tokens, 'the open frame does not draw the focus border').toContain('border-lf-focus');
+        expect(
+            tokens.filter((token) => FRAME.closedBorder.includes(token)),
+            'the open frame keeps a closed border beside the focus one, and Tailwind emits it later: that is the border drawn',
+        ).toEqual([]);
     });
 });
 

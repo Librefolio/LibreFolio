@@ -111,8 +111,8 @@ test.describe('Asset Data Editor', () => {
     test('prices tab is active by default', async ({page}) => {
         await openDataEditor(page);
         const pricesTab = page.getByTestId('asset-editor-prices-tab');
-        // Active tab has border-libre-green class (check for text color)
-        await expect(pricesTab).toHaveClass(/text-libre-green|text-emerald/);
+        // The active tab is the selected one: the state TabBar publishes (aria-selected), not the colour it draws
+        await expect(pricesTab).toHaveAttribute('aria-selected', 'true');
     });
 
     // ========================================================================
@@ -123,7 +123,7 @@ test.describe('Asset Data Editor', () => {
         const eventsTab = page.getByTestId('asset-editor-events-tab');
         await eventsTab.click();
         // Events tab should now be active
-        await expect(eventsTab).toHaveClass(/text-libre-green|text-emerald/);
+        await expect(eventsTab).toHaveAttribute('aria-selected', 'true');
     });
 
     // ========================================================================
