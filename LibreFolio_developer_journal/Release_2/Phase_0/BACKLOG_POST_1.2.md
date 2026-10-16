@@ -2035,6 +2035,23 @@ plugin.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-20».
 
+- **L-21 · Censimento a runtime dei colori predefiniti di ECharts e delle librerie** — medio; L, 16/10 (audit dei colori fuori metrica).
+  - **Il problema:** `CHART_INIT_THEME` fissa solo il font, quindi ogni colore che un'opzione non scrive resta quello di ECharts. Il controllo statico ne ha confermati 5: i tooltip di `CorrelationHeatmap` e `ScatterChart`, tre `axisPointer`. Gli altri, cioè palette delle serie, stati `emphasis`/`blur`, etichette di `markLine`, non si possono vedere senza il browser.
+  - **Proposta:** un giro con il Lab nella corsia 6152, su ogni pagina con un grafico:
+    - leggere `getOption()` di ogni istanza;
+    - togliere i colori scritti nel sorgente (catalogo, ruoli risolti, categorie);
+    - ciò che resta sono i predefiniti.
+  - Lo stesso giro può fotografare embedpdf e cheetah-grid. Serve uno slot con il server.
+
+  Dettagli: [audit](../Phase_1/10_colorSystem/L-designerLab/audit-colori-fuori-metrica.md), §2 riga 8 e §5.
+
+- **L-22 · Il catalogo del Lab elenca i colori scritti nei commenti** — basso; L, 16/10 (audit dei colori fuori metrica).
+  - Sono ≈ 170 voci su 1450, per esempio `/* rgba(147, 51, 234, 0.25) */` accanto ai token di componente, le note della designer in `tokens.css` e i JSDoc di `colorAlpha.ts`. Non sono fonti: il cricchetto di T toglie i commenti.
+  - Nelle schede compaiono come occorrenze in più di un valore, e nell'export finiscono tra le righe da cambiare, ma sono righe di commento.
+  - **Correzione possibile:** l'annotazione salta i commenti, mentre il conteggio resta allineato a `color_inventory.py` per la parità, come per L-14.
+
+  Dettagli: [audit](../Phase_1/10_colorSystem/L-designerLab/audit-colori-fuori-metrica.md), §3.
+
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
 Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
