@@ -52,7 +52,8 @@ backend/app/services/financial_math/
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the usable-ratio rule
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -279,8 +280,8 @@ flowchart LR
    `load_configured_fx_pair_sets()` in `portfolio/data_quality.py` for the configured FX
    routes), the Yield on Cost loaders (`yield_on_cost.py`), the
    [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
-   is given) and the split links (`splits.load_split_links()`, the rows of the transactions it
-   is given).
+   is given) and the split links (`splits.load_split_links()` and `splits.split_linked_ids()`,
+   the rows of the transactions it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.
@@ -315,6 +316,12 @@ flowchart LR
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
+   The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
+   followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
+   (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
+   fails when a listed file lacks the tag, an unlisted file carries it, or an annualizing
+   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed files:
+   adding an exception means extending that list on purpose; otherwise, use the backend's field.
 
 ---
 
@@ -411,6 +418,22 @@ The sync builders of `LotsAnalysisService` that never touched the database moved
 functions of `lots/`; the service keeps the orchestration, the database loaders, the response
 builders and the analysis' data-quality report (see
 [Lots Analysis Service](transactions/lots_analysis_service.md#code-layout)).
+
+### 🚦 The Frontend Exceptions Gate {: #frontend-exceptions-gate }
+
+`frontend/src/financialMathExceptions.gate.test.ts` guards [rule 6](#layer-rules) over the `.ts`
+and `.svelte` sources of `frontend/src` — tests, mocks and generated API clients aside — and
+fails when:
+
+- a file of its list, `DECLARED_EXCEPTIONS`, lacks `@financial-math-exception` in its leading
+  JSDoc block, followed by a description of at least 20 characters;
+- any other source contains the tag, even in a comment or a string;
+- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the list.
+  Powers are found with the TypeScript and Svelte parsers, so comments and strings never count.
+
+As in the layer guard, each detector proves, on synthetic sources, that it sees what it looks
+for. The gate runs with the chart-safety unit tests:
+`./dev.py test front-portfolio chart-safety-unit`.
 
 ### 🎯 Targeted Test Selectors {: #test-selectors }
 

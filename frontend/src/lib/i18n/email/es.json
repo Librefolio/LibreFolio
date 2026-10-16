@@ -129,6 +129,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un enlace de restablecimiento solo va a la dirección de su cuenta.",
         "EMAIL_RECIPIENT_INVALID": "No es una sola dirección de correo válida.",
         "EMAIL_RATE_LIMITED": "Se alcanzó el límite de correos por hora: inténtalo de nuevo en {minutes} min.",
+        "RECIPIENT_REFUSED": "El servidor SMTP ha rechazado la dirección del destinatario.",
         "generic": "No se pudo enviar el correo."
       }
     },
@@ -138,7 +139,6 @@
       "sending": "Enviando…",
       "accepted": "Si coincide una cuenta activa, su propietario recibe un correo con un enlace para elegir una contraseña nueva. Revisa la bandeja de entrada y el spam: el enlace funciona durante 30 minutos.",
       "errors": {
-        "FORGOT_PASSWORD_DISABLED": "El restablecimiento de la contraseña por correo aún no está disponible en esta instancia: pregunta a su administrador.",
         "unavailable": "Ahora esta instancia no puede enviar correos: pregunta a su administrador.",
         "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
         "generic": "No se pudo enviar la solicitud: inténtalo de nuevo."

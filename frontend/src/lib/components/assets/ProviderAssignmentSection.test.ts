@@ -34,6 +34,14 @@
  * written in the house notation of a tooltip day, every expected day written by
  * `Intl` too.
  *
+ * The probe's scope note (C-90): the manual probe reads only the last few days of
+ * history, while creating the asset downloads all of it. Once a manual probe has
+ * settled with a `history` row — a success or a warning — the section ends on one
+ * `provider-test-scope-note` under the total time, in the catalogue's words
+ * (`assets.probe.scopeNote`); none before a test, none while one runs, none when
+ * the probe failed as a whole or answered without a history, none after an
+ * automatic probe.
+ *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
@@ -798,6 +806,171 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
         await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: range});
 
         expect(historyRange(), 'a range the backend does not write was rewritten').toBe(range);
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe’s scope note (C-90)', () => {
+    /*
+     * The manual probe reads only the last few days of history, while creating the asset downloads all of it, and the
+     * probe's few points were taken for what the asset would get. So a manual probe that has settled with a `history`
+     * row — a success, or a warning — ends on one note under the total time, `provider-test-scope-note`, in the
+     * catalogue's words (`assets.probe.scopeNote`). The note goes with the history row, not with the verdict: a probe
+     * that failed on its current price has still read the history. No note before a test, none while one runs, none
+     * when the probe failed as a whole (its one `probe` row) or answered without a history, and none after an
+     * automatic probe, which draws no results.
+     *
+     * Every absence is asserted after a positive barrier — the button's status, and the rows the answer drew — so that
+     * «no note» never means «not drawn yet». The note's words are compared through the catalogue, never as a literal,
+     * and the catalogue must know them: a missing key renders as itself, and would match itself.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+    type Operations = Pick<ProbeResponse, 'current_price' | 'history'>;
+    type Settled = 'passed' | 'failed';
+
+    const NOTE = 'provider-test-scope-note';
+    const PRICE_OK = {success: true, value: '100.50', currency: 'USD', as_of_date: '2024-01-05', execution_time_ms: 120};
+    const PRICE_FAILED = {success: false, error: 'HTTP 500 upstream', error_code: 'HTTP_ERROR', execution_time_ms: 40};
+    const HISTORY_OK = {success: true, points_count: 5, date_range: '2024-01-01 → 2024-01-05', sample_prices: [{date: '2024-01-05', close: '100.50'}], execution_time_ms: 300};
+    const HISTORY_SOFT = {success: false, error: 'no prices in the days read', error_code: 'NO_DATA', execution_time_ms: 20};
+
+    /** The probe's answer: the operations a case names, in 0.42 s. */
+    function answer(operations: Operations): ProbeResponse {
+        return {provider_code: 'yahoo', identifier: 'AAPL', total_execution_time_ms: 420, ...operations};
+    }
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** A catalogue text as the section words it: `$_`, in whatever language the catalogue speaks. */
+    function word(key: string): string {
+        return normalize(get(_)(key));
+    }
+
+    /** Mounts the section, runs a manual probe, and waits until it has settled on `status`. */
+    async function probeManually(status: Settled): Promise<void> {
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', status));
+    }
+
+    /** The list of results: the rows' nearest common ancestor, as the M-18 cases find it. */
+    function resultListOf(rows: HTMLElement[]): HTMLElement {
+        for (let node = rows[0].parentElement; node; node = node.parentElement) {
+            const candidate = node;
+            if (rows.every((row) => candidate.contains(row))) return candidate;
+        }
+        throw new Error('the result rows share no list');
+    }
+
+    /** The total line, by structure: the one line of the results list that holds no result, and is not, nor holds, the note. */
+    function totalLineOf(rows: HTMLElement[], note: HTMLElement): HTMLElement {
+        const lines = [...resultListOf(rows).children].filter((child): child is HTMLElement => child instanceof HTMLElement && !rows.some((row) => child.contains(row)) && !child.contains(note));
+        expect(lines, 'besides its results and the note, the results list holds one line, the total: the note is a line of its own, not part of the total').toHaveLength(1);
+        expect(normalize(lines[0].textContent).startsWith(`${word('assets.probe.totalTime')}:`), 'control: the line found is the total time, its label read through the catalogue').toBe(true);
+        return lines[0];
+    }
+
+    interface Shown {
+        /** What the history did, for the title. */
+        history: string;
+        operations: Operations;
+        status: Settled;
+        rows: string[];
+    }
+
+    const SHOWN: Shown[] = [
+        {history: 'succeeded', operations: {current_price: PRICE_OK, history: HISTORY_OK}, status: 'passed', rows: ['current_price:success', 'history:success']},
+        {history: 'failed softly, a warning (no prices in the days it read)', operations: {current_price: PRICE_OK, history: HISTORY_SOFT}, status: 'passed', rows: ['current_price:success', 'history:warning']},
+        {history: 'succeeded while the current price failed for real', operations: {current_price: PRICE_FAILED, history: HISTORY_OK}, status: 'failed', rows: ['current_price:error', 'history:success']},
+    ];
+
+    it.each(SHOWN)('a manual probe whose history $history ends on one scope note, under the total time, in the catalogue’s words', async ({operations, status, rows}) => {
+        probeFn().mockResolvedValue(answer(operations));
+
+        await probeManually(status);
+
+        const results = screen.getAllByTestId('provider-test-result');
+        expect(operationStatuses(results), 'barrier: the rows the answer drew, a history among them').toEqual(rows);
+        const notes = screen.queryAllByTestId(NOTE);
+        expect(notes, 'no scope note under the result: nothing says the test read only the last few days, while creating the asset downloads its whole history').toHaveLength(1);
+        const [note] = notes;
+        expect(note).toBeVisible();
+        const total = totalLineOf(results, note);
+        expect(total.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING, 'the note is not under the total time').toBeTruthy();
+        const words = word('assets.probe.scopeNote');
+        expect(words, 'the shipped catalogue does not word the note: assets.probe.scopeNote is missing').not.toBe('assets.probe.scopeNote');
+        expect(normalize(note.textContent), 'the note is not in the catalogue’s words, assets.probe.scopeNote').toBe(words);
+    });
+
+    it('says nothing before a test: no scope note while the configuration is untested', async () => {
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+
+        // Barrier: the section is drawn and ready to test, and has not been tested.
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId(NOTE), 'a scope note before any test').toBeNull();
+    });
+
+    it('says nothing while a test runs — not even when the result before it held a history', async () => {
+        let settle!: (response: ProbeResponse) => void;
+        probeFn()
+            .mockResolvedValueOnce(answer({current_price: PRICE_OK, history: HISTORY_OK}))
+            .mockImplementationOnce(
+                () =>
+                    new Promise<ProbeResponse>((resolve) => {
+                        settle = resolve;
+                    }),
+            );
+        await probeManually('passed');
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'barrier: the first test settled, a history among its rows').toEqual(['current_price:success', 'history:success']);
+
+        await fireEvent.click(testBtn());
+
+        // Barrier: the second test is in flight.
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(screen.queryByTestId(NOTE), 'a scope note while the test runs').toBeNull();
+
+        settle(answer({current_price: PRICE_OK, history: HISTORY_OK}));
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+    });
+
+    interface Silent {
+        when: string;
+        program: () => void;
+        status: Settled;
+        rows: string[];
+    }
+
+    const SILENT: Silent[] = [
+        {when: 'the probe failed as a whole', program: () => probeFn().mockRejectedValue(new Error('network down')), status: 'failed', rows: ['probe:error']},
+        {when: 'the answer holds no history', program: () => probeFn().mockResolvedValue(answer({current_price: PRICE_OK})), status: 'passed', rows: ['current_price:success']},
+    ];
+
+    it.each(SILENT)('says nothing when $when: no history row, no scope note', async ({when, program, status, rows}) => {
+        program();
+
+        await probeManually(status);
+
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'barrier: the rows the probe drew, none of them a history').toEqual(rows);
+        expect(screen.queryByTestId(NOTE), `a scope note when ${when}`).toBeNull();
+    });
+
+    it('says nothing after an automatic probe, which draws no results', async () => {
+        probeFn().mockResolvedValue(answer({current_price: PRICE_OK, history: HISTORY_OK}));
+        render(ProviderProbeLifecycleHarness, {providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+
+        await fireEvent.click(screen.getByTestId('provider-probe-auto'));
+
+        // Barrier: the automatic answer, a history among it, has landed: its verdict is drawn.
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+        expect(probeFn()).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId(NOTE), 'a scope note after an automatic probe').toBeNull();
     });
 });
 

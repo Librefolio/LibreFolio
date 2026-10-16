@@ -19,7 +19,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 | `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
 | `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
 | `yield_on_cost.py` | Yield on Cost of holdings, replayed from the transaction ledger |
-| `splits.py` | the ADJUSTMENT rows linked to a SPLIT asset event (`load_split_links`, one query for every reader) and the rule for a usable ratio (`is_valid_split_ratio`) |
+| `weights.py` | a part's share of a total, None on a total ≤ 0 (`share_of`, `percent_of`); the signed slices of an allocation (`slice_percents`); gross weights (`gross_weights`); concentration — largest weight and Herfindahl index (`concentration`) |
+| `splits.py` | the ADJUSTMENT rows linked to a SPLIT asset event (`load_split_links`, one query for every reader; `split_linked_ids`, the ids an average-cost replay rescales — WAC preview, broker summary, auto cost) and the rule for a usable ratio (`is_valid_split_ratio`) |
 | `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
 | `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity), `engine` |
 | `lots/` | lots analysis math: `prices`, `conversions` (`convert_closure`: a closure's legs, each in its currency at its date), `economic_events`, `histories`, `average_cost_lines` |
@@ -31,7 +32,7 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    `data_quality_thresholds`, the cache. It reads its own data from the database only at named points: the portfolio
    engine (`portfolio/engine.py`, and the configured FX pairs of `portfolio/data_quality.py`), the Yield on Cost
    loaders, the ledger totals (`ledger_totals.compute_control_totals`, on the session it is given) and the split links
-   (`splits.load_split_links`, the rows of the transactions it is given).
+   (`splits.load_split_links` and `splits.split_linked_ids`, the rows of the transactions it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports orchestration services
    (`portfolio_service`, `broker_service`, `transaction_service`, `lots_analysis_service`), the API, AI Export, risk,
    PAC or signals.

@@ -16,6 +16,7 @@ from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
     AddressProbeResult,
+    AdminSetupRequest,
     AuthLoginRequest,
     AuthLoginResponse,
     AuthLogoutResponse,
@@ -33,7 +34,7 @@ from backend.app.schemas.auth import (
     UpdateProfileResponse,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, password_policy, registration_service, settings_service, token_service, user_service
+from backend.app.services.accounts import address_probe, bootstrap_admin_service, password_policy, registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -44,6 +45,7 @@ from backend.app.services.accounts.auth_service import (
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.accounts.global_settings_service import get_session_ttl_hours
 from backend.app.services.accounts.registration_service import RegistrationError
+from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
 from backend.app.services.platform.client_address import client_address
 
@@ -157,10 +159,11 @@ async def login(
     # so neither the answer nor its timing tells which accounts exist.
     password_ok = await asyncio.to_thread(verify_password_or_dummy, request.password, user.hashed_password if user else None)
     if not password_ok or user is None:
+        # Never what was typed: the field takes an email too, and no address goes in the log (workstream E's rule).
         if user is None:
-            logger.warning("Login failed: user not found", username=request.username)
+            logger.warning("Login failed: user not found")
         else:
-            logger.warning("Login failed: wrong password", username=request.username)
+            logger.warning("Login failed: wrong password", user_id=user.id)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Only the right password learns that the account is disabled.
@@ -169,7 +172,7 @@ async def login(
         if await email_verification.awaiting_verification(session, user):
             logger.info("Login refused: email not verified", user_id=user.id)
             raise HTTPException(status_code=403, detail={"error_code": "EMAIL_NOT_VERIFIED", "message": "Verify your email address first"})
-        logger.warning("Login failed: user inactive", username=request.username)
+        logger.warning("Login failed: user inactive", user_id=user.id)
         raise HTTPException(status_code=403, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"})
 
     # Update login/donation-popup counters and decide whether to show the support popup
@@ -343,9 +346,11 @@ async def change_password(
     if request.current_password == request.new_password:
         raise HTTPException(status_code=400, detail="New password must be different from current password")
 
-    # Update password, and end every session of the account: this one gets a new cookie below.
+    # Update password, and end every session of the account: this one gets a new cookie below. The live password-reset
+    # links of the account die with the old password (A-27), in the same commit.
     current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
     user_service.end_sessions(current_user)
+    await token_service.revoke_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     session.add(current_user)
     await session.commit()
     _issue_session_cookie(response, http_request, current_user, await _session_ttl_hours(session))
@@ -360,6 +365,7 @@ async def update_profile(
     request: UpdateProfileRequest,
     response: Response,
     http_request: Request,
+    background: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -371,13 +377,18 @@ async def update_profile(
 
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
-    The change ends every other session of the account; this one receives a new session cookie and carries on.
+    The change ends every other session of the account; this one receives a new session cookie and carries on. When
+    email works, the address the account had before gets a notice after the answer (workstream E), with the new one
+    masked.
     """
     # Nothing to update
     if request.username is None and request.email is None:
         return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
 
-    email_changes = request.email is not None and request.email != current_user.email
+    # The same address in another case is no change (decision P18): no password, no session ended.
+    email_changes = request.email is not None and not user_service.same_email(request.email, current_user.email)
+    # Read before the change: the account below is the same object, and the notice goes to this address.
+    old_email = current_user.email
     if email_changes:
         if request.current_password is None:
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})
@@ -400,8 +411,11 @@ async def update_profile(
         # update_profile ended every session of the account with the change: this one gets a new cookie.
         _issue_session_cookie(response, http_request, updated_user, await _session_ttl_hours(session))
         logger.info("Email changed, other sessions ended", user_id=updated_user.id)
+        # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
+        background.add_task(email_flows.email_changed_work, updated_user.id, old_email, updated_user.email, engine=session.bind)
 
-    logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email=updated_user.email)
+    # Never the address in the log (workstream E's rule): whether it changed is enough.
+    logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email_changed=email_changes)
 
     return UpdateProfileResponse(user=AuthUserResponse.model_validate(updated_user), message="Profile updated successfully")
 
@@ -487,3 +501,38 @@ async def delete_own_account(
     )
 
     return {"message": "Account deleted successfully"}
+
+
+@router.post("/setup", response_model=AuthLoginResponse)
+async def setup_admin(
+    request: AdminSetupRequest,
+    response: Response,
+    http_request: Request,
+    session: AsyncSession = Depends(get_session_generator),
+):
+    """
+    Spend the setup link of the initial administrator (F02): choose the password, activate the account, sign in.
+
+    The password rules come first (400 ``PASSWORD_TOO_WEAK``). A link that is not a live setup link (used, expired,
+    revoked, unknown, of another purpose, or of an account already active, whose link is then revoked) answers 400
+    ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
+    """
+    _refuse_weak_password(request.new_password)
+    user = await bootstrap_admin_service.complete_admin_setup(session, request.token, request.new_password)
+    if user is None:
+        raise HTTPException(status_code=400, detail={"error_code": "TOKEN_INVALID", "message": "This setup link is not valid"})
+
+    show_donation_popup = record_login_and_maybe_show_popup(user)
+    session.add(user)
+    await session.commit()
+
+    _issue_session_cookie(response, http_request, user, await _session_ttl_hours(session))
+    logger.info("Initial administrator signed in after the setup", user_id=user.id, username=user.username)
+
+    user_settings = await settings_service.get_user_settings(user.id, session)
+    return AuthLoginResponse(
+        user=AuthUserResponse.model_validate(user),
+        user_settings=user_settings,
+        message="Setup complete",
+        show_donation_popup=show_donation_popup,
+    )

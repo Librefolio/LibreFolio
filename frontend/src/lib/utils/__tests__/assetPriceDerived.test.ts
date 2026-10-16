@@ -6,7 +6,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS, deltaPeriodLabel} from '../assetPriceDerived';
+import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS, deltaPeriodLabel, extractDaysBack} from '../assetPriceDerived';
 
 describe('computePeriodDelta', () => {
     it('computes a simple positive delta over a period', () => {
@@ -114,6 +114,21 @@ describe('computeDerivedPriceState', () => {
         const result = computeDerivedPriceState(prices);
         expect(result.deltaAbs).toBeNull();
         expect(result.deltaPercent).toBeNull();
+    });
+});
+
+describe('extractDaysBack — the one home of the "filled backward" rule, shared with the sync dialog (C-66)', () => {
+    // The sync dialog warns before replacing stored rows, and a point is a stored row only when it is not
+    // filled backward from an earlier date: the same rule as staleDays above, so it is exported rather than
+    // copied, and it takes a bare point — the two fill shapes, no date or close needed.
+    //
+    // Red today: `extractDaysBack` is private to the module.
+    it('reads the snake_case and the camelCase shape from a bare point, and 0 when neither carries a count', () => {
+        expect(extractDaysBack({backward_fill_info: {days_back: 3}})).toBe(3);
+        expect(extractDaysBack({backwardFillInfo: {daysBack: 5}})).toBe(5);
+        expect(extractDaysBack({backward_fill_info: {days_back: 0}})).toBe(0);
+        expect(extractDaysBack({backward_fill_info: null, backwardFillInfo: null})).toBe(0);
+        expect(extractDaysBack({})).toBe(0);
     });
 });
 

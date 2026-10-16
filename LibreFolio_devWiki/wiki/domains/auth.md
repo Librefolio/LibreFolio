@@ -69,6 +69,9 @@ graph LR
   - an anonymous refusal for the limit tells no count and no billing link;
   - the link pages are `/invite` and `/reset-password`. The token travels in the URL fragment, so no access or
     proxy log ever holds it: [[decisions/link-tokens-in-the-url-fragment]].
+- Email on top of the tokens (release 1.3, workstream E, 15–16/10) — emailed invitation and reset links, «forgot
+  password», verification at sign-up and the notice to the old address all spend these tokens; every emailed link
+  comes from `LIBREFOLIO_PUBLIC_URL` alone: [[domains/email]].
 
 ## Known problems / limitations
 

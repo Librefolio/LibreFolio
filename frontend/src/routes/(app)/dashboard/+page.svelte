@@ -51,6 +51,7 @@
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -106,6 +107,9 @@
     let contributionLoading = $state(false);
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
     let contributionRefreshing = $state(false);
+    /** The same refresh after a price catch-up (Z-18): it guards against a second request like `contributionRefreshing`,
+     *  but the root's `aria-busy` does not read it. Never rendered, so not reactive. */
+    let contributionInBackground = false;
     let reportLoading = $state(true);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
@@ -165,7 +169,7 @@
      * shared dateRangeController (owns the seed/display/isMaxPending bookkeeping
      * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
-    const dateRangeCtl = createDateRangeController(() => void loadAll());
+    const dateRangeCtl = createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()));
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
@@ -208,7 +212,7 @@
         // (or a prior currency change) is still in flight — avoids duplicate concurrent
         // fetches racing to reassign summary/history while the user may be interacting
         // with the page (e.g. clicking a card whose click depends on stable DOM state).
-        if (hadLoadedData && !reportLoading) void loadAll(true);
+        if (hadLoadedData && !reportLoading) void pageBusy.track('dashboard-currency', () => loadAll(true));
     });
 
     /**
@@ -308,7 +312,7 @@
         if (key !== lastTxLoadKey) {
             lastTxLoadKey = key;
             txCurrentPage = 1;
-            void loadTransactions();
+            void pageBusy.track('dashboard-transactions', loadTransactions);
         }
     });
 
@@ -553,10 +557,12 @@
      * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
      * not — and only a stale or missing one is asked again, in background: the figures stay up and
      * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
+     * With `background` (after a price catch-up, Z-18) the page does not say it is busy either: neither
+     * `reportLoading` nor `contributionRefreshing` turns on, so the root's `aria-busy` stays off.
      */
     let loadSeq = 0;
 
-    async function loadAll(force = false, propagateError = false) {
+    async function loadAll(force = false, propagateError = false, {background = false}: {background?: boolean} = {}) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || !brokersReady) return;
@@ -574,13 +580,13 @@
         const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
         if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
         const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
-        if (showCachedContribution()) void loadContribution();
+        if (showCachedContribution()) void loadContribution({background});
         if (!request) {
             reportLoading = false;
             return;
         }
 
-        reportLoading = true;
+        if (!background) reportLoading = true;
         try {
             const report = await request;
             if (!current() || load !== loadSeq) return;
@@ -610,7 +616,7 @@
         if (!pageAlive) return;
         invalidateFxRoutes();
         invalidate();
-        await loadAll(true);
+        await pageBusy.track('dashboard-reload', () => loadAll(true));
     }
 
     async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -622,10 +628,11 @@
     /**
      * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
      * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
-     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`).
+     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`). With `background`
+     * (after a price catch-up, Z-18), `contributionInBackground` instead, which the root's `aria-busy` does not read.
      */
-    async function loadContribution() {
-        if (!canAsk || contributionLoading || contributionRefreshing) return;
+    async function loadContribution({background = false}: {background?: boolean} = {}) {
+        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground) return;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
         const start = dateRangeCtl.start || undefined;
@@ -637,7 +644,8 @@
             setContribution(cached.report);
             return;
         }
-        if (cached) contributionRefreshing = true;
+        if (cached && background) contributionInBackground = true;
+        else if (cached) contributionRefreshing = true;
         else contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
@@ -652,6 +660,7 @@
         } finally {
             contributionLoading = false;
             contributionRefreshing = false;
+            contributionInBackground = false;
         }
     }
 
@@ -691,7 +700,7 @@
         if (reloadTimer !== null) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => {
             reloadTimer = null;
-            void loadAll();
+            void pageBusy.track('dashboard-scope', () => loadAll());
         }, 2000);
     }
 
@@ -701,7 +710,7 @@
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
-            await loadAll(true);
+            await pageBusy.track('dashboard-refresh', () => loadAll(true));
         } finally {
             syncLoading = false;
         }
@@ -710,12 +719,13 @@
     /**
      * The server caught up on prices and updated something (Z5, Z-13): the stale report is asked again in background,
      * without force, and the figures stay until the new ones land. `refreshVersion` and `requestPortfolioRefresh()` are
-     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Run after the
+     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Nor does the
+     * page say it is busy (Z-18): a screen reader would announce «busy» for a simple price refresh. Run after the
      * dispatch, so every store has marked its answers stale first.
      */
     function reloadAfterPriceCatchUp() {
         if (!pageAlive) return;
-        void loadAll();
+        void loadAll(false, false, {background: true});
     }
     onMount(() =>
         registerPortfolioMutationListener('dashboard:prices', (signal) => {
@@ -815,7 +825,8 @@
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void loadAiExportCompatibility();
-        void (async () => {
+        // The first load holds the Refresh button (Y11), from the reference lists to the report.
+        void pageBusy.track('dashboard-first-load', async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
             if (!pageAlive) return;
             // F2: dashboard scope = owned brokers only (share > 0). A user who owns
@@ -833,7 +844,7 @@
             } else {
                 reportLoading = false;
             }
-        })();
+        });
         return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
@@ -893,7 +904,7 @@
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
                                 writeDashboardView({targetCurrency});
-                                void loadAll();
+                                void pageBusy.track('dashboard-currency', () => loadAll());
                             }}
                         />
                     </div>
@@ -978,11 +989,12 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
                 onclick={handleSync}
-                disabled={syncLoading}
+                disabled={pageBusy.busy}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 data-testid="sync-button"
                 title={$_('dashboard.syncData')}
             >
-                <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
                 {#if showActionLabels}
                     <span>{$_('dashboard.syncData')}</span>
                 {/if}
@@ -1022,7 +1034,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
@@ -1032,7 +1044,17 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? loadContribution : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <PositionsPanel
+                {summary}
+                contribution={positionsContribution}
+                loading={summaryLoading}
+                {contributionLoading}
+                {assetsHref}
+                brokers={allBrokers}
+                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+                onAnalyze={openAssetPanel}
+                analyzedAssetId={activeAssetId}
+            />
             <LotsAnalysisPanel
                 open={activeAssetId != null}
                 assetId={activeAssetId}

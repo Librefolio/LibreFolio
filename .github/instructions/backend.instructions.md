@@ -48,7 +48,9 @@ backend/
 
 - Cookie-based sessions (JWT in HttpOnly cookie)
 - Multi-worker: JWT stateless (no session store)
-- First user = automatic admin
+- The first account of an instance without accounts is an administrator (registration, in any mode); with
+  `LIBREFOLIO_ADMIN_EMAIL` (F02) that administrator is created at startup instead, and activates through a
+  single-use `/setup` link (`services/accounts/bootstrap_admin_service.py`)
 - Broker roles: Owner / Editor / Viewer
 
 ## Financial Math — One Home
@@ -79,6 +81,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows and the usable ratio | `services/financial_math/splits.py` |
+| Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
 | Risk metrics and optimization | `services/risk/quant/` |
