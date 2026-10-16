@@ -150,9 +150,9 @@ test.describe('FX List Page', () => {
         await expect(yearPreset).toBeVisible();
         await yearPreset.click();
 
-        // After clicking 1Y, the preset should be active (styled differently)
-        // Verify the 1Y button has the active class
-        await expect(yearPreset).toHaveClass(/bg-libre-green/);
+        // After clicking 1Y, the preset should be active
+        // Verify the 1Y button is marked active — the state it publishes, not the colour it draws
+        await expect(yearPreset).toHaveAttribute('data-active', 'true');
     });
 
     // ========================================================================

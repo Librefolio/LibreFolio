@@ -17,6 +17,7 @@
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /**
  * Provider error codes that mean "config is fine, just no data here" — a warning,
@@ -101,12 +102,14 @@ export interface ProbeTooltipLabels {
 
 /**
  * Build the rich HTML tooltip for a probe result — a single-row table for a
- * current price, a multi-row table for a history sample, the raw detail
- * otherwise. Kept as a pure string builder so both the branch shape and the
- * escaping can be asserted directly.
+ * current price, a multi-row table for a history sample, the detail otherwise.
+ * Kept as a pure string builder so both the branch shape and the escaping can
+ * be asserted directly. The detail is escaped: a failure's text comes from the
+ * provider (an external site's error, a reason phrase) and the tooltip renders
+ * HTML (security review of CP10–CP11).
  */
 export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeTooltipLabels): string {
-    if (!result.success) return result.detail ?? 'Error';
+    if (!result.success) return escapeHtml(result.detail ?? 'Error');
 
     const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent);';
     const tdStyle = 'padding:2px 8px;';
@@ -135,5 +138,5 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         return html;
     }
 
-    return result.detail ?? '—';
+    return escapeHtml(result.detail ?? '—');
 }

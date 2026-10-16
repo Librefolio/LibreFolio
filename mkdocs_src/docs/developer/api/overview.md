@@ -157,10 +157,12 @@ generator version in `frontend/package-lock.json` (1.18.3, pinned in the guard) 
 
 ## 🗜️ Response Compression
 
-Starlette's `GZipMiddleware` (`minimum_size=1024`, `compresslevel=6`) is the first, outermost entry
-of `MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`), which `install_middleware(app)`
-puts on the whole application, so it covers API JSON as well as the SvelteKit
-bundle and the documentation served by the same process.
+Starlette's `GZipMiddleware` (`minimum_size=1024`, `compresslevel=6`) is the `gzip` entry of
+`MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`), inside `activity` and
+`security_headers` and outside `cors` (the whole stack:
+[Steps and Middleware: the Contract](../architecture/overview.md#lifecycle-contract)).
+`install_middleware(app)` puts the stack on the whole application, so GZip covers API JSON as well
+as the SvelteKit bundle and the documentation served by the same process.
 
 - A response is compressed only when the request's `Accept-Encoding` header contains `gzip`.
   Browsers send it and decompress transparently, so frontend code never handles compressed
@@ -247,4 +249,23 @@ Returns the **current price** of each asset in a list: the assigned provider's l
 **Side effect**: the call is not read-only. A provider quote dated today creates today's `PriceHistory` row (open, high, low and close all equal to the quote) or extends it (`high` and `low` widened, `open` set if missing, `close` replaced). A database fallback is never written back.
 
 This endpoint is used by the Assets list (inline live prices on cards and table rows) and by the asset detail page (price summary and chart head) — see [Live Prices](../frontend/components/features/live-ticker.md#polling).
+
+### 🔎 `GET /api/v1/assets/provider/search` and `/search/stream` — Asset Search
+
+Both search, in parallel, every provider with search support, or those named in `providers`, for the signed-in user: each provider receives that user's personal plugin settings, such as justETF's preferred currency ([Plugin Settings](../architecture/patterns/plugin_settings.md#scopes)). A provider that fails never fails the request; the answer says which one, and why:
+
+- **`/search`** answers `FAProviderSearchResponse` once every provider is done: `results`, `providers_queried`, `providers_with_errors` (every provider that failed) and `providers_not_configured`, those of them not called because a required setting has no value (`NOT_CONFIGURED`); an empty list otherwise.
+- **`/search/stream`** answers Server-Sent Events: one per provider as soon as it finishes, then `done`. The stream has no `response_model` (rule 1 of the Contract Rules above), so its events are not in the generated client:
+
+```text
+data: {"event": "provider_results", "provider_code": "justetf", "results": [...]}
+
+data: {"event": "provider_error", "provider_code": "my_provider", "error": "Provider my_provider is not configured: api_key missing", "error_code": "NOT_CONFIGURED"}
+
+data: {"event": "provider_error", "provider_code": "yfinance", "error": "Provider yfinance is paused after too many requests: 1835 s left", "error_code": "RATE_LIMITED", "retry_after": 1834.6}
+
+data: {"event": "done", "total_results": 12, "providers_queried": [...], "providers_with_errors": [...]}
+```
+
+`provider_error` carries `error_code` for every `AssetSourceError`: `NOT_CONFIGURED`, `RATE_LIMITED` with `retry_after` (the seconds before the provider may be called again), or the provider's own code, such as `SEARCH_ERROR`. An error of any other type has neither field. The search box, `AssetSearchAutocomplete.svelte`, reads the stream and falls back to `/search` only when the stream is unavailable; for each provider not configured it shows a row with **Configure**. Details: [Interactive Search Stack](../backend/assets/architecture.md#interactive-search).
 
