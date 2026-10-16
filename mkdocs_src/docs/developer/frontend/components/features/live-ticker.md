@@ -418,16 +418,14 @@ broker detail page (`routes/(app)/brokers/[id]/+page.svelte`). Each registers a 
 `onMount`, `dashboard:prices` or `broker-page:<id>:prices`, and removes it on destroy. On
 `{kind: 'prices'}`, and on no other kind, the listener queues `reloadAfterPriceCatchUp()` with
 `queueMicrotask()`: the reload runs once the dispatch is over, when every cache has marked its
-answers stale, whatever the order of the listeners. The reload does what **Refresh** does, in
-background:
+answers stale, whatever the order of the listeners. The reload calls the page's report loader
+without `force`, in background: `loadAll()` on the Dashboard, `loadOverview()` on the broker page.
+The mark has made the report on screen stale, so the loader asks that question again; the figures
+stay until the new ones land.
 
-- it bumps `refreshVersion`, so the risk and lots panels on screen ask again, with `force` as on
-  **Refresh**;
-- it calls the page's report loader without `force`: `loadAll()` on the Dashboard, `loadOverview()`
-  on the broker page. The mark has made the report on screen stale, so the loader asks that question
-  again; the figures stay until the new ones land.
-
-It does not call `requestPortfolioRefresh()`: the caches are already marked. On the Dashboard it
+It touches neither `refreshVersion` nor `requestPortfolioRefresh()`, the signals of the user's
+**Refresh**: the caches are already marked, and the risk and lots panels on screen keep their
+answers, marked stale, until they next load. On the Dashboard it
 leaves `syncLoading` alone, so the **Refresh** button does not spin, and it does nothing once the
 page is destroyed (`pageAlive`). On the broker page the **Refresh** icon follows `reportLoading`, so
 it spins while the overview is asked again; the broker summary (`loadBroker()`) and the
