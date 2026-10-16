@@ -29,28 +29,34 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
 
 `ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
-(`$auth.user?.is_superuser ?? false`). The registry holds seven tabs:
+(`$auth.user?.is_superuser ?? false`). The registry holds eight tabs:
 
 | `id` | `order` | Body | Visible to | Extras |
 |---|---|---|---|---|
 | `profile` | 10 | `ProfileTab` | everyone | — |
 | `preferences` | 20 | `PreferencesTab` | everyone | — |
+| `plugins` | 25 | `PluginSettingsTab` | everyone | — |
 | `about` | 30 | `AboutTab` | everyone | — |
 | `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
 | `users` | 110 | [`UsersTab`](#userstab) | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `backup` | 120 | `BackupTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 
-The first five bodies are in `lib/features/settings/tabs/`. The Backup tab's body, `lib/features/backup/BackupTab.svelte`
-(label `backup.tab`), and the Email tab's, `lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live
-with their features: for the Email tab see [The Email Tab](../../../backend/email.md#email-tab).
+Five bodies are in `lib/features/settings/tabs/`. The Plugins tab's body,
+`lib/features/plugin-settings/PluginSettingsTab.svelte` (label `pluginSettings.tab.label`), the
+Backup tab's, `lib/features/backup/BackupTab.svelte` (label `backup.tab`), and the Email tab's,
+`lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live with their features:
+for the Plugins tab see [Plugin Settings › The Interface](../../../architecture/patterns/plugin_settings.md#interface),
+for the Email tab [The Email Tab](../../../backend/email.md#email-tab). The Plugins tab takes no
+props: every user sees it, and the catalogue the API returns already says which fields this user may
+change.
 
 The page is the runtime of the registry, written in Svelte 5 runes:
 
 - **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
   sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
   with the labels hidden on a phone (`hideLabelOnMobile`). The bar is also `scrollable`: tabs that
-  do not fit the card (an administrator sees seven) scroll sideways instead of being clipped by its
+  do not fit the card (an administrator sees eight) scroll sideways instead of being clipped by its
   `overflow-hidden`, and the active tab stays whole in view (see
   [Scrollable tab bar](../core-ui/toolbar.md#tabbar-scrollable)).
 - **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
@@ -71,7 +77,7 @@ import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
 import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-    // profile (10), preferences (20), about (30), admin (100, alignEnd)
+    // profile (10), preferences (20), plugins (25), about (30), admin (100, alignEnd)
     // Administrators only: the accounts and the open invitations (decision D-A10).
     {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser},
 ];

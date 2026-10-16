@@ -3,9 +3,12 @@
 Module under test: ``utils/runtime/secret_masking.py``, and its wiring in ``logging_config.configure_logging``. The
 contract pinned here, hardened after the security review:
 
-1. ``mask_text`` replaces each secret by ``***``, and its URL-encoded forms (``quote`` and ``quote_plus``) too, the
-   longest form first so that a secret inside another is not half-masked; by default the secrets in flight; an empty
-   secret masks nothing.
+1. ``mask_text`` replaces each secret by ``***``, and its URL-encoded forms (``quote`` and ``quote_plus``) too; by
+   default the secrets in flight; an empty secret masks nothing. Every occurrence of every form is found in the
+   original text, and each run of occurrences that overlap or touch becomes one ``***``: a secret inside another, beside
+   itself, or overlapped by a value a caller chose — the overlap attack of the security review of CP10–CP11, a known
+   context and one guessed character — leaves no character of itself behind. With ``whole``, a text that shows a
+   secret becomes ``***`` entirely and a text that shows none comes back as it was: two guesses read the same (N15).
 2. Any value is judged by the text it shows. Strings are masked; plain dicts, lists, tuples and sets are copied with
    their keys and items masked; any other value — bytes, a number, a URL object, an exception kept as a detail, a dict
    subclass — that shows a secret in its ``str()`` or its ``repr()`` becomes its masked text, and one that shows none is
@@ -15,7 +18,9 @@ contract pinned here, hardened after the security review:
    ``__cause__`` / ``__context__`` chain and the members of exception groups; type and traceback stay. What it cannot
    rewrite — a group's own message, a text a ``__str__`` builds from state outside ``__dict__`` (``__slots__``) — is what
    ``exception_renders_secret`` reports (the text, or the notes, of any link); ``masked_description`` gives
-   ``Type: text`` masked, what a boundary says of an error it has to replace.
+   ``Type: text`` masked, what a boundary says of an error it has to replace. With ``whole``, every text that shows a
+   secret — an argument, ``message``, a detail, a note, a cause — becomes ``***`` entirely, the rest as it was, type,
+   code and traceback kept; ``masked_description`` is then ``Type: ***``.
 4. ``mask_event_dict`` (structlog) masks every value of an event, the formatted traceback included, and hands back the
    same dict when nothing is in flight; ``SecretMaskingFilter`` (standard ``logging``) replaces the formatted message
    and the traceback text of a record by their masked text and leaves a record with nothing to mask as it was.
@@ -139,7 +144,7 @@ def test_mask_text_replaces_the_value_and_its_url_encoded_forms():
 
 
 def test_a_secret_inside_another_is_masked_whole():
-    """1: the longest form first: ``abcd1234efgh`` is masked whole, not as ``***efgh``."""
+    """1: ``abcd1234efgh`` is masked whole, not as ``***efgh``: the two occurrences overlap, one ``***``."""
     short, long = "abcd1234", "abcd1234efgh"
 
     assert mask_text(f"a {long} b {short} c", frozenset({short, long})) == f"a {MASK} b {MASK} c"
@@ -164,6 +169,119 @@ def test_mask_text_masks_the_secrets_in_flight_by_default_and_nothing_outside():
 def test_mask_text_leaves_the_text_when_there_is_nothing_to_mask(text, values):
     """1: no secret, an empty text, or an empty secret (which would otherwise match everywhere): the text as it was."""
     assert mask_text(text, values) == text
+
+
+# -----------------------------------------------------------------------------
+# Overlapping occurrences, the overlap attack and ``whole`` (security review of CP10–CP11, N15)
+# -----------------------------------------------------------------------------
+
+#: What a refused request shows right before an instance key, as an HTTP library writes it: anybody can read it in the
+#: plugin's code. Longer than a key, so a value chosen as this context and one character is the longer of the two: the
+#: order in which replacing the longest form first let the right guess take the key's first character with it.
+_KNOWN_CONTEXT = "Client error '401 Unauthorized' for url 'https://api.provider.example/v1/quote?symbol=msft&apikey="
+_AFTER_THE_KEY = "' refused"
+#: The letters of the instance keys below: none occurs in the context or after the key, so any character of a key left
+#: in an output shows as such.
+_KEY_LETTERS = "BDFGHJLNPQRSTVWZ"
+
+
+def _instance_key() -> str:
+    """A unique instance key: 24 characters of ``_KEY_LETTERS``."""
+    return "".join(_KEY_LETTERS[int(digit, 16)] for digit in uuid.uuid4().hex[:24])
+
+
+def _chosen(key: str, *, right: bool) -> str:
+    """The personal secret a caller chooses to test a guess of ``key``'s first character: the known context, then the
+    guess — the right one, or another letter a key may start with."""
+    guess = key[0] if right else next(letter for letter in _KEY_LETTERS if letter != key[0])
+    return _KNOWN_CONTEXT + guess
+
+
+def _echoed(key: str) -> str:
+    """The text of the error: the known context, the key, what follows it."""
+    return f"{_KNOWN_CONTEXT}{key}{_AFTER_THE_KEY}"
+
+
+@pytest.mark.parametrize("right", [False, True], ids=["a-wrong-guess", "the-right-guess"])
+def test_the_overlap_attack_leaves_no_character_of_the_key(right: bool):
+    """1, the overlap attack: an instance key behind a known context, and a value the caller chose — that context and
+    one guessed character — longer than the key. Replaced one form after another, the longest first, the right guess
+    took the key's first character with it and left the rest of the key in clear; found all at once and merged, the
+    output shows no character of the key, whichever the guess."""
+    print_section(f"1: the overlap attack, {'the right' if right else 'a wrong'} guess")
+    key = _instance_key()
+    chosen, text = _chosen(key, right=right), _echoed(key)
+    assert len(chosen) > len(key), "setup: the chosen value is the longer one"
+    assert not set(key) & set(text.replace(key, "")), "setup: only the key uses the key's letters"
+
+    masked = mask_text(text, frozenset({key, chosen}))
+
+    assert not set(masked) & set(key), f"the output shows part of the key: {masked!r}"
+    assert masked == (f"{MASK}{_AFTER_THE_KEY}" if right else f"{_KNOWN_CONTEXT}{MASK}{_AFTER_THE_KEY}"), "one *** per run of overlapping occurrences"
+    print_success(f"no character of the key: {masked!r}")
+
+
+def test_with_whole_the_two_guesses_give_the_same_output():
+    """1, N15: masked in place, the two guesses still read differently — the known context is masked with the right one
+    only, an oracle a character at a time. With ``whole`` a text that shows a secret is ``***`` entirely: byte for byte
+    the same output, whichever the guess."""
+    key = _instance_key()
+    text = _echoed(key)
+    wrong, right = frozenset({key, _chosen(key, right=False)}), frozenset({key, _chosen(key, right=True)})
+    assert mask_text(text, wrong) != mask_text(text, right), "barrier: masked in place, the output tells the guesses apart"
+
+    hidden = {"wrong": mask_text(text, wrong, whole=True), "right": mask_text(text, right, whole=True)}
+
+    assert hidden["wrong"] == hidden["right"] == MASK, hidden
+
+
+@pytest.mark.parametrize(
+    ("text", "values", "expected"),
+    [
+        pytest.param("x AAAA1111BBBB2222 y", {"AAAA1111", "BBBB2222"}, f"x {MASK} y", id="two-secrets-touching"),
+        pytest.param("x AAAA1111BBBB y", {"AAAA1111", "1111BBBB"}, f"x {MASK} y", id="two-secrets-overlapping"),
+        pytest.param("x CCCC3333CCCC3333 y", {"CCCC3333"}, f"x {MASK} y", id="one-secret-twice-in-a-row"),
+        pytest.param("x xyzxyzxyz y", {"xyzxyz"}, f"x {MASK} y", id="one-secret-overlapping-itself"),
+        pytest.param("x AAAA1111 BBBB2222 y", {"AAAA1111", "BBBB2222"}, f"x {MASK} {MASK} y", id="apart-a-mask-each"),
+    ],
+)
+def test_occurrences_that_overlap_or_touch_become_one_mask(text: str, values: set[str], expected: str):
+    """1: every occurrence of every form is found in the original text; a run of occurrences that overlap or touch is
+    one ``***`` — nothing of a secret is left beside another, nor beside itself —; occurrences apart get one each."""
+    assert mask_text(text, frozenset(values)) == expected
+
+
+@pytest.mark.parametrize(
+    ("build", "in_place"),
+    [
+        pytest.param(lambda secret: f"first {secret}, again {secret}, once more {secret}.", f"first {MASK}, again {MASK}, once more {MASK}.", id="several-occurrences"),
+        pytest.param(lambda secret: f"GET /q?raw={secret}&k={quote(secret, safe='')}&j={quote_plus(secret)} failed", f"GET /q?raw={MASK}&k={MASK}&j={MASK} failed", id="the-url-encoded-forms"),
+    ],
+)
+def test_whole_hides_a_text_wherever_and_however_it_shows_a_secret(build, in_place: str):
+    """1, N15: several occurrences, the URL-encoded forms: masked in place each has its own ``***``; with ``whole`` the
+    whole text is ``***``."""
+    secret = _secret(" p@ss/w+rd&é")
+    text = build(secret)
+
+    assert mask_text(text, frozenset({secret})) == in_place
+    assert mask_text(text, frozenset({secret}), whole=True) == MASK
+
+
+@pytest.mark.parametrize(
+    ("text", "values"),
+    [
+        pytest.param("the provider answered 404 for MOCK", frozenset({"lfsecret-not-in-this-text"}), id="no-secret-in-the-text"),
+        pytest.param(_KNOWN_CONTEXT, frozenset({"lfsecret-not-in-this-text"}), id="the-known-context-alone"),
+        pytest.param("nothing secret here", frozenset(), id="no-secret-at-all"),
+        pytest.param("", frozenset({"s3cret-value"}), id="empty-text"),
+        pytest.param("abc", frozenset({""}), id="empty-secret"),
+    ],
+)
+def test_with_whole_a_text_that_shows_no_secret_comes_back_as_it_was(text: str, values: frozenset[str]):
+    """1, N15: ``whole`` hides only a text that shows a secret; an empty secret, which would match everywhere, hides
+    nothing."""
+    assert mask_text(text, values, whole=True) == text
 
 
 # =============================================================================
@@ -403,6 +521,48 @@ def test_mask_exception_without_secrets_changes_nothing():
     error = RuntimeError("nothing secret", {"k": "v"})
     mask_exception(error, frozenset())
     assert error.args == ("nothing secret", {"k": "v"})
+
+
+def test_with_whole_every_text_of_an_error_that_shows_a_secret_is_hidden_and_the_rest_stays():
+    """3, N15: ``whole`` through ``mask_exception``: the argument, ``message``, each detail, the note and the cause that
+    show the secret become ``***`` entirely; the details that show none, the code, the type and the traceback stay."""
+    print_section("3: mask_exception with whole")
+    secret = _secret("/k+y")
+    try:
+        try:
+            raise ConnectionError(f"GET https://api.example/q?apikey={quote_plus(secret)} refused")
+        except ConnectionError as cause:
+            raise AssetSourceError(f"provider refused key {secret}", "AUTH_FAILED", {"url": f"https://api.example/q?apikey={quote_plus(secret)}", "request": _Url(f"https://api.example/q?k={secret}"), "status": 401, "hint": "check the key"}) from cause
+    except AssetSourceError as caught:
+        error = caught
+    error.add_note(f"while calling with key {secret}")
+    traceback_before = error.__traceback__
+
+    mask_exception(error, frozenset({secret}), whole=True)
+
+    assert (error.args, error.message, str(error)) == ((MASK,), MASK, MASK)
+    assert error.details == {"url": MASK, "request": MASK, "status": 401, "hint": "check the key"}
+    assert error.__notes__ == [MASK]
+    assert (error.__cause__.args, str(error.__cause__)) == ((MASK,), MASK)
+    assert type(error) is AssetSourceError and error.error_code == "AUTH_FAILED"
+    assert error.__traceback__ is traceback_before
+    assert not exception_renders_secret(error, frozenset({secret}))
+    print_success("each text that showed the secret is ***, the rest as it was")
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        pytest.param(ValueError("bad key lfsecret-description-0001 for https://api.example"), f"ValueError: {MASK}", id="with-text"),
+        pytest.param(_SlotsLeak("lfsecret-description-0001"), f"_SlotsLeak: {MASK}", id="text-of-a-__str__"),
+        pytest.param(ValueError("bad key, nothing secret in it"), "ValueError: bad key, nothing secret in it", id="a-text-without-a-secret"),
+        pytest.param(ValueError(), "ValueError", id="without-text"),
+    ],
+)
+def test_masked_description_with_whole_is_the_type_and_a_mask(error, expected):
+    """3, N15: what a boundary says of an error it replaces when the caller chose a secret: ``Type: ***``; a text that
+    shows no secret as it is; the type alone without a text."""
+    assert masked_description(error, frozenset({"lfsecret-description-0001"}), whole=True) == expected
 
 
 # =============================================================================
