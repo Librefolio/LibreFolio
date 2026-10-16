@@ -3509,14 +3509,16 @@ della pagina e togliendo solo l'indentazione. La pagina **non** è ancora toccat
   - Pezzo 3: `node frontend/scripts/theme/theme-roles.mjs --split 'routes/(app)/assets/[id]/+page.svelte:routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte'`.
   - Gli altri allo stesso modo, con i loro file.
 
-### K-16 e O-9 — un lotto piccolo, scritto nella pausa ⏳ (2026-10-16, 05:30–05:40; prove dopo le 06:45)
+### K-16 e O-9 — un lotto piccolo, scritto nella pausa ✅ (2026-10-16, scritto 05:30–05:40, provato 06:49–06:53)
 
 Sono le due voci backend del dominio che il piano mette «in un treno qualunque» (§9, punto 8). Nessun file in comune con
 il FE5c, quindi un commit separato.
 
 - **K-16** (D-X7): in `borsa_italiana/plugin.py`, `"etc/etn"` passa da `AssetType.ETF` a `AssetType.ETF_COMMODITY`, con
   una riga di commento.
-  - Borsa Italiana usa la stessa etichetta per ETC ed ETN, e quasi sempre sono su una materia prima.
+  - Borsa Italiana usa la stessa etichetta per ETC ed ETN, e D-X7 le mappa tutte e due su `ETF_COMMODITY`.
+  - **È un'approssimazione**: un ETN su un indice o su una valuta diventa `ETF_COMMODITY` anche lui, perché
+    l'etichetta non li distingue. Il commento nel codice lo dice.
   - Test: un'asserzione in `test_borsa_italiana_errors.py::test_map_asset_type` (azione `services provider-errors`).
 - **O-9**: i parametri di justETF e del CSS scraper si vedevano col nome della chiave (`current_css_selector`), perché
   i due `params_schema` non avevano `label`, e le descrizioni erano solo in inglese.
@@ -3543,11 +3545,17 @@ il FE5c, quindi un commit separato.
 - **Trovato da test-author, corretto nel lotto** (stesso tema di O-9): la descrizione di `codice_fondo` di Borsa
   Italiana nel backend aveva guadagnato «when the fund is not on the XMIL market API», e le 4 traduzioni no. In
   interfaccia vinceva la traduzione, quindi si leggeva il testo vecchio. Ora le 4 lingue sono allineate.
-- **Da provare dopo le 06:45**:
-  - `services provider-errors` e `services asset-source`;
-  - `utils gate-plugin-i18n-ownership` e `gate-plugin-layout`;
-  - `i18n check`;
-  - ruff e black sui due plugin.
+- **Prove** (06:49–06:53, ognuna dopo il controllo del carico, con `nice`, a carico 40–52):
+  - `services provider-errors` → **182 passed**;
+  - `services provider-contracts` → **442 passed, 4 skipped**: i tre provider senza traduzioni e un salto vecchio di
+    mockprov;
+  - `services borsa-italiana-search` → verde;
+  - `utils gate-plugin-i18n-ownership` e `gate-plugin-layout` → verdi;
+  - `i18n check` → strict, 4762 chiavi, 73 frammenti di plugin;
+  - ruff e black sui 5 file Python → puliti, anche dopo la correzione del commento.
+- **⚠️ Fuori pista**: il commento di K-16 diceva «quasi sempre su una materia prima», un'affermazione non verificata.
+  L'ho corretto in «approssimazione per un ETN su un indice o una valuta» prima dell'handoff.
+- K-16 e O-9 sono chiuse nel backlog 38 (`38_postReleaseBacklog/README.md`), come A ha fatto con K-17.
 
 ### CP13 — F21, C-90 e C-66: analisi preliminare (2026-10-16, 05:40, sola lettura; da mandare al coordinatore con l'ultimo pezzo del FE5c)
 
