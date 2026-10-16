@@ -1,7 +1,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {goto} from '$app/navigation';
-    import {Play, RefreshCw, RotateCw} from 'lucide-svelte';
+    import {Play, RotateCw} from 'lucide-svelte';
     import type {z} from 'zod';
 
     import {schemas} from '$lib/api';
@@ -453,10 +453,6 @@
         return key ? $t(key) : '';
     }
 
-    async function loadBase(force: boolean): Promise<void> {
-        await controller.loadBase(force);
-    }
-
     async function runComparison(): Promise<void> {
         await controller.runGuarded('comparison', () => (comparisonUsable ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
     }
@@ -592,10 +588,6 @@
                 >
                     <RotateCw size={14} />
                     {$t('common.sync')}
-                </button>
-                <button type="button" class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50" onclick={() => loadBase(true)} disabled={initialLoading || refreshing} data-testid="risk-refresh-button">
-                    <RefreshCw size={14} class={refreshing ? 'animate-spin' : ''} />
-                    {$t('common.refresh')}
                 </button>
             </div>
         {/if}

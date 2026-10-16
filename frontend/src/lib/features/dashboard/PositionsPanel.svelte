@@ -120,7 +120,6 @@
     // =========================================================================
 
     let holdings = $derived(summary?.holdings ?? []);
-    let navAmount = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
     let displayCurrency = $derived(summary?.net_worth.code ?? 'EUR');
 
     /** Performance shows open+closed positions together — Status is a filterable
@@ -200,7 +199,7 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}

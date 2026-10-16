@@ -566,46 +566,184 @@ test.describe('Broker Detail Page', () => {
             await expectChartCanvas(page, 'lot-gantt-chart');
         });
 
-        test('Value presentation toggle: two independent buttons (Aggregate/Per lot), Asset-Global-style tri-state — neither pressed shows both', async ({page}) => {
+        // ── The comparison chart's presentation controls ─────────────────────────────────────
+        //
+        // What these two replace: a test pressing an Aggregate / Per-lot pair (`lots-value-*`) that
+        // left the component in 59c160325, when Value mode became aggregate-only. Its
+        // `if (!visible) return` then ended it on every run — green without testing anything — and
+        // it picked its lot by a CSS class.
+        //
+        // Today's controls are two-button groups that publish `aria-pressed`
+        // (LotComparisonChart.svelte): the mode, Value | Return; Value's Y axis, Auto | From 0; and,
+        // in Return mode only, the unit, Abs | %, and Return's own Y axis, Auto | From 0. Their state
+        // is the component's `$state` and nothing is persisted, so every test starts from the
+        // defaults the component declares: Value, Auto, Abs, Auto.
+        //
+        // What a floor does to the axis (`yAxis.min: 0` in Value mode) is not read here: unlike
+        // GrowthChart or PerformanceChart, this chart publishes no handle on its ECharts instance
+        // (`__lfChart`), and adding one is a product change. The assertions stop at what the user is
+        // told — which button is pressed, which controls are offered — and at the chart finishing a
+        // redraw after every click, with something to draw.
+
+        /**
+         * Open the lots panel from the first holding, as the tests above do, and wait until its
+         * comparison chart has drawn — before any lot is picked.
+         *
+         * Nothing picked is not nothing to draw: until the user picks lots, the panel compares every
+         * visible one (plan v3 §13, `effectiveSelectedLots`), so `lot-comparison-empty` only shows
+         * when no lot is visible at all. The chart stays `invisible` until it has something to draw,
+         * which makes its visibility the barrier on the histories it waits for.
+         *
+         * The title comes first, for the reason `openLotsPanelSettled` gives: the panel's currency is
+         * the asset's own once the asset cache resolves (the base currency before), and a currency
+         * change reloads the panel and mounts every chart again — this one with its presentation back
+         * at the defaults, under a test that has just changed them. The title gains the asset name in
+         * the same update. The name is the broker summary's, for the id the panel wrote into the URL.
+         */
+        async function openComparisonChart(page: Page): Promise<Locator> {
             await goToBrokerWithHoldings(page);
-
             const row = await firstHoldingRow(page);
-
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expect(page).toHaveURL(/[?&]asset=\d+/);
 
-            const checkbox = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first().locator('.checkbox-btn, button').first();
-            await expect(checkbox, 'the value presentation toggle must be present once the panel is open').toBeVisible({timeout: 10_000});
-            await checkbox.click();
+            const url = new URL(page.url());
+            const brokerId = Number(url.pathname.split('/').filter(Boolean).pop());
+            const assetId = Number(url.searchParams.get('asset'));
+            const summaryResponse = await page.request.get(`/api/v1/brokers/${brokerId}/summary`);
+            expect(summaryResponse.ok(), `broker ${brokerId} summary answered ${summaryResponse.status()}`).toBe(true);
+            const summary = (await summaryResponse.json()) as {holdings?: {asset_id: number; asset_name: string}[] | null};
+            const assetName = summary.holdings?.find((holding) => holding.asset_id === assetId)?.asset_name;
+            if (!assetName) throw new Error(`Asset ${assetId}, opened from the first ${BROKER_WITH_HOLDINGS} holding, is missing from broker ${brokerId}'s summary`);
+            await expect(page.getByTestId('lots-analysis-panel-title'), `the title gains "${assetName}" once the asset cache has resolved — from then on the panel's currency is final and its charts are not mounted again`).toContainText(assetName, {timeout: 10_000});
 
-            const presentationFilter = page.getByTestId('lots-value-presentation-filter');
-            if (!(await presentationFilter.isVisible({timeout: 5_000}).catch(() => false))) return; // no selectable lot in range
-
-            const aggregateToggle = page.getByTestId('lots-value-aggregate-toggle');
-            const individualToggle = page.getByTestId('lots-value-individual-toggle');
-            // No 3rd "Both" button — removed in favor of the Asset-Global-style tri-state pattern.
-            await expect(page.getByTestId('lots-value-both-toggle')).toHaveCount(0);
-
-            // Default: only Aggregate pressed.
-            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'true');
-            await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
+            const chart = page.getByTestId('lot-comparison-echart');
+            await expect(chart, `the comparison chart must show ${assetName}'s lots before any is picked — it stays invisible until it has something to draw`).toBeVisible({timeout: 20_000});
             await expectChartCanvas(page, 'lot-comparison-echart');
+            await expect(chart).toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+            await expect(page.getByTestId('lot-comparison-empty'), 'nothing picked yet, and still a chart: the empty state is for a panel with no visible lot').toHaveCount(0);
+            return chart;
+        }
 
-            // Press Per lot too -> both pressed -> still shows everything.
-            await individualToggle.click();
-            await expect(individualToggle).toHaveAttribute('aria-pressed', 'true');
-            await expectChartCanvas(page, 'lot-comparison-echart');
+        /** One choice per group: `chosen` pressed, and no other button of its group. */
+        async function expectChoice(group: Locator, chosen: Locator, what: string): Promise<void> {
+            await expect(chosen, `${what}: pressed`).toHaveAttribute('aria-pressed', 'true');
+            await expect(group.getByRole('button', {pressed: true}), `${what}: exactly one button of the pair pressed`).toHaveCount(1);
+        }
 
-            // Un-press Aggregate -> only Per lot pressed -> exclusive individual view.
-            await aggregateToggle.click();
-            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
+        /**
+         * Press one presentation button of the comparison chart and wait for the redraw it causes.
+         *
+         * Each button sets a value rather than toggling it, so pressing the current choice changes
+         * nothing and no redraw would come: the button must start unpressed. The render counter
+         * (`data-chart-renders`, from attachChartReady) is read before the click and polled for a
+         * delta, so the redraw proven finished after the click. The canvas is checked only after it —
+         * the element survives the click, and checked at once it would show the picture being
+         * replaced — and the container goes `invisible` whenever the chosen presentation has nothing
+         * to draw, so the check is also the proof that it has data.
+         */
+        async function pressAndRedraw(page: Page, button: Locator, what: string): Promise<void> {
+            const chart = page.getByTestId('lot-comparison-echart');
+            await expect(button, `${what}: the button must be offered, and not pressed yet`).toHaveAttribute('aria-pressed', 'false');
+            const before = await chartRenders(chart);
+            await button.click();
+            await expect(button, `${what}: the button must report itself pressed`).toHaveAttribute('aria-pressed', 'true');
+            await expect.poll(() => chartRenders(chart), {message: `${what}: the comparison chart must finish the redraw the click caused`, timeout: 10_000}).toBeGreaterThan(before);
+            await expect(chart, `${what}: the chart must still have something to draw — it goes invisible on "no data"`).toBeVisible();
             await expectChartCanvas(page, 'lot-comparison-echart');
+        }
 
-            // Un-press Per lot too -> neither pressed -> implicit "show both" (tri-state rule).
-            await individualToggle.click();
-            await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
-            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
+        test('comparison chart: a picked lot keeps it drawn, Value/Return swap the toolbar, and each mode keeps its own Y-axis floor (aria-pressed)', async ({page}) => {
+            const chart = await openComparisonChart(page);
+            const modeGroup = page.getByTestId('lot-comparison-mode-toggle');
+            const valueFloor = page.getByTestId('lot-comparison-value-yaxis-toggle');
+            const returnUnit = page.getByTestId('lot-comparison-return-abs-pct-toggle');
+            const returnFloor = page.getByTestId('lot-comparison-return-yaxis-toggle');
+
+            // Pick a lot by the state the table publishes — DataTable writes `data-selected` on the
+            // row and `data-state` on its checkbox — and address it by its own id from then on. Which
+            // lot does not matter to the controls, so the first row is taken; that it still gives the
+            // chart something to draw is asserted below, not assumed. The panel opens with nothing
+            // picked, and that is checked too: the checkbox toggles, and would unpick a picked lot.
+            const lotRows = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]');
+            await expect(lotRows.first(), `the first ${BROKER_WITH_HOLDINGS} holding must have at least one lot to pick — check populate_mock_data.py`).toBeVisible({timeout: 10_000});
+            const lotId = await lotRows.first().getAttribute('data-row-id');
+            if (!lotId) throw new Error('A row of the unified lots table carries an empty data-row-id');
+            const lotRow = page.locator(`[data-testid="unified-lots-table"] tbody tr[data-row-id="${lotId}"]`);
+            const lotCheckbox = lotRow.getByTestId(`dt-row-checkbox-${lotId}`);
+            await expect(lotRow, 'the panel opens with no lot picked').toHaveAttribute('data-selected', 'false');
+            await expect(lotCheckbox).toHaveAttribute('data-state', 'unchecked');
+
+            const rendersBeforePick = await chartRenders(chart);
+            await lotCheckbox.click();
+            await expect(lotCheckbox).toHaveAttribute('data-state', 'checked');
+            await expect(lotRow, `lot ${lotId} is picked`).toHaveAttribute('data-selected', 'true');
+            await expect.poll(() => chartRenders(chart), {message: `the comparison chart must redraw for lot ${lotId} alone`, timeout: 10_000}).toBeGreaterThan(rendersBeforePick);
+            await expect(chart, `lot ${lotId} alone must still give the chart something to draw — it goes invisible on "no data"`).toBeVisible();
             await expectChartCanvas(page, 'lot-comparison-echart');
+            await expect(page.getByTestId('lot-comparison-empty'), 'picking a lot narrows the comparison, it does not empty it').toHaveCount(0);
+
+            // The defaults. Return's controls are not rendered in Value mode ({#if}), so their absence
+            // is asserted once a control of the same toolbar has shown up.
+            await expectChoice(modeGroup, page.getByTestId('lot-comparison-mode-value'), 'default mode Value');
+            await expect(valueFloor).toBeVisible();
+            await expectChoice(valueFloor, page.getByTestId('lot-comparison-value-yaxis-auto'), 'default Value Y axis Auto');
+            await expect(returnUnit, 'Abs/% belongs to Return mode').toHaveCount(0);
+            await expect(returnFloor, "Return's Y-axis floor belongs to Return mode").toHaveCount(0);
+
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-value-yaxis-zero'), 'Value Y axis From 0');
+            await expectChoice(valueFloor, page.getByTestId('lot-comparison-value-yaxis-zero'), 'Value Y axis From 0');
+
+            // Value → Return swaps the toolbar, and Return's floor is its own: still Auto.
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-mode-return'), 'Return mode');
+            await expectChoice(modeGroup, page.getByTestId('lot-comparison-mode-return'), 'mode Return');
+            await expect(returnUnit).toBeVisible();
+            await expect(returnFloor).toBeVisible();
+            await expect(valueFloor, "Value's Y-axis floor leaves with Value mode").toHaveCount(0);
+            await expectChoice(returnUnit, page.getByTestId('lot-comparison-return-abs'), 'default Return unit Abs');
+            await expectChoice(returnFloor, page.getByTestId('lot-comparison-return-yaxis-auto'), "Return's own Y axis, Auto — From 0 on Value's does not carry over");
+
+            // Return → Value swaps it back, and Value's floor kept its From 0 through the round trip.
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-mode-value'), 'Value mode again');
+            await expectChoice(modeGroup, page.getByTestId('lot-comparison-mode-value'), 'mode Value again');
+            await expect(valueFloor).toBeVisible();
+            await expect(returnUnit).toHaveCount(0);
+            await expect(returnFloor).toHaveCount(0);
+            await expectChoice(valueFloor, page.getByTestId('lot-comparison-value-yaxis-zero'), "Value's Y axis after a round trip through Return");
+
+            // …and the pair's other half.
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-value-yaxis-auto'), 'Value Y axis Auto');
+            await expectChoice(valueFloor, page.getByTestId('lot-comparison-value-yaxis-auto'), 'Value Y axis Auto again');
+        });
+
+        test('comparison chart in Return mode: Abs/% and the Y-axis floor switch both ways, one button per pair pressed, the chart drawn after each click', async ({page}) => {
+            // No lot picked here: the chart shows the panel's own selection, every visible lot. The %
+            // view needs a lot whose opening value is above zero — the others have no percentage to
+            // give — and asking that of the set rather than of one row keeps this test about the
+            // controls.
+            await openComparisonChart(page);
+            const returnUnit = page.getByTestId('lot-comparison-return-abs-pct-toggle');
+            const returnFloor = page.getByTestId('lot-comparison-return-yaxis-toggle');
+
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-mode-return'), 'Return mode');
+            await expectChoice(returnUnit, page.getByTestId('lot-comparison-return-abs'), 'default Return unit Abs');
+            await expectChoice(returnFloor, page.getByTestId('lot-comparison-return-yaxis-auto'), 'default Return Y axis Auto');
+
+            // Each pair moves on its own: the unit leaves the floor alone, and the floor the unit.
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-return-pct'), 'Return unit % (needs a visible lot whose opening value is above zero)');
+            await expectChoice(returnUnit, page.getByTestId('lot-comparison-return-pct'), 'Return unit %');
+            await expectChoice(returnFloor, page.getByTestId('lot-comparison-return-yaxis-auto'), 'Return Y axis, untouched by the unit');
+
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-return-yaxis-zero'), 'Return Y axis From 0');
+            await expectChoice(returnFloor, page.getByTestId('lot-comparison-return-yaxis-zero'), 'Return Y axis From 0');
+            await expectChoice(returnUnit, page.getByTestId('lot-comparison-return-pct'), 'Return unit, untouched by the floor');
+
+            // Back the other way: each pair's other half.
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-return-abs'), 'Return unit Abs');
+            await expectChoice(returnUnit, page.getByTestId('lot-comparison-return-abs'), 'Return unit Abs again');
+
+            await pressAndRedraw(page, page.getByTestId('lot-comparison-return-yaxis-auto'), 'Return Y axis Auto');
+            await expectChoice(returnFloor, page.getByTestId('lot-comparison-return-yaxis-auto'), 'Return Y axis Auto again');
         });
     });
 });

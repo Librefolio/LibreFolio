@@ -5,6 +5,7 @@
     import {t} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {fetchToolCatalog} from './client';
     import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
@@ -129,7 +130,8 @@
             entries = [];
             error = null;
             loading = next.authenticated;
-            if (next.authenticated) void loadCatalog();
+            // The catalog holds the page's Refresh button (Y11).
+            if (next.authenticated) void pageBusy.track('tools-catalog', () => loadCatalog());
         });
         return () => {
             alive = false;
@@ -152,13 +154,14 @@
             </h1>
             <button
                 type="button"
-                onclick={() => loadCatalog(true)}
-                disabled={busy || !account.authenticated}
+                onclick={() => void pageBusy.track('tools-refresh', () => loadCatalog(true))}
+                disabled={busy || pageBusy.busy || !account.authenticated}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
                 class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-lf-input bg-lf-card px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={$t('common.refresh')}
                 data-testid="tools-hub-refresh"
             >
-                <RefreshCw size={16} aria-hidden="true" />
+                <RefreshCw size={16} aria-hidden="true" class={pageBusy.busy ? 'animate-spin' : ''} />
                 <span class="hidden sm:inline">{$t('common.refresh')}</span>
             </button>
         </div>
@@ -180,7 +183,7 @@
         <div class="space-y-3 rounded-xl border border-lf-danger-line bg-lf-danger-soft p-5 text-lf-danger-on-soft" role="alert" data-testid="tools-catalog-error" data-error-code={error.code}>
             <h2 class="font-semibold">{$t('common.error')}</h2>
             <p class="text-sm">{$t(errorCopy.key, {default: errorCopy.fallback})}</p>
-            <button type="button" onclick={() => loadCatalog(true)} class="rounded-lg border border-current px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tools-catalog-retry">
+            <button type="button" onclick={() => void pageBusy.track('tools-retry', () => loadCatalog(true))} class="rounded-lg border border-current px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2" data-testid="tools-catalog-retry">
                 {$t('common.retry')}
             </button>
         </div>
