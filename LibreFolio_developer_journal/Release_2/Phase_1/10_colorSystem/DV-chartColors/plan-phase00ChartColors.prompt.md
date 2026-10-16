@@ -661,6 +661,124 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
 >   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
 >   (un caso C4 in `GrowthChart.test.ts`).
 
+### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
+
+**Richiesta del coordinatore** (16/10 alle 02:06): per ciascun file dei grafici, cosa resta in m1 (classi colore
+legacy) e in m2 (letterali), con il conteggio, la destinazione (un ruolo o una categoria) e se dipende da una risposta
+della designer (grafici giro 3, punti 2.1–2.9). Nessun codice toccato.
+
+**Base:** `20558ead5`, uguale al target `57802d827`. I percorsi sono quelli di oggi: Y3, Y4b e Y5 spostano dashboard,
+rischio e broker. Per uno spostamento puro il baseline non va toccato, perché il gate accoppia i file per nome.
+
+**Metodo:** le regole stesse del gate (`theme-roles.mjs`: `listSources`, `codeOf`, `LEGACY_CLASS_RE`,
+`measureSource`), in uno script in sola lettura.
+- Le classi neutre (`slate`, `gray`, `zinc`, `neutral`, `stone`, `white`, `black`) e quelle del marchio (`libre-*`,
+  `primary-*`, `surface-*`) vanno ai ruoli diretti della skill `theme-roles`.
+- Le classi colorate le ho classificate a mano, riga per riga.
+
+**Totale: 103 file, m1 2628, m2 0.** I letterali stanno già nelle tabelle di `lib/theme/`.
+- **Neutri, 2081:** `text-lf-primary`/`secondary`/`muted`, `bg-lf-card`/`panel`/`field`/`hover`/`neutral`,
+  `border-lf-subtle`/`input`, `ring-lf-focus`.
+- **Marchio, 154:** `bg-lf-action`, `text-lf-link`, `bg-lf-selected`, `bg-lf-checked`.
+- **Colorati, 393:**
+  - gli stati (warning, danger, info, success) → `lf-<stato>`, `-soft`, `-line`, `-on-soft`, senza dipendenze;
+  - i numeri con segno → `text-lf-gain`/`text-lf-loss`, che dipendono dal punto 2.8;
+  - le categorie vere sono poche.
+
+**Dipendono dalla designer 9 file, uno di T.**
+- **2.8, numeri con segno:** `LotCustodyModal`, `OtherPeriodEffectsTable`, `AssetSetLossComparisonSection`,
+  `ReturnHistogram`, e `KpiSection` (TD-2, di T).
+- **2.1 e 2.5:** `BackendTimingBar` e `RiskReturnLevel`.
+- **Giro dei badge:** `UnifiedLotsTable` e `LotGanttChart`.
+
+Tutto il resto si può convertire già.
+
+**Ordine consigliato del lotto,** per area e dopo gli spostamenti:
+1. i file con soli neutri e marchio, che sono il grosso e non chiedono decisioni;
+2. gli stati;
+3. infine i file che aspettano la designer.
+
+**`lib/components/charts/`**: 14 file, m1 431, di cui neutri 368 e marchio 39; colorati 24. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `ChartSignalsSection.svelte` | 95 | 73 / 7 | 15 | banner ambra, icone d'errore e d'avviso, elimina → ruoli warning e danger | — |
+| `MeasurePanel.svelte` | 34 | 26 / 0 | 8 | nota ambra → warning-soft; elimina → `hover:text-lf-danger` | — |
+| `SignalAssetParamControl.svelte` | 1 | 0 / 0 | 1 | errore → `text-lf-danger` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `ChartAestheticsSection.svelte` 78, `ChartSettingsModal.svelte` 47, `SignalStyleEditor.svelte` 42, `ChartToolbar.svelte` 38, `PriceChartFull.svelte` 36, `SignalParamControl.svelte` 24, `SignalVisualLegend.svelte` 16, `ResolutionBadge.svelte` 6, `SignalOptionContent.svelte` 6, `GeographyMap.svelte` 4, `ScatterChart.svelte` 4.
+
+**`lib/components/risk/`**: 30 file, m1 763, di cui neutri 596 e marchio 32; colorati 135. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `RiskAnalysisPanel.svelte` | 192 | 177 / 5 | 10 | riquadro d'errore → ruoli danger; note ambra → warning | — |
+| `AssetSetRiskPanel.svelte` | 71 | 48 / 3 | 20 | avvisi ambra ed errore rosso → ruoli warning e danger | — |
+| `levels/l4/L4Simulation.svelte` | 45 | 34 / 5 | 6 | avviso di deriva → warning-soft | — |
+| `RiskResultFrame.svelte` | 41 | 28 / 1 | 12 | badge e riquadro ambra → warning-soft | — |
+| `levels/RiskLevelSection.svelte` | 29 | 23 / 0 | 6 | avviso → warning-soft | — |
+| `levels/l4/L4Replay.svelte` | 29 | 9 / 4 | 16 | note ambra → warning-soft; bottone bordato → ruoli di azione | — |
+| `levels/L4WhatIf.svelte` | 27 | 19 / 2 | 6 | avviso del modello → warning-soft | — |
+| `AssetSetLossComparisonSection.svelte` | 26 | 22 / 0 | 4 | `LOSS_CLASS`, le perdite → `text-lf-loss`; errore → danger | 2.8 |
+| `levels/l4/L4Shock.svelte` | 25 | 16 / 6 | 3 | chip del preset scelto → `bg-lf-selected`/azione; nota → warning | — |
+| `AssetSetRiskReturnSection.svelte` | 22 | 20 / 0 | 2 | errore → `text-lf-danger` | — |
+| `levels/RiskPanelHeader.svelte` | 22 | 16 / 0 | 6 | riquadro d'errore → ruoli danger | — |
+| `AssetSetCorrelationSection.svelte` | 20 | 18 / 0 | 2 | errore → `text-lf-danger` | — |
+| `levels/RiskPartialNotice.svelte` | 20 | 4 / 0 | 16 | varianti info e warning → info-soft e warning-soft | — |
+| `levels/SimulationProvenance.svelte` | 20 | 14 / 0 | 6 | avviso di troncamento → warning-soft | — |
+| `levels/l1/ReturnHistogram.svelte` | 16 | 10 / 0 | 6 | barra del taglio → warning; barre sotto il taglio → `bg-lf-loss` | 2.8 |
+| `RiskReturnLevel.svelte` | 14 | 10 / 0 | 4 | legenda: punto «portafoglio» cielo e rombo «asset» ambra → categorie del grafico rischio/rendimento, coerenti con la serie ECharts | 2.5 |
+| `levels/L1HowMuchItHurts.svelte` | 11 | 10 / 0 | 1 | hover del link alla documentazione → `text-lf-link` | — |
+| `levels/RiskLevelsPanel.svelte` | 6 | 0 / 0 | 6 | avviso → warning-soft | — |
+| `BenchmarkSelect.svelte` | 3 | 0 / 0 | 3 | errore → danger; icona «misurato» → warning | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `CorrelationHeatmap.svelte` 33, `CorrelationPairsList.svelte` 25, `levels/L2Diversification.svelte` 23, `AssetRiskScenariosView.svelte` 13, `LabAssetPicker.svelte` 8, `levels/l1/UnderwaterChart.svelte` 8, `levels/L3RiskAdjusted.svelte` 4, `levels/l4/TornadoChart.svelte` 4, `AssetChip.svelte` 2, `assetSetTable.ts` 2, `levels/L3Benchmark.svelte` 2.
+
+**`lib/components/brokers/lots/`**: 7 file, m1 545, di cui neutri 399 e marchio 17; colorati 129. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `LotCustodyModal.svelte` | 219 | 173 / 4 | 42 | importi con segno, commissioni e tasse → `text-lf-gain`/`text-lf-loss`; nota ambra → `text-lf-warning`; badge → `bg-lf-success-soft`; hover → `text-lf-link` | 2.8 |
+| `UnifiedLotsTable.svelte` | 84 | 30 / 0 | 54 | badge di direzione e custodia del lotto (smeraldo, ambra, viola, cielo, rosso) → categoria «stato del lotto», da allineare a `LOT_STATE_COLORS` | giro dei badge (registro, 19:2x) |
+| `LotsAnalysisPanel.svelte` | 42 | 32 / 1 | 9 | errore → ruoli danger; hover → `text-lf-link` | — |
+| `LotGanttChart.svelte` | 36 | 32 / 0 | 4 | chip tratteggiata viola, il marcatore «altro» → categoria del marcatore | giro dei badge |
+| `LotDataQualityBanner.svelte` | 20 | 0 / 0 | 20 | banner warning e info → `bg-lf-warning-soft`/`bg-lf-info-soft` con `-line` e `-on-soft` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `LotComparisonChart.svelte` 96, `LotWacPriceChart.svelte` 48.
+
+**`lib/components/dashboard/`**: 12 file, m1 308, di cui neutri 274 e marchio 15; colorati 19. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `KpiSection.svelte` | 50 | 46 / 0 | 4 | barre dei KPI blu e smeraldo → TD-2 di T (W3/W5) | 2.8 (di T) |
+| `PositionsPanel.svelte` | 46 | 42 / 3 | 1 | link → `text-lf-link` | — |
+| `OtherPeriodEffectsTable.svelte` | 28 | 20 / 0 | 8 | badge per segno (smeraldo, rosso) → gain/loss tenui | 2.8 |
+| `ContributionTable.svelte` | 14 | 8 / 2 | 4 | badge «aperta» smeraldo → `bg-lf-success-soft text-lf-success-on-soft` | — |
+| `YieldOnCostCell.svelte` | 8 | 6 / 0 | 2 | icona ambra → `text-lf-warning` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `GrowthChart.svelte` 86, `AllocationPanel.svelte` 42, `KpiCard.svelte` 14, `ExposureTreemap.svelte` 10, `AllocationHistoryChart.svelte` 4, `PerformanceChart.svelte` 4, `ExposureTable.svelte` 2.
+
+**`lib/features/tools/pac-allocator/`**: 40 file, m1 581, di cui neutri 444 e marchio 51; colorati 86. m2 0.
+
+| File | m1 | Neutri / marchio | Colorati | Destinazione dei colorati | Designer |
+|---|---:|---:|---:|---|---|
+| `planner/ui.ts` | 118 | 78 / 21 | 19 | bottoni: primario → `bg-lf-action text-lf-on-action`; pericolo bordato → `border-lf-danger-line text-lf-danger`; avviso pieno → `bg-lf-warning text-lf-on-status` | — |
+| `planner/result/BackendTimingBar.svelte` | 32 | 20 / 0 | 12 | 6 fasi colorate (cielo, viola, smeraldo, ambra, rosa, verde acqua) → sequenza di categoria (`sequenceColor`) | 2.1, 2.5 |
+| `planner/steps/BrokersStep.svelte` | 32 | 30 / 0 | 2 | problema → `text-lf-danger` | — |
+| `planner/steps/BrokerEditor.svelte` | 24 | 12 / 4 | 8 | avvisi → warning-soft | — |
+| `planner/steps/AssetsStep.svelte` | 22 | 18 / 0 | 4 | note senza prezzo → `text-lf-warning-on-soft` | — |
+| `planner/shell/StepNav.svelte` | 20 | 11 / 3 | 6 | icone → warning e success; passo corrente → `bg-lf-selected` | — |
+| `planner/shared/IssueList.svelte` | 18 | 12 / 0 | 6 | icone errore, avviso, info → danger, warning, info | — |
+| `planner/shared/ReviewCell.svelte` | 18 | 12 / 0 | 6 | icone e data vecchia → warning e success | — |
+| `planner/steps/LiquidityStep.svelte` | 16 | 14 / 0 | 2 | liquidità oltre il disponibile → `text-lf-danger` | — |
+| `planner/steps/RoutingStep.svelte` | 16 | 8 / 0 | 8 | problema e avviso → danger e warning-soft | — |
+| `planner/steps/FxStep.svelte` | 12 | 8 / 0 | 4 | cambio mancante → `text-lf-warning-on-soft` | — |
+| `planner/result/FailurePanel.svelte` | 10 | 6 / 0 | 4 | icone d'esito → warning e danger | — |
+| `planner/steps/TargetsStep.svelte` | 9 | 6 / 0 | 3 | ✅, eccesso e mancanza → success, danger, warning | — |
+| `planner/shell/SummaryPanel.svelte` | 8 | 6 / 0 | 2 | valore da controllare → `text-lf-warning` | — |
+
+Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `planner/result/OrderDetail.svelte` 28, `planner/steps/StrategyStep.svelte` 19, `planner/steps/DistributionDialog.svelte` 18, `planner/result/KpiCards.svelte` 16, `planner/steps/BrokerScopeCopyDialog.svelte` 16, `planner/shared/PlannerDialog.svelte` 15, `planner/steps/OwnedAssetsDialog.svelte` 15, `planner/result/ProofPanel.svelte` 14, `planner/result/OperationalPlan.svelte` 12, `planner/shared/AutoManualToggle.svelte` 11, `planner/PacPlannerTool.svelte` 8, `planner/shared/OwnerBrokerPicker.svelte` 8, `planner/result/ResultCell.svelte` 7, `planner/result/AssetTable.svelte` 5, `planner/result/ExposureMaps.svelte` 4, `planner/result/ExposureSection.svelte` 4, `planner/result/ResultView.svelte` 4, `planner/result/ToolErrorPanel.svelte` 4, `planner/steps/AssetEditor.svelte` 4, `planner/steps/ReviewStep.svelte` 3, `planner/result/OutcomeHeader.svelte` 2, `planner/shared/ConflictDialog.svelte` 2, `planner/shared/MarqueeName.svelte` 2, `planner/shared/columnHelp.ts` 2, `planner/steps/ScenarioStep.svelte` 2, `planner/result/ResultSection.svelte` 1.
+
 | Passo | Contenuto | File | Conflitti |
 |---|---|---|---|
 | S2 | Fondamenta in `lib/theme` e gate | `lib/theme/chartCategories.ts`, `chartShades.ts`, `roleColors.ts` (nuovi), `themeMode.ts`, `colorAlpha.ts` | nessuno |
