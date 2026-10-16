@@ -39,7 +39,7 @@ it.
 
 The value is a literal, so a release build turns every `if (__LF_DESIGNER_LAB__)` into `if (false)`:
 Rollup drops the branch **and the dynamic `import()` inside it**, and no Lab chunk is emitted. Three
-places hold such a branch:
+places import the Lab inside such a branch:
 
 | File | What the branch does |
 |:--|:--|
@@ -52,6 +52,10 @@ places hold such a branch:
 if (__LF_DESIGNER_LAB__) import('$lib/dev/designer-lab/client').then((lab) => lab.start()).catch(() => {});
 ```
 
+A fourth branch, in `src/lib/theme/chartCategories.ts` (workstream DV), imports nothing: it asks the
+published hook for an edited category colour, and a release build drops it too — see
+[Chart Categories](#chart-categories).
+
 ### 🧪 Test Server, E2E and Gallery {: #neutrality }
 
 `./dev.py server --test` always builds and serves the **debug** bundle: `--test` forces debug mode, and
@@ -61,7 +65,9 @@ They do, because in a browser context where the Lab was never opened — every g
 E2E context but those of the Lab's own specs — the client stays idle:
 
 - the client publishes its [debug hook](#debug-hook) and adds one `storage` listener: it loads no engine
-  and no picker, and touches no stylesheet, variable or chart;
+  and no picker, and touches no stylesheet, variable or chart. The hook's `categoryColor`, which every
+  chart asks for its [categories](#chart-categories), answers nothing, so the charts keep their tables'
+  colours;
 - the Alt+Shift+D shortcut adds one `keydown` listener, and only in a browser where the Lab has been
   opened (`lf-designer-lab/seen`, written by the Lab page);
 - the engines and the element picker are dynamic imports, separate chunks loaded the first time a state
@@ -151,7 +157,7 @@ flowchart LR
     end
     subgraph TABS["🖥️ Every tab of the same origin"]
         CLIENT["client.ts<br/>started by the root layout"]
-        ENGINE["engine/ — lazy chunk<br/>L1 variables · L2 stylesheets · L3 charts<br/>specialisations · colour vision"]
+        ENGINE["engine/ — lazy chunk<br/>L1 variables · L2 stylesheets · L3 charts<br/>categories · specialisations · colour vision"]
         PICKER["picker/ — lazy chunk<br/>veil · describe · anchor"]
     end
     CAT -->|"Lab page only"| UI
@@ -204,8 +210,9 @@ state, undoes everything and leaves the module loaded but idle.
 
 A change has an `id` — `<layer>:<target>@<scope>`, plus `#<literal id>` when it is restricted to one
 stylesheet occurrence, and `element:<property>[:<colour key>]@<scope>~<selector>` for a specialisation —
-a `layer`, a `target` (a variable name, a colour key, or a specialisation's selector), a `scope` (`light`,
-`dark` or `both`), `from`, `to` (any CSS colour, `var(--x)` included), `alphaVariants` (default `true`),
+a `layer`, a `target` (a variable name, a colour key, a chart category such as `type:ETF`, or a
+specialisation's selector), a `scope` (`light`, `dark` or `both`), `from`, `to` (any CSS colour,
+`var(--x)` included), `alphaVariants` (default `true`),
 `occurrence` and `match` for a single occurrence, `property` and `colorKey` for a specialisation, an
 `anchor` (the picked element the change was decided on: set on every `element` change the Lab makes,
 context on the other layers), a `note` and `shots`. `isSafeCssValue()` refuses a `to` longer than 200 characters or holding a
@@ -271,6 +278,10 @@ rules (`@media`, `@supports`, `@layer`) included, minus the Lab's own styles (`d
   `<head>` rewrites each `<link rel="stylesheet">` when it loads and each `<style>` as it arrives.
 - **Component variables.** A `css-var` change to a variable defined on a non-root rule rewrites that
   definition.
+- **Variables' definitions.** A colour written inside a custom property's definition is rewritten like any
+  other, and the variable changes wherever it is read: a role that `tokens.css` writes as a literal
+  changes with a **Stylesheets** edit of that value, as with an L1 edit of the role. The charts that read
+  roles when they draw hear of it through the redraw signal, C4 ([Chart Categories](#chart-categories)).
 - **One occurrence.** A change restricted to one occurrence carries the selector and property that the
   catalogue recorded. The engine compares them with each rule after `normalizeSelector()` — `.svelte-…`
   scope classes dropped, `:global()` unwrapped, spaces and case normalised — and accepts a longhand of the
@@ -301,11 +312,15 @@ two mechanisms:
    placeholders, because ECharts merges them by index; other arrays (`data`, `colorStops`, a palette) are
    sent whole. Zoom and data stay as they are.
 
-The re-apply exists because forcing a redraw is not enough: 5 of the 17 chart components do not redraw
-when the class of `<html>` changes without a theme switch. ScatterChart, CorrelationHeatmap, ExposureBars
-and ExposureMaps only store the `dark` flag, and SemiDonutChart has no observer at all. The spike
-confirmed it on the correlation heatmap, the scatter and the semi-donut; the re-apply updated 6 instances
-out of 6, in 1.9–6.8 ms each, with patches of 151–650 bytes.
+The re-apply exists because forcing a redraw is not enough: at the step 0 spike, 5 of the 17 chart
+components did not redraw when the class of `<html>` changed without a theme switch. ScatterChart,
+CorrelationHeatmap, ExposureBars and ExposureMaps only stored the `dark` flag, and SemiDonutChart had no
+observer at all. The spike confirmed it on the correlation heatmap, the scatter and the semi-donut; the
+re-apply updated 6 instances out of 6, in 1.9–6.8 ms each, with patches of 151–650 bytes. SemiDonutChart
+now redraws on every class change, while the other four still store the flag only. Some charts also
+rebuild their option on the Lab's redraw signal, C4 ([Chart Categories](#chart-categories)), which the
+engine sends when the variables or the categories the charts read change — an L1 edit, a category edit,
+or a variable's definition the stylesheet pass rewrote — not for chart colours: L3 patches those itself.
 
 The mapping:
 
@@ -319,6 +334,78 @@ The mapping:
   a form no colour of the app uses, so the engine recognises its own output when it reads an option back;
 - keeps one plan per theme, and reads the theme in force when it maps; an instance's plan also takes the
   chart specialisations whose selector contains it (see below).
+
+### 🍩 Chart Categories {: #chart-categories }
+
+The charts draw each asset type and each sector in a **fixed colour, chosen by key**: 11 asset-type
+families and 14 sectors, plus two buckets that both kinds share, `Liquidity` (the cash) and `Unknown`.
+Workstream DV keeps them in `frontend/src/lib/theme/chartCategories.ts`, under a contract with the Lab:
+
+- **C1, one read point.** Every chart reads a category's colour through `categoryColor(kind, key, dark)`:
+  the pie, the history, their legends and tooltips. The GR4 subtype shades are mixed from the colour it
+  returns.
+- **C2, one literal per line.** The tables write one literal per line, each entry under its key, as
+  `light:` and `dark:`: an edit is exported by file and line.
+- **C3, a hook in debug builds.** `categoryColor` first asks
+  `globalThis.__lfDesignerLab?.categoryColor?.(kind, key, dark)`, inside a
+  `typeof __LF_DESIGNER_LAB__ !== 'undefined' && __LF_DESIGNER_LAB__` branch that a release build drops.
+  The app imports nothing of the Lab. The [release guard](#release-builds) looks for `lf-designer-lab`,
+  which the name `__lfDesignerLab` does not hold: the minifier is what keeps the branch out, and DV's
+  `chartCategories.test.ts` checks it on a minified build.
+- **C4, a redraw signal.** `src/lib/theme/themeMode.ts` has `onChartColorsChange(cb)` and
+  `notifyChartColorsChange()`: the event `lf:chart-colors-change` on `document`. A chart that hears it
+  rebuilds its whole option, so it reads its categories again, and the roles it reads through
+  `chartRoles` (`roleColors.ts`, the sRGB bridge).
+
+**By key, not by value.** Types and sectors share values (`ETF` and `Technology`, `BOND` and
+`Utilities`…), and some category values are written elsewhere too, by a role or another chart: a change
+of the value in the **Charts** tab would recolour several categories at once. A `category` change — the
+sixth [change layer](#change-layers) — names one category by its key: `type:<KEY>`, `sector:<Key>`,
+`bucket:Liquidity` or `bucket:Unknown`, as the table writes it. Its id is `category:<target>@<scope>`, and
+its value any colour the editor accepts: a literal, a `var()`, a mix with `transparent`.
+
+**The engine.** `engine/categories.ts`, part of the engine chunk of the app tabs, holds the `category`
+changes of the applied state and answers the hook, which `client.ts` publishes as `categoryColor`
+([The Debug Hook](#debug-hook)). The hook answers nothing until a state with an effect loads the engine,
+nor while the state is suspended: the table's colour then stands. Otherwise, for a category with a change
+in the asked theme:
+
+- a change for that theme wins over one for `both`, as in L1;
+- the value is resolved at each ask: a `var()` follows the page's current value of the variable, an L1
+  edit included, and a value that does not resolve now gives no answer;
+- the answer is a colour the canvas reads, clamped to sRGB: `#rrggbb` when opaque, the form the GR4 shades
+  mix, and `rgba()` when translucent;
+- keys are compared as `categoryColor` compares them, ignoring case, spaces and underscores
+  (`Health Care`, `HEALTH_CARE`), and the two buckets answer for both kinds.
+
+`stats().categoryOverrides` counts the `category` changes the engine holds.
+
+**The redraw (C4).** The engine calls `notifyChartColorsChange()` when what the charts read at their draw
+has changed since its last check (`signalChartInputs()` in `engine/index.ts`). It compares one signature
+of it:
+
+- the `css-var` and `category` changes, by id and value;
+- the custom-property declarations the stylesheet pass rewrote, on a root rule or a component's, as
+  selector, property and value (`variableRewrites()` in `engine/stylesheets.ts`). The roles of
+  `tokens.css`, the derived ones aside, are written as literals, so a **Stylesheets** edit of such a value
+  changes the role.
+
+The check runs at the end of `applyState()`, once every engine is applied — a change added, edited or
+removed, the state suspended, resumed or reset — and again after the theme observer has re-planned the
+stylesheets. A literal scoped to one theme rewrites a role in that theme only: after the switch the check
+signals once, whatever order the theme observers ran in, and a chart that redrew before the re-plan reads
+the role again. Nothing is sent while the signature stays the same: the same changes applied again, and
+the changes the charts do not read at their draw — stylesheet literals that define no variable, chart
+colours and chart specialisations (L3 patches the charts already drawn), the colour-vision simulation.
+The signal brings an edit of a role, from L1 or from the stylesheets, to the charts that read roles
+through `chartRoles` — today the allocation pie, the allocation history, the semi-donut and the
+correlation heatmap — at once, where it used to wait for their next draw. A stylesheet that arrives
+later sends no signal of its own ([Known Limits](#known-limits)).
+
+**Reach.** A category's colour is the base of its family's GR4 subtype shades, and the categories without
+a key of their own borrow it by rank (GR5, `sequenceColor`): the owners of the semi-donut take the first
+eight asset types, the countries of the allocation history the sectors. All of them follow a `category`
+change; the Growth chart's broker lines do not yet ([Known Limits](#known-limits)).
 
 ### 📌 Specialisations — `element` Rules {: #specialisations }
 
@@ -367,16 +454,17 @@ their place. The mode is part of the state: every tab follows, the Lab's own inc
 ### 🔍 The Debug Hook {: #debug-hook }
 
 `start()` publishes `window.__lfDesignerLab` (typed in `src/app.d.ts`) in every tab of a debug build, for
-E2E tests and the browser console:
+E2E tests, the browser console and the charts' [category colours](#chart-categories):
 
 | Member | Returns |
 |:--|:--|
 | `active()` | Whether an engine is active in this tab |
 | `picking()` | Whether this tab is in picking mode, waiting for a click |
-| `stats()` | `{cssRules, chartInstances, varOverrides, elementRules}`: declarations rewritten, chart instances patched, variable overrides written, specialisation rules written |
+| `stats()` | `{cssRules, chartInstances, varOverrides, elementRules, categoryOverrides}`: declarations rewritten, chart instances patched, variable overrides written, specialisation rules written, `category` changes held |
 | `chartColors(selector)` | A promise of the distinct colours of the ECharts instance in the first element matching `selector` |
+| `categoryColor(kind, key, dark)` | The colour a `category` change gives that chart category in that theme, or `undefined`: what `categoryColor` of `chartCategories.ts` asks first (C3) |
 
-An idle tab answers `active() === false`, `picking() === false` and zero stats.
+An idle tab answers `active() === false`, `picking() === false`, zero stats and no category colour.
 
 ---
 
@@ -417,14 +505,16 @@ about 870 KB of JSON (measured on 14/10/2026).
 | `files` | Paths relative to `frontend/`; the other sections point into this list by index |
 | `css_vars` | Every custom property defined or read with `var()`: `name`, `defs` (file, line, value, zone, selector, theme and `scope`, `root` or `scoped`; `inline` and `alias_of` for a definition inside `@theme inline`), `uses`, uses per file, and `use_sites`, the `[file, line, selector]` of every `var()` read (the selector `null` outside a stylesheet rule) |
 | `palette` | Every colour variable a Tailwind class reaches (`text-emerald-600` → `--color-emerald-600`, `bg-libre-green` → `--color-libre-green`, `bg-lf-card` → `--color-lf-card`): uses, uses under `dark:`, classes, files, `occ`, the `[file, line, classIndex]` of every use — `classIndex` points into `Object.keys(classes)` — and `role` for the alias of a colour role |
-| `literals` | Every hand-written colour: `id`, `file`, `line`, `col`, `raw`, `kind` (`hex`, `fn`, `mix`), `key`, `alpha`, `zone`, `theme`, `layer`, `preview`, `snippet`. Stylesheet colours add `selector`, `at` (the enclosing at-rules) and `property`; script colours add `chart`; markup colours add `via` |
+| `literals` | Every hand-written colour: `id`, `file`, `line`, `col`, `raw`, `kind` (`hex`, `fn`, `mix`), `key`, `alpha`, `zone`, `theme`, `layer`, `preview`, `snippet`. Stylesheet colours add `selector`, `at` (the enclosing at-rules) and `property`; script colours add `chart`; markup colours add `via`; a line of the chart category tables adds `category`, the category it colours (`type:ETF`) |
 | `by_value` | Colour key → literal ids |
+| `categories` | The [chart categories](#chart-categories), in the order of their tables: `target` (`type:ETF`, `sector:Health Care`, `bucket:Liquidity`), `kind` (`type`, `sector` or `bucket`), `key` as the table writes it, and `light` and `dark`, the id of the literal that holds each theme's value (`null` when the table writes none) |
 | `testids` | Every static test id → the `[file, line, via]` of each place that writes it: `via` is `attr` for `data-testid=`, `prop` for a prop that a component renders as its `data-testid` (`testid=`, `optionTestId=`…), `script` for a property or variable of a script (`testId: 'x'`) |
 | `testid_prefixes` | The templated test ids (`row-{id}`): `[prefix, file, line, via]`, longest prefix first |
 
 `testids`, `testid_prefixes`, the class index of `palette[].occ` and `css_vars[].use_sites` serve the
-element picker; `inline`, `alias_of` and `role` serve the [colour roles](#colour-roles). They are
-additions: the schema keeps its name, `lf-color-catalog/1`, and none of them enters `meta.parity`.
+element picker; `inline`, `alias_of` and `role` serve the [colour roles](#colour-roles); `categories` and
+the literals' `category` serve the [chart categories](#chart-categories). They are additions: the schema
+keeps its name, `lf-color-catalog/1`, and none of them enters `meta.parity`.
 
 `meta.hash` is a `sha256:` of the body only, without volatile fields such as `generated_at` and
 `scan_ms`: it stays the same on an unchanged tree, and the export records it as `catalog_hash`.
@@ -445,10 +535,12 @@ colour share it. Expressions (`color-mix()`, `var()`) have `key: null`.
 | `svelte-script`, `ts` | Any other script (`.ts` and `.js`) | `script` | ❌ |
 | `static` | `app.html`, `offline.html`, `manifest.json` | `static` | ❌ |
 
-A **chart file** is one under `components/charts`, `components/dashboard`, `components/risk`,
-`components/brokers/lots`, a `charts/` folder or `features/tools/pac-allocator/planner/result/`, or any
-file that imports from `'echarts'`. It is a heuristic: a `chart-color` previews only where it reaches an
-ECharts option.
+A **chart file** is one under `components/charts`, `components/dashboard` or `features/dashboard/`,
+`components/risk` or `features/risk/`, `components/brokers/lots` or `features/brokers/lots/` (Y3 moves the
+dashboard there, a 1.3 batch the risk feature, and Y5, also a 1.3 batch, the lots; both paths count until
+they have), a `charts/` folder or `features/tools/pac-allocator/planner/result/`, one whose name holds
+`chart` in any case (`chartCategories.ts`, `GrowthChart.svelte`), or any file that imports from
+`'echarts'`. It is a heuristic: a `chart-color` previews only where it reaches an ECharts option.
 
 **Theme hint.** In stylesheets, `dark` or `light` when the rule, or a block around it, is limited to one
 theme: by a `prefers-color-scheme` media query, or by a selector list whose selectors all name the same
@@ -459,6 +551,14 @@ names the dark theme, on one line (`isDark ? … : …`) or split as Prettier wr
 line, `? '#…'` and `: '#…'` on the next ones); a negated condition (`!isDark`, `!$isDark`) swaps the sides. In markup,
 `dark` when the class holding the colour carries a `dark:` variant (`dark:bg-[#1e293b]`), never from a
 neighbouring class. `null` otherwise.
+
+**Chart categories.** In `src/lib/theme/chartCategories.ts` (`CATEGORY_FILE`), `categoryLines()` reads the
+tables of the chart categories line by line: `ASSET_TYPE_COLORS` and `SECTOR_COLORS`,
+one entry per key, and the two buckets, `LIQUIDITY_COLOR` and `UNCLASSIFIED_COLOR`. Each literal on one of
+their lines gets `category`, the target a change names (`type:ETF`, `sector:Health Care`,
+`bucket:Liquidity`), and as `theme` the property it is written in, `light:` or `dark:`; `categories` lists
+the categories in table order. The file is a chart file by its name, so these literals stay in the
+`chart-color` layer, and the **Charts** tab still lists their values.
 
 ### 🎭 Colour Roles {: #colour-roles }
 
@@ -477,10 +577,14 @@ catalogue records the link:
 
 - **Classes.** The custom-token class expression covers the role utilities: `lf-[a-z0-9-]+`, next to
   `libre-*`, `theme-*`, `primary*` and `accent*` — `TW_CUSTOM_RE` in `scan-colors.mjs` and `tw_custom_re`
-  in `color_inventory.py`, changed together. A role name may hold digits, as T's own `ROLE_CLASS_RE`
-  (`frontend/scripts/theme/theme-roles.mjs`) allows. A role utility, variants and opacity included
-  (`hover:border-lf-card/50`), counts among the custom-token classes and enters `palette` under its
-  alias, `--color-lf-<name>`.
+  in `color_inventory.py`, changed together. Its prefixes are the palette expression's list, `PREFIXES`
+  (decision D-a, 15/10/2026): besides `bg-`, `text-`, `border-`, `ring-`, `outline-`, `divide-`, `fill-`,
+  `stroke-` and the gradient stops, the side borders (`border-t-`, `-b-`, `-l-`, `-r-`, `-x-`, `-y-`),
+  `ring-offset-`, `shadow-`, `accent-`, `caret-`, `decoration-` and `placeholder-`. So the shadow roles'
+  utilities, `shadow-lf-shadow` and `shadow-lf-shadow-card`, count and have their chips. A role name may
+  hold digits, as T's own `ROLE_CLASS_RE` (`frontend/scripts/theme/theme-roles.mjs`) allows. A role
+  utility, variants and opacity included (`hover:border-lf-card/50`), counts among the custom-token
+  classes and enters `palette` under its alias, `--color-lf-<name>`.
 - **Definitions.** A definition inside an `@theme inline` block gets `inline: true` and `alias_of`: the
   variable it names when its value is exactly `var(--x)`, else `null`. The two fields are written only
   for such definitions.
@@ -502,11 +606,16 @@ literals, colour functions, `var()` uses and custom property definitions. On 14/
 1,047 files, 1,610 hex literals and 211 colour functions, with the same occurrences line by line. The
 picker's additions — test ids, `use_sites`, the class index of `occ` — are annotation, not counting: the
 Python inventory has no counterpart for them, and the parity totals did not move when they arrived. The
-same holds for the roles' `inline`, `alias_of` and `role`; what the roles did change is the class
-expression. On 15/10/2026, on the base `9d57aa4c0`, which carries the first wave of workstream T, the two
-class expressions took in the role utilities in the same change ([Colour Roles](#colour-roles)), and the
-inventories stayed identical line by line: the custom-token classes went from 764 to 912, while the 1,080
-files, 1,291 hex literals and 238 colour functions did not move.
+same holds for the roles' `inline`, `alias_of` and `role`, and for the chart categories' `categories` and
+`category`; what the roles did change is the class expression. On 15/10/2026, on the base `9d57aa4c0`,
+which carries the first wave of workstream T, the two class expressions took in the role utilities in the
+same change ([Colour Roles](#colour-roles)), and the inventories stayed identical line by line: the
+custom-token classes went from 764 to 912, while the 1,080 files, 1,291 hex literals and 238 colour
+functions did not move. Later that day, on the base `a0915bef9`, both took the palette's prefix list
+(decision D-a), and the inventories stayed identical again: the custom-token classes went from 1,358 to
+1,375. The `lf` uses went from 611 to 619 — 7 more `shadow-lf-shadow` and 1 `shadow-lf-shadow-card` —
+which is now the count of T's `ROLE_CLASS_RE`; the other 9 are `libre-green` uses under `accent-`,
+`decoration-`, `border-l-` and `border-t-`.
 
 !!! warning "Change one, change the other"
 
@@ -591,9 +700,11 @@ Lab shows an error status and keeps the last saved state, the one the other tabs
 - **Export JSON + MD**, **JSON**, **MD**, **Copy summary**, **Import**, and **Reset all**, which asks for
   confirmation and keeps notes, variants and the colour-vision mode.
 
-**Tabs.** A search box (name, value or file) filters the palette, variable and value tabs. Once an
-element is picked, the checkbox **Only the picked element's colours** next to it narrows the same lists
-to that element ([what it keeps](#element-tab)).
+**Tabs.** A search box (name, value or file) filters the palette, variable, value and category tabs. Once
+an element is picked, the checkbox **Only the picked element's colours** next to it narrows the palette,
+variable and value lists to that element ([what it keeps](#element-tab)). The **Categories** tab hides
+the checkbox, which would filter nothing there: the picker does not name a category yet
+([Known Limits](#known-limits)).
 
 | Tab | Content |
 |:--|:--|
@@ -603,6 +714,7 @@ to that element ([what it keeps](#element-tab)).
 | App variables | Variables the app defines with a colour value: brand, `--theme-*`, the colour roles, component variables — never an inline alias |
 | Stylesheets | `css-literal` colours grouped by value, alpha variants together, with occurrences, files, alphas and theme hints |
 | Charts | `chart-color` colours, grouped the same way |
+| Categories | The [chart categories](#chart-categories) in three groups — asset types, sectors, cash and unclassified — each row with its light and dark swatches and values; a row opens the editor on its category |
 | No preview | `script`, `markup` and `static` colours: proposals only |
 | Changes | The current changes, from → to, with layer, theme and note; a specialisation shows its property, and opens the editor with its anchor |
 | Contrast | WCAG ratios before and after the changes, in both themes, plus a free pair |
@@ -636,6 +748,8 @@ aliases (`appVars()`), which no stylesheet defines at runtime.
 - for values, **Translucent variants too** and, in stylesheets, **Reach in the code**: every occurrence,
   or one occurrence with its selector — preselected on the picked element's rule when the editor is opened
   from the **Element** tab and exactly one catalogue occurrence matches it;
+- for a chart colour that is also the colour of chart categories, a warning that names them and points to
+  the **Categories** tab: a change of the value would recolour them all at once;
 - a note and gallery screen codes such as `dashboard/kpi-top` — the codes of the designer package;
 - the impact of a variable (uses, files, most used classes, definitions), or the occurrences of a value
   (file, line, selector, property, theme, snippet). `varImpact()` (`catalogView.ts`) adds up the palette
@@ -644,7 +758,12 @@ aliases (`appVars()`), which no stylesheet defines at runtime.
 - in **`element` mode**, opened by **Specialise here**: the selector, the property (and the colour key for
   a chart), the reminder that only this component changes, how many elements the selector matched when
   the element was picked, and where an agent would bind the new variable. The current value is the one the
-  picker read on the element.
+  picker read on the element;
+- for a **category**, opened from the **Categories** tab: the value its table writes in the theme being
+  edited as the current one, a note on the reach — every chart reads the colour through `categoryColor`,
+  the subtype shades follow, and only this category changes, even where another one has the same value —
+  and **Written at**, the line of each theme in `chartCategories.ts`, with its value. There is no
+  translucent-variant or reach choice: the change is by key.
 
 **Contrast** (`contrast.ts`, `ContrastPanel.svelte`). The declared pairs come from the catalogue: every
 root `--theme-text-*` on every root `--theme-bg-*` except the hover surfaces (AA at 4.5:1, AAA at 7:1),
@@ -652,7 +771,8 @@ and every `--theme-border-*` on the card surface (3:1, the threshold of UI compo
 the value the sources define for each theme (`sourceVarValue()`): the definition for that theme, else one
 both themes share (`:root`, `@theme`) — never the other theme's — and at equal footing the later one, as
 in the cascade. *After* applies the `css-var` changes; a translucent foreground is composited over the
-background first. Changes to literal colours and specialisations do not enter this table.
+background first. Changes to literal colours, chart categories and specialisations do not enter this
+table.
 
 ---
 
@@ -789,7 +909,7 @@ with no winner, is flagged: it follows the text colour.
 
 **Charts.** Inside an ECharts instance (`[_echarts_instance_]`), the facts add the chart: the selector of
 its component (its nearest test id, else its CSS path), the colours of its option as the app wrote them —
-Lab changes undone, at most 40 — and the colour of the shape under the pointer. That colour comes from
+L3's changes undone, at most 40 — and the colour of the shape under the pointer. That colour comes from
 zrender's hit test, not a documented ECharts API: when it fails, the colour is unknown.
 
 **What the app tab reports** (`PickedElement` in `types.ts`): the route (SvelteKit's route id, see
@@ -911,7 +1031,7 @@ their alias, so their chips show.
 
 ## 🎚️ Live Preview: Layers and Limits
 
-### 🧱 The Five Change Layers
+### 🧱 The Six Change Layers {: #change-layers }
 
 | Change layer | What it changes | Engine | Reach |
 |:--|:--|:--|:--|
@@ -920,6 +1040,7 @@ their alias, so their chips show.
 | `chart-color` | A colour written in a chart script, as it reaches an ECharts option | L3 | The value with its translucent variants |
 | `proposal` | Colours with no live path: inline styles, other markup and scripts, generated colours, `app.html`, `offline.html`, `manifest.json` | — | Exported only, with `preview: false` |
 | `element` | A specialisation: one colour property of a picked element, or one colour of the charts inside its component | [Specialisation rules](#specialisations); L3 for a chart colour | The elements the selector matches, in every instance of the component |
+| `category` | The fixed colour of a [chart category](#chart-categories): an asset type, a sector, or the `Liquidity` or `Unknown` bucket — `type:<KEY>`, `sector:<Key>`, `bucket:…` | `engine/categories.ts`, through the hook `categoryColor` asks (C3), then the redraw signal (C4) | That category in every chart that reads it, its subtype shades included; never another category with the same value |
 
 ### ⚠️ Known Limits {: #known-limits }
 
@@ -928,13 +1049,16 @@ their alias, so their chips show.
   `/transactions` — a modal, the pagination, the data table. The editor lists the occurrences, and a
   stylesheet colour can go down to one occurrence; a chart colour cannot, because an ECharts option
   carries no provenance. The export lists the catalogue's occurrences for both. A specialisation narrows
-  either to one component, chart colours included.
+  either to one component, chart colours included. The fixed colours of the chart categories are the
+  exception: the **Categories** tab changes them by key ([Chart Categories](#chart-categories)).
 - **ECharts' default palette** (`#5070dd`, …) is not written in the app's sources: it is not in the
   catalogue, and the Lab does not offer it.
 - **Derived and generated colours.** A colour computed before `setOption` — a shade derived from a
-  literal (`shadeForDepth`), an HSL generated from an index (`getIndexColor`, `lotColor`) — reaches the
-  option as a value no change targets. The preview changes a base colour only where the option carries it
-  unchanged; the export still points at the literal in the source.
+  literal (`familyShade`, the GR4 shades), an HSL generated from an index (`getIndexColor`, `lotColor`) —
+  reaches the option as a value no change targets. The preview changes a base colour only where the
+  option carries it unchanged; the export still points at the literal in the source. The shades of a
+  chart category are the exception: they are mixed from what `categoryColor` returns, so a `category`
+  change reaches them.
 - **No preview** for the `proposal` layer.
 - **Variables redefined in a subtree.** L1 writes its overrides on `<html>` and on the `.light` and
   `.dark` subtrees (`VAR_SELECTOR` in `engine/vars.ts`), where the token blocks of `tokens.css` define the
@@ -957,13 +1081,38 @@ their alias, so their chips show.
   **Unrecognised colour** and no sliders, and keeps **Apply** disabled until a new value — typed, from the
   sRGB input or snapped to a variable — replaces it.
 - **Class names in comments** count as uses, in the scanner and in the Python inventory alike: the header
-  comments of `app.css` and `tokens.css` name role utilities (`bg-lf-card`, `text-lf-muted`…). They show
-  among the uses, in the editor's impact, and among the export's occurrences, where an agent finds a
-  comment line.
+  comments of `app.css` and `tokens.css` name role utilities (`bg-lf-card`, `text-lf-muted`…;
+  `shadow-lf-shadow-card` is written only there). They show among the uses, in the editor's impact, and
+  among the export's occurrences, where an agent finds a comment line.
 - **Wide gamut.** Stylesheets keep the value as typed, so an `oklch()` outside sRGB stays wide; charts
   receive it clamped to sRGB. The editor warns when a value leaves sRGB. `<input type="color">` and the
   gallery screenshots are sRGB only, so a wide-gamut display shows such colours more saturated than the
   PNGs.
+- **Late stylesheets and the redraw signal.** A stylesheet that arrives after the state is applied — a
+  route's CSS — is rewritten when it loads, without a redraw signal of its own: a variable it defines that
+  a chart reads at its draw would wait for the chart's next draw. The roles `chartRoles` reads are all
+  defined in `tokens.css`, which `app.css` imports: the global sheet, not a route's.
+
+**The chart categories:**
+
+- **The picker does not name a slice's category.** It reports the colour of a pie slice as a chart
+  colour, and one value can belong to two categories: open the category from the **Categories** tab.
+  While a `category` change applies, the slice reports the edited colour, not the table's.
+  Naming the category is in L's backlog.
+- **The Growth chart's broker lines** take the first asset types' colours once, when
+  `GROWTH_BROKER_PALETTE` (`src/lib/theme/chartPalettes.ts`) is imported, and the Growth chart does not
+  listen to C4: they do not follow a `category` change until DV's batch TD-1b.
+- **Translucent category colours.** For a translucent value the engine answers `rgba()`, and the charts
+  draw the category with it. Its GR4 subtype shades, though, are mixed from the colour alone —
+  `familyShade` reads the channels and drops the alpha — so they come out opaque.
+- **`bucket:Unknown` and keys outside the tables.** An edit of `bucket:Unknown` reaches the categories the
+  tables call `Unknown`, of both kinds, and the charts that ask for `Unknown` by name (the unclassified
+  countries of the allocation history). `categoryColor` also draws a key outside its tables in the
+  Unknown colour, but the edit does not reach such a key: it keeps the table's colour. The enum gates keep
+  such keys out of real data.
+- **A copy of the key rule.** Until DV exports `lookupKey` from `chartCategories.ts` (batch TD-1),
+  `categoryKey()` in `engine/categories.ts` holds a copy of its rule — case, spaces and underscores
+  ignored — which the tests hold to `categoryColor`.
 
 **The element picker:**
 
@@ -1088,14 +1237,15 @@ An abridged export (occurrence lists and classes cut):
 | `app_version`, `catalog_hash` | The build (`__APP_VERSION__`) and the catalogue the export was made with |
 | `exported_at` | ISO 8601 with the local offset |
 | `author`, `notes` | From the **Notes** tab |
-| `changes[].id`, `layer`, `scope`, `target` | As in the state: for `element`, `target` is the specialisation's selector |
+| `changes[].id`, `layer`, `scope`, `target` | As in the state: for `element`, `target` is the specialisation's selector; for `category`, the category (`type:ETF`) |
 | `changes[].preview` | `false` only for `proposal` |
 | `changes[].from`, `to` | The value the Lab saw, and the new value (any CSS colour, `var(--x)` included) |
 | `changes[].granularity`, `alpha_variants` | `css-literal`, `chart-color` and `proposal`: `value` or `occurrence`, and whether translucent writings change too |
 | `changes[].impact`, `definitions` | `css-var`: uses, files and Tailwind classes, the editor's figures (`varImpact()`); where the sources define the variable (file, line, selector, theme, value) |
 | `changes[].property`, `color_key` | `element`: the property specialised, or `chart` with the colour key it replaces in the charts the selector reaches |
 | `changes[].anchor` | The picked element the change was decided on: on every `element` change the Lab makes, and on a change of another layer opened from the **Element** tab — see [The Anchor](#anchor) |
-| `changes[].occurrences` | `css-var`: the file and line of every class use, and `raw`, the class, for a utility that reads a colour role. `element`: the anchor's candidates, as `file`, `line`, `raw` (the text expected there) and `why`. Other layers: `file`, `line`, `col`, `raw`, `layer`, `theme_context`, `selector`, `property`, `snippet` |
+| `changes[].category` | `category`: the chart category as its table writes it, `{kind, key}` — `kind` is `type`, `sector` or `bucket` |
+| `changes[].occurrences` | `css-var`: the file and line of every class use, and `raw`, the class, for a utility that reads a colour role. `element`: the anchor's candidates, as `file`, `line`, `raw` (the text expected there) and `why`. Other layers: `file`, `line`, `col`, `raw`, `layer`, `theme_context`, `selector`, `property`, `snippet` — for `category`, only the category's own line in each theme of the change |
 | `changes[].note`, `shots` | The designer's note and gallery screen codes, when given |
 | `contrast` | The declared pairs whose ratio changed: `fg`, `bg`, `scope`, `before`, `after` |
 | `variants` | The named variants, as the Lab stores them |
@@ -1110,6 +1260,14 @@ A `css-var` change on a colour role (`--lf-surface-card`, see [Colour Roles](#co
 with `raw`, the class: the line names neither the role nor a palette shade, so the class is the text
 [`verify-export`](#verify-export) looks for there. `definitions[]` lists the role's definitions in
 `tokens.css`. The schema is unchanged: occurrences already had `raw`.
+
+A `category` change ([Chart Categories](#chart-categories)) adds `category: {kind, key}`, and its
+`occurrences[]` are the lines of `chartCategories.ts` that write the category's colour in the themes of
+the change: the `light:` line, the `dark:` line, or both for `both`, each with `raw`, the value written
+there, and `theme_context`, the theme of the line. They are never the other places that write the same
+value, and [`verify-export`](#verify-export) finds them again by key and theme, not by value. A
+`category` change has no `granularity` and no `alpha_variants`. These are additions too: the schema keeps
+its name, `lf-designer-lab/1`.
 
 The occurrences of a value change are the catalogue literals with the same colour key, in the change's
 layers (`proposal` covers `script`, `markup` and `static`); translucent ones are listed only with
@@ -1216,6 +1374,9 @@ Where to bind the new variable:
 - a specialisation (`element`) is skipped as invalid unless its selector passes `isSafeSelector()`, its
   `property` is one a specialisation can set, and a `chart` one carries a `color_key` (`#rrggbb` or
   `oklch(…)`);
+- a `category` change is skipped as an unknown category unless its target has a safe shape — `type:`,
+  `sector:` or `bucket:`, then at most 60 letters, digits, spaces or `_&.-` — and names a category of the
+  running catalogue;
 - an `anchor`, on any layer, goes through `sanitizeAnchor()`, which keeps only the shape and the sizes the
   Lab writes: one-line strings within limits (route 300 characters, selectors 600, at most 8 test ids,
   40 classes and 20 candidates), the enums (`theme`, `breadth`, `source.kind`, `why`), positive line
@@ -1269,6 +1430,14 @@ by a known prefix; a `prefix*` is known when it extends a catalogue prefix, or w
 it — the picker may have cut an id the index did not know. The totals add `anchors_lost` and
 `anchor_testids_missing`, and the human summary a line for the specialisations.
 
+**Chart categories.** The occurrences of a `category` change are found by key and theme, never by value
+(`locateCategory()`): categories share values, and a search for the value could land on another
+category's line. `categoryLines()` of the scanner reads the occurrence's file, and the line that writes
+the change's `target` in the occurrence's `theme_context` decides. The occurrence is **ok** when that is
+its own line, **moved** when the key and theme are written on another line now (reported with that
+line), and **missing** when the key is gone or its line holds a value other than `raw`: the export's
+starting value is stale.
+
 | Exit code | Meaning |
 |:--|:--|
 | `0` | Nothing is missing and no specialisation is lost: moved occurrences, moved or gone candidates, `testid-missing` and `no-candidates` are fine |
@@ -1291,6 +1460,11 @@ variable, or a role token, and binds it at the places the candidates list. The s
 the preview's, context rather than code to paste; since no element text is exported, the component is
 found by route, test ids and CSS path, never by content.
 
+A `category` change is applied on the lines its `occurrences[]` list in `chartCategories.ts`, one per
+theme of the change, and **never by value**: another category, a role or another chart may write the
+same value. The subtype shades follow the new colour by themselves, and a `bucket` change edits the one
+entry both kinds share.
+
 Changing how the app looks is a decision: an agent applies an export only when the developer asks, in a
 workstream allowed to change the appearance.
 
@@ -1302,7 +1476,7 @@ workstream allowed to change the appearance.
 
 | File | Role |
 |:--|:--|
-| `frontend/scripts/designer-lab/scan-colors.mjs` | Colour scanner and CLI: the `lf-color-catalog/1` catalogue, test ids included (`testidValues()`) |
+| `frontend/scripts/designer-lab/scan-colors.mjs` | Colour scanner and CLI: the `lf-color-catalog/1` catalogue, test ids included (`testidValues()`), and the chart categories (`categoryLines()`) |
 | `frontend/scripts/designer-lab/vite-plugin.mjs` | `designerLabEnabled()`, `virtual:lf-color-catalog`, `virtual:lf-testid-index` (`testidIndex()`), the release guard |
 | `frontend/scripts/designer-lab/verify-export.mjs` | Checks an export against the current code: occurrences, candidates, the anchors' test ids |
 | `frontend/vite.config.ts` | Registers the plugin, defines `__LF_DESIGNER_LAB__`, excludes the Lab from istanbul |
@@ -1310,7 +1484,7 @@ workstream allowed to change the appearance.
 | `frontend/src/routes/+layout.svelte` | One line in `onMount`: starts the client |
 | `frontend/src/routes/designer-lab/` | The route: `+page.ts` (404 without the Lab) and `+page.svelte` (lazy import of the page) |
 | `frontend/src/lib/dev/designer-lab/client.ts`, `store.ts`, `pick.ts` | The client every page loads, the shared state, the picker's messages between tabs |
-| `frontend/src/lib/dev/designer-lab/engine/` | `index.ts` (orchestration), `vars.ts` (L1), `stylesheets.ts` (L2), `charts.ts` (L3, chart specialisations included), `anchors.ts` (specialisation rules), `cvd.ts`, `targets.ts` (the value each consumer accepts; safe values and selectors) |
+| `frontend/src/lib/dev/designer-lab/engine/` | `index.ts` (orchestration, and the redraw signal C4), `vars.ts` (L1), `stylesheets.ts` (L2; `variableRewrites()` for C4), `charts.ts` (L3, chart specialisations included), `categories.ts` (the chart categories: the `category` changes, the hook's answer), `anchors.ts` (specialisation rules), `cvd.ts`, `targets.ts` (the value each consumer accepts; safe values and selectors) |
 | `frontend/src/lib/dev/designer-lab/picker/` | The lazy chunk of the app tabs: `overlay.ts` (picking mode), `describe.ts` (colours and proved declarations), `anchor.ts` (test-id chain, CSS path, component selector) |
 | `frontend/src/lib/dev/designer-lab/cssProps.ts` | The colour properties, their shorthands, what a specialisation may set: shared by the picker and the Lab |
 | `frontend/src/lib/dev/designer-lab/color.js` | Colour parsing, OKLCH and sRGB conversion, gamut, WCAG contrast — shared by Node and the browser |
@@ -1319,6 +1493,7 @@ workstream allowed to change the appearance.
 | `frontend/src/lib/dev/designer-lab/catalogView.ts`, `contrast.ts`, `export.ts`, `pickView.ts` | What the page lists, contrast pairs, export and import, what the Lab makes of a pick: pure functions |
 | `frontend/src/lib/dev/designer-lab/i18n.ts`, `labTheme.ts` | The Lab's dictionary and its own colours |
 | `frontend/src/lib/dev/designer-lab/types.ts`, `virtual-catalog.d.ts` | Types of the catalogue, the state, the pick and the hook; the two virtual modules |
+| `frontend/src/lib/theme/chartCategories.ts`, `themeMode.ts` | Not the Lab's: workstream DV's side of the [chart categories](#chart-categories) contract — the tables and `categoryColor` (C1–C3), the redraw signal (C4) |
 | `scripts/visual_review/designer_live.sh` | The review server for a designer (port 6160) |
 | `scripts/visual_review/color_inventory.py` | The Python inventory kept in parity with the scanner |
 | `.github/skills/design-tools/designer-lab-apply/SKILL.md` | The agent's skill |
@@ -1367,19 +1542,32 @@ four-language rule of the UI. Do not add Lab keys to the [app catalogue](i18n.md
   ([Import the Lab only inside a branch](#release-builds)).
 - Seams for tests: the pure modules (`color.js`, `colorValue.ts` with `parseTransparentMix()`,
   `resolveValue()`, `withOpacity()` and `withBase()`, `store.ts`, `pick.ts`, `cssProps.ts`, `catalogView.ts`
-  with `varImpact()`, `editTarget()` and `isInlineAlias()`, `contrast.ts`, `export.ts` with
-  `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of `picker/anchor.ts`, which take the test-id index
-  as a parameter and run under jsdom; `elementRule()` and `applyElementRules()` in `engine/anchors.ts`;
-  `applyVars()` and `VAR_SELECTOR` in `engine/vars.ts`; `collectRules()` in `picker/describe.ts`; the
-  exported functions of the scripts (`scanColors()`, `scanSource()`, `listSourceFiles()`, `testidValues()`,
+  with `varImpact()`, `editTarget()`, `isInlineAlias()`, `categoryRows()` and `sourceCategoryValue()`,
+  `contrast.ts`, `export.ts` with `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of
+  `picker/anchor.ts`, which take the test-id index as a parameter and run under jsdom; `elementRule()` and
+  `applyElementRules()` in `engine/anchors.ts`; `applyVars()` and `VAR_SELECTOR` in `engine/vars.ts`;
+  `categoryKey()`, `categoryTargetKey()`, `setCategoryChanges()` and `categoryColor()` in
+  `engine/categories.ts`; `collectRules()` in `picker/describe.ts`; the exported functions of the scripts
+  (`scanColors()`, `scanSource()`, `listSourceFiles()`, `testidValues()`, `categoryLines()`,
   `designerLabEnabled()`, `filesWithMarker()`, `testidIndex()`, `verifyExport()`, `locate()`,
-  `testidKnown()`); `mapChartOption()` and `chartPatch()` in `engine/charts.ts`, kept for tests.
-- In the browser: `window.__lfDesignerLab` (`picking()`, `stats().elementRules` included) and the test
-  ids. The page root is `data-testid="designer-lab"`, with `data-catalog-hash` and `data-changes`; every
-  control has a `lab-…` test id. A palette chip is `lab-item-var-<variable>`, with `data-target`, the
-  variable it edits; the picker's are `lab-pick`, `lab-pick-cancel`, `lab-tab-element`, `lab-picked-…`
-  (with `data-property`, `data-kind`, `data-matches`) and `lab-filter-picked`. In the app tab, the veil is
-  `lf-lab-pick-veil`.
+  `locateCategory()`, `testidKnown()`); `mapChartOption()` and `chartPatch()` in `engine/charts.ts`, kept
+  for tests.
+- In the browser: `window.__lfDesignerLab` (`picking()`, `categoryColor()`, `stats().elementRules` and
+  `stats().categoryOverrides` included) and the test ids. The page root is `data-testid="designer-lab"`,
+  with `data-catalog-hash` and `data-changes`; every control has a `lab-…` test id. A palette chip is
+  `lab-item-var-<variable>`, with `data-target`, the variable it edits; the picker's are `lab-pick`,
+  `lab-pick-cancel`, `lab-tab-element`, `lab-picked-…` (with `data-property`, `data-kind`,
+  `data-matches`) and `lab-filter-picked`. The Categories tab is `lab-tab-categories`, its list
+  `lab-categories` and a row `lab-item-category-<target>` (`lab-item-category-type:ETF`); in the editor, a
+  category's reach note and lines are `lab-editor-category-reach` and `lab-editor-category-lines`, and the
+  warning on a chart value that is also a category's colour is `lab-editor-category-warning`. In the app
+  tab, the veil is `lf-lab-pick-veil`.
+- The app's side of the [chart categories](#chart-categories) contract has DV's own tests:
+  `src/lib/theme/chartCategories.test.ts` pins C3 — the hook asked first in a debug build, never asked
+  without the switch, and gone from a minified build with the switch off — and
+  `src/lib/theme/themeMode.test.ts` pins the C4 event. On the Lab's side, `categories.test.ts` holds the
+  engine's key rule to DV's real `categoryColor` and runs C3 end to end, and `chartColorsSignal.test.ts`
+  checks when `applyState()` sends C4.
 
 ### 🔁 Rebuilds
 

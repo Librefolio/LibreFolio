@@ -1426,3 +1426,249 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 | porta | 6152 libera. Resta la **build di release**: la rifà in debug il primo `server --test` della corsia |
 
 > **Note implementazione:** i ruoli con mix trasparente nel catalogo fuso sono `--lf-selected` e `--lf-surface-overlay`; le ombre di T arriveranno con T-8. Il test E2E del mix li trova a runtime, senza nominarli.
+
+## ⏳ L-16 — Giro 3 nel Lab: ruoli di T-8/T-8b e livello `category` (15/10/2026, notte)
+
+**Entrata nel target:** il cursore dell'opacità è in `dev_release2` con `c96a62268` (merge di `f37f805fc`).
+**Base:** `a0915bef9` (T e DV entrati), raggiunta con un fast-forward del coordinatore; albero pulito, porta libera. Nessun file del Lab è cambiato dopo il mio ingresso.
+**Via del coordinatore (22:51):** «Via a L-16» — prima un'analisi breve con file e prove; «per stanotte basta il mio OK». Le prove pesanti si fanno al suo via, perché G-13 chiederà una finestra quieta. Obiettivo della notte, dal developer: finire la migrazione dei colori.
+
+**Analisi (sola lettura, 22:5x–23:0x).** Prove leggere: scanner, inventario e parità sul nuovo albero; lo script `/tmp/libreFolio_L16_roles.mjs`, che confronta con `ROLE_CLASS_RE` di T. File in `/tmp/libreFolio_L16/`.
+- **Parità identica:** hex 1355, fn 244, `custom` 1358, 1197 file.
+- **Ruoli di T:**
+  - 92 ruoli in `tokens.css`, tutti con definizioni root, quindi modificabili in «Variabili dell'app» e in L1;
+  - 88 alias `@theme inline`, tutti `inline` con `alias_of`;
+  - 64 chip `lf`, tutti col loro ruolo.
+- **Mix:** 11 ruoli sono `color-mix`. Quelli con `transparent` (ombre, fondale, `--lf-selected`, alone del tour, illustrazione in chiaro) si modificano col cursore A. I due mix di due colori (`--lf-action-hover`, `--lf-terminal-comment`) mostrano la sorgente come non riconosciuta, ma accettano un valore nuovo (limite documentato).
+- **24 alias senza chip:** nessuna classe li usa ancora, perché le ondate non hanno migrato quei componenti (AI, mark, checked, switch…). In più `shadow-lf-*`, 8 usi, non viene contato: `TW_CUSTOM_RE` non ha il prefisso `shadow`, che `ROLE_CLASS_RE` di T ha. È l'unico scarto: T 619 usi, lo scanner 611.
+- **Grafici che leggono i ruoli:** sono 4 e tutti usano `chartRoles` (`roleColors.ts`), che rilegge i ruoli a ogni disegno: AllocationPie, AllocationHistory, SemiDonut, CorrelationHeatmap. Ascoltano C4, ma il Lab oggi non emette `notifyChartColorsChange()` dopo una modifica L1, quindi non si ridisegnano.
+- **Categorie (DV):**
+  - C1–C3 sono in `lib/theme/chartCategories.ts`. L'aggancio chiama `globalThis.__lfDesignerLab?.categoryColor?.(kind, key, dark)` e si aspetta `string | null | undefined`.
+  - C2 è rispettato: 54 letterali, cioè (11 tipi + 14 settori + 2 contenitori) × 2 temi, una riga ciascuno, col tema dato dalla chiave dell'oggetto.
+  - Il modifica «per valore» non funziona:
+    - nello stesso file 16 valori compaiono due volte per tema (ETF = Tecnologia…);
+    - 22 valori sono scritti anche altrove (`#b45309` = `--lf-mark-line` in scuro, `#6d28d9` = `--lf-ai`).
+  - C4 (`onChartColorsChange`, `notifyChartColorsChange`) è in `themeMode.ts`.
+  - **Scarto C1:** `GROWTH_BROKER_PALETTE` (`chartPalettes.ts`) è calcolato una volta all'import, e `GrowthChart` non ascolta C4. Le linee dei broker non seguono quindi una modifica di categoria. È di DV.
+  - `lookupKey`, che ignora maiuscole, spazi e trattini bassi, è privata.
+  - `familyShade` (GR4) accetta un colore che `parseRgb` sa leggere; se non lo legge, restituisce la base.
+- **D3:** `CONTRAST_PAIRS` è ancora in `themeTokens.gate.test.ts`, quindi L-15 aspetta.
+- **Import:** il gate controlla solo gli import verso il Lab, quindi il Lab può importare `$lib/theme/themeMode` e `$lib/theme/chartCategories`.
+
+**Piano proposto:**
+- **Parte 1 — ruoli:**
+  - (1a) **C4 per L1:** l'engine chiama `notifyChartColorsChange()` quando cambiano le sostituzioni applicate (variabili e categorie), cioè al caricamento, a ogni modifica, al reset e alla sospensione;
+  - (1b) **prefisso `shadow`**, facoltativo: il gruppo dei prefissi di `TW_CUSTOM_RE` si allinea alla lista `PREFIXES` già usata per la palette; serve la riga Python del coordinatore e la parità prima e dopo.
+- **Parte 2 — livello `category`:**
+  - scanner: annota i letterali di `chartCategories.ts` con `{kind, key}` e aggiunge la sezione `categories` al catalogo, fuori dalla parità;
+  - livello `category`, con target `type:<KEY>`, `sector:<KEY>` e `bucket:Liquidity|Unknown`;
+  - nell'engine, `LabHook.categoryColor`: `#rrggbb` se il colore è opaco, nulla se lo stato è sospeso;
+  - una scheda «Categorie»;
+  - export con `raw` sulla riga del tema, così `verify-export` resta invariato;
+  - l'avviso nella scheda Grafici;
+  - una riga nella skill, la documentazione, i test unit ed E2E.
+- **Decisioni:**
+  - D-a: (1b) adesso o nel backlog;
+  - D-b: `lookupKey` esportata da DV, oppure una copia nel Lab con un test di parità;
+  - D-c: lo scarto C1 di `GROWTH_BROKER_PALETTE` va a DV.
+
+**Approvazione del coordinatore (23:00), testuale nelle decisioni:**
+- **D-a: sì, adesso.** Il gruppo dei prefissi di `TW_CUSTOM_RE` si allinea a `PREFIXES`, che comprende `shadow`. La riga `tw_custom_re` di `scripts/visual_review/color_inventory.py` la scrivo io, su sua assegnazione. Parità prima e dopo; lo scarto 611 → 619 va spiegato nel checkpoint.
+- **D-b: (a).** DV esporta `lookupKey` da `chartCategories.ts` dentro TD-1, con una riga. Io la uso dopo l'ingresso di TD-1, che il coordinatore mi porta al prossimo merge di base. Fino ad allora lavoro sul resto.
+- **D-c:** passa a DV come lotto TD-1b, subito dopo TD-1.
+- **Punto 5, il selettore delle categorie:** va nel backlog.
+- **Ordine:** prima 1a e il punto 2 (scanner ed engine), poi interfaccia, skill, documentazione e test, con gli agenti in parallelo.
+- **Slot pesante dopo le 01:15,** al suo via. **Dalle 00:00 alle 01:15 c'è la finestra quieta di G-13:** niente build, Vitest, Playwright, server, né agenti che li lancino.
+- **Checkpoint:** due o tre righe «dove guardarlo» per la lista del developer, perché stanotte i lotti validati entrano senza il suo OK.
+
+### Avanzamento L-16
+
+**✅ Passo 1 — D-a, prefissi delle classi custom (15/10, 23:05).**
+> **Note implementazione:** `TW_CUSTOM_RE` usa `PREFIX_ALT`, cioè la lista `PREFIXES` della palette, e `tw_custom_re` di Python la stessa lista ordinata per lunghezza: una riga per parte. Le due liste `PREFIXES` erano già identiche.
+> **Parità, stesso albero:**
+> - prima: identica, `custom` **1358**;
+> - dopo: identica, `custom` **1375**.
+>
+> Lo scarto, misurato voce per voce:
+> - usi `lf` da 611 a **619**, uguali a `ROLE_CLASS_RE` di T: +7 `shadow-lf-shadow` (`--color-lf-shadow` → `--lf-shadow-raised`) e +1 `shadow-lf-shadow-card`, quindi 2 chip nuovi, col loro ruolo;
+> - +9 `libre-green`, coi prefissi `accent-`, `decoration-`, `border-l-`, `border-t-`.
+>
+> Hex 1355, fn 244, 1197 file, invariati. File in `/tmp/libreFolio_L16/{before,after}/`.
+
+**✅ Passo 2 — 1a e livello `category`, il codice (15/10, 23:05–23:12).**
+> **Note implementazione:**
+> - **Scanner:**
+>   - `CATEGORY_FILE` e `categoryLines(text)` leggono le tabelle di `chartCategories.ts` (`ASSET_TYPE_COLORS`, `SECTOR_COLORS`, `LIQUIDITY_COLOR`, `UNCLASSIFIED_COLOR`);
+>   - i letterali di quelle righe ricevono `category` e il tema della proprietà;
+>   - il catalogo ha la sezione `categories`, `[{target, kind, key, light, dark}]`, fuori dalla parità.
+>   - Sull'albero reale: **27 categorie** (11 tipi, 14 settori, 2 contenitori), tutte con chiaro e scuro, e 54 letterali su 54 annotati.
+> - **`types.ts`:** `CatalogLiteral.category`, `CatalogCategory`, `ColorCatalog.categories?`, il livello `category`, `LabStats.categoryOverrides`, `LabHook.categoryColor`.
+> - **Nuovo `engine/categories.ts`:**
+>   - `categoryKey`, copia temporanea della regola di `lookupKey` fino a TD-1, segnalata al coordinatore;
+>   - `categoryTargetKey`;
+>   - `setCategoryChanges`: per ogni tema prima `both`, poi il tema stesso, che quindi vince;
+>   - `categoryColor`: i contenitori valgono per i due tipi; il valore si risolve a ogni richiesta; `toCanvasColor` dà `#rrggbb` o `rgba()`.
+> - **`engine/index.ts`:** `categoryOverrides`, e **C4**. Dopo tutti i motori confronta la firma `[id, to]` delle modifiche `css-var` e `category` (all'inizio `'[]'`) e, se è cambiata, chiama `notifyChartColorsChange()` da `$lib/theme/themeMode`.
+> - **`client.ts`:** `hook.categoryColor`, che non risponde finché non c'è un engine, e le statistiche predefinite con `categoryOverrides`.
+> - **`export.ts`:**
+>   - l'export porta `category: {kind, key}` e come occorrenze la riga di ogni tema dell'ambito;
+>   - l'import accetta solo una categoria del catalogo, con una forma sicura, e non dà `alphaVariants`.
+> - **`catalogView.ts`:** `categoryRows`, `sourceCategoryValue`.
+> - **`DesignerLab.svelte`:** la scheda «Categorie» (`lab-tab-categories`), divisa in tre gruppi, con le righe `lab-item-category-<target>`.
+> - **`ColorEditor.svelte`:**
+>   - `isCategory`: il valore di partenza viene dal catalogo, e niente casella delle varianti;
+>   - la portata (`lab-editor-category-reach`) e le righe (`lab-editor-category-lines`);
+>   - per un valore che è anche una categoria, l'avviso (`lab-editor-category-warning`).
+> - **`i18n.ts`:** 9 chiavi.
+> - **Skill `designer-lab-apply`:** la riga `category`.
+>
+> **Prove leggere (23:11):** Prettier pulito; `tsc` sui moduli TS del Lab senza errori nei miei file (solo i moduli `$app/*` di SvelteKit); unit del Lab invariati, 548/548.
+> **In parallelo:** `test-author` unit (`451159cb`), `docs-writer` (`2df1d670`), `test-author` E2E (`6e1c06cc`, solo scrittura). Dalle 00:00 alle 01:15 nessuno esegue niente.
+> **Decisione del coordinatore sulla copia di `lookupKey` (23:1x), testuale:** «Approvata, ma solo come provvisoria: la copia non deve entrare nel target. TD-1 entrerà prima della tua validazione pesante, che è dopo le 01:15. Al merge di base con TD-1 la sostituisci con l'import di `lookupKey`, tieni il test, e solo dopo validi e consegni il checkpoint.»
+> **Ordine conseguente:**
+> 1. merge di base con TD-1, fatto dal coordinatore;
+> 2. in `engine/categories.ts`, `categoryKey` diventa `export const categoryKey = lookupKey` da `$lib/theme/chartCategories`: alias, non copia; il test di parità resta;
+> 3. poi le prove pesanti nello slot e il checkpoint.
+
+**✅ Passo 3 — test unitari (`test-author`, 23:1x–23:30, prima della finestra).** Il giro del Lab più `chartCategories.test.ts` passa da 19 file e 633 test a **21 file e 687**, verde due volte. Registrati 2 file nuovi, `categories.test.ts` e `chartColorsSignal.test.ts`, solo con aggiunte. Prettier pulito, `check-orphans` verde.
+> - `categories.test.ts` (20 test):
+>   - le chiavi;
+>   - le risposte per tema, la precedenza del tema su `both`, i contenitori;
+>   - le varianti delle chiavi, confrontate con il `categoryColor` vero di DV;
+>   - le forme di colore: `#rrggbb` minuscolo, `rgba()`, `var()` letta a ogni richiesta;
+>   - C3 da capo a fondo: `categoryColor` di DV restituisce il colore modificato solo con `__LF_DESIGNER_LAB__`.
+> - `chartColorsSignal.test.ts` (3 test): C4 con il vero `onChartColorsChange`. Un evento per ogni cambio di variabili o categorie, nessuno per gli stessi input o per gli stati con soli letterali, elementi o CVD; `categoryOverrides` segue.
+> - Estesi: `scanColors` (prefissi, `categoryLines`, albero sintetico, due invarianti sull'albero reale), `exportFormat`, `verifyExport`, `catalogView`, `colorEditor`.
+>
+> **⚠️ Fuori pista — difetto trovato da `test-author` e corretto (23:3x):** `verify-export` cercava una riga di categoria spostata per valore. Su un valore condiviso finiva sulla riga di un'altra categoria: per esempio dava `moved` alla riga del settore quando il valore del tipo era cambiato, e sempre con exit 0. Ora `locateCategory()` trova la riga per chiave e tema con `categoryLines()`:
+> - `ok` se è alla stessa riga;
+> - `moved` se la chiave è scritta altrove;
+> - `missing` se la chiave non c'è più o la riga ha un altro valore.
+>
+> **⚠️ Fuori pista — tentativo ritirato:** avevo fatto rispondere una modifica di `bucket:Unknown` anche alle chiavi fuori dalle tabelle, come fa DV. Ha rotto 11 test, che usano chiavi inventate, e richiedeva `CATEGORY_KEYS` nell'engine. Le enum del backend tengono quelle chiavi fuori dai dati reali, quindi l'ho tolto: resta un limite documentato.
+> **Piccola correzione UI:** la casella del filtro «picked» non compare più nella scheda Categorie, dove non filtrava niente.
+> **Giro di controllo (23:35):** 21 file, **687/687**.
+> **Secondo giro di `test-author` (23:40):** i test di `locateCategory` vanno in `verifyExport.test.ts`, che passa da 22 a 33 test: 6 test diretti e 6 su `verifyExport` con un albero sintetico.
+> - La fixture condivisa ha `type:AAA` e `sector:Zed` con lo stesso valore in chiaro.
+> - Ogni caso di regressione verifica prima cosa avrebbe restituito la vecchia ricerca per valore.
+> - Il vecchio titolo «found by its value» non c'è più.
+> - Totale: 21 file, **698/698**; Prettier pulito, `check-orphans` verde.
+> - Comportamenti fissati dai test:
+>   - un `theme_context` null o `both` dà `missing` (il Lab non lo scrive mai per una categoria);
+>   - un'occorrenza senza `raw` viene collocata solo per chiave e tema;
+>   - le chiavi si confrontano come le scrive la tabella.
+
+**✅ Passo 4 — documentazione (`docs-writer`, 23:1x–23:3x).** `designer-lab.md`: nuova sezione «🍩 Chart Categories» (`#chart-categories`); aggiornati build switch, neutralità, hook, schema del catalogo (`category`, `categories`), Colour Roles (prefissi), parità (1358 → 1375), scheda e editor, livelli (titolo «The Six Change Layers» con l'ancora `#change-layers`; nessun link al vecchio slug), Known Limits, schema dell'export, import, skill, File Map, seams. Ha corretto anche quattro frasi già superate: `shadeForDepth`, l'osservatore di SemiDonut, la regola dei file dei grafici, i «tre posti» del ramo. Il secondo e il terzo giro sono qui sotto.
+> Dopo TD-1: vanno tolti il limite (d) e la frase sulla copia di `categoryKey()`.
+> **Secondo giro (23:4x):** `locateCategory`, il limite delle chiavi fuori tabella, la casella del filtro.
+> **Terzo giro (23:5x, solo scrittura):**
+> - C4 in «L2» (righe 281–284), «L3» (320–323) e «The redraw (C4)» (383–403): firma, momenti del controllo, elenco dei casi muti;
+> - `features/risk/` nella frase sui file dei grafici (538–543);
+> - un limite nuovo, i fogli arrivati dopo, in Known Limits (1091–1094);
+> - la File Map (1487).
+> - Ha notato che i ruoli derivati, come `--lf-text-on-inverse` = `var(--lf-surface-card)`, non sono letterali: la pagina dice «the derived ones aside». Seguono comunque la modifica del ruolo a cui rimandano.
+> - Build strict e `check-links` nello slot.
+
+**⏳ Passo 5 — E2E (`test-author`, sola scrittura).** Il test delle categorie è scritto: tipo scelto a runtime, la torta dei tipi ricolorata per chiave, quella dei settori invariata, export e `verify-export`, reset.
+> **⚠️ Fuori pista:** il test C4 «ruolo letto da un grafico» non ha un legame robusto con i dati di TEST_USER. La torta legge solo `--lf-surface-card`, per le sfumature dei sottotipi in scuro, e TEST_USER non ha sottotipi; la heatmap richiede la rotta del rischio. Lo sostituisco con un test di contratto dal lato del Lab: un contatore di `lf:chart-colors-change` nella scheda dell'app; una modifica L1 → 1 evento, una modifica di un letterale → nessuno, il reset → 1. Il redraw da capo a fondo lo prova già il test delle categorie.
+>
+> **⚠️ Fuori pista — buco di C4 trovato da `test-author` (E2E) e corretto (23:4x):** ogni ruolo di `tokens.css` è scritto come letterale in `:root` e `html.dark`, e L2 riscrive anche i letterali dentro le definizioni di variabile. Una modifica dalla scheda Fogli di stile di quel valore (per esempio `#fafbfa`) cambiava quindi `--lf-surface-card` senza C4: i grafici che leggono i ruoli con `chartRoles` non si ridisegnavano.
+> - **Correzione:**
+>   - `engine/stylesheets.ts` esporta `variableRewrites()`: ogni proprietà custom riscritta dal passaggio, con selettore, nome e valore attuale, ordinate;
+>   - in `engine/index.ts` la firma di C4 è `[variabili e categorie dello stato, variableRewrites()]`, e il valore iniziale è calcolato a vuoto, così un reset senza modifiche resta muto;
+>   - `signalChartInputs()` gira alla fine di `applyState` e, di nuovo, nell'osservatore del tema dopo il ri-piano. Così un letterale con ambito di tema su un ruolo manda il segnale una volta dopo il cambio di tema, in qualunque ordine siano girati gli osservatori.
+> - **Limite:** un foglio caricato dopo (CSS di rotta) viene riscritto senza un segnale suo. I ruoli che legge `chartRoles` stanno tutti nel foglio globale.
+> - **Giro (23:47):** 21 file, **698/698**; Prettier pulito.
+> - **Test:**
+>   - `test-author` unitario scrive i casi con un `<style>` controllato in jsdom: definizione `:root` → 1, regola comune → 0, variabile di componente → 1, cambio di tema con ambito → 1, `both` → 0, `variableRewrites()`;
+>   - `test-author` E2E riscrive il test C4: L1 → 1, letterale nella definizione di un ruolo letto da `chartRoles` → 2, reset → 3. Il caso negativo passa agli unitari.
+>   - Scrivono soltanto, perché c'è la finestra quieta.
+> - `docs-writer` aggiorna le frasi che dicevano «C4 solo per variabili e categorie».
+>
+> **⚠️ Fuori pista — richiesta del coordinatore (23:49), `features/risk` nello scanner:** Y4b (1.3) sposta il rischio da `components/risk/**`, `lib/risk/` e `stores/risk/` a `lib/features/risk/`, verso le 02:30.
+> - In `CHART_PATH_RE` (`scan-colors.mjs:194`) la parte finale è ora `features\/(risk|tools\/pac-allocator\/planner\/result)`, accanto a `components/risk`, con un commento di una riga. Vale sia prima sia dopo lo spostamento.
+> - Prova sulla regex (23:51):
+>   - `features/risk/components/X.svelte`, `features/risk/x.ts` e `components/risk/X.svelte` danno chart;
+>   - `features/riskier/x.ts` e `features/tools/x.ts` no.
+> - `lib/risk/` e `stores/risk/` oggi non hanno letterali di colore (grep), quindi il catalogo non cambia.
+> - Una riga nell'`it.each` «recognises a chart by %s» la scrive `test-author`, e una frase nella pagina developer (~520) `docs-writer`. Il file Python non ha la lista dei percorsi dei grafici e non va toccato.
+>
+> **⚠️ Fuori pista — `features/dashboard` (coordinatore, 00:0x):** Y3 (1.3) sposta `components/dashboard/**` in `lib/features/dashboard/`, a radice piatta, 35 file, verso le 02:00 o più tardi.
+> - La regex è ora `features\/(dashboard|risk|tools\/pac-allocator\/planner\/result)` (`scan-colors.mjs:195`), e il commento cita Y3 e Y4b.
+> - Scritto nella finestra quieta, senza run:
+>   - la riga `features/dashboard/Kpi.svelte` di `test-author`: il nome non contiene «chart», così combacia solo il ramo nuovo;
+>   - la frase di `docs-writer`.
+> - Oggi nessun file di `components/dashboard` con colori dipende dalla sola regola della cartella: hanno tutti «Chart» nel nome o importano `echarts`. Il catalogo non cambia.
+> - Le costanti `pickView.test.ts:23` (`GROWTH`) e `scanColors.test.ts:339` sono fixture sintetiche, che non leggono i file veri: lo spostamento non le rompe. Le aggiorno, solo per estetica, al primo giro dopo l'ingresso di Y3.
+> - **Scritti (00:0x), non eseguiti:**
+>   - la riga `['the dashboard feature folder', 'src/lib/features/dashboard/Kpi.svelte']` in `scanColors.test.ts`, attesi **706** test;
+>   - la frase di `designer-lab.md` (538–543), che accoppia `components/dashboard` con `features/dashboard/` e `components/risk` con `features/risk/`.
+>
+> **⚠️ Fuori pista — `features/brokers/lots` (coordinatore, 00:14):** Y5 (1.3), dopo il lotto di T, sposta `components/brokers/*` in `lib/features/brokers/`, che non è una cartella di grafici, e `components/brokers/lots/*` in `lib/features/brokers/lots/`, che lo è.
+> - La regex è ora `features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result)` (`scan-colors.mjs:196`), e il commento cita Y3, Y4b e Y5.
+> - Scritti nella finestra:
+>   - `test-author`: una riga positiva (`features/brokers/lots/LotsAnalysisPanel.svelte`) e una negativa (`features/brokers/BrokerImportFilesModal.svelte` resta `script`);
+>   - `docs-writer`: la frase.
+> - L'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte` (`designer-lab.md:1215`) si cambia dopo l'ingresso di Y5.
+> - **Scritti (00:2x), non eseguiti:**
+>   - la riga positiva;
+>   - il test «keeps the colours of any other module in the script layer» diventa un `it.each` con `utils/format.ts` e `features/brokers/BrokerImportFilesModal.svelte`, che va a `script` con `chart: false`;
+>   - attesi **708** test;
+>   - la frase della doc (538–543): tre coppie `components/…` ↔ `features/…`, con Y3, Y4b e Y5 tra parentesi.
+> - **Risposta al coordinatore, Y5 prima di L-16?** Sì, senza rotture.
+>   - Nessun test o gate fissa la classificazione del catalogo vero: il test sull'albero reale controlla solo invarianti, il gate degli import guarda gli import, gli E2E scelgono a runtime.
+>   - Nessun file di `components/{brokers/lots,dashboard,risk}` con colori (hex e tutte le funzioni colore) dipende dalla sola regola della cartella: hanno tutti «chart» nel nome o importano `echarts`. La classificazione non cambia.
+> - **Slot riordinato (00:14):** DV ~01:35 → T ~02:10 → L-16 ~03:20. Al merge di base, se Y3 e Y5 sono entrati, aggiorno prima della validazione le costanti di estetica (`pickView.test.ts:23`, `scanColors.test.ts:339`) e l'esempio JSON.
+>
+> **Giro di `test-author` sui due punti (23:51, prima della finestra):** 21 file, **705/705** (+6 C4, +1 riga del rischio); Prettier pulito, `check-orphans` verde.
+> - **`chartColorsSignal.test.ts`** passa da 3 a 9 test. Ogni test inserisce il proprio `<style data-lab-test>`, e l'afterEach toglie stili e classe di `html`.
+>
+>   | Caso | Eventi |
+>   |---|---|
+>   | `:root` | 1, 0, 1, 1, 0 |
+>   | regola comune | 0, con la barriera `cssRules > 0` |
+>   | variabile di componente | 1, 1 |
+>   | tema con ambito chiaro | 1, 1 |
+>   | `both` | 0, 0 |
+>
+>   C'è anche un test diretto di `variableRewrites()`.
+>   - Per il cambio di tema la barriera è un secondo `MutationObserver`, non un'attesa a tempo.
+>   - jsdom serializza i colori comuni in `rgb()` ed espande le shorthand; i test ne tengono conto.
+> - **`scanColors.test.ts`:** la riga `features/risk/components/CorrelationHeatmap.svelte`. Su quel percorso combacia solo il ramo nuovo.
+> - **Non dimostrato da una run:** il fallimento dei nuovi test sul codice di prima. Lo si deduce solo dalla lettura: prima nessun segnale dall'osservatore del tema e nessuna variabile riscritta nella firma.
+
+**✅ Passo 5a — E2E, scrittura (`test-author`, 23:4x).** Il test C4 è riscritto: «an L1 edit, a literal inside a role's definition and a reset each reach the other tab as one chart-colours signal».
+1. Prima di ogni modifica sceglie il ruolo B tra quelli che legge `chartRoles`: il suo valore in chiaro su `<html>` deve comparire nella scheda Fogli di stile (confronto per chiave colore, senza `color-mix`).
+2. L1 su un ruolo A ≠ B → contatore 1, e B ancora al suo valore.
+3. Letterale di B → B col colore nuovo, contatore 2.
+4. Reset → B originale, contatore 3, segno di nessun ricaricamento, client inattivo, `IDLE_STATS`.
+
+Prettier e tsc temporaneo sugli E2E: 0 errori (23:49). Non ancora eseguito.
+
+**✅ Passo 5b — checkpoint intermedio, richiesto dal coordinatore (16/10, 02:06):** «TD-1 è nel target (`57802d827`) […] Mandami il checkpoint di L-16 così com'è, FROZEN». Dopo vengono il suo commit e il merge di base; poi tocca a me la sostituzione, le prove leggere e un piccolo checkpoint; lo slot pesante dopo T, verso le 03:20.
+- **Prove leggere (02:07):** Vitest del Lab più `chartCategories.test.ts`: 21 file, **708/708**, quindi le 3 righe scritte nella finestra sono verdi. Prettier pulito su `scripts/designer-lab`, `lib/dev/designer-lab`, `routes/designer-lab`, `e2e/designer-lab`. Alle 02:10: ruff e black puliti su `color_inventory.py`, `theme-roles --check` pulito, `git diff --check` pulito, porta 6152 libera (`lsof` exit 1). Stato: 24 file tracciati modificati e 3 nuovi. **FROZEN** per il commit del coordinatore.
+- **Previsione di conflitto verso `57802d827`:**
+  - dei miei file, il target cambia solo `BACKLOG_POST_1.2.md`, in altre sezioni (T, DV, H, A, W, J, Z, B, E, Y), mentre io ho toccato solo L (righe 1950–1960): nessuna sovrapposizione;
+  - `chartCategories.ts` di TD-1: `categoryLines()` sulla versione del target dà ancora 54 righe e 27 categorie (11 tipi, 14 settori, 2 contenitori), solo spostate di una riga (39…177 → 40…178);
+  - `lookupKey` è identico alla mia copia (`key.replace(/[\s_]/g, '').toUpperCase()`), quindi sostituirla non cambia il comportamento;
+  - `roleColors.ts`: TD-1 aggiunge `--lf-text-secondary` a `ChartRole`. La lista dei nomi nell'E2E C4 va aggiornata dopo il merge; non si rompe niente, ha solo un candidato in meno;
+  - Y3, Y4b e Y5 non sono nel target: niente costanti né esempio da aggiornare a questo merge.
+
+**⏳ Passo 6 — dopo il merge di base con TD-1 (DV esporta `lookupKey`):**
+1. verificare la nuova HEAD e i suoi padri;
+2. in `engine/categories.ts`, sostituire la copia con `export const categoryKey = lookupKey` (import da `$lib/theme/chartCategories`), tenendo il test di parità;
+3. eseguire il Vitest del Lab;
+4. `docs-writer` toglie il limite (d) e riscrive la frase sulla copia di `categoryKey()`;
+5. `api sync`, se il target porta API nuove;
+6. con `test-author`, aggiungere `--lf-text-secondary` alla lista `CHART_ROLES` dell'E2E C4, perché TD-1 l'ha aggiunto a `ChartRole`;
+7. se Y3 e Y5 sono entrati, aggiornare:
+   - con `test-author`, le costanti di estetica: `pickView.test.ts:23` `GROWTH`, che diventa `lib/features/dashboard/GrowthChart.svelte`, e la riga `scanColors.test.ts:339`;
+   - con `docs-writer`, l'esempio JSON `designer-lab.md:1215`, che diventa `lib/features/brokers/…`.
+
+**⏳ Passo 7 — slot pesante (dopo le 01:15, al via del coordinatore), corsia 6152, un passo alla volta:** script `/tmp/libreFolio_L16_validate.sh`.
+1. `pre`: unitari, svelte-check, gate, `theme-roles`, Prettier, ruff e black sulla riga Python, scanner e parità (attesi 1375 `custom` e 619 `lf`), MkDocs strict e `check-links`.
+2. `live`: iterazione E2E con `test-author`.
+3. `post`: `all` a 1 worker, `e2e` a 4, `check-orphans`.
+4. `release`: marcatore, catalogo e indice a 0, nessuna traccia di `categoryOverrides` né di `__lfDesignerLab`.
+
+**⏳ Passo 8 — checkpoint:** ✅ nel piano, backlog L-16, handoff FROZEN con le righe «dove guardarlo».

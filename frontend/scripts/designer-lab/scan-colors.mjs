@@ -45,7 +45,7 @@ const PREFIX_ALT = [...PREFIXES].sort((a, b) => b.length - a.length).join('|');
 
 const TW_RE = new RegExp(`(?<![\\w-])((?:[a-z0-9-]+:)*)(${PREFIX_ALT})-(${FAMILIES.join('|')})-(50|100|200|300|400|500|600|700|800|900|950)(/\\d{1,3}|/\\[[^\\]]+\\])?(?![\\w-])`, 'g');
 const TW_BW_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via)-(white|black|transparent|current)(\/\d{1,3})?(?![\w-])/g;
-const TW_CUSTOM_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*|lf-[a-z0-9-]+)(\/\d{1,3})?(?![\w-])/g;
+const TW_CUSTOM_RE = new RegExp(`(?<![\\w-])((?:[a-z0-9-]+:)*)(${PREFIX_ALT})-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*|lf-[a-z0-9-]+)(/\\d{1,3})?(?![\\w-])`, 'g');
 const TW_ARBITRARY_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-\[([^\]]*(?:#|rgb|hsl|var\(|oklch)[^\]]*)\]/g;
 const HEX_RE = /(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 const FUNC_RE = /\b(rgba?|hsla?|oklch|color-mix)\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
@@ -190,7 +190,62 @@ export function listSourceFiles(root = FRONTEND_DIR) {
 /** @typedef {'css-literal' | 'chart-color' | 'script' | 'markup' | 'static'} Layer */
 /** @typedef {{start: number, end: number, prelude: string, parent: CssBlock | null}} CssBlock */
 
-const CHART_PATH_RE = /\/(components\/(charts|dashboard|risk|brokers\/lots)|charts|features\/tools\/pac-allocator\/planner\/result)\/|chart[^/]*$/i;
+// The `features/` folders next to their `components/` ones: those features move there (dashboard Y3, risk Y4b, broker
+// lots Y5), and both paths hold until they have.
+const CHART_PATH_RE = /\/(components\/(charts|dashboard|risk|brokers\/lots)|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
+
+/**
+ * The chart categories with a fixed colour (contract C1–C2 with DV): the file that holds them, its two tables (the asset
+ * types, the sectors) and its two buckets, which `categoryColor` adds to both kinds. One literal per line, under its key,
+ * its theme the `light:` / `dark:` property it is written in.
+ */
+export const CATEGORY_FILE = 'src/lib/theme/chartCategories.ts';
+const CATEGORY_TABLES = /** @type {Record<string, string>} */ ({ASSET_TYPE_COLORS: 'type', SECTOR_COLORS: 'sector'});
+const CATEGORY_BUCKETS = /** @type {Record<string, string>} */ ({LIQUIDITY_COLOR: 'Liquidity', UNCLASSIFIED_COLOR: 'Unknown'});
+
+/**
+ * The category each line of the categories file writes a colour for: line (1-based) → the target a `category` change
+ * names (`type:ETF`, `sector:Health Care`, `bucket:Liquidity`) and the theme of the value.
+ * @param {string} text
+ * @returns {Map<number, {target: string, theme: 'light' | 'dark'}>}
+ */
+export function categoryLines(text) {
+    /** @type {Map<number, {target: string, theme: 'light' | 'dark'}>} */
+    const out = new Map();
+    /** @type {string | null} */
+    let owner = null;
+    /** @type {string | null} */
+    let key = null;
+    text.split('\n').forEach((line, i) => {
+        const decl = /^(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\b/.exec(line);
+        if (decl) {
+            owner = CATEGORY_TABLES[decl[1]] ?? (CATEGORY_BUCKETS[decl[1]] ? `bucket:${CATEGORY_BUCKETS[decl[1]]}` : null);
+            key = null;
+            return;
+        }
+        // Any other line at the margin (`};`, a doc comment, the next declaration) ends the table.
+        if (/^\S/.test(line)) {
+            owner = null;
+            key = null;
+            return;
+        }
+        if (!owner) return;
+        const entry = /^\s+(?:'([^']+)'|"([^"]+)"|([A-Za-z_]\w*))\s*:\s*\{\s*$/.exec(line);
+        if (entry && !owner.startsWith('bucket:')) {
+            key = entry[1] ?? entry[2] ?? entry[3];
+            return;
+        }
+        if (/^\s+\},?\s*$/.test(line)) {
+            key = null;
+            return;
+        }
+        const value = /^\s+(light|dark)\s*:\s*['"`]/.exec(line);
+        if (!value) return;
+        const target = owner.startsWith('bucket:') ? owner : key ? `${owner}:${key}` : null;
+        if (target) out.set(i + 1, {target, theme: /** @type {'light' | 'dark'} */ (value[1])});
+    });
+    return out;
+}
 // Selectors that define a variable for the whole page, so the Lab overrides it on `<html>` (L1) instead of rewriting
 // the rule. Same list as ROOT_SELECTOR in src/lib/dev/designer-lab/engine/stylesheets.ts (plus `@theme`, which only the
 // sources have): change both together.
@@ -714,7 +769,12 @@ export function scanColors(opts = {}) {
             const {offset: _offset, ...def} = /** @type {any} */ (d);
             varEntry(d.name).defs.push({file: f, ...def, scope: varScope(def.selector)});
         }
-        for (const lit of scan.literals) literals.push({file: f, ...lit});
+        // The lines of the category tables name their category; their theme is the property they are written in.
+        const categoryAt = rel === CATEGORY_FILE ? categoryLines(text) : null;
+        for (const lit of scan.literals) {
+            const category = categoryAt?.get(lit.line);
+            literals.push(category ? {file: f, ...lit, theme: category.theme, category: category.target} : {file: f, ...lit});
+        }
     }
     parity.var_uses_distinct = distinctUses.size;
 
@@ -741,6 +801,20 @@ export function scanColors(opts = {}) {
     for (const lit of /** @type {{id: number, key: string | null}[]} */ (literals)) {
         if (lit.key) (byValue[lit.key] ??= []).push(lit.id);
     }
+    // The chart categories, in the order the tables write them: the literal of each theme (the target of a `category`
+    // change edits those lines, never a value that other categories or files share).
+    /** @type {Map<string, {target: string, kind: string, key: string, light: number | null, dark: number | null}>} */
+    const categories = new Map();
+    for (const lit of /** @type {{id: number, theme: string | null, category?: string}[]} */ (literals)) {
+        if (!lit.category || (lit.theme !== 'light' && lit.theme !== 'dark')) continue;
+        const colon = lit.category.indexOf(':');
+        let entry = categories.get(lit.category);
+        if (!entry) {
+            entry = {target: lit.category, kind: lit.category.slice(0, colon), key: lit.category.slice(colon + 1), light: null, dark: null};
+            categories.set(lit.category, entry);
+        }
+        entry[lit.theme] ??= lit.id;
+    }
 
     const body = {
         files,
@@ -748,6 +822,7 @@ export function scanColors(opts = {}) {
         palette: [...palette.values()].sort((a, b) => a.var.localeCompare(b.var)),
         literals,
         by_value: byValue,
+        categories: [...categories.values()],
         testids,
         testid_prefixes: testidPrefixes.sort((a, b) => b[0].length - a[0].length),
     };
