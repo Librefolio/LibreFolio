@@ -744,6 +744,16 @@ def front_email_tab(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("settings/email-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_email_verification(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the email-verification E2E tests (sign-up and sign-in on simulated answers; the Settings › Admin switch with GET /system/instance simulated)."""
+    print_section("Frontend Email Verification Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("auth-email-verification.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
     print_section("Frontend Backup Settings Tests")
@@ -973,6 +983,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Email (workstream E, lot E2b): on the lane's backend an administrator opens ?tab=email and finds email off (no SMTP server on the lane, asserted first through GET /api/v1/email/status), explained, the docs link opening admin/email/; a user has no Email tab and ?tab=email opens profile instead; on a simulated server (page.route on /email/status and /email/test, owned and unrouted by each test) ready with 48 of 50 left and a warning notice, a test email sent (200, busy and disabled while held, email.test.sent), refused by the SMTP server (502 EMAIL_DELIVERY_FAILED AUTH_FAILED) and by the hourly limit (429 EMAIL_RATE_LIMITED, retry_after), each read as the generated client rejects (email.test.failed) and followed by a second status read",
         prereq="Admin user + test users; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="settings/email-tab.spec.ts",
+    )
+    add_test(
+        cat,
+        "email-verification",
+        front_email_verification,
+        name="Email Verification E2E",
+        desc="E5b (developer decision 44), signed out on simulated answers: a 201 with verification_required goes back to the sign-in with a success line of its own and signs nobody in; a 409 EMAIL_VERIFICATION_UNAVAILABLE stays on the register card with words of its own; a 403 EMAIL_NOT_VERIFIED draws the verification notice instead of the danger box, and «send the link again» goes with the typed credentials (email.verification.resent). As e2e_test_admin with GET /system/instance simulated: the require_email_verification switch of Settings › Admin disabled with email.links false (not the lock: the sibling switch usable; no placeholder badge), usable with true; nothing saved",
+        prereq="Admin user + test users; no SMTP server on the lane; require_email_verification saved off",
+        tests="auth-email-verification.spec.ts",
     )
     add_test(
         cat,
