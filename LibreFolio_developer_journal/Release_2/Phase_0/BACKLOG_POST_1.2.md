@@ -2825,8 +2825,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   chip su una tinta in tutti e due i temi, e `htmlSink.gate.test.ts:73` ne fissa uno alla lettera. Restano legacy fino a
   un ruolo di T. Dettagli: piano AF, sezione «2», C5.
 - **AF-6 · Velo e icona bianca sull'immagine dell'asset** — minimo; AF, 16/10. In `AssetModalDetails:104–107`
-  (`bg-black/40`, `text-white`) manca un ruolo «testo sul velo»: restano legacy (2 classi). Dettagli: piano AF,
-  sezione «7».
+  (`bg-black/40`, `text-white`) mancava un ruolo «testo sul velo». ✅ 16/10: T ha creato `text-lf-on-overlay`
+  (`f043c1b58`); il velo va su `bg-lf-overlay` e l'icona su `text-lf-on-overlay` (checkpoint AF dopo `bfd33a0f5`).
+  Da rivedere: il velo è più scuro (60 % invece del 40 %). Dettagli: piano AF, passo 12.
 - **AF-7 · Tre interruttori dell'area** — basso; AF, 16/10. `AssetModalFooter` attivo/benchmark e l'interesse di mora
   di `ScheduledInvestmentEditor` (12 classi) restano per il lotto unico degli interruttori di T, già nel suo
   inventario. Dettagli: piano di T, «Il lotto degli interruttori (Q2)».

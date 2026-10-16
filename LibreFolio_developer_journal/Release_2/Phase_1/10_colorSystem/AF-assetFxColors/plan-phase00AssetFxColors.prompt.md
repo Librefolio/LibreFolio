@@ -10,9 +10,12 @@
 > [`theme-roles`](../../../../../.github/skills/design-tools/theme-roles/SKILL.md) (tabella classe → ruolo, baseline).
 > Backlog: sezione «AF · Colori di asset e cambi» di [`BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md),
 > voci `AF-n`.
-> **Stato:** analisi del 16/10 mattina inviata al coordinatore; piano approvato il 16/10 alle 11:1x (uscita dal plan
-> mode nella sessione AF). Decisioni chieste al coordinatore e ancora aperte: OK sui test della zona X (lotto 3), chi
-> parte prima per i lotti 4–6, conferma della regola per le tinte ambigue, AF-8, sotto-agenti in parallelo.
+> **Stato (16/10, 13:05):**
+> - **Lotti 1–8 nel target** (`bfd33a0f5`): A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, docs `15f31f12e`, fix G6
+>   `5cdf4c307`. Il target scende da m1 8.249 e m2 54 a 6.734 e 48.
+> - AF-6 è nel checkpoint successivo.
+> - Il lotto 9, il dettaglio asset, aspetta FE5c di X (slot 13:15–14:00).
+> - Le decisioni chieste nell'analisi le ha prese il coordinatore (passo 1).
 
 ## 0. Dati di partenza (verificati il 16/10, 10:41–11:30)
 
@@ -524,3 +527,89 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
    >   verificati identici.
    >
    > **Ruoli nuovi di T** (`f043c1b58`, arrivano con la base merge): `text-lf-on-overlay` risolve AF-6.
+9. ✅ (16/10, 12:01–12:43) **Slot pesante H1+H2** sulla base `5e759bc9b` (A, B, C committati dal coordinatore, merge
+   del target `f77743d47`).
+   > **Ambiente:** corsia 6157 + `/tmp/librefolio-r2-af`, 1 worker (carico fra 36 e 165).
+   > Script `/tmp/libreFolio_af_slotH12.sh`, che non avvia nessun passo nuovo dopo le 12:43; log in
+   > `/tmp/libreFolio_af_slotH12/`.
+   >
+   > **Preparazione e unità:**
+   >
+   > | Passo | Esito |
+   > |---|---|
+   > | `api sync` | rc 0 |
+   > | `front build --debug` | rc 0 (4 min) |
+   > | `mkdocs build` | rc 0 |
+   > | `front check` | 0 errori, 0 avvisi |
+   > | `front-utility component-unit` | 154 file, 4.027/4.027 |
+   >
+   > **E2E, 151/151** (nessun rosso né flaky):
+   >
+   > | Spec | Test |
+   > |---|---:|
+   > | asset-list | 28 |
+   > | asset-modal | 17 |
+   > | asset-data-editor | 26 |
+   > | asset-merge | 3 |
+   > | asset-mobile-layout | 21 |
+   > | asset-classification | 4 |
+   > | asset-browse | 8 |
+   > | fx-list | 12 |
+   > | fx-detail | 17 |
+   > | fx-add-pair | 11 |
+   > | fx-editor | 4 |
+   >
+   > **Saltati per il taglio:** fx-csv-import, fx-bulk, fx-sync-mock, live-pause, asset-name-xss, recuperati nella coda
+   > del passo 10. Porta libera alla fine.
+   >
+   > **⚠️ Fuori pista:** fra le 11:53 e le 11:57 la rete è caduta e il turno della sessione AF si è chiuso con un errore;
+   > il worktree era pulito. G, che occupava la corsia pesante, è morto con la sua sessione, e il coordinatore ha
+   > anticipato il via.
+10. ✅ (16/10, 12:45–13:00) **Coda breve** sulla base `0ff61e8c0`: merge di `be911db7e`, con W-B43 (spec di
+    `asset-data-editor` e `fx-csv-import` più strette), G-18 e la correzione dello scanner di T (`18824449c`, i commenti
+    nelle espressioni del markup).
+    > Niente `api sync`: la base non toccava componenti né API.
+    > - **Gate:** `--check` pulito; Vitest `themeRoles` + `themeTokens` 71/71 (prima 65: c'è il test nuovo dello scanner).
+    > - **E2E, 70/70:** asset-data-editor 26 e fx-csv-import 22 (gli spec nuovi di W-B43), fx-sync-mock 5, fx-bulk 7,
+    >   live-pause 8, asset-name-xss 2.
+    > - Totale dei due slot: **221 E2E verdi**. Log in `/tmp/libreFolio_af_queueB/`.
+11. ✅ (16/10, 13:02) **Ritocco G6** (la regola nuova di T per i campi nativi, `a317392d4`).
+    > Il G6 trovava un solo caso nell'albero AF: in `ScheduledInvestmentEditor.svelte:1295` il campo note degli eventi
+    > (`placeholder="optional"`) prende `placeholder:text-lf-placeholder`.
+    > - **Prove:** `--check`, Prettier, Vitest dei gate 71/71, `git diff --check`. Gli E2E non vanno rifatti
+    >   (coordinatore).
+    > - **Commit** `5cdf4c307`, poi nel target con A+B+C: **`bfd33a0f5`**.
+12. ✅ (16/10, 13:05) **AF-6**: il velo sull'immagine dell'asset (`AssetModalDetails:104–107`). `bg-black/40` passa a
+    `bg-lf-overlay` (tabella di `theme-roles`: i fondali neri al 40–50 % vanno su `overlay`), e l'icona `Upload` da
+    `text-white` a `text-lf-on-overlay`, il ruolo nuovo di T «icona sul velo».
+    > - **Conteggi:** `AssetModalDetails` da 2 a 0 classi legacy; il target da m1 6.734 a 6.732 (`--update`).
+    > - **Prove:** `--check` pulito, Prettier ok, `dark_only_check` 0 casi; Vitest dei gate e `AssetModal.test.ts`
+    >   103/103.
+    > - **Da rivedere:** il velo passa dal 40 % di nero al 60 % del fondale (`#0D1110`), quindi è più scuro.
+    >   `on-overlay` è provvisorio (domanda aperta 5 dello skill).
+13. ⏳ **Lotto 9 · dettaglio asset**, dopo l'ingresso di FE5c (X, slot 13:15–14:00): `routes/(app)/assets/[id]/+page.svelte`
+    e `lib/components/assets/detail/*.svelte`.
+    > **Lo slot del lotto 9** porta anche fx-settings, fx-destructive, asset-event-delete, asset-event-editor-save e
+    > tx-import-asset-inspector.
+
+## 12. Dove guardarlo (per il developer)
+
+- **A, lotti 1–3:**
+  - `/fx` in griglia e lista: card (hover, fuoco, %, «Manual», icone, sync disabilitata), segmenti assoluto/%, stati
+    vuoto, errore e caricamento;
+  - `/fx/<coppia>`: banner ambra, cornice di «Modifica tassi», nessun dato (manuale e non). Gli interruttori della barra
+    non cambiano (AF-1);
+  - modali «Aggiungi coppia» e import CSV dei cambi;
+  - `/assets`: card attive e inattive (superficie ambra, hover, lampeggio dei prezzi), riga inattiva della lista,
+    pallini di stato, ‹ n/N › del dettaglio;
+  - il riepilogo del prezzo nella pagina del dettaglio.
+- **B, lotti 4–7:**
+  - modale asset: campi, quantità di base non valida, avvisi d'importazione, fornitore, identificativi, velo
+    sull'icona (AF-6);
+  - ricerca (chip dei fornitori, tendina), test del fornitore, confronto con il fornitore, scelta dell'identificativo
+    primario, anche dentro il wizard d'importazione;
+  - cambio valuta, unione di asset, taglio o eliminazione delle date, import CSV di prezzi ed eventi;
+  - editor dell'investimento programmato, col segnaposto delle note (G6).
+- **C, lotto 8:** la barra di `/assets` (ricerca, filtri attivi e inattivi, tipo, pastiglie delle valute, segmenti).
+- **Galleria:** le scene `fx-*`, `assets*`, `asset-modal*`, `asset-detail-header`; il dettaglio asset cambia col lotto 9.
+- I «da rivedere», lotto per lotto, sono nei passi 2–8 e 12.
