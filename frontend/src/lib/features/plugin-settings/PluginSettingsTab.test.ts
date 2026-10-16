@@ -9,6 +9,9 @@
  *   - the entries are grouped by family, one `plugin-settings-family` (`data-family`) per family: the price sources
  *     (`asset`) before the exchange-rate sources (`fx`) whatever the order of the answer, each family in the answer's
  *     order, a family without entries left out; one form `plugin-settings-form-{code}` per entry, inside its family;
+ *   - each family's title (`h3`) starts with the family's icon, `plugin-settings-family-icon` (`aria-hidden`): one per
+ *     family shown, each its own, none for a family left out. Which icon is which is pinned by
+ *     `pluginSettingsForm.test.ts` (`FAMILY_ICONS`);
  *   - an answer with no entry shows `plugin-settings-empty`, a read that fails `plugin-settings-load-error` (role
  *     alert), each alone;
  *   - a save in a form hands the plugin's fresh state back, and the tab shows it in place of the old one, the other
@@ -47,6 +50,7 @@ vi.mock('$lib/stores/app/notify.svelte', () => ({notify: fake.notify}));
 
 import PluginSettingsTab from './PluginSettingsTab.svelte';
 import type {PluginSettingsEntry, SettingField, SettingsFamily} from './pluginSettingsApi';
+import {FAMILY_TITLE_KEYS} from './pluginSettingsForm';
 
 // --- Fixtures --------------------------------------------------------------------------------------------------------
 
@@ -80,7 +84,7 @@ function nickname(): SettingField {
 }
 
 function plugin(family: SettingsFamily, code: string, over: Partial<PluginSettingsEntry> = {}): PluginSettingsEntry {
-    return {family, plugin_code: code, plugin_name: code, configured: false, fields: [nickname()], ...over};
+    return {family, plugin_code: code, plugin_name: code, icon_url: null, configured: false, fields: [nickname()], ...over};
 }
 
 const JUSTETF = plugin('asset', 'justetf');
@@ -92,6 +96,25 @@ const MOCKFX = plugin('fx', 'mockfx');
 
 const tab = () => screen.getByTestId('plugin-settings-tab');
 const form = (code: string) => screen.getByTestId(`plugin-settings-form-${code}`);
+
+/** The section of `family`, found by what it publishes: never by its place on the page. */
+function familySection(family: SettingsFamily): HTMLElement {
+    const section = screen.queryAllByTestId('plugin-settings-family').find((element) => element.getAttribute('data-family') === family);
+    if (!section) throw new Error(`no plugin-settings-family for ${family}`);
+    return section;
+}
+
+/** The text of `container` on either side of `element`, blanks collapsed: what is read before it, and after it. */
+function textAround(container: Element, element: Element): {before: string; after: string} {
+    const before = document.createRange();
+    before.setStart(container, 0);
+    before.setEndBefore(element);
+    const after = document.createRange();
+    after.setStartAfter(element);
+    after.setEnd(container, container.childNodes.length);
+    const read = (range: Range) => range.toString().replace(/\s+/g, ' ').trim();
+    return {before: read(before), after: read(after)};
+}
 
 /** The groups, top to bottom: each family with the codes of its forms, in order. */
 function groups(): Array<{family: string | null; plugins: string[]}> {
@@ -230,5 +253,56 @@ describe('PluginSettingsTab — a save', () => {
             {family: 'fx', plugins: ['mockfx']},
         ]);
         expect(fake.fetchAll, 'the tab reads nothing else again').toHaveBeenCalledTimes(1);
+    });
+});
+
+// =====================================================================================================================
+describe('PluginSettingsTab — the family icons', () => {
+    it('PST-07: each family’s title starts with its icon: one per family, inside its h3, before the title, hidden from assistive technology', async () => {
+        fake.fetchAll.mockResolvedValueOnce([ECB, JUSTETF, MOCKFX, BORSA]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(
+            groups().map((group) => group.family),
+            'premise: both families are shown',
+        ).toEqual(['asset', 'fx']);
+        for (const family of ['asset', 'fx'] as const) {
+            const section = familySection(family);
+            const icons = within(section).getAllByTestId('plugin-settings-family-icon');
+            expect(icons, `${family}: one icon`).toHaveLength(1);
+            const [icon] = icons;
+            const title = within(section).getByRole('heading', {level: 3});
+            expect(title, `${family}: the icon is in the title`).toContainElement(icon);
+            expect(icon, `${family}: a decoration, which assistive technology skips`).toHaveAttribute('aria-hidden', 'true');
+            expect(textAround(title, icon), `${family}: the icon first, then the title`).toEqual({before: '', after: FAMILY_TITLE_KEYS[family]});
+        }
+    });
+
+    it('PST-08: each family draws its own icon: the price sources’ and the exchange-rate sources’ differ', async () => {
+        fake.fetchAll.mockResolvedValueOnce([JUSTETF, ECB]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const drawing = (family: SettingsFamily) => within(familySection(family)).getByTestId('plugin-settings-family-icon').innerHTML;
+        expect(drawing('asset'), 'premise: the icon draws something').not.toBe('');
+        expect(drawing('asset')).not.toBe(drawing('fx'));
+    });
+
+    it.each<[string, PluginSettingsEntry[], SettingsFamily]>([
+        ['only exchange-rate sources: no price-source icon', [MOCKFX, ECB], 'fx'],
+        ['only price sources: no exchange-rate icon', [BORSA, JUSTETF], 'asset'],
+    ])('PST-09: a family left out has no icon either — %s', async (_label, answer, shown) => {
+        fake.fetchAll.mockResolvedValueOnce(answer);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(
+            screen.getAllByTestId('plugin-settings-family-icon').map((icon) => icon.closest('[data-testid="plugin-settings-family"]')?.getAttribute('data-family')),
+            'every icon on the tab, by the family whose title it starts',
+        ).toEqual([shown]);
     });
 });

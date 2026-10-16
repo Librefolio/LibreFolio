@@ -220,11 +220,11 @@
 <ModalBase {open} {zIndex} maxWidth="2xl" onRequestClose={onClose} testId="parse-detail-modal">
     {#if parseResult || isAggregate}
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="flex items-center justify-between p-4 border-b border-lf-subtle">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {title}
             </h2>
-            <button type="button" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400" onclick={onClose}>
+            <button type="button" class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted" onclick={onClose}>
                 <X size={18} />
             </button>
         </div>
@@ -233,7 +233,7 @@
         <div class="p-4 space-y-5 max-h-[70vh] overflow-y-auto">
             <!-- File info bar (single file only) -->
             {#if parseResult}
-                <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div class="flex flex-wrap items-center gap-4 text-sm text-lf-secondary">
                     <span class="flex items-center gap-1.5">
                         <BrokerIcon iconUrl={parseResult.brokerIconUrl} portalUrl={parseResult.brokerPortalUrl} altText={parseResult.brokerName} size="sm" />
                         <strong>{parseResult.brokerName}</strong>
@@ -245,7 +245,7 @@
                     <span><strong>TX:</strong> {parseResult.response?.transactions?.length ?? 0}</span>
                 </div>
             {:else if isAggregate}
-                <div class="text-sm text-gray-500 dark:text-gray-400">
+                <div class="text-sm text-lf-muted">
                     {$t('importWizard.txCount', {values: {n: activeResults.reduce((s, r) => s + (r.response!.transactions?.length ?? 0), 0), k: activeResults.length}})}
                 </div>
             {/if}
@@ -255,17 +255,12 @@
                 {@const outcomes = summaryCounts(parseResult.set.summary, 'outcomes')}
                 {@const reasons = summaryCounts(parseResult.set.summary, 'reasons')}
                 <section data-testid="parse-detail-pairing" data-pair={outcomes.pair ?? 0} data-standalone={outcomes.standalone ?? 0} data-summarized={outcomes.summarized ?? 0} data-deferred={outcomes.deferred ?? 0} data-excluded={outcomes.excluded ?? 0}>
-                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.reportSet.pairingTitle')}</h3>
-                    <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{parseResult.set.memberNames.join(' + ')}</p>
+                    <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.reportSet.pairingTitle')}</h3>
+                    <p class="mb-2 text-xs text-lf-muted">{parseResult.set.memberNames.join(' + ')}</p>
                     <div class="flex flex-wrap gap-1.5">
                         {#each SET_OUTCOMES as outcome}
                             {@const count = outcomes[outcome] ?? 0}
-                            <span
-                                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs {count > 0 ? 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-gray-100' : 'bg-gray-50 text-gray-400 dark:bg-slate-900 dark:text-gray-500'}"
-                                data-testid="parse-detail-pairing-outcome"
-                                data-outcome={outcome}
-                                data-count={count}
-                            >
+                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs {count > 0 ? 'bg-lf-panel text-lf-primary' : 'bg-lf-panel text-lf-muted'}" data-testid="parse-detail-pairing-outcome" data-outcome={outcome} data-count={count}>
                                 <span aria-hidden="true">{OUTCOME_ICON[outcome]}</span>
                                 <span class="font-semibold tabular-nums">{count}</span>
                                 <span>{$t(`importWizard.reportSet.outcome.${outcome}`)}</span>
@@ -275,14 +270,14 @@
                     {#if Object.keys(reasons).length > 0}
                         <table class="mt-3 w-full max-w-md text-xs" data-testid="parse-detail-pairing-reasons">
                             <thead>
-                                <tr class="text-gray-500 dark:text-gray-400">
+                                <tr class="text-lf-muted">
                                     <th class="py-1 pr-3 text-left font-normal">{$t('importWizard.reportSet.column.reason')}</th>
                                     <th class="py-1 text-right font-normal">{$t('importWizard.reportSet.column.rows')}</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                            <tbody class="divide-y divide-lf-subtle">
                                 {#each Object.entries(reasons) as [reason, count]}
-                                    <tr class="text-gray-700 dark:text-gray-300" data-testid="parse-detail-pairing-reason" data-reason={reason} data-count={count}>
+                                    <tr class="text-lf-secondary" data-testid="parse-detail-pairing-reason" data-reason={reason} data-count={count}>
                                         <td class="py-1 pr-3">{reasonLabel(reason)}</td>
                                         <td class="py-1 text-right font-mono tabular-nums">{count}</td>
                                     </tr>
@@ -292,11 +287,11 @@
                     {/if}
                     <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
                         {#if onPreview}
-                            <button type="button" class="inline-flex items-center gap-1 text-libre-green hover:underline" onclick={onPreview} data-testid="parse-detail-preview-combined">
+                            <button type="button" class="inline-flex items-center gap-1 text-lf-link hover:underline" onclick={onPreview} data-testid="parse-detail-preview-combined">
                                 <Eye size={12} />{$t('importWizard.reportSet.previewCombined')}
                             </button>
                         {/if}
-                        <a class="inline-flex items-center gap-1 text-libre-green hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
+                        <a class="inline-flex items-center gap-1 text-lf-link hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
                             <Download size={12} />{$t('importWizard.reportSet.downloadCombined')}
                         </a>
                     </div>
@@ -305,31 +300,31 @@
 
             <!-- TX by Type -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.txByType')}</h3>
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.txByType')}</h3>
                 {#if txByType.length > 0}
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {#each txByType as [type, count]}
-                            <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-gray-100 dark:bg-slate-800">
+                            <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-lf-panel">
                                 <img src={getTransactionTypeIconUrl(type)} alt={type} class="w-4 h-4" />
-                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{$t('transactions.types.' + type)}</span>
-                                <span class="text-sm font-semibold text-gray-900 dark:text-white">{count}</span>
+                                <span class="text-xs font-medium text-lf-secondary flex-1">{$t('transactions.types.' + type)}</span>
+                                <span class="text-sm font-semibold text-lf-primary">{count}</span>
                             </div>
                         {/each}
                     </div>
                 {:else}
-                    <p class="text-xs text-gray-400">—</p>
+                    <p class="text-xs text-lf-muted">—</p>
                 {/if}
             </section>
 
             <!-- Assets -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('common.assets')}</h3>
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('common.assets')}</h3>
                 {#if assetMappings.length > 0}
                     <div class="space-y-1.5">
                         {#each assetMappings as mapping}
-                            <div class="flex items-center justify-between px-3 py-1.5 rounded bg-gray-50 dark:bg-slate-800 text-sm">
+                            <div class="flex items-center justify-between px-3 py-1.5 rounded bg-lf-panel text-sm">
                                 <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 flex-1 min-w-0 mr-2">
-                                    <span class="font-medium text-gray-900 dark:text-white truncate max-w-full">
+                                    <span class="font-medium text-lf-primary truncate max-w-full">
                                         {(mapping.extracted_name as string | null) ?? (mapping.extracted_symbol as string | null) ?? (mapping.extracted_isin as string | null) ?? `ID ${mapping.fake_asset_id}`}
                                     </span>
                                     {#if mapping.extracted_symbol}
@@ -347,64 +342,64 @@
                                 </div>
                                 <div class="flex items-center gap-1 shrink-0">
                                     {#if mapping.selected_asset_id != null}
-                                        <CheckCircle size={14} class="text-emerald-500" />
-                                        <span class="text-xs text-emerald-600 dark:text-emerald-400">{$t('importWizard.assetResolved')}</span>
+                                        <CheckCircle size={14} class="text-lf-success" />
+                                        <span class="text-xs text-lf-success">{$t('importWizard.assetResolved')}</span>
                                     {:else}
-                                        <HelpCircle size={14} class="text-amber-500" />
-                                        <span class="text-xs text-amber-600 dark:text-amber-400">{$t('importWizard.assetUnresolved')}</span>
+                                        <HelpCircle size={14} class="text-lf-warning" />
+                                        <span class="text-xs text-lf-warning">{$t('importWizard.assetUnresolved')}</span>
                                     {/if}
                                 </div>
                             </div>
                         {/each}
                     </div>
                 {:else}
-                    <p class="text-xs text-gray-400">{$t('importWizard.noAssets')}</p>
+                    <p class="text-xs text-lf-muted">{$t('importWizard.noAssets')}</p>
                 {/if}
             </section>
 
             <!-- Validation Issues -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">
                     {$t('importWizard.validationIssues')}
                     {#if validationIssues.length > 0}
-                        <span class="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">({validationIssues.length})</span>
+                        <span class="ml-1 text-xs font-normal text-lf-warning">({validationIssues.length})</span>
                     {/if}
                 </h3>
                 {#if validationIssues.length > 0}
                     <ul class="space-y-1.5">
                         {#each validationIssues as issue}
-                            <li class="flex items-start gap-2 px-3 py-1.5 rounded bg-amber-50 dark:bg-amber-900/20 text-sm">
-                                <CircleAlert size={14} class="mt-0.5 shrink-0 text-amber-500" />
+                            <li class="flex items-start gap-2 px-3 py-1.5 rounded bg-lf-warning-soft text-sm">
+                                <CircleAlert size={14} class="mt-0.5 shrink-0 text-lf-warning" />
                                 <div class="min-w-0 flex-1">
-                                    <span class="font-medium text-amber-800 dark:text-amber-300">{$t('common.rowN', {values: {n: issue.row}})}</span>
+                                    <span class="font-medium text-lf-warning-on-soft">{$t('common.rowN', {values: {n: issue.row}})}</span>
                                     {#if issue.field}
-                                        <span class="text-xs text-amber-600 dark:text-amber-400 ml-1">({issue.field})</span>
+                                        <span class="text-xs text-lf-warning ml-1">({issue.field})</span>
                                     {/if}
-                                    <span class="text-amber-700 dark:text-amber-400 ml-1">{@html sanitizeHtml(resolveIssueMessage({code: issue.code, params: issue.params ?? undefined, error: issue.message}, $t))}</span>
+                                    <span class="text-lf-warning ml-1">{@html sanitizeHtml(resolveIssueMessage({code: issue.code, params: issue.params ?? undefined, error: issue.message}, $t))}</span>
                                     {#if issue.context}
-                                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {issue.context}</span>
+                                        <span class="text-xs text-lf-muted ml-1">— {issue.context}</span>
                                     {/if}
                                 </div>
                             </li>
                         {/each}
                     </ul>
                 {:else}
-                    <p class="text-xs text-gray-400">{$t('importWizard.noValidationIssues')}</p>
+                    <p class="text-xs text-lf-muted">{$t('importWizard.noValidationIssues')}</p>
                 {/if}
             </section>
 
             <!-- Manual Fields (Field TODOs) — 'Required' only when blockers exist, else 'To Verify' -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2 flex items-center gap-1.5">
                     <span>
                         {hasBlockerTodo ? $t('importWizard.manualFieldsRequired') : $t('importWizard.manualFieldsToVerify')}
                         {#if fieldTodoEntries.length > 0}
-                            <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodoEntries.length})</span>
+                            <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-lf-danger' : 'text-lf-warning'}">({fieldTodoEntries.length})</span>
                         {/if}
                     </span>
                     {#if fieldTodoEntries.length > 0}
                         <Tooltip text={$t('importWizard.manualFieldsTooltip')} position="right" maxWidth="320px">
-                            <Info size={13} class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+                            <Info size={13} class="shrink-0 text-lf-muted hover:text-lf-secondary" />
                         </Tooltip>
                     {/if}
                 </h3>
@@ -414,31 +409,31 @@
                             {@const todo = entry.todo}
                             {@const isBlocker = todo.severity === 'blocker'}
                             {@const view = todoView(todo)}
-                            <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}" data-testid="parse-detail-todo" data-reason-code={todo.reason_code} data-severity={todo.severity}>
-                                <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-red-500' : 'text-amber-500'}" />
+                            <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-lf-danger-soft' : 'bg-lf-warning-soft'}" data-testid="parse-detail-todo" data-reason-code={todo.reason_code} data-severity={todo.severity}>
+                                <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-lf-danger' : 'text-lf-warning'}" />
                                 <div class="min-w-0 flex-1 space-y-1.5">
                                     <div>
                                         {#if entry.fileName}
-                                            <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
+                                            <span class="text-xs text-lf-muted mr-1">{entry.fileName} ·</span>
                                         {/if}
-                                        <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
-                                        <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({translateFieldName(todo.field, $t)})</span>
-                                        <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{view.message}</span>
+                                        <span class="font-medium {isBlocker ? 'text-lf-danger-on-soft' : 'text-lf-warning-on-soft'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
+                                        <span class="text-xs ml-1 {isBlocker ? 'text-lf-danger' : 'text-lf-warning'}">({translateFieldName(todo.field, $t)})</span>
+                                        <span class="ml-1 {isBlocker ? 'text-lf-danger' : 'text-lf-warning'}">{view.message}</span>
                                     </div>
                                     {#if view.facts.length > 0}
                                         <dl class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
                                             {#each view.facts as fact (fact.key)}
                                                 <div class="flex gap-1" data-testid="parse-detail-todo-fact" data-fact={fact.key}>
-                                                    <dt class="text-gray-500 dark:text-gray-400">{fact.label}</dt>
-                                                    <dd class="font-mono text-gray-800 dark:text-gray-100">{fact.value}</dd>
+                                                    <dt class="text-lf-muted">{fact.label}</dt>
+                                                    <dd class="font-mono text-lf-primary">{fact.value}</dd>
                                                 </div>
                                             {/each}
                                         </dl>
                                     {/if}
                                     {#if view.suggestions.length > 0}
                                         <div class="text-xs">
-                                            <p class="text-gray-500 dark:text-gray-400">{$t('importWizard.parseDetail.suggestions')}</p>
-                                            <ul class="list-disc space-y-0.5 pl-5 text-gray-700 dark:text-gray-300">
+                                            <p class="text-lf-muted">{$t('importWizard.parseDetail.suggestions')}</p>
+                                            <ul class="list-disc space-y-0.5 pl-5 text-lf-secondary">
                                                 {#each view.suggestions as suggestion}
                                                     <li>{suggestion}</li>
                                                 {/each}
@@ -450,8 +445,8 @@
                                     {/each}
                                     {#if view.technical}
                                         <details class="text-xs" data-testid="parse-detail-todo-technical">
-                                            <summary class="cursor-pointer text-gray-500 dark:text-gray-400">{$t('importWizard.parseDetail.technical')}</summary>
-                                            <pre class="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-white/70 p-2 font-mono text-[11px] text-gray-700 dark:bg-slate-900/60 dark:text-gray-300">{view.technical}</pre>
+                                            <summary class="cursor-pointer text-lf-muted">{$t('importWizard.parseDetail.technical')}</summary>
+                                            <pre class="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-lf-card/70 p-2 font-mono text-[11px] text-lf-secondary">{view.technical}</pre>
                                         </details>
                                     {/if}
                                 </div>
@@ -459,52 +454,52 @@
                         {/each}
                     </ul>
                 {:else}
-                    <p class="text-xs text-gray-400">{$t('importWizard.noFieldTodos')}</p>
+                    <p class="text-xs text-lf-muted">{$t('importWizard.noFieldTodos')}</p>
                 {/if}
             </section>
 
             <!-- Duplicates -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.duplicatesSection')}</h3>
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.duplicatesSection')}</h3>
                 {#if duplicateStats}
                     {@const stats = duplicateStats}
                     {#if stats}
                         <div class="flex flex-wrap gap-2 text-sm">
-                            <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">✓ {$t('importWizard.uniqueTx', {values: {n: stats.unique}})}</span>
+                            <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-lf-success-soft text-lf-success-on-soft">✓ {$t('importWizard.uniqueTx', {values: {n: stats.unique}})}</span>
                             {#if stats.possible > 0}
-                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">ℹ {$t('importWizard.possibleDuplicates', {values: {n: stats.possible}})}</span>
+                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-lf-info-soft text-lf-info-on-soft">ℹ {$t('importWizard.possibleDuplicates', {values: {n: stats.possible}})}</span>
                             {/if}
                             {#if stats.likely > 0}
-                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">⚠ {$t('importWizard.likelyDuplicates', {values: {n: stats.likely}})}</span>
+                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-lf-warning-soft text-lf-warning-on-soft">⚠ {$t('importWizard.likelyDuplicates', {values: {n: stats.likely}})}</span>
                             {/if}
                         </div>
                     {/if}
                 {:else}
-                    <p class="text-xs text-gray-400">{$t('importWizard.noDuplicates')}</p>
+                    <p class="text-xs text-lf-muted">{$t('importWizard.noDuplicates')}</p>
                 {/if}
             </section>
 
             <!-- Warnings -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.warningsSection')}</h3>
+                <h3 class="text-sm font-semibold text-lf-secondary mb-2">{$t('importWizard.warningsSection')}</h3>
                 {#if warnings.length > 0}
                     <BrimNoticeList notices={warnings} />
                 {:else}
-                    <p class="text-xs text-gray-400">{$t('importWizard.noWarnings')}</p>
+                    <p class="text-xs text-lf-muted">{$t('importWizard.noWarnings')}</p>
                 {/if}
             </section>
         </div>
 
         <!-- Footer -->
-        <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between p-4 border-t border-lf-subtle">
             <div>
                 {#if parseResult && onPreview}
-                    <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={onPreview}>
+                    <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-lf-secondary hover:bg-lf-hover transition-colors" onclick={onPreview}>
                         <FileText size={14} />{$t('importWizard.previewFile')}
                     </button>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose} data-testid="parse-detail-close">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary hover:bg-lf-hover" onclick={onClose} data-testid="parse-detail-close">
                 {$t('common.close')}
             </button>
         </div>
