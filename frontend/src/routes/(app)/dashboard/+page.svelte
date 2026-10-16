@@ -1035,7 +1035,17 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? () => void pageBusy.track('dashboard-contribution', loadContribution) : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <PositionsPanel
+                {summary}
+                contribution={positionsContribution}
+                loading={summaryLoading}
+                {contributionLoading}
+                {assetsHref}
+                brokers={allBrokers}
+                onRequestContribution={canAsk ? () => void pageBusy.track('dashboard-contribution', loadContribution) : undefined}
+                onAnalyze={openAssetPanel}
+                analyzedAssetId={activeAssetId}
+            />
             <LotsAnalysisPanel
                 open={activeAssetId != null}
                 assetId={activeAssetId}
