@@ -113,18 +113,18 @@
     {/if}
     <!-- ── Resolve Assets section ─────────────────────────── -->
     {#if assetResolutions.length > 0}
-        <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
+        <div class="border border-lf-subtle rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
             <!-- Section header -->
-            <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)} data-testid="import-wizard-resolve-toggle">
+            <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-lf-panel hover:bg-lf-neutral transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)} data-testid="import-wizard-resolve-toggle">
                 <div class="flex items-center gap-2">
                     {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                     <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
                     {#if step4UnresolvedCount > 0}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" data-testid="import-wizard-unresolved-count">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-lf-warning-soft text-lf-warning-on-soft" data-testid="import-wizard-unresolved-count">
                             {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
                         </span>
                     {:else}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-lf-success-soft text-lf-success-on-soft">
                             <Check size={12} class="mr-1" />{$t('importWizard.allResolved')}
                         </span>
                     {/if}
@@ -144,11 +144,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
                     {#each assetResolutions as res (res.fakeAssetId)}
                         {@const isResolved = res.resolvedAssetId !== null}
-                        <div class="border rounded-lg p-3 {isResolved ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-gray-700'}">
+                        <div class="border rounded-lg p-3 {isResolved ? 'border-lf-success-line bg-lf-success-soft/30' : 'border-lf-subtle'}">
                             <!-- Card header — name + badges on same flex-wrap row, TX count right -->
                             <div class="flex items-start justify-between gap-2 mb-1">
                                 <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 flex-1 min-w-0">
-                                    <span class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate max-w-full">
+                                    <span class="font-semibold text-sm text-lf-primary truncate max-w-full">
                                         {res.extractedName ?? res.extractedSymbol ?? '?'}
                                     </span>
                                     {#if res.extractedSymbol}
@@ -164,11 +164,11 @@
                                         </span>
                                     {/if}
                                 </div>
-                                <span class="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                <span class="shrink-0 text-xs font-medium text-lf-muted bg-lf-panel px-1.5 py-0.5 rounded whitespace-nowrap">
                                     {res.txCount} TX
                                 </span>
                             </div>
-                            <div class="text-xs text-gray-400 mb-3 truncate">{res.sourceFiles.join(', ')}</div>
+                            <div class="text-xs text-lf-muted mb-3 truncate">{res.sourceFiles.join(', ')}</div>
 
                             <!-- AssetSelect: candidates pinned at top via suggestedIds prop -->
                             <AssetSelect
@@ -189,10 +189,10 @@
                                 }}
                             />
                             {#if duplicateCandidates(res).length >= 2}
-                                <div class="mt-1.5 flex items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 dark:border-amber-700/60 dark:bg-amber-900/20" data-testid="import-wizard-duplicate-hint-{res.fakeAssetId}">
-                                    <AlertTriangle size={13} class="shrink-0 text-amber-500" />
-                                    <span class="min-w-0 flex-1 text-[11px] text-gray-600 dark:text-gray-300">{$t('importWizard.duplicateAssetHint')}</span>
-                                    <button type="button" class="shrink-0 rounded bg-amber-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-700" onclick={() => openMergeFromCard(res)} data-testid="import-wizard-merge-assets-{res.fakeAssetId}">
+                                <div class="mt-1.5 flex items-center gap-2 rounded border border-lf-warning-line bg-lf-warning-soft px-2 py-1.5" data-testid="import-wizard-duplicate-hint-{res.fakeAssetId}">
+                                    <AlertTriangle size={13} class="shrink-0 text-lf-warning" />
+                                    <span class="min-w-0 flex-1 text-[11px] text-lf-secondary">{$t('importWizard.duplicateAssetHint')}</span>
+                                    <button type="button" class="shrink-0 rounded bg-lf-warning px-2 py-0.5 text-[11px] font-medium text-lf-on-status hover:bg-lf-warning-hover" onclick={() => openMergeFromCard(res)} data-testid="import-wizard-merge-assets-{res.fakeAssetId}">
                                         {$t('importWizard.duplicateAssetMerge')}
                                     </button>
                                 </div>
@@ -200,7 +200,7 @@
                             {#if res.resolvedAssetId !== null}
                                 <button
                                     type="button"
-                                    class="ml-auto mt-1.5 flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-libre-green disabled:opacity-50 dark:text-gray-400"
+                                    class="ml-auto mt-1.5 flex w-fit items-center gap-1 text-xs text-lf-muted hover:text-lf-link disabled:opacity-50"
                                     onclick={() => void openAssetInspector(res.resolvedAssetId!)}
                                     disabled={inspectAssetLoading}
                                     title={$t('importWizard.inspectAssetHint')}
@@ -220,12 +220,12 @@
     {#if brokerOpeningIssues.length > 0}
         <div class="space-y-2 mb-3" data-testid="import-wizard-broker-opening-issues">
             {#each brokerOpeningIssues as issue (issue.brokerId)}
-                <div class="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-700/60 dark:bg-amber-900/20 sm:flex-row sm:items-center sm:gap-3">
+                <div class="flex flex-col gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                     <div class="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
-                        <AlertTriangle size={16} class="mt-0.5 shrink-0 text-amber-500 sm:mt-0" />
+                        <AlertTriangle size={16} class="mt-0.5 shrink-0 text-lf-warning sm:mt-0" />
                         <div class="min-w-0">
                             <BrokerBadge broker={issue.broker} size={18} showName={true} />
-                            <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+                            <p class="mt-0.5 text-xs text-lf-secondary">
                                 {$t('importWizard.brokerOpeningMsg', {values: {count: issue.count, openedAt: issue.openedAt, minDate: issue.minTxDate}})}
                             </p>
                         </div>
@@ -233,7 +233,7 @@
                     <div class="flex shrink-0 items-center gap-2">
                         <button
                             type="button"
-                            class="flex items-center gap-1 rounded bg-libre-green px-2 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                            class="flex items-center gap-1 rounded bg-lf-action px-2 py-1 text-xs font-medium text-lf-on-action hover:opacity-90 disabled:opacity-50"
                             onclick={() => void autoFixBrokerOpening(issue)}
                             disabled={autoFixingBrokerId !== null || !issue.minTxDate}
                             data-testid="broker-opening-autofix-{issue.brokerId}"
@@ -246,12 +246,7 @@
                             {/if}
                             <span>{$t('importWizard.autoFixOpening', {values: {date: issue.minTxDate}})}</span>
                         </button>
-                        <button
-                            type="button"
-                            class="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 dark:border-slate-600 dark:hover:bg-slate-700"
-                            onclick={() => void openBrokerOpeningEditById(issue.brokerId)}
-                            data-testid="broker-opening-edit-{issue.brokerId}"
-                        >
+                        <button type="button" class="flex items-center gap-1 rounded border border-lf-input px-2 py-1 text-xs hover:bg-lf-hover" onclick={() => void openBrokerOpeningEditById(issue.brokerId)} data-testid="broker-opening-edit-{issue.brokerId}">
                             <Pencil size={12} /><span>{$t('importWizard.status.editBrokerDate')}</span>
                         </button>
                     </div>
@@ -261,52 +256,52 @@
     {/if}
 
     <!-- ── TX Table (DataTable) ───────────────────────────── -->
-    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div class="border border-lf-subtle rounded-lg overflow-hidden">
         <!-- Toolbar row -->
-        <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between px-4 py-2.5 bg-lf-panel border-b border-lf-subtle">
             <div class="flex items-center gap-3 text-sm">
                 <span class="font-semibold">{$t('transactions.title')}</span>
-                <span class="text-gray-500">{step4SelectedCount} / {step4TotalCount}</span>
+                <span class="text-lf-muted">{step4SelectedCount} / {step4TotalCount}</span>
                 {#if step4SelectedDuplicateCount > 0}
                     <Tooltip text={$t('importWizard.duplicatesSelectedTip')} position="top" maxWidth="320px" wrapperClass="inline-flex">
-                        <span class="cursor-help text-xs text-amber-600 underline decoration-dotted dark:text-amber-400">⚠ {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}</span>
+                        <span class="cursor-help text-xs text-lf-warning underline decoration-dotted">⚠ {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}</span>
                     </Tooltip>
                 {/if}
                 {#if step4BeforeOpeningCount > 0}
-                    <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
+                    <span class="text-xs text-lf-muted">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
                 {/if}
                 {#if step4BeforeHistoryCount > 0}
-                    <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="import-wizard-before-history-count" data-count={step4BeforeHistoryCount}>⏮ {$t('importWizard.reportSet.beforeHistoryCount', {values: {n: step4BeforeHistoryCount}})}</span>
-                    <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (showBeforeHistory = !showBeforeHistory)} aria-pressed={showBeforeHistory} data-testid="import-wizard-before-history-toggle">
+                    <span class="text-xs text-lf-muted" data-testid="import-wizard-before-history-count" data-count={step4BeforeHistoryCount}>⏮ {$t('importWizard.reportSet.beforeHistoryCount', {values: {n: step4BeforeHistoryCount}})}</span>
+                    <button type="button" class="text-xs text-lf-link hover:underline" onclick={() => (showBeforeHistory = !showBeforeHistory)} aria-pressed={showBeforeHistory} data-testid="import-wizard-before-history-toggle">
                         {showBeforeHistory ? $t('importWizard.reportSet.hideBeforeHistory') : $t('importWizard.reportSet.showBeforeHistory')}
                     </button>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
                 {#if step4BeforeOpeningCount > 0}
-                    <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1 disabled:opacity-50" onclick={() => void recheckOpenings()} disabled={recheckingOpenings} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
+                    <button type="button" class="text-xs text-lf-link hover:underline flex items-center gap-1 disabled:opacity-50" onclick={() => void recheckOpenings()} disabled={recheckingOpenings} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
                         <RefreshCw size={12} class={recheckingOpenings ? 'animate-spin' : ''} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
                     </button>
-                    <span class="text-gray-300 dark:text-gray-600">|</span>
+                    <span class="text-lf-muted">|</span>
                 {/if}
-                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll} data-testid="import-wizard-select-all">
+                <button type="button" class="text-xs text-lf-link hover:underline flex items-center gap-1" onclick={step4SelectAll} data-testid="import-wizard-select-all">
                     <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
                 </button>
-                <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectVisible} data-testid="import-wizard-select-visible" title={$t('importWizard.selectVisibleTip')}>
+                <span class="text-lf-muted">|</span>
+                <button type="button" class="text-xs text-lf-link hover:underline flex items-center gap-1" onclick={step4SelectVisible} data-testid="import-wizard-select-visible" title={$t('importWizard.selectVisibleTip')}>
                     <ListChecks size={12} /><span class="hidden sm:inline">{$t('importWizard.selectVisible')}</span>
                 </button>
-                <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll} data-testid="import-wizard-deselect-all">
+                <span class="text-lf-muted">|</span>
+                <button type="button" class="text-xs text-lf-muted hover:underline flex items-center gap-1" onclick={step4DeselectAll} data-testid="import-wizard-deselect-all">
                     <Square size={12} /><span class="hidden sm:inline">{$t('common.deselectAll')}</span>
                 </button>
-                <span class="text-gray-300 dark:text-gray-600">|</span>
+                <span class="text-lf-muted">|</span>
                 <ColumnVisibilityToggle tableRef={step4TableRef} />
             </div>
         </div>
 
         {#if step4HasDeselectReasons}
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200" data-testid="import-wizard-deselect-banner">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-lf-warning-line bg-lf-warning-soft px-4 py-2 text-xs text-lf-warning-on-soft" data-testid="import-wizard-deselect-banner">
                 <span class="font-medium">{$t('importWizard.deselectReasons.title')}</span>
                 {#if step4BeforeOpeningCount > 0}
                     <span class="inline-flex items-center gap-1">⛔ {$t('importWizard.deselectReasons.beforeOpening', {values: {n: step4BeforeOpeningCount}})}</span>
@@ -336,7 +331,7 @@
             enableColumnResize={true}
             enableColumnVisibility={true}
             tableLayout="auto"
-            getRowClass={(mt) => `${!mt.selected ? 'opacity-50' : ''} ${mt.isDupKeeper ? 'bg-emerald-50/60 dark:bg-emerald-900/10' : ''}`.trim()}
+            getRowClass={(mt) => `${!mt.selected ? 'opacity-50' : ''} ${mt.isDupKeeper ? 'bg-lf-success-soft/60' : ''}`.trim()}
             emptyMessage={$t('importWizard.noFiles')}
         />
     </div>
