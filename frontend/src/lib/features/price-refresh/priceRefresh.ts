@@ -7,7 +7,8 @@
  * `priceRefresh.observe`. From the first one, the tracker asks `GET /api/v1/system/price-refresh` every 3 s through
  * `startActivePolling` (so it pauses in a hidden tab and after two minutes without input, and waits longer after
  * failures), shows an `info` instance notice while a job runs, and when the catch-up is over hides it and, if it saw a
- * job run and the catch-up updated something, asks the portfolio views to refresh. Without the header it asks nothing:
+ * job run and the catch-up updated something, asks the portfolio views to refresh (`notifyPricesCaughtUp`: the caches
+ * turn stale, and the Dashboard or a broker's page on screen reloads in background). Without the header it asks nothing:
  * an idle instance can still sleep.
  *
  * The pages without a session (an invitation, a password reset) get the header too. The question is asked with `fetch`,
@@ -22,7 +23,7 @@
 
 import {startActivePolling, type ActivePolling, type PollOutcome} from '$lib/features/live-updates/activePolling';
 import {instanceNotices, type InstanceNotice} from '$lib/features/instance/instanceNotices.svelte';
-import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+import {notifyPricesCaughtUp} from '$lib/stores/portfolio/portfolioMutation';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 /** The response header, as axios exposes it (lower case). */
@@ -106,7 +107,7 @@ export function createPriceRefresh(deps: Partial<PriceRefreshDeps> = {}): PriceR
     // mocks one of these modules only in part (the client's own tests) must still load it.
     const fetchStatus = deps.fetchStatus ?? fetchStatusFromApi;
     const notices = deps.notices ?? {show: (notice: InstanceNotice) => instanceNotices.show(notice), hide: (id: string) => instanceNotices.hide(id)};
-    const refreshPortfolio = deps.refreshPortfolio ?? (() => requestPortfolioRefresh());
+    const refreshPortfolio = deps.refreshPortfolio ?? (() => notifyPricesCaughtUp());
     const startPolling: typeof startActivePolling = deps.startPolling ?? ((options) => startActivePolling(options));
 
     let poller: ActivePolling | null = null;

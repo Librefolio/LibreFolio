@@ -31,7 +31,9 @@
  *   5. `stop()`: the poller stopped, the notice hidden if shown, `tracking` false; a later header starts a new tracking.
  *      `reset()` is `stop()` that also lifts a suspension, and the app's `priceRefresh` is reset when the signed-in
  *      account changes.
- *   6. The defaults: `notices` = `instanceNotices`, `refreshPortfolio` = `requestPortfolioRefresh`, `startPolling` =
+ *   6. The defaults: `notices` = `instanceNotices`, `refreshPortfolio` = `notifyPricesCaughtUp` — the portfolio bus's
+ *      `{kind: 'prices'}`, which the open Dashboard and broker page reload on (lot Z-13); never `requestPortfolioRefresh`,
+ *      «Aggiorna»'s `{kind: 'refresh'}`, which no page can tell from its own refresh —, `startPolling` =
  *      `startActivePolling`; `fetchStatus` = `fetch(PRICE_REFRESH_STATUS_PATH, {credentials: 'same-origin', headers:
  *      {Accept: 'application/json'}})`, never the API client (whose error interceptor sends a 401 to the login page and
  *      loses the link token of the page): a response that is not ok throws `PriceRefreshStatusError(response.status)`,
@@ -43,13 +45,18 @@
  * the default `fetchStatus` build a tracker without one and put a fake `fetch` in place of the global
  * (`vi.stubGlobal`, undone after each case), with `$lib/api` replaced by a trap meanwhile. Only the cases of the app's
  * own `priceRefresh` (rule 5's account change, rule 6's defaults) take a freshly imported module graph, with
- * `startActivePolling` and `requestPortfolioRefresh` replaced by `vi.doMock` and the real `instanceNotices` and
- * `clientSession` of that graph. The node environment: the module is plain TypeScript.
+ * `startActivePolling` and the bus's two signals — `notifyPricesCaughtUp` and `requestPortfolioRefresh` — replaced by
+ * `vi.doMock` and the real `instanceNotices` and `clientSession` of that graph. The node environment: the module is
+ * plain TypeScript.
  *
  * Red until `frontend/src/lib/features/price-refresh/priceRefresh.ts` exists: the import fails, the whole file is red.
  * Rule 3b and the default `fetchStatus` of rule 6 stay red until `PRICE_REFRESH_STATUS_PATH` and
  * `PriceRefreshStatusError` are exported, a 4xx suspends the tracker and the default asks with `fetch`. The cases of
  * rule 3c and the 4xx answering a tracking that already ended guard what stays as it was.
+ *
+ * Lot Z-13 (rule 6's default refresh): the app-instance cases of the default refresh stay red until `priceRefresh.ts`
+ * calls `notifyPricesCaughtUp()` instead of `requestPortfolioRefresh()`. The mock of the bus provides both functions, so
+ * the file loads whatever the bus exports today, and the red is the call counts, not an import.
  */
 import {AxiosError, AxiosHeaders} from 'axios';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -741,17 +748,18 @@ describe('the app instance', () => {
     const ACTIVE_POLLING = '$lib/features/live-updates/activePolling';
     const PORTFOLIO_MUTATION = '$lib/stores/portfolio/portfolioMutation';
 
-    /** A freshly imported graph: `startActivePolling` and `requestPortfolioRefresh` replaced, the rest real. */
+    /** A freshly imported graph: `startActivePolling` and the bus's two signals replaced — `notifyPricesCaughtUp` (the price catch-up, Z-13) and `requestPortfolioRefresh` («Aggiorna») —, the rest real. */
     async function freshGraph() {
         vi.resetModules();
         const polling = fakePolling();
+        const notifyPricesCaughtUp = vi.fn<() => void>();
         const requestPortfolioRefresh = vi.fn<() => void>();
         vi.doMock(ACTIVE_POLLING, async (importOriginal) => ({...(await importOriginal<Record<string, unknown>>()), startActivePolling: polling.start}));
-        vi.doMock(PORTFOLIO_MUTATION, async (importOriginal) => ({...(await importOriginal<Record<string, unknown>>()), requestPortfolioRefresh}));
+        vi.doMock(PORTFOLIO_MUTATION, async (importOriginal) => ({...(await importOriginal<Record<string, unknown>>()), notifyPricesCaughtUp, requestPortfolioRefresh}));
         const module = await import('./priceRefresh');
         const {instanceNotices} = await import('$lib/features/instance/instanceNotices.svelte');
         const session = await import('$lib/stores/app/clientSession');
-        return {module, polling, requestPortfolioRefresh, instanceNotices, session};
+        return {module, polling, notifyPricesCaughtUp, requestPortfolioRefresh, instanceNotices, session};
     }
 
     afterEach(() => {
@@ -773,16 +781,60 @@ describe('the app instance', () => {
         expect(instanceNotices.list.filter((notice) => notice.id === NOTICE.id)).toEqual([]);
     });
 
-    it('a tracker without refreshPortfolio refreshes through requestPortfolioRefresh', async () => {
-        const {module, polling, requestPortfolioRefresh} = await freshGraph();
-        const fetchStatus = vi.fn(async () => status('idle', {last_refreshed: true}));
+    it('a tracker without refreshPortfolio refreshes through notifyPricesCaughtUp, never through requestPortfolioRefresh (Z-13)', async () => {
+        const {module, polling, notifyPricesCaughtUp, requestPortfolioRefresh} = await freshGraph();
+        const fetchStatus = vi.fn(async () => status('idle', {last_finished_at: '2026-10-16T06:01:00+00:00', last_refreshed: true}));
         const tracker = module.createPriceRefresh({fetchStatus, startPolling: polling.start});
 
         tracker.observe(runningHeader);
         await polling.run();
 
         expect(fetchStatus).toHaveBeenCalledTimes(1);
-        expect(requestPortfolioRefresh).toHaveBeenCalledTimes(1);
+        expect(notifyPricesCaughtUp, 'the end of a catch-up that updated something must send the price signal, {kind: "prices"}: the open Dashboard and broker page reload on it').toHaveBeenCalledTimes(1);
+        expect(requestPortfolioRefresh, '«Aggiorna»’s signal is not the price catch-up: sent here, the open page cannot tell it from its own refresh, and keeps the old figures').not.toHaveBeenCalled();
+    });
+
+    it('the app’s priceRefresh, with its default fetch, refreshes through notifyPricesCaughtUp once a catch-up that updated something is over (Z-13)', async () => {
+        const {module, polling, notifyPricesCaughtUp, requestPortfolioRefresh, instanceNotices} = await freshGraph();
+        const fetchMock = vi.fn(async () => jsonResponse(200, status('idle', {last_finished_at: '2026-10-16T06:01:00+00:00', last_refreshed: true})));
+        vi.stubGlobal('fetch', fetchMock);
+        module.priceRefresh.observe(runningHeader);
+        expect(
+            instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
+            'premise: the notice is on',
+        ).toEqual([NOTICE]);
+
+        await polling.run();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(
+            instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
+            'the idle answer hides the notice',
+        ).toEqual([]);
+        expect(notifyPricesCaughtUp, 'the app’s tracker did not send the price signal at the end of the catch-up').toHaveBeenCalledTimes(1);
+        expect(requestPortfolioRefresh, 'the app’s tracker still sends «Aggiorna»’s signal').not.toHaveBeenCalled();
+        expect(module.priceRefresh.tracking).toBe(false);
+    });
+
+    it('the app’s priceRefresh sends neither signal when the catch-up updated nothing, or when no job was seen running', async () => {
+        const {module, polling, notifyPricesCaughtUp, requestPortfolioRefresh} = await freshGraph();
+        const fetchMock = vi
+            .fn<() => Promise<Response>>()
+            .mockResolvedValueOnce(jsonResponse(200, status('idle', {last_finished_at: '2026-10-16T06:01:00+00:00', last_refreshed: false})))
+            .mockResolvedValueOnce(jsonResponse(200, status('idle', {last_finished_at: '2026-10-16T06:02:00+00:00', last_refreshed: true})));
+        vi.stubGlobal('fetch', fetchMock);
+
+        module.priceRefresh.observe(runningHeader);
+        await polling.run();
+        expect(module.priceRefresh.tracking, 'premise: the first catch-up is over').toBe(false);
+
+        module.priceRefresh.observe(startingHeader);
+        await polling.run();
+
+        expect(fetchMock, 'premise: both catch-ups were asked about').toHaveBeenCalledTimes(2);
+        expect(polling.start, 'premise: two trackings').toHaveBeenCalledTimes(2);
+        expect(notifyPricesCaughtUp, 'a catch-up that updated nothing, or one whose job this page never saw run, must not reload the open page').not.toHaveBeenCalled();
+        expect(requestPortfolioRefresh).not.toHaveBeenCalled();
     });
 
     it('a change of the signed-in account resets priceRefresh: its poller stopped, no tracking', async () => {

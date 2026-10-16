@@ -336,8 +336,9 @@ tab: the scheduler's current-price refresh calls the same service on its own sch
 
 When the server catches up on prices — at its start, at the first request after a minute of
 silence, at a scheduled wake-up — the web app shows the instance notice **Updating prices…** while
-one of the catch-up's jobs runs, and marks the portfolio views stale once the catch-up has brought
-something up to date. `lib/features/price-refresh/priceRefresh.ts` does it, on the
+one of the catch-up's jobs runs and, once the catch-up has brought something up to date, marks the
+portfolio views stale and reloads the Dashboard or a broker's page on screen.
+`lib/features/price-refresh/priceRefresh.ts` does it, on the
 `startActivePolling()` of the live prices. The server's side — what a catch-up is, the header, the
 route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh); what users see, in
 [While Prices Catch Up](../../../../admin/sleep_wake.md#price-refresh).
@@ -404,12 +405,40 @@ one.
 
 **The portfolio refresh.** "Seen running" means a `running` header or answer during this tracking:
 a catch-up with nothing due never shows one, and the `last_refreshed` read at `idle` would then be an
-older catch-up's. The refresh is `requestPortfolioRefresh()`
-(`lib/stores/portfolio/portfolioMutation.ts`), the signal of the Dashboard's **Refresh** button: the
-report, risk and lots caches mark their answers stale and keep them, and each portfolio view asks
-again the next time it loads, showing what it has meanwhile
-([Domain state](../../state/domain-state.md)). The signal reloads no page by itself: a view already
-on screen keeps its figures until it loads again.
+older catch-up's. The refresh is `notifyPricesCaughtUp()`
+(`lib/stores/portfolio/portfolioMutation.ts`), which dispatches `{kind: 'prices'}` on the portfolio
+bus. It is a signal of its own, so that a page on screen can tell the end of a catch-up from a write
+(`{kind: 'mutation', …}`) and from its own **Refresh** button (`requestPortfolioRefresh()`,
+`{kind: 'refresh'}`), which already reloads the page, with `force`. The report, risk and
+lots caches mark their answers stale on any signal and keep them, so each portfolio view asks again
+the next time it loads, showing what it has meanwhile ([Domain state](../../state/domain-state.md)).
+
+Two pages also reload while on screen: the Dashboard (`routes/(app)/dashboard/+page.svelte`) and the
+broker detail page (`routes/(app)/brokers/[id]/+page.svelte`). Each registers a bus listener in
+`onMount`, `dashboard:prices` or `broker-page:<id>:prices`, and removes it on destroy. On
+`{kind: 'prices'}`, and on no other kind, the listener queues `reloadAfterPriceCatchUp()` with
+`queueMicrotask()`: the reload runs once the dispatch is over, when every cache has marked its
+answers stale, whatever the order of the listeners. The reload does what **Refresh** does, in
+background:
+
+- it bumps `refreshVersion`, so the risk and lots panels on screen ask again, with `force` as on
+  **Refresh**;
+- it calls the page's report loader without `force`: `loadAll()` on the Dashboard, `loadOverview()`
+  on the broker page. The mark has made the report on screen stale, so the loader asks that question
+  again; the figures stay until the new ones land.
+
+It does not call `requestPortfolioRefresh()`: the caches are already marked. On the Dashboard it
+leaves `syncLoading` alone, so the **Refresh** button does not spin, and it does nothing once the
+page is destroyed (`pageAlive`). On the broker page the **Refresh** icon follows `reportLoading`, so
+it spins while the overview is asked again; the broker summary (`loadBroker()`) and the
+transactions, which that page's **Refresh** asks again too, are left as they are.
+
+No other page listens for `prices`. The broker list (`routes/(app)/brokers/+page.svelte`) and the
+risk panels of the asset pages read the caches the signal marked stale, so they ask again the next
+time they load; the live prices of the Assets list and of an asset's page keep their own polling
+([Where prices are polled](#polling)). The price and rate series that an asset's page and the FX
+pages keep in their session caches (`lib/stores/assetPriceStoreRegistry.ts`,
+`lib/stores/fxStoreRegistry.ts`) are not on the bus: the signal leaves them as they are.
 
 #### 🚫 After a 4xx {: #price-refresh-4xx }
 
@@ -442,7 +471,7 @@ or a sign-out, so no tracking and no notice outlive the account that saw them.
 `createPriceRefresh(deps)` builds a tracker with its collaborators — `fetchStatus`, `notices`,
 `refreshPortfolio` and `startPolling` — so a test can pass its own. The module exports the app's
 tracker, `priceRefresh`, built with the defaults: the `fetch` above, `instanceNotices`,
-`requestPortfolioRefresh()` and `startActivePolling()`. The defaults reach those modules when they
+`notifyPricesCaughtUp()` and `startActivePolling()`. The defaults reach those modules when they
 are called, not when the module loads: the API client imports this module, and a test that mocks one
 of them only in part, such as the client's own tests, must still load it.
 
@@ -453,15 +482,26 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/features/live-updates/activePolling.test.ts` (Vitest, node, fake timers) | `./dev.py test front-utility core-unit` | Every rule of [`startActivePolling`](#active-polling) on a clock and a tracker the test owns, [failures and provider pauses](#backoff) included, and the four numbers of `cadence.ts` |
 | `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
-| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included |
+| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running |
+| `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
+| `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
+| `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once |
 
-The E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
+The live-pause E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
 guessed, and answers `POST /assets/prices/current` in the browser with an empty, schema-valid
 result — or, in (g) and (h), with a failure or a provider pause — that it counts: nothing reaches a provider and nothing is written. A hidden tab has no
 Playwright API, so the spec redefines `document.visibilityState` and dispatches
 `visibilitychange`, which is exactly what the tracker listens to.
+
+The price-refresh E2E, desktop only, never waits on a real catch-up of the shared backend. One
+route on `**/api/v1/**`, installed after the sign-in, answers the status route in the browser with
+what the case scripts, and passes every other request to the backend (`route.fetch()`), giving the
+page the real answer with the case's header, or with none. Time runs on real timers. An init script
+records in the page every report request and every status answer read, the latter one task later,
+so a reload that answer caused is already recorded and an absence is read exactly. Nothing is
+written.
 
 ## ⚙️ Backend {: #backend }
 

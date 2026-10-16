@@ -22,6 +22,7 @@ vi.mock('$lib/api', async (importOriginal) => {
 import type {AssetEligibilityItem, EligibilityVerdicts} from '$lib/features/risk/eligibility';
 import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters, canonicalizeScope, type RiskScope} from '$lib/features/risk/riskRequest';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
+import * as portfolioMutation from '$lib/stores/portfolio/portfolioMutation';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
 let fetchRiskCatalog: typeof import('./riskStore.svelte').fetchRiskCatalog;
@@ -459,6 +460,23 @@ describe('riskStore', () => {
 
         expect(getRiskQuerySnapshot(baseRequest), 'the mutation listener still calls invalidateRisk(): the answer is gone and the panel can only show a skeleton').toMatchObject({status: 'success', response: OLD_ANSWER, stale: true});
         expect(queryApi).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the answers stale on the price catch-up signal too (Z-13), keeps them, and asks nothing by itself', async () => {
+        // The risk store needs no change for Z-13: its listener marks stale on any signal. Pinned for the
+        // new kind because the Dashboard and the broker page rely on it: on `{kind: 'prices'}` they bump
+        // `refreshVersion`, and the risk panel asks again, with force as for «Aggiorna»; any other reader of a
+        // stale answer asks again too.
+        const notifyPricesCaughtUp = (portfolioMutation as unknown as {notifyPricesCaughtUp?: () => void}).notifyPricesCaughtUp;
+        expect(typeof notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up has no signal of its own').toBe('function');
+        transitionClientSession(605);
+        queryApi.mockResolvedValueOnce(OLD_ANSWER);
+        await queryRisk(baseRequest);
+
+        notifyPricesCaughtUp!();
+
+        expect(getRiskQuerySnapshot(baseRequest), 'the price catch-up left the risk answer fresh, or threw it away').toMatchObject({status: 'success', response: OLD_ANSWER, stale: true});
+        expect(queryApi, 'a mark must not ask anything by itself').toHaveBeenCalledTimes(1);
     });
 
     it('leaves both catalogs cached through markRiskStale()', async () => {

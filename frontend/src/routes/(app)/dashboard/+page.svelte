@@ -50,7 +50,7 @@
         type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -706,6 +706,22 @@
             syncLoading = false;
         }
     }
+
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): what «Aggiorna» does, in background. The
+     * stale report is asked again without force and the risk and lots panels reload; the figures stay until the new
+     * ones land. Run after the dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        if (!pageAlive) return;
+        refreshVersion += 1;
+        void loadAll();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener('dashboard:prices', (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
 
     async function loadAiExportCompatibility() {
         aiExportCatalogLoading = true;
