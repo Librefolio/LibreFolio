@@ -1121,7 +1121,7 @@ qui resta la decisione.
 | Punto | Lotto | Decisione del developer (16/10) |
 |---|---|---|
 | P1 | E4b | Il riquadro con i comandi per l'admin resta sotto il modulo «password dimenticata», **in un pannello chiuso** |
-| P2 | J-17 | Una rettifica **non è mai un prezzo**: il prezzo dalle transazioni viene solo dagli acquisti. Un asset senza nessuna osservazione si valuta **al costo, come stima dichiarata** («valutato al costo, nessun prezzo»). *Aperto*: se anche la vendita resta una fonte di prezzo |
+| P2 | J-17 | Una rettifica **non è mai un prezzo**. **Acquisti e vendite** restano fonti di prezzo. Un asset senza nessuna osservazione, nemmeno un prezzo vecchio, si valuta **al costo, come stima dichiarata** («valutato al costo, nessun prezzo»); con un prezzo vecchio vince quello, segnato come stantio |
 | P3 | Y11, decisione 48 | Approvato. «Aggiorna» gira solo per le domande «grandi» decise nella UI: un componente tiene la lista delle richieste in volo, riceve un segnale all'inizio e uno alla fine (riuscita o no), si ferma quando sono rientrate tutte o dopo un timeout lungo. Non gira per l'aggiornamento dei prezzi |
 | P4 | W-B34 | La lista degli accessi di un broker **resta aperta**, per decisione |
 | P5 | W-B30 | Svuotare un costo manuale **lo cancella** |
@@ -1131,7 +1131,7 @@ qui resta la decisione.
 | P9, P10, P10b, P14 | Y7, colori | Visti sul server di prova: vanno bene |
 | P11 | B3 | Al ripristino si **revocano i link monouso** (inviti, reset, verifiche), con un solo avviso |
 | P12 | B4 | scrypt **`2^15`**; password con le regole e l'indicatore della registrazione, **almeno 12 caratteri** |
-| P13 | barra delle Impostazioni | *Aperto* |
+| P13 | barra delle Impostazioni | **(a) + (b)**: la barra scorre con la rotella, con una sfumatura sul bordo quando ci sono schede nascoste; le cinque schede dell'admin raggruppate sotto «Amministrazione» con una seconda barra, i link diretti (`?tab=users`…) restano validi. Cornice di A8 |
 | P15 | E5b | Sì a un pulsante **«Conferma»** nella pagina di verifica. *Da chiarire*: i testi delle email in un file a parte, modificabile, che il codice si limita a riempire |
 | P16 | A7, F02 | Nel cloud **il token lo crea il pannello di controllo** e lo passa per variabile; il self-hosted resta com'è stato costruito; senza email nulla cambia. Con l'istanza bloccata la creazione dell'admin è bloccata anche lei (coordinatore) |
 | P17 | E5b | Sì: nel profilo cloud il limite per client legge `Fly-Client-IP` (contratto ad H) |
@@ -1200,3 +1200,18 @@ qui resta la decisione.
   un'altra. Serve anche un'azione «reinvia il link di attivazione» (punto 3).
 - Lato pannello di controllo (repo privato): le macchine con `auto_stop_machines="off"` e `auto_start_machines=true`,
   perché è l'istanza a decidere quando sospendersi.
+
+### Le decisioni del 16/10 dopo l'audit della matematica (MF)
+
+| Punto | Decisione del developer (16/10) |
+|---|---|
+| Lotti dell'audit | **Tutti i 16 lotti (A–P) nella 1.3**, in un workstream dedicato (MF) accanto a J |
+| D-MF2 | La detenzione di una posizione arrivata con un trasferimento parte **dall'arrivo nel broker**; uno split non la azzera più |
+| D-MF3 | Una rettifica negativa di dividendo o interesse **riduce il reddito** anche nei lotti |
+| D-MF4 | La cassa che arriva con un trasferimento interno o un cambio porta con sé **la sua divisione fra capitale e rendimenti** |
+| D-MF5 | Con prelievi netti, se la card MWRR non ha dati **sparisce anche la linea** del grafico |
+| D-MF6 | Variazione del P&L a un giorno, effetto timing, G/L % dei gruppi **dal backend**; le misure interattive (lotti selezionati, intervalli scelti) restano nel browser, dichiarate |
+| D-MF7 | Con NAV ≤ 0 il peso sul NAV mostra **«—»** |
+| D-MF1 | *Aperto*: togliere `holdings` dal sommario del broker via API (il developer ha chiesto chiarimenti) |
+| C-97 | Quantità a **10 decimali**, prezzi a **12**, importi a 6 (issue #43) |
+| C-99 | Manuale admin ristrutturato, variabili d'ambiente **divise per categoria**, a fine 1.3 |
