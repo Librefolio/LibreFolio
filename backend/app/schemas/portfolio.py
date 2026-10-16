@@ -466,6 +466,18 @@ class BrokerBreakdown(StrictModel):
     cash_balances: List[Currency] = Field(default_factory=list, description="Cash balance per currency, native (unconverted)")
 
 
+class HoldingGroupGainLoss(StrictModel):
+    """Unrealized gain or loss of a group of holdings: one broker's, or one asset type's at one broker."""
+
+    broker_id: int
+    asset_type: Optional[str] = Field(None, description="Asset type of the group, as the holdings report it; None for the broker's whole group")
+    gain_loss: Optional[Currency] = Field(None, description="Sum of gain_loss over the group's holdings whose current_value and gain_loss are both known; None when none is")
+    gain_loss_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="gain_loss / the cost of the same holdings (current_value − gain_loss), a fraction (0.05 = 5 %), unrounded; None when no holding counts or the cost is 0",
+    )
+
+
 class UnrealizedBreakdownRow(StrictModel):
     """One row of the period's unrealized change, split by cause (Dashboard tooltip).
 
@@ -524,11 +536,31 @@ class PortfolioSummary(StrictModel):
     mwrr_annualized_percent: Optional[SafeDecimal] = Field(None, description="Annualized MWRR / XIRR (None if not converged)")
     mwrr_cumulative_percent: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR for the period: (1+r_ann)^(days/365)-1")
     mwrr_period_days: Optional[int] = Field(None, description="Number of days in the MWRR calculation period")
+    timing_effect_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="mwrr_cumulative_percent − twrr_percent, a fraction: what the timing of deposits and withdrawals added to the period's return; None when either is missing",
+    )
+    pnl_change_1d: Optional[Currency] = Field(
+        None,
+        description="Change of the total P&L from the calendar day before the valuation date to it, from the engine's daily states; None for a portfolio born on the valuation date",
+    )
+    pnl_change_1d_vs_total_pnl_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="pnl_change_1d / |total P&L of the day before|, a fraction with the change's sign, unrounded; None on a zero base",
+    )
+    pnl_change_1d_vs_nav_percent: Optional[SafeDecimal] = Field(
+        None,
+        description="pnl_change_1d / |NAV of the day before|, a fraction with the change's sign, unrounded; None on a zero base",
+    )
     simple_roi_percent: SafeDecimal
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
     allocation_by_geography: List[AllocationItem] = Field(default_factory=list)
     holdings: List[PortfolioHolding] = Field(default_factory=list)
+    holding_groups: List[HoldingGroupGainLoss] = Field(
+        default_factory=list,
+        description="Unrealized G/L of the holdings grouped by broker (asset_type None) and by asset type at each broker, ordered by broker_id then asset_type (the broker's group first)",
+    )
     by_broker: Optional[List[BrokerBreakdown]] = Field(None, description="Only populated when include_breakdown=True")
     missing_fx_pairs: List[WACMissingPairInfo] = Field(
         default_factory=list,
