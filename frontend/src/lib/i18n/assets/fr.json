@@ -325,7 +325,9 @@
       "placeholder": "Rechercher par nom, ticker, ISIN...",
       "searching": "Recherche en cours...",
       "timeout": "Recherche expirée. Veuillez réessayer.",
-      "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable"
+      "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable",
+      "notConfigured": "{provider} doit être configuré avant de pouvoir chercher",
+      "crownLegend": "👑 la devise du fonds"
     },
     "comparison": {
       "title": "Comparaison des données du fournisseur",

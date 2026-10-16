@@ -102,6 +102,10 @@ vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default:
 vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: mocks.noopComponent}));
+// Workstream X (CP11b): reached through the real registry like the others; unmocked, its form's date formatter would
+// load the language store, which reads constants the `$lib/i18n` mock below does not provide, and the file would fail
+// on its import.
+vi.mock('$lib/features/plugin-settings/PluginSettingsTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$app/stores', () => ({page: {subscribe: mocks.page.subscribe}}));
 vi.mock('$lib/stores/app/auth', () => ({auth: {subscribe: mocks.auth.subscribe}}));
 vi.mock('$lib/i18n', async () => {
