@@ -38,9 +38,11 @@ the same sample as `.env`.
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup, and the archives uploaded for a restore are limited to 500 MB unless `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` says otherwise. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
 | `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
 | `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
+| `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | _not set_ | Leave it unset. A hosting provider sets it so that its hosting panel can back up the instance through `/api/v1/backup/panel/jobs`: at least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`. Not set: those routes answer `404`. A token LibreFolio cannot use does not stop the server: the routes answer `503` and the log has an error. `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Read from the environment only. See [Hosting for Others](hosting_providers.md#panel-backups). |
+| `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | _not set_ | Leave it unset. The largest archive an administrator may upload to check it for a restore, in megabytes; `0` is no limit. Not set: no limit, or `500` in the `managed` profile. A hosting provider sets it, since there the administrator is its customer. A value that is not a whole number does not stop the server: the uploads answer `503` and the log has an error. Read from the environment only. See [Hosting for Others](hosting_providers.md#restore-upload-limit). |
 | `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
@@ -107,6 +109,7 @@ read from a file.
 | `LIBREFOLIO_INSTANCE_KEY` | `LIBREFOLIO_INSTANCE_KEY_FILE` | The [instance key](#instance-key). Not set: LibreFolio creates one in the data directory. |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
+| `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` | The token of the hosting panel that backs up the instance: see [Hosting for Others](hosting_providers.md#panel-backups). Like the web-search key, a file that cannot give it does not stop the server: the panel's backup routes answer `503`. |
 | `LIBREFOLIO_WAKE_TOKEN` | `LIBREFOLIO_WAKE_TOKEN_FILE` | The token of the [scheduled wake-up](sleep_wake.md#wake-sync), in the main options above. A token that cannot be used, or a file that cannot give it, does not stop the server either: the scheduled wake-up answers `503` until it is fixed. |
 
 A plugin may have secrets of its own, such as the API key of a paid data source: see
@@ -136,6 +139,10 @@ and out of the container's environment.
 - `LIBREFOLIO_SMTP_PASSWORD_FILE` is read only when `LIBREFOLIO_SMTP_HOST` is set. Like the web-search
   key file, a file that cannot give the password does not stop the server: email stays off, with an
   error in the log (`Email configuration cannot be used: email stays off`).
+- `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` is read only when the hosting panel calls its backup routes.
+  Like the web-search key file, a file that cannot give the token does not stop the server: those
+  routes answer `503`, with an error in the log
+  (`The hosting panel's backup token cannot be used: its routes refuse every request`).
 - LibreFolio reads these variables from its environment: `./dev.py` and Docker Compose
   (`env_file: .env`) put the values of `.env` there, so `.env` works with both.
 
@@ -173,7 +180,8 @@ and out of the container's environment.
     `sudo chmod 600 jwt_secret.txt`. Otherwise the server stops at startup and the error says that the
     file `cannot be read`.
 
-    `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` work the same way.
+    `LIBREFOLIO_INSTANCE_KEY_FILE`, `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`,
+    `LIBREFOLIO_SMTP_PASSWORD_FILE` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` work the same way.
 
 ### 🗝️ The Instance Key {: #instance-key }
 
