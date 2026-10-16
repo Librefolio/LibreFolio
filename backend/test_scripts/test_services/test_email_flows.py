@@ -49,8 +49,9 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
 11. ``admit_forgotten_password`` ships open (lot E4 removed its hold, ``FORGOT_PASSWORD_HELD``, once changing an
     account's email asked for the current password). It reads the configuration first — email, then links —,
     counting nothing when it refuses; then 10 requests per 15 minutes per client address — keyed
-    by ``address_key``: an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4,
-    anything else as written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
+    by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17; ``flows`` keeps no copy):
+    an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4, anything else as
+    written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
     ``EmailRateLimitedError`` with the seconds until the window frees; then the instance's hourly budget, peeked, never
     spent. Without a client address (a unix socket) the limit per address does not apply — one shared count would let
     a single client block everyone —, while the limit per identifier and the budget still do. The shipped limits are
@@ -142,6 +143,7 @@ from backend.app.services.email.delivery import EmailError, EmailRateLimitedErro
 from backend.app.services.email.flows import account_language, send_test_email
 from backend.app.services.email.links import EmailLinksUnavailableError, email_link
 from backend.app.services.email.messages import EmailRecipientError, build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
@@ -1382,31 +1384,14 @@ async def test_the_block_is_asked_before_anything_else_by_every_flow(monkeypatch
 ONE_MAILBOX = ["zq-shared@example.com", "ZQ-SHARED@EXAMPLE.COM", "Zq-Shared@Example.com", "zq-shared@EXAMPLE.com"]
 
 
-@pytest.mark.parametrize(
-    ("address", "key"),
-    [
-        pytest.param("198.51.100.7", "198.51.100.7", id="ipv4-as-is"),
-        pytest.param("2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64", id="ipv6-by-its-64"),
-        pytest.param("2001:db8:1:2::abcd", "2001:db8:1:2::/64", id="ipv6-another-address-of-the-same-64"),
-        pytest.param("2001:DB8:1:2::1", "2001:db8:1:2::/64", id="ipv6-in-capitals"),
-        pytest.param("2001:db8:1:3::1", "2001:db8:1:3::/64", id="ipv6-the-next-64"),
-        pytest.param("::1", "::/64", id="ipv6-loopback"),
-        pytest.param("fe80::1%eth0", "fe80::/64", id="ipv6-with-a-zone-the-zone-ignored"),
-        pytest.param("::ffff:198.51.100.7", "198.51.100.7", id="ipv4-mapped-as-the-ipv4"),
-        pytest.param("testclient", "testclient", id="a-name-as-written"),
-        pytest.param("/run/librefolio/zq.sock", "/run/librefolio/zq.sock", id="a-socket-path-as-written"),
-        pytest.param("", None, id="an-empty-address"),
-        pytest.param(None, None, id="no-address"),
-    ],
-)
-def test_the_key_of_a_client_address(address: str | None, key: str | None) -> None:
-    """EMF-036 — contract 11: ``address_key``: an IPv4 address as is; an IPv6 one by its /64 network — which one subscriber usually holds whole —, in its canonical form, a zone (``%eth0``) ignored; an IPv4-mapped IPv6 address as the IPv4 it maps; anything that is not an IP address as written; no address, or an empty one, no key."""
-    print_section(f"EMF-036: address_key({address!r})")
+def test_the_key_of_a_client_address_has_one_home() -> None:
+    """EMF-036 — contract 11: one home for the per-client key (decision P17). ``flows`` keys ``FORGOT_BY_ADDRESS`` with workstream H's ``client_rate_key`` — the very object ``backend.app.services.platform.client_address`` defines, not a copy — and keeps no key of its own: no ``address_key`` any more. The rule itself — an IPv4 address as is, an IPv4-mapped IPv6 one as the IPv4 it maps, any other IPv6 one by its /64 in canonical form, a zone ignored, anything that is not an IP address as written, no key without an address or with an empty one — is H's to pin, value by value, in ``test_services/test_client_address.py``, section (f); EMF-037 proves the limit per address counts by it."""
+    print_section("EMF-036: one home for the per-client key")
+    used = getattr(flows, "client_rate_key", None)
 
-    answer = flows.address_key(address)
-
-    assert answer == key, f"address_key({address!r}) is {answer!r}, expected {key!r}"
-    print_success(f"{address!r} → {answer!r}")
+    assert used is client_rate_key, f"flows.client_rate_key is {used!r}, not workstream H's client_rate_key: the key of FORGOT_BY_ADDRESS has one home (P17)"
+    assert not hasattr(flows, "address_key"), "flows still carries address_key, a second copy of the per-client key: its home is workstream H's client_rate_key (P17)"
+    print_success("flows holds H's client_rate_key itself, and no address_key of its own")
 
 
 @pytest.mark.asyncio
@@ -1430,7 +1415,7 @@ async def test_the_limit_per_address_counts_by_the_key(monkeypatch: pytest.Monke
     await flows.admit_forgotten_password(outsider, "zq_user_outsider")
 
     assert refused.value.retry_after == pytest.approx(900)
-    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(flows.address_key(outsider))) == (10, 1)
+    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(client_rate_key(outsider))) == (10, 1)
     print_success(f"ten under {key}, the eleventh refused; another key passes")
 
 

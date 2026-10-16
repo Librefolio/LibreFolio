@@ -21,8 +21,9 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
    ``{error_code, message}`` only — no ``smtp_code`` either —, after which «resend» works at once; 422
    ``EMAIL_RECIPIENT_INVALID``; 422 for a body that is not ``{username, password}``. Accounts and limits are asked
    before the configuration: an unknown account is 401 whatever email can do.
-4. The client address is ``request.client.host``, keyed by ``flows.address_key``: one IPv6 /64 is one client; a
-   request without an address (a unix socket) is not counted per address.
+4. The client address is H's ``client_address(request)`` (the connection's address while
+   ``LIBREFOLIO_CLIENT_IP_HEADER`` is unset, as here), keyed by H's ``client_rate_key`` (decision P17): one IPv6 /64 is
+   one client; a request without an address (a unix socket) is not counted per address.
 5. No log event holds a token, a password, an identifier or an address.
 
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed

@@ -10,7 +10,6 @@ hourly budget, sends, and logs. Every link an email carries comes from ``links.e
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -28,6 +27,7 @@ from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError, send_email
 from backend.app.services.email.links import email_link, links_state, require_links
 from backend.app.services.email.messages import build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -37,9 +37,10 @@ LinkPurpose = Literal["invite", "password_reset"]
 
 _PURPOSES: dict[str, AccountTokenPurpose] = {"invite": AccountTokenPurpose.INVITE, "password_reset": AccountTokenPurpose.PASSWORD_RESET}
 
-#: «Forgot password», per client address: 10 requests every 15 minutes; an IPv6 client counts by its /64, which one
-#: subscriber usually holds whole. The address is the one uvicorn gives the request (``request.client.host``): it follows
-#: ``X-Forwarded-For`` only from the proxies it trusts (``FORWARDED_ALLOW_IPS``), so a forged header does not move it.
+#: «Forgot password», per client address: 10 requests every 15 minutes, keyed by workstream H's ``client_rate_key()``:
+#: an IPv6 client counts by its /64, which one subscriber usually holds whole. The address is H's ``client_address()``:
+#: the header a trusted proxy sets when ``LIBREFOLIO_CLIENT_IP_HEADER`` names it, otherwise the connection's, which
+#: follows ``X-Forwarded-For`` only from the proxies uvicorn trusts (``FORWARDED_ALLOW_IPS``).
 FORGOT_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: «Forgot password», per identifier as written (case-insensitive): 3 requests an hour, whether an account matches or not.
 FORGOT_BY_IDENTIFIER = SlidingWindowLimiter(3, 60 * 60)
@@ -61,23 +62,6 @@ class EmailAccountInactiveError(EmailError):
 
     def __init__(self) -> None:
         super().__init__("EMAIL_ACCOUNT_INACTIVE")
-
-
-def address_key(address: str | None) -> str | None:
-    """The key of ``address`` for the per-address limit: an IPv4 address as is, an IPv6 one by its /64, anything else
-    (a name, a unix socket) as written; ``None`` without an address, an empty one included."""
-    if not address:
-        return None
-    try:
-        ip = ipaddress.ip_address(address)
-    except ValueError:
-        return address
-    if not isinstance(ip, ipaddress.IPv6Address):
-        return str(ip)
-    if ip.ipv4_mapped is not None:
-        return str(ip.ipv4_mapped)
-    # From the integer, so a zone (``fe80::1%eth0``) does not get in the way.
-    return str(ipaddress.IPv6Network((int(ip) >> 64 << 64, 64)))
 
 
 class EmailLinkInvalidError(EmailError):
@@ -212,7 +196,7 @@ async def admit_forgotten_password(address: str | None, identifier: str) -> None
     require_links()
     # Without an address (a unix socket), one shared count would let a single client block the feature for everyone:
     # the limits per identifier and per account, and the hourly budget, still apply.
-    checks = ((FORGOT_BY_ADDRESS, address_key(address)), (FORGOT_BY_IDENTIFIER, identifier.strip().casefold()))
+    checks = ((FORGOT_BY_ADDRESS, client_rate_key(address)), (FORGOT_BY_IDENTIFIER, identifier.strip().casefold()))
     for limiter, key in checks:
         if key is None:
             continue
