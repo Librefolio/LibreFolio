@@ -3879,3 +3879,67 @@ vengono dal catalogo generato alle 18:27.
     - **Verdetto: lentezza sotto carico.** Subito dopo l'apertura del replay storico il thread principale resta
       occupato per più di 3 s; non è un difetto di Y12b. Al coordinatore ho proposto una terza corsa sotto carico 50,
       oppure l'ingresso subito, con Y-21.
+- **21:19, coordinatore**: il W6-d di DV è entrato (`3805bf2ca`), e `PositionsPanel.svelte` ed `ExposureTable.svelte`
+  sono di nuovo liberi.
+  - DV ha chiuso la mia **Y-17**: `aria-pressed` sui 4 pulsanti Holdings/Performance e Table/Map di `PositionsPanel`.
+    È segnata ✅ nel BACKLOG con `3805bf2ca`, e va nel prossimo checkpoint.
+  - `3805bf2ca` non è ancora nella mia base: lo porterà il prossimo aggiornamento.
+  - Il test N55 sulla vista Performance del broker legge ancora `contribution-table`. Potrà leggere `aria-pressed`
+    dopo l'aggiornamento della base, ma non serve.
+- **21:20, coordinatore**: opzione 2. Y12b è entrato con la correzione: `8acf41fdf` (test) e `684560cd3` (journal, che
+  contiene solo il piano). Y-21 va nel BACKLOG, scritta alle 21:21 e da portare nel prossimo checkpoint.
+  - Prossimo: `assets/[id]` dopo il lotto A di Z; nel frattempo Y-14, oppure un'altra voce lontana dalle pagine degli
+    asset.
+
+### Y-14 · «Aggiorna» della lista dei broker ricalcola anche le schede (dalle 21:22, su `684560cd3`) — ✅ rosso e verde 21:43, prove leggere 22:05
+
+> **Note implementazione**.
+> - **Decisione** (coordinatore, 21:2x): il rimedio è «forzare», come nella Dashboard e nella pagina del broker.
+> - **Vincolo**: il lotto B di Z ha aperto `page-busy.spec.ts` fino alle 22:10 circa, quindi il rosso va in
+>   `e2e/brokers/brokers.spec.ts` (azione `front-broker list`).
+>   - `test-author` era partito su `page-busy.spec.ts`: l'ho reindirizzato, con l'ordine di riportare quel file a
+>     HEAD.
+> - **Patch** (`files/patches/y14_brokers_refresh.py`, provata a secco su una copia):
+>   - `loadBrokers(force = false)` passa `force` a `fetchReport` (riga 177);
+>   - il clic su `brokers-refresh` va a un nuovo `handleRefresh()`, che fa `requestPortfolioRefresh()` e poi
+>     `pageBusy.track('brokers-refresh', () => loadBrokers(true))`;
+>   - il primo caricamento, la valuta e i ricaricamenti dopo una modifica restano senza `force`;
+>   - **⚠️ Fuori pista, il pulsante «riprova» dello stato d'errore** (riga 404). Passava `loadBrokers` direttamente
+>     a `on:click`, quindi con il parametro nuovo l'evento del clic sarebbe finito in `force`. Ora è una chiamata
+>     esplicita, tracciata (`brokers-retry`) come ogni ricaricamento chiesto dall'utente: nel passo 4 mi era sfuggito.
+> - La pagina non ascolta il bus del portafoglio, quindi `requestPortfolioRefresh()` qui non provoca un secondo
+>   caricamento: segna come scadute le cache delle altre viste.
+> - **Il rosso di `test-author`** (dalle 21:22 alle 21:37, `e2e/brokers/brokers.spec.ts`, +160/−2). `page-busy.spec.ts`
+>   e `_frontend_portfolio.py` non li ha mai toccati.
+>   - Titolo: «Refresh asks the report of the cards again even when its cache is fresh, and holds its button until it
+>     is back (Y-14)», in un `describe` suo, con un limite di 90 s.
+>   - **Cosa fa**:
+>     1. la lista si carica da zero e si assesta;
+>     2. come precondizione, il primo caricamento ha chiesto il report delle schede (`include_breakdown: true`) e ha
+>        avuto risposta;
+>     3. trattiene ogni report successivo e fa clic su `brokers-refresh`;
+>     4. attende fino a 30 s un report trattenuto. Il suo corpo, tolti i `broker_ids`, deve essere uguale a quello in
+>        cache, e i `broker_ids` devono essere quelli con un ruolo nella risposta stessa di «Aggiorna»;
+>     5. intanto il pulsante deve essere occupato; dopo il rilascio torna libero, e il report ha risposto.
+>   - **Perché oggi è rosso**: con `force=false` la cache ancora fresca risponde, e nessun report parte.
+>   - **Limite**: con tutto `front-broker all` altre spec cambiano i broker di TEST_USER. Allora la cache può mancare per
+>     conto suo, e il test passerebbe senza dimostrare il `force`, anche se non può fallire per questo. Quindi il rosso
+>     va provato con la sola azione `front-broker list`.
+> - Al coordinatore ho chiesto uno slot di circa 12 minuti: il rosso, la patch con le prove leggere, poi il verde.
+> - **Rosso, patch e verde** (slot 1, dalle 21:38 alle 21:43, carico 87–98; script `files/scripts/y14_red_green.sh`):
+>   - **rosso**, `front-broker list` sul codice di oggi: 1 fallito su 10, cioè solo il test Y-14, alla riga 244, perché
+>     entro 30 s non è partito nessun report;
+>   - la patch applicata;
+>   - **verde**, `front-broker list` dopo la ricostruzione: **10/10**.
+> - **⚠️ Fuori pista, ordini incrociati**: il messaggio del coordinatore «solo il rosso, il verde dopo», scritto con il
+>   carico a 142, mi è arrivato quando lo script aveva già fatto anche il verde, secondo il via dello slot «rosso,
+>   patch, verde». Gliel'ho detto subito: lo slot si è liberato alle 21:43:37 e il verde non va ripetuto.
+> - **Prettier**: dopo la patch la pagina non era formattata. `--write` ha rimesso su una riga il pulsante «Aggiorna»,
+>   che con `on:click={handleRefresh}` è più corto. È solo formattazione: il verde vale lo stesso.
+> - **Prove leggere** (`files/scripts/y14_light.sh`, dalle 21:52 alle 22:05; ognuna è partita solo con il carico sotto 50):
+>   - Prettier pulito;
+>   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - core 6 830/6 830;
+>   - `git diff --check` pulito; la porta 6189 è libera.
+> - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
+>   sul W6-d.
