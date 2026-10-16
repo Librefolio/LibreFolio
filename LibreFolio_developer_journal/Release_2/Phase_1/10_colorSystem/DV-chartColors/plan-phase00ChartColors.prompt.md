@@ -661,7 +661,7 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
 >   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
 >   (un caso C4 in `GrowthChart.test.ts`).
 
-### W5-PAC — Ruoli di colore nel PAC ⏳ (dal 16/10/2026)
+### W5-PAC — Ruoli di colore nel PAC ✅ (16/10/2026, validato su `35a55cf39`)
 
 **Mandato.** Proposta del coordinatore, alle 02:16, approvata alle 02:20, con l'OK di J (stanotte lavora solo sul
 backend). Rientra nel mandato del developer delle 22:20: «mergia il lavoro fatto, correggi gli aspetti tecnici e
@@ -781,8 +781,9 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
   > - Nessun test asserisce classi del PAC, E2E compreso: test-author non serve.
 - [x] ✅ (16/10/2026) Checkpoint: commit `4743b1542` del coordinatore (02:41), 43 file. Le merge simulate con il
   target `db384eaf5` e con il ramo di T (`abc4c84de`) sono pulite, compreso il baseline.
-- [ ] Prove pesanti nello slot delle 06:45 circa, insieme a W5-charts: `front check`, `core-unit`, `component-unit`,
-  E2E `pac-allocator-real`.
+- [x] ✅ (16/10/2026) Prove pesanti nello slot delle 06:45, insieme a W5-charts, sulla base merge `35a55cf39` (target
+  `72e66d1a6`, col secondo lotto di T: W1-c, W1-e con `ModalBase`, W2-a). Tutto verde: i conteggi stanno nella sezione
+  «W5-charts», passo «Prove pesanti».
 
 **Dove guardarlo, per il developer:**
 - Strumenti › PAC, in chiaro e in scuro: tutti i passi, cioè scenario, strategia, asset, obiettivi, broker, liquidità,
@@ -791,7 +792,7 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
 - I campi di testo restano com'erano fino al lotto di T sull'input. Le barre verdi «dopo il piano» e la traccia
   degli obiettivi restano anche loro come prima.
 
-### W5-charts — Ruoli di colore nei componenti di `components/charts/` ⏳ (dal 16/10/2026)
+### W5-charts — Ruoli di colore nei componenti di `components/charts/` ✅ (16/10/2026, validato su `35a55cf39`)
 
 **Mandato.**
 - Proposta del coordinatore alle 02:41, dopo il commit di W5-PAC (`4743b1542`): «i file di `components/charts/` che
@@ -855,6 +856,8 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
 - Per ora, su un fondo panel l'hover è `hover:bg-lf-neutral`: «Annulla» di `ChartSettingsModal` e le righe di
   `MeasurePanel`.
 - Domanda: l'hover deve distinguersi dal panel, o è voluto che un fondo panel non abbia hover?
+- **Instradato** (coordinatore, 03:08): va nel pacchetto delle domande sui token di T, col caso di `SignalStyleEditor`.
+  È una questione dei ruoli, non dei grafici, e il coordinatore la riporta nel resoconto del mattino.
 
 **Passi:**
 - [x] ✅ (16/10/2026) Conversione: il convertitore di W5-PAC, adattato, poi i ritocchi a mano.
@@ -922,8 +925,32 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
   >   `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54.
   > - Nessun test asserisce colori di questi file: le classi asserite sono `animate-spin`, `lf-compact-number-input` e
   >   `hidden`, quindi test-author non serve.
-- [ ] Checkpoint, entro le 06:30. Le prove pesanti nello slot delle 06:45: `front check`, `core-unit`,
-  `component-unit`, E2E `pac-allocator-real` e `front-fx fx-settings`.
+- [x] ✅ (16/10/2026) Checkpoint: commit `7d3896011` del coordinatore (03:08), 14 file. Le merge simulate con il target
+  `8850ad002` e con T (`abc4c84de`) sono pulite.
+- [x] ✅ (16/10/2026) Prove pesanti, W5-PAC e W5-charts in una sola validazione, sulla base merge `35a55cf39` del
+  coordinatore.
+  > **Note implementazione**: la base merge porta il target `72e66d1a6`, col secondo lotto di T (W1-c, W1-e con
+  > `ModalBase`, W2-a). L'albero era uguale alla simulazione e il worktree pulito; `app.css`, baseline e backlog si sono
+  > fusi da soli. Sulla revisione: m1 8.833, m2 64.
+  >
+  > - Corsia 6156, `/tmp/librefolio-r2-dv`, dalle 06:47:45 alle 07:09:20 (21,5 minuti, sotto lo stop di 50); carico da
+  >   25 a 78.
+  > - Script `/tmp/libreFolio_dv_w5_heavy.sh`, un passo per volta:
+  >
+  > | Passo | Esito | Tempo |
+  > |---|---|---|
+  > | `api sync` | verde, 0 file tracciati cambiati | 27 s |
+  > | `front check` | 0 errori, 0 avvisi | 136 s |
+  > | `front-utility core-unit` | 174 file, 6220 test | 87 s |
+  > | `front-utility component-unit` | 150 file, 3980 test | 337 s |
+  > | gate Vitest `themeRoles.gate.test.ts` | 47/47 | 13 s |
+  > | gate Vitest `themeTokens.gate.test.ts` | 18/18 (2 in più, dal secondo lotto di T) | 6 s |
+  > | E2E `front-utility pac-allocator-real` | 1 passed, senza tentativi ripetuti | 609 s, quasi tutti di popolamento |
+  > | E2E `front-fx fx-settings` | 3 passed | 79 s |
+  >
+  > - L'avviso di mathjax del runner (`CERTIFICATE_VERIFY_FAILED`, ripiego sul CDN) c'era già nel lancio di TD-1;
+  >   non tocca le prove.
+  > - Alla fine la porta 6156 è libera (`lsof` vuoto), HEAD `35a55cf39`, worktree pulito.
 
 **Dove guardarlo, per il developer:**
 - Dettaglio di un asset e di un cambio, in chiaro e in scuro:
