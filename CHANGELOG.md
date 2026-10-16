@@ -173,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other than the one it was bought in shows the right proceeds.
 - Short lots: P&L now subtracts the buy-backs, and the return reads against the amount sold (a short at break-even shows 0%, not −100%).
 - **Emptying a manual cost basis is no longer silently ignored**: when you edit a received transfer or an incoming adjustment and clear its manual cost, the save is refused with "cost basis required" instead of keeping the old cost without a word. API: an explicit `cost_basis_override: null` in an update removes the manual cost where the type and side take one, and is ignored elsewhere and in Auto mode.
+- **Editing a transfer, a currency exchange or a cash transfer can no longer break its type's rules**: an update that adds cash to an asset transfer, sets its quantity to zero, gives a currency exchange a quantity, or sets an exchange's or a cash transfer's amount to zero is refused, as creating one already was; a withdrawal and a deposit of zero can no longer be promoted into one. Rows saved before stay editable as long as that field doesn't change.
 
 #### 🔒 Security
 
