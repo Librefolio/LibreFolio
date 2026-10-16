@@ -26,13 +26,13 @@
      under the switches (right-aligned), and each group can wrap in longer locales. Below `sm`
      the switches fill their row, justified: each with its label and info is one piece, Active
      on the left edge, Benchmark on the right one — also when it wraps. -->
-<div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
+<div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-lf-subtle">
     <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
         <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Tooltip text={$t('assets.modal.activeTooltip')} position="top" maxWidth="320px">
-                <Info size={14} class="text-gray-400 cursor-help shrink-0" />
+                <Info size={14} class="text-lf-muted cursor-help shrink-0" />
             </Tooltip>
-            <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span id="asset-active-label" class="text-sm font-medium text-lf-secondary">
                 {active ? $t('common.active') : $t('assets.edit.status.inactive')}
             </span>
             <button
@@ -49,13 +49,13 @@
             </button>
         </div>
 
-        <span class="mx-1 hidden h-5 w-px bg-gray-200 sm:block dark:bg-slate-700"></span>
+        <span class="mx-1 hidden h-5 w-px bg-lf-subtle sm:block"></span>
 
         <div class="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Tooltip text={$t('assets.modal.benchmarkTooltip')} position="top" maxWidth="320px">
-                <Info size={14} class="text-gray-400 cursor-help shrink-0" />
+                <Info size={14} class="text-lf-muted cursor-help shrink-0" />
             </Tooltip>
-            <span id="asset-benchmark-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span id="asset-benchmark-label" class="text-sm font-medium text-lf-secondary">
                 {$t('assets.modal.benchmark')}
             </span>
             <button
@@ -74,13 +74,7 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-3 ml-auto">
-        <button
-            type="button"
-            onclick={oncancel}
-            disabled={saving}
-            data-testid="asset-modal-cancel"
-            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-        >
+        <button type="button" onclick={oncancel} disabled={saving} data-testid="asset-modal-cancel" class="px-4 py-2 text-sm font-medium text-lf-secondary bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover transition-colors">
             {$t('common.cancel')}
         </button>
         {#if !tourPreview}
@@ -89,7 +83,7 @@
                 onclick={onsave}
                 disabled={!isValid || saving}
                 data-testid="asset-modal-save"
-                class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {#if saving}
                     <Loader2 size={14} class="animate-spin" />
