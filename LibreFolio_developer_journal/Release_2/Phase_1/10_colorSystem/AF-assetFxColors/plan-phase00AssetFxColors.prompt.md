@@ -10,12 +10,14 @@
 > [`theme-roles`](../../../../../.github/skills/design-tools/theme-roles/SKILL.md) (tabella classe → ruolo, baseline).
 > Backlog: sezione «AF · Colori di asset e cambi» di [`BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md),
 > voci `AF-n`.
-> **Stato (16/10, 17:06):**
-> - **Lotti 1–8 nel target** (`bfd33a0f5`): A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, docs `15f31f12e`, fix G6
->   `5cdf4c307`. Il target scende da m1 8.249 e m2 54 a 6.734 e 48.
-> - **AF-6** (`8dc5b864c`) e il piano (`830a805a3`) entrano con il lotto 9.
-> - **Lotto 9 e AF-4 al checkpoint D** (passo 13); il suo slot pesante è verso le 18:00.
-> - Le decisioni chieste nell'analisi le ha prese il coordinatore (passo 1).
+> **Stato (16/10, 18:30): area migrata, tutto nel target** (`c179a5144`). Dettagli nel passo 15.
+> - **Lotti 1–8:** A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, fix G6 `5cdf4c307`.
+> - **AF-6:** `8dc5b864c`. **Lotto 9 e AF-4:** `8aa3904a6`.
+> - **Docs:** `15f31f12e`, `830a805a3`, `8347b7713`.
+> - **Area AF:** da m1 1.946 e m2 6 a **170 e 0**. Restano solo classi annotate: AF-1 109, AF-2 23, AF-3 8, AF-5 18,
+>   AF-7 12.
+> - **Aperte:** AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 (da
+>   confermare), AF-10 (ruolo di T).
 
 ## 0. Dati di partenza (verificati il 16/10, 10:41–11:30)
 
@@ -634,11 +636,58 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     > - il bottone di chiusura del banner ha l'hover sulla linea ambra;
     > - in scuro i secondari si staccano poco dalla card (domanda aperta 3);
     > - la nota dell'editor è su `-on-soft/70`.
-14. ⏳ **Slot pesante del lotto 9** (verso le 18:00, dopo la galleria di G, al massimo 45 minuti):
-    - `api sync` e `front build --debug`; `front check`; `component-unit`;
-    - E2E `front-asset` asset-detail, asset-browse, live-pause, asset-modal, asset-event-delete, asset-event-editor-save;
-    - `front-portfolio` risk-asset-detail; `front-transaction` tx-import-asset-inspector;
-    - `front-fx` fx-settings e fx-destructive.
+14. ✅ (16/10, 17:53–18:25) **Slot pesante del lotto 9** sulla base `dc360b486`: lotto 9 e AF-4 committati dal
+    coordinatore (codice `8aa3904a6`, docs `8347b7713`), più la merge del target `ce5954329` con J-17.
+    > Corsia 6157 + `/tmp/librefolio-r2-af`; taglio alle 18:40, nessun passo nuovo dopo le 18:35. Script
+    > `/tmp/libreFolio_af_slotD.sh`, log in `/tmp/libreFolio_af_slotD/`. I worker: 2 per ogni spec partita col carico a
+    > 1 minuto sotto 60, altrimenti 1.
+    >
+    > | Passo | Esito |
+    > |---|---|
+    > | `api sync` | rc 0 |
+    > | `front build --debug` | rc 0 |
+    > | `front check` | 0 errori, 0 avvisi |
+    > | `front-utility component-unit` | 158 file, 4.092/4.092 |
+    >
+    > **E2E, 102/102** (nessun rosso né flaky; fra parentesi i worker):
+    >
+    > | Spec | Test |
+    > |---|---|
+    > | `front-asset` asset-detail | 34 (1) |
+    > | `front-designer-lab` picker | 4 (1) |
+    > | asset-browse | 8 (2) |
+    > | live-pause | 8 (1) |
+    > | asset-modal | 17 (2) |
+    > | asset-event-delete | 4 (2) |
+    > | asset-event-editor-save | 4 (2) |
+    > | `front-portfolio` risk-asset-detail | 5 (2) |
+    > | `front-transaction` tx-import-asset-inspector | 5 (2) |
+    > | `front-fx` fx-settings | 3 (2) |
+    > | fx-destructive | 10 (2) |
+    >
+    > Porta libera alla fine.
+    >
+    > **⚠️ Fuori pista — `designer-lab picker` aggiunto dal coordinatore:** il lotto aveva tolto `html.dark .text-gray-800`
+    > (C4), che era il soggetto del test dell'override scuro di L-20. Lo spec sceglie dal CSSOM la regola, senza
+    > nominarla, ed è passato da solo a un'altra classe ancora rimappata: 4/4.
+15. ✅ (16/10, 18:27) **Ingresso nel target: `c179a5144`.** La base merge è `c403534c7`, con la punta `ccfabfd6d`; il
+    frontend è identico a quello validato (`dc360b486`), con i gate a 119/119. Target m1 936.
+    > **Definition of done (§10):**
+    > - lotti 1–9 migrati; l'area scende da m1 1.946 a **170**, tutte con la loro voce AF-n; m2 da 6 a **0**;
+    > - `--check` pulito, baseline stretto a ogni checkpoint;
+    > - prove leggere e pesanti verdi in tutti gli slot: **323 E2E** (151 + 70 + 102), `component-unit` a ogni slot;
+    > - nessun elemento misto nuovo; catene ricontrollate (C1 chiusa con `tone="danger"`); porta libera;
+    > - journal e backlog aggiornati, «dove guardarlo» nella sezione 12.
+    >
+    > **Residuo dell'area, per voce:**
+    >
+    > | Voce | Classi | Dove |
+    > |---|---:|---|
+    > | AF-1 | 109 | `fx/[pair]` 54; `assets/[id]` 42; `detail/` 13 |
+    > | AF-2 | 23 | `AssetTable` 12; `IdentifierPrimaryChooser` 11 |
+    > | AF-3 | 8 | `assets/+page` 4; `fx/+page` 4 |
+    > | AF-5 | 18 | `PriceDataImportModal` 6; `EventDataImportModal` 12 |
+    > | AF-7 | 12 | `AssetModalFooter` 8; `ScheduledInvestmentEditor` 4 |
 
 ## 12. Dove guardarlo (per il developer)
 
