@@ -334,8 +334,9 @@ pause registry, `backend/app/services/platform/provider_cooldown.py`:
 - A test double that is not a plugin (no `PluginSettingsMixin`) has no settings and no pause: it is
   called as it is.
 
-Each process keeps its own pauses, in memory. They are on by default: `.env.example` (section
-«Sleep and Wake») lists the two variables that tune them, `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`
+Each process keeps its own pauses, in memory. They are on by default:
+[Provider Pauses](../../../admin/sleep_wake.md#provider-pauses), in the admin guide, and `.env.example`
+(section «Sleep and Wake») list the two variables that tune them, `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`
 and `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`. With the pauses turned off, nothing is skipped, and a
 refusal still reaches the caller as `RATE_LIMITED`, with the provider's own `Retry-After` (or none).
 The FX boundary, `call_fx_provider()`, does the same for the exchange-rate providers

@@ -85,7 +85,7 @@
         depositPct,
         withdrawPct,
         signedPct,
-        valueColor = 'text-gray-700 dark:text-gray-300',
+        valueColor = 'text-lf-secondary',
         positiveColor = SIGN_BAR.kpi.gain,
         negativeColor = SIGN_BAR.kpi.loss,
         barHeight = 'h-1.5',
@@ -121,26 +121,26 @@
 {#snippet labelNode()}
     {#if tooltipHtml}
         <Tooltip html={tooltipHtml} position="top" wrapperClass="min-w-0">
-            <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+            <span class="block truncate min-w-0 cursor-help border-b border-dotted border-lf-input text-lf-muted" title={label}>{label}</span>
         </Tooltip>
     {:else if tooltip}
         <Tooltip text={tooltip} position="top" wrapperClass="min-w-0">
-            <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+            <span class="block truncate min-w-0 cursor-help border-b border-dotted border-lf-input text-lf-muted" title={label}>{label}</span>
         </Tooltip>
     {:else}
-        <span class="block truncate min-w-0 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+        <span class="block truncate min-w-0 text-lf-muted" title={label}>{label}</span>
     {/if}
 {/snippet}
 
 {#snippet track()}
     <!-- Diverging bar: left half = negative side, right half = positive side -->
     <div class="relative w-full {barHeight} flex">
-        <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-l-full overflow-hidden">
+        <div class="relative w-1/2 h-full bg-lf-neutral rounded-l-full overflow-hidden">
             <div class="absolute right-0 top-0 h-full {negativeColor} rounded-l-full transition-all duration-700 ease-out" style="width: {clampedWithdraw}%"></div>
         </div>
         <!-- Center divider -->
-        <div class="w-px h-full bg-gray-300 dark:bg-slate-500 flex-shrink-0"></div>
-        <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-r-full overflow-hidden">
+        <div class="w-px h-full bg-lf-input flex-shrink-0"></div>
+        <div class="relative w-1/2 h-full bg-lf-neutral rounded-r-full overflow-hidden">
             <div class="absolute left-0 top-0 h-full {positiveColor} rounded-r-full transition-all duration-700 ease-out" style="width: {clampedDeposit}%"></div>
         </div>
     </div>

@@ -317,8 +317,8 @@
     <div class="modal-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div class="modal-header-row">
             <div class="flex items-center gap-2 min-w-0">
-                <FileUp class="text-libre-green shrink-0" size={20} />
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">
+                <FileUp class="text-lf-link shrink-0" size={20} />
+                <h2 class="text-lg font-semibold text-lf-primary truncate">
                     {$_('brokers.importFiles')} - {brokerName}
                 </h2>
             </div>
@@ -360,7 +360,7 @@
         </div>
     {:else if uploading}
         <div class="upload-area" transition:fade={{duration: 150}}>
-            <div class="flex items-center justify-center gap-2 py-8 text-gray-500">
+            <div class="flex items-center justify-center gap-2 py-8 text-lf-muted">
                 <RefreshCw size={20} class="animate-spin" />
                 <span>{$_('common.uploading')}...</span>
             </div>
@@ -374,14 +374,14 @@
     <div class="modal-body">
         {#if loading && files.length === 0}
             <div class="loading-state">
-                <RefreshCw size={32} class="animate-spin text-gray-400" />
-                <p class="text-gray-500 mt-2">{$_('common.loading')}</p>
+                <RefreshCw size={32} class="animate-spin text-lf-muted" />
+                <p class="text-lf-muted mt-2">{$_('common.loading')}</p>
             </div>
         {:else if files.length === 0}
             <div class="empty-state">
-                <FileUp size={48} class="text-gray-300 dark:text-gray-600" />
-                <p class="text-gray-500 dark:text-gray-400 mt-2">{$_('brokers.noImportFiles')}</p>
-                <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{$_('brokers.uploadHint')}</p>
+                <FileUp size={48} class="text-lf-muted" />
+                <p class="text-lf-muted mt-2">{$_('brokers.noImportFiles')}</p>
+                <p class="text-lf-muted text-sm mt-1">{$_('brokers.uploadHint')}</p>
             </div>
         {:else}
             <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} onPreview={(file) => openPreview(file as BrimFile)} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />

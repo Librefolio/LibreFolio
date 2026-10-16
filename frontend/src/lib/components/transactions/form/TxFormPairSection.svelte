@@ -125,21 +125,21 @@
     }: Props = $props();
 </script>
 
-<fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
+<fieldset class="border border-lf-subtle rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-lf-muted px-1">{$t('transactions.form.sectionRequired')}</legend>
 
     <!-- Type (date is now inside Da/A panels) -->
     <div class="text-sm">
         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
         <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap" use:guideAnchor={'transaction.create.basics'}>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
+            <span class="text-xs text-lf-muted">{$t('common.type')}</span>
             {#if typeImmutable}
                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
                      readonly type as a plain inline [icon] [name]
                      row matching the table cell rendering — icon
                      enlarged (w-6 h-6) so it stays legible
                      alongside the other selectors. -->
-                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
+                <div class="flex items-center gap-2 px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary" data-testid="tx-form-type-readonly">
                     <img
                         src={getTransactionTypeIconUrl(draft.type)}
                         alt=""
@@ -160,10 +160,10 @@
     <!-- FX: shared broker -->
     {#if pairLayout === 'fx'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-broker-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+            <span class="text-xs text-lf-muted">{$t('transactions.table.broker')}</span>
             {#if brokerImmutable}
                 {@const b = brokers.find((br) => br.id === draft.broker_id)}
-                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
+                <div class="flex items-center gap-2 px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary" data-testid="tx-form-broker-readonly">
                     <BrokerIcon brokerId={b?.id ?? null} iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
                     <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                 </div>
@@ -176,12 +176,12 @@
     <!-- Transfer Asset: shared asset + quantity -->
     {#if pairLayout === 'transfer_asset'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.asset')} *</span>
+            <span class="text-xs text-lf-muted">{$t('common.asset')} *</span>
             <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
         </div>
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">
-                {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
+            <span class="text-xs text-lf-muted">
+                {$t('transactions.table.quantity')} <span class="text-lf-warning">(+)</span>
             </span>
             <ExactQuantityInput
                 value={draft.quantity}
@@ -207,7 +207,7 @@
     <!-- Transfer Cash: shared cash -->
     {#if pairLayout === 'transfer_cash'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-cash-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">
+            <span class="text-xs text-lf-muted">
                 {$t('transactions.table.cash')} *
             </span>
             <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" />
@@ -219,13 +219,13 @@
     <!-- ============================================================= -->
     <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start overflow-hidden" data-testid="tx-form-dual-split">
         <!-- DA (From) -->
-        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-from">
-            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.from')}</div>
+        <div class="border border-lf-subtle rounded-lg p-3 min-w-0" data-testid="tx-form-dual-from">
+            <div class="text-xs font-semibold uppercase tracking-wide text-lf-muted mb-2">{$t('common.from')}</div>
             <!-- Date (from side) -->
             <div class="flex flex-col gap-1 mb-2">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
+                <span class="text-xs text-lf-muted">{$t('common.date')}</span>
                 {#if isReadonly}
-                    <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
+                    <div class="px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary">{draft.date || '—'}</div>
                 {:else}
                     <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
                 {/if}
@@ -235,7 +235,7 @@
             {:else}
                 <!-- transfer_asset / transfer_cash: broker from -->
                 <div class="flex flex-col gap-1">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                    <span class="text-xs text-lf-muted">{$t('transactions.table.broker')}</span>
                     <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                 </div>
             {/if}
@@ -244,7 +244,7 @@
         <!-- Arrow (clickable to swap Da↔A) -->
         <button
             type="button"
-            class="hidden sm:flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green self-center p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+            class="hidden sm:flex items-center justify-center text-lf-muted hover:text-lf-link self-center p-1 rounded-full hover:bg-lf-hover transition-colors"
             onclick={swapDualSides}
             title={$t('transactions.form.swapSides') || 'Swap sides'}
             data-testid="tx-form-dual-swap"
@@ -254,7 +254,7 @@
         </button>
         <button
             type="button"
-            class="flex sm:hidden items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+            class="flex sm:hidden items-center justify-center text-lf-muted hover:text-lf-link p-1 rounded-full hover:bg-lf-hover transition-colors"
             onclick={swapDualSides}
             title={$t('transactions.form.swapSides') || 'Swap sides'}
             data-testid="tx-form-dual-swap-mobile"
@@ -264,16 +264,16 @@
         </button>
 
         <!-- A (To) -->
-        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
-            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.to')}</div>
+        <div class="border border-lf-subtle rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
+            <div class="text-xs font-semibold uppercase tracking-wide text-lf-muted mb-2">{$t('common.to')}</div>
             <!-- Date (to side) — hidden when partner is inaccessible (role=null or not in store) -->
             {#if inaccessiblePartnerBrokerId != null || (isReadonly && !partnerRow && dualTo.broker_id > 0 && getBrokerRole(dualTo.broker_id) == null)}
                 <!-- partner inaccessible — hide date -->
             {:else}
                 <div class="flex flex-col gap-1 mb-2">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
+                    <span class="text-xs text-lf-muted">{$t('common.date')}</span>
                     {#if isReadonly}
-                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{effectiveDualTo.date || '—'}</div>
+                        <div class="px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary">{effectiveDualTo.date || '—'}</div>
                     {:else}
                         <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} onvaliditychange={onDateToValidityChange} />
                     {/if}
@@ -285,12 +285,12 @@
                 <!-- transfer_asset / transfer_cash: broker to -->
                 <div class="flex flex-col gap-1">
                     {#if inaccessiblePartnerBrokerId == null}
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                        <span class="text-xs text-lf-muted">{$t('transactions.table.broker')}</span>
                     {/if}
                     {#if inaccessiblePartnerBrokerId != null}
                         {@const pInfo = getBrokerInfo(inaccessiblePartnerBrokerId)}
                         {@const RoleIconC = getRoleIcon(null)}
-                        <div class="flex flex-col gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400" data-testid="tx-form-partner-locked">
+                        <div class="flex flex-col gap-1.5 px-3 py-2 bg-lf-danger-soft border border-lf-danger-line rounded-lg text-sm text-lf-danger-on-soft" data-testid="tx-form-partner-locked">
                             <div class="flex items-center gap-1.5">
                                 {#if pInfo?.icon_url || pInfo?.portal_url || pInfo?.default_import_plugin}
                                     <BrokerIcon brokerId={pInfo.id} iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
@@ -305,9 +305,7 @@
                         {@const toInfo = getBrokerInfo(dualTo.broker_id)}
                         {@const toRole = toInfo ? getBrokerRole(dualTo.broker_id) : null}
                         <div
-                            class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo
-                                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
-                                : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200'} border rounded-lg text-sm"
+                            class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo ? 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft' : 'bg-lf-panel border-lf-subtle text-lf-secondary'} border rounded-lg text-sm"
                             data-testid="tx-form-broker-to-readonly"
                         >
                             {#if toInfo && toRole != null}
@@ -333,9 +331,9 @@
                                 {@const LockIcon2 = getRoleIcon(null)}
                                 {@const lockColor2 = getRoleIconColor(null)}
                                 <LockIcon2 size={14} class="{lockColor2} shrink-0" />
-                                <span class="text-gray-500 dark:text-gray-400">#{dualTo.broker_id} — {$t('transactions.access.partnerNotAccessible')}</span>
+                                <span class="text-lf-muted">#{dualTo.broker_id} — {$t('transactions.access.partnerNotAccessible')}</span>
                             {:else}
-                                <span class="text-gray-400">—</span>
+                                <span class="text-lf-muted">—</span>
                             {/if}
                         </div>
                     {:else}
@@ -361,7 +359,7 @@
                         <Info size={12} />
                         <span class="font-mono">{formatFixed(fxInfo.impliedRate, 4)}</span>
                         {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
-                            <span class="text-amber-500">⚠️</span>
+                            <span class="text-lf-warning">⚠️</span>
                         {/if}
                     </span>
                 </Tooltip>

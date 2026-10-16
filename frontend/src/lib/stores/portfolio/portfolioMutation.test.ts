@@ -178,3 +178,98 @@ describe('portfolio mutation listeners (page cache, phase 1)', () => {
         expect(second.mock.calls[0][0]).toMatchObject({kind: 'refresh'});
     });
 });
+
+/**
+ * The price catch-up signal (workstream Z, lot Z-13).
+ *
+ * When the server has caught up on prices and updated something, `priceRefresh` (lot Z5) tells the portfolio views.
+ * Until now it sent «Aggiorna»'s `{kind: 'refresh'}`: the caches turned stale, but no page on screen could tell that
+ * signal from the one its own «Aggiorna» sends, so the open Dashboard kept the old figures until reloaded. The bus gets
+ * a signal of its own, `notifyPricesCaughtUp()` → `{kind: 'prices'}`, dispatched like the others: to every listener,
+ * once, a listener that throws keeping none of the others from hearing it. `requestPortfolioRefresh()` stays
+ * `{kind: 'refresh'}`, and a write stays `{kind: 'mutation', …}`.
+ *
+ * Red first: `notifyPricesCaughtUp` is not exported yet. It is read by name from the module, so its absence fails each
+ * case below with the contract in the message — not the whole file at import — and the type check of this file does
+ * not depend on the export landing first.
+ */
+describe('the price catch-up signal (Z-13)', () => {
+    function listen(name: string) {
+        const listener = vi.fn();
+        const stop = registerPortfolioMutationListener(`portfolioMutation.test:prices:${name}`, listener);
+        onTestFinished(stop);
+        return {listener, stop};
+    }
+
+    function pricesSignal(): () => void {
+        const notifyPricesCaughtUp = (portfolioMutation as unknown as {notifyPricesCaughtUp?: () => void}).notifyPricesCaughtUp;
+        expect(typeof notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up can only send «Aggiorna»’s signal, and no page on screen can tell it apart to reload').toBe('function');
+        return notifyPricesCaughtUp!;
+    }
+
+    function refreshSignal(): () => void {
+        const requestPortfolioRefresh = (portfolioMutation as unknown as {requestPortfolioRefresh?: () => void}).requestPortfolioRefresh;
+        expect(typeof requestPortfolioRefresh, 'portfolioMutation no longer exports requestPortfolioRefresh(): «Aggiorna» lost its signal').toBe('function');
+        return requestPortfolioRefresh!;
+    }
+
+    it('notifyPricesCaughtUp() calls every listener once with exactly {kind: "prices"}', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const first = listen('every-a').listener;
+        const second = listen('every-b').listener;
+
+        notifyPricesCaughtUp();
+
+        expect(first).toHaveBeenCalledTimes(1);
+        expect(second).toHaveBeenCalledTimes(1);
+        expect(first.mock.calls[0][0], 'the price catch-up must arrive as {kind: "prices"} and nothing else: the pages reload on that kind, the stores mark stale on any').toEqual({kind: 'prices'});
+        expect(second.mock.calls[0][0]).toEqual({kind: 'prices'});
+    });
+
+    it('keeps the three signals apart: «Aggiorna» stays refresh, the catch-up is prices, a write stays mutation', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const requestPortfolioRefresh = refreshSignal();
+        const {listener} = listen('kinds');
+
+        requestPortfolioRefresh();
+        notifyPricesCaughtUp();
+        notify('POST', '/api/v1/transactions/commit');
+
+        expect(
+            listener.mock.calls.map(([signal]) => signal),
+            'a page that reloads on the price catch-up must not reload on «Aggiorna» (which reloads by itself, forced) nor on a write: the three kinds must stay distinct',
+        ).toEqual([{kind: 'refresh'}, {kind: 'prices'}, {kind: 'mutation', method: 'POST', path: '/api/v1/transactions/commit'}]);
+    });
+
+    it('a listener that throws on the price catch-up keeps none of the others from hearing it, and is reported', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => consoleError.mockRestore());
+        const before = listen('throws-before').listener;
+        const failing = listen('throws').listener;
+        failing.mockImplementation(() => {
+            throw new Error('synthetic: a page listener failed');
+        });
+        const after = listen('throws-after').listener;
+
+        expect(() => notifyPricesCaughtUp(), 'a failing listener made the signal throw: priceRefresh would end its check with an error').not.toThrow();
+
+        expect(before).toHaveBeenCalledTimes(1);
+        expect(failing).toHaveBeenCalledTimes(1);
+        expect(after, 'a listener registered after the failing one never heard the price catch-up').toHaveBeenCalledTimes(1);
+        expect(after.mock.calls[0][0]).toEqual({kind: 'prices'});
+        expect(consoleError, 'the failure was swallowed without a trace').toHaveBeenCalled();
+    });
+
+    it('a listener removed before the signal does not hear it (a page destroyed before the catch-up ends)', () => {
+        const notifyPricesCaughtUp = pricesSignal();
+        const kept = listen('kept').listener;
+        const removed = listen('removed');
+
+        removed.stop();
+        notifyPricesCaughtUp();
+
+        expect(removed.listener, 'a removed listener still heard the price catch-up: a destroyed page would reload').not.toHaveBeenCalled();
+        expect(kept, 'premise: the signal was sent').toHaveBeenCalledTimes(1);
+    });
+});

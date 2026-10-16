@@ -12,7 +12,9 @@
  * @module lib/theme/chartPalettes
  */
 
-import {CATEGORY_SEQUENCE, categoryColor} from './chartCategories';
+import {CATEGORY_SEQUENCE, categoryColor, sequenceColor} from './chartCategories';
+import {shadePoles, type ShadePoles} from './chartShades';
+import {chartRoles} from './roleColors';
 import type {ThemePair} from './themePair';
 
 /** Default line colours of a new chart signal; `registry.ts` picks the one farthest in hue from those in use. The same in both themes. */
@@ -26,9 +28,13 @@ export const GEO_CHOROPLETH_SCALE: ThemePair<string[]> = {
 
 /**
  * The colour of the Growth chart's P&L broker line `index`: the first eight asset types of the designer's table, in its
- * order, cycled (GR5: «devono tutte seguire la nuova famiglia cromatica»). Read at each draw through `categoryColor`, so
- * a Designer Lab edit of a category reaches the lines (C1, TD-1b).
+ * order, then the same eight one shade further at each round, never a silent repeat (GR5, `sequenceColor`; DV-8). Read
+ * at each draw through `categoryColor`, so a Designer Lab edit of a category reaches the lines (C1, TD-1b).
+ *
+ * `poles` are the GR4 poles of the chart's theme. By default those of the page's card (`chartRoles` on `<html>`), read
+ * only from the ninth line on, where a shade is needed: the Growth chart sits on the page's card, in no forced theme.
  */
-export function growthBrokerColor(index: number, dark: boolean): string {
-    return categoryColor('type', CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length], dark);
+export function growthBrokerColor(index: number, dark: boolean, poles?: ShadePoles): string {
+    if (index < CATEGORY_SEQUENCE.length) return categoryColor('type', CATEGORY_SEQUENCE[index], dark);
+    return sequenceColor('type', CATEGORY_SEQUENCE, index, dark, poles ?? shadePoles(dark, chartRoles(dark).color('--lf-surface-card')));
 }

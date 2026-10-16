@@ -113,7 +113,7 @@
         return `${value < 0 ? '\u2212' : '+'}${formatPercent(Math.abs(value), {scale: 100, signed: false, digits: 1})}`;
     }
 
-    const VALUE_CLASS = 'tabular-nums text-gray-600 dark:text-gray-300';
+    const VALUE_CLASS = 'tabular-nums text-lf-secondary';
 
     type ValueColumn = 'weight' | 'volatility' | 'expectedReturn' | 'sortino' | 'sharpe' | 'beta' | 'correlation';
 
@@ -182,7 +182,7 @@
         const iconHtml = icon ? `<img src="${escapeHtml(icon)}" alt="" class="h-5 w-5 shrink-0 object-contain" data-testid="${prefix}-icon" />` : '';
         const assetId = role === 'benchmark' ? ` data-asset-id="${row.assetId}"` : '';
         const reference = row.added ? ` data-reference="${role}"` : '';
-        return `<div class="flex min-w-0 items-center gap-2" data-testid="${prefix}-name"${reference}${assetId}>${roleMarkHtml(role)}${iconHtml}<span class="min-w-0 flex-1 text-gray-700 dark:text-gray-200 ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
+        return `<div class="flex min-w-0 items-center gap-2" data-testid="${prefix}-name"${reference}${assetId}>${roleMarkHtml(role)}${iconHtml}<span class="min-w-0 flex-1 text-lf-secondary ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
     }
 
     /**
@@ -289,7 +289,7 @@
 
 <div class="space-y-4">
     {#if title}
-        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">{title}</h4>
+        <h4 class="text-sm font-medium text-lf-secondary">{title}</h4>
     {/if}
 
     <div bind:this={tableWrapper} class="risk-return-table" data-testid="{testIdPrefix}-table" data-row-count={assetRowCount} data-reference-count={addedRowCount}>
@@ -324,7 +324,7 @@
                  by tens of percentage points, and a reader seeing "-11%" beside a coin that halved
                  will not guess that the word "average" was the warning — so the warning is the
                  part in bold. -->
-            <ul class="mt-1 space-y-0.5 text-xs text-gray-500 dark:text-gray-400" data-testid="{testIdPrefix}-scatter-note">
+            <ul class="mt-1 space-y-0.5 text-xs text-lf-muted" data-testid="{testIdPrefix}-scatter-note">
                 {#each notes as note (note)}
                     {#if note === 'outside'}
                         <li data-testid="{testIdPrefix}-scatter-outside">
@@ -340,7 +340,7 @@
                     {:else if note === 'above'}
                         <li>{$t('risk.levels.l3.scatter.notes.above')}</li>
                     {:else if note === 'return'}
-                        <li>{$t('risk.levels.l3.scatter.notes.expected')} <strong class="font-semibold text-gray-700 dark:text-gray-200">{$t('risk.levels.l3.scatter.notes.expectedWarning')}</strong></li>
+                        <li>{$t('risk.levels.l3.scatter.notes.expected')} <strong class="font-semibold text-lf-secondary">{$t('risk.levels.l3.scatter.notes.expectedWarning')}</strong></li>
                     {:else if note === 'priceOnly'}
                         <li data-testid="{testIdPrefix}-scatter-price-only">{$t('risk.levels.l3.scatter.notes.priceOnly')}</li>
                     {:else if note === 'line'}
