@@ -577,7 +577,13 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
 | 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
 | 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
-| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ⏳ validato il 15/10 su `a0915bef9` più il delta; checkpoint da committare |
+| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
+| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | ✅ commit `7df164689`; validato nello slot unico del 16/10 (02:08–03:21) su `abc4c84de`; ingresso unico con 13–15 |
+| 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `078d4dcf8`; validato nello slot unico; ingresso unico |
+| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
+| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
+| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 bozza su copie, patch pronta; dopo l'ingresso di DV (~07:20), slot verso le 07:30 |
 
 ## Avanzamento
 
@@ -1511,3 +1517,409 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **Dove guardarlo** (per il developer): Dashboard, la fila dei tre KPI in alto (P&L del periodo, Rendimenti con
 > l'effetto tempi, Patrimonio netto), in chiaro e in scuro; le tabelle Contributo ed Esposizione sotto; nei pannelli
 > rischio le card delle metriche (striscia e valore) e il tornado dello stress test.
+
+> **Ingresso:** commit `96a7c5bbb` nel target (15/10, 23:4x).
+
+### TD-3 e W3-b — 🔄 15/10/2026 (la card «Allocazione Patrimoniale»; il segno su mercato e broker; D-T27)
+
+> **Avvio** (coordinatore, 23:4x): OK a TD-3 e a W3-b, la 1.3 informata. **Escluso `brokers/lots/LotCustodyModal.svelte`**
+> (J ha modifiche aperte nel suo worktree, righe 17 e 181): le sue due funzioni di segno, `signedToneClass` ed
+> `eventDetailToneClass` (righe 103–114, copie scritte a mano di `SIGN_TEXT.market`), vanno in un lotto dopo l'ingresso
+> di J. Se Y3 sposta `AllocationPanel.svelte` prima dell'ingresso, il merge di base lo segue coi rinomini. Dalle 00:00
+> alle 01:15 la finestra di G-13: solo scrittura e prove leggere; poi lo slot va a Y7 e a DV, poi a T.
+
+> ✅ **1 · TD-3, `dashboard/AllocationPanel.svelte`** (nota della designer nel giro 2: la card su `--lf-surface-card`, i
+> pulsanti di scelta attivi su `--lf-action` `#215240` invece del vecchio verde acceso). La card → `bg-lf-card
+> text-lf-primary border border-lf-subtle shadow-sm shadow-lf-shadow-card`; il titolo → `text-lf-secondary`; i due
+> gruppi di pulsanti → `border-lf-subtle`, attivo `bg-lf-action text-lf-on-action`, inattivo `bg-lf-card text-lf-muted
+> hover:bg-lf-hover`, divisori `border-l border-lf-subtle`; lo skeleton → `bg-lf-neutral`; «nessun dato» →
+> `text-lf-muted`. I grafici dentro sono di DV. Lo stesso pannello è nel dettaglio di ogni broker. I test leggono
+> `aria-pressed`, non i colori: nessun test da toccare.
+> - **Da rivedere (D-T27):** i pulsanti attivi seguono la designer (`--lf-action`), non D-T16 (`--lf-checked`, il verde
+>   focus `#236B4D` / `#429E79`, per i segmenti attivi); solo in questo pannello.
+
+> ✅ **2 · W3-b, il segno su mercato e broker:**
+> - `lib/theme/toneClasses.ts`: `SIGN_TEXT.market` e `.brokerCard` → `text-lf-gain` / `text-lf-loss`, `market.none` →
+>   `text-lf-muted`. Ora tutte le voci di `SIGN_TEXT` e `SIGN_BAR` sono sui ruoli; il commento del modulo descrive la
+>   deriva che resta, quella degli stati;
+> - `app.css`, il flash del prezzo live (`.lf-price-flash-*`, dettaglio dell'asset): picco `var(--lf-gain)` /
+>   `var(--lf-loss)`, riposo `var(--lf-text-secondary)`; via le quattro regole `html.dark`;
+> - copie scritte a mano delle stringhe di segno, trovate come in `KpiSection`: la direzione del prezzo live di
+>   `AssetTable` (riga 217) e di `AssetCard` (riga 224, il neutro → `text-lf-primary`), il neutro del prezzo di
+>   `AssetPriceSummary` (riga 95 → `text-lf-secondary`, lo stesso ruolo del riposo del flash: nessun salto a fine
+>   animazione);
+> - `CompactCashCell`: i bordi di segno leggono i ruoli nel `<style>`, `color-mix(in oklab, var(--lf-gain) 70%,
+>   transparent)`, e i due token `--lf-cmp-compact-cash-cell-sign-{ok,bad}-border` escono da
+>   `lib/theme/components/table.css` (il gate dei token di componente vuole ogni token definito letto da un
+>   componente). **⚠️ Fuori pista:** non li ho ridefiniti sui ruoli dentro `table.css`, perché i token di componente
+>   stanno su `:root`: un `var(--lf-gain)` lì si risolverebbe col tema della radice e non seguirebbe i sottoalberi
+>   forzati `.light` / `.dark` (l'anteprima del Lab), che invece `tokens.css` ricalcola.
+> - Cambiano aspetto senza modifiche: `FxCard`, `FxPriceSummary`, `FxTable`, `BrokerCard`, `MeasurePanel`. Nessun test
+>   legge questi colori; gli E2E del flash leggono i nomi `lf-price-flash-*`, invariati.
+
+> ✅ **3 · Prove leggere** (23:5x): Prettier verde sugli 8 file; `--check` pulito, 5 file sotto il record; `diff --check`
+> pulito. `--update` (00:00): m1 10.980 → 10.916, cioè `AllocationPanel` 42 → 0 (la riga esce dalla baseline: il file è
+> tutto sui ruoli), `toneClasses` 176 → 166, `AssetCard` 76 → 70, `AssetTable` 27 → 23, `AssetPriceSummary` 15 → 13;
+> `--check` pulito, 0 file sotto il record.
+
+> ✅ **4 · Checkpoint di scrittura** (coordinatore, 00:00, scelta (a)): `toneClasses.ts` sta sia in W3-b sia in W3-c/d,
+> quindi i lotti non si separano per path. TD-3 e W3-b si committano adesso con le sole prove leggere; W3-c/d si scrive
+> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso. Commit `7df164689`.
+
+> **Dove guardarlo** (per il developer): Dashboard, la card «Allocazione Patrimoniale» in scuro (sfondo come le altre
+> card; Ora/Storico e Tipo/Settore/Geografica attivi sul verde azione), e la stessa nel dettaglio di un broker; liste di
+> asset e cambi (card e tabella), dettaglio dell'asset, card dei broker e misura del grafico: i delta ▲▼ e il flash del
+> prezzo live sui ruoli.
+
+### W3-c e W3-d — 🔄 16/10/2026 (gli stati e la polarità sui ruoli; D-T27)
+
+> **Avvio** (coordinatore, 00:0x): scelta (a), commit di scrittura di TD-3 + W3-b `7df164689`; OK a
+> `ToastContainer.svelte` e a `ReportSetCard.svelte:351`, la 1.3 informata. Le scelte «da rivedere» vanno nella lista
+> del developer; il toast d'errore pieno è una delle domande aperte alla designer (la pagina dei toast). `DistributionEditor`
+> va con W1-d: l'asserzione `text-green-600` di `gallery.spec.ts:6067` la cambia G dopo G-13, in fila dal coordinatore.
+
+> ✅ **1 · Analisi** (sotto-agente `explore`, sola lettura): mappa voce per voce, consumatori, G3, copie scritte a mano,
+> test. Nessun G3: ogni valore arriva su un elemento senza altri colori (`BADGE_BASE` e `NOTICE_BASE` del pianificatore
+> sono solo layout; `AssetChip` aggiunge solo `border` e `border-dashed`). Nessun test legge questi colori. Le 16
+> utility di stato esistono tutte, con `danger-solid`, `on-status` e `on-danger-solid`.
+
+> ✅ **2 · Le tabelle sui ruoli** (`lib/theme/toneClasses.ts`):
+> - `STATUS_TONES`: icone della sincronizzazione `text-lf-success` / `-warning` / `-danger`, saltato e sconosciuto
+>   `text-lf-muted`; badge e avvisi del pianificatore PAC, stati dei report set, badge dei set di file, chip del rischio
+>   e banner della qualità dei dati sulla tinta (`bg-lf-X-soft text-lf-X-on-soft`, più `border-lf-X-line` dove c'è un
+>   bordo); i toast pieni `bg-lf-X text-lf-on-status`; i chip neutri `bg-lf-neutral text-lf-secondary`, come la pillola
+>   «Aggiornamenti in pausa»; il chip escluso, tratteggiato, `border-lf-subtle text-lf-muted`;
+> - `POLARITY_TONES`: le barre del contributo al rischio `bg-lf-danger` / `bg-lf-info`, i poli della correlazione; la
+>   divergenza, dove più alto è peggio, `danger` / `success` per il testo e la barra;
+> - restano classi di palette solo i categoriali: `KIND_TONES.identifier` (ISIN azzurro, simbolo viola, nome ardesia) e
+>   `fileSet.combined` (indaco). Il commento del modulo lo dice.
+
+> ✅ **3 · Le copie scritte a mano nello stesso widget:** `ToastContainer`, il pulsante di chiusura
+> `hover:bg-lf-on-status/20` e il conto alla rovescia `bg-lf-on-status/15` e `/40`: seguono il testo sul pieno, quindi in
+> scuro sono scuri su un pieno chiaro; `ReportSetCard:351`, il badge «analizzato» → `bg-lf-info-soft text-lf-info-on-soft`,
+> come lo stato accanto.
+
+> **Da rivedere (D-T27):**
+> - i toast in scuro passano a pieni chiari col testo scuro, lo stile «pieno» dei ruoli; anche l'errore, su `danger` +
+>   `on-status` come gli altri tre e non su `danger-solid`, che è dei pulsanti col testo bianco (Q3);
+> - `DataQualityBanner` tiene gli errori nel tono d'avviso, come prima; il suo pulsante sta un passo sopra la tinta,
+>   `bg-lf-X-line/50 hover:bg-lf-X-line`, perché manca un ruolo per l'hover su una tinta;
+> - la barra PAC «bilanciata» passa da `libre-green` a `bg-lf-success`; la «sconosciuta» va su `bg-lf-neutral`, e la sua
+>   traccia in `TargetsStep` resta di palette, come quella di `RiskAnalysisPanel`: un neutro più forte per un riempimento
+>   non esiste;
+> - i chip neutri (`gray-100`) vanno su `bg-lf-neutral`, un passo più scuri in chiaro.
+> - **Rimandato a W1-d:** `ui/input/DistributionEditor.svelte`, righe 138 e 527, copie di `pacTargetBar` e
+>   `pacTargetTotal`, dopo che G avrà portato l'asserzione di `gallery.spec.ts:6067` su un attributo `data-`.
+
+> ✅ **4 · Prove leggere** (00:0x): Prettier verde sui 3 file; `--update` m1 10.916 → 10.765, cioè `toneClasses` 166 → 22
+> (restano i categoriali), `ToastContainer` 3 → 0 (la riga esce), `ReportSetCard` 79 → 75; `--check` pulito, 0 file sotto
+> il record; `diff --check` pulito. Le prove pesanti nello slot, dopo Y7 e DV, su TD-3, W3-b, W3-c e W3-d insieme.
+
+> **Dove guardarlo** (per il developer): i toast, in chiaro e in scuro (salvare un'impostazione, una sincronizzazione);
+> il pianificatore PAC (badge, avvisi, barra e totale della distribuzione); il banner della qualità dei dati sulla
+> dashboard; l'import delle transazioni (lo stato dei report set); i badge dei set di file; nel rischio i chip degli
+> asset, le barre del contributo e la divergenza della diversificazione; l'esito di una sincronizzazione.
+
+> **Commit:** `078d4dcf8` (coordinatore, 16/10, 00:1x; 6 file, genitore `7df164689`).
+
+### I1 — 🔄 16/10/2026 (W1-a e W1-b, i selettori di `ui/select`; le funzioni di segno di `LotCustodyModal`; D-T27)
+
+> **Avvio** (coordinatore, 00:14): OK a I1 con due sotto-agenti su file disgiunti e sole prove leggere; nessun worktree
+> ha modifiche aperte in `ui/select/`, la 1.3 avvisata.
+> - `ImportPluginSelect`: Y5 (broker → `features/brokers/`) ne riscriverà una riga d'import, entrando dopo di noi.
+> - `brokers/lots/LotCustodyModal.svelte` (il resto di W3-b) si scrive quando il coordinatore dice che J CP-16 è entrato
+>   (~01:00): stesso lotto, prima di Y5.
+> - **`frontend/scripts/theme/theme-roles.mjs` non si tocca fino all'ingresso di Y5:** Y sposta l'eccezione della riga
+>   70 (`lotComparisonChartHelpers.ts`) insieme al file.
+> - **Uno slot solo**, ~60 minuti, subito dopo DV (verso le 02:10): W3 (TD-3, W3-b, W3-c, W3-d), `LotCustodyModal` e I1.
+>   Prima del via, il checkpoint di I1 con `LotCustodyModal` (commit a parte), poi la base del coordinatore con DV e
+>   CP-16.
+
+> 🔄 **1 · Scrittura** (00:15): due sotto-agenti `general-purpose`, in parallelo su file disgiunti, col prompt comune
+> della bozza qui sopra e i blocchi di W1-a e W1-b: W1-a gli 11 selettori generici (`SearchSelect`, `SimpleSelect`,
+> `SelectPopover`, `TreeSelect`, `CheckMenu`, `CountrySearchSelect`, `CurrencySearchSelect`, `SectorSearchSelect`,
+> `UserSearchSelect`, `AssetTypeSelect`, `ImportPluginSelect`); W1-b i 3 di dominio (`AssetPickerPanel`, `AssetSelect`,
+> `FxProviderSelect`). Poi `test-author` su `SimpleSelect.test.ts:74-76`, che elenca le classi del trigger una per una.
+
+> ✅ **2 · W1-b** (sotto-agente, 00:30): i 3 file a m1 0 e m2 0 per il sotto-agente, nessun G3; `--check` pulito,
+> Prettier verde. Campi e trigger sui ruoli del campo (`bg-lf-field border-lf-input`, aperto `ring-lf-focus
+> border-lf-focus`), caselle D-T16, righe evidenziate `bg-lf-selected`, stati dei provider sui ruoli di stato (tinte
+> `-soft`/`-on-soft`/`-line`), badge inattivi e di ripiego `bg-lf-neutral text-lf-secondary` (il testo attenuato sulla
+> traccia neutra è a 4,0:1, il secondario no). Restano legacy i badge dei provider e della priorità, che prendono il colore
+> da `getProviderColor` / `getPriorityBadgeStyle` di `lib/utils/colors.ts` (categoriali), con le loro due regole
+> `:global(.dark)`.
+> - **⚠️ Fuori pista — l'ordine delle utility:** Tailwind 4 emette due utility base della stessa proprietà in ordine
+>   alfabetico, e vince l'ultima. Con la palette `border-gray-300` veniva prima di `border-libre-green`, quindi il trigger
+>   aperto era verde per caso; coi ruoli `border-lf-focus` viene prima di `border-lf-input`, e il bordo di focus
+>   perderebbe. Regola per tutte le ondate: due colori della stessa proprietà su un elemento stanno nei due rami di un
+>   ternario, mai uno sempre presente. Correzione mandata al sotto-agente di W1-a mentre lavorava; scansione
+>   `/tmp/libreFolio_T_r2/same_prop_scan.py` (gli attributi `class` con due utility base della stessa proprietà) sui tre
+>   file di W1-b: tre casi, tutti ternari esclusivi. La stessa scansione sui 44 file già sui ruoli (piloti, W3, TD-3):
+>   nessun caso fuori da un ternario esclusivo (un falso positivo in `PasswordStrength`, dove l'elemento prende un solo
+>   `textColor`).
+> - **⚠️ Fuori pista — Q10 aspetta il tooltip:** il sotto-agente aveva portato l'avviso dentro il tooltip di
+>   `FxProviderSelect` (riga 466, `#fbbf24`) su `var(--lf-warning-on-inverse)`. Ma `ui/feedback/Tooltip.svelte` disegna
+>   ancora un tooltip scuro nei due temi (`#1f2937`, in scuro `#61666f`): l'avviso del tema opposto, pensato per il
+>   tooltip invertito chiaro del tema scuro, lì sarebbe `#AE4E00` su `#61666F`, 1,07:1. Riga ripristinata a `#fbbf24`
+>   (m2 1, come il record): l'avviso migra con `Tooltip.svelte`, in un lotto a parte (da proporre).
+> - **Da rivedere:** la riga evidenziata di `AssetPickerPanel` era verde al 30 % in chiaro e piena verde col testo bianco
+>   in scuro, ora è `bg-lf-selected` (12 %), molto più quieta in scuro.
+
+> ✅ **3 · W1-a** (sotto-agente, 00:4x): gli 11 file a m1 0, nessun G3, `--check` pulito, Prettier verde. Trigger nei tre
+> stati, campi di ricerca, pannelli (`bg-lf-card border-lf-raised shadow-lg shadow-lf-shadow`), opzioni, caselle D-T16,
+> intestazioni, vuoti, badge di conteggio, avatar di ripiego.
+> - **Correzione dell'ordine** (ricevuta mentre lavorava): il bordo del trigger in un solo ternario, `{isOpen ? 'ring-2
+>   ring-lf-focus border-lf-focus' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}`
+>   (`SearchSelect`; in `SimpleSelect` con `disabled || loading`, che possono accendersi a lista aperta); l'hover solo
+>   nel ramo chiuso, anche in `TreeSelect`; le righe di `SimpleSelect` `{evidenziata ? 'bg-lf-selected' : selezionata ?
+>   'bg-lf-selected/50' : 'hover:bg-lf-hover'}`, quindi ora l'evidenziazione da tastiera vince sulla selezione, prima il
+>   contrario. Scansione rifatta: tutti i casi sono ternari esclusivi.
+> - **Le props di classe dei chiamanti** (`triggerBorderClass`, `triggerClass`, `rootClass`, `panelClass`,
+>   `fieldsClass`): passano solo layout o ruoli, nessun G3 a runtime.
+> - **Da rivedere:** il bordo quasi nero del selettore dei segnali (`TreeSelect:83`, `border-gray-900`) → `border-lf-input`,
+>   più chiaro in chiaro: manca un ruolo per un bordo di campo forte; il filtro attivo di `CheckMenu` (blu) sui ruoli
+>   `info` (i ruoli della selezione l'avrebbero fatto verde); l'evidenziazione scura di `SearchSelect`, piena verde col
+>   testo bianco, ora `bg-lf-selected`; il trigger di `SearchSelect` ora nomina il bordo (prima in chiaro era nel colore
+>   del testo).
+
+> ✅ **4 · `test-author`, `SimpleSelect.test.ts`** (00:5x): i gruppi del trigger divisi in superficie (abilitata,
+> non disponibile) e bordo (a riposo, non disponibile, aperto); 7 stati, con «caricamento» chiuso e «aperto, poi
+> caricamento/disabilitato» raggiunti con `rerender` a lista aperta; un test nuovo vuole a lista aperta `border-lf-focus`
+> e nessun bordo chiuso; la radice `['relative', 'text-lf-primary']`. 31 → 40 test, 40/40; provato che il test nuovo
+> fallisce coi bordi chiusi accanto a quello di focus (tre rossi, gli stati aperti), poi tolto.
+> - **⚠️ Fuori pista:** test-author ha notato che una select disabilitata a lista aperta resta aperta e un clic del mouse
+>   su un'opzione la sceglie ancora (solo la tastiera controlla `disabled || loading`). Viene da prima dei colori: riga
+>   **TC-11** del backlog.
+
+> ✅ **5 · `LotCustodyModal`** (00:50, dopo l'ingresso di J CP-16, `240675ad1`): `signedToneClass` ed
+> `eventDetailToneClass` sulle tabelle, `SIGN_TEXT.portfolio` per guadagno, perdita e zero; il valore assente e il
+> neutro degli eventi → `text-lf-primary`. L'import di `SIGN_TEXT` sta dopo `maskableQuantity`, lontano dalla riga 17
+> che J cambia (la base del coordinatore, simulata, è pulita). m1 219 → 205; il resto della modale va con W5.
+> - **Da rivedere:** il neutro degli eventi era `slate-700` in chiaro (fra primario e secondario) e `slate-100` in scuro.
+
+> ✅ **6 · Prove leggere** (00:5x): Prettier verde sui 16 file; scansione dell'ordine; `--update` m1 10.765 → 10.223
+> (13 dei 14 file di I1 escono dalla baseline; `FxProviderSelect` resta col solo `#fbbf24`; `LotCustodyModal` 205);
+> `--check` pulito; `diff --check` pulito; `theme-roles.mjs` non toccato (Y5). `front check`, `component-unit` ed E2E
+> nello slot unico.
+
+> **Dove guardarlo** (per il developer): tutte le select, in chiaro e in scuro, aperte e chiuse — Impostazioni
+> (preferenze), la modale dell'asset (tipo ad albero, settore, paese, valuta), la modale delle transazioni (asset,
+> broker), l'aggiunta di una coppia di cambi (la scelta della rotta dei provider), il laboratorio del rischio (asset,
+> filtro dei broker), la condivisione di un broker (utenti), i segnali del grafico; la modale di custodia di un lotto
+> (le cifre col segno).
+
+> **Commit:** `6345f6950` (`LotCustodyModal`) e `1c16151a1` (I1); base del coordinatore `7d78607df` (target `03ec20ac8`,
+> con J CP-16 e X CP11a): `LotCustodyModal` fuso da solo, il mio import, la riga di J con `closureValueLabelKey`, le mie
+> due funzioni, la sua etichetta alla 182; `--check` pulito.
+
+### W1-d e Q10 — 🔄 16/10/2026 (i campi di `ui/input`; il tooltip sul fondo invertito; D-T27)
+
+> **Avvio** (coordinatore, 00:5x–01:1x). Lo slot unico si sposta verso le 02:30–02:40 (dopo r2 di G, la galleria mobile
+> di Y7 e DV); fino alle 02:20 si scrive, e quello che è committato a quell'ora entra nello slot, che resta sotto i 75
+> minuti. **W1-d** sbloccato da G alle sue condizioni: in `gallery.spec.ts` solo le righe 6064 e 6067–6068, sullo span
+> `distribution-total-{kind}` un attributo di stato e non di colore, e nello slot una galleria filtrata a 1 worker,
+> desktop e mobile, le cui impronte 🔎 delle due scene siano uguali a `g-ref13-r1`/`r2` (`/tmp/librefolio-g13-ref/
+> compare_fingerprints.py`). OK di W per `TransactionFormModal.test.ts` 791–792 e 834–838. **Q10** approvato dalla
+> designer (`risposta-1-originale.txt`): tooltip sul fondo invertito, avviso su `--lf-warning-on-inverse`; la regola si
+> estende (coordinatore) a successo, pericolo, info e attenuato, «da rivedere». OK della 1.3, per W e X, a
+> `fxConversionHelper.ts:118–131`, `WacPreviewSection.svelte:321–322` e `providerProbe.ts:111`, solo colori.
+
+> ✅ **1 · W1-d, ridotto a 2 file** (sotto-agente, 01:1x). `DistributionEditor`: barra e totale sui ruoli di stato, gli
+> stessi valori di `pacTargetBar` / `pacTargetTotal`, traccia `bg-lf-neutral`, ✅/⚠ sui ruoli, testi attenuati; sullo span
+> del totale `data-state={isValid ? 'valid' : isExcess ? 'excess' : 'missing'}`, coi rami della classe. `TagInput`: campo
+> `bg-lf-field border-lf-input`, menu `bg-lf-card border-lf-raised shadow-lg shadow-lf-shadow`, suggerimento evidenziato
+> `bg-lf-selected` (prima blu), anello del chip a fuoco `ring-lf-focus ring-offset-lf-field`, i ripieghi del `<style>` sui
+> ruoli; i colori dei chip da `getStringBadgeStyle` restano (categoriali). Nessuno dei due riceve classi dai chiamanti.
+> - **⚠️ Fuori pista — `ExactDecimalInput` ed `ExactQuantityInput` rimandati:** i chiamanti passano classi di palette
+>   dentro `className`. Il pianificatore PAC passa `INPUT` (`ui.ts:39`: `bg-white`, `border-gray-300`, `dark:…`) a
+>   `TargetInputCell`, `AssetsStep`, `RoutingStep`: col campo sui ruoli il suo `dark:border-gray-600` (variante) batterebbe
+>   il bordo d'errore `border-lf-danger` (base), e in scuro l'errore sparirebbe. `TxFormSingleSection:185,233` e
+>   `TxFormPairSection:200` forzano `!bg-white`: col campo sui ruoli il remap scuro non vale più, e in scuro il campo
+>   sarebbe bianco col testo chiaro. In più `ExactQuantityInput.test.ts:284`, `TransactionFormModal.test.ts:803–813, 826`
+>   e `transactions-modals.spec.ts:1171–1203` leggono i colori dello stile in linea. I due file tornano come in HEAD; le
+>   bozze del sotto-agente stanno in `files/W1d-deferred/` della sessione. Vanno con i loro chiamanti (pianificatore, form
+>   delle transazioni), in un lotto con l'OK dei proprietari. Il test di `TransactionFormModal` non serve più stanotte.
+> - `gallery.spec.ts` (test-author): il commento della 6064 e le asserzioni 6067–6068 su
+>   `toHaveAttribute('data-state', 'valid', {timeout: 5_000})`; nient'altro (la 6027 dice ancora «green 100% total badge»:
+>   è di G).
+
+> ✅ **2 · Q10** (01:1x). Ruoli nuovi in `tokens.css`, coi valori del tema opposto, e le utility:
+> `--lf-danger-on-inverse` `#FF7A86` / `#C82838` (6,34 / 4,86:1 sul tooltip `#1C2420` / `#EDF2F0`),
+> `--lf-info-on-inverse` `#3F86FA` / `#155EEF` (4,54 / 4,78:1), `--lf-text-muted-on-inverse` `#7F8C87` / `#616D67`
+> (4,54 / 4,77:1); il verde non serve (nessun tooltip ne ha). `Tooltip.svelte`: fondo `var(--lf-surface-inverse)`, testo
+> `var(--lf-text-on-inverse)`, ombra `var(--lf-shadow-raised)` come i menu (Q8), KaTeX `var(--lf-info-on-inverse)`; via la
+> regola `html.dark`. I contenuti col colore per il fondo scuro (mappa di un `explore`, gli altri costruttori non hanno
+> colori): `fxConversionHelper` (etichette → `text-lf-muted-on-inverse`, «⚠️ non aggiornato» →
+> `text-lf-warning-on-inverse`), `WacPreviewSection:321–322` (data → avviso, tasso vecchio → `text-lf-danger-on-inverse`),
+> `FxProviderSelect:466` (`#fbbf24` → `class="text-lf-warning-on-inverse"`), `providerProbe.ts:111` (il bordo delle
+> intestazioni → `color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent)`).
+> - `test-author`: in `themeTokens.gate.test.ts` le 3 coppie nuove su `surface-inverse` e un controllo di parità (ogni
+>   `X-on-inverse` di un tema è la `X` dell'altro, trovati per nome, non vuoto, con un foglio difettoso permanente che
+>   deve dare 6 rilievi); in `sanitizeHtml.test.ts` un caso col markup vero della sonda: DOMPurify 3.4.8 tiene lo stile
+>   con `color-mix(… var(…) …)` com'è scritto e la classe. 28/28, provati rossi coi valori sbagliati.
+> - **Da rivedere:** in scuro tutti i tooltip dell'app diventano chiari col testo scuro; l'ombra dei tooltip è quella dei
+>   menu, più marcata; info e attenuato in chiaro stanno a 4,54:1, al filo della soglia (la parità li lega ai valori
+>   dello scuro).
+
+> ✅ **3 · Prove leggere** (01:2x–01:37): Prettier verde sugli 11 file; `--update` m1 10.223 → 10.166 e m2 83 → 71 (escono
+> dalla baseline `Tooltip`, `providerProbe`, `fxConversionHelper`, `FxProviderSelect`, `DistributionEditor`, `TagInput`;
+> `WacPreviewSection` 96 → 94); `--check` pulito; `diff --check` pulito; Vitest mirati sotto `nice -n 10` (dopo r2 di G,
+> come chiesto): `Tooltip`, `TagInput`, `providerProbe`, `providerProbeState`, `fxConversionHelper`, gate dei token,
+> `sanitizeHtml`, `FxProviderSelect` 336/336, `WacPreviewSection` 4/4. `front check`, suite intere, E2E e la galleria
+> filtrata di G nello slot unico.
+
+> **Dove guardarlo** (per il developer): i tooltip, in chiaro e soprattutto in scuro (ora chiari col testo scuro) — i KPI
+> della dashboard, l'informazione sul cambio nella modale delle transazioni e nel bulk, l'anteprima WAC, la sonda del
+> provider nella modale dell'asset (la tabella col bordo delle intestazioni), la legenda della rotta dei provider dei
+> cambi (l'avviso), le formule KaTeX del pianificatore PAC; l'editor delle distribuzioni (settori, paesi) nella modale
+> dell'asset; il campo dei tag.
+
+> **Commit:** `eebbd1da4` (W1-d) e `17e26bfce` (Q10), dal coordinatore alle 01:38; albero pulito, `--check` pulito.
+> Approvato il ritiro di `ExactDecimalInput` ed `ExactQuantityInput`: vanno con i chiamanti, con l'OK dei proprietari.
+
+### Slot unico — ✅ 16/10/2026 (W3, I1, `LotCustodyModal`, W1-d, Q10: le prove pesanti)
+
+> **Via** (coordinatore, 02:08): valida `abc4c84de`, la base col target `57802d827` (DV, Y7, Z4, W-B31/36, E4a). Corsia
+> 6155 e `/tmp/librefolio-r2-t`, carico 33–38; script `/tmp/libreFolio_T_r2/slot_w3_i1.sh` in ordine di priorità, con lo
+> stop a 70 minuti e il resoconto di cosa resta; albero fermo durante lo slot.
+
+> ✅ **Esito** (02:08–03:21, 72 minuti, nessun passo saltato):
+> - `--check` pulito; `component-unit` 3.816/3.816; `risk-levels-component` 273/273;
+> - E2E a 1 worker, W3: `dashboard` 27, `banners` 20, `risk` 38, `asset-list` 28, il flash del prezzo 4, `fx-list` 12,
+>   `tx-import-report-set` 32 (più 32 saltati per progetto, come vuole lo spec: ogni test gira solo sul suo, desktop o
+>   `@mobile`), `files` 28, `pac-allocator-real` 1; I1 e W1-d: `select` 17, `asset-modal` 17, `transactions-modals` 25,
+>   `asset-classification` 4, `fx-add-pair` 11, `tx-import-upload` 10, `broker-sharing` 17, `fx-detail` 17, `risk-lab`
+>   44; Q10: `tooltip` 9;
+> - **la prova di G per W1-d:** galleria filtrata `Asset distribution editors`, 1 worker, desktop e mobile, 2 test verdi,
+>   32 scatti su 32; `compare_fingerprints.py` contro `g-ref13-r1`: `y`, `dh`, `vh`, `hdr` e `focus` uguali in tutti e 32.
+>   L'unico campo diverso è `charts` in 12 scatti (5 → 4 o 3): i grafici già disegnati sulla pagina dell'asset dietro la
+>   modale, un tempo, non un colore. Il coordinatore: «le impronte di W1-d tornano».
+> - **⚠️ Fuori pista — il client API vecchio:** lo script non apriva con `api sync`. Al primo giro `front check` 12 errori
+>   in 4 file e `core-unit` 15 rossi su 5.902, tutti in `features/email/verificationApi.test.ts`
+>   (`confirm_email_verification_… is not a function`): la base aveva portato gli endpoint della verifica email e `scope`
+>   in `UploadFileInfo`, e `generated.ts`, ignorato da git, era di prima. Nessun file di T. Il build del primo E2E
+>   (`cmd_fe_build`) l'ha rigenerato, col suo `svelte-check` 0 e 0; alle 03:22 `front check` 0 e 0 e
+>   `verificationApi.test.ts` 104/104. **Regola per gli slot:** aprire con `api sync`.
+> - Porta 6155 libera alla fine.
+
+> ✅ **Base** (coordinatore, 03:2x): `3b9c4ca1c`, col target `8850ad002` (Y4b, il rischio in `features/risk`: 103 file
+> che usano `toneClasses` spostati; H CP-U2, A6d/e, X CP11b, Z7b, B2); baseline e backlog fusi da soli. Cancello sulla
+> revisione unita, nella corsia: `api sync` rc 0, `front check` 0 e 0, `--check` pulito (03:24–03:25).
+
+### W1-c, W1-e e W2-a — 🔄 16/10/2026 (bozze su copie durante lo slot; D-T27)
+
+> **Avvio** (coordinatore, 01:4x–02:2x): OK a W1-c (10 file e `DateRangePicker.test.ts`; la 1.3 per
+> `fx-list.spec.ts:155` e `asset-data-editor.spec.ts:115,126`, solo quelle righe), a W1-e (`ModalBase`) e a W2-a
+> (la 1.3: A9 stanotte non c'è; H copierà direttamente i ruoli in `InstanceNotices`). Durante lo slot si scrive solo su
+> copie fuori dall'albero, in `files/W1c-draft`, `W1e-draft`, `W2a-draft` della sessione (`base/` dalla revisione dello
+> slot, `work/` convertita, `FILES`, `BASE_COMMIT`, `count_legacy.mjs` che importa in sola lettura i pattern del gate);
+> dopo l'ingresso le patch si applicano con `git apply --3way`, controllando prima `git diff <BASE_COMMIT> HEAD` sui loro
+> file. `theme-roles.mjs` non si tocca fino a Y5 (resta orfana la voce `ARBITRARY_ALLOWED` del coachmark).
+
+> ✅ **1 · W1-c** (sotto-agente su copie di `17e26bfce`): i 10 file da 225 classi legacy a 0. Il giorno di `CalendarMonth`
+> è una catena di rami esclusivi per sfondo e testo (selezionato e capi `bg-lf-checked text-lf-on-checked`, intervallo
+> `bg-lf-selected`, in sospeso `bg-lf-checked/50` col testo primario per il contrasto, oggi `ring-lf-focus`, fuori mese e
+> futuri `text-lf-muted`): il `!text-white` del piano non serve più. La cornice di `DateRangePicker` col bordo in un solo
+> ternario (aperto `ring-lf-focus border-lf-focus`, chiuso `border-lf-input hover:border-lf-input-hover`), e così il
+> testo d'errore dei campi. Preset attivi e segmento attivo di `ViewModeToggle` D-T16; preset inattivi riallineati da me
+> alla tabella della skill (`bg-lf-panel text-lf-secondary hover:bg-lf-neutral`, scuri al passaggio come oggi), testo
+> inattivo del toggle `text-lf-muted`; `CompactDurationBadge` attivo resta sull'avviso (ambra, oggi); `TabBar` attiva
+> `text-lf-link border-lf-focus bg-lf-selected`. Nessun chiamante passa classi di palette (`fieldClass`, `className`,
+> `tab.className`: solo classi d'immagine). `test-author` su copie: la cornice di `DateRangePicker.test.ts` divisa in
+> base, bordo chiuso e aperto, più un test che a calendario aperto vuole il bordo di focus e nessun bordo chiuso;
+> `fx-list.spec.ts:155` su `data-active`, `asset-data-editor.spec.ts:114–115, 126` su `aria-selected`. Patch
+> `w1c.patch`, 13 file; `git apply --check` pulito su `abc4c84de`.
+> - **Da rivedere:** al passaggio i preset inattivi si scuriscono come oggi; il badge personalizzato resta ambra; la
+>   sottolineatura al passaggio delle schede è del colore della riga sotto la barra.
+
+> ✅ **2 · W1-e** (io, su copie di `abc4c84de`): `ModalBase`, fondale `var(--lf-surface-overlay)` (Q13), pannello
+> `var(--lf-surface-card)` con l'ombra `var(--lf-shadow-raised)` (Q8), via la regola `.dark`; il bordo `border
+> border-lf-raised` (N3) e il testo `text-lf-primary` come classi nel markup. **⚠️ Fuori pista:** lo stile di un
+> componente sta fuori dai layer di Tailwind e batte ogni utility: un bordo nel `<style>` cancellerebbe il
+> `border-2 border-red-300 dark:border-red-700` che `AssetCurrencyChangeModal` passa in `contentClass`; come classi, le
+> sue vincono per ordine. Il `bg-white dark:bg-slate-*` di `LotCustodyModal` era già morto (vince lo sfondo del
+> componente) e resta tale. Nota per dopo: quando `AssetCurrencyChangeModal` migrerà (per esempio a
+> `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` e perderebbe: servirà una variante della modale.
+> Nessun test legge questi colori; `OnboardingCoachmark.test.ts` usa `modal-content` come selettore (il nome resta).
+> Patch `w1e.patch`; `git apply --check` pulito.
+
+> ✅ **3 · W2-a** (sotto-agente su copie di `abc4c84de`): gli 8 file da 240 classi legacy a 0. Il banner del bootstrap
+> sulla tinta d'avviso (il modello per H); il blocco con la card dal bordo `danger-line`; il coachmark con fondale
+> `bg-lf-overlay`, bagliore `border-lf-focus shadow-[0_0_0_5px_var(--lf-tour-glow),0_0_28px_var(--lf-tour-glow)]` (Q9),
+> pannello flottante; pagine di benvenuto su `bg-lf-page`, card `bg-lf-card`, il disco dell'avatar `bg-lf-brand`; i punti
+> dell'introduzione in un solo ternario. `onboarding-tour.spec.ts:443–448` legge l'alfa calcolata del puntatore (0,7 e
+> 0,8): coi ruoli `color-mix()` il browser dà `oklab(… / 0.7)`, che passa la regex. Patch `w2a.patch`, 8 file; `git apply
+> --check` pulito.
+> - **Da rivedere:** il contorno del pulsante «Riprova» sul banner (`border-lf-warning-line`) è tenue in chiaro; i punti
+>   inattivi dell'introduzione più tenui in scuro; le tessere del logo bianche anche in scuro (`bg-lf-logo`); fondale
+>   del coachmark al 60 % invece del 45 %.
+
+> ✅ **4 · Applicazione e prove leggere** (03:28–03:31, dopo l'ingresso `503dce683`, il ramo in avanti veloce): `git diff
+> <BASE_COMMIT> HEAD` vuoto sui file di tutti e tre i lotti, quindi `git apply -p2` semplice (solo l'albero, niente
+> indice; il coordinatore: «se è vuoto, va bene anche la copia»), 22 file identici alle bozze. Prettier verde sui 22;
+> `--check` pulito (anche la grammatica G1–G4, ora sui file veri); nessun colore della stessa proprietà fuori da un
+> ternario; `diff --check` pulito; Vitest mirati sotto `nice -n 10` (lo slot di L girava): date, schede, barra,
+> `ModalBase` e onboarding, 16 file, 430/430 (compreso `DateRangePicker.test.ts`, scritto su copia senza poterlo
+> lanciare). `--update`: m1 10.166 → 9.701, m2 71 → 64; i 19 file escono dalla baseline. `front check` ed E2E nel secondo
+> slot, che apre con `api sync`.
+
+> **Dove guardarlo** (per il developer):
+> - **W1-c:** i selettori di date (preset, calendario, intervallo, campi) su quasi ogni pagina, le schede (asset, impostazioni,
+>   editor dei dati), la barra degli strumenti, la vista griglia/lista, l'elenco ordinabile del pianificatore.
+> - **W1-e:** tutte le modali, in chiaro e in scuro: il fondale più scuro, il pannello sulla superficie delle card, il bordo
+>   sottile, l'ombra.
+> - **W2-a:** il benvenuto del primo accesso, il tour guidato (bagliore, fondale, pannello), il ripasso dell'onboarding
+>   nelle impostazioni, il banner del bootstrap.
+
+> **Commit:** `a5c7714ca` (W1-c), `d27fdef4a` (W1-e), `a0ced5980` (W2-a, con baseline e piano), dal coordinatore sopra
+> `503dce683`; base `91bae7f2e` (target `d0efca910`: H CP7b-1, J CP-6 backend).
+
+### Secondo slot — ✅ 16/10/2026 (W1-c, W1-e, W2-a)
+
+> **Via** del coordinatore: valida `91bae7f2e`; corsia 6155, carico 27 alla partenza (dalle 04:00 alle 04:30 un `all-backend`
+> di H sotto `nice -n 19`); script `/tmp/libreFolio_T_r2/slot2.sh`, che apre con `api sync`; stop a 65 minuti; un rosso
+> di valore e non di colore sulla dashboard sarebbe stato CP-6.
+
+> ✅ **Esito** (03:54–04:50, 55 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; `front check` 0 e 0;
+> `component-unit` 3.940/3.940; `onboarding-component-unit` 449/449; E2E a 1 worker: `transactions-modals` 25,
+> `settings` 51, `onboarding-tour` 10 (l'alfa del puntatore regge, `oklab(… / 0.7)`), `onboarding-guides` 24, `fx-list` 12
+> e `asset-data-editor` 26 (le asserzioni nuove su `data-active` e `aria-selected`), `asset-modal` 17, `dashboard` 27,
+> `toolbar-width-sweep` 24, `files` 29, `support-copy-and-go` 16, `asset-list` 28. Porta libera.
+> - **⚠️ Fuori pista — un rosso mio:** `core-unit` 1 su 6.146, `themeRoles.gate.test.ts › keeps LITERAL_EXCEPTIONS and
+>   ARBITRARY_ALLOWED current and explained`: «These entries let nothing through: delete them — ARBITRARY_ALLOWED
+>   OnboardingCoachmark.svelte». Con W2-a il bagliore è sui ruoli e il gate vuole che l'eccezione si tolga. Avevo scritto
+>   (TC-12) che la voce orfana non faceva danni: sbagliato. Le mie prove leggere lanciavano il gate da riga di comando
+>   (`--check`), che questo controllo non lo fa, e non il suo file Vitest. **Regola, da ora:** le prove leggere di ogni
+>   lotto includono `src/themeRoles.gate.test.ts` e `src/themeTokens.gate.test.ts`, non solo `--check`.
+> - **Correzione** (OK del coordinatore durante lo slot; a slot finito, commit a parte prima dell'ingresso): via la riga 84 di
+>   `frontend/scripts/theme/theme-roles.mjs` (Y5 cambia la riga 70: 13 righe in mezzo, il merge a tre vie resta pulito in
+>   tutti e due gli ordini; il coordinatore avvisa la 1.3); `test-author` riscrive i due commenti di
+>   `themeRoles.gate.test.ts` (~218, ~547) che descrivevano il vecchio bagliore `rgba`. `themeRoles.gate.test.ts` 47/47,
+>   `--check` pulito, Prettier verde. TC-12 chiusa.
+
+### Lotto input — 🔄 16/10/2026 (bozza su copie: i campi numerici e i loro chiamanti; D-T27)
+
+> **Avvio** (coordinatore, prima e durante il secondo slot). Il disegno approvato: il bordo d'errore del campo come variante,
+> `aria-invalid:border-lf-danger`. Tailwind 4.1 registra `aria` dopo `hover`, `focus` e `disabled` (prima di `dark`), quindi
+> la variante viene dopo ogni utility base e vince sul `border-lf-input` che un chiamante passa in `className`. **Da
+> rivedere:** un campo non valido resta rosso anche col fuoco (oggi diventava verde). OK della 1.3, per W e J, a `ui.ts`
+> (`INPUT`/`TITLE_INPUT`), ai due `TxForm*` e ai test di W (righe 791–792, 803–813, 826, 828, 829, 831, 834–838 di
+> `TransactionFormModal.test.ts`; 1168, 1171, 1173, 1176, 1198, 1203 di `transactions-modals.spec.ts`). `ui.ts` e i tre file
+> dei grafici sono di DV (W5-PAC, W5-charts, commit `7d3896011`, entra verso le 07:20): la bozza parte dalla sua versione
+> (`git show 7d3896011:<path>`; il target non li ha toccati dalla base di DV, `20558ead5`). Slot dopo quello di DV, verso le
+> 07:30.
+
+> ✅ **1 · Bozza** (`files/INPUT-draft` della sessione, `input.patch`, 11 file, la base di ogni file in `BASES`):
+> - `ExactDecimalInput`: una sola stringa di classi sui ruoli, l'hover del campo (D-T18), il segnaposto, la variante
+>   `aria-invalid:border-lf-danger`; via il ternario su `locallyInvalid` (il campo mette già `aria-invalid={locallyInvalid}`);
+> - `ExactQuantityInput`: il bordo del segno (stile in linea, che batte ogni classe) su `color-mix(in oklab,
+>   var(--lf-danger|success) 70%, transparent)`, la stessa alfa di oggi;
+> - `INPUT`: ruoli del campo, hover, segnaposto (non l'errore: i campi semplici del pianificatore non l'hanno mai avuto);
+>   `TITLE_INPUT`: `text-lf-primary`, segnaposto, `hover:border-lf-input`; i 37 usi in 8 file non si toccano;
+> - i tre campi quantità dei form delle transazioni: via `!bg-white dark:!bg-slate-800`, `focus:!ring-lf-focus/30`;
+> - i 6 campi dei grafici di DV (`ChartSignalsSection` 609 e 798, `ChartAestheticsSection` 221 e 237, `SignalParamControl`
+>   79 e 93): `border-lf-input bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-lf-focus`;
+> - `test-author` su copie: `ExactQuantityInput.test.ts` (i due bordi come costanti, nessun `border-color` per il segno
+>   neutro); `TransactionFormModal.test.ts` (la variante presente in tutti e due gli stati, nessun `border-lf-danger` di
+>   base, `aria-invalid="false"` a riposo; la tabella dei segni su `'success'`/`'danger'`); `transactions-modals.spec.ts`
+>   (l'helper risolve il colore atteso nella pagina: le espressioni coi ruoli).

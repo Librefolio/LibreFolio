@@ -74,69 +74,69 @@ def get_uploads_dir() -> Path:
 
 
 # Blocked MIME types (executables, scripts)
-# TODO(frozenset): BLOCKED_MIME_TYPES and BLOCKED_EXTENSIONS below are immutable
-# module-level whitelists used only with `in` membership checks. Promote both to
-# `frozenset[str]` to communicate immutability and prevent accidental mutation
-# at runtime (same pattern as EVENT_COMPATIBLE_TYPES in schemas/transactions/transactions.py).
-BLOCKED_MIME_TYPES = {
-    # Executables
-    "application/x-executable",
-    "application/x-dosexec",
-    "application/x-msdownload",
-    "application/x-msdos-program",
-    "application/vnd.microsoft.portable-executable",
-    # Scripts
-    "application/x-sh",
-    "application/x-shellscript",
-    "application/x-bash",
-    "application/x-csh",
-    "text/x-python",
-    "text/x-perl",
-    "text/x-ruby",
-    "text/x-php",
-    "application/javascript",
-    "text/javascript",
-    # Archives that can contain executables
-    # (optional - can be enabled if needed)
-    # "application/x-tar",
-    # "application/zip",
-}
+BLOCKED_MIME_TYPES: frozenset[str] = frozenset(
+    {
+        # Executables
+        "application/x-executable",
+        "application/x-dosexec",
+        "application/x-msdownload",
+        "application/x-msdos-program",
+        "application/vnd.microsoft.portable-executable",
+        # Scripts
+        "application/x-sh",
+        "application/x-shellscript",
+        "application/x-bash",
+        "application/x-csh",
+        "text/x-python",
+        "text/x-perl",
+        "text/x-ruby",
+        "text/x-php",
+        "application/javascript",
+        "text/javascript",
+        # Archives that can contain executables
+        # (optional - can be enabled if needed)
+        # "application/x-tar",
+        # "application/zip",
+    }
+)
 
 # Blocked file extensions
-BLOCKED_EXTENSIONS = {
-    ".exe",
-    ".dll",
-    ".so",
-    ".dylib",
-    ".bat",
-    ".cmd",
-    ".ps1",
-    ".vbs",
-    ".vbe",
-    ".sh",
-    ".bash",
-    ".csh",
-    ".zsh",
-    ".py",
-    ".pyc",
-    ".pyo",
-    ".pl",
-    ".pm",
-    ".rb",
-    ".php",
-    ".php3",
-    ".php4",
-    ".php5",
-    ".phtml",
-    ".js",
-    ".mjs",
-    ".cjs",
-    ".jar",
-    ".class",
-    ".com",
-    ".scr",
-    ".pif",
-}
+BLOCKED_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".bat",
+        ".cmd",
+        ".ps1",
+        ".vbs",
+        ".vbe",
+        ".sh",
+        ".bash",
+        ".csh",
+        ".zsh",
+        ".py",
+        ".pyc",
+        ".pyo",
+        ".pl",
+        ".pm",
+        ".rb",
+        ".php",
+        ".php3",
+        ".php4",
+        ".php5",
+        ".phtml",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".jar",
+        ".class",
+        ".com",
+        ".scr",
+        ".pif",
+    }
+)
 
 
 class UploadSecurityError(Exception):

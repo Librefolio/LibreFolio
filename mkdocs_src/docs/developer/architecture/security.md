@@ -76,12 +76,13 @@ Tokens are signed with HS256 and one key per process, `_JWT_SECRET` in
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
-- Read each time a session cookie is issued — at login, and when a password change re-issues it — it sets both the
-  token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to the
-  cookies issued after it
+- Read each time a session cookie is issued — at login, and when a password or email change re-issues it — it sets
+  both the token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to
+  the cookies issued after it
 - After expiration, the user must log in again
-- There is no token refresh mechanism — a new login is required. The only cookie issued without a login is the one a
-  password change sends back to the device that made it ([Session Revocation](#session-revocation))
+- There is no token refresh mechanism — a new login is required. The only cookies issued without a login are the ones
+  a password change or an email change sends back to the device that made it
+  ([Session Revocation](#session-revocation))
 
 ### 🚪 Logout
 
@@ -99,20 +100,23 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Five changes call it:
+not commit: the caller commits it with the change that asks for it. Six changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
+| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change) | Every other session of the account, as for a password change: the same response sets a new cookie |
 | Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
 | Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
-Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
-password equal to it, on `change-password`; an unknown user; the last active administrator; *already an admin* or
-*not an admin*; a reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, and a
-`PATCH` whose values equal the current ones.
+Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
+[password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
+`change-password`; a missing or wrong current password, or an address or a username already
+taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
+reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
+equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -125,12 +129,12 @@ password equal to it, on `change-password`; an unknown user; the last active adm
   found*, *User account is disabled*), then refuses a token whose version differs from the account's, behind or
   ahead, with `401` *Session expired or invalid*: the answer to an invalid token, so nothing tells the holder why.
   While an account is deactivated, its cookies get *User account is disabled* first.
-- **The re-issued cookie.** Login and password change set the cookie through one helper, `_issue_session_cookie()`:
-  a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the setting cannot be read),
-  with the same name and attributes as the login cookie, so the browser replaces the old cookie instead of keeping
-  both.
+- **The re-issued cookie.** Login, password change and email change set the cookie through one helper,
+  `_issue_session_cookie()`: a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the
+  setting cannot be read), with the same name and attributes as the login cookie, so the browser replaces the old
+  cookie instead of keeping both.
 
-!!! note "A request in flight during a password change"
+!!! note "A request in flight during a password or email change"
 
     A request the same device sent with its old cookie, and that reaches the server after the change is committed,
     gets `401`. The frontend's 401 interceptor (`frontend/src/lib/api/zodios-client.ts`) sends it to the login page,
@@ -140,7 +144,109 @@ Tests: `./dev.py test services session-version` (`backend/test_scripts/test_serv
 token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
 (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
 second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
-`./dev.py test api registration`.
+`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change).
+
+### ✉️ Changing the Email {: #email-change }
+
+An account's email is a way into it: a password-reset link sent to that address lets whoever reads it choose the
+password. `PUT /api/v1/auth/profile` used to change the email on the session cookie alone, so with the self-service
+«forgot password» ([held](../backend/email.md#flow-forgot) until lot E4) a moment inside someone else's session — an
+XSS, a stolen cookie, a computer left unlocked — would become a permanent takeover: change the email, ask for a reset,
+choose the password (security review of lot E3, rated medium). Since lot A6e (release 1.3), an email change asks for
+the current password and ends the account's other sessions. No other route changes an account's email.
+
+- **What counts as an email change.** An `email` in the body that differs from the stored one, compared exactly, as
+  `user_service.update_profile()` compares it. A username-only change, or the stored email sent again, needs no
+  password, as before, and a `current_password` sent beside it is not checked.
+- **The body.** `UpdateProfileRequest` (`backend/app/schemas/auth.py`) has an optional `current_password` of at least
+  one character: an empty string is refused with `422`.
+- **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
+  anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. bcrypt runs in
+  a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
+- **The sessions.** `user_service.update_profile()` calls `end_sessions()` and sets `users.email_verified_at` back to
+  `NULL` (the new address is not verified, and no flow of release 1.3 verifies a changed one), in the commit of the
+  new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
+  the device that made the change carries on, and every other session gets `401` at its next request. A
+  username-only change ends no session, nor does a refused one.
+
+| Answer | `detail` | When |
+|--------|----------|------|
+| `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
+| `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address or the name belongs to another account. Nothing is written |
+| `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
+| `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
+
+Not covered yet: the notice to the previous address is lot E4's (workstream E), and the route counts no wrong
+passwords: limiting the guesses here is planned with the login attempt limit (lot A8).
+
+The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
+user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
+
+Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-016: the
+refusals, the taken address not revealed without the password, the sessions with two devices, the username-only and
+same-email guards), `./dev.py test services user-profile` (`backend/test_scripts/test_services/test_user_profile.py`,
+`TestUpdateProfileEmailVerification`: `email_verified_at`), and for the tab
+`./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
+(`frontend/e2e/settings.spec.ts`, its «A6e» block).
+
+### 🔏 Password Rules {: #password-rules }
+
+The rules a new password must meet are written once, in `backend/app/services/accounts/password_policy.py` (decision
+37, lot A6c, release 1.3), and every way of choosing a password applies them. Before, they were written twice and
+disagreed: `validate_password()` in `scripts/user_cli.py` used Python's `str.isupper()`, `str.islower()`,
+`str.isdigit()` and a fixed list of ASCII symbols, `PasswordStrength.svelte` ASCII regular expressions and another
+list, and the API asked only for 8 characters (`min_length=8` in the request schemas).
+
+- **The rules.** `PASSWORD_RULES`, in this order: `min_length` (value `MIN_LENGTH`, 8), `uppercase`, `lowercase`,
+  `digit`, `special`. `failed_rules(password)` returns the codes of the rules a password misses, in that order; an
+  empty list means it meets them all.
+- **Unicode classes.** Each class is a Unicode general category (`unicodedata.category()`): an uppercase letter is
+  `Lu`, a lowercase one `Ll`, a digit `Nd`; a symbol, for `special`, is any character that is neither a letter
+  (`L*`), nor a number (`N*`), nor whitespace. The length counts characters, that is code points. So `É` is an
+  uppercase letter and `é` a lowercase one, `٣` (Arabic-Indic three) a digit, `€` and `_` symbols; a space is not a
+  symbol, and `²` is a number (`No`) but not a digit, so it meets neither `digit` nor `special`.
+- **Stored passwords stay valid.** The login never checks the rules: they apply only when a new password is chosen,
+  so an account whose password predates them keeps signing in with it.
+
+Each entry point checks the new password first, as soon as the request body is valid (and, for `change-password`, the
+session):
+
+| Entry point | Checked before |
+|-------------|----------------|
+| `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
+| `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
+| `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
+| `./dev.py user create`, `./dev.py user reset` | Anything in the database, the username included: `validate_password()` in `scripts/user_cli.py` is a thin wrapper over `failed_rules()` |
+
+- **The refusal.** The three routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
+  with `{"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": […]}`
+  in `detail`, `rules` being the codes missed, in the rules' order. Nothing is written: a refused change or reset
+  leaves the password, the session version and the sessions as they were. The command line prints
+  `❌ Password does not meet security requirements:`, then one line per rule missed that starts with its code
+  (`_RULE_MESSAGES`), such as `min_length: the password must be at least 8 characters long`, and exits with `1`.
+- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password` and
+  `PasswordResetRequest.new_password` (`backend/app/schemas/auth.py`) only require a non-empty string
+  (`min_length=1`): an empty password is still a `422` of the request validation, not `PASSWORD_TOO_WEAK`. The
+  length is the policy's rule.
+- **Published to the app.** `password_rules_public()` is the list `GET /api/v1/system/instance` publishes as
+  `accounts.password_rules`, `[{code, value}]` (`PasswordRuleRead`), `value` being `null` for every rule but
+  `min_length` ([Public instance configuration](settings.md#public-instance-configuration)). The app draws and checks
+  that list under every new-password field, with the same classes (`\p{Lu}`, `\p{Ll}`, `\p{Nd}`, a symbol
+  `[^\p{L}\p{N}\s]`, the length in code points) in `frontend/src/lib/features/auth/passwordRules.ts`
+  ([PasswordStrength](../frontend/components/features/auth.md#passwordstrength)), so a rule changed here reaches the
+  interface without a change of its own. A code the app does not know is not checked there: the server decides.
+
+Tests: `./dev.py test services password-policy` (`backend/test_scripts/test_services/test_password_policy.py`,
+POLICY-000 to POLICY-006: the published list, the order of `failed_rules()`, the Unicode classes, the length in code
+points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-005 and PWD-001 to PWD-008: registration
+and password change, the new password checked before the current one, a login that never checks);
+`./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
+RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
+block); `./dev.py test utils dev-cli-image` (`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
+`validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
+`./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
+(`PasswordStrength.test.ts`).
 
 ### 💻 Using curl
 
@@ -167,8 +273,8 @@ curl -b cookies.txt -X POST \
 ### 📄 Secrets from Files {: #secrets-from-files }
 
 Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
-`backend/app/config/__init__.py`:
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`
+today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -198,6 +304,16 @@ then logs `web_link_finder: <error>; disabling` and returns no engine, so that s
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
+Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
+`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
+startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`BackupConfigError` for a token with anything but visible ASCII characters, spaces included
+(`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
+(`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
+either into `503` with the code `backup_panel_unavailable`, on every panel route, and logs one error line
+per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
+`error` names the variable, and the path of a file, never the token
+([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -341,7 +457,7 @@ Tests: `./dev.py test services config-audit`. What the administrator sees and do
 
 ## 🛡️ Endpoint Protection
 
-All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI).
+All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
 
 ### 🌐 Public Endpoints (no auth required)
 
@@ -349,20 +465,38 @@ All endpoints that access or modify user data require a valid session cookie (`D
 |----------|--------|---------|
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
-| `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
+| `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
 | `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
-| `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
+| `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
-| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
+| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration), and [The First-Account Flag](#first-account-open) for the one fact about the users it tells |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
-| `/settings/global`, `/settings/global/{key}` | GET | The global settings, read-only (writes need an administrator): see [Settings System](settings.md) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
 
 On an instance blocked by its hosting provider, the public endpoints outside its short list answer
 `401`: see [Instance Block](#instance-block).
+
+### 🆕 The First-Account Flag {: #first-account-open }
+
+`GET /system/instance` tells anyone one fact about the users: `accounts.first_account_open`, true
+while the `users` table is empty, an inactive account counted (`first_account_open(session)` in
+`backend/app/services/accounts/registration_service.py`). The login page needs it: the first account
+of an empty instance can be created in any [registration mode](access_control.md#registration-modes)
+and becomes the administrator, so the page offers **Register here** while the flag is true, even on
+an instance that registers by invitation, the default of a new install. Publishing it is accepted
+(coordinator decision, 15/10/2026):
+
+- **It tells nothing a registration attempt would not.** An empty instance takes the first
+  `POST /auth/register` it gets, whatever the mode: anyone can learn that it is empty by trying.
+- **The window is short.** The flag turns false with the first registration, normally minutes after
+  the install; the administrator manual asks to register before exposing the instance
+  ([Global Settings](../../admin/settings.md), section «Who Can Sign Up»).
+- **A managed instance will not show it.** With lot A7 (F02, not delivered yet), the first account of
+  a managed instance will be the administrator created from the environment, so the flag will be
+  false from the start. Until then a managed instance starts empty, like any other.
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -400,7 +534,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -471,6 +605,8 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
+| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
+| `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -492,7 +628,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -639,9 +775,11 @@ tokens:
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
   Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
-- **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
-  carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
-  About accounts, `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+- **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
+  `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
+  and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
+  locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
+  [password rules](#password-rules), the same on every instance.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
@@ -878,6 +1016,112 @@ redirects (`?redirect=`, `?returnTo=`) carry a path and query, never a fragment:
 hand into a query string. `mask_query_credentials()` holds the rule. One mode is outside it: uvicorn's own
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
+
+## 🏷️ Response Headers {: #response-headers }
+
+`SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
+`MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds the security headers
+of decision D5. Two of them, `ALWAYS_HEADERS`, go on every HTTP response of the app: API answers, the web app, the
+documentation and the files, compressed or not, errors included. Two switches add more, off on a self-hosted install and
+on in the managed profile: see [Frame Protection and the Report-Only Policy](#managed-headers).
+
+| Header | Value | Effect |
+|--------|-------|--------|
+| `X-Content-Type-Options` | `nosniff` | The browser uses the type the server sends and never guesses another, so no file, an upload included, is sniffed into a script or a page |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Another site learns at most the origin of a page, never its path or query |
+
+- **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
+  any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the text preview of an upload
+  (`backend/app/api/v1/uploads.py`) and the download of a broker report (`backend/app/api/v1/brokers.py`) set
+  themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
+  one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
+  `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and
+  lifespan scopes pass untouched.
+- **The 500 of an exception.** Starlette answers an unhandled exception from `ServerErrorMiddleware`, which it puts
+  outside every middleware of the stack, so its 500 would go out without the headers. When a request raises before
+  its response has started, the middleware sends the 500 itself (`Internal Server Error`, plain text) with the headers
+  of every response, then re-raises the exception: `ServerErrorMiddleware` finds the response started and sends
+  nothing, and the server still logs the error.
+- **A type for every file served.** With `nosniff`, a script or a style sheet sent with a type that is not its own is
+  refused, so every file the app serves must carry its right type. `FileResponse` (the `/_app` mount, the SPA
+  catch-all, `/mkdocs`) and the plugin-asset route (`/uploads/plugin/…`) take it from `mimetypes`, with
+  `application/octet-stream` for a name it does not know. `mimetypes` reads Python's own table, which has no type
+  for the fonts or `.map`, then the system's `mime.types` files, which a slim image such as the runtime
+  `python:3.13-slim` does not have. `register_served_types()`, which `install_static_site()` calls, adds
+  `SERVED_TYPES` (JavaScript, CSS, JSON and source maps, the web manifest, WebAssembly, SVG, the fonts) to
+  `mimetypes` for the whole process, so these extensions get the same type on every machine.
+
+### 🖼️ Frame Protection and the Report-Only Policy {: #managed-headers }
+
+The part of decision D5 meant for the [managed profile](../../admin/hosting_providers.md#managed-profile): two `bool`
+switches of `Settings`, `False` in the code and `True` in `PROFILE_DEFAULTS["managed"]` (see
+[Settings System](settings.md)). Each can be set on its own, in either profile, and a value set in the environment or in
+`.env` wins over the profile.
+
+| Switch | Header | Value | Sent on |
+|--------|--------|-------|---------|
+| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every HTTP response |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app |
+
+- **Frame protection** (`FRAME_HEADERS`) is enforced: only the app's own pages may frame it, so a hosting panel or a
+  dashboard on another origin that shows the app in a frame is refused by the browser. Its two headers go where
+  `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files, the CORS preflights (the `cors` entry is
+  inside this one) and the middleware's own 500.
+- **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
+  report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
+  is sent.
+- **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
+  `Content-Type` and `scope["path"]`: the type must start with `text/html`, and the path must be outside `/mkdocs`
+  (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`). The middleware is outside GZip, so a compressed page still says
+  `text/html`. The policy thus reaches `/`, the client-side routes the SPA catch-all answers and the HTML files of the
+  build (`200.html`, `offline.html`). Left out on purpose: the documentation, a separate site that this policy does not
+  describe; Swagger UI and ReDoc (`/api/v1/docs`, `/api/v1/redoc`), which load their scripts from a CDN, so a
+  `default-src 'self'` report there would be pure noise; the HTML 404 that the catch-all answers for an unknown API
+  path; and every response that is not HTML: JavaScript, JSON, text files, and the CORS preflights and the 500, which
+  are plain text.
+- **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
+  the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
+  call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
+  each configuration.
+
+`CSP_REPORT_ONLY_POLICY`, directive by directive:
+
+| Directive | Sources | Why |
+|-----------|---------|-----|
+| `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
+| `script-src` | `'self' 'wasm-unsafe-eval'` | Script files from the app's origin, no inline script; WebAssembly may compile, for the PDF viewer (its PDFium engine) |
+| `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
+| `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
+| `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
+| `connect-src` | `'self'` | `fetch`, XHR and WebSockets reach the app's origin only |
+| `worker-src` | `'self' blob:` | Workers, the service worker included, from the app's origin or a `blob:` URL |
+| `frame-src` | `'self' blob:` | The app's frames show its own pages or a `blob:` URL |
+| `object-src` | `'none'` | No `<object>` or `<embed>` content |
+| `base-uri` | `'self'` | A `<base>` element cannot send the page's relative URLs to another origin |
+| `form-action` | `'self'` | Forms submit to the app's origin only |
+| `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
+
+Today a page of the web app reports at least its inline scripts: the one of `frontend/src/app.html`, which applies the
+theme before the first paint and registers the service worker, and the start script SvelteKit writes into the page
+(`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
+`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
+reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
+enforced policy would block.
+
+Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
+`nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
+still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
+on fresh apps holding the stack's `security_headers`, `gzip` and `cors` and a fake static site: frame protection once
+on every response when on and on none when off, `false` over `managed` included; the report-only policy on the web
+app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript chunk, a text file, a
+CORS preflight or a 500; the policy read directive by directive, each directive once, with no report endpoint; a
+route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
+and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
+the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
+`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 ## 🌐 HTTPS & Deployment Architecture
 

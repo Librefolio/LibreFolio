@@ -13,6 +13,7 @@
     import {_} from '$lib/i18n';
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import type {UploadScope} from '$lib/types';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import '$lib/theme/components/media.css';
@@ -21,6 +22,8 @@
     export let open: boolean = false;
     export let file: File | null = null;
     export let uploadOnComplete: boolean = true;
+    /** Who sees the renamed file once uploaded: the Files page passes personal; without it the backend decides */
+    export let scope: UploadScope | undefined = undefined;
     /** Z-index for modal stacking (default 60 = second-level modal) */
     export let zIndex: number = 60;
 
@@ -114,7 +117,7 @@
             }
 
             // Upload to backend
-            const uploadedUrl = await uploadFile(renamedFile);
+            const uploadedUrl = await uploadFile(renamedFile, undefined, scope);
 
             dispatch('complete', {url: uploadedUrl, file: renamedFile});
         } catch (err) {

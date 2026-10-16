@@ -36,8 +36,8 @@ its border.
 ## Source files
 | Role | Path |
 |------|------|
-| Emphasis style | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
-| Ranking that picks a cell | `frontend/src/lib/components/risk/CorrelationPairsList.svelte` |
+| Emphasis style | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
+| Ranking that picks a cell | `frontend/src/lib/features/risk/CorrelationPairsList.svelte` |
 
 ## Links
 - [[problems/echarts-canvas-mismeasures-emoji-labels]]

@@ -92,7 +92,7 @@
             <div class="flex items-center gap-1.5">
                 {#key livePriceFlashToken}
                     <span
-                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-gray-700 dark:text-gray-200'}"
+                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-lf-secondary'}"
                         data-testid="asset-detail-live-price"
                         data-live-price-direction={livePriceDirection}
                     >

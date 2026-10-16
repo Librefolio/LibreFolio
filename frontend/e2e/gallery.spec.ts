@@ -136,7 +136,7 @@ import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
-import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
+import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY, TEST_USER} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage} from './assets/assets-helpers';
 import {schemas} from '../src/lib/api/generated';
@@ -2084,6 +2084,41 @@ test.describe('Gallery Screenshots', () => {
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the profile shot frames it.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/email`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'email');
+                await restoreTallScreen(page);
+            });
+        });
+
+        test('plugins - all languages and themes', async ({page}, testInfo) => {
+            // Settings › Plugins (workstream X, CP11; G's conditions, 2026-10-16): the settings the installed plugins ask for —
+            // justETF's and Borsa Italiana's personal search preferences, on their default «All». Nothing is mocked: the lane's
+            // own catalogue. A member's view (TEST_USER), the one the user manual describes: the tab bar without the
+            // administrators' tabs.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_USER);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as the email shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                await navigateTo(page, '/settings?tab=plugins');
+                await expect(page.getByTestId('settings-tab-plugins')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // The catalogue arrives after the tab is drawn: the tab says when it is in (data-busy).
+                await waitForSettled(page.getByTestId('plugin-settings-tab'), 15_000);
+                await expect(page.getByTestId('plugin-settings-load-error')).toHaveCount(0);
+                await expect(page.getByTestId('plugin-settings-empty')).toHaveCount(0);
+                await expect(page.getByTestId('plugin-settings-family').first()).toBeVisible();
+                // No secret saved, or set by a variable of the server: a leftover of the E2E, or a variable of the shell, would
+                // give a shot CI cannot reproduce.
+                await expect(page.locator('[data-testid="plugin-setting-secret-state"][data-state="set"], [data-testid="plugin-setting-secret-state"][data-state="env"]')).toHaveCount(0);
+                await freezeAnimations(page);
+                if (viewport === 'desktop') {
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the email shot
+                    // frames it; past ~2500 px (many plugins), the first family only.
+                    const settingsPage = page.getByTestId('settings-page');
+                    const bottom = await settingsPage.evaluate((element) => element.getBoundingClientRect().bottom);
+                    const block = bottom > 2500 ? page.getByTestId('plugin-settings-family').first() : settingsPage;
+                    await extendScreenToBlock(page, block, `desktop/${lang}/${theme}/settings/plugins`);
+                }
+                // MOBILE — the first screen, as the email shot.
+                await screenshot(page, viewport, lang, theme, 'settings', 'plugins');
                 await restoreTallScreen(page);
             });
         });
@@ -6061,11 +6096,11 @@ test.describe('Gallery Screenshots', () => {
 
                     await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5_000});
-                    // Populated distributions sum to 100% → totals render in the green (valid) state
+                    // Populated distributions sum to 100% → both totals are in the valid state (data-state, not a colour)
                     const sectorTotal = page.getByTestId('distribution-total-sector');
                     const geoTotal = page.getByTestId('distribution-total-geographic');
-                    await expect(sectorTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
-                    await expect(geoTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
+                    await expect(sectorTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
+                    await expect(geoTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
                     await freezeAnimations(page);
 
                     await sectorTotal.scrollIntoViewIfNeeded();

@@ -76,7 +76,21 @@
     "uploader": "Téléversé par",
     "uploaderHint": "Utilisateur ayant téléversé le fichier.",
     "noUploader": "Utilisateur non indiqué",
-    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants."
+    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants.",
+    "scope": {
+      "column": "Visibilité",
+      "columnHint": "Les fichiers partagés sont visibles par tous les utilisateurs ; les fichiers personnels, seulement par la personne qui les a téléversés et par les administrateurs.",
+      "common": "Partagé",
+      "personal": "Personnel",
+      "share": "Partager avec tout le monde",
+      "makePersonal": "Rendre personnel",
+      "makePersonalConfirm": "Les autres utilisateurs ne verront plus ce fichier, pas même là où il sert d'icône ou de photo.",
+      "nowShared": "{name} est désormais visible par tous les utilisateurs",
+      "nowPersonal": "{name} n'est désormais visible que par la personne qui l'a téléversé et par les administrateurs",
+      "changeFailed": "Impossible de modifier la visibilité du fichier",
+      "sharedOnPick": "{name} était personnel : il est désormais visible par tous les utilisateurs, pour que chacun le voie ici"
+    },
+    "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place"
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"

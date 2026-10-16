@@ -23,7 +23,7 @@ and only the test's index arithmetic was wrong.
 The normalisation lives in the request builder:
 
 ```ts
-// frontend/src/lib/risk/riskRequest.ts
+// frontend/src/lib/features/risk/riskRequest.ts
 return {...scope, asset_ids: sortedNumbers(scope.asset_ids)};
 ```
 
@@ -60,8 +60,8 @@ from a payload index by looking it up in the selection array. Always go through
 
 | Role | Path |
 |------|------|
-| Normalisation | `frontend/src/lib/risk/riskRequest.ts` |
-| Positional consumer | `frontend/src/lib/components/risk/correlationHelpers.ts` |
+| Normalisation | `frontend/src/lib/features/risk/riskRequest.ts` |
+| Positional consumer | `frontend/src/lib/features/risk/correlationHelpers.ts` |
 | Spec that hit the trap | `frontend/e2e/portfolio/risk-lab.spec.ts` |
 
 Related: [[problems/front-check-does-not-check-what-you-think]]

@@ -37,14 +37,17 @@ The `LoginCard` handles user authentication via username/email and password.
     - `LoginCard` always draws `$_(key)`, so the message follows a language change on screen. The
       transport's own text (axios's *Network Error*, *Request failed with status code 500*) never
       reaches the user: it is English whatever the language.
-- **Register link**: `goto-register` (**Register here**) is shown only while
-  `instanceConfig.config.accounts.registration_mode === 'open'`: the mode in force that
-  `GET /api/v1/system/instance` publishes, `LIBREFOLIO_REGISTRATION` included
+- **Register link**: `goto-register` (**Register here**) is shown while
+  `instanceConfig.config.accounts.registration_mode === 'open'`, or while
+  `instanceConfig.config.accounts.first_account_open === true`: the instance has no account yet, and
+  its first account can be created in any mode (it becomes the administrator). Both come from
+  `GET /api/v1/system/instance`, the mode in force with `LIBREFOLIO_REGISTRATION` included
   ([Instance configuration](../../state/app-state.md#instance-config)). `LoginCard` calls
-  `instanceConfig.load()` on mount, not forced, so it shares the page load's request; it no longer
-  loads the global settings. Until the server answers, and if it never does, the configuration is
-  `DEFAULT_INSTANCE_CONFIG`, whose mode is `open`: the link is shown, and goes as soon as the answer
-  says `invite` or `disabled`, without a remount.
+  `instanceConfig.load()` on mount, not forced, so it shares the page load's request; it does not
+  load the global settings, which need a session. Until the server answers, and if it never does, the
+  configuration is `DEFAULT_INSTANCE_CONFIG`, whose mode is `open`: the link is shown, and goes as
+  soon as the answer says `invite` or `disabled` with `first_account_open` false, or absent (an
+  answer from before the flag), without a remount.
 - **Props**: `redirectTo` (default `/dashboard`), `successMessage` — drawn in `login-success`: the
   confirmation of a registration, or the message a [link page](#link-pages) left with
   `setAuthFlash()`, which the login page (`routes/+page.svelte`) reads once with `takeAuthFlash()` —,
@@ -80,7 +83,8 @@ The `RegisterCard` handles new user registration with client-side validation.
 - **Validation**: on blur of each field, and all together on submit:
     - Username (at least 3 characters, after trimming)
     - Email (format)
-    - Password (the five strength rules: 8 characters, uppercase, lowercase, number, special character)
+    - Password: the [password rules](#passwordstrength), read from `PasswordStrength`'s `valid`
+      (`bind:valid={passwordRulesMet}`): the card keeps no copy of them
     - Confirm Password (match)
 - **Strength Meter**: Integrated `PasswordStrength` component.
 - **Invitation mode**: three props, all given by the [`/invite` page](#link-pages):
@@ -96,8 +100,8 @@ The `RegisterCard` handles new user registration with client-side validation.
     fields and, when `grantsAdmin`, `register-invite-admin-notice` (`auth.invite.adminNotice`,
     warning).
 - **Error Handling**: `describeRegistrationError()` turns the failure into a translated message:
-  the refusals of the registration rule, a username or email already taken, and field validation
-  errors (see [Registration errors](#registration-errors)).
+  the refusals of the registration rule and of the password rules, a username or email already
+  taken, and field validation errors (see [Registration errors](#registration-errors)).
 
 ### 💻 Usage
 
@@ -140,7 +144,9 @@ Both are outside the `(app)` group: they need no session and run no auth check. 
 prerendered, so the backend serves them through the SPA fallback (`200.html`). A valid invitation
 also opens the form in mode `invite`: an invitation is exactly what that mode asks for. The
 `/invite` page loads the instance configuration in parallel with the inspection
-(`instanceConfig.load()`), to know whether the mode is `disabled`.
+(`instanceConfig.load()`), to know whether the mode is `disabled`. The `/reset-password` page asks
+for it on mount without waiting for it: only the password rules of
+[`PasswordStrength`](#passwordstrength) depend on it, and they follow the answer when it arrives.
 
 ```mermaid
 flowchart TD
@@ -217,11 +223,12 @@ The form of a reset link: the new password, twice, for one account.
 - **The rules are the app's own**: the card binds `PasswordStrength`'s `valid`
   (`bind:valid={rulesMet}`) and keeps no copy of them. While the rules are not met, or the two
   fields differ, the submit shows `auth.validation.passwordTooWeak` or
-  `auth.validation.passwordsNoMatch` and sends nothing. The server checks only its own rule, at
-  least 8 characters (`PasswordResetRequest`).
+  `auth.validation.passwordsNoMatch` and sends nothing. The server applies the same
+  [password rules](../../../architecture/security.md#password-rules), before it reads the link.
 - **The request**: `POST /api/v1/auth/password-reset` with `{token, new_password}`, the password
-  exactly as typed. Success calls `ondone`. A `400` `TOKEN_INVALID` calls `oninvalid`; a `422`
-  shows `auth.validation.passwordTooWeak`; any other failure `auth.resetPassword.failed`.
+  exactly as typed. Success calls `ondone`. A `400` `TOKEN_INVALID` calls `oninvalid`; a `400`
+  `PASSWORD_TOO_WEAK`, or a `422`, shows `auth.validation.passwordTooWeak`; any other failure
+  `auth.resetPassword.failed`.
 
 ### 🧩 Helper Modules {: #auth-modules }
 
@@ -233,6 +240,7 @@ In `lib/features/auth/`:
 | `addressBar.ts` | `replaceAddress(path)` | Puts `path` in the address bar with SvelteKit's `replaceState`, which keeps the router in step; before the router has started, it falls back to `history.replaceState`. |
 | `authFlash.ts` | `setAuthFlash(message)`, `takeAuthFlash()` | A message for the login page. `takeAuthFlash()` returns it once, then `''`. Kept in memory only: a reload of the login page shows nothing. |
 | `registrationErrors.ts` | `describeRegistrationError(error)` | See [Registration errors](#registration-errors) below. |
+| `passwordRules.ts` | `PasswordRule` (`{code, value?}`), `DEFAULT_PASSWORD_RULES`, `RULE_UI_KEYS`, `ruleMet(rule, password)`, `unmetRules(password, rules)` | The app's half of the [password rules](../../../architecture/security.md#password-rules), pure: no store, no request. `DEFAULT_PASSWORD_RULES` are the five of release 1.3 (`min_length` 8, `uppercase`, `lowercase`, `digit`, `special`), assumed until the server answers. `RULE_UI_KEYS` maps each code the app knows to its key (`min_length` → `minLength`, `uppercase` → `hasUppercase`, `lowercase` → `hasLowercase`, `digit` → `hasNumber`, `special` → `hasSpecial`). `ruleMet()` checks with the server's classes — `\p{Lu}`, `\p{Ll}`, `\p{Nd}`, a symbol `[^\p{L}\p{N}\s]`, the length in code points — and returns `null` for a code it does not know; `unmetRules()` gives the known codes a password misses, in the order of `rules`. |
 
 #### Registration errors {: #registration-errors }
 
@@ -246,6 +254,7 @@ returns a catalogue key (`{key}`), or the server's own words (`{raw}`) when noth
 | `{error_code: "INVITE_REQUIRED"}` | `auth.registrationInviteOnly` |
 | `{error_code: "INVITE_INVALID"}` | `auth.link.unknown` |
 | `{error_code: "USER_LIMIT_REACHED"}` | `auth.userLimitReached`: the server is full, with no count, as the caller is not signed in |
+| `{error_code: "PASSWORD_TOO_WEAK"}` | `auth.validation.passwordTooWeak`: the password misses a [rule of the server](../../../architecture/security.md#password-rules), and the checklist under the field says which |
 | Any other object | `auth.registrationFailed` |
 | A Pydantic error list | Its first error: on `email`, `auth.validation.invalidEmailDomain` for a special-use or reserved domain, `auth.validation.invalidEmail` otherwise; on `username`, `auth.validation.usernameMinLength`; on `password`, `auth.validation.passwordTooWeak`; anything else, `auth.registrationFailed` |
 | A string that mentions `username` (case-folded) | `auth.validation.usernameTaken` |
@@ -255,8 +264,8 @@ returns a catalogue key (`{key}`), or the server's own words (`{raw}`) when noth
 
 ### 🧪 Tests
 
-- `./dev.py test front-utility core-unit`: `authFlash.test.ts`, `linkToken.test.ts` and
-  `registrationErrors.test.ts`.
+- `./dev.py test front-utility core-unit`: `authFlash.test.ts`, `linkToken.test.ts`,
+  `registrationErrors.test.ts` and `passwordRules.test.ts`.
 - `./dev.py test front-utility component-unit`: `AuthCard.test.ts`, `AuthPageFrame.test.ts`,
   `LinkStatusCard.test.ts`, `ResetPasswordCard.test.ts`, `LoginCard.test.ts`, `RegisterCard.test.ts`,
   and the pages: `routes/page.authFlash.test.ts`, `routes/invite/page.test.ts`,
@@ -284,6 +293,7 @@ offers to save or update the password:
 | | Current password | `currentPassword` | `current-password` | `current-password` |
 | | New password | `newPassword` | `new-password` | `new-password` |
 | | Confirm new password | `confirmPassword` | `confirm-password` | `new-password` |
+| `ProfileTab` (email change) | Current password | `profile-current-password` | `current-password` | `current-password` |
 | `ResetPasswordCard` | Hidden username, when the server named the account | — | `username` | `username` |
 | | New password | `reset-password-new` | `new-password` | `new-password` |
 | | Confirm new password | `reset-password-confirm` | `confirm-password` | `new-password` |
@@ -307,23 +317,36 @@ offers to save or update the password:
 absence without an account) and the `type` and `autocomplete` of its two password fields. The
 autofill itself belongs to the browser and is checked by hand.
 
-## 🔒 PasswordStrength
+## 🔒 PasswordStrength {: #passwordstrength }
 
-A visual indicator of password strength using `zxcvbn-ts`.
+A visual indicator of password strength using `zxcvbn-ts`, with the checklist of the
+[password rules](../../../architecture/security.md#password-rules)
+(`lib/components/ui/input/PasswordStrength.svelte`, Svelte 5 runes).
 
 ### ⚡ Features
 
-- **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong).
-- **Visual Bar**: Color-coded progress bar (Red -> Orange -> Yellow -> Lime -> Green).
-- **Rules Checklist**: Shows specific requirements:
-    - Min 8 characters
-    - Uppercase & Lowercase
-    - Number
-    - Special character
-- **`valid`**: true while every rule is met. A form that needs a valid password binds to it
-  (`bind:valid`) instead of keeping its own copy of the rules, as
-  [`ResetPasswordCard`](#resetpasswordcard) does. `RegisterCard` still checks its own copy
-  (`passwordRules`).
+- **Score**: Calculates a score from 0 (Very Weak) to 4 (Very Strong), published in `data-strength`
+  on `password-strength-bar`.
+- **Visual Bar**: five segments, filled up to the score in one of three colours (decision D-T13):
+  danger for 0 and 1, warning for 2, success for 3 and 4. The label says the level in words.
+- **Rules Checklist** (`password-requirements`, with `showRules`, the default): one line per rule,
+  `password-rule-<key>`, with `data-passed` and a check or a cross. The rules are the server's,
+  `instanceConfig.config.accounts.password_rules`
+  ([Instance configuration](../../state/app-state.md#instance-config)), in its order; while the
+  configuration carries none — before the answer, or an empty list — `DEFAULT_PASSWORD_RULES`, the
+  five of release 1.3. `RULE_UI_KEYS` ([`passwordRules.ts`](#auth-modules)) gives each code its key,
+  which names the test id and the label, `auth.passwordStrength.rules.<key>`; the length's label is an
+  ICU message that receives the rule's `{value}`. A code the app does not know is neither drawn nor
+  checked: the server decides it.
+- **`valid`** (`$bindable`): true while every rule drawn holds, each checked by `ruleMet()`. A form
+  that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the
+  rules: `RegisterCard`, [`ResetPasswordCard`](#resetpasswordcard) and `PasswordChangeModal` all
+  do.
+- Nothing is drawn while the password is empty.
+
+Tests: `PasswordStrength.test.ts` (`./dev.py test front-utility component-unit`): the checklist from
+the defaults and from the server's list, unknown codes, an answer that lands under a mounted meter,
+the Unicode classes, the length passed to the label.
 
 ### 💻 Usage
 

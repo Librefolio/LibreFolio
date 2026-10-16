@@ -473,6 +473,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
+    print_section("Services: Password Policy")
+    print_info("Testing: backend/app/services/accounts/password_policy.py")
+    print_info("Tests: the five rules published in order, failed_rules in the policy's order, Unicode classes (Lu, Ll, Nd, symbols), length in code points")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_password_policy.py", test_names)
+    return run_command(cmd, "Password policy tests", verbose=verbose)
+
+
 def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
     """Test the SMTP configuration accessors of the optional e-mail: LIBREFOLIO_SMTP_* read at call time."""
     print_section("Services: E-mail Configuration")
@@ -626,6 +636,16 @@ def services_sleep_wake_activity(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
 
 
+def services_sleep_wake_suspend(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the idle suspension of a Fly machine: its configuration, the suspender, the idle monitor and its hooks (lot Z2b)."""
+    print_section("Services: Sleep and Wake Suspend")
+    print_info("Testing: backend/app/config/sleep_wake.py, backend/app/services/platform/sleep_wake/suspend.py and idle_monitor.py, their hooks in backend/app/api/v1/system/wake.py and backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: IDLE_SUSPEND_MODE/MINUTES, FlySuspender on a MockTransport (request, 2xx, http_<status>, connection, not_on_fly, socket, timeout), IdleMonitor.check (outcomes, backoff, a warning per streak), the loop, requested checks, start/stop, busy checks, wake hook, lifespan steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_suspend.py", test_names)
+    return run_command(cmd, "Sleep and wake suspend tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -650,7 +670,9 @@ def services_account_deletion_preview(verbose: bool = False, test_names: list = 
     """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
     print_section("Services: Account Deletion Preview")
     print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
-    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+    print_info(
+        "Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
     return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
@@ -937,6 +959,17 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
 
+def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's retry of deferred items and its backoff after a job that raises (lot Z7b)."""
+    print_section("Services: Scheduler Retry and Backoff")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (due_current_price, due_history_sync, run_due_jobs, JobOutcome)")
+    print_info(
+        "Tests: SBO-001..012 — next_attempt_at holds a job back, retry_at makes it due before its regular round, unreadable timestamps absent; a job or its save that raises: failure recorded and saved, backoff 60 s doubling to its cap, each job its own, reset by a run that ends; outcomes: items_deferred, retry_at"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
+    return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -992,6 +1025,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     print_info("Testing: .env.example against backend/app/, Settings and the compose files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
+def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
+    print_section("Services: Profile Defaults")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
+    return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
@@ -1058,6 +1099,30 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
 
 
+def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cache policy of the web app's files: hashed chunks immutable, the rest of /_app and the HTML revalidated (F28)."""
+    print_section("Services: Static Cache Policy")
+    print_info("Testing: backend/app/services/platform/static_site.py (the /_app mount, the HTML documents)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_cache_policy.py", test_names)
+    return run_command(cmd, "Static cache policy tests", verbose=verbose)
+
+
+def services_security_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the security headers every response carries: nosniff and Referrer-Policy, never overwritten (F15, D5)."""
+    print_section("Services: Security Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware), middleware.py (MIDDLEWARE_STACK), the app of backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_security_headers.py", test_names)
+    return run_command(cmd, "Security headers tests", verbose=verbose)
+
+
+def services_managed_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the headers of the managed profile: frame protection and the report-only CSP, read when the middleware is built (D5)."""
+    print_section("Services: Managed Profile Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware with LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY), on fresh apps with the stack's entries and the static site")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_managed_headers.py", test_names)
+    return run_command(cmd, "Managed profile headers tests", verbose=verbose)
+
+
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
     print_section("Services: Instance Backup Archive")
@@ -1072,6 +1137,14 @@ def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool
     print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
     return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
+def services_backup_staging(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the check of a backup archive for a restore, on a copy: refusals, upgrade of the copy, report, one at a time."""
+    print_section("Services: Instance Backup Staging")
+    print_info("Testing: backend/app/services/platform/instance_backup/staging.py, paths.py (the restore's folders)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_staging.py", test_names)
+    return run_command(cmd, "Instance backup staging tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1447,6 +1520,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "password-policy",
+        services_password_policy,
+        name="Password Policy",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        # PURE: a module of plain functions; no database, no server, no environment variable.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "email-config",
         services_email_config,
         name="E-mail Configuration",
@@ -1602,6 +1684,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "sleep-wake-suspend",
+        services_sleep_wake_suspend,
+        name="Sleep and Wake Suspend",
+        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check; start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
+        # PURE: no DB, no server, no lane port, no network. The Fly Machines API is an httpx.MockTransport, the socket's
+        # transport class replaced on httpx by a recorder; every Activity is the test's own on a fake clock, the process's
+        # ACTIVITY replaced through monkeypatch; the monitor runs on fake clocks with an injected sleep, its collaborators
+        # replaced on its module; the wake-up is served in this process by httpx.ASGITransport with run_due_jobs replaced.
+        # One fresh interpreter of its own, run to its end; checks held at a gate are released before each test ends.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "session-version",
         services_session_version,
         name="Session Version",
@@ -1741,7 +1836,13 @@ Note: No backend server required.
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
-    add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
+    add_test(
+        cat,
+        "scheduler-state",
+        services_scheduler_state,
+        name="Scheduler State",
+        desc="Load/save/atomic write, corrupt/partial JSON recovery; the fields of lot Z7b (last_items_deferred, retry_at, consecutive_failures, next_attempt_at) saved, defaulted in an older file, a newer file's unknown keys ignored",
+    )
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
@@ -1760,10 +1861,22 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-backoff",
+        services_scheduler_backoff,
+        name="Scheduler Retry and Backoff",
+        desc="Lot Z7b. Due rules first: next_attempt_at ahead holds a job back (even past its retry_at or an overdue round), else retry_at reached makes it due before its regular round (a history sync deferred at 23:00 retries at 23:0x), else today's rule; unreadable timestamps absent. run_due_jobs: a job that raises keeps its previous JobState (last_run_at too) with consecutive_failures+1, next_attempt_at now+backoff, error by class name, saved and logged; a save that raises after the job records it on the job's fresh JobState; backoff 60 s doubling, capped at 1 h for history and at the price frequency for the price; each job its own; a run that ends resets. JobOutcome items_deferred and retry_at: copied, next attempt of a failure, pending time of a job not due, whatever the reason",
+        # PURE: no DB, no server, no lane port, no network. The due functions are called as they are; for run_due_jobs every
+        # other collaborator (switches, leader, settings, state store, jobs, utc_now, settle_clock) is a fake set with
+        # monkeypatch, the state store in memory, and the process's ACTIVITY is replaced only through monkeypatch by an
+        # Activity on a fake clock. Nothing sleeps: every moment is a fake wall clock's.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
-        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled); lot Z7b: RATE_LIMITED items deferred whatever their status or value, retry_at at the shortest pause, a run that ends resets the failure backoff, deferred marks and counters in the job log",
         # READ, not write-global: the three bulk entry points that rewrite prices for
         # every active asset and every FX route are replaced by doubles, so only the
         # two SELECTs reach the shared DB. The job log is redirected to a per-test
@@ -1777,6 +1890,16 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(
+        cat,
+        "profile-defaults",
+        services_profile_defaults,
+        name="Profile Defaults",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed",
+        # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
+        # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
     # built with create_all, the call boundaries read their rows through a private engine put in place of
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
@@ -1789,6 +1912,39 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "static-cache-policy",
+        services_static_cache_policy,
+        name="Static Cache Policy",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
+        # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "security-headers",
+        services_security_headers,
+        name="Security Headers",
+        desc="F15 (D5, always): MIDDLEWARE_STACK holds one security_headers entry, SecurityHeadersMiddleware, outside gzip (relative order), and the app carries it outside GZip; every response has X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin exactly once (JSON, HTML, streamed, the router's 404, a CORS preflight, a gzip-compressed body, a start without headers); a route's Referrer-Policy: no-referrer is kept and its nosniff not repeated; lifespan and websocket scopes pass untouched; on the app, the health route, the SPA catch-all and the 500 of an exception (still re-raised to the server) carry both",
+        # Raw ASGI calls on fresh apps holding the stack's own entries and on the global app (its lifespan never runs);
+        # the health route's session dependency, the catch-all's build and frontend_available swapped by monkeypatch.
+        # No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "managed-headers",
+        services_managed_headers,
+        name="Managed Profile Headers",
+        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src with 'self', each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
+        # Fresh FastAPI() apps holding the stack's security_headers, gzip and cors, a few routes and the static site of a
+        # fake build and documentation under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped by monkeypatch); test mode,
+        # a data directory under tmp_path and the profile variables set by monkeypatch before an app is built; raw ASGI
+        # calls. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "backup-archive",
@@ -1804,9 +1960,20 @@ Note: No backend server required.
         "backup-jobs",
         services_backup_jobs,
         name="Instance Backup Jobs",
-        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed; backup_in_progress (the run lock or the restore checks' lock held by anyone, read only, without fcntl the process's locks)",
         # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
         # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-staging",
+        services_backup_staging,
+        name="Instance Backup Staging",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
+        # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
+        # directory of the test configured (which must stay absent). No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

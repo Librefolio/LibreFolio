@@ -64,7 +64,8 @@ frontend/src/routes/
 - Public access
 - **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals), inside
   `AuthPageFrame`
-- **Register here** only while the instance accepts anyone (`registration_mode` `open`)
+- **Register here** only while the instance accepts anyone (`registration_mode` `open`), or while it
+  has no account yet (`first_account_open`: the first account can be created in any mode)
 - Animated background with waves and chart lines
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login
@@ -238,7 +239,9 @@ frontend/src/routes/
 - Upload interface with:
     - Image files → **ImageEditModal** (crop, rotate, flip)
     - Non-image files → **FileEditModal** (rename)
-- Copy link, download, delete actions
+- Copy link, download, delete actions; delete only on the files the user may delete (`can_delete`)
+- Static Resources: a **Visibility** column (common or personal) and the switch between the two, see
+  [Scope of uploaded files](../components/core-ui/file-upload.md#scope-flow)
 - File thumbnails via `?img_preview=` API
 
 ### ⚙️ Settings (`/settings`)

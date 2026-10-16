@@ -90,15 +90,18 @@ class BrokerAccessMixin:
 
     async def list_accesses(self, broker_id: int, user_id: int, is_superuser: bool = False) -> List[dict]:
         """
-        List all users with access to a broker.
+        List all users with access to a broker: role, share and profile fields.
+
+        Checks no access: the route decides who may read the list (today any authenticated user, for any existing
+        broker). ``user_id`` and ``is_superuser`` are not read; they are kept for a check the route may add.
 
         Args:
             broker_id: Broker ID
-            user_id: Current user ID
-            is_superuser: If True, skip access check
+            user_id: Current user ID (not read)
+            is_superuser: Whether the caller is an administrator (not read)
 
         Returns:
-            List of dicts with user_id, username, email, role, created_at
+            List of dicts with user_id, username, email, role, share_percentage, avatar_url, created_at
         """
         # Import here to avoid circular import
         from backend.app.db.models import User, UserSettings  # noqa: PLC0415 — avoid circular import
@@ -135,10 +138,9 @@ class BrokerAccessMixin:
 
         Rules:
         - Only OWNERs (or superusers) can call this
-        - At least one OWNER must remain
+        - At least one OWNER must remain: nobody, the caller included, can remove or downgrade the last one
         - Only OWNERs can have share_percentage > 0 (enforced by schema)
         - Sum of share_percentage must be ≤ 1.0
-        - Cannot remove the calling user as last OWNER
 
         Args:
             broker_id: Broker ID
