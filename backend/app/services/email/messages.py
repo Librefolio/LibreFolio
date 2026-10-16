@@ -1,11 +1,14 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
 Each kind of email has a builder (``build_password_reset``, ``build_invite``, ``build_verification``,
-``build_admin_setup``, ``build_test_message``) that returns an ``EmailContent``: a subject, a plain-text part and an
+``build_admin_setup``, ``build_test_message``, ``build_email_changed``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
 in ``templates/layout.html``. Every value that comes from a person — a user name, the name of the instance, who sent an
-invitation — is escaped in the HTML part, and none goes into a subject. ``compose_message`` adds the headers.
+invitation — is escaped in the HTML part, and none goes into a subject. The emails a stranger can have sent to an
+address of their choice (a password reset, an email verification, the notice of an email change) carry no text of
+theirs: their builders take no user name and nothing of a new address (night decision N62). ``compose_message`` adds
+the headers.
 
 Nothing here sends anything, reads the configuration or logs: ``delivery.send_email`` does.
 """
@@ -144,11 +147,11 @@ def _duration(ttl: timedelta, language: str) -> str:
     return format_timedelta(ttl, locale=language)
 
 
-def build_password_reset(*, language: str | None, username: str, link: str, ttl: timedelta, instance: str) -> EmailContent:
-    """The link to choose a new password, sent to the owner of the account."""
+def build_password_reset(*, language: str | None, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The link to choose a new password, for the owner of an account. No user name: a stranger can have it sent (N62)."""
     lang = email_language(language)
-    values = {"username": username, "instance": instance, "duration": _duration(ttl, lang)}
-    return _render(EmailKind.PASSWORD_RESET, lang, greeting="greeting", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
+    values = {"instance": instance, "duration": _duration(ttl, lang)}
+    return _render(EmailKind.PASSWORD_RESET, lang, greeting="greeting_anonymous", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
 
 
 def build_invite(
@@ -167,11 +170,11 @@ def build_invite(
     return _render(EmailKind.INVITE, lang, greeting="greeting_anonymous", before=before, after=["expiry", "ignore"], values=values, link=_checked_link(link))
 
 
-def build_verification(*, language: str | None, username: str, link: str, ttl: timedelta, instance: str) -> EmailContent:
-    """The link that confirms the address of an account."""
+def build_verification(*, language: str | None, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The link that confirms the address of an account. No user name: whoever registers chooses both (N62)."""
     lang = email_language(language)
-    values = {"username": username, "instance": instance, "duration": _duration(ttl, lang)}
-    return _render(EmailKind.EMAIL_VERIFICATION, lang, greeting="greeting", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
+    values = {"instance": instance, "duration": _duration(ttl, lang)}
+    return _render(EmailKind.EMAIL_VERIFICATION, lang, greeting="greeting_anonymous", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
 
 
 def build_admin_setup(*, language: str | None, username: str, link: str, ttl: timedelta, instance: str) -> EmailContent:
@@ -188,17 +191,12 @@ def build_test_message(*, language: str | None, username: str, instance: str) ->
     return _render(EmailKind.TEST, lang, greeting="greeting", before=["intro"], after=["outro"], values=values)
 
 
-def masked_address(address: str) -> str:
-    """An address as an email may show it to someone else: its domain only, ``***@example.com``; ``***`` without one."""
-    domain = address.strip().rpartition("@")[2] if "@" in address else ""
-    return f"***@{domain}" if domain else "***"
-
-
-def build_email_changed(*, language: str | None, username: str, new_address: str, instance: str) -> EmailContent:
-    """The notice to the address an account had before, when its email address changes: the new one masked, no link."""
+def build_email_changed(*, language: str | None, instance: str) -> EmailContent:
+    """The notice to the address an account had before, when its email address changes. No link, no user name and
+    nothing of the new address, which whoever changes it chooses, down to the last label of its domain (N62)."""
     lang = email_language(language)
-    values = {"username": username, "instance": instance, "address": masked_address(new_address)}
-    return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting", before=["intro"], after=["advice"], values=values)
+    values = {"instance": instance}
+    return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro"], after=["advice"], values=values)
 
 
 class EmailRecipientError(ValueError):

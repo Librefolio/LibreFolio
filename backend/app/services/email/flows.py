@@ -44,15 +44,15 @@ _PURPOSES: dict[str, AccountTokenPurpose] = {"invite": AccountTokenPurpose.INVIT
 FORGOT_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: «Forgot password», per identifier as written (case-insensitive): 3 requests an hour, whether an account matches or not.
 FORGOT_BY_IDENTIFIER = SlidingWindowLimiter(3, 60 * 60)
-#: «Forgot password», per recipient mailbox (case-insensitive): 3 emails an hour, whatever account they are for — several
-#: accounts may give the same mailbox.
+#: «Forgot password», per recipient mailbox (``delivery.mailbox_budget_key()``: the aliases of one mailbox count
+#: together): 3 emails an hour, whatever account they are for — several accounts may give the same mailbox.
 FORGOT_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 #: Per account, counted on its reset links: at most one email every 5 minutes, and 3 an hour; past them, in silence.
 RESET_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 RESET_EMAILS_PER_HOUR = 3
-#: Email-change notices: 3 an hour per account, and 3 an hour per recipient mailbox (case-insensitive). Without them, an
-#: account could point its email at any address, change it again, and so have the instance write to that address, with
-#: its username and a domain of its choice, as often as the hourly budget allows. Counted on the notices that went out.
+#: Email-change notices: 3 an hour per account, and 3 an hour per recipient mailbox (``delivery.mailbox_budget_key()``).
+#: Without them, an account could point its email at any address, change it again, and so have the instance write to
+#: that address as often as the hourly budget allows. Counted on the notices that went out.
 EMAIL_CHANGE_NOTICES_BY_ACCOUNT = SlidingWindowLimiter(3, 60 * 60)
 EMAIL_CHANGE_NOTICES_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 
@@ -178,7 +178,7 @@ async def send_link_email(
             raise EmailAccountInactiveError()
         recipient = user.email
         lang = await account_language(session, user.id)
-        content = build_password_reset(language=lang, username=user.username, link=link, ttl=link_ttl(record, moment), instance=links.instance)
+        content = build_password_reset(language=lang, link=link, ttl=link_ttl(record, moment), instance=links.instance)
         user_id = user.id
     await send_email(content, to=recipient, user_id=user_id)
     logger.info("Link emailed by an administrator", admin_id=admin.id, purpose=purpose, token_id=record.id, user_id=user_id, language=lang)
@@ -267,7 +267,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
             if not delivery.budget_status(state.max_per_hour).allowed:
                 logger.warning("Forgotten password: the hourly limit of the instance is reached, nothing sent", user_id=user_id)
                 return
-            if not FORGOT_BY_MAILBOX.hit(user.email.strip().casefold()).allowed:
+            if not FORGOT_BY_MAILBOX.hit(delivery.mailbox_budget_key(user.email)).allowed:
                 logger.info("Forgotten password: the mailbox had reset emails moments ago, nothing sent", user_id=user_id)
                 return
             issued = await user_service.create_password_reset(session, user, now=moment)
@@ -285,7 +285,6 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
                 language = await account_language(session, user_id)
                 content = build_password_reset(
                     language=language,
-                    username=user.username,
                     link=email_link(AccountTokenPurpose.PASSWORD_RESET, issued.token),
                     ttl=link_ttl(issued.record, moment),
                     instance=links.instance,
@@ -313,7 +312,7 @@ INSTANCE_FALLBACK = "LibreFolio"
 async def email_changed_work(user_id: int, old_address: str, new_address: str, *, engine: AsyncEngine | None = None) -> None:
     """The notice to the address an account had before its email changed, after the answer, with a session of its own.
 
-    It goes only to the old address, in the account's language, and shows the new one masked (``***@domain``). It carries
+    It goes only to the old address, in the account's language, and shows nothing of the new one (N62). It carries
     no link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else «LibreFolio». Nothing
     goes when the addresses are the same (``user_service.same_email()``, the one rule of decision P18: A–Z in any case),
     email is off (an ``info`` line, not a warning: the self-hosted default), the account is gone, email cannot be used
@@ -333,14 +332,14 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
                 logger.info("Email change notice: the account no longer exists, nothing sent", user_id=user_id)
                 return
             await require_email()
-            mailbox = old_address.strip().casefold()
+            mailbox = delivery.mailbox_budget_key(old_address)
             if not (EMAIL_CHANGE_NOTICES_BY_ACCOUNT.peek(user_id).allowed and EMAIL_CHANGE_NOTICES_BY_MAILBOX.peek(mailbox).allowed):
                 logger.info("Email change notice: past its limits, nothing sent", user_id=user_id)
                 return
             language = await account_language(session, user_id)
             links = links_state()
             instance = links.instance if links.ready else INSTANCE_FALLBACK
-            content = build_email_changed(language=language, username=user.username, new_address=new_address, instance=instance)
+            content = build_email_changed(language=language, instance=instance)
             await send_email(content, to=old_address, user_id=user_id)
             EMAIL_CHANGE_NOTICES_BY_ACCOUNT.hit(user_id)
             EMAIL_CHANGE_NOTICES_BY_MAILBOX.hit(mailbox)

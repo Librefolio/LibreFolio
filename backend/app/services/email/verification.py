@@ -55,8 +55,9 @@ RESEND_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: Per account, counted on the verification links already emailed: one every 5 minutes, 3 an hour.
 VERIFICATION_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 VERIFICATION_EMAILS_PER_HOUR = 3
-#: Per recipient mailbox (case-insensitive): 3 verification emails an hour, whatever account they are for, since several
-#: accounts may give the same mailbox, as with ``flows.FORGOT_BY_MAILBOX``. Counted on the emails that went out.
+#: Per recipient mailbox (``delivery.mailbox_budget_key()``: the aliases of one mailbox count together): 3 verification
+#: emails an hour, whatever account they are for, since several accounts may give the same mailbox, as with
+#: ``flows.FORGOT_BY_MAILBOX``. Counted on the emails that went out.
 VERIFICATION_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 #: Registration emails per client address, an IPv6 client by its /64: 10 an hour. Past it the account is still created
 #: and waits, but its email does not go: its owner asks for the link again from the sign-in page (coordinator, 16/10).
@@ -229,8 +230,8 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, n
     if not budget.allowed:
         raise EmailRateLimitedError(budget.retry_after)
     # Read now: a rollback expires ``user``, and an async session cannot reload it.
-    user_id, address, username = user.id, user.email, user.username
-    mailbox = address.strip().casefold()
+    user_id, address = user.id, user.email
+    mailbox = delivery.mailbox_budget_key(address)
     by_mailbox = VERIFICATION_BY_MAILBOX.peek(mailbox)
     if not by_mailbox.allowed:
         raise EmailRateLimitedError(by_mailbox.retry_after)
@@ -263,7 +264,6 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, n
         language = await account_language(session, user_id)
         content = build_verification(
             language=language,
-            username=username,
             link=email_link(VERIFICATION, issued.token),
             ttl=link_ttl(issued.record, now),
             instance=links.instance,
