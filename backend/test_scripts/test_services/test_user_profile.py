@@ -1153,3 +1153,172 @@ class TestUpdateProfileEmailVerification:
         assert (updated, error) == (None, "Email already registered"), f"{holder.email} is {holder.username}'s: the change must be refused, got {(updated, error)}"
         after = await _stored_profile(isolated_engine, ref.id)
         assert after == before, f"A refused change must write nothing, the verification included: {before} → {after}"
+
+
+# ============================================================================
+# NO ADDRESS IN THE LOGS — lot A7c (release 1.3, workstream A; the rule of workstream E)
+# ============================================================================
+# These imports and helpers serve TestUpdateProfileLogsNoAddress only, so they live next to it. Every test runs on the
+# private database of isolated_engine. Its accounts are rows committed in a setup session of their own before any
+# capture, so update_profile runs in isolated_session, which has never loaded them, as in a request; what it committed
+# is read back in a fresh session, after the capture. Each address has a local part of its own that no username
+# shares: a log may carry the username, never the address, and the check looks for the local part alone too.
+
+import logging
+from collections.abc import Iterable
+from typing import Any
+
+import structlog
+from structlog.testing import capture_logs
+
+#: update_profile's logger: structlog.get_logger(__name__) in user_service.
+USER_SERVICE_LOGGER = user_service.__name__
+#: The event update_profile logs once a change is committed, word for word.
+USER_PROFILE_UPDATED = "User profile updated"
+CANARY = "canary: the capture sees the events of the user service's logger"
+#: The SQL loggers. Below WARNING they print every statement with its parameters and every row read, so the addresses an
+#: UPDATE writes and a SELECT reads too. configure_logging (backend/app/logging_config.py) sets them to WARNING: a running
+#: server never writes those records, caplog sees them only because it lowers the root's level. UADM-030
+#: (test_users_admin_api.py) pins that premise, read from configure_logging's source.
+SQL_LOGGERS = ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool")
+
+
+@dataclass(frozen=True)
+class _AddressedUser:
+    """A user the test committed, as plain values: its username and its address carry tags of their own."""
+
+    id: int
+    username: str
+    email: str
+
+
+def _address(prefix: str) -> str:
+    """An address nobody has, in lower case at example.com, its local part a tag of its own."""
+    return f"{prefix}.{uuid.uuid4().hex[:12]}@example.com"
+
+
+async def _committed_addressed_user(engine: AsyncEngine, role: str) -> _AddressedUser:
+    """A regular user written as a row, with no service call, and committed in a setup session of its own, before any
+    capture. The hash is a marker, never used: nobody signs in."""
+    async with AsyncSession(engine, expire_on_commit=False) as setup:
+        user = User(username=f"{role}_{uuid.uuid4().hex[:8]}", email=_address("mailbox"), hashed_password="$2b$04$marker.nobody.signs.in")
+        setup.add(user)
+        await setup.commit()
+    return _AddressedUser(user.id, user.username, user.email)
+
+
+async def _logged_update(session: AsyncSession, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, user_id: int, username: Optional[str], email: Optional[str]) -> tuple[tuple[Optional[User], Optional[str]], list[dict[str, Any]], list[logging.LogRecord]]:
+    """update_profile in ``session``, and everything it logged, from the canaries to its return: the structlog events
+    (capture_logs) and the stdlib records (caplog at DEBUG, on the root and on the service's logger, enabled even if a
+    configuration disabled it).
+
+    Barriers first: a canary through the service's logger name must reach both captures, or a capture that sees nothing
+    would pass for a service that logs nothing.
+    """
+    monkeypatch.setattr(logging.getLogger(USER_SERVICE_LOGGER), "disabled", False)
+    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger=USER_SERVICE_LOGGER)
+    caplog.clear()
+    with capture_logs() as events:
+        structlog.get_logger(USER_SERVICE_LOGGER).debug(CANARY)
+        logging.getLogger(USER_SERVICE_LOGGER).debug(CANARY)
+        outcome = await user_service.update_profile(session=session, user_id=user_id, username=username, email=email)
+    records = list(caplog.records)
+    assert any(event.get("event") == CANARY for event in events), "barrier: structlog events of the user service's logger do not reach capture_logs"
+    assert any(record.name == USER_SERVICE_LOGGER and record.getMessage() == CANARY for record in records), "barrier: stdlib records of the user service's logger do not reach caplog at DEBUG"
+    return outcome, events, records
+
+
+def _shows_an_address(text: str, addresses: Iterable[str]) -> bool:
+    """Whether ``text`` shows one of ``addresses``, whole or by its local part alone, compared in lower case."""
+    lowered = text.lower()
+    return any(address.lower() in lowered or address.lower().partition("@")[0] in lowered for address in addresses)
+
+
+def _record_text(record: logging.LogRecord) -> str:
+    """All a stdlib record shows: its message and every attribute."""
+    return record.getMessage() + repr(vars(record))
+
+
+def _written_by_a_server(record: logging.LogRecord) -> bool:
+    """Whether a running server writes ``record``: every record but those below WARNING of the SQL loggers and their children."""
+    of_sql = any(record.name == name or record.name.startswith(f"{name}.") for name in SQL_LOGGERS)
+    return record.levelno >= logging.WARNING or not of_sql
+
+
+def _assert_no_address(events: list[dict[str, Any]], records: list[logging.LogRecord], addresses: Iterable[str], call: str) -> None:
+    """No structlog event, and no stdlib record a server would write, shows one of ``addresses``: in any key, value or
+    message, whole or by its local part, in any case."""
+    needles = sorted(set(addresses))
+    leaked_events = [event for event in events if _shows_an_address(repr(event), needles)]
+    leaked_records = [f"{record.name}: {record.getMessage()}" for record in records if _written_by_a_server(record) and _shows_an_address(_record_text(record), needles)]
+    assert leaked_events == [], f"{call}: structlog events showing {needles}, whole or by the local part: {leaked_events}"
+    assert leaked_records == [], f"{call}: stdlib records showing {needles}, whole or by the local part: {leaked_records}"
+
+
+def _the_user_profile_updated_event(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The «User profile updated» event of the capture, asserted to be there once."""
+    updated = [event for event in events if event.get("event") == USER_PROFILE_UPDATED]
+    assert len(updated) == 1, f"update_profile must log «{USER_PROFILE_UPDATED}» once for the change: {updated}"
+    return updated[0]
+
+
+class TestUpdateProfileLogsNoAddress:
+    """Lot A7c: update_profile writes no email address in any log — the rule of workstream E, which matters most on
+    the hosted cloud. Its «User profile updated» keeps ``user_id`` and ``username``, and ``email`` gives way to
+    ``email_changed``: exactly True when the address changed, False otherwise.
+
+    What is checked is everything the call logged, captured at DEBUG by ``_logged_update``: no structlog event and no
+    stdlib record shows the old address or the new one, whole or by its local part, in any case — the SQL loggers'
+    records below WARNING aside, which no server writes (``SQL_LOGGERS``).
+
+    Today update_profile logs ``email=user.email``: UPROF-001 is red on that keyword alone, in each of its four changes
+    (the change itself succeeds and is committed); the refusal of UPROF-002 logs nothing and is a guard.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("with_username", "email_sent", "email_changed"),
+        [
+            pytest.param(False, "new", True, id="email-only"),
+            pytest.param(True, "new", True, id="username-and-email"),
+            pytest.param(True, None, False, id="username-only"),
+            pytest.param(False, "same", False, id="same-email"),
+        ],
+    )
+    async def test_the_update_logs_email_changed_never_an_address(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, with_username: bool, email_sent: Optional[str], email_changed: bool):
+        """UPROF-001 — NEW, red today only because of update_profile's ``email=`` keyword (the route's is PROF-017's and
+        PROF-018's): «User profile updated» carries the address, and no ``email_changed``. An email change alone, a
+        username and an email together, a username alone, the account's own email sent again: no event and no record
+        shows the old address or the new one, and «User profile updated» is there once, without ``email``, with
+        ``email_changed`` exactly True for the two email changes and exactly False for the other two, ``user_id`` and
+        ``username`` as the change left them."""
+        account = await _committed_addressed_user(isolated_engine, "logged")
+        username = f"renamed_{uuid.uuid4().hex[:8]}" if with_username else None
+        email = {"new": _address("moved"), "same": account.email}.get(email_sent)
+        username_after, email_after = username or account.username, email or account.email
+
+        (updated, error), events, records = await _logged_update(isolated_session, caplog, monkeypatch, account.id, username, email)
+
+        assert error is None and updated is not None, f"barrier: the change must succeed: error {error!r}"
+        after = await _stored_profile(isolated_engine, account.id)
+        assert (after.username, after.email) == (username_after, email_after), f"barrier: the change must be committed: {account} → {after}"
+        _assert_no_address(events, records, [account.email, email_after], f"update_profile(username={username!r}, email={email!r})")
+        event = _the_user_profile_updated_event(events)
+        assert "email" not in event, f"«{USER_PROFILE_UPDATED}» must carry no 'email' key: {event}"
+        assert event.get("email_changed") is email_changed, f"«{USER_PROFILE_UPDATED}» must carry email_changed={email_changed}, exactly: {event}"
+        assert (event.get("user_id"), event.get("username")) == (account.id, username_after), f"«{USER_PROFILE_UPDATED}» keeps user_id and username, as the change left them: {event}"
+
+    @pytest.mark.asyncio
+    async def test_a_refused_email_change_logs_no_address(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """UPROF-002 — GUARD, green today and after: an address another account already uses is refused («Email already
+        registered»), and no event and no record shows either address, the account's or the one it asked for; nothing is
+        updated, so there is no «User profile updated» either."""
+        account = await _committed_addressed_user(isolated_engine, "refused")
+        holder = await _committed_addressed_user(isolated_engine, "holder")
+
+        outcome, events, records = await _logged_update(isolated_session, caplog, monkeypatch, account.id, None, holder.email)
+
+        assert outcome == (None, "Email already registered"), f"barrier: {holder.email} is {holder.username}'s, so the change must be refused: {outcome}"
+        _assert_no_address(events, records, [account.email, holder.email], "The refused update_profile")
+        assert [event for event in events if event.get("event") == USER_PROFILE_UPDATED] == [], f"A refused change updates nothing, so it logs no «{USER_PROFILE_UPDATED}»: {events}"

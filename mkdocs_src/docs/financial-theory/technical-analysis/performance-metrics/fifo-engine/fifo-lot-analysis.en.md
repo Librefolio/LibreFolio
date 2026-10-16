@@ -148,7 +148,7 @@ $$
 \text{Closure Realized PnL} = q\,(\text{ClosePrice} - \text{LotUnitCost})\,r_{\text{close}} + q\,\text{LotUnitCost}\,(r_{\text{close}} - r_{\text{open}})
 $$
 
-The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds convert at the sale date and the units sold leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
+The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds — or the value an outgoing adjustment hands over — convert at its date and the units leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
 
 Every closure's cost converts at the opening date, like $\text{OriginalCost}$, so a LONG lot's market P&L is the value of its open units minus their cost at the purchase rate:
 
@@ -278,6 +278,9 @@ Where:
 The **D-1** rule keeps the day of record clean: a purchase made *on* the income date does not earn that
 distribution, and a lot sold the day before does not either. Larger eligible lots receive a larger share;
 lots held at other brokers, or not yet (or no longer) eligible, receive nothing.
+
+Income keeps its sign: a negative correction of a dividend or interest payment lowers the lot's income, as it
+does on the Dashboard.
 
 !!! warning "Changed in FIFO v5"
 

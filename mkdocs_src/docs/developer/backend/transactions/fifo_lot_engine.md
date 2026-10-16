@@ -142,7 +142,7 @@ Returned snapshot of complete run.
 | `closures` | All FIFO closures sorted by close date. |
 | `issues` | Data-quality / unsupported-scenario issues. |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) with source tx, rule, weights, native+target amounts. |
-| `economic_accumulators_by_lot` | Per-lot `gross_income`, `allocated_fees`, `allocated_taxes` (target currency, positive magnitudes). |
+| `economic_accumulators_by_lot` | Per-lot `gross_income` (signed: a negative income correction lowers it), `allocated_fees`, `allocated_taxes` (positive magnitudes), all in the target currency. |
 | `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts with no eligible lot, kept at asset level. |
 
 Useful helpers on result:
@@ -266,9 +266,9 @@ The figures in the report currency are the lots analysis's: `convert_closure()` 
 
 ### 📤 Hand-over at cost {: #handover-at-cost }
 
-A negative `ADJUSTMENT` carrying a per-unit `cost_basis_override` hands its units over at that cost (developer decision 47: the principle of a priced `ADJUSTMENT_IN`, in the opposite direction). The average cost already treats it so — the cost of the units leaves the capital, it is not a loss — and the lots agree: every fragment closes at the row's `cost_basis_override` — the event's `unit_price`, the average cost the units leave with, **not** the fragment's own `unit_price` — so a fragment of a cheaper lot realizes the difference. Example, in one currency: 10 units bought at 10 and 10 at 20 (average 15); an `ADJUSTMENT_OUT` of 10 at cost 15 closes the first lot at 15 — `realized_pnl = +50`, `proceeds = 150` — and the lots total equals the Dashboard's P&L. With a single lot the realized part is 0.
+A negative `ADJUSTMENT` carrying a per-unit `cost_basis_override` hands its units over at that cost (developer decision 47: the principle of a priced `ADJUSTMENT_IN`, in the opposite direction). The Dashboard treats it so: the value handed over, converted at the row's date, leaves the capital baseline, and its difference from the average cost the pool gives up is realized (`DailyStateBuilder._handed_over_value()`, see [WAC & Cost Basis — Portfolio engine](wac.md#portfolio-engine)). The lots agree: every fragment closes at the row's `cost_basis_override` — the event's `unit_price`, **not** the fragment's own `unit_price` — so a fragment of a cheaper lot realizes the difference. Example, in one currency: 10 units bought at 10 and 10 at 20 (average 15); an `ADJUSTMENT_OUT` of 10 at cost 15 closes the first lot at 15 — `realized_pnl = +50`, `proceeds = 150` — and the lots total equals the Dashboard's P&L. With a single lot and a cost equal to the lot's, the realized part is 0.
 
-The cost applies to every fragment, whatever its lot's currency. `_handover_currency(tx, fragment)` gives each closure its `close_currency`: the cost basis's — `tx.cost_basis_currency`, or the lot's currency when empty — or, for a row without a cost basis, the lot's. A cost basis in another currency than the lot's leaves the closure's native `realized_pnl` `None` (see [Closure currency](#closure-currency)); the lots analysis realizes the value handed over, converted at the row's date, against the lot's cost converted at its opening date.
+The cost applies to every fragment, whatever its lot's currency. `_handover_currency(tx, fragment)` gives each closure its `close_currency`: the cost basis's — `tx.cost_basis_currency`, or the lot's currency when empty — or, for a row without a cost basis, the lot's. A cost basis in another currency than the lot's leaves the closure's native `realized_pnl` `None` (see [Closure currency](#closure-currency)); the lots analysis realizes the value handed over, converted at the row's date, against the lot's cost converted at its opening date. With `cost_basis_currency` empty, the Dashboard reads the cost basis in the asset's currency instead (`_handed_over_value()`): the two agree when the lot was opened in the asset's currency.
 
 ---
 
@@ -361,13 +361,17 @@ per-lot accumulators, an audit trail, and asset-level orphans.
   (`backend/app/services/financial_math/yield_on_cost.py`) counts eligible quantity with the same public function.
 - weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
   conserved exactly;
+- **signed amounts**: a pool sums its `native_amount` / `target_amount` values with their sign, as the Dashboard
+  does (`NativeCash.flows()` keeps income signed; developer decision D-MF3): a negative correction lowers the
+  income of the lots, and an orphan pool can be negative;
 - **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
   issue and an audit group tagged `ASSET_INCOME_HOLDINGS`.
 
 ### 💸 FEE / TAX
 
 `_allocate_cost_pools()` pools asset-linked cost and matches it to operations with a deterministic ladder
-(`_match_cost_operations`), weighting by `target_amount`:
+(`_match_cost_operations`), weighting by `target_amount`. Unlike income, a cost pool sums its amounts in
+absolute value, as the Dashboard counts fees and taxes:
 
 | Cost | Matching order (first non-empty wins) |
 |------|----------------------------------------|

@@ -15,7 +15,7 @@
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
+    import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -232,10 +232,8 @@
     });
     let activeTransactionId = $derived(activeHistoryEvent?.transaction_id ?? lot?.opening_transaction_id ?? null);
     let canGotoTransaction = $derived(onGotoTransaction != null && activeTransactionId != null);
-    let lotOpeningValue = $derived.by(() => {
-        if (!lot) return null;
-        return multiplyOrNull(parseNumber(lot.original_quantity), parseNumber(lot.opening_unit_price));
-    });
+    // The backend's cost of the lot at opening (U8): null without the opening-date rate, never rebuilt as quantity × price.
+    let lotOpeningValue = $derived.by(() => (lot ? parseNumber(lot.original_cost) : null));
     let lotCurrentValue = $derived.by(() => (lot ? (parseNumber(lot.total_value) ?? parseNumber(lot.open_value)) : null));
     let lotCumulativeProceeds = $derived.by(() => (lot ? parseNumber(lot.cumulative_proceeds) : null));
     let lotPnl = $derived.by(() => (lot ? parseNumber(lot.pnl) : null));
@@ -270,126 +268,126 @@
     }
 </script>
 
-<ModalBase open={open && lot != null} maxWidth="4xl" onRequestClose={onClose} contentClass="bg-white dark:bg-slate-800" testId="lot-custody-modal">
+<ModalBase open={open && lot != null} maxWidth="4xl" onRequestClose={onClose} testId="lot-custody-modal">
     {#if lot}
-        <div class="flex items-center gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+        <div class="flex items-center gap-3 border-b border-lf-subtle px-5 py-4">
             <AssetIcon iconUrl={assetInfo?.icon_url ?? null} assetType={assetInfo?.asset_type ?? null} altText={assetName} size="md" />
             <div class="min-w-0 flex-1">
-                <h2 class="truncate text-lg font-semibold text-slate-900 dark:text-slate-100" data-testid="lot-custody-modal-title">
+                <h2 class="truncate text-lg font-semibold text-lf-primary" data-testid="lot-custody-modal-title">
                     {$_('brokers.lots.modal.title', {values: {asset: assetName, date: formatDate(lot.opening_date)}})}
                 </h2>
-                <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400" data-testid="lot-custody-modal-lot-id">
+                <p class="mt-0.5 text-sm text-lf-muted" data-testid="lot-custody-modal-lot-id">
                     #{lot.lot_id}
                 </p>
             </div>
-            <button type="button" class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-100" onclick={onClose} aria-label={$_('common.close')} data-testid="lot-custody-modal-close">
+            <button type="button" class="rounded-lg p-2 text-lf-muted transition-colors hover:bg-lf-hover hover:text-lf-secondary" onclick={onClose} aria-label={$_('common.close')} data-testid="lot-custody-modal-close">
                 <X size={18} />
             </button>
         </div>
 
         <div class="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-5">
             <section class="space-y-3" data-testid="lot-custody-modal-summary">
-                <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-lf-muted">
                     {$_('brokers.lots.modal.summary')}
                 </h3>
                 <dl class="grid gap-3 sm:grid-cols-2">
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.directionLabel')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{directionLabel(lot.direction)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.directionLabel')}</dt>
+                        <dd class="mt-1 text-sm font-medium text-lf-primary">{directionLabel(lot.direction)}</dd>
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.originalQuantity')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.original_quantity)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.originalQuantity')}</dt>
+                        <dd class="mt-1 text-sm font-medium text-lf-primary">{formatQuantity(lot.original_quantity)}</dd>
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openQuantity')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.open_quantity)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.openQuantity')}</dt>
+                        <dd class="mt-1 text-sm font-medium text-lf-primary">{formatQuantity(lot.open_quantity)}</dd>
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingPrice')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatUnitPrice(lot.opening_unit_price)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.openingPrice')}</dt>
+                        <dd class="mt-1 text-sm font-medium text-lf-primary">{formatUnitPrice(lot.opening_unit_price)}</dd>
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingValue')}</dt>
-                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotOpeningValue)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.openingValue')}</dt>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-lf-primary" data-testid="lot-custody-modal-opening-value">{formatPrice(lotOpeningValue)}</dd>
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.currentValue')}</dt>
-                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCurrentValue)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.currentValue')}</dt>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-lf-primary">{formatPrice(lotCurrentValue)}</dd>
                         {#if lotIsEstimated}
-                            <p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400" data-testid="lot-custody-modal-value-source">
+                            <p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-lf-warning" data-testid="lot-custody-modal-value-source">
                                 <Info size={12} />
                                 {$_('brokers.lots.modal.estimatedAtCost')}
                             </p>
                         {/if}
                     </div>
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.cumulativeProceeds')}</dt>
-                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCumulativeProceeds)}</dd>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.cumulativeProceeds')}</dt>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-lf-primary">{formatPrice(lotCumulativeProceeds)}</dd>
                     </div>
                     {#if lotHasIncome}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.assetIncome')}</dt>
+                        <div class="rounded-xl bg-lf-panel px-4 py-3">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.assetIncome')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotAssetIncome)}`} data-testid="lot-custody-modal-asset-income">{formatSignedCurrency(lotAssetIncome)}</dd>
                         </div>
                     {/if}
                     {#if lotMarketPnl != null}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.marketPnl')}</dt>
+                        <div class="rounded-xl bg-lf-panel px-4 py-3">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.marketPnl')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotMarketPnl)}`} data-testid="lot-custody-modal-market-pnl">{formatSignedCurrency(lotMarketPnl)}</dd>
                         </div>
                     {/if}
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.fifoPnl')}</dt>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.fifoPnl')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotPnl)}`}>{formatSignedCurrency(lotPnl)}</dd>
                     </div>
                     {#if lotTotalPnl != null}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.totalPnl')}</dt>
+                        <div class="rounded-xl bg-lf-panel px-4 py-3">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.totalPnl')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalPnl)}`} data-testid="lot-custody-modal-total-pnl">{formatSignedCurrency(lotTotalPnl)}</dd>
                         </div>
                     {/if}
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openReturn')}</dt>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.openReturn')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotRelativeReturn)}`}>{formatPercent(lotRelativeReturn)}</dd>
                     </div>
                     {#if lotTotalReturn != null}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalReturn')}</dt>
+                        <div class="rounded-xl bg-lf-panel px-4 py-3">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.totalReturn')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalReturn)}`} data-testid="lot-custody-modal-total-return">{formatPercent(lotTotalReturn)}</dd>
                         </div>
                     {/if}
                     {#if lotHasNetCosts}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:col-span-2" data-testid="lot-custody-modal-net-breakdown">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netBreakdown')}</dt>
-                            <dd class="mt-2 space-y-1 text-sm tabular-nums text-slate-900 dark:text-slate-100">
+                        <div class="rounded-xl bg-lf-panel px-4 py-3 sm:col-span-2" data-testid="lot-custody-modal-net-breakdown">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.netBreakdown')}</dt>
+                            <dd class="mt-2 space-y-1 text-sm tabular-nums text-lf-primary">
                                 <div class="flex items-center justify-between gap-4">
-                                    <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.grossTotalPnl')}</span>
+                                    <span class="text-lf-muted">{$_('brokers.lots.modal.grossTotalPnl')}</span>
                                     <span class={`font-medium ${signedToneClass(lotTotalPnl)}`}>{formatSignedCurrency(lotTotalPnl)}</span>
                                 </div>
                                 <div class="flex items-center justify-between gap-4">
-                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.fees')}</span>
-                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-fees">{formatPrice(lotAllocatedFees)}</span>
+                                    <span class="text-lf-muted">− {$_('brokers.lots.modal.fees')}</span>
+                                    <span class="font-medium {SIGN_TEXT.portfolio.loss}" data-testid="lot-custody-modal-allocated-fees">{formatPrice(lotAllocatedFees)}</span>
                                 </div>
                                 <div class="flex items-center justify-between gap-4">
-                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.taxes')}</span>
-                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-taxes">{formatPrice(lotAllocatedTaxes)}</span>
+                                    <span class="text-lf-muted">− {$_('brokers.lots.modal.taxes')}</span>
+                                    <span class="font-medium {SIGN_TEXT.portfolio.loss}" data-testid="lot-custody-modal-allocated-taxes">{formatPrice(lotAllocatedTaxes)}</span>
                                 </div>
-                                <div class="flex items-center justify-between gap-4 border-t border-slate-200 pt-1 dark:border-slate-700">
-                                    <span class="font-medium text-slate-600 dark:text-slate-300">{$_('brokers.lots.modal.netTotalPnl')}</span>
+                                <div class="flex items-center justify-between gap-4 border-t border-lf-subtle pt-1">
+                                    <span class="font-medium text-lf-secondary">{$_('brokers.lots.modal.netTotalPnl')}</span>
                                     {#if lotNetAvailable}
                                         <span class={`font-semibold ${signedToneClass(lotNetTotalPnl)}`} data-testid="lot-custody-modal-net-total-pnl">{formatSignedCurrency(lotNetTotalPnl)}</span>
                                     {:else}
-                                        <span class="font-semibold text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-pnl">—</span>
+                                        <span class="font-semibold text-lf-muted" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-pnl">—</span>
                                     {/if}
                                 </div>
                                 {#if lotNetTotalReturn != null || !lotNetAvailable}
                                     <div class="flex items-center justify-between gap-4">
-                                        <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netTotalReturn')}</span>
+                                        <span class="text-lf-muted">{$_('brokers.lots.modal.netTotalReturn')}</span>
                                         {#if lotNetAvailable}
                                             <span class={`font-medium ${signedToneClass(lotNetTotalReturn)}`} data-testid="lot-custody-modal-net-total-return">{formatPercent(lotNetTotalReturn)}</span>
                                         {:else}
-                                            <span class="font-medium text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-return">—</span>
+                                            <span class="font-medium text-lf-muted" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-return">—</span>
                                         {/if}
                                     </div>
                                 {/if}
@@ -397,22 +395,22 @@
                         </div>
                     {/if}
                     {#if lotHasIncome && lotCashYield != null}
-                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.cashYield')}</dt>
+                        <div class="rounded-xl bg-lf-panel px-4 py-3">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.modal.cashYield')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotCashYield)}`} data-testid="lot-custody-modal-cash-yield">{formatPercent(lotCashYield)}</dd>
                         </div>
                     {/if}
-                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:col-span-2">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('common.status')}</dt>
+                    <div class="rounded-xl bg-lf-panel px-4 py-3 sm:col-span-2">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('common.status')}</dt>
                         <dd class="mt-2 flex flex-wrap gap-2" data-testid="lot-custody-modal-states">
                             {#if lotStates.length > 0}
                                 {#each lotStates as state}
-                                    <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                    <span class="rounded-full bg-lf-success-soft px-2.5 py-1 text-xs font-medium text-lf-success-on-soft">
                                         {stateLabel(state)}
                                     </span>
                                 {/each}
                             {:else}
-                                <span class="text-sm text-slate-500 dark:text-slate-400">
+                                <span class="text-sm text-lf-muted">
                                     {$_('brokers.lots.modal.emptyStates')}
                                 </span>
                             {/if}
@@ -423,11 +421,11 @@
 
             <section class="space-y-3" data-testid="lot-custody-modal-current-custody">
                 <div class="flex items-center gap-2">
-                    <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-lf-muted">
                         {$_('brokers.lots.modal.currentCustody')}
                     </h3>
                     <Tooltip text={$_('brokers.lots.modal.absoluteQuantityTooltip')} position="top" maxWidth="280px">
-                        <span class="inline-flex text-slate-400 hover:text-libre-green dark:hover:text-emerald-400" data-testid="lot-custody-modal-absolute-quantity-info">
+                        <span class="inline-flex text-lf-muted hover:text-lf-link" data-testid="lot-custody-modal-absolute-quantity-info">
                             <Info size={14} />
                         </span>
                     </Tooltip>
@@ -437,54 +435,54 @@
                     <div class="space-y-2">
                         <div class="grid gap-2 sm:grid-cols-2" data-testid="lot-custody-modal-custody-summary">
                             {#each groupedCustody as group, index}
-                                <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70" data-testid={`lot-custody-modal-custody-summary-row-${index}`}>
+                                <div class="flex items-center justify-between gap-3 rounded-xl bg-lf-panel px-4 py-3" data-testid={`lot-custody-modal-custody-summary-row-${index}`}>
                                     <div class="min-w-0 flex-1">
                                         {#if group.custodyType === 'BROKER' && group.broker}
                                             <BrokerBadge broker={group.broker} {brokers} />
                                         {:else}
-                                            <div class="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                                            <div class="inline-flex items-center gap-2 text-sm font-medium text-lf-secondary">
                                                 <ArrowRightLeft size={16} class="text-blue-500 dark:text-blue-400" />
                                                 <span>{$_('brokers.lots.modal.inTransit')}</span>
                                             </div>
                                         {/if}
                                     </div>
-                                    <div class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                                    <div class="shrink-0 text-right text-sm font-semibold tabular-nums text-lf-primary">
                                         {formatQuantity(group.quantity)}
                                     </div>
                                 </div>
                             {/each}
                         </div>
 
-                        <div class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400" data-testid="lot-custody-modal-custody-fragments-label">
+                        <div class="text-xs font-medium uppercase tracking-[0.16em] text-lf-muted" data-testid="lot-custody-modal-custody-fragments-label">
                             {$_('brokers.lots.modal.custodyFragments')}
                         </div>
                         {#each currentCustody as slice, index}
-                            <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-700" data-testid={`lot-custody-modal-custody-row-${index}`}>
+                            <div class="flex items-center justify-between gap-3 rounded-xl border border-lf-subtle px-4 py-3" data-testid={`lot-custody-modal-custody-row-${index}`}>
                                 <div class="min-w-0 flex-1">
                                     {#if slice.custody_type === 'BROKER' && getBroker(slice.broker_id)}
                                         <BrokerBadge broker={getBroker(slice.broker_id) ?? {id: -1, name: '—'}} {brokers} />
                                     {:else}
-                                        <div class="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                                        <div class="inline-flex items-center gap-2 text-sm font-medium text-lf-secondary">
                                             <ArrowRightLeft size={16} class="text-blue-500 dark:text-blue-400" />
                                             <span>{$_('brokers.lots.modal.inTransit')}</span>
                                         </div>
                                     {/if}
                                 </div>
-                                <div class="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                                <div class="shrink-0 text-right text-sm font-semibold tabular-nums text-lf-primary">
                                     {formatQuantity(slice.quantity)}
                                 </div>
                             </div>
                         {/each}
                     </div>
                 {:else}
-                    <div class="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400" data-testid="lot-custody-modal-current-custody-empty">
+                    <div class="rounded-xl border border-dashed border-lf-subtle px-4 py-6 text-sm text-lf-muted" data-testid="lot-custody-modal-current-custody-empty">
                         {$_('brokers.lots.modal.emptyCustody')}
                     </div>
                 {/if}
             </section>
 
             <section class="space-y-3" data-testid="lot-custody-modal-history">
-                <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-lf-muted">
                     {$_('brokers.lots.modal.history')}
                 </h3>
 
@@ -496,14 +494,12 @@
                             {@const detailItems = eventDetailItems(event)}
                             <button
                                 type="button"
-                                class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {activeHistoryKey === rowKey
-                                    ? 'border-libre-green bg-emerald-50/60 dark:border-emerald-500 dark:bg-emerald-900/15'
-                                    : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50'}"
+                                class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {activeHistoryKey === rowKey ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle bg-lf-card hover:bg-lf-hover'}"
                                 onclick={() => (selectedHistoryKey = rowKey)}
                                 aria-pressed={activeHistoryKey === rowKey}
                                 data-testid={`lot-custody-modal-history-row-${index}`}
                             >
-                                <div class="flex w-14 shrink-0 items-center pt-0.5 text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+                                <div class="flex w-14 shrink-0 items-center pt-0.5 text-xs font-semibold tabular-nums text-lf-muted">
                                     {formatDate(event.date, 'short')}
                                 </div>
 
@@ -528,17 +524,17 @@
                                         {/if}
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <div class="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                                        <div class="truncate text-sm font-medium text-lf-primary">
                                             {eventDescription(event)}
                                         </div>
-                                        <div class="mt-1 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                        <div class="mt-1 text-xs uppercase tracking-wide text-lf-muted">
                                             {eventKindLabel(event.kind)}
                                         </div>
                                         {#if detailItems.length > 0}
                                             <div class="mt-2 flex flex-wrap gap-2" data-testid={`lot-custody-modal-history-details-${index}`}>
                                                 {#each detailItems as item}
-                                                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] dark:bg-slate-700/70">
-                                                        <span class="uppercase tracking-wide text-slate-500 dark:text-slate-400">{item.label}</span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full bg-lf-panel px-2 py-1 text-[11px]">
+                                                        <span class="uppercase tracking-wide text-lf-muted">{item.label}</span>
                                                         <span class={`font-semibold tabular-nums ${eventDetailToneClass(item.tone)}`}>{item.value}</span>
                                                     </span>
                                                 {/each}
@@ -547,27 +543,27 @@
                                     </div>
                                 </div>
 
-                                <div class="shrink-0 pl-2 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                                <div class="shrink-0 pl-2 text-right text-sm font-semibold tabular-nums text-lf-primary">
                                     {eventQuantityText(event)}
                                 </div>
                             </button>
                         {/each}
                     </div>
                 {:else}
-                    <div class="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400" data-testid="lot-custody-modal-history-empty">
+                    <div class="rounded-xl border border-dashed border-lf-subtle px-4 py-6 text-sm text-lf-muted" data-testid="lot-custody-modal-history-empty">
                         {$_('brokers.lots.modal.emptyHistory')}
                     </div>
                 {/if}
             </section>
         </div>
 
-        <div class="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
-            <button type="button" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600" onclick={onClose} data-testid="lot-custody-modal-footer-close">
+        <div class="flex items-center justify-end gap-3 border-t border-lf-subtle px-5 py-4">
+            <button type="button" class="rounded-lg bg-lf-panel px-4 py-2 text-sm font-medium text-lf-secondary transition-colors hover:bg-lf-neutral" onclick={onClose} data-testid="lot-custody-modal-footer-close">
                 {$_('common.close')}
             </button>
             <button
                 type="button"
-                class="rounded-lg bg-libre-green px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-libre-green/90 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action transition-colors hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
                 onclick={handleGotoTransaction}
                 disabled={!canGotoTransaction}
                 data-testid="lot-custody-modal-footer-goto-transaction"
