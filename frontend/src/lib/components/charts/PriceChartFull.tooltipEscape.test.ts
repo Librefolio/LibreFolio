@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * PriceChartFull.tooltipEscape.test.ts — K-15: the price chart's axis tooltip escapes the currencies its rows name.
+ * PriceChartFull.tooltipEscape.test.ts — K-15: the price chart's tooltips escape what they name: the currencies of the axis
+ * tooltip's rows, and the type and currencies of an event marker.
  *
  * ## What it protects (K-15)
  *
@@ -8,6 +9,10 @@
  * brackets, a currency with its flag. Every text interpolated there must be escaped, or a value that holds markup becomes
  * markup. The verdict, on a payload whose markup carries a marker (`PAYLOAD`): parsed into a detached element, the
  * tooltip holds no `[data-pwned]` element, and its text holds the payload verbatim — escaped markup reads as text.
+ *
+ * The item tooltip of an event marker (`eventMarkers`, :872–:895) is HTML too. `formatEventEntry` (:807–:835) writes the
+ * event's type (:809), its amount with a badge naming its currency and flag (:813) and, for an event converted to the
+ * display currency, a second badge naming the original currency and its flag (:816). Same rule, same verdict.
  *
  * ## Why it is red today
  *
@@ -25,12 +30,21 @@
  * The codes are tested as well as the flags: in this component they reach only the tooltip strings (and the
  * pass-through to `CandlestickChart`), never an `Intl` call, so a markup code cannot crash the render.
  *
+ * ## The event markers (written green)
+ *
+ * The marker cases came after the fix. Before it, `formatEventEntry` interpolated the type and both flags raw, beside the
+ * codes it already escaped — `marker.currency` and `marker.originalCurrency`, the green guards. The asset page builds the
+ * markers from the asset's events (`routes/(app)/assets/[id]/+page.svelte`, `chartEventMarkers`): the type is the event's
+ * own, the flags are `getCurrencyInfo(code).flag_emoji` of the event's currencies.
+ *
  * ## How
  *
  * The real component in jsdom, ECharts replaced by the recorder of `PriceChartFull.test.ts`. The tooltip is the formatter
- * the chart handed ECharts, called with the items under the pointer, as ECharts calls an axis tooltip. Layout is
- * stubbed: jsdom measures every box as 0×0 and the chart draws only into a non-empty one; the recorder reports a plot
- * 1200 px wide, so the week and a half of data stays daily. The chart imports `assetTypes.ts` (through
+ * the chart handed ECharts, called with the items under the pointer, as ECharts calls an axis tooltip; an event's is the
+ * formatter of the scatter series (`Events: <type>`) that holds its point, called with that point, as ECharts calls an
+ * item tooltip (`tooltipOf` in `PriceChartFull.test.ts`) — at the daily resolution, where the point carries its marker.
+ * Layout is stubbed: jsdom measures every box as 0×0 and the chart draws only into a non-empty one; the recorder reports a
+ * plot 1200 px wide, so the week and a half of data stays daily. The chart imports `assetTypes.ts` (through
  * `signalLabel.ts`), which reads the generated client at module load, so the modules are imported after asserting the
  * generated file exists.
  *
@@ -108,6 +122,7 @@ import type {ComponentProps} from 'svelte';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {LineDataPoint} from './LineChart.svelte';
+import type {EventMarker} from './PriceChartFull.svelte';
 
 // =============================================================================
 // Fixtures
@@ -130,6 +145,11 @@ const HOVERED_DAY = '2024-03-04';
 const MAIN_LABEL = 'Invented asset';
 /** The overlay signal's label: the key of its entry in `overlaySignalInfoMap`, and its row's series name. */
 const PEER_LABEL = 'Peer';
+
+/** A dividend on HOVERED_DAY, paid in dollars and shown in dollars: its badge names the currency with its flag. */
+const DIVIDEND: EventMarker = {date: HOVERED_DAY, type: 'DIVIDEND', value: 1.25, currency: 'USD', currencyFlag: '🇺🇸'};
+/** The same dividend converted to euros: its badge names the display currency, a second one the original currency with its flag. */
+const CONVERTED_DIVIDEND: EventMarker = {date: HOVERED_DAY, type: 'DIVIDEND', value: 1.1375, currency: 'EUR', currencyFlag: '🇪🇺', originalValue: 1.25, originalCurrency: 'USD', originalCurrencyFlag: '🇺🇸'};
 
 /** One series under the pointer, as ECharts hands it to an axis tooltip. */
 interface AxisRow {
@@ -225,6 +245,35 @@ function expectConversionDrawn(): void {
     expect(seriesNames(), 'barrier: the chart does not draw the ghost series of the original values: conversion is not active').toContain(ghost?.label);
 }
 
+/** A point of an event series as the chart hands it to ECharts: at the daily resolution it carries its marker. */
+interface EventPoint {
+    value: [string, number];
+    marker?: EventMarker;
+    markers?: EventMarker[];
+}
+
+/** A scatter series of events, with the item tooltip that writes them. */
+interface EventSeries {
+    name: string;
+    type: string;
+    data: EventPoint[];
+    tooltip: {formatter: Formatter};
+}
+
+/** The event series of the last draw: the scatter series the chart names `Events: <type>`. */
+function eventSeries(): EventSeries[] {
+    return ((lastDraw().series ?? []) as EventSeries[]).filter((entry) => entry.type === 'scatter' && String(entry.name).startsWith('Events: '));
+}
+
+/** The chart drawn with `marker` on it, and its tooltip's HTML: the formatter of the series that holds the marker's point, called with that point. */
+async function markerTooltip(marker: EventMarker): Promise<string> {
+    render(PriceChartFull, {props: {data: DATA, currency: 'EUR', mainSeriesLabel: MAIN_LABEL, eventMarkers: [marker]}});
+    await waitFor(() => expect(axisDays(), 'barrier: the chart drew at the daily resolution, one point per day').toEqual(DAYS), {timeout: 5_000});
+    const holders = eventSeries().flatMap((series) => series.data.filter((point) => point.marker?.date === marker.date && point.marker?.type === marker.type).map((point) => ({series, point})));
+    expect(holders, 'barrier: exactly one event series holds a point of its own for the marker, the daily tooltip’s path').toHaveLength(1);
+    return holders[0].series.tooltip.formatter({data: holders[0].point});
+}
+
 /** A tooltip's HTML parsed into a detached element, as the browser parses it when ECharts sets it. */
 function parse(html: string): HTMLDivElement {
     const host = document.createElement('div');
@@ -301,6 +350,50 @@ describe('PriceChartFull — the axis tooltip rows escape what they interpolate 
 
         it('no conversion: mainCurrency is escaped (:1025)', async () => {
             expectEscaped(await axisTooltip({mainCurrency: PAYLOAD, mainCurrencyFlag: '🇺🇸'}, [MAIN_ROW]), 'main row, main currency code');
+        });
+    });
+});
+
+// =============================================================================
+// K-15 — the event markers' tooltip escapes what it names
+// =============================================================================
+
+describe('PriceChartFull — the event markers’ tooltip escapes what it interpolates (K-15)', {timeout: 20_000}, () => {
+    describe('an event in its own currency', () => {
+        it('control — the tooltip names the event’s type and, in brackets, its currency with its flag: the paths of :809 and :813', async () => {
+            const text = parse(await markerTooltip(DIVIDEND)).textContent ?? '';
+
+            expect(text, 'the tooltip does not name the event’s type').toContain(DIVIDEND.type);
+            expect(text, 'the tooltip does not name the event’s currency in brackets').toContain('(🇺🇸 USD)');
+        });
+
+        it('the marker’s type is escaped (:809)', async () => {
+            expectEscaped(await markerTooltip({...DIVIDEND, type: PAYLOAD}), 'event marker, type');
+        });
+
+        it('the marker’s currency flag is escaped (:813)', async () => {
+            expectEscaped(await markerTooltip({...DIVIDEND, currencyFlag: PAYLOAD}), 'event marker, currency flag');
+        });
+
+        it('guard — the marker’s currency code is escaped (:813)', async () => {
+            expectEscaped(await markerTooltip({...DIVIDEND, currency: PAYLOAD}), 'event marker, currency code');
+        });
+    });
+
+    describe('an event converted to the display currency', () => {
+        it('control — the badge names the display currency, marked as converted, and a second badge the original currency with its flag: the path of :816', async () => {
+            const text = parse(await markerTooltip(CONVERTED_DIVIDEND)).textContent ?? '';
+
+            expect(text, 'the converted event’s badge does not name the display currency, marked as converted').toContain('(🇪🇺 EUR) 💱');
+            expect(text, 'the converted event does not name its original currency in brackets').toContain('(🇺🇸 USD)');
+        });
+
+        it('the original currency flag is escaped (:816)', async () => {
+            expectEscaped(await markerTooltip({...CONVERTED_DIVIDEND, originalCurrencyFlag: PAYLOAD}), 'converted event marker, original currency flag');
+        });
+
+        it('guard — the original currency code is escaped (:816)', async () => {
+            expectEscaped(await markerTooltip({...CONVERTED_DIVIDEND, originalCurrency: PAYLOAD}), 'converted event marker, original currency code');
         });
     });
 });

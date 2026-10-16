@@ -42,19 +42,24 @@ const FLAG_SAMPLE = '\u{1F1FA}\u{1F1F8}';
 let flagFaceRequest: Promise<void> | undefined;
 
 /**
- * Asks the browser for the flag face, once, and resolves when the request has settled. It never rejects: a face that
- * fails to load leaves the system's fallback, as before K-13. Where nothing can load a font — no `document.fonts`, as
- * in a test or on a server — it resolves at once.
+ * Asks the browser for the flag face, once, and resolves when the request has settled. It never rejects and never
+ * throws: a face that fails to load leaves the system's fallback, as before K-13. Where nothing can load a font — no
+ * `document.fonts`, as in a test or on a server — it resolves at once.
  */
 export function chartFontReady(): Promise<void> {
     if (!flagFaceRequest) {
         const fonts = typeof document === 'undefined' ? undefined : document.fonts;
-        flagFaceRequest = fonts?.load
-            ? fonts.load(FLAG_FONT, FLAG_SAMPLE).then(
-                  () => undefined,
-                  () => undefined,
-              )
-            : Promise.resolve();
+        try {
+            flagFaceRequest = fonts?.load
+                ? fonts.load(FLAG_FONT, FLAG_SAMPLE).then(
+                      () => undefined,
+                      () => undefined,
+                  )
+                : Promise.resolve();
+        } catch {
+            // The request runs when the first chart module loads: a throw here would break every chart's import.
+            flagFaceRequest = Promise.resolve();
+        }
     }
     return flagFaceRequest;
 }
@@ -62,7 +67,11 @@ export function chartFontReady(): Promise<void> {
 /** Whether the flag face is already in, so that a canvas painting now draws flags with it. True where fonts cannot load. */
 export function chartFontLoaded(): boolean {
     const fonts = typeof document === 'undefined' ? undefined : document.fonts;
-    return !fonts?.check || fonts.check(FLAG_FONT, FLAG_SAMPLE);
+    try {
+        return !fonts?.check || fonts.check(FLAG_FONT, FLAG_SAMPLE);
+    } catch {
+        return true;
+    }
 }
 
 // Every chart imports this module before it can paint: asking for the face here puts the request ahead of the first paint.

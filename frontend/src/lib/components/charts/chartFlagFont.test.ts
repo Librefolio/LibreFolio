@@ -44,12 +44,13 @@
  * could not see. Sanity, path-agnostic: at least 18 calls in at least 17 files (today: 18 in 17 — 15 component files,
  * `LotGanttChart.svelte` with two, and the two PAC files `ExposureBars` and `ExposureMaps`).
  *
- * ## Why it is red today
+ * ## Why it was red before K-13
  *
- * - Part A: `src/lib/components/charts/chartFont.ts` exports neither `CHART_FONT_FAMILY` nor `CHART_INIT_THEME`. They are reached
- *   through a namespace import, so their absence is `undefined`, not an import error: the chart created with
- *   `CHART_INIT_THEME` draws in ECharts' default family, and the checks on the constants fail at their first assertion.
- * - Part B: all 18 calls pass `undefined` or nothing as second argument — e.g. `src/lib/components/charts/LineChart.svelte:384`
+ * - Part A: neither `CHART_FONT_FAMILY` nor `CHART_INIT_THEME` existed. They are reached through a namespace import, so a
+ *   missing one is `undefined`, not an import error: the chart created with `CHART_INIT_THEME` drew in ECharts' default
+ *   family, and the checks on the constants failed at their first assertion. Both live in
+ *   `src/lib/components/charts/chartFont.ts`.
+ * - Part B: all 18 calls passed `undefined` or nothing as second argument — e.g. `src/lib/components/charts/LineChart.svelte:384`
  *   (`echarts.init(chartContainer, undefined, {renderer: 'canvas'})`), `src/lib/features/risk/CorrelationHeatmap.svelte:458`
  *   (`echarts.init(container)`).
  *
@@ -60,10 +61,10 @@ import {basename, dirname, join, relative, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as echarts from 'echarts';
 import {describe, expect, it} from 'vitest';
-import * as chartTheme from '$lib/components/charts/chartFont';
+import * as chartFont from '$lib/components/charts/chartFont';
 
-/** What K-13 adds to chartTheme, reached through the namespace: absent today, so `undefined` rather than an import error. */
-const theme = chartTheme as unknown as Record<string, unknown>;
+/** The K-13 constants of chartFont, reached through the namespace: a missing one reads `undefined` and fails its own assertion, not the import of the whole file. */
+const theme = chartFont as unknown as Record<string, unknown>;
 
 const FLAG_FACE = 'LF Flags';
 
@@ -697,25 +698,25 @@ describe('K-13 — Part A: a theme object gives every ECharts text the LF Flags 
         const texts = drawnTexts(renderSvg(theme.CHART_INIT_THEME as object | undefined, flagOption()));
 
         expectFlagsDrawn(texts);
-        expect(notFlagFirst(texts), "texts drawn without LF Flags first: chartTheme exports no CHART_INIT_THEME (undefined: ECharts' default family), or its textStyle sets no such fontFamily").toEqual([]);
+        expect(notFlagFirst(texts), "texts drawn without LF Flags first: chartFont exports no CHART_INIT_THEME (undefined: ECharts' default family), or its textStyle sets no such fontFamily").toEqual([]);
     });
 
     it('CHART_FONT_FAMILY is a family list whose first family is LF Flags', () => {
-        expect(typeof theme.CHART_FONT_FAMILY, 'chartTheme exports no CHART_FONT_FAMILY string').toBe('string');
+        expect(typeof theme.CHART_FONT_FAMILY, 'chartFont exports no CHART_FONT_FAMILY string').toBe('string');
 
         expect(familyList(String(theme.CHART_FONT_FAMILY))[0]).toBe(FLAG_FACE);
     });
 
     it("after LF Flags, CHART_FONT_FAMILY is ECharts' own default family: no other glyph changes", () => {
-        expect(typeof theme.CHART_FONT_FAMILY, 'chartTheme exports no CHART_FONT_FAMILY string').toBe('string');
+        expect(typeof theme.CHART_FONT_FAMILY, 'chartFont exports no CHART_FONT_FAMILY string').toBe('string');
 
         expect(familyList(String(theme.CHART_FONT_FAMILY)).slice(1)).toEqual(echartsDefaultFamilies());
     });
 
     it('CHART_INIT_THEME is {textStyle: {fontFamily: CHART_FONT_FAMILY}}', () => {
         const initTheme = theme.CHART_INIT_THEME as {textStyle?: {fontFamily?: unknown}} | null | undefined;
-        expect(typeof initTheme === 'object' && initTheme !== null, 'chartTheme exports no CHART_INIT_THEME object').toBe(true);
-        expect(typeof theme.CHART_FONT_FAMILY, 'chartTheme exports no CHART_FONT_FAMILY string').toBe('string');
+        expect(typeof initTheme === 'object' && initTheme !== null, 'chartFont exports no CHART_INIT_THEME object').toBe(true);
+        expect(typeof theme.CHART_FONT_FAMILY, 'chartFont exports no CHART_FONT_FAMILY string').toBe('string');
 
         expect(initTheme?.textStyle?.fontFamily).toBe(theme.CHART_FONT_FAMILY);
     });
