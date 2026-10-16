@@ -227,7 +227,7 @@ The test-mode commands do not run in the container either; like `./dev.py mkdocs
 - `./dev.py docker exec test db populate` gets the same *not available* answer as every `test` command;
 - `./dev.py docker exec server --test` stops with `Frontend build failed. Server not started.`: test mode first tries to rebuild the web app in debug mode, which needs Node.js and the web app's sources, while the image ships only the production build, without Node.js.
 
-**Database migrations need no command.** The server applies pending migrations every time it starts: after `docker compose pull` and `docker compose up -d` there is nothing else to run, and `docker compose restart librefolio` retries them after a failure. Do not use `./dev.py docker exec db upgrade`: `db upgrade` needs the server stopped, and in the container the server is the main process, always running.
+**Database migrations need no command.** The server applies pending migrations every time it starts: after `docker compose pull` and `docker compose up -d` there is nothing else to run, and `docker compose restart librefolio` retries them after a failure. A restart does not help when the 1.3 upgrade stops because two accounts share an email address apart from its capitals: separate the accounts first, as «Two Accounts with the Same Email Address» in [Command-Line Tools](cli_tools.md) explains. Do not use `./dev.py docker exec db upgrade`: `db upgrade` needs the server stopped, and in the container the server is the main process, always running.
 
 ## 🩹 Post-Migration Fixes {: #post-migration-fixes }
 
@@ -278,7 +278,7 @@ The most common changes:
 | (4) | All configuration | Edit `.env` file (copied from `.env.example`) |
 | (5) | Run another image tag | Set `LIBREFOLIO_IMAGE` in `.env`, for example `LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0` |
 
-The first account created in the browser automatically becomes the administrator: no command needed.
+The first account created in the browser automatically becomes the administrator: no command needed. To have LibreFolio create the administrator at its first start instead, from `LIBREFOLIO_ADMIN_EMAIL`, see [The Initial Administrator](configuration.md#initial-admin).
 
 ??? example "📄 The repository's `docker-compose.yml`, annotated"
 
