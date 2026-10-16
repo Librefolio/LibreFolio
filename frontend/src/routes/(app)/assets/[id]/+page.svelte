@@ -2165,7 +2165,7 @@
 </script>
 
 <div
-    class="space-y-4"
+    class="space-y-4 text-lf-primary"
     data-testid="asset-detail-page"
     data-live-updates={live.updatesState}
     aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')}
@@ -2178,9 +2178,9 @@
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <div class="bg-lf-warning-soft border border-lf-warning-line rounded-xl p-4 text-sm text-lf-warning-on-soft flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => (error = null)}>{$t('common.close')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-lf-warning-line/50 rounded hover:bg-lf-warning-line" onclick={() => (error = null)}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -2305,7 +2305,7 @@
         <!-- Chart with left toolbar -->
         <!-- ======================================================================= -->
         <div
-            class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4"
+            class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4"
             data-testid="asset-detail-chart"
             data-view-mode={viewMode}
             data-primary-mode={primaryMode}
@@ -2326,8 +2326,8 @@
             {#if primaryMode === 'price' && loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
-                        <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{$t('assetDetail.loadingPrices')}</p>
+                        <RefreshCw size={24} class="animate-spin text-lf-link mx-auto mb-2" />
+                        <p class="text-sm text-lf-muted">{$t('assetDetail.loadingPrices')}</p>
                     </div>
                 </div>
             {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
@@ -2340,8 +2340,8 @@
 
                 <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
                 {#if showAesthetics}
-                    <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                        <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                    <div data-testid="asset-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-lf-subtle relative">
+                        <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                             <X size={16} />
                         </button>
                         <ChartAestheticsSection
@@ -2359,16 +2359,16 @@
 
                 {#if primaryMode === 'calendar-return' && calendarChartState === 'loading'}
                     <div class="h-96 flex items-center justify-center" data-testid="asset-calendar-return-loading">
-                        <RefreshCw size={24} class="animate-spin text-libre-green" />
+                        <RefreshCw size={24} class="animate-spin text-lf-link" />
                     </div>
                 {:else if primaryMode === 'calendar-return' && calendarChartState === 'unavailable'}
-                    <div class="h-96 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400" data-testid="asset-calendar-return-unavailable">
+                    <div class="h-96 flex items-center justify-center text-sm text-lf-muted" data-testid="asset-calendar-return-unavailable">
                         <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
                             {calendarPrimaryProblemMessage ?? $t('chartSettings.signalProblems.unavailable')}
                         </span>
                     </div>
                 {:else if primaryMode === 'calendar-return' && calendarChartState === 'error'}
-                    <div class="h-96 flex items-center justify-center text-sm text-red-600 dark:text-red-400" data-testid="asset-calendar-return-error">
+                    <div class="h-96 flex items-center justify-center text-sm text-lf-danger" data-testid="asset-calendar-return-error">
                         <span data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
                             {calendarPrimaryProblemMessage ?? $t('chartSettings.signalResultsUnavailable')}
                         </span>
@@ -2492,16 +2492,11 @@
                         />
                     </div>
                     {#if primaryMode === 'calendar-return' && calendarReturnView.problem}
-                        <p
-                            class="mt-2 text-center text-xs {calendarPrimaryProblemSeverity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}"
-                            data-testid="asset-calendar-primary-problem"
-                            data-problem-code={calendarReturnView.problem.code}
-                            data-problem-status={calendarReturnView.problem.status}
-                        >
+                        <p class="mt-2 text-center text-xs {calendarPrimaryProblemSeverity === 'error' ? 'text-lf-danger' : 'text-lf-warning'}" data-testid="asset-calendar-primary-problem" data-problem-code={calendarReturnView.problem.code} data-problem-status={calendarReturnView.problem.status}>
                             {calendarPrimaryProblemMessage}
                         </p>
                     {:else if primaryMode === 'calendar-return' && calendarReturnView.state === 'partial'}
-                        <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400" data-testid="asset-calendar-return-partial">
+                        <p class="mt-2 text-center text-xs text-lf-warning" data-testid="asset-calendar-return-partial">
                             {$t('chartSettings.signalProblems.partialResult')}
                         </p>
                     {/if}
@@ -2513,10 +2508,10 @@
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
                         {#if isManualOnly}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataManual')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noDataManual')}</p>
                             <div class="flex items-center gap-2 justify-center">
                                 <button
-                                    class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                                    class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors"
                                     onclick={() => {
                                         savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
                                         showAesthetics = false;
@@ -2529,7 +2524,7 @@
                                     {$t('fxDetail.insertManually')}
                                 </button>
                                 <button
-                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={!assetInfo}
                                     onclick={() => {
                                         editDataForModal = buildEditData();
@@ -2540,9 +2535,9 @@
                                 </button>
                             </div>
                         {:else if isParametric}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noDataScheduled')}</p>
                             <button
-                                class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={!assetInfo}
                                 onclick={() => {
                                     editDataForModal = buildEditData();
@@ -2550,12 +2545,12 @@
                                 }}>{$t('common.edit')}</button
                             >
                         {:else}
-                            <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noData')}</p>
+                            <p class="text-lf-muted mb-3">{$t('assetDetail.noData')}</p>
                             <div class="flex items-center gap-2 justify-center">
-                                <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
+                                <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSync} disabled={syncing}>{syncing ? $t('common.syncing') : $t('assetDetail.syncPrices')}</button>
                                 <!-- I-bis #6 — Add manually: open data editor pre-filtered on Prices tab -->
                                 <button
-                                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                    class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors"
                                     data-testid="asset-detail-add-prices-manually"
                                     onclick={() => {
                                         savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
@@ -2579,14 +2574,14 @@
         <!-- Data Editor Placeholder -->
         <!-- ======================================================================= -->
         {#if showDataEditor}
-            <div data-testid="asset-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 {primaryMode === 'price' ? '' : 'hidden'}" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
-                <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-                    <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+            <div data-testid="asset-detail-editor-panel" class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-warning-line {primaryMode === 'price' ? '' : 'hidden'}" aria-hidden={primaryMode !== 'price'} inert={primaryMode !== 'price'}>
+                <div class="flex items-center justify-between px-4 py-3 border-b border-lf-warning-line bg-lf-warning-soft rounded-t-xl">
+                    <span class="flex items-center gap-2 text-sm font-medium text-lf-warning-on-soft">
                         <Pencil size={15} />
                         {$t('assetDetail.editData')}
                     </span>
                     <button
-                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        class="text-lf-muted hover:text-lf-secondary transition-colors"
                         onclick={() => {
                             showDataEditor = false;
                             pendingPreviewSignal = null;
@@ -2600,7 +2595,7 @@
                         title={$t('common.closeEditor')}>✕</button
                     >
                 </div>
-                <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+                <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">
                     💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
                 </p>
                 <div class="px-4 py-4">
@@ -2658,7 +2653,7 @@
                 activeMeasurePanel()?.addMeasureFromChartData();
             }}
         >
-            <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
+            <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
                 <MeasurePanel
                     bind:this={measurePanel}
                     chartData={lineData}
@@ -2675,7 +2670,7 @@
                 />
             </div>
             <div
-                class={primaryMode === 'calendar-return' && showCalendarMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'}
+                class={primaryMode === 'calendar-return' && showCalendarMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'}
                 data-testid="asset-detail-calendar-measures-panel"
                 aria-hidden={primaryMode !== 'calendar-return' || !showCalendarMeasures}
                 inert={primaryMode !== 'calendar-return' || !showCalendarMeasures}
@@ -2734,7 +2729,7 @@
         </div>
     {:else}
         <div class="flex min-h-48 items-center justify-center" data-testid="asset-detail-risk-loading">
-            <RefreshCw size={24} class="animate-spin text-libre-green" />
+            <RefreshCw size={24} class="animate-spin text-lf-link" />
         </div>
     {/if}
 
