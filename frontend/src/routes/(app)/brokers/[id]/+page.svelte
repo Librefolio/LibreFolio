@@ -19,10 +19,10 @@
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
     import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
     import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
-    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
-    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
+    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
+    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';

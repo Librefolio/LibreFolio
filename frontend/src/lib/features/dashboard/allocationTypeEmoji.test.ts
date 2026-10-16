@@ -79,7 +79,7 @@ const ENUM_SOURCE = 'AssetType (backend/app/db/models.py)';
 const ENUM_ANCHORS = ['STOCK', 'ETF', 'OTHER', 'ETF_MONETARY'];
 /** Buckets the engine adds on top of the enum: cash, and an asset without a type. */
 const SYNTHETIC_BUCKETS = ['LIQUIDITY', 'UNKNOWN'];
-const TABLE_SOURCE = 'src/lib/components/dashboard/allocationTypeEmoji.ts';
+const TABLE_SOURCE = 'src/lib/features/dashboard/allocationTypeEmoji.ts';
 
 /** The scraped enum, guarded. Every loop starts from here, never from a bare scrape. */
 function assetTypes(): string[] {

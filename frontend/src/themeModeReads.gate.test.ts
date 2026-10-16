@@ -497,9 +497,9 @@ function srcAudit(): Audit {
 // ---------------------------------------------------------------------------
 
 const LINE_CHART = 'src/lib/components/charts/LineChart.svelte';
-const GROWTH_CHART = 'src/lib/components/dashboard/GrowthChart.svelte';
-const ALLOCATION_HISTORY = 'src/lib/components/dashboard/AllocationHistoryChart.svelte';
-const OTHER_EFFECTS = 'src/lib/components/dashboard/OtherPeriodEffectsTable.svelte';
+const GROWTH_CHART = 'src/lib/features/dashboard/GrowthChart.svelte';
+const ALLOCATION_HISTORY = 'src/lib/features/dashboard/AllocationHistoryChart.svelte';
+const OTHER_EFFECTS = 'src/lib/features/dashboard/OtherPeriodEffectsTable.svelte';
 const HEADER = 'src/lib/components/layout/Header.svelte';
 const RISK_CARD_GRID = 'src/lib/components/ui/display/RiskCardGrid.svelte';
 const DEFERRED_POPUPS = 'src/lib/features/onboarding/components/DeferredAppPopups.svelte';
@@ -846,11 +846,11 @@ describe('The page theme — read and watched only through $lib/theme/themeMode 
                 `${SCROLL_ON_OVERFLOW}:5 node - not-class`,
                 `${SCROLL_ON_OVERFLOW}:6 node - not-class`,
                 `${SCROLL_ON_OVERFLOW}:7 container - not-class`,
-                `${ALLOCATION_HISTORY}:14 ancestor - class`,
-                `${OTHER_EFFECTS}:7 tableShell - not-class`,
                 `${HEADER}:7 body - not-class`,
                 `${RISK_CARD_GRID}:7 grid - not-class`,
                 `${RISK_CARD_GRID}:8 grid - not-class`,
+                `${ALLOCATION_HISTORY}:14 ancestor - class`,
+                `${OTHER_EFFECTS}:7 tableShell - not-class`,
                 `${DEFERRED_POPUPS}:6 document.body - not-class`,
                 `${THEME_MODE}:10 document.documentElement <html> class`,
                 `${VIEWPORT}:4 document.documentElement <html> not-class`,
@@ -1115,7 +1115,7 @@ describe('The page theme — read and watched only through $lib/theme/themeMode 
                 // Tests, mocks and the Lab: never opened.
                 'src/themeModeReads.gate.test.ts': false,
                 'src/lib/theme/themeMode.test.ts': false,
-                'src/lib/components/dashboard/GrowthChart.test.ts': false,
+                'src/lib/features/dashboard/GrowthChart.test.ts': false,
                 'src/lib/utils/core/__tests__/resizeWatcher.test.ts': false,
                 'src/__tests__/component.ts': false,
                 'src/__tests__/harness/ThemeProbe.svelte': false,

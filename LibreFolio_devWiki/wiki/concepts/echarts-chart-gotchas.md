@@ -48,9 +48,9 @@ money (privacy) or user-visible translations (tooltip HTML).
 
 | Role | Path |
 |------|------|
-| Growth chart (category Income axis, privacy rebuild key, `showMinLabel`) | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Performance chart | `frontend/src/lib/components/dashboard/PerformanceChart.svelte` |
-| Separator/label planner (`CANDLE_MIN_SLOT_PX`) | `frontend/src/lib/components/dashboard/growthLadderAxis.ts` |
+| Growth chart (category Income axis, privacy rebuild key, `showMinLabel`) | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Performance chart | `frontend/src/lib/features/dashboard/PerformanceChart.svelte` |
+| Separator/label planner (`CANDLE_MIN_SLOT_PX`) | `frontend/src/lib/features/dashboard/growthLadderAxis.ts` |
 | Tooltip/catalogue HTML gate | `frontend/src/htmlInterpolation.gate.test.ts` |
 | Lots chart colours | `frontend/src/lib/components/brokers/lots/lotComparisonChartHelpers.ts` |
 | Compact and wide axis policies (`alignMaxLabel`), the zoom patch (`categoryAxisLabelPatch`) | `frontend/src/lib/components/charts/responsiveXAxis.ts` |

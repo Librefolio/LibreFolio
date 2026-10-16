@@ -16,11 +16,11 @@
  * from your own load function once your data reveals the real start date
  * (e.g. `history[0].date`), same as the pattern this replaces.
  *
- * @module stores/dateRangeController
+ * @module features/dashboard/dateRangeController
  */
 
 import type {QuickPreset} from '$lib/components/ui/date/DateRangePicker.svelte';
-import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from './dateRangeStore.svelte';
+import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '../../stores/dateRangeStore.svelte';
 
 export type DateRangeActivePreset = QuickPreset | 'custom' | null;
 
