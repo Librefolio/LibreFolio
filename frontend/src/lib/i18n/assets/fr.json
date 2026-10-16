@@ -281,7 +281,8 @@
       "notTested": "Non testé",
       "totalTime": "Total",
       "copyErrorDetail": "Copier le détail de l'erreur",
-      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}"
+      "points": "{count, plural, one {{n} point} many {{n} points} other {{n} points}}",
+      "scopeNote": "Le test ne lit que les derniers jours : un nouvel actif reçoit tout son historique de prix à sa création."
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",

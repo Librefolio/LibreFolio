@@ -281,7 +281,8 @@
       "notTested": "Not tested",
       "totalTime": "Total",
       "copyErrorDetail": "Copy error detail",
-      "points": "{count, plural, one {{n} point} other {{n} points}}"
+      "points": "{count, plural, one {{n} point} other {{n} points}}",
+      "scopeNote": "The test reads only the last few days: a new asset gets its whole price history when it is created."
     },
     "identifiers": {
       "askProvider": "Ask Provider",
