@@ -2608,3 +2608,17 @@ Rispetto a dev `26dda1a26` cambia solo `hosting_providers.en.md`, alla riga ~104
    ancore dei link aggiunti verificate anche a mano (`#history-sync`, `#run-reasons`, `#run-checks`,
    `#execution-logs`, `#pauses-and-failures`, `admin/settings.md#market-data-scheduler`).
 5. ✅ 16/10 16:32 — Checkpoint FROZEN inviato: 11 file (codice, test, sette pagine di doc, piano, backlog).
+
+### Z-17 — una frase falsa in `developer/backend/scheduler.md` (16/10, mini-lotto dopo Z-5)
+
+> **Via** (coordinatore, 16/10 16:27): «Z-17: go, the sentence in `scheduler.md`, a mini-lot of its own.» Z-5 salvato
+> (`b36542f81`, `441b5196a`) ed entrato in dev con Z-12: merge `ebe9eb346`. Base del lotto: HEAD `441b5196a`.
+
+1. ✅ 16/10 16:28 — Verifica sul codice: l'unica via di scrittura delle regole globali è
+   `PATCH /api/v1/settings/global/bulk` (`api/v1/settings.py:325`), tutto o niente (`update_global_settings`,
+   `services/accounts/settings_service.py:255`); ogni valore passa da `validate_global_setting_value()` contro
+   `GLOBAL_SETTINGS_CONSTRAINTS` (`schemas/settings.py`): minuti 1–1440, giorni 1–365, almeno un orario `HH:MM` e un
+   giorno, un fuso che il server conosce; un rifiuto risponde 422 con tutti i rifiuti e non scrive nulla. I ripieghi
+   del caricamento (`scheduler/settings.py`) restano per i valori salvati prima del controllo o scritti a mano.
+2. ✅ 16/10 16:28 — La frase di «Configuration Integration» riscritta così, senza citare il commit (la pagina descrive
+   lo stato di oggi). Solo inglese: la pagina per sviluppatori non ha traduzioni. Backlog: Z-17 chiusa.
