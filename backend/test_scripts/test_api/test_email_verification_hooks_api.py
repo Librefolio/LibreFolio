@@ -10,7 +10,10 @@ in place. The contract:
    one email goes to its address with a ``/verify-email#token=`` link built from ``LIBREFOLIO_PUBLIC_URL``. Signing in
    with the right password is 403 ``EMAIL_NOT_VERIFIED``; with a wrong one 401, byte for byte an unknown account's
    answer. «Resend» sends a new link that replaces the first; the click verifies the account, and the sign-in is 200.
-   The instance's first account never waits. An invited registration waits too, and spends its invitation.
+   The instance's first account never waits. An invited registration waits too, and spends its invitation. From one
+   client address, ten registration emails an hour: past them the registration still answers 201
+   ``verification_required: true``, but its email is held — logged, ``info`` —, and the account waits with its hold
+   until its owner asks «resend».
 2. The option on and no email with a link able to go out (email off, or no public URL): 409
    ``EMAIL_VERIFICATION_UNAVAILABLE``, nothing created, an invitation given with it not spent. The option off:
    registration as before, ``verification_required: false``, active, no verification token, no email.
@@ -20,10 +23,10 @@ in place. The contract:
    account. ``PATCH /users/{id}`` ``{is_active: true}`` on a full instance is accepted for it while its link is live
    (no ``USER_LIMIT_REACHED``: its place is already counted), refused once the link expired; after such an activation
    its emailed link is ``TOKEN_INVALID`` ``revoked`` and the sign-in is 200. ``PATCH`` ``{is_active: false}`` on a
-   waiting account — already inactive — changes nothing (night decision of 16/10): 200, its link still live and still
-   counted, and still able to verify it; an unwanted sign-up is deleted, or ended by ``user deactivate`` on the CLI.
+   waiting account — already inactive — ends its wait (revised 16/10, after the security review of E5b; it was a no-op):
+   200, its links revoked, its place free, and its sign-in 403 ``ACCOUNT_DISABLED`` instead of ``EMAIL_NOT_VERIFIED``.
    The answer of ``PATCH /users/{id}`` carries the list's flag: ``holds_place: true`` for a waiting account with a live
-   link — after that no-op, or after a promotion, which leaves it waiting —, false once its link expired.
+   link — after a promotion, which leaves it waiting —, false once its wait ended or its link expired.
 4. ``PATCH /settings/global/bulk``: ``require_email_verification`` off → on without an email with a link able to go out
    is 409 ``{error_code: EMAIL_VERIFICATION_UNAVAILABLE, message, key}`` and nothing of the request is saved; with
    email and a public URL it is saved; turning it off is always saved; sending it on again while already on, email
@@ -35,9 +38,10 @@ Pure: the real auth, users, settings and email routers run in-process on a priva
 to ``open`` in that file — never through ``LIBREFOLIO_REGISTRATION``, which would lock it —; the first account and the
 invited cases keep the default. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*``,
 ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``; each test
-sets its own with ``monkeypatch``. The hourly budget and the «resend» limiter are private on a fake clock;
-``socket.getaddrinfo`` resolves the loopback only; every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1.
-Where minutes must pass between two steps, ``verification.utcnow`` is a clock the test moves. Nothing is timed.
+sets its own with ``monkeypatch``. The hourly budget, the «resend» limiter, the per-mailbox limiter and the limiter of
+registration emails per client address are private on a fake clock; ``socket.getaddrinfo`` resolves the loopback only;
+every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. Where minutes must pass between two steps,
+``verification.utcnow`` is a clock the test moves. Nothing is timed.
 
 Red until E5b is applied (``AuthRegisterResponse.verification_required``, ``AdminUserRead.holds_place``).
 """
@@ -62,6 +66,7 @@ from fastapi import FastAPI
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.api.v1 import email as email_api
@@ -114,6 +119,10 @@ NOBODY = "zq_nobody"
 VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 INVITE = AccountTokenPurpose.INVITE
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
+#: The process's limiter of verification emails per recipient mailbox: replaced by a private one, as «resend»'s is.
+SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
+#: The process's limiter of registration emails per client address: replaced by a private one, as the others are.
+SHIPPED_REGISTRATION_EMAILS = verification.REGISTRATION_EMAILS_BY_ADDRESS
 START = 1_000.0
 
 
@@ -161,6 +170,20 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 @pytest.fixture(autouse=True)
 def _private_resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
     monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock))
+
+
+@pytest.fixture(autouse=True)
+def _private_mailbox_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """Every test registers the same few mailboxes: with the process's limiter, the fourth email of the run to one of them would be refused."""
+    monkeypatch.setattr(verification, "VERIFICATION_BY_MAILBOX", SlidingWindowLimiter(SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds, clock=clock))
+
+
+@pytest.fixture(autouse=True)
+def registration_emails(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """Every registration of this module comes from one in-process client address: with the process's limiter, the eleventh of the run would go without its email."""
+    limiter = SlidingWindowLimiter(SHIPPED_REGISTRATION_EMAILS.limit, SHIPPED_REGISTRATION_EMAILS.window_seconds, clock=clock)
+    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+    return limiter
 
 
 @pytest.fixture(autouse=True)
@@ -561,43 +584,77 @@ async def test_reactivating_once_the_link_expired_needs_a_free_place(private: _P
 
 
 @pytest.mark.asyncio
-async def test_deactivating_a_waiting_account_changes_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-    """EVH-011 — contract 3 (night decision of 16/10): Vera waits, so she is already inactive: ``PATCH /users/{id}`` ``{is_active: false}`` is a no-op — 200, still inactive —; her link is still live, she is still counted (``holds_place`` true in ``GET /users``), and the link still verifies her. An unwanted sign-up is deleted, or ended by ``user deactivate`` on the command line."""
+async def test_deactivating_a_waiting_account_ends_its_wait(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+    """EVH-011 — contract 3 (revised 16/10, after the security review of E5b): Vera waits, so she is already inactive; ``PATCH /users/{id}`` ``{is_active: false}`` ends her wait, as ``user deactivate`` does: 200, still inactive, ``holds_place`` false; her link is revoked — the click is 400 ``TOKEN_INVALID`` ``revoked`` —; her place is free in ``GET /users`` (``used`` one less, ``holds_place`` false); her sign-in with the right password is now 403 ``ACCOUNT_DISABLED``, not ``EMAIL_NOT_VERIFIED``."""
     print_section("EVH-011: deactivating a waiting account")
     vera, token = await _registered_and_waiting(private, monkeypatch)
+    waiting = await _listed(private)
 
     answered = await _as_admin(private, "PATCH", f"{USERS}/{vera.id}", {"is_active": False})
+    after = await _listed(private)
+    clicked = await _post(private, CONFIRM, {"token": token})
+    signed_in = await _login(private, VERA)
 
-    assert answered.status_code == 200 and answered.json()["is_active"] is False, answered.text
-    assert await _status(private.engine, token, VERIFICATION) == TokenStatus.VALID
-    assert (await _listed(private))["holds_place"][VERA] is True
-    confirmed = await _post(private, CONFIRM, {"token": token})
-    assert (confirmed.status_code, confirmed.json()) == (200, {"username": VERA}), confirmed.text
-    print_success("a no-op: the link live, counted, and it still verifies")
+    assert answered.status_code == 200, answered.text
+    assert (answered.json()["is_active"], answered.json()["holds_place"]) == (False, False), answered.text
+    assert await _status(private.engine, token, VERIFICATION) == TokenStatus.REVOKED
+    assert (clicked.status_code, _detail(clicked)["error_code"], _detail(clicked)["status"]) == (400, "TOKEN_INVALID", "revoked"), clicked.text
+    assert (waiting["holds_place"][VERA], after["holds_place"][VERA]) == (True, False)
+    assert after["usage"]["used"] == waiting["usage"]["used"] - 1, (waiting["usage"], after["usage"])
+    assert (signed_in.status_code, _detail(signed_in)["error_code"]) == (403, "ACCOUNT_DISABLED"), signed_in.text
+    print_success("the wait ended: link revoked, place freed, ACCOUNT_DISABLED at sign-in")
 
 
 @pytest.mark.asyncio
 async def test_the_patch_answer_says_whether_a_waiting_account_holds_its_place(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-    """EVH-012 — contract 3: the answer of ``PATCH /users/{id}`` replaces the account's row in the Users tab, so it carries the list's ``holds_place``. Vera waits with a live link: the no-op ``{is_active: false}`` and a promotion ``{is_superuser: true}`` — which leaves her inactive and her link live — each answer 200 with ``holds_place: true``, as ``GET /users`` says. Once her link expired, the same no-op answers ``holds_place: false``, as the list then does."""
+    """EVH-012 — contract 3: the answer of ``PATCH /users/{id}`` replaces the account's row in the Users tab, so it carries the list's ``holds_place``. Vera waits with a live link: a promotion ``{is_superuser: true}`` leaves her inactive and her link live — 200 with ``holds_place: true``, as ``GET /users`` says. Then ``{is_active: false}`` ends her wait (revised 16/10: it revokes her links) — 200 with ``holds_place: false``, her link revoked, as the list then says. The promotion comes first: after the deactivation she no longer waits."""
     print_section("EVH-012: the PATCH answer carries holds_place")
     vera, token = await _registered_and_waiting(private, monkeypatch)
 
-    kept = await _as_admin(private, "PATCH", f"{USERS}/{vera.id}", {"is_active": False})
     promoted = await _as_admin(private, "PATCH", f"{USERS}/{vera.id}", {"is_superuser": True})
     link_after_promotion = await _status(private.engine, token, VERIFICATION)
-    listed_live = (await _listed(private))["holds_place"][VERA]
-    await _expire_links(private.engine, vera.id)
-    expired = await _as_admin(private, "PATCH", f"{USERS}/{vera.id}", {"is_active": False})
-    listed_expired = (await _listed(private))["holds_place"][VERA]
+    listed_after_promotion = (await _listed(private))["holds_place"][VERA]
+    deactivated = await _as_admin(private, "PATCH", f"{USERS}/{vera.id}", {"is_active": False})
+    link_after_deactivation = await _status(private.engine, token, VERIFICATION)
+    listed_after_deactivation = (await _listed(private))["holds_place"][VERA]
 
-    assert kept.status_code == 200 and (kept.json()["is_active"], kept.json()["holds_place"]) == (False, True), kept.text
     assert promoted.status_code == 200, promoted.text
     assert (promoted.json()["is_superuser"], promoted.json()["is_active"], promoted.json()["holds_place"]) == (True, False, True), promoted.text
     assert link_after_promotion == TokenStatus.VALID, "a promotion revokes no verification link: she still waits"
-    assert listed_live is True, "the list says the same while the link is live"
-    assert expired.status_code == 200 and (expired.json()["is_active"], expired.json()["holds_place"]) == (False, False), expired.text
-    assert listed_expired is False, "the list says the same once the link expired"
-    print_success("holds_place true in both answers while the link is live, false once it expired — as the list says")
+    assert listed_after_promotion is True, "the list says the same while the link is live"
+    assert deactivated.status_code == 200 and (deactivated.json()["is_active"], deactivated.json()["holds_place"]) == (False, False), deactivated.text
+    assert link_after_deactivation == TokenStatus.REVOKED, "the deactivation ends the wait: her link revoked"
+    assert listed_after_deactivation is False, "the list says the same once the wait ended"
+    print_success("holds_place true after the promotion, false after the deactivation — as the list says")
+
+
+@pytest.mark.asyncio
+async def test_registration_emails_are_limited_per_client_address(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EVH-013 — contract 1 (E5b, after the security review): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test. Two registrations from one client address both answer 201 ``verification_required: true``; only the first one's email goes. The second account waits with its hold — inactive, one verification token without an address, neither consumed nor revoked —, and «Verification email held: too many registrations from this address» is logged, ``info``, with its ``user_id``. Its owner then asks «resend» from the sign-in: 200, and its link goes."""
+    print_section("EVH-013: registration emails per client address")
+    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", SlidingWindowLimiter(1, 3600, clock=clock))
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            first = await _register(private, VERA)
+            second = await _register(private, "zq_wanda")
+        sent_by_the_registrations = [message.rcpt_tos for message in fake.messages]
+        wanda = await _user(private.engine, "zq_wanda")
+        holds = [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, wanda.id)]
+        resent = await _post(private, RESEND, {"username": "zq_wanda", "password": PASSWORD})
+
+    assert [(answer.status_code, answer.json()["verification_required"]) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert sent_by_the_registrations == [[f"{VERA}@example.com"]], "only the first registration's email goes"
+    assert wanda.is_active is False and holds == [(None, None, None)], holds
+    held = [(event["log_level"], event.get("user_id")) for event in events if event.get("event") == "Verification email held: too many registrations from this address"]
+    assert held == [("info", wanda.id)], events
+    assert resent.status_code == 200, resent.text
+    assert [message.rcpt_tos for message in fake.messages] == [[f"{VERA}@example.com"], ["zq_wanda@example.com"]]
+    print_success("201 twice, one email; the second waits with its hold, and resend sends its link")
 
 
 # =============================================================================

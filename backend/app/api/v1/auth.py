@@ -242,7 +242,7 @@ def _refuse_weak_password(password: str) -> None:
 
 
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
-async def register(request: AuthRegisterRequest, background: BackgroundTasks, session: AsyncSession = Depends(get_session_generator)):
+async def register(request: AuthRegisterRequest, background: BackgroundTasks, http_request: Request, session: AsyncSession = Depends(get_session_generator)):
     """
     Register a new user, under the registration mode and the limit of the instance.
 
@@ -251,8 +251,9 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, se
     A refusal for the limit tells nothing about how many accounts exist: whoever asks is not signed in.
 
     With email verification required (workstream E), the new account waits for its link: ``verification_required`` is
-    true and the email goes after the answer. 409 ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email
-    with a link can go out now.
+    true and the email goes after the answer, unless this client address sent 10 of them in the hour: the account then
+    waits without it, and its owner asks for the link again from the sign-in page. 409
+    ``EMAIL_VERIFICATION_UNAVAILABLE`` when the option is on and no email with a link can go out now.
     """
     _refuse_weak_password(request.password)
     try:
@@ -270,8 +271,12 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, se
 
     verification_required = not user.is_active
     if verification_required:
-        # The session of this request ends with it: the work opens its own, on the same database.
-        background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
+        if email_verification.registration_email_allowed(http_request.client.host if http_request.client else None):
+            # The session of this request ends with it: the work opens its own, on the same database.
+            background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
+        else:
+            # Too many registration emails from this client address: the account waits without its email (workstream E).
+            logger.info("Verification email held: too many registrations from this address", user_id=user.id)
     return AuthRegisterResponse(
         user=AuthUserResponse.model_validate(user),
         message="Registration successful" + (": check your email to activate the account" if verification_required else "") + (" (Admin)" if user.is_superuser else ""),

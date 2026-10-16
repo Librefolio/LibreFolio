@@ -48,6 +48,12 @@ TIMEOUT = 10.0
 REGISTRATION_MODE_KEY = "registration_mode"
 
 
+def _register_http_request() -> Request:
+    """The HTTP request ``auth_api.register`` reads the client address from, as FastAPI hands it over (E5b: the limit
+    of registration emails per client address)."""
+    return Request({"type": "http", "method": "POST", "path": "/api/v1/auth/register", "headers": [], "client": ("127.0.0.1", 50000)})
+
+
 def _error_code(response: httpx.Response) -> Optional[str]:
     """``detail.error_code`` of a coded refusal (as ACCOUNT_DISABLED is given), or None."""
     detail = response.json().get("detail")
@@ -244,6 +250,7 @@ class TestRegister:
                         password="TestPass123!",
                     ),
                     background=BackgroundTasks(),
+                    http_request=_register_http_request(),
                     session=session,
                 )
 
@@ -1855,7 +1862,7 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
-            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), session=session)
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), http_request=_register_http_request(), session=session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
         assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"
