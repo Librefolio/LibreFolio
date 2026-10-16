@@ -2801,6 +2801,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     usano, così la guardia copre ogni default del profilo. Da concordare con B.
 
   Dettagli: piano H, §14 «CP7b-2», passo 2.
+- **H-18 · I toast non arrivano ai lettori di schermo** — basso; H (revisione del test-author sulla card della pagina di
+  blocco), 16/10.
+  - `ToastContainer` (`components/ui/feedback/`) non ha né `aria-live` né `role="status"`: nessun toast dell'app viene
+    annunciato. Gli errori che contano hanno di solito anche un `role="alert"` nel punto in cui avvengono, come nella
+    card del backup.
+  - Cura proposta: una regione `aria-live="polite"` sul contenitore, `assertive` per gli errori, con un caso Vitest. Il
+    componente è condiviso: va al proprietario dell'interfaccia comune, con la regola dei colori per i file condivisi.
+
+  Dettagli: piano H, §14 «La card del backup nella pagina di blocco».
 
 ## A · Account e accessi (fase 01)
 
