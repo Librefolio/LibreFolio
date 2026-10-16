@@ -3999,7 +3999,8 @@ test.describe('Risk analysis functional integration', () => {
                 await expect(benchmarkRow(panel, benchmarkId), "D378: the benchmark's row outlived the verdict that rules it out").toHaveCount(0);
 
                 // Nothing measured over the new window. Barriers: the verdict above, and the new window's base wave
-                // asked and landed — the refresh control is back — with L3's table drawn from it.
+                // asked and landed — the page's Refresh is idle again: it waits for the panel's base wave, the panel
+                // having no Refresh of its own (Y11, decision 48) — with L3's table drawn from it.
                 const newWave = () =>
                     new Set(
                         requests
@@ -4008,7 +4009,7 @@ test.describe('Risk analysis functional integration', () => {
                             .map((request) => request.mode),
                     );
                 await expect.poll(newWave, {timeout: 10_000, message: "premise: the new window's base wave was never asked"}).toEqual(new Set(['historical', 'current_composition']));
-                await expect(panel.getByTestId('risk-refresh-button'), "premise: the new window's base wave never landed").toBeEnabled({timeout: 15_000});
+                await expect(page.getByTestId('sync-button'), "premise: the new window's base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 20_000});
                 await expectBaseTable(panel);
                 expect(
                     comparisonsAgainst(requests, owned, benchmarkId).filter(({at}) => at >= loggedBefore),
