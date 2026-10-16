@@ -72,8 +72,7 @@
                             <button
                                 type="button"
                                 class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded
-                                    bg-libre-green/10 text-libre-green hover:bg-libre-green/20
-                                    dark:bg-libre-green/20 dark:text-green-300 dark:hover:bg-libre-green/30
+                                    bg-lf-selected text-lf-link hover:bg-lf-checked/20
                                     transition-colors"
                                 onclick={handleSyncFx}
                                 data-testid="tx-form-sync-fx-link"

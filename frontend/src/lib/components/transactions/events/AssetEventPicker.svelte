@@ -188,7 +188,7 @@
         return {
             value: diff,
             label: `${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`,
-            color: crossCurrency ? 'text-gray-400' : close ? 'text-green-600 dark:text-green-400' : 'text-amber-500 dark:text-amber-400',
+            color: crossCurrency ? 'text-lf-muted' : close ? 'text-lf-success' : 'text-lf-warning',
             crossCurrency,
         };
     }
@@ -374,13 +374,13 @@
 </script>
 
 <div class="flex flex-col gap-1" data-testid="tx-form-event-select">
-    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.linkedEvent')}</span>
+    <span class="text-xs text-lf-muted">{$t('common.linkedEvent')}</span>
     <div class="relative">
         <!-- Trigger button -->
         <button
             bind:this={triggerRef}
             type="button"
-            class="w-full flex items-center gap-2 px-3 py-2 text-left bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-sm transition-colors hover:border-libre-green focus:outline-none focus:ring-2 focus:ring-libre-green/30 disabled:opacity-60 disabled:cursor-not-allowed"
+            class="w-full flex items-center gap-2 px-3 py-2 text-left bg-lf-field border border-lf-input rounded-lg text-sm transition-colors hover:border-lf-focus focus:outline-none focus:ring-2 focus:ring-lf-focus/30 disabled:opacity-60 disabled:cursor-not-allowed"
             {disabled}
             onclick={toggle}
             onkeydown={handleKeydown}
@@ -402,9 +402,9 @@
                     <span class="text-[10px] font-mono {delta.color} shrink-0">Δ{delta.label}</span>
                 {/if}
             {:else}
-                <span class="text-xs text-gray-400 italic flex-1">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
+                <span class="text-xs text-lf-muted italic flex-1">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
             {/if}
-            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-3.5 h-3.5 text-lf-muted shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
@@ -418,41 +418,41 @@
         use:adjustForTopPosition
         data-event-picker-dropdown={_uid}
         id={_uid}
-        class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl overflow-hidden"
+        class="fixed z-[9999] bg-lf-card border border-lf-raised rounded-lg shadow-xl shadow-lf-shadow overflow-hidden"
         style="top: {fixedTop}px; left: {fixedLeft}px; width: {fixedWidth}px; max-height: {dropdownMaxHeight};"
         role="listbox"
         data-testid="tx-form-event-picker-dropdown"
     >
         <!-- Slider header -->
-        <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50" data-testid="tx-form-event-slider">
-            <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap font-mono">± {daysRange}d</span>
-            <input type="range" min="1" max={MAX_DAYS} value={daysRange} oninput={handleSlider} class="flex-1 h-1 accent-libre-green cursor-pointer" />
+        <div class="flex items-center gap-2 px-3 py-2 border-b border-lf-subtle bg-lf-panel" data-testid="tx-form-event-slider">
+            <span class="text-[10px] text-lf-muted whitespace-nowrap font-mono">± {daysRange}d</span>
+            <input type="range" min="1" max={MAX_DAYS} value={daysRange} oninput={handleSlider} class="flex-1 h-1 accent-lf-checked cursor-pointer" />
         </div>
 
         <!-- Items list -->
         <div class="overflow-y-auto" style="max-height: calc({dropdownMaxHeight} - 3rem);">
             {#if loading}
-                <div class="px-3 py-4 text-center text-xs text-gray-400">⏳ {$t('common.loading') || 'Loading...'}</div>
+                <div class="px-3 py-4 text-center text-xs text-lf-muted">⏳ {$t('common.loading') || 'Loading...'}</div>
             {:else if events.length === 0 && value == null}
                 <!-- No events + nothing selected: show "none" as only option + empty hint -->
-                <button type="button" class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-slate-700 {highlightedIndex === 0 ? 'bg-gray-50 dark:bg-slate-700' : ''}" onclick={() => selectItem({type: 'none'})} role="option" aria-selected={value == null}>
-                    <div class="flex items-center gap-2 text-gray-400 dark:text-gray-500">
-                        <span class="w-6 h-6 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 text-[10px]">∅</span>
+                <button type="button" class="w-full px-3 py-2 text-left hover:bg-lf-hover {highlightedIndex === 0 ? 'bg-lf-hover' : ''}" onclick={() => selectItem({type: 'none'})} role="option" aria-selected={value == null}>
+                    <div class="flex items-center gap-2 text-lf-muted">
+                        <span class="w-6 h-6 flex items-center justify-center rounded border border-dashed border-lf-subtle text-[10px]">∅</span>
                         <span class="text-sm italic">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
-                        {#if value == null}<span class="ml-auto text-xs text-libre-green">✓</span>{/if}
+                        {#if value == null}<span class="ml-auto text-xs text-lf-link">✓</span>{/if}
                     </div>
                 </button>
-                <div class="px-3 py-3 text-center text-[11px] text-gray-400 dark:text-gray-500">
+                <div class="px-3 py-3 text-center text-[11px] text-lf-muted">
                     😶 {$t('common.noResults') || 'No events found in this range'}
                 </div>
             {:else}
                 {#each items as item, idx}
                     {#if item.type === 'none'}
-                        <button type="button" class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {highlightedIndex === idx ? 'bg-gray-50 dark:bg-slate-700' : ''}" onclick={() => selectItem(item)} role="option" aria-selected={value == null}>
-                            <div class="flex items-center gap-2 text-gray-400 dark:text-gray-500">
-                                <span class="w-6 h-6 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 text-[10px]">∅</span>
+                        <button type="button" class="w-full px-3 py-2 text-left hover:bg-lf-hover transition-colors {highlightedIndex === idx ? 'bg-lf-hover' : ''}" onclick={() => selectItem(item)} role="option" aria-selected={value == null}>
+                            <div class="flex items-center gap-2 text-lf-muted">
+                                <span class="w-6 h-6 flex items-center justify-center rounded border border-dashed border-lf-subtle text-[10px]">∅</span>
                                 <span class="text-sm italic">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
-                                {#if value == null}<span class="ml-auto text-xs text-libre-green">✓</span>{/if}
+                                {#if value == null}<span class="ml-auto text-xs text-lf-link">✓</span>{/if}
                             </div>
                         </button>
                     {:else}
@@ -461,25 +461,19 @@
                         {@const delta = computeDelta(ev.amount, ev.code)}
                         {@const fmtAmt = ev.amount && ev.amount !== '0' ? formatExactDecimal(ev.amount) : null}
                         {@const isSelected = value === ev.id}
-                        <button
-                            type="button"
-                            class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {highlightedIndex === idx ? 'bg-gray-50 dark:bg-slate-700' : ''} {isSelected ? 'bg-libre-green/5' : ''}"
-                            onclick={() => selectItem(item)}
-                            role="option"
-                            aria-selected={isSelected}
-                        >
+                        <button type="button" class="w-full px-3 py-2 text-left hover:bg-lf-hover transition-colors {isSelected ? 'bg-lf-selected' : highlightedIndex === idx ? 'bg-lf-hover' : ''}" onclick={() => selectItem(item)} role="option" aria-selected={isSelected}>
                             <div class="flex items-center gap-2 min-w-0">
                                 <span class="shrink-0 w-6 h-6 flex items-center justify-center {cfg.bg} rounded text-sm">{cfg.icon}</span>
                                 <div class="flex-1 min-w-0">
                                     <div class="text-sm font-medium truncate">{shortDate(ev.date)} · {ev.notes || typeLabel(ev.type)}</div>
                                 </div>
                                 {#if fmtAmt}
-                                    <span class="text-xs font-mono text-gray-500 dark:text-gray-400 shrink-0">{fmtAmt} {ev.code}</span>
+                                    <span class="text-xs font-mono text-lf-muted shrink-0">{fmtAmt} {ev.code}</span>
                                 {/if}
                                 {#if delta}
                                     <span class="text-[10px] font-mono shrink-0 {delta.color}">Δ{delta.label}</span>
                                 {/if}
-                                {#if isSelected}<span class="text-xs text-libre-green shrink-0">✓</span>{/if}
+                                {#if isSelected}<span class="text-xs text-lf-link shrink-0">✓</span>{/if}
                             </div>
                         </button>
                     {/if}
@@ -489,7 +483,7 @@
         {#if onCreateNew}
             <button
                 type="button"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-lf-link hover:bg-lf-selected border-t border-lf-subtle transition-colors"
                 onclick={() => {
                     close();
                     onCreateNew?.();

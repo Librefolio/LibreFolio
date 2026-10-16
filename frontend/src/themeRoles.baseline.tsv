@@ -13,15 +13,12 @@ lib/components/assets/PriceDataImportModal.svelte	6
 lib/components/assets/ScheduledInvestmentEditor.svelte	4
 lib/components/charts/ChartAestheticsSection.svelte	16
 lib/components/table/DataTableCellContent.svelte	4
-lib/components/transactions/TransactionsTable.svelte	6	#0f0f18×2	#1e293b	#334155×3	#475569×2	#cbd5e1	#e2e8f0×5	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
-lib/components/transactions/bulk/TxBulkBanners.svelte	54
-lib/components/transactions/bulk/TxBulkToolbar.svelte	48
-lib/components/transactions/events/AssetEventPicker.svelte	72
-lib/components/transactions/events/EventCreateMiniModal.svelte	42
-lib/components/transactions/form/TxFormBanners.svelte	6
-lib/components/transactions/form/TxFormOptionalSection.svelte	25
-lib/components/transactions/form/TxFormPairSection.svelte	93
-lib/components/transactions/form/TxFormSingleSection.svelte	50
+lib/components/transactions/TransactionsTable.svelte	0	#0f0f18×2	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
+lib/components/transactions/bulk/TxBulkBanners.svelte	2
+lib/components/transactions/bulk/TxBulkToolbar.svelte	4
+lib/components/transactions/events/AssetEventPicker.svelte	12
+lib/components/transactions/form/TxFormOptionalSection.svelte	6
+lib/components/transactions/form/TxFormPairSection.svelte	4
 lib/components/transactions/import/AssetGroupStep.svelte	108
 lib/components/transactions/import/BrimEvidenceTable.svelte	52
 lib/components/transactions/import/BrimNoticeList.svelte	8
@@ -33,16 +30,10 @@ lib/components/transactions/import/ReportSetCard.svelte	75
 lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1
 lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
 lib/components/transactions/modals/ParseDetailModal.svelte	141
-lib/components/transactions/modals/PromoteAllModal.svelte	32
-lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionBulkModal.svelte	88
-lib/components/transactions/modals/TransactionCompareModal.svelte	82
-lib/components/transactions/modals/TransactionFormModal.svelte	35
-lib/components/transactions/modals/TransactionPickerModal.svelte	20
-lib/components/transactions/shared/TransactionResultBanner.svelte	18
-lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
-lib/components/transactions/wac/WacPreviewSection.svelte	94
+lib/components/transactions/modals/PromoteMergeModal.svelte	62
+lib/components/transactions/modals/TransactionBulkModal.svelte	9
+lib/components/transactions/modals/TransactionCompareModal.svelte	4
+lib/components/transactions/wac/WacPreviewSection.svelte	21
 lib/components/transactions/wizard/AnalyzeStep.svelte	67
 lib/components/transactions/wizard/DuplicatesStep.svelte	77
 lib/components/transactions/wizard/ReviewStep.svelte	86
@@ -81,7 +72,6 @@ routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/[id]/+page.svelte	12
 routes/(app)/fx/+page.svelte	4
 routes/(app)/fx/[pair]/+page.svelte	54
-routes/(app)/transactions/+page.svelte	37
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
 ~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214
