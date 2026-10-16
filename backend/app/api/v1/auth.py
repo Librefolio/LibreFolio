@@ -157,10 +157,11 @@ async def login(
     # so neither the answer nor its timing tells which accounts exist.
     password_ok = await asyncio.to_thread(verify_password_or_dummy, request.password, user.hashed_password if user else None)
     if not password_ok or user is None:
+        # Never what was typed: the field takes an email too, and no address goes in the log (workstream E's rule).
         if user is None:
-            logger.warning("Login failed: user not found", username=request.username)
+            logger.warning("Login failed: user not found")
         else:
-            logger.warning("Login failed: wrong password", username=request.username)
+            logger.warning("Login failed: wrong password", user_id=user.id)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Only the right password learns that the account is disabled.
@@ -169,7 +170,7 @@ async def login(
         if await email_verification.awaiting_verification(session, user):
             logger.info("Login refused: email not verified", user_id=user.id)
             raise HTTPException(status_code=403, detail={"error_code": "EMAIL_NOT_VERIFIED", "message": "Verify your email address first"})
-        logger.warning("Login failed: user inactive", username=request.username)
+        logger.warning("Login failed: user inactive", user_id=user.id)
         raise HTTPException(status_code=403, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"})
 
     # Update login/donation-popup counters and decide whether to show the support popup
