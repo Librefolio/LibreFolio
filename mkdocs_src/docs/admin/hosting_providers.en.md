@@ -84,6 +84,9 @@ your users sign in again after each restart. See
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
   with another instance. See [Backups for Your Hosting Panel](#panel-backups).
+- Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
+  instance's prices and exchange rates up to date on its own schedule, for example right after it
+  wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 
 ---
 
@@ -124,6 +127,10 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
 - While the instance is blocked, every start logs a warning,
   `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer`,
   with the deletion date when there is one.
+- While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
+  runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
+  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
+  (14 days by default).
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -155,11 +162,11 @@ On a blocked instance, only these API calls answer as usual:
 | Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
+| The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
   instance.
-- The web app itself is still served: the block covers the API only.
-- Scheduled jobs, such as the price and FX syncs, keep running: they do not go through the API.
+- The web app itself is still served: the block covers the API, not the pages of the app.
 
 The list is short on purpose, and it is fixed in the code: there is no setting to change it.
 

@@ -410,7 +410,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). The hosting panel's backup routes, `/backup/panel/jobs…`, take no session: they authenticate with the panel token, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, sent as `Authorization: Bearer <token>` and compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`), so a missing or wrong token answers `401`. While no token is set they answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -486,6 +486,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
+| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -507,7 +508,8 @@ valid session gets these answers:
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
-  `/system/info` and `/system/ready` answer as on any other instance.
+  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up
+  tells, and only to the holder of its token: `status: "blocked"`.
 - The public routes outside the list answer `401` only while the instance is blocked. From them, a
   caller without a session can tell that the instance is blocked, and nothing more: they return no
   data.
@@ -531,8 +533,11 @@ fills it in `block.py` with one call to its service.
 lost the password (see the table above): they read a link already sent or spend a reset link, and
 create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
 that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
-scheduled wake-up joins the list when its route exists; any other addition goes through the
-developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
+full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
+delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
+instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
+of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). Any other
+addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
 documentation, so an addition, or a route the guard does not reach, shows in review.
@@ -541,7 +546,8 @@ documentation, so an addition, or a route the guard does not reach, shows in rev
 FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
 covered: the browser still loads the app, which turns the first `423` into the block page (see
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
-HTTP, so its jobs keep running.
+HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
+job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 
