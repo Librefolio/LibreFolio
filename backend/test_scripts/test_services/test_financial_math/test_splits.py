@@ -41,6 +41,13 @@ another shows.
 
 Red by absence until MF-I1: ``splits.py`` is imported while each test runs (``_splits()``), never at module level, so
 the file collects today and every test fails on the missing module (``ModuleNotFoundError``) before it seeds anything.
+
+MF-I2 adds ``split_linked_ids(db, transactions) -> set[int]``: the ids of the given transactions linked to a SPLIT
+asset event, ``{link.transaction_id for link in load_split_links(...)}``, what an average-cost replay needs to mark a
+row as a split rescale (the WAC preview of ``portfolio_service.py``, the broker summary, the auto cost). It judges no
+ratio: the rescale reads the row's own quantity, never the event's ratio. ``TestSplitLinkedIds`` reads it off the module
+when each test runs (``_split_linked_ids()``), before seeding anything: on a tree with MF-I1's ``splits.py`` and without
+it, every one of those tests fails on ``AttributeError`` and the rest of the file still collects and runs.
 """
 
 from __future__ import annotations
@@ -97,6 +104,11 @@ VALID_RATIOS = (Decimal("2"), Decimal("0.5"), Decimal("1"), Decimal("10"), Decim
 def _splits() -> ModuleType:
     """``financial_math/splits.py``, imported when a test runs: until MF-I1 it does not exist."""
     return importlib.import_module(SPLITS_MODULE)
+
+
+def _split_linked_ids() -> Callable[[AsyncSession, Sequence[Transaction]], Awaitable[set[int]]]:
+    """``splits.split_linked_ids``, read when a test runs: until MF-I2 the module has no such name (AttributeError)."""
+    return _splits().split_linked_ids
 
 
 def _engine_rejects_today(ratio: Decimal | None) -> bool:
@@ -254,6 +266,38 @@ async def _load(splits: ModuleType, engine: AsyncEngine, transaction_ids: Sequen
         with captured_statements(engine) as statements:
             links = await splits.load_split_links(session, given)
     return links, statements
+
+
+def _unsaved(asset_event_id: int) -> Transaction:
+    """An ADJUSTMENT of asset 5 never written, so without an id, that already names the event ``asset_event_id``."""
+    unsaved = Transaction(broker_id=B1, asset_id=A5, type=ADJUSTMENT, date=D_SPLIT, quantity=Decimal("10"), amount=Decimal("0"), asset_event_id=asset_event_id)
+    assert unsaved.id is None, "precondition: a transaction never written has no id"
+    return unsaved
+
+
+async def _load_ids(split_linked_ids: Callable[..., Awaitable[Any]], engine: AsyncEngine, given: Sequence[int | Transaction], *, container: Callable[[list[Transaction]], Sequence[Transaction]] = list) -> tuple[Any, list[str]]:
+    """``split_linked_ids`` on a fresh session of ``engine``, with every statement the call sent.
+
+    ``given`` in that order: an int is the transaction of that id, read from the file; a ``Transaction`` is passed as it is.
+    """
+    async with AsyncSession(engine) as session:
+        read = {row.id: row for row in await _given(session, [item for item in given if isinstance(item, int)])}
+        transactions = container([read[item] if isinstance(item, int) else item for item in given])
+        with captured_statements(engine) as statements:
+            ids = await split_linked_ids(session, transactions)
+    return ids, statements
+
+
+def _assert_id_set(ids: Any) -> None:
+    """A ``set`` of ints: the ids as the database gives them, not links, not a list."""
+    assert type(ids) is set, f"split_linked_ids returned a {type(ids).__name__}, not a set: {ids!r}"
+    assert all(type(tx_id) is int for tx_id in ids), f"the ids must be ints: {ids!r}"
+
+
+def _assert_one_read(statements: Sequence[str]) -> None:
+    """With a candidate the ids are read in one statement, a SELECT, through the session given."""
+    assert len(statements) == 1, f"one query for every candidate, not {len(statements)}: {statements}"
+    assert statements[0].lstrip().upper().startswith("SELECT"), f"split_linked_ids only reads: {statements}"
 
 
 # =============================================================================
@@ -598,3 +642,150 @@ class TestLoadSplitLinks:
         assert links == expected, f"the row without an asset, returned:\n{_shown(links)}"
         assert links[0].transaction_asset_id is None
         print_success("transaction_asset_id None returned beside the event's asset")
+
+
+# =============================================================================
+# MF-I2 — split_linked_ids on private SQLite files
+# =============================================================================
+
+
+class TestSplitLinkedIds:
+    def test_i2_split_linked_ids_is_a_coroutine_function(self):
+        """``split_linked_ids`` reads the database: a coroutine function, beside ``load_split_links``.
+
+        Before MF-I2: AttributeError (``financial_math.splits`` has no ``split_linked_ids``).
+        """
+        print_section("I2 — split_linked_ids is a coroutine function")
+        split_linked_ids = _split_linked_ids()
+        assert inspect.iscoroutinefunction(split_linked_ids), "split_linked_ids reads the database: a coroutine function"
+        print_success("a coroutine function of financial_math.splits")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("event_type", NON_SPLIT_EVENT_TYPES, ids=str)
+    async def test_i2_the_ids_of_the_given_rows_linked_to_a_split_and_of_no_other(self, split_file, event_type):
+        """Exactly the given rows linked to a SPLIT event, as a set of ids, in agreement with ``load_split_links``.
+
+        Two splits: 2:1 of asset 5 (event 31, row 21 on broker 1 and row 25 on broker 2) and 1:2 of asset 7 (event 34,
+        row 24). Row 22 differs from row 21 only by the type of its event (32); row 23 is a DIVIDEND realizing a DIVIDEND
+        event (33); rows 11 and 12 are buys linked to nothing. Given all but row 25, in no particular order: {21, 24},
+        read in one statement, the transaction ids of the links ``load_split_links`` returns for the same input. Given
+        row 25 alone: {25} — the barrier that makes its absence above mean «not given», not «not linked».
+        Before MF-I2: AttributeError.
+        """
+        print_section(f"I2 — split_linked_ids beside a row linked to a {event_type} event")
+        split_linked_ids = _split_linked_ids()
+        splits = _splits()
+        engine = await split_file(
+            "linked-ids.db",
+            [
+                _asset_event(31, A5, D_SPLIT, value="2"),
+                _asset_event(32, A5, D_SPLIT, event_type=event_type, value="2"),
+                _asset_event(33, A5, D_LATE, event_type=AssetEventType.DIVIDEND, value="0.35"),
+                _asset_event(34, A7, D_REVERSE_SPLIT, value="0.5"),
+            ],
+            [
+                _transaction(11, BUY, D_BUY, B1, asset_id=A5, quantity="10", amount="-1000", currency="EUR"),
+                _transaction(12, BUY, D_BUY, B2, asset_id=A7, quantity="8", amount="-80", currency="EUR"),
+                _transaction(21, ADJUSTMENT, D_SPLIT, B1, asset_id=A5, quantity="10", asset_event_id=31),
+                _transaction(22, ADJUSTMENT, D_SPLIT, B1, asset_id=A5, quantity="10", asset_event_id=32),
+                _transaction(23, DIVIDEND, D_LATE, B1, asset_id=A5, amount="7", currency="EUR", asset_event_id=33),
+                _transaction(24, ADJUSTMENT, D_REVERSE_SPLIT, B2, asset_id=A7, quantity="-4", asset_event_id=34),
+                _transaction(25, ADJUSTMENT, D_SPLIT, B2, asset_id=A5, quantity="10", asset_event_id=31),
+            ],
+        )
+        given = [24, 11, 23, 22, 21, 12]
+        ids, statements = await _load_ids(split_linked_ids, engine, given)
+        links, _link_statements = await _load(splits, engine, given)
+        alone, _alone_statements = await _load_ids(split_linked_ids, engine, [25])
+
+        _assert_id_set(ids)
+        assert ids == {21, 24}, f"given {given}: {sorted(ids)}"
+        _assert_one_read(statements)
+        assert ids == {link.transaction_id for link in links}, f"split_linked_ids {sorted(ids)} disagrees with load_split_links:\n{_shown(links)}"
+        _assert_id_set(alone)
+        assert alone == {25}, f"given row 25 alone: {sorted(alone)}"
+        print_success(f"{{21, 24}}: not the unlinked rows, not the row linked to the {event_type} event, not the row not given")
+
+    @pytest.mark.asyncio
+    async def test_i2_without_a_candidate_an_empty_set_and_not_a_statement(self, split_file):
+        """Nothing given, no row with an ``asset_event_id``, or a row that names the SPLIT event but was never written (no
+        id): an empty ``set``, and not a single statement.
+
+        The same rows then given with row 21, linked to the split, as a tuple: {21}, in one statement — the barrier that
+        makes the silences above mean «nothing to ask» rather than «never asks»; the row without an id is still left out,
+        and still has no id: it was not written to be read. Before MF-I2: AttributeError.
+        """
+        print_section("I2 — split_linked_ids without a candidate")
+        split_linked_ids = _split_linked_ids()
+        engine = await split_file(
+            "no-candidate-ids.db",
+            [_asset_event(31, A5, D_SPLIT, value="2")],
+            [
+                _transaction(11, BUY, D_BUY, B1, asset_id=A5, quantity="10", amount="-1000", currency="EUR"),
+                _transaction(12, DEPOSIT, D_BUY, B1, asset_id=None, amount="5000", currency="EUR"),
+                _transaction(21, ADJUSTMENT, D_SPLIT, B1, asset_id=A5, quantity="10", asset_event_id=31),
+            ],
+        )
+        unsaved = _unsaved(31)
+        silent: dict[str, list[int | Transaction]] = {
+            "nothing given": [],
+            "unlinked rows only": [11, 12],
+            "an unsaved row only": [unsaved],
+            "unlinked and unsaved rows": [11, unsaved, 12],
+        }
+        for name, given in silent.items():
+            ids, statements = await _load_ids(split_linked_ids, engine, given)
+            assert ids == set() and type(ids) is set, f"{name}: {ids!r}"
+            assert statements == [], f"{name}: no candidate, yet split_linked_ids sent {statements}"
+        mixed, mixed_statements = await _load_ids(split_linked_ids, engine, [unsaved, 21, 12, 11], container=tuple)
+
+        _assert_id_set(mixed)
+        assert mixed == {21}, f"the linked row among unlinked and unsaved ones: {sorted(mixed)}"
+        _assert_one_read(mixed_statements)
+        assert unsaved.id is None, "the unsaved row was written: split_linked_ids only reads"
+        print_success(f"{len(silent)} inputs without a candidate: set() and no statement; with one, {{21}}")
+
+    @pytest.mark.asyncio
+    async def test_i2_no_ratio_is_judged(self, split_file):
+        """A row linked to a SPLIT whose ratio is null, zero or negative is still returned: an average-cost replay rescales
+        the pool by the row's own quantity, never by the ratio, so ``split_linked_ids`` refuses none of them.
+
+        On the file whose schema admits a null ratio (checked to hold the NULL), events 31 (NULL), 32 (0), 33 (-1) and 34
+        (2), one ADJUSTMENT each, beside an unlinked buy: {21, 22, 23, 24}, the ids of ``load_split_links``. The barrier is
+        ``is_valid_split_ratio`` on those links: it refuses three of the four, so the set of four means «not judged»
+        rather than «nothing to judge». Before MF-I2: AttributeError.
+        """
+        print_section("I2 — split_linked_ids judges no ratio")
+        split_linked_ids = _split_linked_ids()
+        splits = _splits()
+        engine = await split_file(
+            "unjudged-ratios.db",
+            [
+                _asset_event(31, A5, D_SPLIT, value=None),
+                _asset_event(32, A5, D_SPLIT, value="0"),
+                _asset_event(33, A5, D_LATE, value="-1"),
+                _asset_event(34, A5, D_REVERSE_SPLIT, value="2"),
+            ],
+            [
+                _transaction(11, BUY, D_BUY, B1, asset_id=A5, quantity="10", amount="-1000", currency="EUR"),
+                _transaction(21, ADJUSTMENT, D_SPLIT, B1, asset_id=A5, quantity="10", asset_event_id=31),
+                _transaction(22, ADJUSTMENT, D_SPLIT, B1, asset_id=A5, quantity="10", asset_event_id=32),
+                _transaction(23, ADJUSTMENT, D_LATE, B1, asset_id=A5, quantity="10", asset_event_id=33),
+                _transaction(24, ADJUSTMENT, D_REVERSE_SPLIT, B1, asset_id=A5, quantity="40", asset_event_id=34),
+            ],
+            null_ratio_allowed=True,
+        )
+        async with AsyncSession(engine) as session:
+            stored = (await session.execute(select(AssetEvent.value).where(AssetEvent.id == 31))).scalar_one()
+        assert stored is None, f"the file holds {stored!r} for event 31, not NULL: the schema did not admit a null ratio"
+
+        given = [11, 24, 23, 22, 21]
+        ids, statements = await _load_ids(split_linked_ids, engine, given)
+        links, _link_statements = await _load(splits, engine, given)
+
+        _assert_id_set(ids)
+        assert ids == {21, 22, 23, 24}, f"every row linked to a SPLIT, whatever its ratio: {sorted(ids)}"
+        _assert_one_read(statements)
+        assert [(link.transaction_id, splits.is_valid_split_ratio(link.ratio)) for link in links] == [(21, False), (22, False), (23, False), (24, True)], f"the barrier: three of the four ratios are refused by the rule\n{_shown(links)}"
+        assert ids == {link.transaction_id for link in links}, f"split_linked_ids {sorted(ids)} disagrees with load_split_links:\n{_shown(links)}"
+        print_success("null, zero and negative ratios: still split-linked")
