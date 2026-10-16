@@ -105,4 +105,4 @@ overlay types, a shared `ResolutionBadge` + i18n keys, and the **static** compac
 | Broker schema (cash_balances) | `backend/app/schemas/portfolio.py` |
 | Broker service (discovery) | `backend/app/services/brokers/broker_service.py` |
 | Broker API | `backend/app/api/v1/brokers.py` |
-| Broker sharing/discovery components | `frontend/src/lib/components/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |
+| Broker sharing/discovery components | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |

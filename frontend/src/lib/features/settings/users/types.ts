@@ -9,6 +9,8 @@ export interface AdminAccount {
     created_at: string;
     /** Nobody may delete, deactivate or demote it (the paying administrator of a managed instance). */
     protected: boolean;
+    /** Inactive and waiting for its email verification with a live link: its place is already counted (workstream E). */
+    holds_place?: boolean;
 }
 
 export interface OpenInvite {

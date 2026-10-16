@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingReturn": {
+      "name": "Rendimiento móvil",
+      "description": "Rendimiento solo del precio sobre una ventana móvil de días naturales, cada precio frente al de tantos días antes.",
+      "output": "Rendimiento",
+      "outputDescription": "Variación del precio frente al precio anterior, en puntos porcentuales.",
+      "windowTooltip": "Días naturales entre cada precio y el precio anterior con el que se compara."
+    }
+  }
+}

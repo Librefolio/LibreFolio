@@ -1,6 +1,6 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {compareDecimal} from '../decimal';
     import {formatPlannerPercent} from '../format';
     import type {ScopeBroker} from '../scope';
@@ -31,9 +31,9 @@
         <li class="flex flex-wrap items-center gap-2 text-sm" data-testid="{testid}-broker" data-broker-id={broker.id} data-selectable={broker.selectable ? 'true' : 'false'}>
             {#if broker.selectable}
                 <label class="flex items-center gap-2">
-                    <input type="checkbox" class="rounded border-gray-300 text-libre-green focus:ring-libre-green" checked={selected.includes(broker.id)} {disabled} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
+                    <input type="checkbox" class="rounded border-lf-input text-lf-link focus:ring-lf-focus" checked={selected.includes(broker.id)} {disabled} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
                     <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={20} />
-                    <span class="font-medium text-gray-900 dark:text-gray-100">{broker.name}</span>
+                    <span class="font-medium text-lf-primary">{broker.name}</span>
                 </label>
                 {#if partial(broker.share)}
                     <span class={HINT}>· {$t('tools.pacAllocator.planner.scope.share', {default: 'share {share}', values: {share: formatPlannerPercent(broker.share)}})}</span>
@@ -42,8 +42,8 @@
                     <span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>
                 {/if}
             {:else}
-                <span class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <input type="checkbox" class="rounded border-gray-300" disabled checked={false} aria-hidden="true" tabindex="-1" />
+                <span class="flex items-center gap-2 text-lf-muted">
+                    <input type="checkbox" class="rounded border-lf-input" disabled checked={false} aria-hidden="true" tabindex="-1" />
                     <span class="inline-flex opacity-60"><BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={20} /></span>
                     <span>{broker.name}</span>
                 </span>

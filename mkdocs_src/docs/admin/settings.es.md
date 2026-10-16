@@ -48,7 +48,7 @@ Solo los administradores (superusuarios) tienen el candado; todos los demás obt
 |---|---|---|---|
 | ⏳ Sesión | **Duración de Sesión** | 24 horas | Cuánto tiempo permanecen los usuarios con la sesión iniciada. Redúcela en dispositivos compartidos; un nuevo valor se aplica a partir del siguiente inicio de sesión de cada usuario. |
 | 🛡️ Seguridad | **Habilitar registro** | Activado | Permite que se registren nuevas personas. Desactívalo cuando todos tengan una cuenta, sobre todo si se puede acceder a la instancia desde internet. La primera cuenta de una instancia nueva siempre se puede crear. |
-| 🛡️ Seguridad | **Verificación Email Requerida** | Desactivado | Aún no está activo: el envío de correos es una función planificada, por lo que el interruptor es de solo lectura y está marcado como **Próximamente**. |
+| 🛡️ Seguridad | **Verificación Email Requerida** | Desactivado | Las cuentas nuevas deben abrir un enlace enviado por correo a su dirección antes de poder iniciar sesión; la primera cuenta nunca espera, y las cuentas existentes no cambian. Solo se activa mientras el correo funciona y `LIBREFOLIO_PUBLIC_URL` se puede usar: hasta entonces el interruptor aparece en gris. Consulta *Email Verification* en [Correo](email.md). |
 | 🔄 Tarea de actualización | **Planificador Activado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: consulta [Planificador de datos de mercado](#market-data-scheduler). |
 | 🧠 Memoria | **Tamaño Máx. Subida** | 10 MB | El archivo más grande que los usuarios pueden subir, incluidos los informes del bróker. Auméntalo si se rechaza una exportación grande. |
 | 🌍 Predeterminados | **Divisa predeterminada** | `EUR` | La moneda en la que informan los nuevos usuarios. |
