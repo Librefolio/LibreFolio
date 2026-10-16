@@ -4903,7 +4903,8 @@ da Y il 15/10.
     indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
   - Dettagli: piano di Y, «Passo 4b».
 - **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
-  presente prima di Y12b; `test-author` di Y, 16/10.
+  presente prima di Y12b; `test-author` di Y, 16/10. ✅ 16/10: ora la durata segue la fonte della profondità, con una
+  riga in `levelHelpers.ts`. Il rosso era 1/513, il verde 513/513; nel checkpoint di Y-19.
   - In `buildHurtRows` (`levelHelpers.ts`) la durata è `maximum_drawdown_duration_days` del riepilogo, con ripiego sul
     KPI, mentre la profondità ha un ripiego suo.
   - Se il riepilogo c'è ma la sua profondità ha il segno sbagliato, si mostrano la profondità del KPI e la durata del
