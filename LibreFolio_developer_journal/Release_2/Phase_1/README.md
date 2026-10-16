@@ -179,3 +179,4 @@ Sono tutti locali: la push la fa il developer.
 | 90 | 16/10 04:48 | A: A6c (decisione 37: regole della password in `password_policy.py`, classi Unicode, `PASSWORD_TOO_WEAK` su register/change/reset e CLI, `accounts.password_rules`; all-backend 0 rossi, E2E 129) | `3b3f6a1f0` |
 | 91 | 16/10 04:49 | X: CP11c (mascheramento N15 e campo personale N16, sonda senza URL col segreto, E2E `front-utility plugin-settings` 5/5, pagina `user/settings/plugins`, scatto `settings/plugins`) + escape del tooltip della sonda (ultimo LOW della revisione CP10–CP11) | `2f1d77a23` |
 | 92 | 16/10 04:52 | H: CP7b-2 (`PROFILE_DEFAULTS` del profilo gestito, `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY`; all-backend 17 792/0) | `d8549c69a` |
+| 93 | 16/10 04:56 | Z: cura del rosso `services config-package` (1/693 da Z2b): `fly_machine_identity()` in `config/sleep_wake.py`, `suspend.py` senza `os.environ`; trovato da H | `3648a6155` |

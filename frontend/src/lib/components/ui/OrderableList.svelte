@@ -116,12 +116,12 @@
         <div
             class="flex items-center gap-2 {compact ? 'py-1 px-2' : 'p-2'} rounded-lg border transition-all duration-150
                 {dragOverIndex === index && dragIndex !== index
-                ? 'border-l-4 border-l-libre-green border-y-gray-200 dark:border-y-slate-600 border-r-gray-200 dark:border-r-slate-600 bg-green-50/50 dark:bg-green-900/10'
+                ? 'border-l-4 border-l-lf-focus border-y-lf-subtle border-r-lf-subtle bg-lf-selected'
                 : tone === 'error'
-                  ? 'border-red-200 bg-red-50/70 dark:border-red-800/70 dark:bg-red-950/25'
+                  ? 'border-lf-danger-line bg-lf-danger-soft'
                   : tone === 'warning'
-                    ? 'border-amber-200 bg-amber-50/60 dark:border-amber-700/60 dark:bg-amber-950/20'
-                    : 'border-gray-200 dark:border-slate-600'}
+                    ? 'border-lf-warning-line bg-lf-warning-soft'
+                    : 'border-lf-subtle'}
                 {dragIndex === index ? 'opacity-50' : ''}
                 {disabled ? 'opacity-60' : ''}"
             draggable={!disabled}
@@ -134,7 +134,7 @@
         >
             <!-- Drag handle (visible on md+) -->
             {#if !disabled}
-                <div class="hidden md:flex cursor-grab active:cursor-grabbing text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                <div class="hidden md:flex cursor-grab active:cursor-grabbing text-lf-muted hover:text-lf-secondary">
                     <GripVertical size={16} />
                 </div>
             {/if}
@@ -147,10 +147,10 @@
             <!-- Arrow buttons (visible below md) -->
             {#if !disabled}
                 <div class="flex flex-col md:hidden gap-0.5">
-                    <button type="button" class="p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === 0} onclick={() => moveUp(index)} title="Move up">
+                    <button type="button" class="p-0.5 rounded text-lf-muted hover:text-lf-secondary disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === 0} onclick={() => moveUp(index)} title="Move up">
                         <ChevronUp size={14} />
                     </button>
-                    <button type="button" class="p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === items.length - 1} onclick={() => moveDown(index)} title="Move down">
+                    <button type="button" class="p-0.5 rounded text-lf-muted hover:text-lf-secondary disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === items.length - 1} onclick={() => moveDown(index)} title="Move down">
                         <ChevronDown size={14} />
                     </button>
                 </div>
