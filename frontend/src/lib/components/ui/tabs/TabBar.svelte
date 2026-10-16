@@ -126,15 +126,13 @@
 </script>
 
 {#snippet tabRow()}
-    <div bind:this={containerRef} class={['flex border-b border-gray-200 dark:border-slate-600', scrollable ? 'min-w-full w-max' : '', className].filter(Boolean).join(' ')} role="tablist">
+    <div bind:this={containerRef} class={['flex border-b border-lf-subtle text-lf-primary', scrollable ? 'min-w-full w-max' : '', className].filter(Boolean).join(' ')} role="tablist">
         {#each tabs as tab (tab.id)}
             <button
                 bind:this={buttonRefs[tab.id]}
                 type="button"
                 class={`flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all ${fillWidth ? 'flex-1' : 'flex-1 sm:flex-none'} border-b-2 -mb-px ${
-                    activeTab === tab.id
-                        ? 'text-libre-green border-libre-green bg-libre-green/5 dark:text-emerald-400 dark:border-emerald-400 dark:bg-emerald-500/10'
-                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:border-gray-300 dark:hover:border-slate-500'
+                    activeTab === tab.id ? 'text-lf-link border-lf-focus bg-lf-selected' : 'border-transparent text-lf-muted hover:text-lf-secondary hover:bg-lf-hover hover:border-lf-subtle'
                 } ${tab.className ?? ''}`.trim()}
                 data-testid={tab.testId ?? `tab-${tab.id}`}
                 use:guideAnchor={tab.guideAnchor ?? ''}
@@ -150,7 +148,7 @@
                 <!-- Only a tab with an icon may lose its label: an icon-less tab would be left empty. -->
                 <span bind:this={labelRefs[tab.id]} class={!tab.icon ? '' : showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
                 {#if tab.badge != null && tab.badge > 0}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
+                    <span class="text-[10px] px-1.5 py-0.5 bg-lf-warning-soft text-lf-warning-on-soft rounded-full">
                         {tab.badge}
                     </span>
                 {/if}

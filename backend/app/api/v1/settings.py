@@ -53,7 +53,7 @@ from backend.app.services.accounts.settings_service import (
     update_user_settings,
 )
 from backend.app.services.platform.scheduler import read_job_log
-from backend.app.services.platform.scheduler.state import load_state
+from backend.app.services.platform.scheduler.state import JobState, load_state
 from backend.app.utils.runtime.cache import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
@@ -383,21 +383,22 @@ async def get_scheduler_state(
     now_utc = datetime.now(UTC)
     server_now_utc = now_utc.strftime("%H:%M")
 
+    def job_info(job: JobState) -> dict:
+        return {
+            "last_run_at": job.last_run_at,
+            "last_duration_s": job.last_duration_s,
+            "last_status": job.last_status,
+            "last_items_ok": job.last_items_ok,
+            "last_items_err": job.last_items_err,
+            "last_items_deferred": job.last_items_deferred,
+            "retry_at": job.retry_at,
+            "consecutive_failures": job.consecutive_failures,
+            "next_attempt_at": job.next_attempt_at,
+        }
+
     return {
-        "current_price": {
-            "last_run_at": state.current_price.last_run_at,
-            "last_duration_s": state.current_price.last_duration_s,
-            "last_status": state.current_price.last_status,
-            "last_items_ok": state.current_price.last_items_ok,
-            "last_items_err": state.current_price.last_items_err,
-        },
-        "history_sync": {
-            "last_run_at": state.history_sync.last_run_at,
-            "last_duration_s": state.history_sync.last_duration_s,
-            "last_status": state.history_sync.last_status,
-            "last_items_ok": state.history_sync.last_items_ok,
-            "last_items_err": state.history_sync.last_items_err,
-        },
+        "current_price": job_info(state.current_price),
+        "history_sync": job_info(state.history_sync),
         "server_tz": "UTC",
         "server_now_utc": server_now_utc,
         "scheduler_timezone": scheduler_tz,

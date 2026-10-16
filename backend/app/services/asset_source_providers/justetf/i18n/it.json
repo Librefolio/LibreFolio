@@ -1,4 +1,16 @@
 {
+  "assets": {
+    "providerParams": {
+      "justetf": {
+        "label": {
+          "currency": "Valuta del prezzo"
+        },
+        "description": {
+          "currency": "Valuta del prezzo. EUR = quotazione in tempo reale + storico. USD/CHF/GBP = ultimo prezzo giornaliero + storico (convertiti da JustETF)."
+        }
+      }
+    }
+  },
   "pluginSettings": {
     "asset": {
       "justetf": {

@@ -151,6 +151,9 @@ Keep at least one time and one day. Tip: a history sync after the markets close 
 ### 📜 Read the scheduler log
 
 The **Scheduler Status** row shows the last current price refresh, with a dot for its result.
+While a retry is pending, an extra line gives its time: **Failed: next attempt at …** after a
+refresh that could not finish, otherwise **Paused items retried at …** for the prices deferred
+because their provider paused.
 Click the row (or **Details…**) to open the **Scheduler Execution Log**. Only administrators can
 read the status and the log.
 
@@ -163,6 +166,9 @@ read the status and the log.
   many requests; 🔴 **Error**: none succeeded and none was deferred.
 - Click an entry to see each asset or FX pair, its provider and the prices changed (**Delta**).
   Hover an error to read it in full; double-click it (long-press on a phone) to copy it.
+- A deferred item shows a pause icon and **Deferred: provider paused**: hover the label to read the
+  provider's message. The entry counts deferred items with ⏸, next to ✓ and ✗ (for example
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), and **Retry at** in its header gives the time set for retrying them.
 - Filter by job, status or period, from the last hour to the last 30 days. Only the most recent
   runs are kept.
 

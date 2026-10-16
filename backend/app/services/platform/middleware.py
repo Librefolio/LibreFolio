@@ -30,7 +30,8 @@ MIDDLEWARE_STACK: tuple[MiddlewareEntry, ...] = (
     # The user's presence and the requests in flight (workstream Z, decision D-S1): outermost, so it sees every
     # request first and counts the compression of a response as in flight; the probes are not counted.
     MiddlewareEntry("activity", ActivityMiddleware),
-    # nosniff and Referrer-Policy on every response, the 500s and the compressed ones included (D5)
+    # nosniff and Referrer-Policy on every response, the 500s and the compressed ones included; with their switches on
+    # (the managed profile), frame protection and the report-only CSP of the web app's pages (D5)
     MiddlewareEntry("security_headers", SecurityHeadersMiddleware),
     # Compress responses (API JSON, SvelteKit JS/CSS, docs HTML) for clients that accept
     # gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,

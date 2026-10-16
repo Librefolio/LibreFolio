@@ -103,6 +103,9 @@ Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storic
 ### 📜 Leggi il log dello scheduler
 
 La riga **Stato Scheduler** mostra l'ultimo aggiornamento del prezzo corrente, con un punto per il risultato.
+Quando è previsto un nuovo tentativo, una riga in più ne indica l'ora: **Non riuscito: nuovo tentativo alle …** dopo un
+aggiornamento che non si è potuto concludere, altrimenti **Elementi in pausa ritentati alle …** per i prezzi rimandati
+perché il loro fornitore è in pausa.
 Fai clic sulla riga (o su **Dettagli…**) per aprire il **Log Esecuzione Scheduler**. Solo gli amministratori possono
 leggere lo stato e il log.
 
@@ -115,6 +118,9 @@ leggere lo stato e il log.
   🔴 **Errore**: nessuno riuscito e nessuno rimandato.
 - Fai clic su una voce per vedere ciascun asset o coppia FX, il relativo provider e i prezzi modificati (**Delta**).
   Passa il mouse su un errore per leggerlo per intero; fai doppio clic (pressione prolungata su un telefono) per copiarlo.
+- Un elemento rimandato mostra un'icona di pausa e **Rimandato: fornitore in pausa**: passa il mouse sull'etichetta per
+  leggere il messaggio del fornitore. La voce conta gli elementi rimandati con ⏸, accanto a ✓ e ✗ (per esempio
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), e **Nuovo tentativo alle …** nella sua intestazione indica l'ora fissata per ritentarli.
 - Filtra per job, stato o periodo, dall'ultima ora agli ultimi 30 giorni. Vengono conservate solo le esecuzioni più recenti.
 
 ---

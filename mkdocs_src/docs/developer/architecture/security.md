@@ -1029,9 +1029,10 @@ a debugging mode, not meant for a server with real users.
 ## 🏷️ Response Headers {: #response-headers }
 
 `SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
-`MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds two headers,
-`ALWAYS_HEADERS`, to every HTTP response of the app: API answers, the web app, the documentation and the files,
-compressed or not, errors included.
+`MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds the security headers
+of decision D5. Two of them, `ALWAYS_HEADERS`, go on every HTTP response of the app: API answers, the web app, the
+documentation and the files, compressed or not, errors included. Two switches add more, off on a self-hosted install and
+on in the managed profile: see [Frame Protection and the Report-Only Policy](#managed-headers).
 
 | Header | Value | Effect |
 |--------|-------|--------|
@@ -1041,12 +1042,16 @@ compressed or not, errors included.
 - **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
   any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the text preview of an upload
   (`backend/app/api/v1/uploads.py`) and the download of a broker report (`backend/app/api/v1/brokers.py`) set
-  themselves is not repeated. WebSocket and lifespan scopes pass untouched.
+  themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
+  one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
+  `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and
+  lifespan scopes pass untouched.
 - **The 500 of an exception.** Starlette answers an unhandled exception from `ServerErrorMiddleware`, which it puts
   outside every middleware of the stack, so its 500 would go out without the headers. When a request raises before
-  its response has started, the middleware sends the 500 itself (`Internal Server Error`, plain text) with both
-  headers, then re-raises the exception: `ServerErrorMiddleware` finds the response started and sends nothing, and
-  the server still logs the error.
+  its response has started, the middleware sends the 500 itself (`Internal Server Error`, plain text) with the headers
+  of every response, then re-raises the exception: `ServerErrorMiddleware` finds the response started and sends
+  nothing, and the server still logs the error.
 - **A type for every file served.** With `nosniff`, a script or a style sheet sent with a type that is not its own is
   refused, so every file the app serves must carry its right type. `FileResponse` (the `/_app` mount, the SPA
   catch-all, `/mkdocs`) and the plugin-asset route (`/uploads/plugin/…`) take it from `mimetypes`, with
@@ -1056,14 +1061,76 @@ compressed or not, errors included.
   `SERVED_TYPES` (JavaScript, CSS, JSON and source maps, the web manifest, WebAssembly, SVG, the fonts) to
   `mimetypes` for the whole process, so these extensions get the same type on every machine.
 
-These two headers are the part of decision D5 that holds for every instance; its part for the
-[managed profile](../../admin/hosting_providers.md#managed-profile) comes with the profile defaults.
+### 🖼️ Frame Protection and the Report-Only Policy {: #managed-headers }
 
-Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`: both
-headers exactly once on every kind of response, a route's own kept, the 500 with its exception still re-raised) and
-`./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`: the
-type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file).
+The part of decision D5 meant for the [managed profile](../../admin/hosting_providers.md#managed-profile): two `bool`
+switches of `Settings`, `False` in the code and `True` in `PROFILE_DEFAULTS["managed"]` (see
+[Settings System](settings.md)). Each can be set on its own, in either profile, and a value set in the environment or in
+`.env` wins over the profile.
+
+| Switch | Header | Value | Sent on |
+|--------|--------|-------|---------|
+| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every HTTP response |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app |
+
+- **Frame protection** (`FRAME_HEADERS`) is enforced: only the app's own pages may frame it, so a hosting panel or a
+  dashboard on another origin that shows the app in a frame is refused by the browser. Its two headers go where
+  `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files, the CORS preflights (the `cors` entry is
+  inside this one) and the middleware's own 500.
+- **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
+  report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
+  is sent.
+- **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
+  `Content-Type` and `scope["path"]`: the type must start with `text/html`, and the path must be outside `/mkdocs`
+  (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`). The middleware is outside GZip, so a compressed page still says
+  `text/html`. The policy thus reaches `/`, the client-side routes the SPA catch-all answers and the HTML files of the
+  build (`200.html`, `offline.html`). Left out on purpose: the documentation, a separate site that this policy does not
+  describe; Swagger UI and ReDoc (`/api/v1/docs`, `/api/v1/redoc`), which load their scripts from a CDN, so a
+  `default-src 'self'` report there would be pure noise; the HTML 404 that the catch-all answers for an unknown API
+  path; and every response that is not HTML: JavaScript, JSON, text files, and the CORS preflights and the 500, which
+  are plain text.
+- **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
+  the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
+  call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
+  each configuration.
+
+`CSP_REPORT_ONLY_POLICY`, directive by directive:
+
+| Directive | Sources | Why |
+|-----------|---------|-----|
+| `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
+| `script-src` | `'self' 'wasm-unsafe-eval'` | Script files from the app's origin, no inline script; WebAssembly may compile, for the PDF viewer (its PDFium engine) |
+| `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
+| `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
+| `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
+| `connect-src` | `'self'` | `fetch`, XHR and WebSockets reach the app's origin only |
+| `worker-src` | `'self' blob:` | Workers, the service worker included, from the app's origin or a `blob:` URL |
+| `frame-src` | `'self' blob:` | The app's frames show its own pages or a `blob:` URL |
+| `object-src` | `'none'` | No `<object>` or `<embed>` content |
+| `base-uri` | `'self'` | A `<base>` element cannot send the page's relative URLs to another origin |
+| `form-action` | `'self'` | Forms submit to the app's origin only |
+| `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
+
+Today a page of the web app reports at least its inline scripts: the one of `frontend/src/app.html`, which applies the
+theme before the first paint and registers the service worker, and the start script SvelteKit writes into the page
+(`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
+`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
+reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
+enforced policy would block.
+
+Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
+`nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
+still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
+on fresh apps holding the stack's `security_headers`, `gzip` and `cors` and a fake static site: frame protection once
+on every response when on and on none when off, `false` over `managed` included; the report-only policy on the web
+app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript chunk, a text file, a
+CORS preflight or a 500; the policy read directive by directive, each directive once, with no report endpoint; a
+route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
+and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
+the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
+`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 ## 🌐 HTTPS & Deployment Architecture
 

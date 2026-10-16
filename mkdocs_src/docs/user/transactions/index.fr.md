@@ -76,7 +76,7 @@ L'espace de travail groupé est une grille de lignes en brouillon — marquées 
     <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Espace de travail groupé avec la bannière des champs à vérifier déroulée et la ligne de l'entrée cliquée mise en surbrillance dans la grille">
 </div>
 
-Après un enregistrement, un **Promouvoir la paire** ou un **Séparer la paire**, la page Transactions efface sa sélection, car ces lignes ont pu changer ; la fermeture ou l'annulation la conserve.
+Après un enregistrement, un **Promouvoir la paire** ou un **Séparer la paire**, la page Transactions efface sa sélection, car ces lignes ont pu changer ; la fermeture ou l'annulation la conserve. Si un **Promouvoir la paire** ou un **Séparer la paire** est refusé, rien ne change : un message d'erreur dit pourquoi, et la confirmation reste ouverte.
 
 ---
 

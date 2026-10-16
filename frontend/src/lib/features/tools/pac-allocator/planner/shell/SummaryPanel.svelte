@@ -107,16 +107,16 @@
     <dl class="space-y-1 text-sm">
         {#each rows as row (row.id)}
             <div class="flex justify-between gap-3" data-testid="{testid}-row" data-row={row.id} data-warn={row.warn ? 'true' : 'false'}>
-                <dt class="text-gray-600 dark:text-gray-400">{row.label}</dt>
-                <dd class="text-right font-medium tabular-nums {row.warn ? 'text-amber-700 dark:text-amber-300' : ''}">{row.value}{row.warn ? ' !' : ''}</dd>
+                <dt class="text-lf-secondary">{row.label}</dt>
+                <dd class="text-right font-medium tabular-nums {row.warn ? 'text-lf-warning' : ''}">{row.value}{row.warn ? ' !' : ''}</dd>
             </div>
         {/each}
     </dl>
     {#if step === 'targets'}
-        <p class="text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.summary.noFuture', {default: 'No future value calculated.'})}</p>
+        <p class="text-xs text-lf-muted">{$t('tools.pacAllocator.planner.summary.noFuture', {default: 'No future value calculated.'})}</p>
     {/if}
     {#if step === 'scenario' || step === 'review'}
-        <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="{testid}-versions">
+        <p class="text-xs text-lf-muted" data-testid="{testid}-versions">
             {$t('tools.pacAllocator.planner.summary.versions', {default: 'Backend/API {api} · UI {ui}', values: {api: apiVersion, ui: uiVersion}})}
         </p>
     {/if}

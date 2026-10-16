@@ -35,13 +35,13 @@
         {$t(`${KEY}.title`, {default: 'Calculation failed'})}
     </p>
     <p>
-        <code class="rounded bg-white/60 px-1 text-xs dark:bg-black/30">{message.code}</code>
+        <code class="rounded bg-lf-card/60 px-1 text-xs">{message.code}</code>
         · {$t(message.key, {default: message.fallback, values: {code: message.code}})}
     </p>
     {#if reference}
         <p class={HINT} data-testid="pac-planner-platform-reference">
             {$t(`${KEY}.reference`, {default: 'Reference in the server log:'})}
-            <code class="break-all rounded bg-white/60 px-1 text-xs dark:bg-black/30">{reference}</code>
+            <code class="break-all rounded bg-lf-card/60 px-1 text-xs">{reference}</code>
         </p>
     {/if}
     <div class="flex flex-wrap gap-2">
