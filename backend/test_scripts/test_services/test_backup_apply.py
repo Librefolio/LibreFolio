@@ -1,11 +1,12 @@
 """
-Restoring a checked backup at the next start (workstream B, lot B3, contract §1–§4, §7 and §10): ``instance_backup/apply.py``
-and ``instance_backup/restart.py`` (new), the names ``paths.py`` gains, the three startup steps of ``app_lifespan.py``.
-Selector: ``services backup-apply``.
+Restoring a checked backup at the next start (workstream B, lot B3, contract §1–§4, §7, §10 and §11):
+``instance_backup/apply.py`` and ``instance_backup/restart.py`` (new), the names ``paths.py`` gains, the three startup
+steps of ``app_lifespan.py``. Selector: ``services backup-apply``.
 
 Written RED, before B3. ``apply.py``, ``restart.py`` and the new names of ``paths.py`` are looked up by the test that
 needs them (``apply_module``, ``restart_module``, ``new_path_name``), never imported at the top: the file collects
-without them, and each test fails on its own, saying what is missing ("[new] …").
+without them, and each test fails on its own, saying what is missing ("[new] …"). The tests of (m) were written red the
+same way, before P7 (§11).
 
 (a) §1 The layout: ``.restore/restore.json`` (the state), ``.restore/apply.lock``, ``.restore/previous/`` (the data a
     restore replaced), ``.restore/failed/`` (the restored data a rollback set aside); ``SWAPPED_FOLDERS``, the database's
@@ -88,6 +89,19 @@ without them, and each test fails on its own, saying what is missing ("[new] …
     given or the server's, returns it and logs a warning. No real signal: ``os.kill`` itself is replaced too.
 (l) B2 then B3 with real archives at the head and at ``OLDER``: checked, confirmed, applied, committed; the live database
     at the head with the rows the report's ``after`` says, the archive's files live, the copy gone.
+(m) §11, P7 (the developer's decision of 2026-10-16): no restore on a blocked instance. ``WaitReason`` gains
+    ``instance_blocked``. ``LIBREFOLIO_BLOCKED`` blocking (``true``, ``1``, ``yes``, ``ON``): a pending restore is not
+    applied — ``pending``, ``waiting = instance_blocked`` recorded in the state file, the rest of the state as
+    confirmed, nothing moved, written or removed but the state (an earlier restore's ``previous/`` and ``failed/``
+    included), one warning logged («The hosting provider blocked the instance: the restore waits until it is
+    unblocked») and no error, the apply lock and the serving lock free once the step returned; the variable removed,
+    the next start applies it and clears ``waiting``. A value that cannot be read (``maybe``) counts as blocked: the
+    same, an error logged, and the step does not raise. ``false``, ``0``, unset: applied as before. The order:
+    ``other_data_directory`` first (a copy of the data directory never applies the restore, blocked or not), then
+    ``instance_blocked``, before ``server_running`` and ``backup_running`` (each seen to hold the restore back on its
+    own once the block is lifted). Unchanged while blocked: the undo of a restore a dead start applied
+    (``first_start_failed``), of a swap a killed start left ``applying`` and of an undo it left ``rolling_back``
+    (``swap_interrupted``), the data of before back exactly; the commit of a restore this boot applied.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -110,7 +124,10 @@ stays held in the pytest process. Whether a process reaching ``serving-lock`` co
 child (``serving_lock_free``, at every rename through ``Mover.on_each``): a shared ``flock`` through a descriptor of
 the test's own, which conflicts with a lock this process holds through another, since such a lock belongs to an open
 file description. ``apply._boot_of`` keeps the boots it read for the life of a process: its cache is
-emptied before and after every test (``fresh_boots``).
+emptied before and after every test (``fresh_boots``). The block is ``LIBREFOLIO_BLOCKED`` in this process's environment,
+which ``config.platform.instance_blocked()`` reads at each call: the one a developer's shell may carry is removed before
+every test (``no_inherited_block``), and each test of (m) sets its own with ``monkeypatch`` — after any spawn child it
+needs has started, so that the child never sees it.
 
 Pure: every data directory under ``tmp_path``. This process, and the processes it starts, are configured with a
 production data directory of the test that must stay absent (``configured_data_dir`` of the staging tests, imported,
@@ -142,7 +159,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from errno import ENOLCK, EWOULDBLOCK, EXDEV
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, get_args
 
 import psutil
 import pytest
@@ -152,6 +169,7 @@ from sqlalchemy.pool import NullPool
 from structlog.testing import capture_logs
 
 from backend.app.config import PRODUCTION_DATA_MARKER
+from backend.app.config.platform import instance_blocked
 from backend.app.db.models import AccountTokenPurpose
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts import auth_service, token_service
@@ -259,6 +277,10 @@ LOG_CANARY = "b3 apply test: canary through a logger of apply's name"
 #: waiting for a restore to finish moving the folders.
 HALF_SWAPPED_UNDER_A_SERVER = "A server serves a data directory that a restore left half swapped: it is put back all the same, and that server must be restarted"
 WAITING_FOR_THE_MOVES = "A restore is moving the folders of the data directory: this start waits until they have moved"
+#: (§11, P7) The hosting provider's block, which ``config.platform.instance_blocked()`` reads from this process's
+#: environment at each call; and what an operator reads when a pending restore waits for the block to end.
+BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
+INSTANCE_BLOCKED_WAITS = "The hosting provider blocked the instance: the restore waits until it is unblocked"
 
 #: Each folder's (live, restored), every combination for each archived folder across the four layouts; the database's
 #: folder is restored always (a copy without a database is not usable), replacing a live one or none.
@@ -322,6 +344,14 @@ def fresh_boots() -> Iterator[None]:
     _clear_boots()
 
 
+@pytest.fixture(autouse=True)
+def no_inherited_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    """§11: a pending restore is not applied on a blocked instance, and the block is read from this process's
+    environment at each call. The ``LIBREFOLIO_BLOCKED`` a developer's shell may carry is removed for every test, and for
+    the spawn children it starts: a test sees only the block it sets itself."""
+    monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
+
+
 @pytest.fixture
 def serving_here() -> Iterator[Any]:
     """``apply``, and what ``hold_serving_lock`` takes in this process during the test released at its end: each key it
@@ -375,6 +405,12 @@ def outside(fingerprint: dict[str, tuple]) -> dict[str, tuple]:
 def restore_items(root: Path) -> dict[str, tuple]:
     """Everything below ``.restore``, as ``fingerprint`` sees a folder (``{}`` when it is not a plain folder)."""
     return cases.fingerprint(restore_dir(root)) if paths.is_plain_dir(restore_dir(root)) else {}
+
+
+def restore_items_but_the_state(root: Path) -> dict[str, tuple]:
+    """Everything below ``.restore`` but the state file: the checked copy, the checks, the uploads, the apply lock, and
+    ``previous/`` or ``failed/`` where they stand. What a restore that only records why it waits leaves as it was."""
+    return {name: value for name, value in restore_items(root).items() if name != STATE_FILE_NAME}
 
 
 def restore_kind(root: Path) -> str | None:
@@ -545,6 +581,11 @@ def an_error(events: list[dict[str, Any]]) -> bool:
 def a_warning(events: list[dict[str, Any]]) -> bool:
     """A warning, or worse: what an operator must see."""
     return bool(levels(events) & {"warning", "error", "critical"})
+
+
+def logged(events: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """What was logged in the block, (level, message) in order, the canary left out: what a failure shows."""
+    return [(str(event.get("log_level")), str(event.get("event"))) for event in events if event.get("event") != LOG_CANARY]
 
 
 # =============================================================================
@@ -2869,3 +2910,233 @@ def test_a_checked_backup_is_confirmed_applied_and_committed(tmp_path, databases
     assert (left, apply.protected_stage(root)) == ([], None), f"nothing of the restore left: {left}"
     assert cases.changed(outside(before), outside(cases.fingerprint(root))) == [], "nothing else of the data directory touched"
     print_success(f"{archive}: committed, {len(report.tables)} tables as the report said")
+
+
+# =============================================================================
+# (m) §11 P7: no restore on a blocked instance
+# =============================================================================
+
+#: Why a pending restore waits at a start: a backup running, another data directory (§2), another server process
+#: serving it (§10), the hosting provider's block (§11).
+WAIT_REASONS = {"backup_running", "other_data_directory", "server_running", "instance_blocked"}
+#: What blocks the instance (``config.platform``: its words, in any case), and what does not (``None``: unset).
+BLOCKING = ["true", "1", "yes", "ON"]
+NOT_BLOCKING = [pytest.param("false", id="false"), pytest.param("0", id="0"), pytest.param(None, id="unset")]
+#: A value ``instance_blocked()`` cannot read: it raises ``ValueError``.
+UNREADABLE_BLOCK = "maybe"
+
+
+def test_a_pending_restore_waits_for_one_of_four_reasons_the_block_among_them():
+    """(m) §11: ``WaitReason`` gains ``instance_blocked``, beside the three of §2 and §10."""
+    print_section("(m) §11 P7: no restore on a blocked instance")
+    apply = apply_module()
+    reasons = set(get_args(apply.WaitReason))
+    assert reasons == WAIT_REASONS, f"[new] the reasons a pending restore waits for, instance_blocked among them (contract §11): {sorted(reasons)}"
+    print_success(f"WaitReason: {', '.join(sorted(reasons))}")
+
+
+@pytest.mark.parametrize("value", BLOCKING)
+def test_on_a_blocked_instance_a_pending_restore_waits_and_the_first_start_unblocked_applies_it(tmp_path, databases, checked, monkeypatch, value):
+    """(m) §11: a restore confirmed before the hosting provider blocked the instance is not applied while it is blocked.
+    ``pending``, ``waiting = instance_blocked`` recorded in the state file, the rest of the state as it was confirmed;
+    nothing moved, written or removed but the state — the data directory, the checked copy, its check, what
+    ``.restore`` holds for other archives, what an earlier restore left in ``previous/`` and ``failed/`` (a swap removes
+    those first); one warning, no error; the apply lock and the serving lock free once the step returned. The variable
+    removed, the next start applies the restore and clears ``waiting``."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirmed = confirm(apply, instance)
+    cases.write_files(previous_of(instance.root), {"custom-uploads/stale.png": b"set aside by an earlier restore"})
+    cases.write_files(failed_of(instance.root), {"broker_reports/stale.csv": b"set aside by an earlier rollback"})
+    monkeypatch.setenv(BLOCKED_VARIABLE, value)
+    assert instance_blocked() is True, f"precondition: {BLOCKED_VARIABLE}={value!r} blocks the instance"
+    data, kept = cases.fingerprint(instance.root), restore_items_but_the_state(instance.root)
+    with moving(apply) as mover, logs() as events:
+        state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    assert (state.status, state.waiting) == ("pending", "instance_blocked"), f"{BLOCKED_VARIABLE}={value!r}: pending, waiting for the unblock: {state.status}, {state.waiting}"
+    assert state == confirmed.model_copy(update={"waiting": "instance_blocked"}), f"the rest of the state as confirmed: no journal, no boot, nothing applied or finished: {state}"
+    assert apply.read_restore(instance.root) == state, "the state on disk is the state returned"
+    assert json.loads(state_file(instance.root).read_text(encoding="utf-8"))["waiting"] == "instance_blocked", "the reason is recorded in the state file"
+    assert mover.calls == 0, f"nothing moved: {mover.moved}"
+    assert cases.changed(data, cases.fingerprint(instance.root)) == [], "the data directory as it was"
+    assert cases.changed(kept, restore_items_but_the_state(instance.root)) == [], ".restore as it was but the state: the copy, its check, what it holds for other archives, an earlier restore's previous/ and failed/; nothing new"
+    assert said(events, INSTANCE_BLOCKED_WAITS) == ["warning"] and not an_error(events), f"one warning says that the restore waits for the unblock, and no error: {logged(events)}"
+    assert (apply_lock_free(instance.root), serving_lock_free(instance.root)) == (True, True), "the apply lock and the serving lock are free once the step returned"
+    monkeypatch.delenv(BLOCKED_VARIABLE)
+    state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.committed_at)
+    assert (state.status, state.waiting) == ("applied", None), f"unblocked: applied, no longer waiting: {state.status}, {state.waiting}"
+    assert_swapped(instance)
+    print_success(f"{BLOCKED_VARIABLE}={value!r}: instance_blocked, nothing moved; unblocked: applied")
+
+
+def test_a_block_that_cannot_be_read_counts_as_blocked_and_an_error_says_so(tmp_path, databases, checked, monkeypatch):
+    """(m) §11: a ``LIBREFOLIO_BLOCKED`` that ``instance_blocked()`` cannot read (``ValueError``) counts as blocked —
+    fail closed: the startup checks stop the server on it anyway. The step does not raise: ``pending``, ``waiting =
+    instance_blocked`` recorded, nothing moved or removed, an error logged, both locks free."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    monkeypatch.setenv(BLOCKED_VARIABLE, UNREADABLE_BLOCK)
+    with pytest.raises(ValueError, match=BLOCKED_VARIABLE):  # precondition: the configuration cannot read it
+        instance_blocked()
+    data, kept = cases.fingerprint(instance.root), restore_items_but_the_state(instance.root)
+    with moving(apply) as mover, logs() as events:
+        try:
+            state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+        except ValueError as exc:
+            pytest.fail(f"{BLOCKED_VARIABLE}={UNREADABLE_BLOCK!r} must not stop the step: it counts as blocked ({exc})")
+    assert (state.status, state.waiting) == ("pending", "instance_blocked"), f"{BLOCKED_VARIABLE}={UNREADABLE_BLOCK!r}: counted as blocked: {state.status}, {state.waiting}"
+    assert apply.read_restore(instance.root) == state, "the reason is recorded in the state file"
+    assert mover.calls == 0, f"nothing moved: {mover.moved}"
+    assert (cases.changed(data, cases.fingerprint(instance.root)), cases.changed(kept, restore_items_but_the_state(instance.root))) == ([], []), "nothing written or removed but the state"
+    assert an_error(events), f"an error says that the value cannot be read: {logged(events)}"
+    assert (apply_lock_free(instance.root), serving_lock_free(instance.root)) == (True, True), "both locks free once the step returned"
+    print_success(f"{BLOCKED_VARIABLE}={UNREADABLE_BLOCK!r}: instance_blocked, an error logged")
+
+
+@pytest.mark.parametrize("value", NOT_BLOCKING)
+def test_on_an_instance_that_is_not_blocked_a_pending_restore_is_applied_as_before(tmp_path, databases, checked, monkeypatch, value):
+    """(m) §11: ``false``, ``0``, or no ``LIBREFOLIO_BLOCKED`` at all — every install its hosting provider does not
+    block: the swap, as before P7; nothing says that the restore waits."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    described = f"{BLOCKED_VARIABLE} unset" if value is None else f"{BLOCKED_VARIABLE}={value!r}"
+    if value is None:
+        monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(BLOCKED_VARIABLE, value)
+    assert instance_blocked() is False, f"precondition: {described} does not block the instance"
+    with logs() as events:
+        state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    assert (state.status, state.waiting) == ("applied", None), f"{described}: applied: {state.status}, {state.waiting}"
+    assert_swapped(instance)
+    assert said(events, INSTANCE_BLOCKED_WAITS) == [], f"nothing says that the restore waits: {logged(events)}"
+    print_success(f"{described}: applied")
+
+
+def test_on_a_blocked_instance_a_restore_confirmed_for_another_data_directory_says_so_first(tmp_path, databases, checked, monkeypatch):
+    """(m) §11, the order, 1: a copy of the data directory never applies the restore, blocked or not.
+    ``other_data_directory`` comes first: it is what is recorded, with the warning of §2 and not the block's; nothing
+    moved."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirmed = confirm(apply, instance)
+    elsewhere = tmp_path / "mounted-elsewhere"
+    instance.root.rename(elsewhere)
+    monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+    data, kept = cases.fingerprint(elsewhere), restore_items_but_the_state(elsewhere)
+    with moving(apply) as mover, logs() as events:
+        state = apply.apply_pending_restore(elsewhere, boot=never_ran(apply), now=instance.applied_at)
+    assert (state.status, state.waiting, state.data_dir) == ("pending", "other_data_directory", confirmed.data_dir), f"another data directory, blocked: other_data_directory comes first: {state.status}, {state.waiting}"
+    assert apply.read_restore(elsewhere) == state, "the reason is recorded in the state file"
+    assert mover.calls == 0, f"nothing moved: {mover.moved}"
+    assert (cases.changed(data, cases.fingerprint(elsewhere)), cases.changed(kept, restore_items_but_the_state(elsewhere))) == ([], []), "nothing written or removed but the state"
+    assert a_warning(events) and said(events, INSTANCE_BLOCKED_WAITS) == [], f"the warning of another data directory, not the block's: {logged(events)}"
+    print_success("blocked, another data directory: other_data_directory")
+
+
+@contextmanager
+def _a_backup_runs(root: Path) -> Iterator[None]:
+    """A backup runs on ``root`` for the block: it holds ``backups/.jobs/.lock``, as ``jobs._lock_held`` probes it."""
+    backup = jobs._RunLock(lock_path(root))
+    assert backup.try_acquire(), "precondition: the backup lock is free"
+    try:
+        yield
+    finally:
+        backup.release()
+
+
+@contextmanager
+def _another_process_serves(root: Path) -> Iterator[None]:
+    """Another process serves ``root`` for the block: a spawn child holding its serving lock (``serving``)."""
+    with serving(root):
+        yield
+
+
+#: What else holds a pending restore back at a start (§2 step 2, §10), and the reason it records once the block is
+#: lifted.
+BEHIND_THE_BLOCK = [
+    pytest.param(_a_backup_runs, "backup_running", id="a-backup-running"),
+    pytest.param(_another_process_serves, "server_running", id="another-process-holding-the-serving-lock"),
+]
+
+
+@pytest.mark.parametrize(("cause", "alone"), BEHIND_THE_BLOCK)
+def test_on_a_blocked_instance_the_block_is_recorded_before_a_running_backup_or_a_serving_process(tmp_path, databases, checked, monkeypatch, cause, alone):
+    """(m) §11, the order, 2 before 3: blocked while a backup runs, or while another process holds the serving lock, the
+    restore records ``instance_blocked``, with the block's warning; nothing moved. The barrier: the block lifted and the
+    cause still there, the next start records the cause — the step did see it. The block is set once the cause is in
+    place: a serving child never sees it."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    data, kept = cases.fingerprint(instance.root), restore_items_but_the_state(instance.root)
+    with cause(instance.root), moving(apply) as mover:
+        monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+        with logs() as events:
+            state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+        monkeypatch.delenv(BLOCKED_VARIABLE)
+        unblocked = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.committed_at)
+    assert (state.status, state.waiting) == ("pending", "instance_blocked"), f"blocked, and {alone}: the block comes first: {state.status}, {state.waiting}"
+    assert said(events, INSTANCE_BLOCKED_WAITS) == ["warning"], f"the block's warning: {logged(events)}"
+    assert (unblocked.status, unblocked.waiting) == ("pending", alone), f"barrier: the block lifted, {alone} alone holds the restore back: {unblocked.status}, {unblocked.waiting}"
+    assert mover.calls == 0, f"nothing moved: {mover.moved}"
+    assert (cases.changed(data, cases.fingerprint(instance.root)), cases.changed(kept, restore_items_but_the_state(instance.root))) == ([], []), "nothing written or removed but the state"
+    assert (apply_lock_free(instance.root), serving_lock_free(instance.root)) == (True, True), "both locks free once the backup ended, or the serving process exited"
+    print_success(f"blocked and {alone}: instance_blocked; unblocked: {alone}")
+
+
+def _an_undo_a_killed_start_left_rolling_back(apply: Any, instance: Instance) -> None:
+    into_phase(apply, instance, "rolling_back")
+
+
+#: A start's repair of the data directory (§11: unchanged while blocked), from the restore it finds, and how it ends.
+REPAIRS_WHILE_BLOCKED = [
+    pytest.param(_applied_by_a_start_that_died, ("rolled_back", "first_start_failed"), id="the-undo-of-a-restore-a-dead-start-applied"),
+    pytest.param(_half_swapped_by_a_start_that_was_killed, ("rolled_back", "swap_interrupted"), id="the-undo-of-a-swap-a-killed-start-left-applying"),
+    pytest.param(_an_undo_a_killed_start_left_rolling_back, ("rolled_back", "swap_interrupted"), id="the-end-of-an-undo-a-killed-start-left-rolling-back"),
+]
+
+
+@pytest.mark.parametrize(("prepare", "outcome"), REPAIRS_WHILE_BLOCKED)
+def test_on_a_blocked_instance_a_start_still_puts_the_data_of_before_back(tmp_path, databases, checked, monkeypatch, prepare, outcome):
+    """(m) §11, unchanged while blocked: the block keeps a restore from coming in, never the data of before from coming
+    back. The undo of a restore a dead start applied (``first_start_failed``), of a swap a killed start left
+    ``applying``, of an undo it left ``rolling_back`` (``swap_interrupted``): each runs on a blocked instance, the data
+    of before back exactly, nothing waiting; both locks free once the step returned."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    prepare(apply, instance)
+    monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+    assert instance_blocked() is True, "precondition: the instance is blocked"
+    with logs() as events:
+        state = apply.apply_pending_restore(instance.root, boot=never_ran(apply, 2), now=instance.committed_at)
+    assert (state.status, state.reason, state.waiting) == (*outcome, None), f"undone on a blocked instance: {state.status}, {state.reason}, {state.waiting}"
+    assert apply.read_restore(instance.root) == state, "the state on disk is the state returned"
+    assert_put_back(instance)
+    assert said(events, INSTANCE_BLOCKED_WAITS) == [], f"nothing waits for the unblock: {logged(events)}"
+    assert (apply_lock_free(instance.root), serving_lock_free(instance.root)) == (True, True), "both locks free once the step returned"
+    print_success(f"blocked: {outcome[0]}, {outcome[1]}")
+
+
+def test_on_a_blocked_instance_a_restore_this_boot_applied_is_still_committed(tmp_path, databases, checked, monkeypatch):
+    """(m) §11, unchanged while blocked: the block cannot change during one start (an environment variable read at the
+    start), and ``restore-commit`` does not ask about it. A restore this boot applied is committed: every account at
+    the restore time; the data of before, the copy and its check removed."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    boot = never_ran(apply)
+    applied = apply.apply_pending_restore(instance.root, boot=boot, now=instance.applied_at)
+    assert applied.status == "applied", f"precondition: applied by this boot: {applied.status}"
+    monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+    assert instance_blocked() is True, "precondition: the instance is blocked"
+    state = apply.finish_pending_restore(instance.root, boot=boot, now=instance.committed_at)
+    found = (state.status, state.finished_at, state.session_version)
+    assert found == ("committed", instance.committed_at, millis(instance.committed_at)), f"committed on a blocked instance, the sessions' value recorded: {found}"
+    assert apply.read_restore(instance.root) == state, "the state on disk is the state returned"
+    left = [path.name for path in (previous_of(instance.root), failed_of(instance.root), stage_dir(instance.root, instance.stage_id), check_state_path(instance.root, instance.stage_id)) if lexists(path)]
+    assert left == [], f"previous/, failed/, the copy and its check state removed: {left}"
+    assert set(versions_of(instance.root / DATABASE_ENTRY).values()) == {state.session_version}, "every account at the restore's value"
+    print_success(f"blocked: committed, session_version {state.session_version}")

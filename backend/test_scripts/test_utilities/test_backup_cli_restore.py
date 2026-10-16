@@ -1,16 +1,22 @@
 """
-Restoring a backup from the command line (workstream B, lot B3, contract §8): ``dev.py backup restore ARCHIVE`` without
-``--dry-run``, and ``dev.py backup pending [--cancel]``.
+Restoring a backup from the command line (workstream B, lot B3, contract §8 and §11): ``dev.py backup restore ARCHIVE``
+without ``--dry-run``, and ``dev.py backup pending [--cancel]``.
 
 Written before the code (red until lot B3 lands): ``apply.py`` does not exist yet, and every name of lot B3 is imported
 inside the test that needs it, so the file collects and each test fails on its own. The messages are not final: the
 tests pin exit codes, what is on disk, the stable codes in parentheses and a few key words (``waits for the next
-start``, ``Nothing restored``, ``--yes``, ``rolled back``), never whole lines.
+start``, ``Nothing restored``, ``--yes``, ``rolled back``), never whole lines — but one: the line saying that a restore
+waits for the hosting provider's block to end, which the developer decided word for word (§11, P7; written red before
+it), printed by ``pending`` and by a confirmation on a blocked instance.
 
 (a) ``restore ARCHIVE --yes``: the check on a copy and its report, as ``--dry-run`` prints it, then the confirmation:
     exit 0, a ✅ that the restore ``waits for the next start``; the copy kept; ``.restore/restore.json`` (0600)
     ``pending``, its stage the copy's, ``confirmed_by`` ``cli``, the data directory resolved, ``action`` and the
     backup's version from the report. The live database and files are untouched, and nothing restarts the server.
+    §11, P7: on a blocked instance the command line does not refuse — whoever runs the server, the hosting provider,
+    may prepare a restore for the unblock — and says so: exit 0, the restore pending, the usual confirmation lines,
+    then one more line, the decided one, the last printed. A ``LIBREFOLIO_BLOCKED`` that cannot be read counts as
+    blocked; without it, no such line.
 (b) Without ``--yes``: on a terminal (a pty), typing ``restore`` confirms, as ``--yes`` does, the spaces around it
     ignored and its case kept; anything else typed (``Restore`` included) is declined, ``Nothing restored``, exit 1, the
     copy removed, nothing pending. Not a terminal (a pipe, ``restore``
@@ -22,7 +28,13 @@ start``, ``Nothing restored``, ``--yes``, ``rolled back``), never whole lines.
     each of its errors): exit 1, one ❌ line ending with the code in parentheses, the copy removed, nothing pending.
 (d) ``pending``: without a restore, «no restore», exit 0, nothing created; each phase on disk, exit 0. The ``waiting``
     line and the ``reason`` line of a rolled back restore end with the stable code in parentheses (the words before it
-    are not final).
+    are not final); ``instance_blocked`` (§11) too, and its line is the decided one, word for word. §11, P7, decided:
+    ``pending`` reads the block live. A pending restore on an instance blocked now (or whose block cannot be read)
+    prints that line once, whether or not the last start recorded ``instance_blocked``; recorded, it is printed even
+    unset now (what that start found); another reason recorded and the instance blocked now, both lines, the recorded
+    one first — but ``other_data_directory`` recorded wins, as at a start, and the line is not printed (this copy never
+    applies the restore). Anything but a pending restore — in progress, committed, rolled back, or none — never prints
+    it.
 (e) ``pending --cancel``: a pending restore cancelled with its copy (``drop_copy=True``), exit 0, the live data as it
     was. Nothing pending: one ❌ line ending with ``(restore_not_pending)``, exit 1; without a state file nothing is
     created, not even ``.restore/apply.lock``; a restore being applied or finished keeps its state as it was.
@@ -33,7 +45,11 @@ Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data d
 module. The commands go through the parser ``register_subparser`` builds, as ``dev.py backup`` runs them. A terminal is a
 pty, a pipe is a pipe: ``sys.stdin`` replaced for one test. No signal can reach this process: ``restart.send_signal``
 and ``os.kill`` as ``restart`` sees it record, and must stay unused. States only a start can reach are written as
-``apply.RestoreState`` would write them. POSIX-only (pty, modes).
+``apply.RestoreState`` would write them; the reason a pending restore waits is written into the state file itself
+(``waiting_for``), whatever the models accept, so that what ``pending`` prints is what fails. The block is
+``LIBREFOLIO_BLOCKED`` in this process's environment, which ``config.platform.instance_blocked()`` reads at each call:
+the one a developer's shell may carry is removed before every test (``no_inherited_block``), and a test of the block
+sets its own with ``monkeypatch``. POSIX-only (pty, modes).
 """
 
 from __future__ import annotations
@@ -54,6 +70,7 @@ from typing import Any
 
 import pytest
 
+from backend.app.config.platform import instance_blocked
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_dir
 from backend.test_scripts.test_utilities import test_backup_cli as cli
 from backend.test_scripts.test_utils import print_section, print_success
@@ -77,6 +94,19 @@ CONFIRM_ERRORS = {
     "RestoreStageOutdatedError": "restore_stage_outdated",
     "RestoreAlreadyPendingError": "restore_already_pending",
 }
+#: (§11, P7) The hosting provider's block, which ``config.platform.instance_blocked()`` reads from this process's
+#: environment at each call.
+BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
+#: (§11, P7) The line saying that a restore waits for the hosting provider's block to end, which the developer decided
+#: word for word: ``pending`` prints it for a pending restore the last start found blocked, or on an instance blocked
+#: now; a confirmation on a blocked instance prints it after its usual lines. Pinned whole.
+INSTANCE_BLOCKED_LINE = "⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)"
+#: Why a start left a restore pending (contract §2, §10, §11): each ``waiting`` line of ``pending`` ends with its code.
+WAIT_REASONS = ["backup_running", "other_data_directory", "server_running", "instance_blocked"]
+#: (§11) The block now, as a test sets it: the value of ``LIBREFOLIO_BLOCKED`` (``None``: unset), and how
+#: ``instance_blocked()`` reads it. A value that cannot be read counts as blocked.
+BLOCKED_NOW = [pytest.param("true", "blocked", id="blocked-now"), pytest.param("maybe", "unreadable", id="unreadable-now")]
+BLOCK_NOW = [*BLOCKED_NOW, pytest.param(None, "not blocked", id="unset-now")]
 
 
 # =============================================================================
@@ -129,6 +159,34 @@ def no_restart(monkeypatch) -> Iterator[list]:
         monkeypatch.setattr(restart, "os", OsWithoutKill(signals), raising=False)
     yield signals
     assert signals == [], f"the command line sent a signal: {signals}"
+
+
+@pytest.fixture(autouse=True)
+def no_inherited_block(monkeypatch) -> None:
+    """§11: a confirmation on a blocked instance says that the restore waits for the unblock, and the block is read from
+    this process's environment at each call. The ``LIBREFOLIO_BLOCKED`` a developer's shell may carry is removed for
+    every test: a test sees only the block it sets itself."""
+    monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
+
+
+def block_as_read() -> str:
+    """How ``config.platform.instance_blocked()`` reads the block now: ``blocked``, ``not blocked`` or ``unreadable``."""
+    try:
+        return "blocked" if instance_blocked() else "not blocked"
+    except ValueError:
+        return "unreadable"
+
+
+def block_now(monkeypatch, value: str | None, as_read: str) -> str:
+    """The block now: ``LIBREFOLIO_BLOCKED`` set to ``value`` (``None``: removed), checked as ``instance_blocked()``
+    reads it (``as_read``); how a failure names it."""
+    if value is None:
+        monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(BLOCKED_VARIABLE, value)
+    described = f"{BLOCKED_VARIABLE} unset" if value is None else f"{BLOCKED_VARIABLE}={value!r}"
+    assert block_as_read() == as_read, f"precondition: instance_blocked() reads {described} as {as_read}, not {block_as_read()}"
+    return described
 
 
 def run(*argv: str) -> int:
@@ -248,6 +306,46 @@ def test_restore_with_yes_confirms_and_the_restore_waits_for_the_next_start(tmp_
     assert {key: state.get(key) for key in expected} == expected, f"the restore waiting: {state}"
     assert live(root) == before, "nothing of the live data directory changes before the next start"
     print_success(f"exit 0, pending {stages[0]}, copy kept")
+
+
+#: (§11, P7) ``restore ARCHIVE --yes`` and the hosting provider's block: the value of ``LIBREFOLIO_BLOCKED`` (``None``:
+#: unset), how ``instance_blocked()`` reads it, and whether the confirmation ends with the decided line. A value that
+#: cannot be read counts as blocked.
+CONFIRMED_UNDER_A_BLOCK = [
+    pytest.param("true", "blocked", True, id="blocked"),
+    pytest.param("maybe", "unreadable", True, id="unreadable-counts-as-blocked"),
+    pytest.param(None, "not blocked", False, id="unset"),
+]
+
+
+@pytest.mark.parametrize(("value", "as_read", "said"), CONFIRMED_UNDER_A_BLOCK)
+def test_restore_with_yes_on_a_blocked_instance_confirms_and_then_says_that_the_restore_waits_for_the_unblock(tmp_path, monkeypatch, capsys, head_database, value, as_read, said):
+    """(a) §11, P7: the command line does not refuse on a blocked instance — whoever runs the server, the hosting
+    provider, may prepare a restore for the unblock — and says so. Exit 0; the report and the usual confirmation lines,
+    the restore pending with its copy kept, the live data as it was; then one more line, the decided one, once and
+    last. Unset, the confirmation is the usual one, without that line."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    before = live(root)
+    described = block_now(monkeypatch, value, as_read)
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    confirmed_at = next((index for index, line in enumerate(lines) if line.startswith("✅") and "waits for the next start" in line), None)
+    assert code == 0 and confirmed_at is not None, f"{described}: confirmed, exit 0, the usual ✅ that the restore waits for the next start: exit {code}: {out}"
+    assert "Administrators: ada_admin, zoe_admin" in "\n".join(lines[:confirmed_at]), f"{described}: the check's report first, as usual: {out}"
+    stages = cli.stages_left(root)
+    assert len(stages) == 1, f"{described}: the copy is kept, for the start after the unblock: {stages}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    assert (state["status"], state["stage_id"], state["confirmed_by"]) == ("pending", stages[0], "cli"), f"{described}: the restore pending, as usual: {state}"
+    assert live(root) == before, f"{described}: nothing of the live data directory changes before the next start"
+    if said:
+        printed = [line for line in lines if line.strip()]
+        assert lines.count(INSTANCE_BLOCKED_LINE) == 1, f"{described}: the decided line, once and word for word: {INSTANCE_BLOCKED_LINE!r} in {lines}"
+        assert lines.index(INSTANCE_BLOCKED_LINE) > confirmed_at and printed[-1] == INSTANCE_BLOCKED_LINE, f"{described}: the usual confirmation lines, then the decided line, the last printed: {lines[confirmed_at:]}"
+    else:
+        assert [line for line in lines if "instance_blocked" in line] == [], f"{described}: the usual confirmation, nothing about a block: {lines[confirmed_at:]}"
+    print_success(f"{described}: exit 0, pending, {'then the decided line' if said else 'no line about a block'}")
 
 
 # =============================================================================
@@ -401,14 +499,81 @@ def ends_a_line(out: str, code: str) -> bool:
     return any(line.rstrip().endswith(f"({code})") for line in out.splitlines())
 
 
-@pytest.mark.parametrize("waiting", ["backup_running", "other_data_directory", "server_running"])
+def waiting_for(root: Path, waiting: str | None) -> None:
+    """A pending restore, and what the last start recorded on it (``None``: nothing): the reason written in the state file
+    as a start writes it, whatever the models of this LibreFolio accept — what ``pending`` prints is under test."""
+    write_state(root, "pending")
+    if waiting is None:
+        return
+    path = state_path(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "waiting": waiting}), encoding="utf-8")
+
+
+def waiting_codes(out: str) -> list[str]:
+    """Why ``pending`` says the restore waits: the code each of its lines ends with, among ``WAIT_REASONS``, in order."""
+    return [code for line in out.splitlines() for code in WAIT_REASONS if line.rstrip().endswith(f"({code})")]
+
+
+@pytest.mark.parametrize("waiting", WAIT_REASONS)
 def test_pending_ends_the_waiting_line_with_its_code(tmp_path, monkeypatch, capsys, waiting):
     root = instance(tmp_path, monkeypatch)
-    write_state(root, "pending", waiting=waiting)
+    waiting_for(root, waiting)
     assert run("pending") == 0, "a waiting restore: exit 0"
     out = capsys.readouterr().out
     assert ends_a_line(out, waiting), f"a line ends with ({waiting}): {out}"
     print_success(f"waiting: ({waiting})")
+
+
+#: (§11, P7, decided) What the last start recorded on a pending restore (``None``: nothing), for ``pending``.
+RECORDED = [pytest.param(None, id="nothing-recorded"), *(pytest.param(reason, id=f"{reason}-recorded") for reason in WAIT_REASONS)]
+
+
+@pytest.mark.parametrize(("value", "as_read"), BLOCK_NOW)
+@pytest.mark.parametrize("recorded", RECORDED)
+def test_pending_says_once_that_a_pending_restore_waits_for_the_unblock_after_what_the_last_start_recorded(tmp_path, monkeypatch, capsys, recorded, value, as_read):
+    """(d) §11, P7, decided: ``pending`` reads the block live. The decided line is printed, once, when the last start
+    recorded ``instance_blocked`` (even unset now: it tells what that start found), or when the instance is blocked now
+    (``true``, or a value that cannot be read) and the last start did not record ``other_data_directory``. That one
+    wins, as at a start: a copy of another data directory never applies the restore, and the block line would promise
+    it. Another reason recorded and the instance blocked now: both lines, the recorded one first, then the block's.
+    Otherwise no such line, and the recorded reason as before."""
+    root = instance(tmp_path, monkeypatch)
+    waiting_for(root, recorded)
+    described = block_now(monkeypatch, value, as_read)
+    expected = [recorded] if recorded not in (None, "instance_blocked") else []
+    if recorded == "instance_blocked" or (as_read != "not blocked" and recorded != "other_data_directory"):
+        expected.append("instance_blocked")
+    code = run("pending")
+    out = capsys.readouterr().out
+    case = f"{recorded or 'nothing'} recorded, {described}"
+    assert code == 0 and "no restore" not in out.lower(), f"{case}: the pending restore shown, exit 0: exit {code}: {out}"
+    assert waiting_codes(out) == expected, f"{case}: why it waits, in this order: {expected}, not {waiting_codes(out)}: {out}"
+    assert out.splitlines().count(INSTANCE_BLOCKED_LINE) == expected.count("instance_blocked"), f"{case}: the decided line word for word, {expected.count('instance_blocked')} time(s): {out}"
+    print_success(f"{case}: {', '.join(f'({code})' for code in expected) or 'no waiting line'}")
+
+
+#: (§11, P7, decided) What ``pending`` finds that is not a pending restore: a restore in progress (applying, applied,
+#: rolling back), committed or rolled back — and no restore at all.
+NOT_PENDING = [pytest.param(None, id="no-restore"), *(pytest.param(phase, id=phase) for phase in [*ACTIVE[1:], *TERMINAL])]
+
+
+@pytest.mark.parametrize(("value", "as_read"), BLOCKED_NOW)
+@pytest.mark.parametrize("phase", NOT_PENDING)
+def test_pending_never_says_that_anything_but_a_pending_restore_waits_for_the_unblock(tmp_path, monkeypatch, capsys, phase, value, as_read):
+    """(d) §11, P7, decided: the block holds back a restore waiting for a start, nothing else. On an instance blocked now,
+    or whose block cannot be read, a restore that is not pending — as a start leaves it on disk — is shown as it is,
+    exit 0, and ``pending`` prints no line about the block; without a restore, «no restore», and nothing more."""
+    root = instance(tmp_path, monkeypatch)
+    if phase is not None:
+        write_state(root, phase)
+    described = block_now(monkeypatch, value, as_read)
+    code = run("pending")
+    out = capsys.readouterr().out
+    case = f"{phase or 'no restore'}, {described}"
+    assert code == 0 and ("no restore" in out.lower()) == (phase is None), f"{case}: shown as it is, exit 0: exit {code}: {out}"
+    assert [line for line in out.splitlines() if "instance_blocked" in line] == [], f"{case}: no line about the block: {out}"
+    print_success(f"{case}: nothing about the block")
 
 
 #: What a state may hold that a terminal would obey: an escape sequence clearing the screen, a bell, a window title, a C1

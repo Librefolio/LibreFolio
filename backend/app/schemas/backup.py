@@ -176,9 +176,10 @@ class RestoreStage(BaseModel):
 # start that applied it was interrupted; swap_failed, its folders could not be moved into place; stage_missing, its
 # checked copy was gone). none: there was none.
 # waiting, on a pending restore that a start did not apply: backup_running (a backup was running: the next start
-# applies it), other_data_directory (it was confirmed for another data directory, of which this one is a copy) or
+# applies it), other_data_directory (it was confirmed for another data directory, of which this one is a copy),
 # server_running (a server process was serving the data directory: a worker started again under its running siblings,
-# or a second server; a start of the whole server applies it). confirmed_by: the administrator's username, or cli.
+# or a second server; a start of the whole server applies it) or instance_blocked (the hosting provider blocked the
+# instance: the first start after the unblock applies it). confirmed_by: the administrator's username, or cli.
 # upload_limit_mb: the largest archive PUT /backup/restore/upload accepts now, in megabytes (0: no limit), so that a
 # file too large is refused before it is sent; null when the limit cannot be read (the upload then answers 503).
 class RestoreStatus(BaseModel):
@@ -195,5 +196,5 @@ class RestoreStatus(BaseModel):
     action: Literal["same", "upgrade"] | None = None
     finished_at: datetime | None = None
     reason: Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"] | None = None
-    waiting: Literal["backup_running", "other_data_directory", "server_running"] | None = None
+    waiting: Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"] | None = None
     upload_limit_mb: int | None = Field(default=None, ge=0)

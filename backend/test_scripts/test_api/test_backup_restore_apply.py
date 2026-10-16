@@ -1,9 +1,10 @@
 """
-Restoring a backup, the confirmation through the API (workstream B, lot B3, contract §5 and §6): the four new routes of
-``/api/v1/backup/restore``, and what they change in the two of lot B2b that drop and prune a checked copy.
+Restoring a backup, the confirmation through the API (workstream B, lot B3, contract §5, §6 and §11): the four new routes
+of ``/api/v1/backup/restore``, and what they change in the two of lot B2b that drop and prune a checked copy.
 
 Written before the code (red until lot B3 lands): ``apply.py`` and ``restart.py`` do not exist yet. Every name of lot B3
-is imported inside the test that needs it (``product``), so the file collects, and each test fails on its own.
+is imported inside the test that needs it (``product``), so the file collects, and each test fails on its own. The
+``instance_blocked`` cases (§11, P7) were written red the same way, before P7.
 
 Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_jobs.confirm_check`` / ``remove_check`` /
 ``prune``, ``instance_backup/apply.py`` as the routes reach it, ``instance_backup/restart.py`` (``send_signal``) and
@@ -24,8 +25,10 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     it first: it writes there); a link in place of ``checks/`` or ``stage/``: the check or its copy is not found, 404
     ``restore_stage_not_found``. Nothing written through any of them, nor anywhere in the data directory.
 (c) ``GET /backup/restore/status``: ``none`` without a restore, and nothing created to say so; each phase on disk as
-    its state (applying, applied and rolling back are ``in_progress``), its fields as recorded; a ``restore.json`` that
-    is a link is never followed, one that cannot be read is ``none``.
+    its state (applying, applied and rolling back are ``in_progress``), its fields as recorded; a pending restore says
+    why a start left it waiting, for each of the four reasons (§11, P7: ``instance_blocked``, on an instance not blocked
+    itself, since a blocked one answers no restore route); a ``restore.json`` that is a link is never followed, one that
+    cannot be read is ``none``.
 (d) ``DELETE /backup/restore/pending``: 204, the state removed, the copy kept, which can be confirmed again. Without a
     state file, 404 ``restore_not_pending`` and nothing created, not even ``.restore/apply.lock`` (the lock is taken only
     once a state file is found); a restore being applied or finished, 404 too, its state unchanged.
@@ -38,7 +41,8 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     finished restore's old copy is pruned as before.
 (g) Administrators only: a regular user gets 403 from each new route, and nothing changes, no signal. None of the four
     is allowed on a blocked instance. OpenAPI: the four operations carry ``Backup & Export``, their success and model,
-    and document their refusals with their codes; the drop documents ``restore_pending``.
+    and document their refusals with their codes; the drop documents ``restore_pending``; ``RestoreStatus.waiting``
+    lists exactly the four reasons, ``instance_blocked`` included (§11).
 (h) ``upload_limit_mb`` (§6), in every ``RestoreStatus`` answer, ``none`` included: the largest archive the upload
     accepts now, in MB, read by ``backup_max_upload_mb()`` when the answer is built: 0 unset and self-hosted, 500 unset
     and managed, the variable's value when set (over the profile), ``null`` when it cannot be read, with one error
@@ -573,20 +577,24 @@ async def test_the_status_of_each_phase_is_what_its_state_records(instance, phas
     print_success(f"{phase} → {body['state']}")
 
 
-#: Why a start left a restore pending (contract §2, and §10: another server process serves the data directory).
-WAIT_REASONS = ["backup_running", "other_data_directory", "server_running"]
+#: Why a start left a restore pending (contract §2; §10: another server process serves the data directory; §11, P7: the
+#: hosting provider blocked the instance).
+WAIT_REASONS = ["backup_running", "other_data_directory", "server_running", "instance_blocked"]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("waiting", WAIT_REASONS)
 async def test_a_restore_waiting_says_why(instance, waiting):
-    """(c) A pending restore a start could not apply says why: ``waiting``."""
-    apply = apply_module()
+    """(c) A pending restore a start could not apply says why: ``waiting``. ``instance_blocked`` (§11) too, read here on
+    an instance that is not blocked itself: a blocked one answers none of the restore routes. The reason is written in
+    the state file as a start writes it, whatever the models of this LibreFolio accept: the answer is under test."""
     write_state(instance.root, "pending", api.UNKNOWN_ID)
     path = state_path(instance.root)
-    state = apply.RestoreState.model_validate_json(path.read_bytes()).model_copy(update={"waiting": waiting})
-    path.write_text(state.model_dump_json(), encoding="utf-8")
-    body = (await restore_status()).json()
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "waiting": waiting}), encoding="utf-8")
+    response = await restore_status()
+    assert response.status_code == 200, f"{waiting}: the status answers: {api.shown(response)}"
+    body = response.json()
     assert (body["state"], body["waiting"]) == ("pending", waiting), f"pending, waiting {waiting}: {body}"
     print_success(f"pending, waiting {waiting}")
 
@@ -897,7 +905,7 @@ def test_openapi_documents_the_four_routes_their_answers_and_codes():
     assert set(schema["properties"]) == STATUS_FIELDS, f"RestoreStatus has its 11 fields, upload_limit_mb included: {sorted(schema['properties'])}"
     waiting = schema["properties"]["waiting"]
     reasons = {value for option in waiting.get("anyOf", [waiting]) for value in option.get("enum", [])}
-    assert reasons == set(WAIT_REASONS), f"RestoreStatus.waiting lists every reason, server_running included: {waiting}"
+    assert reasons == set(WAIT_REASONS), f"RestoreStatus.waiting lists exactly the four reasons, instance_blocked included (§11): {waiting}"
     print_success("4 operations documented, RestoreStatus with upload_limit_mb")
 
 

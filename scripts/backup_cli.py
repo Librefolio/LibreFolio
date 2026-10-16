@@ -409,6 +409,17 @@ def _confirmed(args) -> bool | None:
     return answer.strip() == "restore"
 
 
+def _instance_blocked() -> bool:
+    """Whether the hosting provider blocks the instance (``LIBREFOLIO_BLOCKED``): a restore confirmed now waits for the
+    unblock (developer decision P7). A value that cannot be read counts as blocked, as at the start."""
+    from backend.app.config.platform import instance_blocked  # noqa: PLC0415 — keep dev.py's start light
+
+    try:
+        return instance_blocked()
+    except ValueError:
+        return True
+
+
 def _confirm(args, stage_id: str, data_dir: Path) -> bool:
     """Ask, then confirm the restore of the checked copy for the next start; whether it waits now."""
     from backend.app.services.platform.instance_backup.apply import RestoreStateError, confirm_restore  # noqa: PLC0415
@@ -432,6 +443,8 @@ def _confirm(args, stage_id: str, data_dir: Path) -> bool:
     print("✅ The restore waits for the next start of the server: restart LibreFolio to apply it.")
     print("   That start replaces the database and the files, and ends every session: sign in with an administrator of the backup.")
     print("   ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.")
+    if _instance_blocked():
+        print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     return True
 
 
@@ -514,6 +527,10 @@ def _print_restore_state(state) -> None:
             print(f"⚠️  It was confirmed for another data directory ({_safe(state.data_dir)}): this one does not apply it (other_data_directory)")
         elif state.waiting == "server_running":
             print("⚠️  At the last start another server process was serving the data directory: restart the whole server to apply it (server_running)")
+        # What the last start found, or the block read now: a restore confirmed on a blocked instance waits for the unblock.
+        # A copy of another data directory never applies it, unblocked or not: there the block says nothing.
+        if state.waiting == "instance_blocked" or (state.waiting != "other_data_directory" and _instance_blocked()):
+            print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     elif state.status == "committed":
         print(f"✅ The last restore was applied on {_when(state.finished_at)}: {backup}")
     elif state.status == "rolled_back":
