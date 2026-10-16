@@ -36,7 +36,7 @@ from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, Phase, build_archive
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
-from backend.app.services.platform.instance_backup.paths import STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
 
 logger = get_logger(__name__)
 
@@ -355,10 +355,28 @@ def remove_expired_jobs(data_dir: Path, *, now: datetime | None = None) -> int:
 
 def _run_lock_held(data_dir: Path) -> bool:
     """Whether a run holds the lock now (a probe: taken and released at once when free)."""
-    if fcntl is not None and not lock_path(data_dir).exists():
+    return _lock_held(lock_path(data_dir))
+
+
+def _lock_held(path: Path) -> bool:
+    """Whether some process holds the lock at ``path`` now: a probe, taken and released at once when free. Where the lock
+    file does not exist nobody holds it, and none is created."""
+    if fcntl is not None and not path.exists():
         return False
-    probe = _RunLock(lock_path(data_dir))
+    probe = _RunLock(path)
     if probe.try_acquire():
         probe.release()
         return False
     return True
+
+
+def backup_in_progress(*, data_dir: Path | None = None) -> bool:
+    """Whether backup work runs now, in any process: a backup (from the Settings tab, the hosting panel or the CLI), or
+    the check of an archive for a restore, which runs in a thread after its request has been answered.
+
+    For the idle monitor of workstream Z (decision D-S2: the instance is never suspended during a backup). Read only:
+    no file is created; a free lock is taken and released at once, so a backup starting in that very instant would be
+    refused as busy, a window the probes of this module already accept.
+    """
+    data_dir = data_dir or get_data_dir()
+    return _lock_held(lock_path(data_dir)) or _lock_held(stages_dir(data_dir) / STAGE_LOCK_FILE)

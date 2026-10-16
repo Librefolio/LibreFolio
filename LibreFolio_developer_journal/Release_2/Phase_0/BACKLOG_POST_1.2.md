@@ -3741,6 +3741,15 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
+- **B-11 · Debito di traduzione delle pagine admin di B2 e B8** — piccolo, doc; B, 15/10 (B2). Pagine inglesi scritte
+  da docs-writer, senza timbro. In it, fr ed es mancano:
+  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»;
+  - in `configuration`, le righe nuove di «Main Options» e di «Secrets»;
+  - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
+
+  `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
+  `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
+  §13, «B2b — l'API della prova su copia».
 
 ## E · Email (fase 01)
 
