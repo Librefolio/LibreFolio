@@ -20,13 +20,15 @@
         dateStart: string;
         dateEnd: string;
         pairs: string[];
+        /** The pairs whose shown rates already hold a stored row in the range: the dialog warns (C-66). */
+        withDataInRange?: string[];
         onsynced: () => void;
         onclose: () => void;
         /** z-index for stacking above other modals */
         zIndex?: number;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, pairs, onsynced, onclose, zIndex = 50}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, pairs, withDataInRange = [], onsynced, onclose, zIndex = 50}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
 
@@ -69,6 +71,7 @@
             targetIds: pairs,
             resultRow: fxResultRow,
             countLabel: $t('fx.sync.pairsCount') ?? 'pairs',
+            existingIds: withDataInRange,
         },
     ]);
 </script>

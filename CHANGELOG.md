@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
 - `LIBREFOLIO_CLIENT_IP_HEADER`: behind a reverse proxy that passes the visitor's address in a header of its own (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), the per-address limits of the emails (sign-up, «send the link again», forgotten password) count each visitor on their own instead of all visitors together. Unset by default; set it only when every request crosses that proxy.
 - While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
+- **The sync window warns before you start** when the period already holds stored prices or rates: it says how many of the assets or pairs have data there, which the sync replaces with the provider's values, manual edits included. On the Assets and FX pages, and on the detail pages of an asset or a pair.
 
 ### 🔄 Changed
 
