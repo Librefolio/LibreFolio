@@ -3778,6 +3778,30 @@ sulla base `23f6578f3`.
   (senza props) sotto l'avviso, in una sezione sua, con un `ToastContainer`. Si chiude quando entra il lotto di H; poi B
   aggiorna le due frasi della doc («no backup button yet» in `backup_restore.en.md`, «the block page has no button for
   it yet» in `hosting_providers.en.md`).
+- **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
+  B, 16/10 (docs-writer, B5b). Un proxy (nginx `client_max_body_size`, Fly, un CDN) che rifiuta il corpo con un 413
+  senza il `code` di LibreFolio fa dire alla scheda «The server answered with an error: the server's log has the
+  cause.», ma il log di LibreFolio non ne sa niente. Proposta: un 413 senza codice → un codice suo della scheda
+  (`proxy_too_large`, «A proxy in front of LibreFolio refused an archive this large: ask whoever runs it, or restore
+  from the command line»), con la chiave nelle quattro lingue e un caso in `restoreFlow.test.ts`. La guida
+  (`backup_restore.en.md`, «What Settings › Backup Says») descrive già il caso. Dettagli: piano 07, §13, «B5b».
+- **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
+  16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
+  che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
+  restarting» senza il suggerimento «has not come back yet», che parte solo col server giù. La guida lo spiega (riga
+  di risoluzione dei problemi: riavvialo a mano). Proposta: server su e stato `pending` oltre `slowAfterMs` → un
+  messaggio suo nell'overlay («LibreFolio did not stop: restart it yourself»), deciso con il coordinatore (cambia un
+  caso fissato di `restoreFlow.test.ts`). Dettagli: piano 07, §13, «B5b».
+- **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
+  16/10 (docs-writer, B5b). La scheda, dopo un annullamento accettato, toglie la copia con `DELETE /stage/{stage_id}`;
+  la CLI non tiene il record della prova, quindi per un ripristino confermato da riga di comando la richiesta è
+  rifiutata (ignorata) e la copia resta in `.restore/stage/` finché una prova avviata dalla scheda non la trova più
+  vecchia di 24 ore; dopo l'annullamento dalla scheda, `backup pending --cancel` non la raggiunge più. La guida dice di
+  annullarlo dalla riga di comando. Proposta: `DELETE /backup/restore/pending` chiama `cancel_restore(drop_copy=True)`
+  come la CLI (una riga in `api/v1/backup/restore.py:309`, due casi di `test_backup_restore_apply.py`, la riga di
+  `security.md`), e la scheda smette di chiamare `dropCheck` (i suoi casi tornano «nessuna cancellazione della
+  copia»). Da fare insieme al biglietto dell'esito (B5c, se scelto): toccano la stessa API. Dettagli: piano 07, §13,
+  «B5b».
 
 ## E · Email (fase 01)
 

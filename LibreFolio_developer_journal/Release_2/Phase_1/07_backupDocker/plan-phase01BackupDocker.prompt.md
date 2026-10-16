@@ -2990,7 +2990,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (l'overlay riceve lo `status`, `restore-cancel-check` ferma anche l'invio, `load()` azzera l'overlay); cinque righe
 >   del runner invece di quattro (`restoreI18n.test.ts` in core-unit), detto al coordinatore.
 
-### P7 — rosso, codice, verde (2026-10-16, 11:49-12:28) ✅ — 🧊 FROZEN
+### P7 — rosso, codice, verde (2026-10-16, 11:49-12:28) ✅ — committato
 
 > - **11:49, i casi di `backup pending`** (test-author `3deeac3c`): una matrice di 15 casi (ciò che ha registrato
 >   l'ultimo avvio × il blocco letto ora: `true`, illeggibile, assente) e una guardia di 12 (nessun ripristino, o non in
@@ -3024,6 +3024,182 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **12:28, handoff del checkpoint P7** al coordinatore, 🧊 FROZEN: 12 file tracciati (7 codice e test, 4 doc, questo
 >   piano), nessun file nuovo. Esclusi i rossi di B5b (`backupApi.test.ts` e i cinque file nuovi di
 >   `features/backup/`): restano rossi finché il codice non entra. Il giro rosso di B5b dopo il commit (carico a 122).
+
+### B5b — rosso, allineamento al design system, codice, verde (2026-10-16, 12:28-13:25) ✅ — continua dopo la pausa
+
+> - **P7 committato** dal coordinatore: `e895fcd97` fix, `b63a00864` docs, `9686942c6` journal (HEAD). Approvata la
+>   scelta su `pending` (`other_data_directory` vince); l'aggiunta al CHANGELOG di B3 («never applied while the instance
+>   is blocked») la tiene il coordinatore.
+> - **Skill nuova `design-system`** (decisione D-T29, `6e569084a` in `dev_release2`, arriva al prossimo aggiornamento di
+>   base): letta con `git show 6e569084a:…` (copia in `files/design-system-SKILL.md` della sessione), non dai file del
+>   checkout principale. Vale subito per i componenti nuovi di B5b. Le bozze erano già solo ruoli `-lf-` (nessuna
+>   palette, nessun esadecimale, nessun `dark:`, testo primario sulla radice, ogni bordo col suo ruolo); corretti
+>   (`files/b5b-wip/align_design_system.py`):
+>   - **fuoco dei pulsanti** (regola 8): `focus-visible:outline-2 focus-visible:outline-offset-2
+>     focus-visible:outline-lf-focus` al posto di `focus:outline-none` più l'anello; il campo della parola
+>     `focus:border-lf-focus focus:ring-1 focus:ring-lf-focus` (lo schema dei campi in `dev`);
+>   - **hover sul pannello** (domanda aperta 3: `hover` = `panel`, non si vede): i pulsanti secondari della scheda, che
+>     sta su `bg-lf-panel`, passano a `hover:bg-lf-neutral`; quelli nel modale e nell'overlay (sulla carta) restano
+>     `hover:bg-lf-hover`;
+>   - **pulsanti rossi pieni**: `hover:bg-lf-danger-hover` (Q3); nel modale `enabled:hover:` e
+>     `disabled:cursor-not-allowed`, così un pulsante spento non cambia colore;
+>   - **nessuna seconda cornice dentro `ModalBase`** (regola 9): in `dev` il `ModalBase` disegna carta, bordo
+>     `raised`, ombra e raggio; il contenuto del report tiene solo `max-h-[85vh] space-y-4 overflow-y-auto p-5
+>     text-lf-primary`. Fino all'aggiornamento di base il `ModalBase` di questa base ha ancora la cornice legacy;
+>   - **l'overlay del riavvio su `ModalBase`** (regola 9: un modale usa `ModalBase`): non chiudibile
+>     (`closeOnBackdropClick={false}`, `closeOnEscape={false}`), `zIndex` 80, `trapFocus`; lo stato pubblicato
+>     (`restart-overlay`, `data-outcome`, `data-slow`) passa all'elemento interno, l'unico che i test leggono;
+>   - **riempimento della barra d'avanzamento**: `bg-lf-action` sul binario `bg-lf-neutral` fa **1,6:1 nel tema
+>     scuro** (`#215240` su `#222c28`), sotto il 3:1 di WCAG 1.4.11; `bg-lf-checked` (il ruolo del «segmento attivo»)
+>     fa 4,4:1 in scuro e 4,8:1 in chiaro. Ruolo più vicino, **«da rivedere»** (D-T27): da segnalare al coordinatore dei
+>     colori per T (un ruolo per l'avanzamento?).
+> - **Anche `BackupDownloadCard` (B5a)**, stessa scheda e stesse regole: lo stesso difetto della barra in scuro, lo
+>   stesso hover invisibile sul pannello, lo stesso fuoco. Solo classi, nessuna prop né test id (H lo monta sulla pagina
+>   di blocco): `files/b5b-wip/align_b5a.py`, applicato con B5b; da dire al coordinatore.
+> - **Giro rosso** Vitest sui sei file (`files/scripts/b_vitest.sh`, carico sotto 50): avviato alle 12:33, carico a 128.
+>   Alle 12:41: **396 rossi, 55 verdi** su 451 (i 51 di B5a in `backupApi.test.ts` e i 4 di `restoreI18n.test.ts` verdi
+>   per costruzione); tutti e soli i motivi previsti (modulo, export o chiave che mancano).
+> - **12:42, applicati** `apply_b5b.py` (cinque moduli nuovi, le funzioni in `backupApi.ts`, `RestoreCard` in
+>   `BackupTab.svelte`, le cinque righe del runner, 123 chiavi × 4 lingue) e `align_b5a.py`; Prettier.
+> - **Primo verde** (otto file, i sei più `BackupDownloadCard.test.ts` e `backupJob.test.ts`): 3 rossi, 96 saltati.
+>   - **⚠️ Fuori pista**: i tre file dei componenti scadono nel `beforeAll` da 60 s (il caricamento con
+>     `import.meta.glob`, lo schema di `GapFixStep.test.ts`): sotto carico la prima trasformazione (Svelte, `ModalBase`,
+>     il barile di `lucide-svelte`) ha superato il minuto (185 s di trasformazione sommati). `BackupDownloadCard.test.ts`,
+>     che monta la stessa scheda con un import statico, era verde. Rilanciati da soli, come vuole la regola del
+>     coordinatore: si caricano.
+>   - **Difetti veri delle bozze**, corretti nel worktree (da qui la fonte è il worktree, non le bozze):
+>     `pickConfirmationWord` ripiega da sé sulla parola tradotta `backup.restore.confirm.word` (prima lo faceva il
+>     modale); il testo del blocco «nessun amministratore» sotto una chiave che finisce col suo codice,
+>     `backup.restore.blocker.no_administrator` (era `report.noAdministrator`; `fix_blocker_key.py`, appena prima di
+>     `report`, l'ordine dei file conservato); il blocco della conferma (parola, campo, pulsante) **sempre disegnato**, e
+>     spento finché l'archivio non è ripristinabile o ha un blocco (`confirmable = restorable && blockers.length === 0`;
+>     prima spariva, e un report «ripristinabile» con il blocco si poteva confermare); `data-reason` e `data-waiting` sulla
+>     radice `restart-overlay` (erano sul paragrafo interno).
+> - **Verde** (12:53-12:56, a gruppi per il carico): `restoreFlow` + `restoreI18n` 264; i tre componenti 96;
+>   `BackupDownloadCard` + `backupJob` + `backupApi` 273. Totale 633, lo stesso conteggio del primo giro.
+> - **Controlli statici** (`files/scripts/b_static.sh`, uno alla volta, 13:03-13:08): ratchet dei colori pulito
+>   («0 files dropped below their record»); i nove file dei cancelli 177 verdi; `i18n check` pulito (4824 chiavi,
+>   «strict»); `lint --dead-code --scope frontend` esce 1, ma nessun reperto è in `features/backup` (file, export e tipi
+>   inutilizzati altrove, già nella base); **`front check`: 18 errori e 1 avviso, tutti nei file nuovi**:
+>   - **⚠️ Fuori pista**: i tipi TS espliciti che il generatore scrive per `RestoreStage` (e il `RestoreStageReport` che
+>     contiene) allargano ogni campo nullabile a `T | null | (T | null)[]`, un ramo che lo schema zod non lascia passare
+>     (la stessa stranezza che `safeScalar` di `$lib/types/common` scarta a run time altrove; 822 `| Array<` in
+>     `generated.ts`). `RestoreStatus` e il job di B5a sono inferiti, quindi puliti. Cura in `backupApi.ts`: un tipo
+>     `Unwidened` che toglie il ramo array dove convive con altri rami (un campo che è solo un array resta tale; nessun
+>     campo dei due schemi è un array nullabile, verificato su `openapi.json`), e un solo cast nelle due funzioni che
+>     restituiscono una prova, dopo la validazione zod;
+>   - l'avviso: `random()` letto una volta all'apertura del modale, ora con `untrack`, che dice l'intenzione.
+> - **Guida** (B6b, `docs-writer` in background, solo scrittura): la sezione «🖱️ Restore from Settings › Backup» e gli
+>   aggiornamenti di «Bring home», «to a hosted instance» e della risoluzione dei problemi; la frase «Today it runs on
+>   the server, from the command line» non è più vera.
+> - **13:16, la guida è scritta** (`docs-writer` `1a89fad1`): `backup_restore.en.md` (sezione nuova `#restore-settings`,
+>   tabella `#restore-settings-problems`, ritocchi in «Bring home», «to a hosted instance», «Who Starts LibreFolio
+>   Again», risoluzione dei problemi) e `hosting_providers.en.md` (tre ritocchi); solo inglese, nessun debito di
+>   traduzione. Nessuna build lanciata. Ha trovato cinque scarti fra codice e brief; decisi:
+>   1. **istanza bloccata durante il riavvio**: la rotta dello stato risponde 423 `instance_blocked` (`/system/ready` 200),
+>      l'esito diventa `down` e l'overlay aspetta per sempre; il «`instance_blocked` compreso» approvato per P8 non
+>      arriva mai alla pagina. **Si corregge in B5b**: `restoreOutcome()` 423 con quel codice → `{kind: 'blocked'}`; il
+>      controllore lo rende `still_pending` con `outcomeStatus = {state: 'pending', waiting: 'instance_blocked'}`, niente
+>      annuncio; «Back to Backup» arriva alla pagina di blocco con l'intercettore del client;
+>   2. **«Cancel the restore» lasciava la copia della prova sul disco** (la CLI `--cancel` la toglie): **si corregge in
+>      B5b**, dopo un annullamento riuscito `DELETE /stage/{stage_id}` best effort; con `restore_not_pending` niente;
+>   3. «Try again» rilegge lo stato e basta: solo doc;
+>   4. un 413 di un proxy dà il messaggio generico: backlog **B-15**;
+>   5. un server che non scende lascia l'overlay in attesa senza suggerimento: backlog **B-16**, e una riga di doc.
+> - **Ultimo giro prima della pausa**: con i tipi corretti, `restoreFlow` + `restoreI18n` + `backupApi` 355 verdi (13:19);
+>   `front check` sceso a 4 errori in un file (`tables` scritto `{}` dal tipo esplicito del generatore: corretto in
+>   `backupApi.ts` con `Record<string, RestoreTableRows>`, **non ancora riverificato**). Il gruppo dei componenti fermato
+>   apposta: il test-author stava per toccare i file.
+> - **Rossi in scrittura** (test-author `817f0858`, solo scrittura): `backupApi.test.ts` (423), `restoreFlow.test.ts`
+>   (esito `blocked`, `cancelPending` con il `DELETE /stage`), `RestoreCard.test.ts` (un caso per ciascuno). La guida
+>   aggiornata ai punti 1, 2, 3 e 5 (`docs-writer`, stesso agente).
+
+### ⏸️ PAUSA del developer (2026-10-16, 13:25-14:14) — ripresa
+
+> - HEAD `9686942c6`, nessun merge aperto, porta 6187 libera, nessun mio comando in corso. Ai due specialisti in corsa
+>   (test-author `817f0858`, `docs-writer` `1a89fad1`) chiesto di finire la modifica in corso e fermarsi.
+> - **Sporchi** (tutti di B5b, niente da committare a metà): `BackupDownloadCard.svelte`, `BackupTab.svelte`,
+>   `backupApi.ts`, `backupApi.test.ts`, i cinque moduli nuovi e i cinque test nuovi di `features/backup/`, i quattro
+>   `i18n/backup/*.json`, `_frontend_utility.py` (cinque righe), `backup_restore.en.md`, `hosting_providers.en.md`, il
+>   backlog (B-15, B-16), questo piano.
+> - **Alla ripresa**: leggere le note dei due specialisti; giro rosso su `backupApi`, `restoreFlow`, `RestoreCard`;
+>   applicare i due cambi (`restoreOutcome` 423 → `blocked`, `#settle` → `still_pending`/`instance_blocked`;
+>   `cancelPending` → `dropCheck` best effort, docstring); Prettier; `front check`; Vitest a gruppi (gli otto file);
+>   le liste del runner `front-utility core-unit` e `component-unit`; `mkdocs build`, `check-links`,
+>   `utils gate-docs-links`; diario; handoff FROZEN. Poi E2E e galleria negli slot pesanti.
+> - **Durante la pausa** (solo note nella cartella della sessione, `files/pause-1325-notes.md`, poi riportate qui):
+>   - il `docs-writer` aveva già finito i cinque punti in `backup_restore.en.md` (la riga dell'istanza bloccata durante
+>     il riavvio, con «Back to Backup» verso la pagina di blocco; «Cancel the restore» che toglie anche la copia, come
+>     `backup pending --cancel`; «Try again» che rilegge lo stato; la riga del 413 di un proxy com'era; una riga nuova per
+>     il server che non scende, con un rimando dall'esito «It takes long»). I punti 1 e 2 descrivono codice non ancora
+>     applicato: da ricontrollare quando entra;
+>   - il test-author si è fermato **senza aver toccato file**: casi disegnati, nessuno scritto;
+>   - a H (tramite il coordinatore): `RestoreCard` è un componente suo, montato solo in `BackupTab`, mai dentro
+>     `BackupDownloadCard`; la pagina di blocco, che monta `BackupDownloadCard`, resta solo con crea, scarica, cancella
+>     (P7). B5b tocca `BackupDownloadCard` solo nelle classi;
+>   - regola C-99 del developer (`b171c058e`): fino al riordino del manuale admin alla fine della 1.3, una variabile
+>     nuova si spiega per intero nella pagina della sua funzione e ha una sola riga, con il link, in
+>     `configuration.md` (vale per B7, Litestream);
+>   - regola dei colori (T `a317392d4`): un `<input>` di testo, una `<textarea>` o una `<select>` con classi `-lf-`
+>     nomina da sé `text-lf-primary`, e `placeholder:text-lf-placeholder` se ha un segnaposto. B5b la rispetta già (il
+>     campo della parola ha tutti e due; il selettore del file è `type="file"` e `hidden`); vale per i campi di B4.
+
+### ▶️ Ripresa (2026-10-16, 14:14-14:50) — B5b: i due fix, i controlli, l'handoff ✅ — 🧊 FROZEN
+
+> - Via del coordinatore («the developer has resumed»): i due fix dei rilievi del `docs-writer`, prima i rossi, poi i
+>   controlli e l'handoff di B5b; prove leggere con carico sotto 50. HEAD `9686942c6` e worktree come alla pausa.
+> - Il test-author `817f0858` scrive i casi disegnati; intanto i controlli della doc (non leggono i file dei test).
+> - **Doc** (14:14-14:20, `b_docs.sh`): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63;
+>   porta libera.
+> - **I rossi** (test-author, 14:20-14:23, solo Prettier): `backupApi.test.ts` (un 423 col corpo vero del backend →
+>   `blocked`, rosso; dieci righe che restano `down`: un altro codice, nessun codice, un dettaglio stringa, il codice
+>   fuori da `detail`, `null`, nessun corpo, non JSON, `instance_blocked` su 403, 409 e 200), `restoreFlow.test.ts`
+>   (`blocked` dopo giù e su, alla lettura veloce, e la riga della tabella degli esiti: `still_pending`, `outcomeStatus`
+>   esattamente `{state: 'pending', waiting: 'instance_blocked'}` con `toStrictEqual`, nessun annuncio, nessun
+>   `toSignIn`, nessun timer; `cancelPending` con `dropCheck(STAGE_ID)` fra l'annullamento e la rilettura, `cancelling`
+>   mentre la cancellazione è in corso; un rifiuto della cancellazione della copia ignorato, in quattro forme; dopo un
+>   riavvio rifiutato si toglie la copia della conferma; guardie verdi: `stage_id` nullo o assente,
+>   `restore_not_pending` e gli altri rifiuti non toccano la copia, con `not.toHaveBeenCalled()` esplicito),
+>   `RestoreCard.test.ts` (un caso da capo a fondo per `blocked`, e l'annullamento con `deleteRestoreCheck`).
+> - **⚠️ Fuori pista — rilievo del test-author, decisione chiesta al coordinatore (14:24)**: la rotta dello stato
+>   controlla la sessione prima del blocco, e un 401 vale «ripristinato». Ma **senza `JWT_SECRET`** il server fa una
+>   chiave casuale a ogni avvio (`auth_service.py:106`): **ogni** riavvio chiude tutte le sessioni, quindi su Docker di
+>   default e con `dev.py server` la pagina conclude sempre «ripristinato» e va al login senza messaggio; un ritorno
+>   indietro o un ripristino non applicato si vedono solo in Impostazioni › Backup dopo l'accesso. Con `JWT_SECRET`
+>   (il cloud) il fallimento è sull'overlay, come deciso. Proposte: **(A)** un biglietto monouso dell'esito
+>   (`GET /backup/restore/outcome` col biglietto in un header, il suo hash in `.restore/`, permesso anche da bloccata;
+>   lotto B5c, mezza giornata; la mia raccomandazione); **(B)** solo con esito incerto (un 401) il login torna a
+>   `/settings?tab=backup`, che sul successo non dice niente e sul fallimento dice perché; **(C)** solo doc. Intanto
+>   (C) nella guida, chiesta al `docs-writer`.
+> - **Giro rosso** (14:28-14:32): 12 rossi su 323, tutti e soli i previsti, più i quattro `TypeError` attesi del
+>   `#settle` di oggi sul tipo sconosciuto.
+> - **Codice** (14:33): `restoreOutcome()` 423 con `detail.code` `instance_blocked` → `{kind: 'blocked'}` (aiuto
+>   `refusedForTheBlock`), `#settle` → `still_pending` con `{state: 'pending', waiting: 'instance_blocked'}`, niente
+>   annuncio; `cancelPending()` tiene lo `stage_id` dello stato e, dopo un annullamento accettato, `dropCheck` best
+>   effort (con `restore_not_pending` niente); docstring aggiornata. **Verde** (14:34): 323 su 323.
+> - **Il resto** (14:35-14:45): `front check` **0 errori, 0 avvisi** (i tipi `Unwidened`, `tables` come
+>   `Record<string, RestoreTableRows>`, `untrack`); gli altri cinque file (`RestoreReportModal`, `RestartOverlay`,
+>   `restoreI18n`, `BackupDownloadCard`, `backupJob`) 332; le liste del runner **`front-utility core-unit` 173 file,
+>   6232 test** e **`component-unit` 149 file, 3957 test**, verdi (le cinque righe nuove registrate). Porta libera.
+> - **Guida, seconda passata** (`docs-writer`): punto 1 conforme al codice; il punto 2 no, per un caso: un ripristino
+>   **confermato dalla CLI** non ha il record della prova, il `DELETE /stage` della scheda è rifiutato (e ignorato), e
+>   la copia resta in `.restore/stage/` finché una prova avviata dalla scheda non la trova vecchia di 24 ore. La guida
+>   dice di annullarlo dalla riga di comando; la cura vera è lato server (`DELETE /pending` con
+>   `cancel_restore(drop_copy=True)`, come la CLI, e la scheda smette di chiamare `dropCheck`): backlog **B-17**, da fare
+>   con il biglietto dell'esito (B5c) se scelto, perché tocca la stessa API. Aggiunta (C): senza `JWT_SECRET` la pagina
+>   va al login qualunque sia l'esito, e Impostazioni › Backup dice perché (rimando a
+>   `index.md#session-persistence`); tolto «needed with several workers» (i worker di un `dev.py server` condividono
+>   la chiave da soli).
+> - `RestoreTableRows` non più esportato (lo usa solo `backupApi.ts`: knip l'avrebbe segnalato). Ultimi controlli
+>   (`files/scripts/b_final_static.sh`): Prettier su `features/backup` e `i18n/backup`, ratchet dei colori, knip,
+>   `front check`, poi `mkdocs build`, `check-links`, `utils gate-docs-links`.
+> - **Ultimi controlli** (14:46-14:49): Prettier pulito su `features/backup` e `i18n/backup`; ratchet dei colori pulito;
+>   knip con gli stessi reperti delle 13:08, nessuno in `features/backup` o `i18n/backup`; `front check` 0/0;
+>   `mkdocs build` stretta 0 avvisi; `check-links` 96; `utils gate-docs-links` 63; `git diff --check` pulito; porta
+>   libera.
+> - **14:50, handoff del checkpoint B5b** al coordinatore, 🧊 FROZEN: 13 file tracciati modificati e 10 nuovi
+>   (`features/backup/`: cinque moduli e cinque test). In attesa: la decisione (A)/(B)/(C) sull'esito senza
+>   `JWT_SECRET`; B-15, B-16, B-17 nel backlog; E2E (`e2e/settings/backup.spec.ts`) e galleria negli slot pesanti.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
