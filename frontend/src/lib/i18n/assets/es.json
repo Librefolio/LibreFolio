@@ -328,7 +328,20 @@
       "timeout": "La búsqueda expiró. Inténtalo de nuevo.",
       "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable",
       "notConfigured": "{provider} debe configurarse antes de poder buscar",
-      "crownLegend": "👑 la moneda del fondo"
+      "crownLegend": "👑 la moneda del fondo",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "Ningún resultado de las fuentes premium.",
+      "communitySection": "Fuentes no premium (comunidad) · {count, plural, one {# resultado} other {# resultados}}",
+      "communityWarning": "Fuentes de terceros: LibreFolio no garantiza sus precios ni sus datos. La elección solo vale para este activo.",
+      "reportQuestion": "¿No lo encuentras?",
+      "reportAction": "Avísanos",
+      "reportVia": {
+        "mailto": "Abre tu app de correo con los detalles de esta búsqueda",
+        "page": "Abre la página de soporte y copia los detalles de esta búsqueda, para pegarlos allí",
+        "github": "Abre una incidencia pública en GitHub con los detalles de esta búsqueda: revísala antes de enviarla"
+      },
+      "reportCopied": "Detalles de la búsqueda copiados: pégalos en la página de soporte.",
+      "reportCopyFailed": "No se pudieron copiar los detalles de la búsqueda: describe tu búsqueda en la página de soporte."
     },
     "comparison": {
       "title": "Comparación de datos del proveedor",

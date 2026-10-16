@@ -102,6 +102,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/currencyBlocker.test.ts",
             "src/lib/components/assets/assetPayload.test.ts",
             "src/lib/components/assets/assetSearchSelection.test.ts",
+            "src/lib/components/assets/assetSearchSections.test.ts",
+            "src/lib/components/assets/assetSearchReport.test.ts",
             "src/lib/components/assets/assetMetadataComparison.test.ts",
             "src/lib/components/assets/assetFormState.test.ts",
             "src/lib/components/assets/scheduleSerialization.test.ts",
@@ -178,6 +180,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",
             "src/lib/features/settings/users/addressProbe.test.ts",
+            "src/lib/features/settings/users/accountErrors.test.ts",
             "src/lib/features/instance/instanceConfig.test.ts",
             "src/lib/features/instance/instanceNotices.test.ts",
             "src/lib/features/auth/authFlash.test.ts",
@@ -185,6 +188,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/auth/registrationErrors.test.ts",
             "src/lib/features/auth/passwordRules.test.ts",
             "src/lib/features/auth/emailCase.test.ts",
+            "src/lib/features/auth/localHost.test.ts",
+            "src/lib/features/auth/openRegistrationNotice.test.ts",
             "src/lib/features/instance/instanceBlock.test.ts",
             "src/lib/api/zodios-client.test.ts",
             "src/lib/features/live-updates/activityTracker.test.ts",
@@ -335,9 +340,11 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/AuthPageFrame.test.ts",
             "src/lib/features/auth/LinkStatusCard.test.ts",
             "src/lib/features/auth/ResetPasswordCard.test.ts",
+            "src/lib/features/auth/SetupCard.test.ts",
             "src/routes/page.authFlash.test.ts",
             "src/routes/invite/page.test.ts",
             "src/routes/reset-password/page.test.ts",
+            "src/routes/setup/page.test.ts",
             "src/routes/verify-email/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
@@ -394,6 +401,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/RegisterCard.verification.test.ts",
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
             "src/lib/features/settings/users/UserRow.verification.test.ts",
+            "src/lib/features/settings/users/UserRow.pendingSetup.test.ts",
             "src/routes/(app)/settings/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
@@ -486,7 +494,7 @@ def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, de
 
 
 def front_auth_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the account link pages, /invite and /reset-password (accounts lot A5b)."""
+    """Run the account link pages, /invite, /reset-password (accounts lot A5b) and /setup (A7b)."""
     print_section("Frontend Auth Links Tests")
     if not _ensure_frontend_build():
         return False
@@ -853,7 +861,7 @@ def populate_registry(registry: dict) -> None:
         "auth-links",
         front_auth_links,
         name="Auth Links Tests",
-        desc="The account link pages (accounts lot A5b), on invitations and reset links an administrator issues over the API: the token, in the fragment, leaves the address bar on load; an invitation with an address prefills it (editable), its registration carries the token, ends on the login page with login-success and signs in as an ordinary member, and the same link then reads consumed; an admin invitation shows its notice; revoked and unknown tokens say so; a page without a token reads missing and sends no inspection; a reset link names its account and takes a new password, after which only the new one signs in; link-status-goto-login leads to /; served registration_mode invite (page only) a valid invitation still opens the registration, served disabled it reads closed; every pending invitation revoked and every account self-deleted after each test",
+        desc="The account link pages (accounts lot A5b), on invitations and reset links an administrator issues over the API: the token, in the fragment, leaves the address bar on load; an invitation with an address prefills it (editable), its registration carries the token, ends on the login page with login-success and signs in as an ordinary member, and the same link then reads consumed; an admin invitation shows its notice; revoked and unknown tokens say so; a page without a token reads missing and sends no inspection; a reset link names its account and takes a new password, after which only the new one signs in; link-status-goto-login leads to /; served registration_mode invite (page only) a valid invitation still opens the registration, served disabled it reads closed; every pending invitation revoked and every account self-deleted after each test. The setup page of the initial administrator (A7b), /setup, with a link it cannot use: an unknown token leaves the address bar, is inspected for admin_setup, reads unknown with its own hint and stays on /setup (no-referrer); no token, or a token in the query, reads missing and sends no inspection",
         prereq="Test users created (e2e_test_admin an administrator); registration_mode open on the lane",
         tests="auth-links.spec.ts",
     )

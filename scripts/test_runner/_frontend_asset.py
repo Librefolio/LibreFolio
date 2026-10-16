@@ -186,7 +186,7 @@ def front_asset_browse(verbose: bool = False, ui: bool = False, headed: bool = F
 
 
 def front_asset_live_pause(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the live-price pause E2E tests (Z1, F26, Z7c): list every 60 s, detail one request every 30 s, pause when hidden or idle, resume at once; back off on failures, wait out a provider pause."""
+    """Run the live-price pause E2E tests (Z1, F26, Z7c, Z-3): list every 60 s, detail one request every 30 s, pause when hidden or idle, resume at once; back off on failures, wait out a provider pause; «today» is the user's calendar day, not the UTC one."""
     print_section("Frontend Asset Live Updates Pause Tests")
     if not _ensure_frontend_build():
         return False
@@ -253,6 +253,6 @@ def populate_registry(registry: dict) -> None:
         desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
         tests="assets/asset-browse.spec.ts",
     )
-    add_test(cat, "live-pause", front_asset_live_pause, name="Asset Live Updates Pause", desc="Live prices pause when the tab is hidden or after 2 minutes without input and resume at once; list every 60 s, detail one request every 30 s, none on a past range (Z1, F26); on a failing endpoint the detail's requests come 60, 120, 240, 480, 600 and 600 s apart, and an answer with every asset RATE_LIMITED holds the list's next request until its retry_after, counted from the answer (Z7c)", tests="assets/asset-live-pause.spec.ts")
+    add_test(cat, "live-pause", front_asset_live_pause, name="Asset Live Updates Pause", desc="Live prices pause when the tab is hidden or after 2 minutes without input and resume at once; list every 60 s, detail one request every 30 s, none on a past range (Z1, F26); on a failing endpoint the detail's requests come 60, 120, 240, 480, 600 and 600 s apart, and an answer with every asset RATE_LIMITED holds the list's next request until its retry_after, counted from the answer (Z7c); «today» is the user's calendar day (Z-3): at 21:00 in New York (01:00 UTC the next day) a range ending today polls on both pages and the detail's summary shows the quote, at 00:30 in Rome (22:30 UTC the day before) a range that ended yesterday polls on neither", tests="assets/asset-live-pause.spec.ts")
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

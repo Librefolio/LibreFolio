@@ -11,6 +11,8 @@ export interface AdminAccount {
     protected: boolean;
     /** Inactive and waiting for its email verification with a live link: its place is already counted (workstream E). */
     holds_place?: boolean;
+    /** The initial administrator of LIBREFOLIO_ADMIN_EMAIL waiting for its setup link (F02): never reactivated here. */
+    pending_setup?: boolean;
 }
 
 export interface OpenInvite {

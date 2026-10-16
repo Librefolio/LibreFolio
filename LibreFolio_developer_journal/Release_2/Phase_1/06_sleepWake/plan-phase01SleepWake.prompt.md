@@ -2852,3 +2852,163 @@ positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` 
 4. ✅ 16/10 22:21 — Checkpoint FROZEN inviato: otto file (il Dashboard, due spec, il runner, due pagine di doc, il
    piano, il backlog con Z-18 ✅). Il `.svelte` è nell'area DV, solo `<script>`: lo SHA va ai colori; i due casi di
    `page-busy.spec.ts` li rivede Y.
+
+### Lotto A — Z-3, Z-8, Z-19: il «oggi» delle pagine degli asset, nessun polling senza fornitore, N58
+
+> **Via** (coordinatore, 16/10 22:22): «Y OK'd your 2 cases. Lot B entered […], and your branch is fast-forwarded to
+> the tip, clean. Lot A: go. In its E2E slot, also run `front-portfolio page-busy` (12), as Y recommends, to prove
+> lot B on the combined revision.» Prima (16/10 22:22): «X's OK on Z-8: you're the writer of
+> `assetDetailLive.svelte.ts` in lot A», con tre note di X: il test che fissa gli input letti dall'effetto, il suo
+> docblock e `live-ticker.md` §«Asset detail» seguono la nuova condizione; la pulizia rimette `direction = 'neutral'`;
+> i 70 casi del file girano in `core-unit`. `dashboard-cache.spec.ts` (di Y): sì (16/10 22:21). Base: `4e233fe5b`.
+
+**Stato reale** (su `4e233fe5b`).
+- Z-3: le due pagine calcolano `isHeadToday` come `dateEnd >= new Date().toISOString().slice(0, 10)` (data UTC),
+  mentre `dateEnd` (`resolveDateSentinel('max')` = `todayIso()`) è sul calendario dell'utente. Due facce del `>=`:
+  a ovest di Greenwich, la sera, un intervallo che finisce oggi sembra passato (niente prezzo dal vivo); a est, subito
+  dopo mezzanotte, un intervallo finito ieri sembra vivo e interroga il fornitore.
+- Z-8: l'effetto di `assetDetailLive.svelte.ts` (FE5c-9b di X) avvia il poller con `isHeadToday` e l'id, senza
+  guardare il fornitore: un asset manuale chiede `POST /assets/prices/current` ogni 30 s (l'endpoint rimanda solo il
+  prezzo salvato, e ogni risposta conta come mutazione del portafoglio). Il controllo del fornitore c'è solo nella
+  testa del grafico (`#applyLiveChartHead`). `reloadPage()` azzera `assetInfo` e `providerAssignment` insieme;
+  `reloadMetadata()` li riassegna in parallelo (`Promise.all`), con oggetti nuovi.
+- Z-19: `reset_provider_cooldowns()` (`provider_cooldown.py`) e `reset_shutdown_budget_state()`
+  (`shutdown_budget.py`) servono solo ai test; `Cooldowns.clear()` ha come unico chiamante la prima.
+  `Cooldowns.reset(key)` non ha chiamanti di prodotto: lo usano PCD-011 (lascia pulita l'istanza spedita) e CDW-032.
+
+**Decisioni** («da rivedere»):
+- N-ZA-1 (Z-3): `isHeadToday` con `todayIso()` (`lib/utils/dateOnly.ts`) in entrambe le pagine, come `dateEnd`.
+- N-ZA-2 (Z-3): l'E2E prova le due facce: New York alle 21:00 e Roma alle 00:30 (orologio della pagina).
+- N-ZA-3 (Z-8): l'effetto vuole anche un codice di fornitore, letto da un `$derived` booleano creato nel costruttore:
+  riparte quando il codice compare o sparisce, non quando l'assegnazione si ricarica con lo stesso codice (né con un
+  altro: il poll chiede al backend, che legge l'assegnazione del momento).
+- N-ZA-4 (Z-8): il controllo del fornitore in `#applyLiveChartHead` esce (non più raggiungibile: niente poller senza
+  codice, e una risposta in volo quando il codice sparisce la scarta `isCurrent()`); il commento I-bis #24 dice perché.
+- N-ZA-5: la data della conversione in `#applyLiveSummary` resta UTC, con un commento: è la data di una ricerca che
+  riempie all'indietro (`convert_currency_bulk`: il tasso più recente fino a quella data, nessun controllo sul futuro),
+  e su entrambi i calendari dà lo stesso tasso, l'ultimo salvato. Nessun effetto visibile: per la classificazione di
+  `problems/utc-today-vs-user-calendar` è «corretto così», non il «oggi» di chi guarda.
+- N-ZA-6 (Z-19, N58): escono `reset_provider_cooldowns()`, `reset_shutdown_budget_state()` e `Cooldowns.clear()`
+  (resta senza chiamanti). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel suo docstring: nessun metodo
+  pubblico dà a PCD-011 lo stesso stato pulito (`succeeded` non dimentica una pausa in corso, `released` libera solo
+  la prova), e `--dead-code` non lo segnala. Decisione del coordinatore (16/10 22:3x): «remove the three as you
+  propose. For `Cooldowns.reset(key)`: […] first see whether PCD-011 can get the same clean state through a public
+  method that already exists (`succeeded(key)` or `released(key)`). If it can't, keep it, with one line in the
+  docstring: «used by the tests only (N58 exception): …»».
+
+**Test** (test-author, in bozza da `27994759a`, invariati fino a `4e233fe5b`; `files/za-draft/README.md`):
+`asset-live-pause.spec.ts` (i)–(l) nuovi, rossi senza Z-3; `assetDetailLive.svelte.test.ts` 10 casi rossi senza Z-8
+(tre casi vecchi tolti perché contraddicono la correzione); `dashboard-cache.spec.ts` sceglie la prima riga posseduta
+con un fornitore (verde prima e dopo); `test_provider_cooldown.py` (PCD-018 riscritto sul comportamento, PCD-021 senza
+il reset), `test_shutdown_budget.py` (SDB-032 tolto, fixture con `monkeypatch`, contratti 12–14 → 11–13),
+`test_cooldown.py` (CDW-032 senza `clear`): verdi prima e dopo. In più, per N-ZA-3: un caso «l'assegnazione ricaricata
+con lo stesso codice, o con un altro, non riavvia il poller».
+
+**Passi.**
+1. ✅ 16/10 22:29–22:41 — Bozze dei test nel worktree (sei file; i blob di base sono quelli del README: nessuno è
+   cambiato da `27994759a` a `4e233fe5b`, copia = diff). Rossi leggeri, codice a HEAD (`files/za_reds.sh`): Vitest sul
+   solo file (binario locale) 10 rossi su 76, i dieci attesi, ognuno perché l'effetto ignora il fornitore (un poller
+   avviato, `stop` mai chiamato, `providerAssignment` assente dalle letture); `services provider-cooldown` 66/66.
+   > **⚠️ Fuori pista**: carico a ~175 (altre corsie). Ho fermato l'attesa della catena prima di `services
+   > shutdown-budget` e `utils cooldown` (nessun test partito): le due prove «prima» non dicono nulla sul codice, i
+   > test in bozza non chiamano le funzioni tolte; contano le prove «dopo» (passo 4).
+   > **⚠️ Fuori pista**: nel log di Vitest due avvisi `assignment_value_stale` di Svelte, dalle frecce delle bozze
+   > che assegnano un oggetto a `providerAssignment` in un'espressione (`LEAVES`): li toglie test-author (passo 2).
+2. ✅ 16/10 22:33–22:55 — Codice (`files/za-draft/apply_za.py`, passi `z3`, `z8`, `z19`, ognuno col suo inverso
+   esatto; impronta dei tre file del frontend in `files/za-draft/za_applied.md5`):
+   - `z3`: le due pagine, solo `<script>` (+4 −2 ciascuna): l'import di `todayIso` e `isHeadToday` con
+     `dateEnd >= todayIso()`, col commento.
+   - `z8`: `assetDetailLive.svelte.ts` (+22 −12): `hasProvider` (`$derived`, nel costruttore) nella condizione
+     dell'effetto (N-ZA-3); il controllo del fornitore tolto da `#applyLiveChartHead` (N-ZA-4); i commenti del
+     modulo, dell'interfaccia, del blocco I-bis #24 e della data UTC della conversione (N-ZA-5). La pulizia rimette
+     ancora `direction = 'neutral'` (nota 2 di X).
+   - `z19`: tolte le tre funzioni; il docstring di `Cooldowns.reset` con l'eccezione di N58 (N-ZA-6); la frase della
+     guida dei plugin (`asset_plugin_guide.md`); la descrizione di `services provider-cooldown`.
+   - A mano: le descrizioni di `utils cooldown` («reset/len») e di `front-asset live-pause` (descrizione e docstring,
+     Z-3).
+   - test-author, nel file Vitest: il caso di N-ZA-3 («does not restart when the assignment is reloaded — a new
+     object with the same code, or another code — but stops when the code goes»), il docblock allineato alle letture
+     (nota 1 di X), e corpi a blocco per le frecce che assegnano un oggetto (anche tre righe di HEAD che davano
+     `assignment_value_stale`).
+   - Prettier `--check` pulito sui sei file del frontend; ruff e black puliti sui file Python. In
+     `_frontend_asset.py` restano 25 errori di ruff, e black riformatterebbe `_frontend_asset.py` e
+     `_backend_utils.py`: identici a HEAD, non miei.
+   - Nessuna menzione rimasta delle funzioni tolte fuori dal journal (`git grep`).
+   > **⚠️ Fuori pista**: docs-writer ha notato che `reloadPage()` carica asset e assegnazione in parallelo:
+   > «l'assegnazione arriva dopo l'asset» non è garantito. Corretti il mio commento in `z8` («nor before the
+   > assignment has loaded») e, da test-author, il docblock, un titolo e un commento del file Vitest.
+   > **Osservazione (non cambiata)**: dopo una sync o una modifica `reloadMetadata()` riassegna anche `assetInfo`, e
+   > l'effetto, che legge `assetInfo`, riparte comunque una volta (un poll subito), come prima di Z-8: il `$derived`
+   > toglie solo il secondo riavvio, quello del fornitore. Sono azioni dell'utente; la doc lo dice.
+3. ✅ 16/10 22:40–22:56 — Doc (docs-writer, verificata da me sul codice): `live-ticker.md` (+54 −26). Tabella «Runs
+   while»; `isHeadToday` sul calendario dell'utente, con le due facce di prima; l'effetto del dettaglio (letture,
+   `hasProvider`, nessun poller senza codice, nessun riavvio sulla ricarica dell'assegnazione); il lampo; la testa del
+   grafico; «Still a write»; le righe dei test e il paragrafo sui (i)–(l). Più tre correzioni mie dalle sue note:
+   lo stato del poller del dettaglio è `live.updatesState` (vecchio da FE5c), il lampo si spegne anche quando il
+   periodo non arriva più a oggi, la data UTC della conversione è voluta.
+4. ✅ 16/10 22:55–23:50 — Controlli leggeri, solo a carico sotto 50 (coordinatore, 16/10 ~22:55: «Meanwhile the
+   light checks, only at load < 50»): `files/za_light.sh`, un passo alla volta, fermo durante lo slot.
+   > **⚠️ Fuori pista**: `z_run.sh`, dopo 30 minuti d'attesa, parte comunque: per questo lotto la catena ha una
+   > soglia rigida (nessun passo a carico ≥ 50), si ferma senza uccidere nulla se esiste `files/za_pause` (per lo slot),
+   > e scrive il passo in corso in `files/za_light.running`. Lo slot (`files/za_slot.sh`) non parte se un passo è in
+   > corso o se `assetDetailLive.svelte.ts` non è alla sua impronta (la mutazione di N-ZA-3 è temporanea).
+   > La prima catena (`files/za_after_backend.sh`) era ancora in attesa: fermata, nessun test partito.
+   Passi: `services provider-cooldown`, `services shutdown-budget`, `utils cooldown`, `lint --dead-code`; la mutazione
+   di N-ZA-3 (l'effetto che legge l'assegnazione dritta: atteso rosso il solo caso «does not restart…», poi i byte
+   rimessi); il file Vitest col codice; `api sync`, `front check`, `front-utility core-unit`, `mkdocs build`,
+   `mkdocs check-links`.
+   Esiti, col codice: `services provider-cooldown` 66/66; `services shutdown-budget` 187/187 (188 a Z6b, meno
+   SDB-032); `utils cooldown` 112/112; `lint --dead-code` non segnala più le due funzioni di Z-19 (rc 1 per i
+   risultati che c'erano già: knip del frontend, vulture su altri moduli); la mutazione di N-ZA-3 fa rosso il solo
+   caso «does not restart…», 1 su 77, e i byte tornano esatti; Vitest col codice 77/77, nessun
+   `assignment_value_stale`; `api sync`; `front check` 0 errori e 0 avvisi; `front-utility core-unit` 7277/7277 (192
+   file, coi cancelli dei colori); `mkdocs build` senza avvisi; `check-links` 97 validi. Porta 6186 libera.
+   > **Osservazione**: vulture mette fra le «Referenced only by tests» altre quattro funzioni di Z
+   > (`cooldown_snapshot()`, `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()`, `ActivityTracker.is_busy`):
+   > Z-21 nel backlog (nata Z-20, rinominata il 16/10), fuori dal lotto per tenerlo corto. `_local_times_to_utc`
+   > (scheduler) non è di Z.
+5. ✅ 16/10 22:57–23:25 — Slot 2 (coordinatore: «Slot 2 is free (J finished at 22:55): lot A E2E go»), soglia 70,
+   `files/za_slot.sh`; i controlli leggeri fermi per tutto lo slot (`files/za_pause`, nessun passo in corso):
+   - A, Z-3 tolto (`apply_za.py revert-z3`, le due pagine identiche a HEAD; Z-8 e Z-19 restano), una ricostruzione
+     (`build/index.html` 23:03): `front-asset live-pause` 4 rossi e 8 verdi. I rossi sono (i)–(l), ognuno col suo
+     messaggio «Z-3: …»: a ovest (i) e (j) nessuna richiesta all'apertura; a est la lista ha chiesto a −2,7 s e
+     +57,3 s (k), il dettaglio a −3,6 s e +26,4 s (l). (j) è su `/assets/1`, con fornitore: Z-8 non c'entra.
+   - B, Z-3 rimesso (impronta dei tre file controllata): `live-pause` 12/12; `front-asset asset-detail` filtrato su
+     «Live price direction flash» e «C-66» 5/5 (i quattro del lampo e il caso di C-66); `front-portfolio
+     dashboard-cache` 6/6; `front-portfolio page-busy` 12/12 (il lotto B sulla revisione combinata, come chiesto da Y).
+     Porta 6186 libera.
+6. ✅ 16/10 23:55 — Backlog: Z-3, Z-8, Z-19 ✅, Z-21 nuova (nata Z-20). Checkpoint FROZEN inviato al coordinatore: 19 file
+   tracciati, nessuno nuovo; le due pagine sono nell'area AF, solo `<script>`: lo SHA va ai colori; il commento di
+   C-66 in `asset-detail.spec.ts` (riga ~8672, «by its UTC reckoning…») è di X, da girargli. Due righe di CHANGELOG
+   proposte (🐛 Z-3, 🐛 Z-8).
+
+### Wiki-file di Z-3 e Z-20/Z-21 (16/10, sola devWiki e journal)
+
+> **Via** (coordinatore, 16/10 ~23:55): «Lot A committed (`a43502298` fix, `f8c47fc3d` journal) and entered: dev
+> `0f55265a1`, with the 2 CHANGELOG lines in `ac9671fd3`. 1. ID collision: J's line J-26 in dev already cites «Z-20»
+> for the probe bridge broken on 16/10 11:18 (the decoupling of `zodios-client` from `instanceNotices`, which I had
+> assigned to you). At your next journal touch, then: Z-20 = the decoupling of `zodios-client` from
+> `instanceNotices`, so that the probe bridge doesn't need the Svelte plugin; your new item (the 4 N58 functions)
+> becomes Z-21. 2. Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14. Z-21 after that, if
+> there's time.» Base: ff a `ac9671fd3` (coordinatore, 16/10 ~23:57), albero pulito.
+
+1. ✅ 16/10 23:40–23:58 — `wiki-file` su `LibreFolio_devWiki/wiki/problems/utc-today-vs-user-calendar.md`: sezione
+   nuova «2026-10-16 — a comparison is one site, not two (Z-3)», cinque righe in «Source files», `updated:` e
+   `concepts/prices-current-side-effect` fra i `related:`; la riga dell'indice; una voce in `log.md`. Storia provata
+   in git, non dedotta:
+   - `2e104b919` (30/08, il commit dell'audit dei 18 punti) ha portato `defaultRange().end` e
+     `resolveDateSentinel('max')` a `todayIso()`; le due righe di `isHeadToday`, con lo stesso idioma UTC nel padre
+     del commit, sono rimaste com'erano. Prima entrambi i lati erano UTC: il confronto era coerente.
+   - Quindi la faccia ovest (la sera un periodo che finisce oggi sembra passato, la vista di default) nasce il 30/08;
+     quella est (dopo mezzanotte un periodo finito ieri interroga, e ogni poll scrive) è più vecchia.
+   - La regola aggiunta: un confronto fra date è un punto solo; chi sposta un lato al calendario dell'utente cerca
+     ogni confronto che lo legge. La data della conversione resta UTC, «corretta così» (ricerca all'indietro).
+   - I sei punti di prodotto che hanno ancora l'idioma a `ac9671fd3` sono elencati, non riclassificati.
+   `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti; la pagina 0 su 8.
+   > **⚠️ Fuori pista**: il passo 6 della skill (graphify `--update`) punta al checkout principale e il grafo non c'è
+   > nel worktree: non eseguito, come le altre voci del `log.md` di questa fase.
+2. ✅ 16/10 23:59 — Numerazione: Z-20 → Z-21 (le quattro funzioni N58) nel backlog e nel lotto A di questo piano; Z-20
+   nuova, il disaccoppiamento. Nota per Z-20, letta nel codice e non provata: la sonda importa `$lib/api`, quindi
+   `zodios-client.ts`, che importa `priceRefresh.ts` (Z5) e, sulla riga dopo, `instanceBlock.svelte.ts` di H, con
+   `$state` al primo livello dal 15/10 (`cb34327e9`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
+   detto al coordinatore.
