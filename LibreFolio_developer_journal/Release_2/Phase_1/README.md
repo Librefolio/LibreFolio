@@ -195,3 +195,4 @@ Sono tutti locali: la push la fa il developer.
 | 106 | 16/10 10:49 | W per cherry-pick: W-B17 (una FX_CONVERSION su due broker è rifiutata, `pairBrokerMismatch`) | `4647c4af4` |
 | 107 | 16/10 11:17 | J: CP-7a (decisione 26: ogni gamba del lotto convertita alla sua data, via il ripiego di CP-16, lotti short corretti, T-B6, J-14; all-backend 17 898/1 rosso estraneo — timeout del fornitore in `search-to-prices`, ripassato 3/3) — T-B5, T-B6 chiuse | `4f9e94420` |
 | 108 | 16/10 11:18 | W per cherry-pick: docstring di `list_accesses` (P4 del developer: la lista degli accessi resta aperta) | `02f08057f` |
+| 109 | 16/10 12:05 | W per cherry-pick: W-B43 (gli spec dell'editor dei dati e dell'import CSV dei cambi verificano invece di sondare; `asset-data-editor` 26/26, `fx-csv-import` 21/22 con il test 19 scaduto a carico ~140 e ripassato da solo in 3 s) | `a59593570` |

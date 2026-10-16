@@ -607,7 +607,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
 | 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
 | 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
-| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | 🔄 prove leggere verdi (gate 66/66, `front check` 0 e 0); checkpoint |
+| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
+| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | 🔄 prove leggere verdi (gate 71/71, `--check` pulito); impatto in sola lettura nullo sul target `f77743d47` e sui 6 worktree |
 
 ## Avanzamento
 
@@ -2342,3 +2343,71 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `roleColors.test.ts`, i test del Designer Lab che leggono `tokens.css`) 414/414; `front check` 0 e 0 (copre i tipi del
 > gate, che test-author non poteva controllare); `svelte-check` 0 e 0 dopo le due voci; `palette.md` 102 su 102 contro
 > `tokens.css`; nomi di `SKILL.md` e `palette.md` tutti esistenti; `git diff --check` pulito.
+
+> ✅ **7 · Integrato** dal coordinatore: `f043c1b58` (11:36), il mio ramo portato avanti con fast-forward.
+
+### Il gate e i commenti nelle espressioni del markup (bug trovato da AF) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 11:4x, prima del lotto del resto della UI). AF, lotto 8: `--check` dava G3 su
+> `routes/(app)/assets/+page.svelte:1639`, l'attributo `onfitperiod={(range) => {…}}` di `<AssetSetRiskPanel>`, che non
+> ha classi. Causa: `codeOf` toglieva i commenti solo da `<script>` e `<style>`; un `//` dentro l'espressione, con un
+> apostrofo («picker's») e dei backtick, faceva leggere a `closing`/`endOfString` una stringa chiusa al primo backtick
+> utile, 60 righe sotto: il valore dell'attributo inghiottiva il markup, e gli elementi inghiottiti non venivano
+> controllati (un punto cieco). AF ha riscritto quel commento per sbloccarsi.
+
+> ✅ **1 · La correzione** in `frontend/scripts/theme/theme-roles.mjs`: `codeOf` divide il file Svelte lasciando interi i
+> blocchi `<script>` e `<style>`, e nel markup toglie i commenti di ogni espressione `{…}` (`blankExpressionComments`),
+> trovando la `}` di chiusura con un percorso che salta stringhe e commenti (`expressionEnd`). Lunghezze e righe
+> invariate (i commenti diventano spazi). Prova (`/tmp/libreFolio_T_r2/g3_probe.mjs`, la copia vecchia dello scanner in
+> `/tmp/libreFolio_T_r2/old/`): sul caso costruito come quello di AF il vecchio dà G3 sulla riga dell'attributo e m1 3
+> (conta anche la classe scritta nel commento), il nuovo G3 sulla riga dell'elemento davvero misto e m1 2; la stringa
+> `'https://…'` col suo `//` resta. `--check` pulito; Prettier verde.
+
+> ✅ **2 · L'impatto, in sola lettura** (`/tmp/libreFolio_T_r2/g3_impact.mjs` e `g3_blind.mjs`, vecchio contro nuovo):
+> - sul target `f77743d47` (estratto con `git archive` in `/tmp`, senza leggere il checkout principale; rimisurato alle
+>   12:02 dopo la caduta della rete, la prima misura su `e36e45f0d` dava lo stesso esito) e sui worktree di IW, TR, AF,
+>   BK, IM e DV, ciascuno col suo `tokens.css`: **nessun G3 nuovo né sparito, nessun conteggio m1 o m2 cambiato, file per
+>   file** (la grammatica dà 0 violazioni ovunque, prima e dopo; m1 si misura sul testo intero, e nessun commento nel
+>   markup conteneva una classe legacy). Log: `/tmp/libreFolio_T_r2/g3_impact2.log` e `g3_blind2.log`;
+> - **il punto cieco era reale:** in 4 file lo scanner vecchio non leggeva parte del markup: `AssetSetRiskPanel` (3 tag
+>   letti su 56), `DataTable` (25 su 51), `routes/(app)/assets/+page.svelte` (75 su 113; in AF già 113, col commento
+>   riscritto), `TransactionBulkModal` (36 su 40). Oggi nessuno ha un elemento misto; ora sono controllati per intero.
+
+> ⚠️ **Fuori pista:** fra le 11:53 e le 11:57 la rete è caduta; il primo giro di test-author è morto senza toccare
+> nulla, e il mio turno si è chiuso con errore. Rilanciato test-author; rifatta la misura d'impatto sul target nuovo.
+
+> ✅ **3 · Il test di regressione** (test-author, solo `frontend/src/themeRoles.gate.test.ts`, 85 righe aggiunte, 0
+> tolte): una sezione nuova, «C'. Comments inside markup expressions», col sorgente della prova costruito come il caso
+> di AF, in cinque test: G3 solo sull'elemento davvero misto e m1 2 (la classe nel commento non conta); i 7 tag di
+> apertura letti tutti, e senza l'elemento misto nessun G3; `codeOf` conserva lunghezze e righe, toglie «picker's» e
+> lascia `href={'https://…'}`; i blocchi `<script>` e `<style>` perdono solo i loro commenti (un `url(https://…)` resta);
+> un commento a blocco in un'espressione di testo misura `{m1: 0, m2: []}`. In più una riga nei due controlli esistenti
+> «ignora i commenti» (m1 e m2), per il commento dentro un'espressione. **Prova di mutazione:** col modulo vecchio 6 test
+> rossi (i quattro nuovi che toccano la correzione e i due controlli estesi), il quarto verde come deve; ognuna delle 10
+> asserzioni sulla correzione fallisce da sola sul vecchio e passa sul nuovo. **Le mie verifiche** (carico 75, sotto
+> `nice`): Vitest dei due gate 71/71 (52 + 19); Prettier verde su `theme-roles.mjs` e sul test; `--check` pulito;
+> `git diff --check` pulito.
+
+### Campi nativi: testo e segnaposto (osservazione di TR) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 12:1x). TR ha notato che `app.css` dà testo e segnaposto ai campi nativi in scuro solo
+> finché non hanno una classe `-lf-` (`html.dark input/select/textarea:where(:not([class*='-lf-']))`, righe 237–247):
+> un campo migrato passa al preflight di Tailwind, cioè colore ereditato e segnaposto al 50 % di quello. La regola
+> chiesta: «un campo nativo migrato porta sempre `text-lf-primary`, e `placeholder:text-lf-placeholder` se ha un
+> segnaposto». Il controllo del coordinatore (`native_field_check.py --all`, in sola lettura) trova 4 casi sul mio
+> albero: 2 miei, `ui/input/TagInput.svelte:214` e `ui/select/TreeSelect.svelte:357` (senza ruolo del testo), e 2 di
+> DV, `charts/ChartAestheticsSection.svelte:217` e `:233` (senza ruolo del segnaposto; glielo dice il coordinatore).
+
+> ✅ **1 · La regola negli skill:** in `design-system`, regola 1, un punto accanto a «text role on the root» e «every
+> `border` names its role»; in `theme-roles`, un sotto-punto della regola 3 (senza rinumerare: la regola 8 si cita per
+> numero). Nomi delle utility esistenti (`design_system_tokens.py names`), link validi, larghezza ≤ 120,
+> `git diff --check` pulito.
+
+> ⏳ **2 · I due campi miei**, nel lotto del resto della UI: `text-lf-primary` sull'`<input>` di `TagInput` e su quello
+> di `TreeSelect`. Oggi nessun effetto visibile: il genitore dà già `text-lf-primary` (`tag-input-wrapper` e il
+> trigger del `TreeSelect`); la regola protegge dai genitori che cambiano.
+
+> ⏳ **3 · Un controllo del gate** (G6, nel lotto del G5 e del fondale): un `<input>` di tipo testuale, `<textarea>` o
+> `<select>` con una classe `-lf-` deve avere un ruolo `text-lf-…` di base, e `placeholder:text-lf-…` se ha
+> `placeholder`. Costruito sui `startTags` dello scanner, con la stessa lista di tipi esenti del controllo del
+> coordinatore.
