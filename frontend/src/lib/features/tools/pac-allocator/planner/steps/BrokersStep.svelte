@@ -46,7 +46,7 @@
         return {broker, label: broker?.name ?? cash?.brokerKey ?? source.cashKey, currency: cash?.currency ?? null};
     }
 
-    const CHIP = 'inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-0.5 pl-0.5 pr-2 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200';
+    const CHIP = 'inline-flex items-center gap-1.5 rounded-full border border-lf-subtle bg-lf-panel py-0.5 pl-0.5 pr-2 text-xs text-lf-primary';
 
     function askRemove(broker: DraftBroker): void {
         removal = {key: broker.key, name: broker.name, impact: draft.brokerRemovalImpact(broker.key)};
@@ -80,7 +80,7 @@
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex min-w-0 items-center gap-2">
                     <PlannerBrokerIcon {broker} />
-                    <h3 class="truncate font-semibold text-gray-900 dark:text-gray-100">{broker.name || '—'}</h3>
+                    <h3 class="truncate font-semibold text-lf-primary">{broker.name || '—'}</h3>
                     {#if !broker.active}<span class={BADGE.warning} data-testid="pac-planner-broker-inactive">{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
                 </div>
                 <div class="flex shrink-0 flex-wrap gap-2">
@@ -94,22 +94,22 @@
             </div>
 
             {#if broker.modes.length === 0}
-                <p class="text-sm text-red-700 dark:text-red-300">{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
+                <p class="text-sm text-lf-danger">{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
             {:else}
                 <div class="space-y-3">
                     {#each broker.modes as mode (mode.key)}
-                        <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-broker-mode" data-currency={mode.currency}>
-                            <p class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100"><CurrencyCode code={mode.currency} /></p>
+                        <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-broker-mode" data-currency={mode.currency}>
+                            <p class="mb-2 text-sm font-semibold text-lf-primary"><CurrencyCode code={mode.currency} /></p>
                             <dl class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5 text-sm">
-                                <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                                <dt class="flex items-center gap-0.5 text-lf-muted">
                                     {$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}
                                     <HelpTip
                                         label={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}
                                         help={$t('tools.pacAllocator.planner.brokers.orderKindHelp', {default: 'How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.'})}
                                     />
                                 </dt>
-                                <dd class="text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-kind">{modeKindText($t, mode.kind)}</dd>
-                                <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                                <dd class="text-lf-primary" data-testid="pac-planner-broker-mode-kind">{modeKindText($t, mode.kind)}</dd>
+                                <dt class="flex items-center gap-0.5 text-lf-muted">
                                     {$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
                                     <HelpTip
                                         label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
@@ -118,8 +118,8 @@
                                         })}
                                     />
                                 </dt>
-                                <dd class="tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-step">{modeIncrementText($t, mode)}</dd>
-                                <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                                <dd class="tabular-nums text-lf-primary" data-testid="pac-planner-broker-mode-step">{modeIncrementText($t, mode)}</dd>
+                                <dt class="flex items-center gap-0.5 text-lf-muted">
                                     {$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
                                     <HelpTip
                                         label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
@@ -129,7 +129,7 @@
                                         })}
                                     />
                                 </dt>
-                                <dd class="tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-fee">{modeFeeText($t, mode)}</dd>
+                                <dd class="tabular-nums text-lf-primary" data-testid="pac-planner-broker-mode-fee">{modeFeeText($t, mode)}</dd>
                             </dl>
                         </div>
                     {/each}
@@ -147,7 +147,7 @@
                         })}
                     />
                 </p>
-                <p class="text-sm text-gray-800 dark:text-gray-200" data-testid="pac-planner-broker-conversion" data-mode={broker.conversionMode}>
+                <p class="text-sm text-lf-primary" data-testid="pac-planner-broker-conversion" data-mode={broker.conversionMode}>
                     {broker.conversionMode === 'automatic'
                         ? $t('tools.pacAllocator.planner.brokers.conversionValueAuto', {default: 'The Broker converts when you buy, at the rate of the FX step minus the spread.'})
                         : $t('tools.pacAllocator.planner.brokers.conversionValue', {default: 'You convert before buying, at the rate of the FX step minus the spread.'})}
@@ -165,7 +165,7 @@
                     />
                 </p>
                 {#if localCash.length === 0 && routes.length === 0}
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.brokers.noFunding', {default: 'none yet'})}</p>
+                    <p class="text-sm text-lf-muted">{$t('tools.pacAllocator.planner.brokers.noFunding', {default: 'none yet'})}</p>
                 {:else}
                     <ul class="flex flex-wrap gap-1.5">
                         {#each localCash as cash (cash.key)}
@@ -206,7 +206,7 @@
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="flex min-w-0 items-center gap-2">
                     <PlannerBrokerIcon {broker} />
-                    <h3 class="truncate font-semibold text-gray-900 dark:text-gray-100">{broker.name || '—'}</h3>
+                    <h3 class="truncate font-semibold text-lf-primary">{broker.name || '—'}</h3>
                 </div>
                 <div class="flex gap-1">
                     <OriginBadge origin={broker.origin} testid="pac-planner-broker-origin" />
