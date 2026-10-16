@@ -2761,6 +2761,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   nessun difetto del prodotto né del lotto, che cambia solo gli stili. Cura per il proprietario della spec delle
   transazioni: togliere i budget brevi espliciti e lasciare il timeout di `expect` della configurazione. Dettagli: piano
   di T, «Sesto slot» e «La spec del rischio sui ruoli», passo 3.
+- **TC-18 · Il commit rifiuta il costo del ricevente di un TRANSFER con più di 12 decimali (FM6 di `tx-wac-formmodal`)**
+  — alto; T, 17/10, mini-lotto `CompactCashCell`. Nel bulk, un BUY di 10 Apple su Interactive Brokers a 1000 e un
+  TRANSFER di 5 verso Directa: il commit risponde 200 con `committed: false`, «Row 2b: Cost basis override: At most 12
+  decimal places». Il WAC proposto al ricevente si vede arrotondato («💡 170.36 $ USD per unit») ma parte intero, e lo
+  stadio di precisione del batch lo rifiuta (`transaction_batch_stages.py:117`, `decimal_limit_issue` di
+  `backend/app/db/precision.py`). Riproducibile: lo stesso rosso tre volte, due col lotto e una con i due file del lotto
+  riportati a HEAD (`9016f47c3`, build rifatta); il lotto cambia solo lo `<style>` e l'import, quindi non c'entra. Il
+  modulo di precisione è cambiato il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della
+  triage: difetto del prodotto. Cura per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna
+  prima del commit, o quantizzarlo nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
 
 ---
 
