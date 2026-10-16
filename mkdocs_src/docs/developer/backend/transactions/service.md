@@ -208,8 +208,9 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
 `_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
-brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and allows an
-intra-broker `FX_CONVERSION`. A `TRANSFER` pair must also move one asset
+brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and one broker for
+both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`).
+A `TRANSFER` pair must also move one asset
 (`pairAssetMismatch`, params `assetA`/`assetB`) by exactly opposite quantities,
 compared as `Decimal` (`pairQuantityMismatch`, params `qtyA`/`qtyB`): what leaves one
 broker arrives at the other, and no unit is created or lost. The first rule that
