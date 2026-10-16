@@ -209,6 +209,19 @@ def gain_loss_ratio(gain: Decimal | None, base: Decimal | None, *, positive_base
     return gain / base
 
 
+def realized_gain(proceeds: Decimal | None, cost: Decimal | None) -> Decimal | None:
+    """The gain or loss a disposal realizes: ``proceeds - cost``, both already in one currency.
+
+    Decision 26: each leg is converted at its own date — the proceeds at the sale's rate, the cost at the
+    purchase's — so a foreign holding's FX move between the two belongs to the realized result. None when
+    either leg is unknown (no rate): the result is then unknown too, never computed from native amounts. The
+    Dashboard's sales and the lots' closures both go through it; each keeps its own rule for summing them.
+    """
+    if proceeds is None or cost is None:
+        return None
+    return proceeds - cost
+
+
 def price_return(start: Decimal | None, end: Decimal | None) -> Decimal | None:
     """The simple return from one price to a later one: ``end / start - 1``, unrounded.
 

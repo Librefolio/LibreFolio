@@ -84,9 +84,11 @@ $$
 \text{RealizedPnL}_{\text{SHORT}} = \text{MatchedQuantity} \times (\text{LotUnitCost} - \text{ClosePrice})
 $$
 
-$\text{ClosePrice}$ is the trade's unit price for a SELL, or for a BUY closing a SHORT lot. An adjustment trades nothing: it closes at its per-unit **cost basis override**, or at **zero** without one. For an outgoing adjustment that zero is a write-off, while a cost basis hands the units over at cost: every lot it consumes closes at that same per-unit cost — the average cost the units leave with, not the lot's own — so a cheaper lot realizes the difference, as the average cost does (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). A lot in a currency other than the cost basis's hands its units over at its own unit cost instead, realizing nothing.
+$\text{ClosePrice}$ is the trade's unit price for a SELL, or for a BUY closing a SHORT lot. An adjustment trades nothing: it closes at its per-unit **cost basis override**, or at **zero** without one. For an outgoing adjustment that zero is a write-off, while a cost basis hands the units over at cost: every lot it consumes closes at that same per-unit cost — the average cost the units leave with, not the lot's own — so a cheaper lot realizes the difference, as the average cost does (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). The cost basis applies whatever the lot's currency.
 
 This is why two lots of the same asset, bought at different times and prices, can show very different realized results even though they are later matched on the same day at the same price — see the worked example in [FIFO Lot Analysis](fifo-lot-analysis.md).
+
+Both formulas take the two prices in the lot's own currency. In the analysis's target currency, each leg of the closure converts at its own date — the lot's cost at the opening date, the closing price, in its own currency, at the closing date — and the realized P&L is their difference (see [Lots in Another Currency](fifo-lot-analysis.md#lots-in-another-currency)).
 
 ---
 

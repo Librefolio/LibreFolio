@@ -433,6 +433,43 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   comportamento. Cura: la corsia tiene solo le variabili del runner e scarta il resto della configurazione d'istanza
   venuta dal `.env`; un test usa `.env.example` come elenco. Assegnata a H dal coordinatore, prima del primo lotto di E;
   comprende A-9 (le quattro variabili di account di A5a). Dettagli: analisi di E; piano H.
+- **C-97 · Più cifre decimali per quantità e prezzi (crypto, issue #43)** — medio, **nella 1.3**; coordinatore,
+  16/10, dalla issue [#43](https://github.com/Librefolio/LibreFolio/issues/43) di un utente che segna BTC, ETH e PEPE.
+  Assegnata a W (transazioni), dopo W-B30 e W-B36b.
+  - **Oggi**: il form delle transazioni accetta 6 decimali (`maxFractionDigits={6}`, `TxFormSingleSection.svelte:176`
+    e `:224`, `TxFormPairSection.svelte:192`, da `75309672e` del 18/09). La 1.1 ne accettava di più.
+  - **Il modello**: `Numeric(18, 6)` per quantità, importi e costo manuale (`transactions`), per i prezzi
+    (`price_history`) e per i valori degli eventi (`asset_events`). Su SQLite la scala dichiarata non limita ciò che
+    si salva (la colonna tiene un `REAL`), ma SQLAlchemy **arrotonda a 6 decimali in lettura**: misurato il 16/10,
+    `0.12345678` salvato torna `0.123457`, e il valore intero resta nel file.
+  - **Le cifre che servono**:
+    - **quantità: 10 decimali**. BTC ne usa 8 (il satoshi). I broker dell'utente ne mostrano 6–8 secondo il token, e
+      qualche exchange arriva a 10. I 18 di ETH (wei) servono solo ai wallet on-chain, fuori dai broker;
+    - **prezzi: 12 decimali**. PEPE vale `0,0000034573 €` (10 decimali), e i token sotto `1e-8` ne vogliono 12 per
+      tenere almeno 4 cifre significative. I cambi hanno già `Numeric(24, 10)`;
+    - **importi in valuta: restano 6**.
+    - **Il limite vero è il `REAL` di SQLite**, circa 15 cifre significative. Con 10 decimali una quantità è esatta fino
+      a 99 999 unità; oltre, i token che si contano a milioni usano pochi decimali. Un salvataggio decimale esatto
+      (testo) è un lavoro più grande, da valutare dopo, insieme al lotto G della matematica (niente `SUM` in SQL).
+  - **Superfici**: il modello; la migrazione, da decidere nell'analisi (precedenti: le note di 002 e 004 sulle
+    dichiarazioni che SQLite ignora); il form singolo, quello della coppia e il Bulk; la visualizzazione delle quantità
+    (`txDisplayHelpers.ts:21` taglia a 6, più le tabelle di posizioni e lotti); i prezzi piccoli mostrati con abbastanza
+    cifre significative; l'import CSV e il BRIM non devono troncare.
+  - **Oltre il limite**: un valore con più cifre si rifiuta con un messaggio che dice il massimo, mai arrotondato in
+    silenzio.
+  - **Effetto per chi ha già i dati**: i valori salvati con più cifre (dalla 1.1, da un import o via API) tornano
+    visibili, perché sparisce solo l'arrotondamento in lettura. Quelli già risalvati a 6 restano a 6.
+  - **I `.svelte` del form sono nell'area TR dei colori**: cambia solo un attributo, ma serve il loro OK.
+  - Test: test-author, dal rosso della quantità a 8 e 10 decimali e del prezzo `0.0000034573`. Doc utente delle
+    transazioni. Una riga 🐛 nel CHANGELOG.
+- **C-98 · Fornitore di prezzi CoinGecko** — basso, da decidere; coordinatore, 16/10, suggerimento dell'utente della
+  issue #43 («CoinGecko lists 3× more crypto than Yahoo Finance»). CoinGecko ha un'API gratuita con chiave e limiti al
+  minuto: con le impostazioni dei plugin di CP11 (chiave per utente o per istanza) si integra come plugin di X. Non è
+  nella 1.3 finché il developer non lo chiede.
+- **C-99 · Manuale admin: nuova struttura, variabili d'ambiente divise per categoria** — medio, **nella 1.3**;
+  developer, 16/10. Un solo lotto di documentazione del coordinatore, quando i lotti cloud di H, A, B, E e Z sono entrati.
+  Struttura, regola provvisoria per i figli e requisiti (link vecchi funzionanti, controllo delle variabili,
+  `.env.example` diviso): piano generale della 1.3, §6, «Manuale admin: la struttura finale».
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -624,11 +661,11 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 
 - **T-B4 · La data del lotto più vecchio dopo uno split** — medio; T, 11/10. Va con U6. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
   «7.1 Lotti, passi, peso, quando».
-- **T-B5 · Il P&L di una chiusura FIFO mescola le valute** — peso da stimare, serve una decisione; T, 11/10. Se un lotto
+- ✅ **T-B5 · Il P&L di una chiusura FIFO mescola le valute** (chiusa 16/10 dal coordinatore: CP-7a di J, decisione 26, treno 107) — peso da stimare, serve una decisione; T, 11/10. Se un lotto
   è aperto e chiuso in valute diverse, `_close_position_piece` (`fifo_lot_engine.py:905-940`) sottrae il prezzo del
   lotto da quello di vendita senza convertirli. Limite già documentato nella pagina dev del servizio dei lotti.
   Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3a — Lotti, niente ripiego sull'importo non convertito».
-- **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** — minimo;
+- ✅ **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** (chiusa 16/10 dal coordinatore: CP-7a di J, treno 107) — minimo;
   T, 11/10, dalla sonda di B3b. Senza cambio `reference_unit_price` è `None`, ma `reference_price_source` resta
   `exact`, e l'AI Export lo copia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Sonda».
 - **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
@@ -2426,6 +2463,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     una run interrotta che non l'ha cancellato.
 
   Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md), «La coppia del rumore».
+- **G-18 · Guardia G3 a runtime nella galleria** ✅ 16/10, `07fe58276` — medio; coordinatore, 16/10 (il developer: «vedi tu»).
+  - Il gate G3 vede gli elementi misti, con classi di ruolo e legacy insieme, solo se sono scritti così nel sorgente.
+    Non vede le classi composte a runtime: le prop di classe fra aree, le costanti, le concatenazioni.
+  - Ogni snapshot ora scandisce ogni scatto con le regex del gate (`galleryMixed.ts`, dopo la cattura, solo
+    segnalazione) e scrive `mixed_elements.json`.
+  - `gallery_tool mixed` li stampa per cartella del file candidato, o per sezione. Il testid è un indizio, non una
+    prova.
+  - Verificata nella run filtrata `g-mixed-probe` (Settings, 192 scatti): un record per PNG, 0 errori di scansione,
+    4 ms di mediana per scatto. **Misti oggi in Settings: 0.** Il conto su tutta la galleria arriverà da solo con il
+    prossimo snapshot completo.
+  - I 13 rossi della run sono di ambiente (carico 110–145 su 10 CPU) e cadono tutti prima della scansione.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «G-18 · Guardia G3 a runtime nella galleria (16/10)».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2585,7 +2636,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     opache; nel changelog il filo del `mark` come ombra interna e la testata dei capitoli al passaggio su `bg-lf-neutral`.
   - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
-    della modale, non un `contentClass`.
+    della modale, non un `contentClass`. **Approvata** (coordinatore, 16/10): `ModalBase` prende un prop di tono,
+    `tone="danger"` → `border-2 border-lf-danger-line` al posto di `border-lf-raised`, in un ternario solo (regola 8), nel
+    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1).
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 - **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
@@ -3917,6 +3970,24 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
   del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
   «CP-7».
+- **J-25 · Debito di traduzione di CP-7a (lotti in un'altra valuta)** — basso, documentazione; J, 16/10. Pagine EN
+  cambiate di senso, senza stamp: `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`
+  (sezione nuova `#lots-in-another-currency` con l'esempio D-J1), `…/fifo-engine/index` (una frase rovesciata, un
+  paragrafo nuovo, due link) e `financial-theory/instruments/transaction-types/adjustment` (la nota sulla valuta della
+  consegna rovesciata). `index` punta all'ancora nuova: tradurla con `fifo-lot-analysis` nello stesso giro. Dettagli:
+  piano J, §10 «CP-7a».
+- **J-26 · Sonda reale dell'AI Export per CP-7a** — basso, prova; J, 16/10. Il realizzato e il «di mercato» dei lotti
+  esteri cambiano (decisione 26) attraverso builder invariati, quindi nessuna versione; i test dei componenti passano
+  (302). La sonda mirata (`ai_export_real_prompt_probe.py`) gira sugli utenti reali del developer e con le loro
+  credenziali, che una corsia coordinata non ha: da fare col developer, un Asset con un lotto USD chiuso e il suo Broker
+  (atteso: realizzato coi cambi delle due date, non realizzato 0). Dettagli: piano J, §10 «CP-7a».
+- **J-27 · `ControlTotals.from_json` espande per intero un importo con un esponente enorme** — basso, robustezza; trovata
+  dal test-author di B con una sonda, via il coordinatore, 16/10. `_as_amount` (`financial_math/ledger_totals.py:190`)
+  accetta ogni testo decimale finito e lo passa a `_canonical`, che lo scrive per esteso: `"1E+50000000"` costa 121 MB e
+  0,4 s, quindi un manifest scritto a mano può esaurire la memoria nella prova a secco del ripristino. B si protegge da
+  sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
+  oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
+  Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4241,3 +4312,13 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+
+## MF · Matematica finanziaria (fase 01)
+
+Workstream nato il 16/10 (decisione del developer su P21). Piano:
+[`Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md`](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md);
+punto di partenza, l'audit dello stesso giorno:
+[`Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md`](../Phase_1/11_financialMath/audit-matematica-finanziaria-20261016.md).
+
+- **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Le voci per lotto le
+  scrive MF dopo la sua analisi.
