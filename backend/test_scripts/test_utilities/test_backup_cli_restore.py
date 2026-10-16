@@ -238,7 +238,7 @@ def test_restore_with_yes_confirms_and_the_restore_waits_for_the_next_start(tmp_
     lines = out.splitlines()
     confirmed_at = next(index for index, line in enumerate(lines) if "waits for the next start" in line)
     missing = [line for line in cli.ACCOUNT_LINK_LINES if line not in lines[:confirmed_at]]
-    assert missing == [], f"the report says, before the confirmation, what becomes of the accounts' links, verbatim: {missing} not before line {confirmed_at} of {out}"
+    assert missing == [], f"the report says, before the confirmation, the notice on the invitations and links, verbatim: {missing} not before line {confirmed_at} of {out}"
     stages = cli.stages_left(root)
     assert len(stages) == 1, f"the copy is kept, for the next start: {stages}"
     path = state_path(root)
