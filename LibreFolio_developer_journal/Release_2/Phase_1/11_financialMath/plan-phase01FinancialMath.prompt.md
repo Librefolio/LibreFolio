@@ -1056,3 +1056,49 @@ Quattro commit, uno per lotto che cambia numeri:
   `dev.py i18n add` (EN «Corrections exceed the income of the last year.», IT/FR/ES). Test al test-author
   (`test_yield_on_cost.py`, `ExposureTable.test.ts`). Da fare: `api sync` (enum nuovo nell'OpenAPI), pagina di teoria
   di Yield on Cost (dice i negativi «non supportati»).
+
+#### Lotto C committato (16/10, ~20:15)
+
+- ✅ Committato dal coordinatore: `3fcce359d` (fix) + `1ade8056f` (giornale); HEAD verificata `1ade8056f`, pulita. Entra
+  dopo J-24 (i conflitti attesi in `broker_financial.py`/`portfolio_service.py` sono in altri pezzi). MF-C2 va nelle
+  domande al developer. I tre `.svelte` del cruscotto (`PositionsPanel`, `ExposureTable`, `LotCustodyModal`) sono
+  della squadra colori finché entrano: il lotto C non li tocca.
+
+#### MF-I2 — il resto dei caricatori degli split (16/10, dalle 20:16)
+
+- **Via**: coordinatore (20:16) — `portfolio_service.py:161` e `brokers/summary.py` liberi; `transactions/auto_cost.py`
+  di W: chiesto a W, che risponde **(a)** (20:2x): i 4 righi li faccio io, il suo ramo aggiunge solo `_handover_cost`
+  (~:140) e non tocca 70–95 né gli import; nessun suo commit aggiunge `AssetEventType.SPLIT`.
+- **Disegno** (correzione della carta §3): i tre caricatori rimasti sono **repliche di WAC** (anteprima del WAC,
+  costo medio del sommario del broker, costo automatico) e la ripartizione per split della casa
+  (`average_cost.cost_movement_from_transaction(split_linked=True)` → `SPLIT_RESCALE`) legge la **quantità della riga**,
+  mai il rapporto. Quindi «tutti i chiamanti rifiutano un rapporto ≤ 0 come il motore» non vale qui: rifiutarlo
+  sarebbe un cambio di comportamento senza un numero da proteggere. I2 è una sostituzione a uscita identica.
+- ✅ **Codice** (solo scrittura): `financial_math/splits.py` — `split_linked_ids(db, transactions) -> set[int]` sopra
+  `load_split_links` (nessun giudizio del rapporto), docstring del modulo coi lettori nuovi; `portfolio_service.py`
+  (~:157, fascia del WAC: l'impronta della cache resta `tuple(sorted(split_linked_row_ids))`), `brokers/summary.py`
+  (`_holding_average_costs`) e `transactions/auto_cost.py` (`is_split_linked = db_tx.id in await
+  split_linked_ids(self.session, [db_tx])`): niente più query in linea, import di `AssetEvent`/`AssetEventType` tolti
+  dove non servono più. Autoflush mai spento in `backend/app` (grep vuoto): l'`asset_event_id` letto dal DB è quello
+  in memoria. Mappe: docstring del pacchetto, `financial-math.instructions.md` (riga di `splits.py` e regola 1),
+  albero e regola 1 di `financial_math.md`. Ruff/black puliti, import verdi. Dopo: `AssetEventType.SPLIT` resta solo in
+  `splits.py` e `event_suggestions.py` (la mappa tipo d'evento → tipo di transazione dell'interfaccia).
+- **Prova** (test-author `mf-i2-tests`): `TestSplitLinkedIds` in `test_splits.py` (rosso: nome assente); guardia in
+  `test_layer_boundaries.py` (`AssetEventType.SPLIT` solo in quei due file; rosso: i tre caricatori); parità nuova del
+  sommario del broker con uno split (`test_financial/test_broker_summary_splits.py`, verde prima e dopo). Parità
+  esistente: `api portfolio-wac` (`test_portfolio_wac.py:430-600`, anteprima e costo automatico con split) e
+  `services transaction-cost-basis-rule` (~:292).
+- **Numeri**: nessuno. **CHANGELOG**: nessuna riga (rifattorizzazione interna).
+- ✅ **Rossi** (20:29, `files/i2.sh red`: prodotto rovesciato, test tenuti; patch `c1bd623f…`, ripristino con hash
+  identico): `services financial-math "TestSplitLinkedIds or test_layer_boundaries"` **8 rossi, 43 verdi** — i 7 casi
+  di `split_linked_ids` (nome assente) e la guardia, che elenca `brokers/summary.py:225`, `portfolio_service.py:162`,
+  `transactions/auto_cost.py:79`; `services roi-fifo-utils broker_summary_splits` **9/9 verdi** (parità, come atteso).
+- ✅ **Verdi** (20:29–20:32, `files/i2.sh green`): `services financial-math` 591; `services roi-fifo-utils` 849;
+  `api portfolio-wac` 12; `services transaction-cost-basis-rule` 73; `services broker` 73; `api brokers` 34.
+- ✅ **Statici** (`files/i2.sh lint`): ruff/black puliti (8 file); `mkdocs build` strict exit 0; `git diff --check`
+  pulito; porta 6190 libera.
+- **Lotto C in dev** (coordinatore, 20:3x): merge `0eb85aa9b` (treno 135), subito dopo J-24 (`31a59bdb1`); CHANGELOG
+  `6319a7dbf`. Per A/B/H/J1/J2 serve J-24 nella base: chiesto l'aggiornamento dopo il commit di I2.
+- Guardia, lacuna nota (test-author): un confronto con la stringa `"SPLIT"` (`AssetEvent.type == "SPLIT"`) sfuggirebbe;
+  oggi le uniche `== "SPLIT"` sono `event.kind` degli eventi già classificati in memoria (`fifo/engine.py:137`,
+  `lots_analysis_service.py:930`, `yield_on_cost.py:623`), non caricatori del DB: non aggiunta.
