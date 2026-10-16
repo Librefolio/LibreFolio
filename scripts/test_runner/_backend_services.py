@@ -979,6 +979,17 @@ def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
 
 
+def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…»: the catch-up tracker PRICE_REFRESH, its wiring in run_due_jobs and scheduler_loop (lot Z5)."""
+    print_section("Services: Scheduler Price Refresh")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (PriceRefreshTracker, PRICE_REFRESH, run_due_jobs, scheduler_loop), with sleep_wake/activity.py's response headers")
+    print_info(
+        "Tests: SPR-001..032 — names and types, idle/starting/running, announce and runs (first reason kept, overlap, no-op end, reset), jobs ran/refreshed, tick never shown; run_due_jobs: an unknown reason counts nothing, run_started before the settle, finished on raise and cancel, job_finished(None) on cancel; the loop: startup announced, header published then removed and reset, return announced on the request, the answers' header"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_price_refresh.py", test_names)
+    return run_command(cmd, "Scheduler price refresh tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -1888,6 +1899,19 @@ Note: No backend server required.
         # other collaborator (switches, leader, settings, state store, jobs, utc_now, settle_clock) is a fake set with
         # monkeypatch, the state store in memory, and the process's ACTIVITY is replaced only through monkeypatch by an
         # Activity on a fake clock. Nothing sleeps: every moment is a fake wall clock's.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-price-refresh",
+        services_scheduler_price_refresh,
+        name="Scheduler Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…» (N-Z5-1…5). PriceRefreshTracker on an injected clock: idle (all None, not refreshed, no header); announce(reason) idle → starting with reason and since, first reason and since kept while pending; tick or unknown reasons refused for announce and run_started, nothing counted; run_started counts overlapping runs, run_finished ends the catch-up with the last one (no-op without a counted run): last_finished_at and last_refreshed (a job with items_ok > 0) only if a job finished while pending, else kept; a cancelled job (None) ran, not refreshed; a job while idle invisible; running with the current job (a tick's job at once on an announced return), starting without; header_value; reset forgets the count and the job. run_due_jobs: catch-up reasons run_started before the settle and run_finished in a finally (raise, cancel), a tick never; job_started/job_finished around each job. scheduler_loop: startup announced, X-LibreFolio-Price-Refresh registered on current_activity(), the return listener announces on the request's thread, removed and reset at the end; the answers through ActivityMiddleware say starting, running, then nothing",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs past PRICE_REFRESH (switches,
+        # leader, settings, state store, due functions, jobs, settle_clock) is a fake set with monkeypatch; the process's
+        # PRICE_REFRESH is reset before and after each test, and its ACTIVITY replaced only through monkeypatch by an
+        # Activity on a fake clock. The loop runs as a task of the test's own event loop and is stopped and awaited within
+        # a deadline; the FastAPI app of the header case is served in this process by httpx.ASGITransport (no socket).
         isolation="pure",
     )
     add_test(
