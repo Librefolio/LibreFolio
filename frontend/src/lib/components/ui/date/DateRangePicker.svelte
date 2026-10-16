@@ -1134,7 +1134,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1149,7 +1149,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1163,7 +1163,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1177,7 +1177,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1203,7 +1203,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
+<div class="relative flex flex-col gap-1.5 text-lf-primary {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to
@@ -1272,21 +1272,19 @@
                  click away, but a known date should not have to be navigated to. -->
             <div
                 bind:this={triggerEl}
-                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
-                    ? 'ring-1 ring-libre-green border-libre-green'
-                    : ''} {fieldsClass}"
+                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-lf-field rounded-xl border overflow-hidden transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-lf-focus border-lf-focus' : 'border-lf-input hover:border-lf-input-hover'} {fieldsClass}"
             >
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
-                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
+                    <Calendar size={compact ? 11 : 14} class="text-lf-link flex-shrink-0" />
+                    <span class="text-[9px] font-medium text-lf-muted uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
                     <input
                         bind:this={startInputEl}
                         type="text"
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} outline-none {startInvalid ? 'text-lf-danger' : 'text-lf-primary'}"
                         value={fieldText('start')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-start"
@@ -1303,21 +1301,21 @@
                     />
                 </label>
                 {#if stacked}
-                    <span class="block w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
+                    <span class="block w-full h-px bg-lf-subtle flex-shrink-0"></span>
                 {:else}
-                    <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
+                    <span class="block w-px h-6 bg-lf-subtle flex-shrink-0"></span>
                 {/if}
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
-                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
+                    <Calendar size={compact ? 11 : 14} class="text-lf-link flex-shrink-0" />
+                    <span class="text-[9px] font-medium text-lf-muted uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
                     <input
                         bind:this={endInputEl}
                         type="text"
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} outline-none {endInvalid ? 'text-lf-danger' : 'text-lf-primary'}"
                         value={fieldText('end')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-end"
@@ -1341,7 +1339,7 @@
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div use:portal>
                         <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
-                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
+                        <div class="drp-popover bg-lf-card rounded-xl shadow-2xl shadow-lf-shadow border border-lf-raised p-4" style={popoverStyle} data-testid="date-range-popover">
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                                 <CalendarMonth
                                     year={calLeftYear}
@@ -1360,7 +1358,7 @@
                                     highlights={calHighlights}
                                     {allowFuture}
                                 />
-                                <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                                <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-lf-subtle self-stretch"></div>
                                 <CalendarMonth
                                     year={calRightYear}
                                     month={calRightMonth}
@@ -1380,14 +1378,14 @@
                                 />
                             </div>
                             {#if pendingDate}
-                                <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                                <div class="mt-3 text-xs text-center text-lf-muted">
                                     {$_('datePicker.selectSecondDate')}
                                 </div>
                             {/if}
                         </div>
                     </div>
                 {:else}
-                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
+                    <div class="drp-popover bg-lf-card rounded-xl shadow-2xl shadow-lf-shadow border border-lf-raised p-4" style={popoverStyle} data-testid="date-range-popover">
                         <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                             <CalendarMonth
                                 year={calLeftYear}
@@ -1406,7 +1404,7 @@
                                 highlights={calHighlights}
                                 {allowFuture}
                             />
-                            <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                            <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-lf-subtle self-stretch"></div>
                             <CalendarMonth
                                 year={calRightYear}
                                 month={calRightMonth}
@@ -1426,7 +1424,7 @@
                             />
                         </div>
                         {#if pendingDate}
-                            <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                            <div class="mt-3 text-xs text-center text-lf-muted">
                                 {$_('datePicker.selectSecondDate')}
                             </div>
                         {/if}

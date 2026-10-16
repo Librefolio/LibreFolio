@@ -107,18 +107,10 @@ lib/components/transactions/wizard/ReviewStep.svelte	86
 lib/components/transactions/wizard/SelectFilesStep.svelte	22
 lib/components/transactions/wizard/UploadStep.svelte	20
 lib/components/transactions/wizard/WizardFooter.svelte	101
-lib/components/ui/DocsLink.svelte	4
-lib/components/ui/OrderableList.svelte	27
-lib/components/ui/TweenedValue.svelte	2
-lib/components/ui/ViewModeToggle.svelte	18
 lib/components/ui/data-editor/CsvEditor.svelte	72
 lib/components/ui/data-editor/DataEditor.svelte	67
 lib/components/ui/data-editor/DataImportModal.svelte	52
 lib/components/ui/data-editor/ErasableNumberCell.svelte	14
-lib/components/ui/date/CalendarMonth.svelte	40
-lib/components/ui/date/CompactDurationBadge.svelte	13
-lib/components/ui/date/DateRangePicker.svelte	73
-lib/components/ui/date/SingleDatePicker.svelte	24
 lib/components/ui/display/KpiDivergingFlowBar.svelte	18
 lib/components/ui/display/KpiMetricBar.svelte	18
 lib/components/ui/display/RiskMetricCard.svelte	16
@@ -127,12 +119,9 @@ lib/components/ui/feedback/LoadingSpinner.svelte	0	#10b981	#1a4031	#374151	#6b72
 lib/components/ui/input/ExactDecimalInput.svelte	10
 lib/components/ui/input/ExactQuantityInput.svelte	0	oklch(0.637 0.237 25.331/0.7)	oklch(0.765 0.177 163.223/0.7)
 lib/components/ui/modals/ConfirmModal.svelte	4
-lib/components/ui/modals/ModalBase.svelte	0	#1e293b	rgba(0,0,0,0.25)	rgba(0,0,0,0.5)×2	white
 lib/components/ui/modals/PageSyncModal.svelte	2
 lib/components/ui/modals/SyncModalBase.svelte	66
 lib/components/ui/modals/SyncResultRow.svelte	22
-lib/components/ui/tabs/TabBar.svelte	20
-lib/components/ui/toolbar/PageToolbar.svelte	4
 lib/features/ai-export/AiExportMenu.svelte	12
 lib/features/ai-export/AiExportOptionsPanel.svelte	74
 lib/features/dashboard/AllocationHistoryChart.svelte	4
@@ -146,13 +135,6 @@ lib/features/dashboard/OtherPeriodEffectsTable.svelte	28
 lib/features/dashboard/PerformanceChart.svelte	4
 lib/features/dashboard/PositionsPanel.svelte	46
 lib/features/dashboard/YieldOnCostCell.svelte	8
-lib/features/onboarding/components/OnboardingBootstrapBanner.svelte	10
-lib/features/onboarding/components/OnboardingBootstrapBlock.svelte	16
-lib/features/onboarding/components/OnboardingCoachmark.svelte	45	rgba(52,211,153,0.4)	rgba(52,211,153,0.95)
-lib/features/onboarding/components/OnboardingIntroScene.svelte	32
-lib/features/onboarding/components/OnboardingReplaySection.svelte	66
-lib/features/onboarding/components/WelcomeForm.svelte	39
-lib/features/onboarding/components/WelcomePage.svelte	28
 lib/features/risk/AssetChip.svelte	2
 lib/features/risk/AssetRiskScenariosView.svelte	13
 lib/features/risk/AssetSetCorrelationSection.svelte	20
@@ -264,7 +246,6 @@ routes/(app)/fx/+page.svelte	97
 routes/(app)/fx/[pair]/+page.svelte	169
 routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
-routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
