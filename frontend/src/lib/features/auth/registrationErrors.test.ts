@@ -11,6 +11,10 @@
  *   - an `error_code` → its key: `REGISTRATION_DISABLED` → `auth.registrationDisabled`, `INVITE_REQUIRED` →
  *     `auth.registrationInviteOnly`, `INVITE_INVALID` → `auth.link.unknown`, `USER_LIMIT_REACHED` →
  *     `auth.userLimitReached` (anonymous: no count reaches the user). The server's English `message` is never shown;
+ *   - accounts lot A6c (decision 37) adds `PASSWORD_TOO_WEAK` → `auth.validation.passwordTooWeak`, the key the card's
+ *     own check already shows: the server applies the same rules to every new password and refuses one that breaks
+ *     them with a 400 `{error_code, message, rules}`, `rules` naming the codes it missed. The list does not change the
+ *     key;
  *   - a string `detail`, case-folded: naming the username → `auth.validation.usernameTaken`, the email →
  *     `auth.validation.emailTaken`, anything else → `{raw: detail}`;
  *   - a Pydantic list: the first entry's `loc` decides — `email` → `auth.validation.invalidEmailDomain` when its `msg`
@@ -51,8 +55,19 @@ describe('describeRegistrationError — the refusals A5a explains with a code', 
         [403, 'INVITE_REQUIRED', 'auth.registrationInviteOnly'],
         [400, 'INVITE_INVALID', 'auth.link.unknown'],
         [409, 'USER_LIMIT_REACHED', 'auth.userLimitReached'],
+        [400, 'PASSWORD_TOO_WEAK', 'auth.validation.passwordTooWeak'],
     ])('reads a %i %s as {key: %s}, never the server sentence', (status, code, key) => {
         expect(describeRegistrationError(coded(status, code))).toEqual({key});
+    });
+
+    it.each([
+        ['one rule missed', ['min_length']],
+        ['several rules missed', ['min_length', 'uppercase', 'special']],
+        ['a code this build does not know', ['no_dictionary_word']],
+    ])('reads the whole refusal of A6c — PASSWORD_TOO_WEAK with %s — as the key of a weak password', (_label, rules) => {
+        const failure = refusal(400, {error_code: 'PASSWORD_TOO_WEAK', message: 'An English sentence the user must not read', rules});
+
+        expect(describeRegistrationError(failure)).toEqual({key: 'auth.validation.passwordTooWeak'});
     });
 
     it('reads a code it does not know as the general failure, not as the server sentence', () => {

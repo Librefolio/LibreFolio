@@ -179,8 +179,13 @@ re-exports nothing, so a patch aimed at it fails. A helper only this provider us
 `plugin.py` as `_*.py`. Discovery, the layout and the gate that keeps it
 (`./dev.py test utils gate-plugin-layout`) are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
 
-FX providers have no catalogue keys, so no `i18n/` folder: the texts a provider shows travel with
-it through the API, in every language it declares (`description_i18n`, `warning_i18n`).
+An FX provider's own texts travel with it through the API, in every language it declares
+(`description_i18n`, `warning_i18n`): they are not catalogue keys. Its only catalogue keys are the
+texts of its [settings](#settings), under `pluginSettings.fx.<CODE>`, `<CODE>` being the code as the
+registry has it, case included (`pluginSettings.fx.ECB`). They live in an `i18n/` folder beside
+`plugin.py`, added with `./dev.py i18n add … --into fx_providers/<folder>`
+([Labels and Translations](plugin_settings.md#translations)). No shipped FX provider declares
+settings, so none has an `i18n/` folder today.
 
 ### 🖼️ Static Assets (Icons)
 
@@ -218,8 +223,16 @@ them to a new instance before each use; the provider reads them in `fetch_rates(
   (`backend/app/services/fx/runtime.py`), on an instance from `configured_fx_provider()`: a required
   field without a value raises `FXNotConfiguredError` before any I/O, a provider paused after «too
   many requests» raises `FXRateLimitedError` before any I/O ([Too Many Requests](#too-many-requests)),
-  and the secrets are masked in the log lines and errors of the call. Never return a secret, log it,
-  or put it in a URL you log or in an exception message: masking is only a safety net.
+  and the secrets are masked in the log lines and errors of the call, every occurrence found at once
+  and overlapping ones masked as one `***`. With no `user` fields, an FX call never hides its errors
+  whole as an asset call with a personal secret does
+  ([Secrets](plugin_settings.md#user-secret-errors)). Never return a secret, log it, or put it in a
+  URL you log or in an exception message: masking is only a safety net.
+- **Texts and screen.** Declare `label_key` and `description_key` on each field, and `label_key` on
+  the options that need a translation, under `pluginSettings.fx.<CODE>` ([Plugin Folder](#plugin-folder)).
+  The provider then appears in **Settings › Plugins**, under **Exchange rates**, where an
+  administrator sets its fields and every other user reads them; **Configure** exists only for price
+  providers.
 
 The full contract is in [Plugin Settings](plugin_settings.md).
 
