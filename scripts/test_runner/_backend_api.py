@@ -2,6 +2,11 @@
 Backend API endpoint tests and E2E tests.
 """
 
+import sqlite3
+from contextlib import closing
+
+from backend.test_scripts.test_db_config import get_test_db_path
+
 from . import _common
 from ._backend_db import db_populate
 from ._common import (
@@ -774,6 +779,36 @@ def _api_setup() -> bool:
     return False
 
 
+#: The users the API units sign in as, seeded by ``db populate`` (``test_user_defs`` in
+#: ``backend/test_scripts/test_db/populate_mock_data.py``).
+API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+
+
+def _api_fixture_users_missing() -> str | None:
+    """Why one ``api`` action must reseed first: the lane's test database lacks a fixture user. None when it has them.
+
+    The category's ``setup_needed`` (H-21, W-B54). It never writes the database file: opened ``mode=ro``, never
+    created. On a WAL database SQLite may create the empty ``-wal``/``-shm`` companions, as any reader does; while
+    the shared backend runs they exist already. A database that cannot be read counts as one to reseed.
+    """
+    db = get_test_db_path()
+    if not db.is_file():
+        return f"no test database at {db}"
+    placeholders = ", ".join("?" * len(API_FIXTURE_USERS))
+    try:
+        with closing(sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)) as conn:
+            rows = conn.execute(f"SELECT username FROM users WHERE username IN ({placeholders})", API_FIXTURE_USERS).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            return f"the test database {db} cannot be read ({exc})"
+        rows = []
+    except sqlite3.Error as exc:
+        return f"the test database {db} cannot be read ({exc})"
+    found = {username for (username,) in rows}
+    missing = [username for username in API_FIXTURE_USERS if username not in found]
+    return f"the test database {db} has no fixture user {', '.join(missing)}" if missing else None
+
+
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
     if _common.nothing_left_to_run("api"):
@@ -834,6 +869,8 @@ Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
         setup=_api_setup,
+        # One action alone reseeds only when the fixture users are missing (H-21).
+        setup_needed=_api_fixture_users_missing,
         # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
         # backend across two full runs with 4 workers — 579 tests, zero reds —
         # before this line was written. They are scoped because each creates its

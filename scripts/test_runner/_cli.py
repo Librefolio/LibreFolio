@@ -113,6 +113,11 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
             print_error(f"--list not supported for category '{category}'")
             return True
 
+    # One action run on its own: its category's setup, when the action needs it (H-21). `all` runs it itself.
+    if action != "all" and not _common.ensure_category_setup(category):
+        print_error(f"{category}: its setup failed — {action} not run")
+        return False
+
     # Frontend categories (have ui, headed, debug flags + test_names)
     if category in _FRONTEND_CATEGORIES:
         ui = kwargs.get("ui", False)
