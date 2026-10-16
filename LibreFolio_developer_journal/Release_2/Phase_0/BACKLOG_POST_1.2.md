@@ -3780,13 +3780,22 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
   Dettagli: piano 08, «E2.4».
-- **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
+- ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
   (`TypeError: "…" is not a function`), e con lui ogni pagina. Successo con `EmailInstanceConfig` (corretto: docstring
   su una riga). Le docstring di `backend/app/schemas` hanno 131 tratti tra doppi backtick: da sfuggire in
   `api sync` (un passo come `fix-openapi-discriminators.mjs`) o da vietare con un test sullo schema.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2b.4».
+  - 16/10, E: chiusa con una guardia; il generatore non si tocca (decisione del coordinatore, nessun caso oggi). Il
+    rischio è più stretto del previsto. Un testo esce solo in quattro forme, ognuna con i suoi caratteri vietati:
+    `.describe()` su più righe e su una riga, le descrizioni Handlebars, il JSDoc. La docstring di un modello esce
+    solo quando un campo è tipizzato direttamente con lui. Oggi nessun testo rompe il client, e 49 componenti sono
+    latenti: basta un loro uso diretto come campo per romperlo.
+    La guardia è `schemas openapi-client-text`
+    (`test_openapi_client_text.py`, OCT-001…032). Legge `app.openapi()`, fallisce nominando campo, forma e
+    carattere, e scatta se cambiano la versione o le opzioni del generatore. La regola 4 di «Contract Rules» è in
+    `developer/api/overview.md`. Dettagli: piano 08, «E-5.0»…«E-5.3».
 - **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
