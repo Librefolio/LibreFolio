@@ -224,9 +224,9 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                 # a different key — otherwise the cache would serve stale series (e.g. DAILY
                 # points after switching to WEEKLY on a scheduled_investment asset) until
                 # the TTL naturally expires.
-                params_hash = core._provider_params_hash(provider_params)
-                # The provider's settings are part of the key too: other settings can give other prices.
-                cache_key = (provider_code, identifier, str(prep.identifier_type), params_hash, core.settings_cache_part(prov))
+                # The provider's settings are part of the key too: other settings can give other prices. One key for
+                # every reader, writer and drop of these caches (core.asset_cache_key).
+                cache_key = core.asset_cache_key(provider_code, identifier, prep.identifier_type, provider_params, core.settings_cache_part(prov))
 
                 # 1. Fetch historical data (with core cache)
                 history_requested = start == "min" or start < today
