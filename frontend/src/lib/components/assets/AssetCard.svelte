@@ -221,7 +221,7 @@
         <div class="flex items-baseline gap-2">
             <span
                 class="text-xl font-mono font-bold transition-colors duration-300
-                         {livePriceDirection === 'up' ? 'text-emerald-600 dark:text-emerald-400' : livePriceDirection === 'down' ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}"
+                         {livePriceDirection === 'up' ? SIGN_TEXT.market.gain : livePriceDirection === 'down' ? SIGN_TEXT.market.loss : 'text-lf-primary'}"
             >
                 {livePrice != null ? formatFixed(Number(livePrice), 2) : '--'}
             </span>

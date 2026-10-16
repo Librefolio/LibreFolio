@@ -61,6 +61,10 @@
     // Profile editing state
     let saving = false;
     let error: string | null = null;
+    /** The code of a refusal the tab words itself (A6e), published on profile-error as data-error-code. */
+    let errorCode: string | null = null;
+    /** The current password, asked only while the email is changed (A6e). */
+    let emailPassword = '';
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -83,6 +87,9 @@
     // Track modifications (separate reactive statements)
     $: usernameModified = editedUsername !== originalUsername;
     $: emailModified = editedEmail !== originalEmail;
+    // The password belongs to the change it was typed for: back to the stored email, it is gone.
+    $: if (!emailModified) emailPassword = '';
+    $: emailNeedsPassword = emailModified && emailPassword === '';
     $: avatarModified = editedAvatarUrl !== originalAvatarUrl;
     $: hasAnyChanges = usernameModified || emailModified || avatarModified;
 
@@ -109,14 +116,38 @@
         showDiscardConfirm = false;
     }
 
+    /** Refusals of an email change the tab words itself (A6e); any other code reads as a failed update. */
+    const PASSWORD_REFUSALS: Record<string, string> = {
+        CURRENT_PASSWORD_INVALID: 'settings.currentPasswordIncorrect',
+        CURRENT_PASSWORD_REQUIRED: 'settings.currentPasswordRequired',
+    };
+
+    /** A refusal as the tab shows it: a known code in words (with the code), the server's sentence, or a generic text. */
+    function describeRefusal(e: unknown): {code: string | null; text: string} {
+        const detail: unknown = isAxiosError(e) ? e.response?.data?.detail : null;
+        if (typeof detail === 'string' && detail) return {code: null, text: detail};
+        if (detail && typeof detail === 'object') {
+            const code = (detail as {error_code?: unknown}).error_code;
+            if (typeof code === 'string' && Object.hasOwn(PASSWORD_REFUSALS, code)) return {code, text: $_(PASSWORD_REFUSALS[code])};
+            return {code: null, text: $_('settings.updateFailed')};
+        }
+        return {code: null, text: e instanceof Error ? e.message : $_('settings.updateFailed')};
+    }
+
+    function clearError() {
+        error = null;
+        errorCode = null;
+    }
+
     // Save individual field
     async function saveField(field: 'username' | 'email') {
         debug.log('ProfileTab', 'saveField', field);
         saving = true;
         error = null;
+        errorCode = null;
 
         try {
-            const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
+            const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail, current_password: emailPassword};
 
             await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
             await auth.checkAuth();
@@ -129,11 +160,14 @@
             });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
-            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
-            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
+            const refusal = describeRefusal(e);
+            error = refusal.text;
+            errorCode = refusal.code;
             if (field === 'username') editedUsername = originalUsername;
+            // A wrong or missing password keeps the address typed, to try again; the password goes.
+            else if (refusal.code) emailPassword = '';
             else editedEmail = originalEmail;
-            setTimeout(() => (error = null), 5000);
+            setTimeout(clearError, 5000);
         } finally {
             saving = false;
         }
@@ -151,30 +185,33 @@
         debug.log('ProfileTab', 'saveAll');
         saving = true;
         error = null;
+        errorCode = null;
 
         const fields: ('username' | 'email')[] = [];
         if (usernameModified) fields.push('username');
         if (emailModified) fields.push('email');
 
         const saved: {field: 'username' | 'email'; label: string}[] = [];
-        const failed: {field: 'username' | 'email'; label: string; reason: string}[] = [];
+        const failed: {field: 'username' | 'email'; label: string; reason: string; code: string | null}[] = [];
 
         for (const field of fields) {
             try {
-                const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
+                const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail, current_password: emailPassword};
                 await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
                 saved.push({field, label: field === 'username' ? $_('auth.username') : $_('auth.email')});
                 if (field === 'username') originalUsername = editedUsername;
                 else originalEmail = editedEmail;
             } catch (e: unknown) {
                 debug.error('ProfileTab', 'saveAll field failed', e);
-                const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+                const refusal = describeRefusal(e);
                 failed.push({
                     field,
                     label: field === 'username' ? $_('auth.username') : $_('auth.email'),
-                    reason: detail || (e instanceof Error ? e.message : $_('settings.updateFailed')),
+                    reason: refusal.text,
+                    code: refusal.code,
                 });
                 if (field === 'username') editedUsername = originalUsername;
+                else if (refusal.code) emailPassword = '';
                 else editedEmail = originalEmail;
             }
         }
@@ -185,7 +222,8 @@
 
         if (failed.length > 0) {
             error = failed.map((f) => `${f.label}: ${f.reason}`).join('\n');
-            setTimeout(() => (error = null), 5000);
+            errorCode = failed.find((f) => f.code)?.code ?? null;
+            setTimeout(clearError, 5000);
         }
 
         if (saved.length > 0 || failed.length > 0) {
@@ -281,7 +319,7 @@
         </div>
         <div class="flex items-center space-x-1">
             {#if !isLocked && hasAnyChanges}
-                <button on:click={saveAll} disabled={saving} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" title={$_('common.saveAll')} data-testid="profile-save-all">
+                <button on:click={saveAll} disabled={saving || emailNeedsPassword} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" title={$_('common.saveAll')} data-testid="profile-save-all">
                     <Save size={18} />
                 </button>
                 <button on:click={undoAll} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" title={$_('common.undoAll')} data-testid="profile-undo-all">
@@ -306,7 +344,7 @@
 
     <!-- Status Messages -->
     {#if error}
-        <div data-testid="profile-error">
+        <div data-error-code={errorCode ?? ''} data-testid="profile-error">
             <InfoBanner variant="error">
                 <span class="text-sm">{error}</span>
             </InfoBanner>
@@ -408,7 +446,7 @@
                     <!-- Action buttons - next to label on mobile, hidden on desktop -->
                     {#if !isLocked && emailModified}
                         <div class="flex items-center space-x-1 sm:hidden">
-                            <button type="button" on:click={() => saveField('email')} disabled={saving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
                             <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
@@ -418,6 +456,25 @@
                     {/if}
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.emailHint')}</p>
+                {#if !isLocked && emailModified}
+                    <!-- A6e: the current password, for the email change only; the change signs the other devices out. -->
+                    <div class="mt-3 space-y-1">
+                        <label class="sr-only" for="profile-current-password">{$_('settings.currentPassword')}</label>
+                        <input
+                            bind:value={emailPassword}
+                            aria-describedby="profile-email-password-hint"
+                            autocomplete="current-password"
+                            class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field text-lf-primary placeholder:text-lf-placeholder text-sm w-full sm:max-w-xs focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="profile-email-password"
+                            disabled={saving}
+                            id="profile-current-password"
+                            name="current-password"
+                            placeholder={$_('settings.currentPassword')}
+                            type="password"
+                        />
+                        <p class="text-xs text-lf-muted" data-testid="profile-email-password-hint" id="profile-email-password-hint">{$_('settings.emailPasswordHint')}</p>
+                    </div>
+                {/if}
             </div>
 
             <!-- Right: Actions (desktop only) + Input -->
@@ -426,7 +483,7 @@
                 {#if !isLocked}
                     <div class="hidden sm:flex items-center space-x-1">
                         {#if emailModified}
-                            <button type="button" on:click={() => saveField('email')} disabled={saving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
                                 <Save size={14} />
                             </button>
                             <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>

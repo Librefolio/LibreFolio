@@ -6061,11 +6061,11 @@ test.describe('Gallery Screenshots', () => {
 
                     await expect(page.getByTestId('distribution-editor-sector')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5_000});
-                    // Populated distributions sum to 100% → totals render in the green (valid) state
+                    // Populated distributions sum to 100% → both totals are in the valid state (data-state, not a colour)
                     const sectorTotal = page.getByTestId('distribution-total-sector');
                     const geoTotal = page.getByTestId('distribution-total-geographic');
-                    await expect(sectorTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
-                    await expect(geoTotal).toHaveClass(/text-green-600/, {timeout: 5_000});
+                    await expect(sectorTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
+                    await expect(geoTotal).toHaveAttribute('data-state', 'valid', {timeout: 5_000});
                     await freezeAnimations(page);
 
                     await sectorTotal.scrollIntoViewIfNeeded();
