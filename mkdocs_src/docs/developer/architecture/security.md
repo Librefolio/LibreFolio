@@ -126,6 +126,15 @@ reset or setup link that is not valid. So do issuing a reset or setup link, whic
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
 stored email sent again, as written or in another A–Z case).
 
+Since lot A-27, the password change, an email change and `./dev.py user reset` also revoke the account's live
+[reset links](access_control.md#reset-links), whoever issued them, in the commit of the change, with
+`token_service.revoke_tokens(…, purpose=AccountTokenPurpose.PASSWORD_RESET)` as issuing and spending a link already
+did: nothing else (invitations, email-verification and setup links stay), and nothing for a refused change, the same
+address in another A–Z case or a username alone; what it revokes is logged as *Account tokens revoked* (`count`,
+`user_id`, `purpose`), with no address. Otherwise whoever reads the mailbox — the old one, after an email change —
+could ask for a link through «forgot password» before the change and spend it after, within its 30 minutes (security
+review of workstream E, E6.9).
+
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
   `decode_jwt_token()` returns `SessionClaims(user_id, session_version)`, or `None` for a token that is expired or
@@ -149,9 +158,12 @@ stored email sent again, as written or in another A–Z case).
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
-token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
-(`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
-second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
+token, the check, the command-line callers and the refusals, in-process; its contract 7, the live reset links revoked
+by `reset_password()` and by a real address change in `update_profile()`, every other link left as it was),
+`./dev.py test api session-revocation` (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password
+change over HTTP, with two devices and a second account; REVOKE-003 to REVOKE-007, an administrator's reset link
+revoked by a password or an address change, kept by the own address in other A–Z capitals and by a refused change),
+and, for the administrator API and the reset links, `./dev.py test api users-admin` and
 `./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change).
 
 ### ✉️ Changing the Email {: #email-change }
@@ -178,11 +190,12 @@ the current password and ends the account's other sessions. No other route chang
 - **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
   anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. bcrypt runs in
   a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
-- **The sessions.** `user_service.update_profile()` calls `end_sessions()` and sets `users.email_verified_at` back to
-  `NULL` (the new address is not verified, and no flow of release 1.3 verifies a changed one), in the commit of the
-  new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
-  the device that made the change carries on, and every other session gets `401` at its next request. A
-  username-only change ends no session, nor does a refused one.
+- **The sessions.** `user_service.update_profile()` calls `end_sessions()`, revokes the account's live reset links
+  ([Session Revocation](#session-revocation)) and sets `users.email_verified_at` back to `NULL` (the new address is
+  not verified, and no flow of release 1.3 verifies a changed one), in the commit of the new address. The route then
+  sets a new session cookie through `_issue_session_cookie()`, as `change-password` does: the device that made the
+  change carries on, and every other session gets `401` at its next request. A username-only change ends no session,
+  nor does a refused one.
 - **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
   profile updated* carry `user_id`, `username` and `email_changed`, true only when the address changed (lot A7c,
   workstream E's rule: no address in any log).
@@ -895,7 +908,8 @@ email verification in [Email Verification](../backend/email.md#verification); th
 - **Only the newest reset or setup link of an account works.** Issuing a reset link revokes the account's live
   reset links, and spending one revokes any other. Likewise, a setup link re-armed by a new
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
-  any other.
+  any other. A password change, an email change and `./dev.py user reset` also revoke the account's live reset
+  links (lot A-27, [Session Revocation](#session-revocation)).
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
   issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
   email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.

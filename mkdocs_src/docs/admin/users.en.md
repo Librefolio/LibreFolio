@@ -158,6 +158,8 @@ When someone forgot their password, send them a link to choose a new one themsel
 3. Check the [server address](#server-address), click **Copy**, send the link, then click **Done**.
 
 - ⏱️ The link works once, for 30 minutes, and only the newest link of an account works.
+- 🔒 It also stops working as soon as the person changes their password or email address, or you
+  run `user reset` or `user set-email` on the [command line](cli_tools.md).
 - 🚪 Creating the link signs nobody out. Once the person sets the new password, their account is
   signed out of every device.
 - 🔗 The link is shown only once: if it gets lost, create a new one.
