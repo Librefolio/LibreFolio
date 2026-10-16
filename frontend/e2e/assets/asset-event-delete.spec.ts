@@ -6,8 +6,10 @@
  * 2. Delete event with linked transaction → the save is refused whole (409 EVENT_IN_USE): nothing
  *    deleted, an error toast. Before E1b: the delete went out apart, came back `in_use` per row with
  *    a warning toast, and any unlinked row beside it was deleted anyway.
- * 3. Delete asset with events → cascade/block behavior
- * 4. ●evt badge in transactions table reflects linked state
+ * 3. Delete an asset with an event → the confirmation names the asset; cancelled, the asset and its
+ *    event are still stored. The page gives no event-specific warning (what it does show: the scenario).
+ * 4. ●evt dot in the transactions table follows the link: drawn on a DIVIDEND that realises an event,
+ *    gone once that DIVIDEND is unlinked.
  *
  * Since E1b a save is ONE `POST /assets/events`: the rows marked deleted travel as `delete_ids`
  * beside the edited rows, and no `DELETE` is sent (decision of 15/10 16:20). Before E1b the editor
@@ -19,8 +21,9 @@
  * on the shared Apple at a fixed date, so the desktop and mobile projects overwrote each other's row,
  * and a regression of the refusal would have deleted Apple's mock events. After each test the owned
  * broker goes first (with `force`, which takes its transaction), then the asset with its prices and
- * events — whatever the outcome. Scenarios 3 and 4 only read the mock data (mock data with asset
- * events and linked transactions populated).
+ * events — whatever the outcome. Scenarios 3 and 4 (W-B42) own their data the same way: scenario 3
+ * an asset with one event, scenario 4 an asset, its event and the DIVIDEND that realises it. They used
+ * to read the mock data and take "the first" card or dot, and scenario 3 could pass asserting nothing.
  *
  * UI flow:
  *   Asset detail (/assets/{id}, opened by id) → click "Edit Prices & Events"
@@ -33,13 +36,14 @@
  *   → click Save (data-testid="asset-editor-save-btn")
  *   → the outcome is reported in a toast (data-testid="toast-success" | "toast-error")
  */
-import {expect, test, type Page, type Request, type Response} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
-import {createOwnedAsset, deleteOwned, eventRow, EVENTS_PATH, linkDividend, markDeleted, openEventsEditor, seedEvents, snapshot, storedEvents, type Owned} from './asset-events-owned';
+import {API_BASE} from './assets-helpers';
+import {createOwnedAsset, deleteOwned, eventRow, EVENTS_PATH, jsonFrom, linkDividend, markDeleted, openEventsEditor, seedEvents, snapshot, storedEvents, type Owned, type OwnedAsset} from './asset-events-owned';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,15 +84,82 @@ function standaloneNumber(n: number): RegExp {
 }
 
 // ---------------------------------------------------------------------------
+// Scenario 3: the assets list
+// ---------------------------------------------------------------------------
+
+/** The assets list, answered offline, once it has settled. */
+async function openAssetsList(page: Page): Promise<Locator> {
+    // The list polls POST /assets/prices/current for every listed asset, which may ask live providers and
+    // write today's price into the shared database. Nothing here is about live prices: answered locally.
+    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await navigateTo(page, '/assets');
+    const assetsPage = page.getByTestId('assets-page');
+    // The cards render first and are re-rendered when the bulk price request lands. Clicking during that
+    // window aims at a node Svelte is about to replace — which took this scenario red at load average 22.
+    await waitForSettled(assetsPage, 30_000);
+    return assetsPage;
+}
+
+/**
+ * Narrow the list view to one asset by its unique name, and wait until it holds that row and no other.
+ * The search is debounced: a row acted on before it lands can be redrawn under the pointer.
+ */
+async function narrowListTo(page: Page, assetsPage: Locator, asset: OwnedAsset): Promise<void> {
+    const search = page.getByTestId('assets-search-input');
+    await search.fill(asset.name);
+    await expect(search).toHaveValue(asset.name);
+    await expect
+        .poll(() => assetsPage.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id'))), {
+            message: `the search narrows the list view to asset ${asset.id} alone`,
+            timeout: 10_000,
+        })
+        .toEqual([String(asset.id)]);
+}
+
+/** The asset as the server has it — id and name — or nothing once it is deleted. */
+async function storedAssets(page: Page, assetId: number): Promise<Array<{asset_id: number; display_name: string}>> {
+    const found = await jsonFrom<Array<{asset_id: number; display_name: string}>>(await page.request.get(`${API_BASE}/assets`, {params: {asset_ids: assetId}}), `read asset ${assetId}`);
+    return found.map(({asset_id, display_name}) => ({asset_id, display_name}));
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 4: the transactions table
+// ---------------------------------------------------------------------------
+
+/** What scenario 4 reads of a stored transaction. */
+type StoredTransaction = {id: number; broker_id: number; type: string; asset_event_id?: number | null};
+
+/** One transaction as the server has it. */
+async function storedTransaction(page: Page, txId: number): Promise<StoredTransaction> {
+    const rows = await jsonFrom<StoredTransaction[]>(await page.request.get(`${API_BASE}/transactions`, {params: {ids: txId}}), `read transaction ${txId}`);
+    const tx = rows.find((row) => row.id === txId);
+    if (!tx) throw new Error(`Transaction ${txId} is not stored: ${JSON.stringify(rows)}`);
+    return tx;
+}
+
+/**
+ * The transactions page narrowed by its URL to one broker — a full load, so the table reads the
+ * transactions afresh — and, once settled, the row of `txId`, found by its id and drawn.
+ */
+async function openTransactionRow(page: Page, brokerId: number, txId: number): Promise<Locator> {
+    await navigateTo(page, `/transactions?broker_id=${brokerId}`);
+    await waitForSettled(page.getByTestId('transactions-page'), 30_000);
+    const row = page.getByTestId('tx-table').locator(`tbody tr[data-row-id="tx-${txId}"]`);
+    await expect(row, `the row of transaction ${txId} is listed`).toBeVisible({timeout: 10_000});
+    await expect(row.getByTestId(`tx-id-${txId}`), `the row of transaction ${txId} is drawn`).toBeVisible();
+    return row;
+}
+
+// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
 test.describe('Asset Event Delete', () => {
-    // No longer serial, and no longer on Apple. Scenarios 1 and 2 each own the asset, the events
-    // and (scenario 2) the broker they act on, so neither takes anything from the other, from the
+    // No longer serial, and no longer on Apple. Each scenario owns the asset, the events and
+    // (scenarios 2 and 4) the broker it acts on, so none takes anything from another, from the
     // other Playwright project running the same spec, or from the shared mock data.
 
-    /** What the running test created; deleted after it, whatever its outcome (nothing for scenarios 3 and 4). */
+    /** What the running test created; deleted after it, whatever its outcome. */
     let owned: Owned = {assetIds: [], brokerIds: []};
 
     test.beforeEach(async ({page}) => {
@@ -243,53 +314,91 @@ test.describe('Asset Event Delete', () => {
     });
 
     // ===================================================================
-    // Scenario 3: Delete asset with events → cascade or block
+    // Scenario 3: Delete an asset with an event → the confirmation names it; cancelled, nothing goes
     // ===================================================================
     test('delete asset with events shows appropriate warning', async ({page}) => {
-        await navigateTo(page, '/assets');
-        await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-        // The cards render first and are re-rendered when the bulk price request lands.
-        // Clicking during that window aims at a node Svelte is about to replace, and the
-        // navigation is simply lost — which is what took this test red at load average 22.
-        await waitForSettled(page.getByTestId('assets-page'));
+        // Setup and cleanup are API round trips on top of the UI flow, as in scenarios 1 and 2.
+        test.setTimeout(60_000);
+        // An asset of this test's own with one event (W-B42). The scenario used to open "the first card" of
+        // the shared list through visibility probes and a text filter, and could pass asserting nothing.
+        //
+        // What the page does (read on 16/10): the card's trash and the row's Delete action call the same
+        // handler, which opens the confirmation at once — nothing is asked of the server first. It names the
+        // asset and carries a fixed warning about provider assignments and price history: nothing about
+        // events, no count. Confirmed, an asset with no transaction goes with its events (asset_events has
+        // ON DELETE CASCADE); one with any transaction — realising an event or not — is refused afterwards
+        // (HAS_TRANSACTIONS, with the count). So no transaction here: the confirmation does not depend on one.
+        const asset = await createOwnedAsset(page, owned);
+        const [eventId] = await seedEvents(page, asset.id, [{date: daysAgoIso(20), type: 'DIVIDEND', amount: '0.42', notes: `e2e-asset-delete ${uniqueSuffix()}`}]);
+        const before = await snapshot(page, asset.id);
+        expect(Object.keys(before).map(Number), 'the asset holds the one event this test created').toEqual([eventId]);
 
-        const assetCards = page.locator('[data-testid^="asset-card-"]');
-        await expect(assetCards.first()).toBeVisible({timeout: 5_000});
+        const assetsPage = await openAssetsList(page);
+        await expect(page.getByTestId(`asset-card-${asset.id}`), 'the owned asset has its card, found by id').toBeVisible({timeout: 10_000});
 
-        // Look for a delete button on any card (may be in a more-actions menu)
-        // Assets with transactions cannot be deleted — this tests the UI handles it
-        const firstCard = assetCards.first();
-        const moreBtn = firstCard.locator('button[title*="more" i], button[aria-label*="more" i], button[data-testid*="more"]').first();
-        if (await moreBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-            await moreBtn.click();
-            const deleteOption = page
-                .locator('[role="menuitem"]')
-                .filter({hasText: /delete|elimina/i})
-                .first();
-            if (await deleteOption.isVisible({timeout: 1_000}).catch(() => false)) {
-                // Just verify it exists — don't actually delete
-                expect(await deleteOption.isVisible()).toBe(true);
-            }
-        }
-        // If no delete button is visible, the asset has transactions (expected for mock data)
-        // This scenario verifies the UI doesn't crash — delete-cascade is API-tested
+        // The card's trash button has no test id (its only handle is a translated title), so the delete is
+        // started from the same asset's row in the list view: the same handler, the same confirmation.
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(assetsPage);
+        await narrowListTo(page, assetsPage, asset);
+        await page.getByTestId(`row-actions-${asset.id}`).click();
+        const deleteAction = page.getByTestId('context-menu-action-delete');
+        await deleteAction.click();
+        await expect(deleteAction).toBeHidden();
+
+        // The confirmation: its one parameter is the asset's name. Its words are never asserted.
+        const message = page.getByTestId('confirm-modal-message');
+        await expect(message, 'starting the delete asks for a confirmation').toBeVisible({timeout: 5_000});
+        await expect(message, 'the confirmation names the asset it would delete').toContainText(asset.name);
+        await expect(message, 'no ICU placeholder is left unresolved').not.toContainText('{');
+        await expect(page.getByTestId('confirm-modal-confirm'), 'the delete is offered, not run').toBeVisible();
+
+        // Cancelled: the confirmation closes, the asset stays listed, and nothing is deleted.
+        await page.getByTestId('confirm-modal-cancel').click();
+        await expect(message, 'cancel closes the confirmation').toHaveCount(0);
+        await expect(page.getByTestId(`row-actions-${asset.id}`), 'the asset is still listed').toBeVisible();
+        expect(await storedAssets(page, asset.id), 'the asset is still stored').toEqual([{asset_id: asset.id, display_name: asset.name}]);
+        expect(await snapshot(page, asset.id), 'its event is still stored, unchanged').toEqual(before);
     });
 
     // ===================================================================
-    // Scenario 4: ●evt badge in transactions table reflects linked state
+    // Scenario 4: ●evt dot in the transactions table follows the link
     // ===================================================================
     test('event badge reflects current link state', async ({page}) => {
-        await navigateTo(page, '/transactions');
+        // Setup and cleanup are API round trips on top of the UI flow, as in scenarios 1 and 2.
+        test.setTimeout(60_000);
+        // An asset, an event and the DIVIDEND that realises it on a broker, all of this test's own (W-B42).
+        // The scenario used to take "the first dot" of the shared table: it read whichever mock transaction
+        // populate_mock_data had linked, and never saw a dot go.
+        const asset = await createOwnedAsset(page, owned);
+        const day = daysAgoIso(21);
+        const [eventId] = await seedEvents(page, asset.id, [{date: day, type: 'DIVIDEND', amount: '0.50', notes: `e2e-event-dot ${uniqueSuffix()}`}]);
+        const txId = await linkDividend(page, owned, asset.id, eventId, day);
 
-        // The dots appear only once the transactions table has its rows. Waiting for the
-        // first one *is* the assertion: the previous fixed 2s sleep followed by a one-shot
-        // count() lost that race under concurrent load and read an empty list, reporting a
-        // missing fixture that was never missing.
-        const eventDots = page.locator('[data-testid^="tx-event-dot-"]');
-        await expect(eventDots.first(), 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeVisible({timeout: 15_000});
+        // Verified, not inferred: the DIVIDEND realises this test's event, on the broker linkDividend created.
+        const linked = await storedTransaction(page, txId);
+        expect(linked.type).toBe('DIVIDEND');
+        expect(linked.asset_event_id, 'the DIVIDEND realises the event this test created').toBe(eventId);
+        expect(owned.brokerIds, 'the DIVIDEND sits on the broker this test created').toContain(linked.broker_id);
 
-        // Verify the dot has proper test-id format
-        const testId = await eventDots.first().getAttribute('data-testid');
-        expect(testId).toMatch(/^tx-event-dot-\d+$/);
+        // Linked: the row carries the event dot, keyed by the TRANSACTION id (TransactionsTable, links column).
+        const linkedRow = await openTransactionRow(page, linked.broker_id, txId);
+        await expect(linkedRow.getByTestId(`tx-event-dot-${txId}`), 'a transaction realising an event shows the dot').toBeVisible();
+
+        // Unlinked through the API. In an update `asset_event_id: 0` unlinks, while null leaves the link as it
+        // is (TXUpdateItem; the editor sends 0 too). A DIVIDEND realising no event is valid: nothing else moves.
+        const unlink = await jsonFrom<{committed: boolean}>(await page.request.post(`${API_BASE}/transactions/commit`, {data: {updates: [{id: txId, asset_event_id: 0}]}}), 'unlink the DIVIDEND from its event');
+        expect(unlink.committed, JSON.stringify(unlink)).toBe(true);
+        expect((await storedTransaction(page, txId)).asset_event_id ?? null, 'the DIVIDEND realises no event any more').toBeNull();
+
+        // Loaded again: the row is still there with its links cell, and the dot is gone — removed, not hidden.
+        const unlinkedRow = await openTransactionRow(page, linked.broker_id, txId);
+        await expect(unlinkedRow.locator('td[data-column-id="links"]'), 'the links column is drawn for this row').toHaveCount(1);
+        await expect(page.getByTestId(`tx-event-dot-${txId}`), 'an unlinked transaction carries no event dot').toHaveCount(0);
+        // Unlinking takes the link, not the event.
+        expect(
+            (await storedEvents(page, asset.id)).map((e) => e.id),
+            'the event itself is still stored',
+        ).toEqual([eventId]);
     });
 });
