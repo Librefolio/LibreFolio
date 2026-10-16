@@ -4145,3 +4145,35 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Per A7b** (in più rispetto a C6–C8, dal `docs-writer`): nella scheda Utenti l'admin in attesa compare come
 >   «Disattivato», che «non occupa posti»; va mostrato «in attesa del setup», senza «Riattiva» (attiverebbe un account
 >   senza una password nota) e con «Nuovo link di setup» al posto del link di reset.
+
+#### Punti di E e di X dopo A7a (2026-10-16, 07:44–07:55)
+> - Il coordinatore ha salvato A7a (`a39b67944` feat, `f9d74b808` doc, `c604ffed0` journal). `all-backend` di A7a nello
+>   slot 1 verso le 08:50; il CHANGELOG entra con A7b; l'admin in attesa nella scheda Utenti va in A7b.
+> - **E · 1, indirizzi nei log**: d'accordo. Uno scan AST di ogni chiamata al logger in `backend/app` e `scripts/` trova
+>   solo due righe, mie: `api/v1/auth.py:382` («Profile updated») e `services/accounts/user_service.py:488` («User profile
+>   updated»). Proposta: togliere l'indirizzo e scrivere `email_changed`, con un rosso prima. Da fare adesso, prima dello
+>   slot, se il coordinatore approva.
+> - **E · 2, testo di `auth.emailRecoveryNotAvailable`** (mia chiave, la scrive E in E4b nelle 4 lingue): sì al testo di
+>   E; suggerimento facoltativo «…ask your administrator for a password-reset link» (A6b: la scheda Utenti lo crea anche
+>   senza email).
+> - **E · 3 e X · `_url()`**: messaggi non arrivati, chiesti al coordinatore. Risposta di massima a X: `_url()` condivisa,
+>   sì; casa proposta `config/__init__.py` come `env_url(name)`, con l'OK di H.
+
+#### A7c — Nessun indirizzo email nei log del profilo ✅ (2026-10-16, 07:46–08:25)
+> - **Approvato** dal coordinatore (07:46): togliere l'indirizzo, `email_changed=True/False`, rosso prima, commit
+>   separato prima dello slot di `all-backend` delle 08:50. Regola nuova dei controlli leggeri (07:48): carico a 1 minuto
+>   sotto 50, altrimenti 60 s d'attesa; un timeout di Vitest sotto carico si rilancia da solo prima di dirlo rosso.
+> - **Rossi** (`test-author`, solo scrittura): `test_services/test_user_profile.py` UPROF-001 (×4: solo email, username
+>   ed email, solo username, la stessa email) e UPROF-002 (guardia: il rifiuto «Email already registered»);
+>   `test_api/test_profile_api.py` PROF-017, PROF-018 e PROF-019 (guardia: la password sbagliata), in-process su un DB
+>   privato con `capture_logs` e `caplog` e un canarino. Osservati (08:11–08:14): `services user-profile` 43 ✅ / 4 ❌,
+>   `api profile` 22 ✅ / 2 ❌, tutti sulla verifica «nessun indirizzo» (l'evento portava `email=`); le guardie verdi.
+> - **Cura**: `user_service.update_profile()` calcola `email_changed` e lo scrive al posto di `email`; la rotta scrive
+>   `email_changed=email_changes`. `ruff` e `black` puliti sui 4 file.
+> - **Verdi** (`nice`, carico sotto 50): `services user-profile` ✅ 47; `db populate --force`; `api profile` ✅ 24.
+>   Porta 6182 libera.
+> - **Doc**: `security.md`, «Changing the Email»: un punto «The log» e la riga dei test (PROF-010…019, UPROF-001/002).
+>   Nessun link o ancora nuovi: niente `mkdocs build` (il prossimo lo copre).
+> - **Fuori perimetro, trovato dal `test-author`** → backlog **A-22**: i tre «Login failed…» di `auth.py` (~160–167)
+>   scrivono `username=request.username`, che può essere un indirizzo (il login accetta l'email). Lo scan AST non lo
+>   vedeva (la chiave è `username=`). Proposta al coordinatore: un lotto piccolo subito dopo, o dentro A8.
