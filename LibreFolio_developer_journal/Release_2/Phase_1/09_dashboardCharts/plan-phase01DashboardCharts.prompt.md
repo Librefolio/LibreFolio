@@ -2384,3 +2384,200 @@ scrivono qui quando partono.
 > **Checkpoint Y10** (mandato alle 05:03): 12 percorsi, cioè i 3 componenti, le 4 sorgenti i18n, i 2 Vitest, l'E2E e il
 > runner, più il piano per il journal. L'E2E `allocation-negative-cash` non è mai stata lanciata: è nella corsa unica
 > di Y3, Y9 e Y10, all'ora che darà il coordinatore.
+> - **Salvato**: `1bb8dc990` (`fix(dashboard)`) e `036d957c0` (journal). Poi il merge di `dev_release2` (`2f637d7cb`)
+>   senza conflitti: HEAD `4cffd9586`, worktree pulito, verificato. La base contiene `60917185c` (C-34 di W).
+
+### C-34 — la guardia senza l'eccezione temporanea ⏳ (2026-10-16, 05:03; non committata)
+
+> **Note implementazione**: in `TransactionBulkModal.svelte` la copia dell'escaper non c'è più (0 occorrenze dopo
+> `60917185c`). Ho tolto la voce dall'elenco ammesso di `escapeHtml.single.test.ts`, che ora ha una sola eccezione,
+> `inlineMath.ts`. La sezione «Why it is red today» è diventata «Why it was red before C-34» e racconta le due copie,
+> tolte da Y9 e da W. Prettier ha anche rimandato a capo una catena, che sfuggiva perché il file era non tracciato al
+> controllo di Y9-1. La guardia dà 6 verdi su 6 (05:04, prima della fermata delle 05:25).
+> - La documentazione la aggiorna `docs-writer`, scrivendo e basta: `charts.md`, che ha «Tooltip HTML» e la tabella
+>   delle guardie, e `security.md`, «Output Escaping». La build stretta e il controllo dei link si fanno dopo le 06:45.
+> - **Dopo le 06:45**, sulla revisione fusa: `api sync`, svelte-check, `allocation-unit`, `core-unit`,
+>   `component-unit`, `mkdocs build` e `check-links`; poi la corsa unica delle E2E di Y3, Y9 e Y10.
+> - **Documentazione aggiornata** (`docs-writer`, scrivendo e basta, 05:05–05:09): in `charts.md`, «Tooltip HTML» e la
+>   riga della guardia nella tabella, e in `security.md`, il terzo punto di «Output Escaping». Ora c'è una sola
+>   eccezione, `inlineMath.ts`, e resta la regola per cui un'eccezione che non ha più una copia fa fallire la guardia.
+> - **05:07, aggiornamento della base** con il secondo lotto di T (`72e66d1a6`). Delle 27 modifiche di `dev_release2`
+>   (`git diff HEAD...72e66d1a6`), l'unico file in comune è il baseline dei colori, il conflitto previsto, da risolvere
+>   solo con `theme-roles.mjs --resolve`. Ho chiesto al coordinatore di aprire il merge prima delle 05:25.
+> - **05:09, merge risolto** (MERGE_HEAD `72e66d1a6` su `4cffd9586`, aperto dal coordinatore): `theme-roles.mjs --resolve`,
+>   poi `--check` pulito. Il baseline fuso ha le 11 righe di Y3 in `features/dashboard/` e non ha le righe che T ha
+>   tolto. In stage solo il baseline; il commit di merge lo fa il coordinatore.
+> - **La regola dei colori sulle classi miste** (`-lf-` mai su un elemento che ha già classi di tavolozza). La scansione
+>   delle righe aggiunte nei `.svelte` dai lotti di stanotte (Y8, Y7, Y4b, Y3, Y9, Y10) e del worktree trova 0 elementi
+>   misti, e 0 anche nei file dove ho toccato classi, guardati come sono oggi. Lo script è
+>   `/tmp/libreFolio_mixed_scan.py`; non vede le direttive `class:` né gli attributi su più righe.
+> - **Merge committato** dal coordinatore: `47c03681a` (genitori `4cffd9586` e `72e66d1a6`), verificato. La riga
+>   `~split` di `GrowthChart`, l'unica con `lib/components/dashboard/`, resta perché è un registro storico.
+> - **Guardia C-34 sulla revisione fusa**: 6 verdi su 6 (05:10). Anche con il secondo lotto di T dentro, nessun escaper
+>   nuovo fuori dall'elenco.
+> - **Dopo le 06:45**: svelte-check, `allocation-unit`, `core-unit`, `component-unit`, `api sync`, e per i documenti
+>   `mkdocs build` stretto e `check-links`; poi la corsa unica delle E2E di Y3, Y9 e Y10 all'ora del coordinatore
+>   (`DEADLINE=HHMM bash /tmp/libreFolio_y3y9y10_e2e.sh`). La guardia e i due documenti vanno nel prossimo lotto.
+
+### Y5 — FE7, broker e lotti in `lib/features/brokers/` ✅ applicato (2026-10-16, 05:12–05:17; via del coordinatore)
+
+> **Note implementazione**: via alle 05:12 per Y5 e poi Y6, solo scrittura. Commit separati, in sequenza: Y5 committato
+> subito, poi Y6 sopra, perché i due lotti hanno file in comune (il baseline, `ImportWizardModal.svelte`,
+> `files/+page.svelte`, alcune pagine della devWiki). Scelta del coordinatore, prima opzione.
+> 1. **Base**: `47c03681a`. Totali prima: 9701/64, 244 file.
+> 2. **Spostamento** (`files/y5_move.py --apply`): 42 file. `components/brokers/**` va in `features/brokers/`, con
+>    `lots/`; `lotsAnalysisStore` (con il test) in `features/brokers/lots/`; `BrokerIcon` (con il test) in
+>    `components/ui/display/`. 52 specificatori riscritti in 28 file.
+> 3. **Percorsi** (`files/y5_paths.py --apply`): 65 sostituzioni in 33 file, compreso `theme-roles.mjs:70`, l'eccezione
+>    del colore generato dei lotti, solo il percorso.
+> 4. **Colori**: `--check` pulito, poi `--update`. 16 righe rinominate a coppie, con conteggi identici, nessun'altra
+>    riga. I totali sono identici, 9701/64, e `--check` è di nuovo pulito.
+> 5. **devWiki**: 4 righe di «Source files» in `sources/` portate al percorso nuovo, come in Y4b e Y3.
+>    `check_source_paths` torna ai 5 di prima.
+> 6. **Prettier**: i 67 file del frontend erano già puliti. `git diff --check` pulito.
+> - **Restano di proposito**: `designer-lab.md`, di L; gli alberi sintetici di `test_i18n_usage_gate.py`; l'albero di
+>   `developer/frontend/index.md`, che si corregge in Y6 per tutti e due gli spostamenti.
+> - **Checkpoint**: 143 percorsi (`files/y5_stage_code.txt`), mandato alle 05:17. Le prove leggere vengono dopo le
+>   06:45.
+> - **Committato**: `6f7ac70ce` (42 rinomine e 59 modifiche), HEAD `6f7ac70ce`.
+
+### Y6 — FE3, i file in `lib/features/files/` ✅ applicato (2026-10-16, 05:17–05:20; sopra Y5 committato)
+
+> **Note implementazione**:
+> 1. **Spostamento** (`files/y6_move.py --apply`): 7 file, da `components/files/` a `features/files/`, e 8 specificatori
+>    riscritti. `utils/files` e `stores/files` restano dove sono.
+> 2. **Percorsi** (`files/y6_paths.py --apply`): 14 sostituzioni in 9 file, compresa la chiave di
+>    `htmlSink.gate.test.ts:70`, il gate di K, che si confronta con il percorso (via libera dei colori), e
+>    `_frontend_utility.py`.
+> 3. **Colori**: `--check` pulito, poi `--update`. Cambia una riga sola, `lib/features/files/FileGrid.svelte 1`, come
+>    avevano previsto i colori. I totali sono identici, 9701/64, e `--check` è di nuovo pulito.
+> 4. **devWiki**: una riga di «Source files» (`phase-final-bugs-2026-06-25.md:41`, `FilesTable.svelte`) portata al
+>    percorso nuovo. `check_source_paths` torna ai 5 di prima.
+> 5. **Prettier**: 12 file già puliti; `git diff --check` pulito.
+> 6. **Documentazione**: l'albero di `developer/frontend/index.md` lo corregge `docs-writer`, scrivendo e basta, per
+>    tutti e due gli spostamenti (`components/brokers/`, `components/files/`, `lotsAnalysisStore`).
+> - **L'albero è corretto** (`docs-writer`, 05:18–05:21): via `components/brokers/` e `components/files/`, via
+>   `lotsAnalysisStore` dal commento di `stores/portfolio/`; `brokers/` e `files/` aggiunti fra le `features/`, in
+>   ordine alfabetico. Nessun'altra riga era vecchia. `designer-lab.md` (`:550` e `:1220`) cita ancora i percorsi
+>   vecchi dei broker: è di L, e lo segnalo al coordinatore.
+> - **Checkpoint Y6**: 30 percorsi (`files/y6_stage_code.txt`), mandato alle 05:22. Fuori: il lotto C-34 e il piano.
+> - **Committato**: `aec49a9cb` (7 rinomine e 16 modifiche), HEAD `aec49a9cb`. La nota su `designer-lab.md` l'ha girata il
+>   coordinatore ai colori. Fuori restano solo il lotto C-34 e il piano.
+
+### Dopo le 06:45 — prove leggere su tutto, poi la corsa E2E unica ⏳ (preparato alle 05:25, niente lanciato)
+
+> **Note implementazione**:
+> - **Prove leggere**, con `/tmp/libreFolio_after0645_light.sh`, una alla volta con `nice` e il carico sotto 70:
+>   - `api sync`, `front check` e `theme-roles --check`;
+>   - la guardia C-34;
+>   - `chart-safety-unit`, `allocation-unit` e `store-unit` (`lotsAnalysisStore`);
+>   - `front-broker broker-unit` e `front-utility onboarding-component-unit`, che hanno test spostati da Y5;
+>   - `core-unit`, `component-unit` e `asset-unit`;
+>   - `check-orphans`, `mkdocs build` stretto e `check-links`, per i documenti di C-34 e per l'albero di Y6;
+>   - `git diff --check`.
+> - Poi il coordinatore committa il lotto C-34 e dà l'ora della corsa E2E.
+> - **Corsa E2E unica** per Y3, Y9, Y10, Y5 e Y6: `DEADLINE=HHMM bash /tmp/libreFolio_y3y9y10_e2e.sh`, 18 spec in ordine di
+>   priorità (circa 88 minuti se partono tutte; lo script salta quelle che non stanno prima della scadenza):
+>   - `dashboard`, `allocation-negative-cash`, `asset-detail`, `asset-name-xss`, `fx-detail`, `front-broker detail` e
+>     `list`, `front-utility files`, `dashboard-cache`, `fx-flag-font`, `front-user broker-sharing`, `broker-icons`,
+>     `files-pdf-offline`, `tx-import-flow`;
+>   - poi le extra: `privacy-masking`, `yield-on-cost-real`, `broker-filter-label`, `tx-broker-icon-hydration`.
+>   - Se Y5 o Y6 non passano le prove leggere, li correggo con un commit sopra, oppure li toglie il coordinatore prima
+>     dell'ingresso.
+
+### Y12a — U8, analisi in sola lettura ✅ (2026-10-16, 05:25–05:30; agente `explore`, durante la fermata; HEAD `aec49a9cb`)
+
+> **Note implementazione**. Le fonti: l'inventario del 43 (righe R17, V11, W7, W8, P4 e P5, e la riga U8 a `:538`), il
+> backlog (T-U8 a `:672-675`, J-1 a `:3457-3465`) e il piano di J (`05_numbersAnalysis`; CP-13 «U8 lato backend per Y»
+> a `:232`, che dipende da CP-3 e CP-4). I percorsi sono quelli dopo Y3 e Y5. «(a)» vuol dire che basta il frontend,
+> «(b)» che serve un campo nuovo del backend.
+>
+> | Voce | Codice di oggi | Campo del backend | Verdetto | Rosso da scrivere prima |
+> |---|---|---|---|---|
+> | **W7** | `features/dashboard/ExposureTable.svelte:181`: `nav_weight_percent ?? (valore/NAV)·100` | `nav_weight_percent` c'è già (`schemas/portfolio.py:395`) | **(a)**: togliere il ripiego, così con null si legge «—» | `ExposureTable.test.ts`: con `nav_weight_percent: null`, valore 100 e NAV 1000, la cella dice «—» e non 10 % |
+> | **`LotCustodyModal`, valore d'apertura** | `features/brokers/lots/LotCustodyModal.svelte:235-238`: `original_quantity × opening_unit_price`, mostrato a `:313-314`. È anche sbagliato per i lotti trasferiti o rettificati, e sulla valuta | `LotSummarySchema.original_cost` c'è già (`portfolio.py:796`, `:808`), nella valuta di destinazione o null; altri componenti dei lotti lo usano già | **(a)** | `LotCustodyModal.test.ts`: con `original_cost '150'`, quantità 10 e prezzo 10, mostra 150 e non 100; con null, «—» |
+> | **Dichiarazioni delle misure interattive** | `charts/signals/MeasureSignal.ts` (R18: Δ, Δ% e annualizzazione), `CompoundSignal.ts` (R19, il «cosa succede se»), `LinearSignal.ts`, `SineSignal.ts` | non serve | **(a)**: una dichiarazione nel codice dell'eccezione e della sua regola (43 `:334`; T-U8) | una guardia che legge il sorgente: i 4 file portano il marcatore, e nessun altro file ha uno schema di annualizzazione senza marcatore |
+> | **J-1, `CompoundSignal.ts:69`** | la curva del «cosa succede se» | non serve | **(a)**, insieme alle dichiarazioni | la stessa guardia |
+> | **J-1, `features/risk/levels/levelHelpers.ts:359`** | `1/(1−perdita) − 1`, il rendimento che recupera una perdita | nessuno trovato, e nessun checkpoint nominato | **decisione aperta**: un campo del backend (Y12b) o una dichiarazione | dipende dalla decisione |
+> | **R17** | `features/dashboard/KpiSection.svelte:80-134` (Δ del giorno e Δ% dalla `history`), `:243` (`mwrr − twrr`) | nessuno a livello di portafoglio; lo porta CP-13 | **(b)** | i valori del backend mostrati così come sono, diversi da quelli che darebbe la `history` |
+> | **W8** | `features/dashboard/ExposureTreemap.svelte:442-445`: costo = valore − gl, poi gl/costo | nessun G/L % per gruppo; CP-13 | **(b)** | il tooltip di un nodo mostra il G/L % del gruppo che manda il backend |
+> | **P4** | `features/dashboard/PerformanceChart.svelte:200-210`: contributo % = valore/apertura | nessuno; CP-13 | **(b)** | il suffisso del tooltip è il campo del backend |
+> | **P5** | `lotComparisonChartHelpers.ts:150-172`, `LotComparisonChart.svelte:524-531`, `unifiedLotsTableHelpers.ts:109-183` | per lotto c'è; per l'aggregato e il piè di tabella no. CP-13 e CP-7 (le regole del realizzato) | **(b)** | l'aggregato e il piè di tabella leggono il backend |
+> | **V11** | `LotWacPriceChart.svelte:1413`: il valore di un BUY è `|qty| × prezzo` | per evento no; CP-13. Il riscalamento di `lotWacPriceChartHelpers.ts:109` è solo una scala di visualizzazione | **(b)** per evento; la bolla per lotto potrebbe già usare `original_cost` | il valore della bolla è quello del backend |
+>
+> - **Conflitti**: nessuno di questi file è di X, W o H.
+>   - Sui lotti lavora J (CP-16; e il suo piano a `:2453`, `:2481` e `:2536` tocca `LotCustodyModal` e i suoi helper):
+>     prima di toccare `LotCustodyModal` serve un accordo con J.
+>   - Il piano R dei colori nomina KpiSection, ExposureTreemap, PerformanceChart, i grafici dei lotti e `MeasureSignal`.
+>     Le loro ondate sono finite o non cambiano i componenti; da riconfermare con i colori al momento.
+>   - Il T-D9 di J è segnato ✔ su `MeasureSignal.ts:103,133`: prima di dichiarare, controllare se la soglia è già
+>     allineata alla casa della matematica.
+> - **Ordine proposto per Y12a**, dopo l'ingresso della corsa unica (il codice cambierebbe la build delle E2E):
+>   1. W7: il rosso, poi via il ripiego;
+>   2. `LotCustodyModal`: il rosso, poi `original_cost`, dopo l'accordo con J;
+>   3. le dichiarazioni (4 file e la guardia), dopo aver ricontrollato T-D9;
+>   4. `levelHelpers:359`: secondo la decisione.
+> - **Decisione notturna, da rivedere**: le dichiarazioni sono un commento-marcatore in testa e una guardia che legge il
+>   sorgente, perché un commento da solo invecchia. **Va invece al developer** (lista di domattina, tramite il
+>   coordinatore): `levelHelpers:359`. La mia proposta è un campo del backend (Y12b, J), perché non è una misura
+>   interattiva e la regola 10 vuole la matematica in un posto solo; l'alternativa è dichiararla come aritmetica di
+>   visualizzazione.
+
+### Nota: gallerie e giorno UTC ✅ (2026-10-16, 06:15; avviso di G inoltrato dal coordinatore)
+
+> **Note implementazione**. Il backend ragiona in UTC, quindi due scatti sono confrontabili solo se cadono nello stesso
+> giorno UTC: la mezzanotte che conta è alle **02:00 ora locale**. Ho controllato le mie gallerie, leggendo gli orari
+> di partenza nei `report.md` dei diff in `LibreFolio_visual_review/diffs/` (`/tmp/libreFolio_y_gallery_days.log`):
+>
+> | Lotto | A (riferimento) | B (candidato) | Giorno UTC |
+> |---|---|---|---|
+> | Y1 | `g-final3-r1`, 15/10 09:14 | 15/10 14:46, 15:05, 15:07 | 15/10 per tutti |
+> | Y2 | `g-final3-r1`, 15/10 09:14 | 15/10 16:54, 18:00 | 15/10 per tutti |
+> | Y7 (mobile) | `g-ref13-r1`, 16/10 00:02 | 16/10 01:33, chiusa alle 01:44:46; diff alle 01:45:32 con 0 immagini mancanti in A | 15/10 per tutti |
+>
+> - Nessun confronto passa le 02:00: le attribuzioni di Y1, Y2 e Y7 restano valide.
+> - **Y-11** non è una galleria: è il JSON di una funzione pura, `timeSeriesAggregation.ts`, che usa solo getter UTC su
+>   date fisse e non legge l'orologio. Non dipende né dal giorno né dal fuso.
+> - **D'ora in poi**: una galleria fatta dopo le 02:00 di oggi vuole un riferimento preso anch'esso dopo le 02:00 locali
+>   del 16/10, per esempio una run del blocco dei colori. `g-ref13-r1` e `g-final3` sono del 15/10 UTC: per questo
+>   giorno non valgono più come riferimento.
+>
+> **Ingresso senza galleria** (decisione del coordinatore, 06:14). Basta la corsa E2E unica: Y3, Y5 e Y6 sono
+> spostamenti, Y9 non tocca il markup, e Y10 cambia il DOM solo quando la liquidità va sotto zero. Ho verificato i tre
+> punti in cui poteva cambiare qualcosa:
+> - **asse di `CorrelationHeatmap`**: `'sans-serif'` è diventato `CHART_FONT_FAMILY`, cioè `'LF Flags', sans-serif`
+>   (`chartFont.ts:26`). `'LF Flags'` copre solo `U+1F1E6-1F1FF` e sul Mac usa `local('Apple Color Emoji')`
+>   (`static/lf-flags.css:18-24`). Le misure del testo latino e le bandiere restano le stesse;
+> - **il campo `emoji` tolto da `AllocationPanel`**: nessuno lo leggeva, perché `AllocationPieChart` prende le emoji
+>   dallo store dei settori (`getSectorEmoji`, `:211`) e mai da `entry.emoji`;
+> - **asse e impilamento di `AllocationHistoryChart`**: con dati tutti positivi il massimo resta 100 e il minimo 0.
+>
+> Se servirà una galleria più avanti, il riferimento sarà il candidato dei colori di oggi (06:10–06:50).
+
+### Prove leggere dopo il blocco dei colori ✅ (2026-10-16, 06:48–07:08; HEAD `aec49a9cb`, con il lotto C-34 nel worktree)
+
+> **Note implementazione**. Lo script è `/tmp/libreFolio_after0645_light.sh`: una prova alla volta, con `nice`, e solo se
+> il carico è sotto 70; il log di ogni prova è in `/tmp/libreFolio_0645_<prova>.log`. Copre Y3, Y9, Y-11, Y10, Y5 e Y6,
+> già committati, più il lotto C-34.
+>
+> | Prova | Esito |
+> |---|---|
+> | `api sync` | nessun cambiamento tracciato |
+> | `front check` | svelte-check 0 errori, 0 avvisi |
+> | `theme-roles.mjs --check` | gate dei colori puliti |
+> | guardia C-34 (`escapeHtml.single.test.ts`) | 6/6 |
+> | `front-portfolio chart-safety-unit` | 7 file, 72 test |
+> | `front-portfolio allocation-unit` | 8 file, 192 test |
+> | `front-portfolio store-unit` | 4 file, 52 test |
+> | `front-broker broker-unit` | 5 file, 57 test |
+> | `front-utility onboarding-component-unit` | 15 file, 449 test |
+> | `front-utility core-unit` | 174 file, 6 220 test (gate per percorso e lotti di Y5 compresi) |
+> | `front-utility component-unit` | 150 file, 3 980 test (file e broker di Y5 e Y6 compresi) |
+> | `front-asset asset-unit` | 20 file, 876 test (il golden di Y-11 compreso) |
+> | `check-orphans` | ogni file registrato, ogni test raggiungibile |
+> | `check_source_paths.py` | 5 percorsi mancanti su 4 026, già noti e non miei (cartelle generate: `htmlcov-*`, `coverage-js`, una sonda) |
+> | `mkdocs build` | nessun avviso; 3 076 URL relativi risolti |
+> | `mkdocs check-links` | 97 link validi |
+> | `git diff --check` | pulito; porta 6189 libera |
+>
+> Poi viene l'handoff del lotto C-34, e dopo il suo commit la corsa E2E unica: `DEADLINE=0850`, slot 1, dopo W.
