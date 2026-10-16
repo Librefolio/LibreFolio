@@ -137,10 +137,15 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
   catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
   (14 days by default).
-- A restore that an administrator confirmed before the block, and that still waits, is applied by
-  the next start all the same, the one that applies the block included. On the server,
-  `backup pending` shows it and `backup pending --cancel` drops it: see «Follow or Cancel a Restore»
-  in [CLI Admin Tools](cli_tools.md).
+- A restore that an administrator confirmed before the block, and that still waits, is not applied
+  while the instance is blocked: the first start after the unblock applies it. On the server,
+  `backup pending` shows it waiting (`instance_blocked`), and `backup pending --cancel` drops it: see
+  «Follow or Cancel a Restore» in [CLI Admin Tools](cli_tools.md). Two consequences:
+  - its checked copy keeps its disk space in the data directory for the whole block: `backup pending
+    --cancel` frees it;
+  - if you update LibreFolio during the block, the first start after the unblock also migrates the
+    restored database, checked at the version of then, as any update does; the data of before stays
+    aside until that start completes, and if the start fails the next one puts it back.
 
 ### 👀 What Users See {: #what-users-see }
 

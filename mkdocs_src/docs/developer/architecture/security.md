@@ -619,8 +619,9 @@ instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with 
 of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). The routes of a
 restore stay out, all of them (`/backup/restore/…`: the upload, the check, the confirmation, the status, the
 cancellation and the restart): the block lets the data leave, never come in, and nobody stops the server through
-the API. A restore confirmed before the block is applied at the next start all the same: the startup step does not
-read the block ([Restoring a Backup](#backup-restore)). Any other
+the API. Nor is a restore confirmed before the block applied while it lasts (developer decision P7): the startup step
+reads `LIBREFOLIO_BLOCKED` and leaves it waiting (`instance_blocked`) until the first start after the unblock
+([Restoring a Backup](#backup-restore)). Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
@@ -798,7 +799,7 @@ Every route under `/backup/restore` requires an administrator (`require_admin`),
 | `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
-| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory` or `server_running`) on a restore a start left waiting |
+| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
 | `DELETE /backup/restore/pending` | Drops the restore waiting (`204`); its copy stays until the check expires, and can be confirmed again. `404` `restore_not_pending` |
 | `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `409` `restore_not_pending` |
 
@@ -842,8 +843,15 @@ The startup step `pending-restore` (`app_lifespan.STARTUP_STEPS`, after `tool-ca
 `database`) applies a `pending` restore:
 
 1. It leaves it waiting, with `waiting` recorded, when the data directory's real path is not the one the restore was
-   confirmed for (`other_data_directory`: a copy of the data directory), when another server process serves the data
-   directory (`server_running`, see below), or when a backup holds its lock (`backup_running`).
+   confirmed for (`other_data_directory`: a copy of the data directory), when the hosting provider blocks the instance
+   (`instance_blocked`: `LIBREFOLIO_BLOCKED`, read at each start; a value that cannot be read counts as blocked), when
+   another server process serves the data directory (`server_running`, see below), or when a backup holds its lock
+   (`backup_running`), in this order. The undo of a swap and the commit still run on a blocked instance: the first
+   repairs the data directory, and the block cannot change during one start. A restore can so wait as long as the
+   block lasts: its copy keeps its disk space (an active restore's copy is never pruned; `backup pending --cancel`
+   frees it), and if LibreFolio was updated meanwhile, the step `database` of the first start after the unblock
+   migrates the restored database, checked at the revision of then, with the data of before still in
+   `.restore/previous/` until the commit (a failure rolls back, `first_start_failed`).
 2. It records it `rolled_back` without moving anything when the checked copy is gone or changed (`stage_missing`), or
    when one of the four folders of the data directory is a link or a file (`swap_failed`).
 3. It writes the journal, fsynced, before the first move: `applying`, the boot, and for each folder of

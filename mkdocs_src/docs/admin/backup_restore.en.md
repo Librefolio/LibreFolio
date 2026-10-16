@@ -271,6 +271,7 @@ One warning lets the restore go on, but read it before you confirm:
 | What you see | Why | What to do |
 | --- | --- | --- |
 | `backup pending` ends with `(server_running)` | At the last start, another server process served the data directory: a worker started again on its own, or a second server | Restart the whole server, never one worker, and run one server per data directory |
+| `backup pending` ends with `(instance_blocked)` | The hosting provider blocked the instance: a restore is never applied on a blocked instance | Nothing: the first start after the unblock applies it. `backup pending --cancel` drops it meanwhile |
 | `backup pending` ends with `(other_data_directory)` | The server found its data directory under another path than the one the restore was confirmed for, such as a copy of the data directory | `backup pending --cancel`, then run `backup restore` where the server runs |
 | `backup pending` ends with `(backup_running)` | A backup was running at the last start | Nothing: the next start applies the restore |
 | `backup pending` says the restore was rolled back, `(first_start_failed)` | The first start on the restored data did not complete | The data is as it was. The log of that start has the cause: fix it, then run `backup restore` again |
