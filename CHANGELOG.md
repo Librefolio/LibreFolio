@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
 - **Instance key**: one secret per installation, generated on first use in the `secrets/` folder of the data directory, or given through the environment. LibreFolio derives its encryption keys from it: back up `secrets/` together with the data.
 - At startup the log warns about settings that leave the instance weaker: a short session key, a secret set twice, loose permissions on the instance key, `SESSION_COOKIE_SECURE=never`, a verbose log level.
+- At startup, the log reports how many stored instance-wide plugin secrets the instance key can no longer read — after a lost key file, or data restored without `secrets/` — with what to do.
 - `.env.example` lists every option LibreFolio reads, grouped by function.
 - `GET /api/v1/system/instance`: the public configuration of the instance, read by the app at startup.
 - A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LIBREFOLIO_PROFILE`: `selfhosted` (the default, nothing changes) or `managed`, for whoever hosts LibreFolio for others. In the managed profile a `JWT_SECRET` shorter than 32 characters stops the server at startup; elsewhere it stays a warning in the log. Documented in the new admin page "Hosting for Others".
 - **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, following a password-reset link already sent, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
 - On a blocked instance, administrators see **Manage subscription** on the block page, linking to the hosting provider's billing page set in `LIBREFOLIO_BILLING_URL`.
+- On a blocked instance, administrators can still back up the whole instance from the block page: the backup card of Settings › Backup.
 - `GET /api/v1/system/block`: the block state behind that page, for signed-in users.
 - **Who can sign up**: in Settings › Admin, «Registration» is Open, By invitation or Closed. `LIBREFOLIO_REGISTRATION` can set it from the server; the field then shows the mode in force, read-only.
 - **Invitation links**: an administrator creates single-use links, valid 7 days, with `./dev.py user invite [--admin] [--email …]` or the admin API. The link opens the registration form with the role and, if given, the suggested address, which can be changed.
@@ -170,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: a **Currency Exchange** whose two legs are on different brokers is refused (`pairBrokerMismatch`): the app always writes both legs on one broker, but the API accepted such a pair.
 - Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other than the one it was bought in shows the right proceeds.
 - Short lots: P&L now subtracts the buy-backs, and the return reads against the amount sold (a short at break-even shows 0%, not −100%).
+- **Emptying a manual cost basis is no longer silently ignored**: when you edit a received transfer or an incoming adjustment and clear its manual cost, the save is refused with "cost basis required" instead of keeping the old cost without a word. API: an explicit `cost_basis_override: null` in an update removes the manual cost where the type and side take one, and is ignored elsewhere and in Auto mode.
 
 #### 🔒 Security
 

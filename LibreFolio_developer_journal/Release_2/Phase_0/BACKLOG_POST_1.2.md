@@ -2832,9 +2832,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ## H · Piattaforma (fase 01)
 
+> 16/10, treno 110 (`0ecc5ed27`): chiuse dal coordinatore H-1, H-4, H-6, H-9, H-14, H-15, H-16 (lotti di H entrati). Restano aperte H-3 (opzione A, P24), H-5, H-17 (le due righe di B), H-18 (→ sezione C), H-19 (→ A).
+
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
-- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1, CP2a e CP4** — minimo; H, 14-15/10.
+- ✅ **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1, CP2a e CP4** — minimo; H, 14-15/10.
   - **CP1**: 9 menzioni in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`,
     `features/F-011.md:20`, `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
     - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
@@ -2877,7 +2879,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - una chiave configurata è casuale, non una passphrase.
 
   Dettagli: piano H, §14 «CP3 passo 2».
-- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+- ✅ **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
   minimo; H, 15/10.
   - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
   - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
@@ -2898,7 +2900,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     rigorosa IT/FR/ES non trova le ancore. L'ancora `#what-to-back-up` c'è già nelle 4 lingue.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
-- **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
+- ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
   - «omits a provider section entirely when nothing is installed» e «shows each section only when its own list has
     something in it» cercano `settings.assetProviders` con un confronto esatto.
   - L'intestazione è però «etichetta (n)», quindi la ricerca non trova niente anche quando la sezione c'è.
@@ -2922,7 +2924,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `./dev.py docker exec`.
 
   Dettagli: piano H, §14 «CP7a passo 2».
-- **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
+- ✅ **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
   lotto del log di accesso), 15/10.
   - `logging_config.py` toglie i gestori della radice con `removeHandler` senza `close()`; poi `basicConfig(force=True)`
     non trova più niente da chiudere.
@@ -2975,7 +2977,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
 
   Dettagli: piano H, §14 «Ingresso dopo A6a».
-- **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
+- ✅ **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
   impostazioni dei plugin), 15/10.
   - Serve al ripristino di B: i segreti dei plugin di un backup sono cifrati con la chiave dell'istanza d'origine, e
     vanno cifrati di nuovo con quella dell'istanza che ripristina.
@@ -2984,14 +2986,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     con la chiave corrente. Da accordare con X e B (nome, firma).
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
-- **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
+- ✅ **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
   - `plugin_secrets_key_status` (X) dice se i segreti salvati si possono ancora decifrare con la chiave corrente, con i
     totali quando non si può, e gira in `to_thread`.
   - Cura: un controllo in `config_audit.py` che lo usa, con un avviso nei log e nella UI dell'admin, nello stile degli
     altri controlli (codice, gravità, chiave i18n).
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
-- **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
+- ✅ **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
   - L'elenco dei segreti letti con `env_secret()` non ha le variabili dei plugin (`LIBREFOLIO_PLUGIN_*`).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
