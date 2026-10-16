@@ -186,3 +186,4 @@ Sono tutti locali: la push la fa il developer.
 | 97 | 16/10 07:09 | Z: Z7c-2 (pannello dello scheduler: elementi rinviati ⏸, `retry_at`, riga di stato del nuovo tentativo; api scheduler 16, component-unit 4006) | `0dfc7cbbe` |
 | 98 | 16/10 07:27 | W per cherry-pick: W-B39 (split/promozione rifiutati con toast d'errore e i problemi tradotti; E2E `tx-split-refusal` 2/2) + W-B42 (scenari 3–4 di `asset-event-delete` con dati propri, 4/4) | `c881237a9` `9df17ef20` |
 | 99 | 16/10 07:43 | W per cherry-pick: W-B44 (test id unici in `PromoteMergeModal`; Vitest 4/4) | `df6e2df10` |
+| 100 | 16/10 08:17 | J: CP-10a (decisione 29: un solo Rolling Return in giorni di calendario, `price_return` in `financial_math/returns.py`, impostazioni dei grafici v3, J-13 finestre in osservazioni; C-71 chiusa; asset E2E 34/34, all-backend 17 204/0, mirate sulla revisione unita) | `82e9c5305` |

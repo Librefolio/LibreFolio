@@ -225,7 +225,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `gate-plugin-i18n-ownership`), e il rifiuto nomina il plugin col suo nome. Resta la parte b, il 400 del parse
     tradotto nel wizard e il codice dell'anteprima illeggibile (K2b, dopo un commit del coordinatore su `brokers.py`
     e `uploads.py`).
-- **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
+- ✅ **C-71 · Due «Rolling Return» con lo stesso nome** (chiusa 16/10 dal coordinatore: CP-10a di J, decisione 29, treno 100 — resta un solo Rolling Return in giorni di calendario, l'indicatore della 1.1 è ritirato) — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
   della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
   calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
