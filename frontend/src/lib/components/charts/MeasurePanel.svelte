@@ -366,7 +366,7 @@
             id: 'valueStart',
             header: () => $t('common.start'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueStart)}</span>`, r.isGhost),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueStart)}</span>`, r.isGhost),
             getValue: (r) => r.valueStart,
             sortable: true,
             filterable: true,
@@ -376,7 +376,7 @@
             id: 'valueEnd',
             header: () => $t('common.end'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono text-right text-gray-600 dark:text-gray-300">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
             getValue: (r) => r.valueEnd,
             sortable: true,
             filterable: true,
@@ -407,7 +407,7 @@
             header: () => $t('measure.table.annualized'),
             type: 'number',
             headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
-            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-gray-400">—</span>'}),
+            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
             getValue: (r) => r.annualizedPct ?? 0,
             sortable: true,
             filterable: true,
@@ -417,7 +417,7 @@
             id: 'days',
             header: () => $t('datePicker.granularity.days'),
             type: 'number',
-            cell: (row) => wrapGhost(`<span class="font-mono text-gray-500 dark:text-gray-400">${row.days}d</span>`, row.isGhost),
+            cell: (row) => wrapGhost(`<span class="font-mono text-lf-muted">${row.days}d</span>`, row.isGhost),
             getValue: (row) => row.days,
             sortable: true,
             filterable: true,
@@ -524,10 +524,10 @@
     }
 </script>
 
-<div class="space-y-3">
+<div class="space-y-3 text-lf-primary">
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
-        <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 border border-amber-200 dark:border-amber-800">
+        <div class="text-xs text-lf-warning-on-soft bg-lf-warning-soft rounded px-3 py-1.5 border border-lf-warning-line">
             📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatFixed(pendingStartValue, 4)}})}
         </div>
     {/if}
@@ -537,14 +537,14 @@
         <div class="space-y-2">
             {#each measurements as { measure, result }}
                 {@const isExpanded = expandedIds.has(measure.id)}
-                <div class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-visible">
+                <div class="rounded-lg border border-lf-subtle overflow-visible">
                     <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
                     <div
-                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-700/50
-                                    hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-lf-panel
+                                    hover:bg-lf-neutral transition-colors"
                     >
                         <!-- 1. Chevron -->
-                        <button type="button" class="flex items-center text-xs font-mono text-gray-600 dark:text-gray-300 shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
+                        <button type="button" class="flex items-center text-xs font-mono text-lf-secondary shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
                             <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
                         </button>
 
@@ -558,14 +558,14 @@
                         {:else}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
-                            <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
+                            <span class="flex items-center gap-2 text-xs font-mono text-lf-secondary cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
                                     {@const delta = compactDelta(result)}
                                     <span class={delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}>
                                         {delta.label}
                                     </span>
-                                    <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                    <span class="text-lf-muted">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
                                 {/if}
                             </span>
                         {/if}
@@ -578,7 +578,7 @@
                                     <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                                         {delta.label}
                                     </span>
-                                    <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
+                                    <span class="text-xs font-mono text-lf-muted shrink-0">· {result.days}d</span>
                                 </div>
                             {/if}
                             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -598,7 +598,7 @@
                                 </div>
                             {/if}
                             <span
-                                class="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex items-center justify-center"
+                                class="p-1 text-lf-muted hover:text-lf-danger rounded transition-colors flex items-center justify-center"
                                 role="button"
                                 tabindex="-1"
                                 title={$t('common.remove')}
@@ -622,7 +622,7 @@
                     {#if isExpanded}
                         <!-- Summary table (DataTable) -->
                         {#if result}
-                            <div class="border-t border-gray-200 dark:border-slate-600">
+                            <div class="border-t border-lf-subtle">
                                 <DataTable
                                     bind:this={measureTableRefs[measure.id]}
                                     data={buildSummaryRows(result, measure)}
@@ -645,7 +645,7 @@
             {/each}
         </div>
     {:else if !measureActive}
-        <p class="text-xs text-gray-400 dark:text-gray-500 italic">
+        <p class="text-xs text-lf-muted italic">
             {$t('measure.empty')}
         </p>
     {/if}

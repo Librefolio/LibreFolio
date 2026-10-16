@@ -239,7 +239,8 @@
       "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (PRU) ou saisissez une valeur <b>manuelle</b>.",
       "pairDeleteIncomplete": "Transaction liée : supprimer cette ligne exige aussi la suppression de sa contrepartie (transaction n°{partnerId}). Si elle appartient à un broker que vous ne pouvez pas modifier, demandez à son propriétaire de la supprimer.",
       "pairQuantityMismatch": "Un transfert doit faire sortir d'un courtier la même quantité qu'il fait entrer dans l'autre (trouvé {qtyA} et {qtyB})",
-      "pairAssetMismatch": "Les deux côtés d'un transfert doivent porter sur le même actif"
+      "pairAssetMismatch": "Les deux côtés d'un transfert doivent porter sur le même actif",
+      "wacFxUnavailableSplit": "Les unités qui sortent sont évaluées à leur coût moyen, qui demande le taux {pairs} : synchronisez les taux FX, puis séparez de nouveau la paire."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",
