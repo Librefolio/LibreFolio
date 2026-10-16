@@ -2108,5 +2108,9 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      `.env.example` resta (superficie condivisa, da dichiarare).
    - Più due link miei, in `apply_z9.py`: `developer/backend/scheduler.md` (lo stesso rimando a `.env.example`) e
      «Related» di `live-ticker.md`, che esiste solo dopo Z7c-1: `check` a secco fallisce solo lì, come previsto.
-2. Applicazione dopo l'ingresso di Z7c-1; `mkdocs build`, `check-links`. ⏳
-3. Checkpoint FROZEN; Z-9 chiusa con ✅ nel backlog. ⏳
+2. ✅ 16/10 07:32 — Applicata col via del coordinatore («Z-9 is yours now, as a separate lot»), su HEAD `053dc9dec`
+   (Z7c-1 salvato), con `apply_z9.py`: precondizioni tutte vere, compreso il «Related» di `live-ticker.md`. Ritocco a
+   mano in `scheduler.md`: il link admin si chiama «Sleep and Wake › Provider Pauses», per non avere due link
+   «Provider Pauses» di fila. `mkdocs build` stretto 0 avvisi, 3076 URL relativi risolti; `check-links` 97 validi.
+   Il sito è aggiornato, così lo slot E2E delle 08:30 non lo ricostruisce.
+3. ✅ 16/10 07:33 — Z-9 chiusa con ✅ nel backlog; checkpoint FROZEN inviato (sola doc, nessuna riga di CHANGELOG).
