@@ -131,6 +131,18 @@ When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its f
 - 📧 The command only prints the link: it sends no email.
 - ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`.
 
+### 📧 Change the Email Address of an Account {: #set-email }
+
+```bash
+pipenv run ./dev.py user set-email <username> <new_email>
+```
+
+The same change as a new email in the user's [Profile](../user/settings/profile.md#email-change), without their password: use it when someone cannot change their address themselves, or to separate two accounts that share one ([below](#email-case-conflict)).
+
+- 🔤 An address belongs to one account only, whatever its capitals: `Anna@example.com` and `anna@example.com` are the same address. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
+- 🚪 A new address signs the account out of every device, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
+- ❌ An address another account already has, in any capitals, is refused: the command stops with the error `Email already registered` and exits with `1`, changing nothing. So does an address that is not valid (`Not an email address`) or an unknown username (`User '<username>' not found`).
+
 ### 👑 Grant or Remove Administrator Rights
 
 ```bash
@@ -177,6 +189,28 @@ pipenv run ./dev.py db check /path/to/copy/app.db
 
 - 📄 Without a path, the commands use the configured database. A path names another SQLite file: a relative one starts at the project root, wherever you run the command from. The file must exist, except for `db upgrade`, which creates it (folder included) and brings it up to date.
 - 🐳 In Docker, the path is inside the container, where `LibreFolio-data/` is `/app/backend/data/prod-docker` (the database is `sqlite/app.db` in it). `db current` and `db check` work in the running container: `docker compose exec librefolio python dev.py db current <path>`. `db upgrade` and `db downgrade` need the server stopped (`docker compose stop librefolio`), then a one-off container: `docker compose run --rm librefolio python dev.py db upgrade <path>` ([details](docker_advanced.md#docker-exec)).
+
+### 🔤 Two Accounts with the Same Email Address {: #email-case-conflict }
+
+From version 1.3, an email address belongs to one account only, whatever its capitals. A database from an earlier version may hold two accounts whose addresses differ only in capitals, such as `Anna@example.com` and `anna@example.com`: the upgrade then stops at the migration that checks this, and the server does not start. The migrations before it stay applied, no account is changed, and the next start picks up from that migration. The log (or the output of `db upgrade`) names the accounts by id and username, never by address; a `;` separates one group of accounts from the next:
+
+```text
+Email addresses must be unique regardless of case (release 1.3), and these accounts share one apart from upper and lower case: #3 'anna', #8 'anna_work'. Give all but one account of each group another address with …
+```
+
+LibreFolio never merges two accounts: give all but one account of each group another address with [`user set-email`](#set-email), then start LibreFolio again:
+
+```bash
+pipenv run ./dev.py user set-email <username> <new_email>
+```
+
+In Docker, the server is the container's main process, so the container does not stay up and `docker compose exec` cannot be relied on: run the command in a one-off container instead.
+
+```bash
+docker compose stop librefolio
+docker compose run --rm librefolio python dev.py user set-email <username> <new_email>
+docker compose start librefolio
+```
 
 ### 🩹 Post-Migration Fixes {: #post-migration-fixes }
 

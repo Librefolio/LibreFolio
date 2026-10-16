@@ -111,7 +111,7 @@ not commit: the caller commits it with the change that asks for it. Seven change
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
-| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change) | Every other session of the account, as for a password change: the same response sets a new cookie |
+| Email change | `PUT /api/v1/auth/profile` with a new `email` and the right `current_password` (Profile tab) → `user_service.update_profile()`: see [Changing the Email](#email-change); `./dev.py user set-email` → the same function | From the Profile tab, every other session of the account, as for a password change: the same response sets a new cookie; from the command line, all of them |
 | Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
 | Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
@@ -124,7 +124,7 @@ Activation, promotion, logout and every refused operation leave the version alon
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
 reset or setup link that is not valid. So do issuing a reset or setup link, which ends nothing until it is spent, a
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
-stored email sent again).
+stored email sent again, as written or in another A–Z case).
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -161,11 +161,18 @@ password. `PUT /api/v1/auth/profile` used to change the email on the session coo
 «forgot password» ([held](../backend/email.md#flow-forgot) until lot E4) a moment inside someone else's session — an
 XSS, a stolen cookie, a computer left unlocked — would become a permanent takeover: change the email, ask for a reset,
 choose the password (security review of lot E3, rated medium). Since lot A6e (release 1.3), an email change asks for
-the current password and ends the account's other sessions. No other route changes an account's email.
+the current password and ends the account's other sessions. No other route changes an account's email; on the server,
+`./dev.py user set-email` does, through the same `user_service.update_profile()` and without a password
+([Command-Line Tools](../../admin/cli_tools.md), «Change the Email Address of an Account»).
 
-- **What counts as an email change.** An `email` in the body that differs from the stored one, compared exactly, as
-  `user_service.update_profile()` compares it. A username-only change, or the stored email sent again, needs no
-  password, as before, and a `current_password` sent beside it is not checked.
+- **What counts as an email change.** An `email` in the body that is another address than the stored one, compared
+  regardless of A–Z case with `user_service.same_email()`, in the route and in `user_service.update_profile()` alike
+  (developer decision P18, see [`USER`](database/users_access.md#user)). A username-only change, or the stored email
+  sent again, needs no password, as before, and a `current_password` sent beside it is not checked. The stored email
+  in another A–Z case is treated the same way (decision C5): it is the same address, so only its stored form changes —
+  `email_verified_at` stays, no session ends, no cookie is set. Letters outside A–Z compare as written:
+  `Émile@example.com` and `émile@example.com` are two different addresses, and changing one into the other is an
+  email change.
 - **The body.** `UpdateProfileRequest` (`backend/app/schemas/auth.py`) has an optional `current_password` of at least
   one character: an empty string is refused with `422`.
 - **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
@@ -184,7 +191,7 @@ the current password and ends the account's other sessions. No other route chang
 |--------|----------|------|
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
 | `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
-| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address or the name belongs to another account. Nothing is written |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or the name does, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
@@ -194,11 +201,14 @@ passwords: limiting the guesses here is planned with the login attempt limit (lo
 The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
 user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
 
-Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-019: the
+Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-022: the
 refusals, the taken address not revealed without the password, the sessions with two devices, the username-only and
-same-email guards, and no address in the log of the route, in-process), `./dev.py test services user-profile`
+same-email guards, the own address and another account's in another A–Z case, and no address in the log of the route,
+in-process), `./dev.py test services user-profile`
 (`backend/test_scripts/test_services/test_user_profile.py`, `TestUpdateProfileEmailVerification`: `email_verified_at`;
-UPROF-001 and UPROF-002: no address in the service's log), and for the tab
+UPROF-001 and UPROF-002: no address in the service's log), `./dev.py test services email-case`
+(`backend/test_scripts/test_services/test_email_case.py`: the A–Z rule on the service, the index and the lookups), and
+for the tab
 `./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
 (`frontend/e2e/settings.spec.ts`, its «A6e» block).
 
@@ -654,7 +664,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,

@@ -133,6 +133,9 @@ choose: [Getting Started](../user/getting-started.md) shows what they see.
   create a new one.
 - 📏 An invitation takes a place from the moment you create it until it is used, revoked or
   expires; the account it creates then takes that place.
+- 🔤 An e-mail address belongs to one account only, whatever its capitals (`Anna@example.com` is
+  `anna@example.com`), but only the letters A to Z are matched this way: `Émile@example.com` and
+  `émile@example.com` are two different addresses.
 
 ### 📋 Open Invitations {: #open-invitations }
 

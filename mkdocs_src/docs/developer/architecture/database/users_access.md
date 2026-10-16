@@ -105,9 +105,9 @@ erDiagram
 
 ## 📋 Tables
 
-### 👤 `USER`
+### 👤 `USER` {: #user }
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
+The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (migration `009_email_unique_ignoring_case`, below). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
 
 Migration `005_accounts_invites` added three columns:
 
@@ -136,6 +136,31 @@ batch: a batch rebuilds `users` — copy, drop the original, rename — and with
 original fires the `ON DELETE` actions of every table that references it (the same trap as in
 [Post-migration fixes](index.md#post-migration-fixes)). Its downgrade removes them with `DROP COLUMN`, which
 rewrites the table in place and fires no foreign-key action.
+
+Migration `009_email_unique_ignoring_case` makes the email unique regardless of case (developer decision P18):
+`alice@example.com` and `Alice@Example.com` are one address, which only one account can hold. Beside `ix_users_email`,
+unique on the address as written, it creates `ux_users_email_lower`, a unique index on `lower(email)`; the model
+declares it after the `User` class (`backend/app/db/models.py`), so `create_all` builds it too. SQLite's built-in
+`lower()` folds A–Z and nothing else, so letters outside ASCII compare as written: `Émile@example.com` and
+`émile@example.com` are two different addresses, a documented limit. `user_service.email_fold()` is the same fold in
+Python, and `same_email()` compares two addresses with it. `get_user_by_email()` and the email half of
+`get_user_by_username_or_email()` compare `lower(email)`, so sign-in, «forgot password» and the duplicate checks of
+`create_user()` and `update_profile()` find an address whatever its case; the username half stays exact. The stored
+email keeps the form last written: its owner changing its case alone is no email change
+([Changing the Email](../security.md#email-change)).
+
+Before writing anything, the upgrade groups the accounts by that fold. If two accounts share an address apart from
+case, it stops with a `RuntimeError` that names them as `#id 'username'`, never by address (workstream E's rule: no
+address in a log), and gives the remedy: `./dev.py user set-email <username> <address>` on all but one account of each
+group (what the administrator does: [Command-Line Tools](../../../admin/cli_tools.md), «Two Accounts with the Same
+Email Address»). No account is changed, and accounts are never merged. Otherwise it creates the index. On SQLite
+Alembic commits each revision on its own (no transactional DDL), so a stop leaves the revisions before 009 applied: an
+install upgraded from an earlier release stays at `008_registration_invite_default`, where `set-email` works (the 1.3
+model needs nothing 009 adds), and the next start resumes at 009. The upgrade checks before it acts, so it can
+run again; the downgrade drops the index. `./dev.py test db migration-009`
+(`backend/test_scripts/test_db/test_migration_009_email_case.py`) covers it on temporary databases, the `set-email`
+remedy included, and `./dev.py test services email-case` (`backend/test_scripts/test_services/test_email_case.py`)
+the fold, the index and the lookups.
 
 ### ⚙️ `USER_SETTINGS`
 
