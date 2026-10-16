@@ -577,6 +577,26 @@ unknown cost therefore comes from:
   (`test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`
   in `backend/test_scripts/test_api/test_portfolio_wac.py`).
 
+**An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
+An update that leaves out `cost_basis_override` changes nothing. One that sends it
+as `null` removes the cost basis stored on the row — `cost_basis_override` and
+`cost_basis_currency` together — where the row, with the update's type and
+quantity applied, takes one (`cost_basis_allowed()`): `_apply_update_values()`
+(`batch_edits.py`) tells the `null` from a missing key by `model_fields_set`.
+Where a cost basis is required — on today's table, every side that takes one: a
+received `TRANSFER`, an `ADJUSTMENT` adding quantity — the removal changes the
+row's `cost_fields()`, so the update check above refuses it with
+`costBasisRequired` (operation `update`, `field` `cost_basis_override`), and the
+stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
+`TRANSFER` keeps the cost decision 47 gives it (see
+[Split & Promote](split_promote.md#transfer-giving-leg)). It is ignored too when
+the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
+own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
+`null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
+`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Tests:
+`./dev.py test services transaction-cost-basis-rule`
+(`TestDecisionP5AnExplicitNullEmptiesTheCost`).
+
 ---
 
 ## 🔄 Inline Batch Auto Modes

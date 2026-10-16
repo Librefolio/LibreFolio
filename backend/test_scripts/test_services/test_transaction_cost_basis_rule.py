@@ -49,9 +49,9 @@ Guards — green before N2, and the cure must keep them green:
 
 Not covered, on purpose:
 
-- an update that REMOVES a cost: ``TXUpdateItem`` cannot express it. ``cost_basis_override: null`` is read as
-  "unchanged" (``_apply_update_values``, ``batch_edits.py``), exactly like an absent key; ``cost_basis_mode`` is not
-  stored. So no update can take a cost away, and no test can watch one being refused;
+- an update that REMOVES a cost, in N2: ``cost_basis_override: null`` is read as "unchanged" (``_apply_update_values``,
+  ``batch_edits.py``), exactly like an absent key, until decision P5's cure makes it a removal where the type and side
+  take a cost — ``TestDecisionP5AnExplicitNullEmptiesTheCost``, below;
 - Auto with no average (P-1, ``auto_cost.py``) and SPLIT-linked ADJUSTMENTs: outside N2, unchanged.
 
 Decision 47 (workstream W, release 1.3) — the giving leg of a TRANSFER, ``TestDecision47TheGivingLegOfATransfer``,
@@ -104,6 +104,7 @@ setup_test_database()
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.app.schemas.transactions.transactions as transaction_schemas
 import backend.app.schemas.transactions.type_metadata as type_metadata
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, FxConversionRoute, FxRate, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
@@ -657,6 +658,201 @@ class TestEditsOfARowWithCost:
         assert _update_results(response) == [(index, (row.id,), "success") for index, row in enumerate(stored.rows)], f"Committed, but not every row was updated: {response.results}"
         _assert_edit_landed(stored.rows, edit, world.marker)
         assert (stored.subject.cost_basis_override, stored.subject.cost_basis_currency) == (STORED_COST.amount, STORED_COST.code), f"A {edit} edit changed the cost basis of id={stored.subject.id}: {stored.subject.cost_basis_override} {stored.subject.cost_basis_currency}"
+
+
+# ============================================================================
+# RED AND GUARDS — DECISION P5: AN EXPLICIT NULL EMPTIES A MANUAL COST
+# ============================================================================
+
+
+async def _commit_as_the_endpoint(world: World, *, updates: list[dict]) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` runs it, its transaction included: kept when the service answers
+    committed, rolled back otherwise (``commit_transactions``, ``api/v1/transactions.py``).
+
+    ``execute_batch`` applies an update to the row and flushes it before its checks can refuse it, and leaves the commit
+    or the rollback to its caller: what a refused batch applied stays in the session until the caller rolls it back. A
+    savepoint stands in for the request's transaction, as ``test_transaction_service.py``'s W-B17 test does: the test's
+    rows, flushed before it, survive its rollback — their flush opened SQLite's transaction, so the savepoint nests in it
+    (``begin_writes``, ``db/session.py``) — and the session fixture still rolls everything back: a savepoint released
+    inside its transaction commits nothing.
+
+    After a rollback the rows the batch touched are expired: read them back with ``_stored_cost``, which re-reads them,
+    never through the attributes of an expired copy, which would load lazily outside the event loop.
+    """
+    savepoint = await world.session.begin_nested()
+    response = await _commit(world, updates=updates)
+    if response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+async def _stored_cost(world: World, tx_id: int) -> tuple[Decimal | None, str | None]:
+    """``(cost_basis_override, cost_basis_currency)`` of row ``tx_id`` as the database holds it: what the user finds once
+    the request is over. ``populate_existing`` makes ``get`` emit its SELECT even for a row the session holds, and
+    overwrite that copy with what it reads."""
+    row = await world.session.get(Transaction, tx_id, populate_existing=True)
+    assert row is not None, f"scaffold: row id={tx_id} is not in the database"
+    return row.cost_basis_override, row.cost_basis_currency
+
+
+def _show(cost: tuple[Decimal | None, str | None]) -> str:
+    """A stored cost basis, for a failure message."""
+    amount, code = cost
+    return "no cost basis" if (amount, code) == (None, None) else f"{amount} {code}"
+
+
+def _sends_the_cost(update: dict) -> bool:
+    """Whether the batch reads ``cost_basis_override`` as SENT in ``update``: in ``model_fields_set`` once parsed, as
+    ``_parse_lenient`` parses it. An explicit null is sent; a key left out is not."""
+    return "cost_basis_override" in transaction_schemas.TXUpdateItem.model_validate(update).model_fields_set
+
+
+async def _legacy_row_with_cost(world: World, shape: str) -> Transaction:
+    """A row stored with a cost basis of 42 EUR although its type and side take none: the handover cost decision 47
+    writes on a giving leg, or what an older version or an API client left — no rule refuses a ``cost_basis_override``
+    sent where none is allowed (rule 12 reads only ``cost_basis_mode``), on a create or on an update.
+
+    ``buy``: a BUY +3 on ``dest`` paying 300 EUR (``dest`` allows a cash overdraft). ``adjustment_out``: an ADJUSTMENT −4
+    on ``source``, which holds the BUY's 10 units, so it does not go short — the shape of a split TRANSFER's giving leg.
+    """
+    if shape == "buy":
+        row = _stored_row(world, broker=world.dest, tx_type=TransactionType.BUY, quantity=Decimal("3"), cost=STORED_COST, amount=Decimal("-300"), currency=EUR)
+    elif shape == "adjustment_out":
+        row = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=-TRANSFER_QUANTITY, cost=STORED_COST)
+    else:
+        raise ValueError(f"unknown legacy shape {shape!r}")
+    world.session.add(row)
+    await world.session.flush()
+    return row
+
+
+# Decision P5 — an explicit null empties a manual cost where one is taken (TestDecisionP5AnExplicitNullEmptiesTheCost).
+# The rows that carry a cost basis although their type and side take none, where the null is ignored (_legacy_row_with_cost).
+LEGACY_SHAPES = ("buy", "adjustment_out")
+LEGACY_LABELS = {"buy": "BUY +3", "adjustment_out": f"ADJUSTMENT -{TRANSFER_QUANTITY}"}
+AUTO_MODES = ("auto", "auto-detail")
+
+
+class TestDecisionP5AnExplicitNullEmptiesTheCost:
+    """Decision P5 — the developer's, 16/10: «se lo svuoto attivamente vuol dire che lo voglio cancellare» — read as the
+    coordinator's option (B), 16/10 11:42, to be reviewed by the developer. In an update, ``cost_basis_override: null``
+    SENT (the key in ``model_fields_set``) removes the manual cost basis — ``cost_basis_override`` and
+    ``cost_basis_currency`` together — where the row's final type and side take one (``cost_basis_allowed``), and is
+    refused there with ``costBasisRequired`` when one is required: on today's table every side that takes a cost requires
+    one (TRANSFER and ADJUSTMENT with quantity > 0), so the null always ends in that refusal and never removes anything.
+    Elsewhere the null is ignored, and with ``cost_basis_mode`` ``auto``/``auto-detail`` too (the Auto cost is computed);
+    a key left out changes nothing.
+
+    Today ``_apply_update_values`` (``batch_edits.py``) writes the cost only when it is not None, so an explicit null
+    reads as a key left out and is ignored everywhere, a side that requires a cost included:
+
+    - RED until the cure: emptying the manual cost of a TRANSFER's receiving leg, a side that needs one, is refused with
+      ``costBasisRequired`` on the update — N2's update check, once the cost is gone — and the cost stays (today the
+      update commits);
+    - guards, green today and after: a null sent on a row whose type and side take no cost — a BUY, an ADJUSTMENT −q
+      carrying the handover cost decision 47 writes on a giving leg — is ignored, the update commits and the cost stays;
+      a notes-only edit of the pair, the key left out, keeps the receiving leg's cost; an Auto update sending the null,
+      as the form does, writes the Auto cost.
+
+    The row that needs a cost is the receiving leg of a stored TRANSFER pair (``_store``), saved with 42 EUR; its Auto
+    cost is ``source``'s average, 100 EUR (``UNIT_COST``), so "kept" and "recomputed" cannot be confused. Each test runs
+    the batch as ``POST /transactions/commit`` does, its transaction included (``_commit_as_the_endpoint``), and reads
+    the row back from the database (``_stored_cost``).
+    """
+
+    @pytest.mark.asyncio
+    async def test_emptying_the_manual_cost_of_a_received_transfer_is_refused(self, world):
+        """RED until decision P5: ``{id, cost_basis_override: null}`` on the receiving leg is refused — one issue,
+        ``costBasisRequired`` on update 0, ``ref_id`` the leg — and the database keeps its 42 EUR.
+
+        The cure clears both columns, and N2's update check (``_check_update_cost_basis``) then sees a row that needs a
+        cost and lost the one it was stored with. Today the null keeps the cost, and the update commits with no issue.
+        """
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        subject_id = stored.subject.id
+        update = {"id": subject_id, "cost_basis_override": None}
+        assert _sends_the_cost(update), "scaffold: the update must SEND cost_basis_override (an explicit null), or this is the case of a key left out"
+
+        response = await _commit_as_the_endpoint(world, updates=[update])
+
+        stored_after = await _stored_cost(world, subject_id)
+        assert response.committed is False, f"Decision P5: emptying the manual cost of a received TRANSFER is saved, and the receiving leg id={subject_id} holds {_show(stored_after)} — that leg needs a cost basis, so the update must be refused with costBasisRequired and the cost kept"
+        assert [issue for issue in response.issues if issue.code != COST_BASIS_REQUIRED] == [], f"Only the missing cost basis may refuse this update: {_render(response.issues)}"
+        assert _cost_issues(response) == [("update", 0, subject_id, "cost_basis_override", {"type": "TRANSFER"})], f"Expected one costBasisRequired on update 0 (id={subject_id}): {_render(response.issues)}"
+        assert stored_after == (STORED_COST.amount, STORED_COST.code), f"The update was refused, yet the receiving leg id={subject_id} holds {_show(stored_after)} instead of the {STORED_COST.amount} {STORED_COST.code} it was saved with"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", LEGACY_SHAPES)
+    async def test_a_null_where_no_cost_is_taken_is_ignored(self, world, shape):
+        """Guard, green today and after decision P5: ``{id, cost_basis_override: null}`` on a row whose type and side
+        take no cost basis, yet carry one, is ignored — the update commits, and ``cost_basis_override`` and
+        ``cost_basis_currency`` stay as stored, 42 EUR.
+
+        The coordinator's decision (B), 16/10 11:42, to be reviewed by the developer: the null removes the MANUAL cost
+        («toglie il costo manuale») where the type and side take one, and is ignored elsewhere. This protects the
+        handover cost decision 47 writes on a giving leg — an ADJUSTMENT −q carrying its broker's Auto cost, the cost
+        CP-16 hands its units over at — from a null sent with it; the BUY stands for any other side that takes none. The
+        row neither allows nor requires a cost — checked first — and nothing else refuses the update: rule 12 reads only
+        ``cost_basis_mode``, not sent, and the rest of the row is valid and unchanged. A cure that clears wherever the
+        null is sent turns it red.
+        """
+        row = await _legacy_row_with_cost(world, shape)
+        row_id = row.id
+        sides = (type_metadata.cost_basis_allowed(row.type, row.quantity), _requires_cost_basis(row.type, row.quantity))
+        assert sides == (False, False), f"precondition broken: a {LEGACY_LABELS[shape]} must neither allow nor require a cost basis; (cost_basis_allowed, _requires_cost_basis) = {sides}"
+        stored_before = await _stored_cost(world, row_id)
+        assert stored_before == (STORED_COST.amount, STORED_COST.code), f"scaffold: the {LEGACY_LABELS[shape]} id={row_id} must be stored with its cost basis, or a null that leaves it alone proves nothing; it holds {_show(stored_before)}"
+        update = {"id": row_id, "cost_basis_override": None}
+        assert _sends_the_cost(update), "scaffold: the update must SEND cost_basis_override (an explicit null), or this is the case of a key left out"
+
+        response = await _commit_as_the_endpoint(world, updates=[update])
+
+        stored_after = await _stored_cost(world, row_id)
+        assert response.committed is True and response.issues == [], f"Decision P5 (B): a null cost sent on a {LEGACY_LABELS[shape]}, a side that takes no cost basis, must be ignored, yet the update was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(0, (row_id,), "success")], f"Committed, but the row was not updated: {response.results}"
+        assert stored_after == stored_before, f"Decision P5 (B): a null sent on a {LEGACY_LABELS[shape]}, a side that takes no cost basis, changed its cost: id={row_id} held {_show(stored_before)}, now {_show(stored_after)} — on a giving leg, decision 47's handover cost"
+
+    @pytest.mark.asyncio
+    async def test_notes_edit_without_the_cost_key_keeps_the_cost(self, world):
+        """Guard, green today and after decision P5: a notes-only edit of the pair — what the app's diff sends, the cost
+        key left out — commits, the notes land, and the receiving leg keeps its 42 EUR. A key left out is not a null.
+
+        Both legs are edited, as the app edits them: a pair keeps one description.
+        """
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        subject_id = stored.subject.id
+        updates = _edit(stored.rows, "notes", world.marker)
+        assert not any(_sends_the_cost(update) for update in updates), f"scaffold: no update may send cost_basis_override, or this is the case of an explicit null: {updates}"
+
+        response = await _commit_as_the_endpoint(world, updates=updates)
+
+        assert response.committed is True and response.issues == [], f"A notes-only edit of a received TRANSFER with its manual cost, the cost key left out, was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(index, (row.id,), "success") for index, row in enumerate(stored.rows)], f"Committed, but not every row was updated: {response.results}"
+        _assert_edit_landed(stored.rows, "notes", world.marker)
+        stored_after = await _stored_cost(world, subject_id)
+        assert stored_after == (STORED_COST.amount, STORED_COST.code), f"Decision P5: a cost key left out keeps the cost, yet after a notes-only edit the receiving leg id={subject_id} holds {_show(stored_after)} instead of {STORED_COST.amount} {STORED_COST.code}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    async def test_auto_update_sending_a_null_writes_the_auto_cost(self, world, mode):
+        """Guard, green today and after decision P5: ``{id, cost_basis_mode: auto, cost_basis_override: null}`` — what
+        the form sends for a row in Auto (``buildUpdateDiff``, ``txPayloadHelpers.ts``) — is not refused for a missing
+        cost, commits, and the receiving leg holds its Auto cost, ``source``'s average, 100 EUR: not the 42 it was saved
+        with, not nothing. In Auto the null is ignored.
+        """
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        subject_id = stored.subject.id
+        update = {"id": subject_id, "cost_basis_mode": mode, "cost_basis_override": None}
+        assert _sends_the_cost(update), "scaffold: the update must SEND cost_basis_override null, as the form does in Auto"
+
+        response = await _commit_as_the_endpoint(world, updates=[update])
+
+        assert _cost_issues(response) == [], f"Decision P5: in {mode} the null is ignored, yet the update of the received TRANSFER id={subject_id} was refused for a missing cost: {_render(response.issues)}"
+        assert response.committed is True and response.issues == [], f"An {mode} update of a received TRANSFER sending a null cost was refused: {_render(response.issues)}"
+        stored_after = await _stored_cost(world, subject_id)
+        assert stored_after == (UNIT_COST, EUR), f"{mode} cost of the received TRANSFER id={subject_id}: expected {UNIT_COST} {EUR}, the average of source's BUY; the row holds {_show(stored_after)} (wac_results={response.wac_results})"
 
 
 # ============================================================================
