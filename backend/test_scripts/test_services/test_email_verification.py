@@ -8,7 +8,8 @@ status, the setting) are not written yet: this module calls the functions of ``v
 
 1. The surface: coroutine functions with their signatures (``first``, ``now``, ``engine``, ``identifier``, ``password``,
    ``address`` keyword-only; ``first`` and ``address`` required); the shipped limits — «resend» 10 requests per 15
-   minutes per client address, per account one verification email every 5 minutes and 3 an hour —, a link that lives
+   minutes per client address, per account one verification email every 5 minutes and 3 an hour, per recipient
+   mailbox 3 verification emails an hour —, a link that lives
    24 hours on the page ``/verify-email``; every refusal an ``EmailError`` with its code (``EMAIL_VERIFICATION_UNAVAILABLE``,
    ``EMAIL_VERIFICATION_NOT_NEEDED``, ``INVALID_CREDENTIALS``, ``ACCOUNT_DISABLED``, ``USER_LIMIT_REACHED``, and the
    token's status for a refused link).
@@ -30,7 +31,8 @@ status, the setting) are not written yet: this module calls the functions of ``v
    account's language, with the ``LIBREFOLIO_PUBLIC_URL`` link of ``/verify-email``, 24 hours, the host of that address
    as the instance —, committed before the email, one unit of the hourly budget spent; the emailed link verifies the
    account. Nothing at all for an account that no longer waits. When the instance is blocked, email or links are not
-   usable or the budget is spent, nothing is made and the hold stays live. When anything fails once the new token is
+   usable, the budget is spent or the recipient's mailbox had its three verification emails of the hour, nothing is
+   made and the hold stays live (logged «not sent»). When anything fails once the new token is
    committed — reading the account's language, building the link or the email, ``send_email`` (the SMTP server
    refusing, or any other error) —, the new token stays unspent but loses its address (an UPDATE, committed) and the
    failure goes on: the account still waits, the token verifies nothing, and it is not counted as an email. A second
@@ -52,18 +54,26 @@ status, the setting) are not written yet: this module calls the functions of ``v
    block, email and links; then the limits per account, counted on the links emailed — tokens carrying an address,
    spent or not; the hold never counts —, the wait being the longest of the two; then, when no link of the account is
    live any more, a place under ``LIBREFOLIO_MAX_USERS`` (``USER_LIMIT_REACHED``); then the hourly budget; then the
-   email of contract 5, returning its language. Whatever fails once the new token is committed is raised, and the new
-   token stays without its address: it confirms nothing and counts for nothing, so «resend» may be asked again at
-   once. A link emailed meanwhile by another request rolls everything back: ``EmailRateLimitedError``.
-8. No log event holds a token, a password, an identifier or an address.
+   recipient's mailbox — three verification emails an hour per mailbox, whatever accounts they are for, letter case
+   and surrounding spaces aside, counted on the emails that went out only (``EmailRateLimitedError`` with the wait);
+   then the email of contract 5, returning its language. Whatever fails once the new token is committed is raised,
+   and the new token stays without its address: it confirms nothing and counts for nothing, so «resend» may be asked
+   again at once. A link emailed meanwhile by another request rolls everything back: ``EmailRateLimitedError``.
+   Inside the write transaction the account's unspent links are revoked first: none left means it stopped waiting
+   meanwhile (its link clicked, or an administrator's decision) — rolled back, ``EMAIL_VERIFICATION_NOT_NEEDED`` when
+   it is active now, ``ACCOUNT_DISABLED`` otherwise, no new link —; when it held no place (``needs_place``: its link
+   expired), the user limit is counted again with the new link, and a place taken meanwhile rolls it back
+   (``USER_LIMIT_REACHED``).
+8. No log event holds a token, a password, an identifier or an address. Wrong credentials for «resend» are a warning,
+   «Verification resend refused: wrong credentials», without the identifier.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown), the option set in that file only; accounts written as rows with a real
 bcrypt hash at cost 4; tokens issued by A's token service with the ``now`` the case needs. An autouse fixture removes
 every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS`` and
-``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget and ``RESEND_BY_ADDRESS``
-are private limiters on a fake clock; ``socket.getaddrinfo`` resolves the loopback only. Every SMTP conversation is
-with ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks. Nothing is timed.
+``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget, ``RESEND_BY_ADDRESS`` and
+``VERIFICATION_BY_MAILBOX`` are private limiters on a fake clock; ``socket.getaddrinfo`` resolves the loopback only.
+Every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks. Nothing is timed.
 """
 
 from __future__ import annotations
@@ -150,6 +160,11 @@ MAPPED = "::ffff:198.51.100.7"
 
 #: The process's limiter of «resend», as shipped (the fixture below puts a private one in its place).
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
+#: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
+SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
+#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX.
+MAILBOX_VARIANTS = ("Zq-Vic@Example.com", "zq-vic@example.com", "ZQ-VIC@EXAMPLE.COM", "zQ-vIc@eXaMpLe.CoM")
+MAILBOX = "zq-vic@example.com"
 START = 1_000.0
 
 POSITIONAL = inspect.Parameter.POSITIONAL_OR_KEYWORD
@@ -205,6 +220,14 @@ def resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWi
     """A private «resend» limiter with the shipped limit, on the fake clock: no test counts in, or is counted by, the process's."""
     limiter = SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock)
     monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", limiter)
+    return limiter
+
+
+@pytest.fixture(autouse=True)
+def mailbox_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """A private per-mailbox limiter with the shipped limit, on the fake clock: an email of one test never counts against another's mailbox."""
+    limiter = SlidingWindowLimiter(SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds, clock=clock)
+    monkeypatch.setattr(verification, "VERIFICATION_BY_MAILBOX", limiter)
     return limiter
 
 
@@ -495,14 +518,15 @@ def test_the_functions_are_coroutine_functions_with_their_signatures() -> None:
 
 
 def test_the_shipped_limits_lifetime_and_page() -> None:
-    """EMV-002 — contract 1: «resend» 10 requests per 900 s per client address; per account one verification email every 5 minutes and 3 an hour; a verification link lives 24 hours and opens ``/verify-email`` with the token in the fragment."""
+    """EMV-002 — contract 1: «resend» 10 requests per 900 s per client address; per account one verification email every 5 minutes and 3 an hour; per recipient mailbox 3 verification emails per 3600 s; a verification link lives 24 hours and opens ``/verify-email`` with the token in the fragment."""
     print_section("EMV-002: limits, lifetime, page")
 
     assert (SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds) == (10, 900)
+    assert isinstance(SHIPPED_MAILBOX, SlidingWindowLimiter) and (SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds) == (3, 3600)
     assert (verification.VERIFICATION_EMAIL_MIN_INTERVAL, verification.VERIFICATION_EMAILS_PER_HOUR) == (timedelta(minutes=5), 3)
     assert verification.VERIFICATION is VERIFICATION and TTL == timedelta(hours=24)
     assert token_service.token_path(VERIFICATION, "zq-token") == f"{PAGE}#token=zq-token"
-    print_success("10/900 s per address, 1 per 5 min and 3 per hour per account, 24 h, /verify-email#token=")
+    print_success("10/900 s per address, 1 per 5 min and 3 per hour per account, 3/3600 s per mailbox, 24 h, /verify-email#token=")
 
 
 @pytest.mark.parametrize(
@@ -1713,3 +1737,170 @@ async def test_no_log_event_holds_a_token_a_password_an_identifier_or_an_address
     secrets = (hold.token, first, second, ACCOUNT_PASSWORD, WRONG_PASSWORD, alice.email, ALICE, NOBODY, ADDRESS)
     assert _holding(events, *secrets) == [], f"a log event holds a token, a password, an identifier or an address: {_holding(events, *secrets)}"
     print_success(f"{len(events)} events, none holding a secret")
+
+
+# =============================================================================
+# 9. AFTER THE SECURITY REVIEW OF E5b
+# =============================================================================
+
+
+async def _mailbox_accounts(engine: AsyncEngine, created: datetime) -> list[tuple[User, IssuedToken]]:
+    """Four waiting accounts, each with its hold issued at ``created``, whose addresses are MAILBOX written four ways."""
+    return [await _waiting(engine, f"zq_vic_{index}", created=created, email=written) for index, written in enumerate(MAILBOX_VARIANTS)]
+
+
+async def _issue_and_send_directly(engine: AsyncEngine, user: User, moment: datetime, **arguments: bool) -> str:
+    """``_issue_and_send`` in a session of its own, past the checks of «resend»: what a request that passed them meets."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        return await verification._issue_and_send(session, user, moment, **arguments)
+
+
+@pytest.mark.asyncio
+async def test_a_mailbox_gets_three_registration_emails_an_hour_whatever_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-043 — contracts 5 and 7: four accounts registered with one mailbox written four ways (``Zq-Vic@Example.com``, ``zq-vic@…``, ``ZQ-VIC@…``, ``zQ-vIc@…``), each waiting with its hold. The registration emails of the first three go out, a minute apart; the fourth's, a minute later, does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised. That account still waits with its hold as it was — live, not revoked, no new token —; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
+    print_section("EMV-043: three registration emails per mailbox")
+    moment = utcnow()
+    accounts = await _mailbox_accounts(engine, moment - timedelta(minutes=5))
+    last, last_hold = accounts[-1]
+    before = _states(await _rows(engine, last.id))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            for index, (user, _hold) in enumerate(accounts):
+                clock.now = START + 60 * index
+                await verification.registration_email_work(user.id, engine=engine, now=moment + timedelta(minutes=index))
+
+    assert [message.rcpt_tos for message in fake.messages] == [[written] for written in MAILBOX_VARIANTS[:3]]
+    refused = [(event["log_level"], event.get("reason"), event.get("code")) for event in _named(events, "Verification email: not sent")]
+    assert refused == [("warning", "EmailRateLimitedError", "EMAIL_RATE_LIMITED")], refused
+    assert _states(await _rows(engine, last.id)) == before and await _awaits(engine, last.id) is True
+    assert await _status(engine, last_hold.token) == TokenStatus.VALID
+    assert (budget.count(), mailbox_limit.count(MAILBOX)) == (3, 3)
+    print_success("three emails, the fourth not sent; that account waits with its hold")
+
+
+@pytest.mark.asyncio
+async def test_an_email_that_did_not_go_does_not_count_for_its_mailbox(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-044 — contract 7: Vic waits; three «resend» in a row meet an SMTP server that refuses her address — ``EmailDeliveryError`` each time, her mailbox counted for none —; the fourth, a minute later, with a server that takes it, goes: one message, the mailbox counted once. A refused email is not a flood."""
+    print_section("EMV-044: a failed email does not count")
+    moment = utcnow()
+    vic, _hold = await _waiting(engine, "zq_vic", created=moment - timedelta(minutes=1), email=MAILBOX_VARIANTS[0])
+
+    with FakeSmtpServer(refuse_recipients={vic.email}) as refusing:
+        _ready(monkeypatch, refusing)
+        for attempt in range(3):
+            with pytest.raises(EmailDeliveryError):
+                await _resend(engine, "zq_vic", now=moment + timedelta(seconds=attempt))
+    counted_after_the_refusals = mailbox_limit.count(MAILBOX)
+    clock.now = START + 60
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        assert await _resend(engine, "zq_vic", now=moment + timedelta(minutes=1)) == "en"
+
+    assert counted_after_the_refusals == 0
+    assert [message.rcpt_tos for message in fake.messages] == [[vic.email]]
+    assert mailbox_limit.count(MAILBOX) == 1
+    print_success("three refusals counted nothing; the fourth went")
+
+
+@pytest.mark.asyncio
+async def test_a_place_taken_meanwhile_is_counted_inside_the_write_transaction(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-045 — contract 7: ``LIBREFOLIO_MAX_USERS=1``, reached by the administrator; Alice's link expired, so she holds no place. ``_issue_and_send(…, needs_place=True)`` is called directly, as by a «resend» that passed the first count before another request took the last place: the user limit, counted again inside the write transaction with her new link, refuses — ``VerificationUserLimitError`` (``USER_LIMIT_REACHED``), everything rolled back: her hold as it was (not revoked), no new token, nothing sent, spent or counted for her mailbox."""
+    print_section("EMV-045: the last place taken meanwhile")
+    moment = utcnow()
+    await _add_user(engine, ADMIN)
+    alice, hold = await _waiting(engine, ALICE, created=moment - TTL - timedelta(hours=1))
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "1")
+    before = _states(await _rows(engine, alice.id))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with pytest.raises(verification.VerificationUserLimitError) as refused:
+            await _issue_and_send_directly(engine, alice, moment, needs_place=True)
+
+    assert refused.value.code == "USER_LIMIT_REACHED"
+    assert _states(await _rows(engine, alice.id)) == before == [(hold.record.id, None, False, False)]
+    assert (fake.connections, budget.count(), mailbox_limit.count(alice.email.casefold())) == (0, 0, 0)
+    print_success("USER_LIMIT_REACHED inside the transaction; the hold as it was")
+
+
+@pytest.mark.asyncio
+async def test_a_live_link_still_holds_its_place_on_a_full_instance(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-046 — contract 7, the control of EMV-045: ``LIBREFOLIO_MAX_USERS=2``, reached by the administrator and Alice, whose live hold holds her place. ``_issue_and_send(…, needs_place=False)`` goes on the full instance: her hold revoked, one emailed link in its place, one message, her mailbox counted once."""
+    print_section("EMV-046: a live link keeps its place")
+    moment = utcnow()
+    await _add_user(engine, ADMIN)
+    alice, hold = await _waiting(engine, ALICE, created=moment - timedelta(hours=1))
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        assert await _issue_and_send_directly(engine, alice, moment, needs_place=False) == "en"
+
+    states = _states(await _rows(engine, alice.id))
+    assert states[0] == (hold.record.id, None, False, True) and [state[1:] for state in states[1:]] == [(alice.email, False, False)], states
+    assert [message.rcpt_tos for message in fake.messages] == [[alice.email]]
+    assert mailbox_limit.count(alice.email.casefold()) == 1
+    print_success("sent on the full instance; the hold replaced")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("case", "error", "active"),
+    [
+        pytest.param("deactivated", verification.VerificationAccountDisabledError, False, id="an-administrator-ended-the-wait-the-links-revoked"),
+        pytest.param("clicked", verification.EmailVerificationNotNeededError, True, id="the-link-was-clicked-the-account-active"),
+        pytest.param("activated", verification.EmailVerificationNotNeededError, True, id="an-administrator-activated-it-the-links-revoked"),
+    ],
+)
+async def test_an_account_that_stopped_waiting_meanwhile_gets_no_new_link(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, mailbox_limit: SlidingWindowLimiter, case: str, error: type[EmailError], active: bool) -> None:
+    """EMV-047 — contract 7: Alice was loaded while she waited, as a «resend» that passed its checks loads her; meanwhile she stopped waiting — an administrator ended the wait (her links revoked, still inactive), her link was clicked (active, the link consumed, the hold revoked) or an administrator activated her (active, her links revoked). ``_issue_and_send`` runs on what it was given: its first write, revoking her unspent links, revokes none, so it stops — rolled back, ``error`` (``ACCOUNT_DISABLED`` inactive, ``EMAIL_VERIFICATION_NOT_NEEDED`` active) —: no new link that would make her wait again, her tokens and her state as they were, nothing sent, spent or counted for her mailbox."""
+    print_section(f"EMV-047: {case}")
+    moment = utcnow()
+    alice, hold = await _waiting(engine, ALICE, created=moment - timedelta(minutes=10))
+    if case == "clicked":
+        link = await _emailed(engine, alice, created=moment - timedelta(minutes=6))
+        await _confirm(engine, link.token, now=moment - timedelta(minutes=1))
+    else:
+        await _spend(engine, hold, "revoked")
+        if case == "activated":
+            async with AsyncSession(engine) as session:
+                await session.execute(update(User).where(User.id == alice.id).values(is_active=True))
+                await session.commit()
+    before = _states(await _rows(engine, alice.id))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with pytest.raises(error):
+            await _issue_and_send_directly(engine, alice, moment)
+
+    assert _states(await _rows(engine, alice.id)) == before, "no new link, nothing revoked"
+    assert (await _account(engine, alice.id)).is_active is active
+    assert (fake.connections, budget.count(), mailbox_limit.count(alice.email.casefold())) == (0, 0, 0)
+    print_success(f"{error.__name__}, no new link")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("identifier", "password"),
+    [
+        pytest.param(ALICE, WRONG_PASSWORD, id="a-wrong-password"),
+        pytest.param(NOBODY, ACCOUNT_PASSWORD, id="an-unknown-account"),
+    ],
+)
+async def test_wrong_credentials_are_a_warning_without_the_identifier(engine: AsyncEngine, identifier: str, password: str) -> None:
+    """EMV-048 — contract 8: «resend» with wrong credentials — a wrong password for Alice, or a name no account has — logs one warning, «Verification resend refused: wrong credentials», as the login logs its failures; no event holds the identifier, either password, Alice's address or the client's."""
+    print_section(f"EMV-048: wrong credentials, {identifier}")
+    moment = utcnow()
+    alice, _hold = await _waiting(engine, ALICE, created=moment)
+
+    with capture_logs() as events:
+        with pytest.raises(verification.VerificationCredentialsError):
+            await _resend(engine, identifier, password, now=moment)
+
+    refused = [(event["event"], event["log_level"]) for event in _named(events, "Verification resend refused")]
+    assert refused == [("Verification resend refused: wrong credentials", "warning")], f"{events}"
+    secrets = (identifier, ALICE, NOBODY, alice.email, ACCOUNT_PASSWORD, WRONG_PASSWORD, ADDRESS)
+    assert _holding(events, *secrets) == [], f"a log event holds an identifier, a password or an address: {_holding(events, *secrets)}"
+    print_success("one warning, nothing of the credentials")

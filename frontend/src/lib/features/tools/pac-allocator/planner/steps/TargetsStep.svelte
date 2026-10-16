@@ -151,7 +151,7 @@
 
 <div class="space-y-3" data-testid="pac-planner-targets">
     <div class="flex flex-wrap items-center gap-2">
-        <p class="text-sm text-gray-700 dark:text-gray-300">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
+        <p class="text-sm text-lf-secondary">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
         <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             {#if selectedKeys.length > 0}
                 <DataTableToolbar
@@ -221,14 +221,14 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-end gap-1.5 pt-1 text-xs font-medium" data-testid="pac-planner-targets-control" data-balanced={totalState === 'balanced' ? 'true' : 'false'} data-state={totalState}>
-            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.total`, {default: 'Total'})}</span>
+            <span class="text-lf-muted">{$t(`${KEY}.total`, {default: 'Total'})}</span>
             <span class="font-mono {TOTAL_CLASS[totalState]}" data-testid="pac-planner-targets-total">{total === null ? '—' : formatPlannerPercentUnits(total)}</span>
             {#if totalState === 'balanced'}
-                <span class="text-green-500" aria-hidden="true">✅</span>
+                <span class="text-lf-success" aria-hidden="true">✅</span>
             {:else if totalState === 'excess' && excess !== null}
-                <span class="text-red-500">⚠ {$t(`${KEY}.excess`, {default: '+{value} in excess', values: {value: formatPlannerPercentUnits(excess)}})}</span>
+                <span class="text-lf-danger">⚠ {$t(`${KEY}.excess`, {default: '+{value} in excess', values: {value: formatPlannerPercentUnits(excess)}})}</span>
             {:else if totalState === 'missing' && remaining !== null}
-                <span class="text-amber-500">⚠ {$t(`${KEY}.remaining`, {default: '{value} missing', values: {value: formatPlannerPercentUnits(remaining)}})}</span>
+                <span class="text-lf-warning">⚠ {$t(`${KEY}.remaining`, {default: '{value} missing', values: {value: formatPlannerPercentUnits(remaining)}})}</span>
             {/if}
             <HelpTip
                 label={$t(`${KEY}.total`, {default: 'Total'})}

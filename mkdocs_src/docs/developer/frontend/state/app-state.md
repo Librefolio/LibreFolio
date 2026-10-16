@@ -367,7 +367,7 @@ the name must be an export pinned by unit tests that would break if its masking 
 What the gate cannot see:
 
 1. **Money without a currency token** — axis ticks and labels, such as the value axis of the lot
-   comparison chart (`formatAxisAmount` in `lib/components/brokers/lots/lotComparisonChartHelpers.ts`).
+   comparison chart (`formatAxisAmount` in `lib/features/brokers/lots/lotComparisonChartHelpers.ts`).
    Only their own tests protect them.
 2. **A `public` marking.** `{sensitivity: 'public'}` sits on a `SAFE_CALL` line and is never a hit,
    and a `public` entry is not re-examined. Only the tests of that site protect the decision — for
@@ -400,12 +400,12 @@ fresh, can see this. The remedy:
 - render the amount through a runes child — `lib/components/ui/display/CurrencyAmount.svelte`
   renders one D8 amount — or migrate the parent to runes when it is small;
 - cover the site with a component test that toggles privacy **in place, in both directions**,
-  including a mount with privacy already on: `lib/components/brokers/BrokerCard.test.ts`, and
+  including a mount with privacy already on: `lib/features/brokers/BrokerCard.test.ts`, and
   `lib/components/ui/display/CurrencyAmount.test.ts`, which mounts the child under
   `__tests__/harness/CurrencyAmountLegacyHost.svelte`. That host is legacy by construction
   (`export let`) and also renders the same call inline, as a control that must stay frozen.
 
-Today the legacy parents that render money are `lib/components/brokers/BrokerCard.svelte` and
+Today the legacy parents that render money are `lib/features/brokers/BrokerCard.svelte` and
 `routes/(app)/brokers/[id]/+page.svelte`; both render it through `CurrencyAmount`.
 
 ### 📈 ECharts formatters {: #privacy-echarts }
@@ -417,9 +417,9 @@ its text until it is shown again. The render `$effect` must read the flag itself
 `void isPrivacyEnabled();`, beside its other `void` dependencies — so that a toggle re-runs it and
 the option is rebuilt with every formatter called again:
 
-- `lib/components/brokers/lots/LotComparisonChart.svelte` — axis formatters; each render replaces
+- `lib/features/brokers/lots/LotComparisonChart.svelte` — axis formatters; each render replaces
   `xAxis`, `yAxis` and `series` (`replaceMerge`);
-- `lib/components/brokers/lots/LotGanttChart.svelte` — the lot quantity on each bar is built in
+- `lib/features/brokers/lots/LotGanttChart.svelte` — the lot quantity on each bar is built in
   `renderItem`.
 
 The interface locale follows the same pattern: both effects also read `void uiLocale();`, so a language

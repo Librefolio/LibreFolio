@@ -682,10 +682,11 @@ async def list_files(
     """
     List all uploaded broker report files.
 
-    Optionally filter by status and/or broker IDs.
-    Non-superusers see the files of the brokers they have a role on, and the files with no broker (uploaded by an
-    older version) they uploaded themselves (decision 36). Each item says whether the user may delete it
-    (``can_delete``). Results are sorted by upload time (newest first).
+    Optionally filter by status and/or broker IDs. With ``broker_ids`` the list holds only those brokers' files: the
+    files with no broker (uploaded by an older version) are listed only without that filter, on the Files page (W-B32).
+    Non-superusers see the files of the brokers they have a role on, and the files with no broker they uploaded
+    themselves (decision 36). Each item says whether the user may delete it (``can_delete``). Results are sorted by
+    upload time (newest first).
     """
     # Determine accessible broker IDs
     if current_user.is_superuser:
@@ -705,6 +706,9 @@ async def list_files(
 
     # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
     files = await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    if broker_ids:
+        # A broker's list holds that broker's files only; list_files also keeps the ones with no broker (W-B32).
+        files = [file for file in files if file.target_broker_id is not None]
     if current_user.is_superuser:
         return [BRIMFileListItem(**file.model_dump(), can_delete=True) for file in files]
 

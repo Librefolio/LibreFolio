@@ -48,7 +48,7 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 |---|---|---|---|
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
 | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). An instance upgraded from an earlier version keeps the mode it had. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. |
-| 🛡️ Security | **Require Email Verification** | Off | Not active yet: sending emails is a planned feature, so the switch is read-only and marked **Coming soon**. |
+| 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
@@ -151,6 +151,9 @@ Keep at least one time and one day. Tip: a history sync after the markets close 
 ### 📜 Read the scheduler log
 
 The **Scheduler Status** row shows the last current price refresh, with a dot for its result.
+While a retry is pending, an extra line gives its time: **Failed: next attempt at …** after a
+refresh that could not finish, otherwise **Paused items retried at …** for the prices deferred
+because their provider paused.
 Click the row (or **Details…**) to open the **Scheduler Execution Log**. Only administrators can
 read the status and the log.
 
@@ -163,6 +166,9 @@ read the status and the log.
   many requests; 🔴 **Error**: none succeeded and none was deferred.
 - Click an entry to see each asset or FX pair, its provider and the prices changed (**Delta**).
   Hover an error to read it in full; double-click it (long-press on a phone) to copy it.
+- A deferred item shows a pause icon and **Deferred: provider paused**: hover the label to read the
+  provider's message. The entry counts deferred items with ⏸, next to ✓ and ✗ (for example
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), and **Retry at** in its header gives the time set for retrying them.
 - Filter by job, status or period, from the last hour to the last 30 days. Only the most recent
   runs are kept.
 

@@ -19,7 +19,7 @@
   inflate the numbers it exists to improve.
 -->
 <script lang="ts">
-    import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
+    import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
 
     export let brokerId: number;
     export let onChanged: (() => void) | undefined = undefined;

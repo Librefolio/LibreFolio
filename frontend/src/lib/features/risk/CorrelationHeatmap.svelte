@@ -38,6 +38,7 @@
      */
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_FONT_FAMILY, CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
@@ -69,6 +70,7 @@
         type ExposureGroup,
         type HeatmapPoint,
     } from './correlationHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -126,9 +128,9 @@
         wrapperWidth = Math.floor(entry?.contentRect.width ?? wrapper?.clientWidth ?? 0);
     });
 
-    /** ECharts' own axis-label font, set explicitly so that what is measured here is what gets drawn. */
+    /** The charts' own axis-label font (K-13), set explicitly so that what is measured here is what gets drawn. */
     const AXIS_FONT_SIZE = 12;
-    const AXIS_FONT_FAMILY = 'sans-serif';
+    const AXIS_FONT_FAMILY = CHART_FONT_FAMILY;
     const AXIS_LINE_HEIGHT = 14;
     /** Row names wrap onto a second line past this width; rotated column names are cut with an ellipsis past theirs. */
     const Y_LABEL_MAX = 200;
@@ -347,11 +349,6 @@
         if (container) void tick().then(render);
     });
 
-    /** Asset names are user data and the tooltip is raw HTML. */
-    function escapeHtml(value: string): string {
-        return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    }
-
     /**
      * One asset in the tooltip: its name, then one line for its sectors and one
      * for its countries, whatever the ordering. A full list made the tooltip tall
@@ -455,7 +452,7 @@
             return;
         }
         if (!chart) {
-            chart = echarts.init(container);
+            chart = echarts.init(container, CHART_INIT_THEME);
             attachChartReady(chart, container, 'correlation-heatmap');
             scheduleFirstRenderStabilityFix(chart, container);
             // The other direction of the link: a cell clicked in the matrix selects its ranking entry, if it has one.

@@ -42,10 +42,20 @@ export function isSignOutRequested(): boolean {
     return signOutRequested;
 }
 
+/** The `error_code` of a refused sign-in's `detail`, when it carries one. */
+function loginErrorCode(body: unknown): unknown {
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    return typeof detail === 'object' && detail !== null ? (detail as {error_code?: unknown}).error_code : undefined;
+}
+
 /** The login's 403 for a disabled account, sent only to whoever gave its right password (plan 36). */
 function isAccountDisabled(body: unknown): boolean {
-    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
-    return typeof detail === 'object' && detail !== null && (detail as {error_code?: unknown}).error_code === 'ACCOUNT_DISABLED';
+    return loginErrorCode(body) === 'ACCOUNT_DISABLED';
+}
+
+/** The login's 403 for an account waiting for its email verification (workstream E), with the right password only. */
+function isEmailNotVerified(body: unknown): boolean {
+    return loginErrorCode(body) === 'EMAIL_NOT_VERIFIED';
 }
 
 /** The key of a sign-in that failed with this HTTP status, or with none when nothing answered. */
@@ -54,6 +64,8 @@ function loginErrorKey(status: number | undefined, body: unknown): AuthErrorKey 
     if (status === 401) return 'auth.invalidCredentials';
     // A disabled account is told so only with its right password, as a 403 ACCOUNT_DISABLED (plan 36).
     if (status === 403 && isAccountDisabled(body)) return 'auth.accountDisabled';
+    // The sign-in card answers it with «send the link again» (`features/email/VerificationNotice.svelte`).
+    if (status === 403 && isEmailNotVerified(body)) return 'email.verification.loginRequired';
     if (status === 422) return 'auth.invalidInput';
     if (status === 429) return 'auth.tooManyAttempts';
     // No answer, or a gateway saying the server behind it is down or too slow.
