@@ -12,7 +12,7 @@ $$
 \boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1)-\mathrm{NAV}(t_0)-\Delta \mathrm{CapitalBaseline}_{[t_0,t_1]}}
 $$
 
-The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital.
+The baseline delta comes from `cumulative_external_cash_flow`, so it includes cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. An outgoing ADJUSTMENT with a cost basis takes out the value it hands over, converted at its date ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
@@ -25,7 +25,7 @@ $$
 | Component | Definition |
 |-----------|-----------|
 | $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period — for assets priced in another currency, including the exchange-rate effect on their historical cost |
-| Realized | Sum of (sell proceeds − historical cost of the units sold) for SELLs in period; proceeds are converted at the sale date |
+| Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs with a cost basis, whose proceeds are the value they hand over; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
 | Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |
@@ -47,7 +47,7 @@ The residual holds what neither the four components nor the exchange result on c
 - the exchange-rate move of cash while it travels between two brokers: in transit, it belongs to no broker's balance;
 - the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
 - the value of assets travelling between two brokers on a boundary day;
-- a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+- a sale left out of Realized because its proceeds could not be converted, or a sale or an outgoing ADJUSTMENT left out because its position's cost is incomplete.
 
 ### 💵 FX on Cash {: #fx-on-cash }
 

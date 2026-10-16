@@ -467,6 +467,8 @@ class PortfolioCalculationEngine:
 
         Includes rates for:
         - Transaction amounts → target_currency (all tx dates)
+        - Priced outgoing ADJUSTMENTs → their cost basis (or asset) currency at their date (J-24: the
+          value they hand over leaves the capital at that day's rate)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
         - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
@@ -484,6 +486,16 @@ class PortfolioCalculationEngine:
             tx = ctxn.tx
             if tx.amount and tx.amount != 0 and tx.currency and tx.currency != target_currency:
                 fx_needs.add((tx.currency, tx.date))
+
+        # From priced outgoing ADJUSTMENTs (J-24): the value they hand over, at the rate of their date, also before
+        # the range, in the cost basis currency or the asset's
+        for ctxn in classified_txs:
+            tx = ctxn.tx
+            if tx.type != TransactionType.ADJUSTMENT or tx.cost_basis_override is None or not tx.quantity or tx.quantity > 0:
+                continue
+            handover_ccy = tx.cost_basis_currency or asset_currencies.get(tx.asset_id)
+            if handover_ccy and handover_ccy != target_currency:
+                fx_needs.add((handover_ccy, tx.date))
 
         # From external cash flows
         for dt, _, _, ccy in external_cash_flows:
