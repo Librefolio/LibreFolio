@@ -158,3 +158,10 @@ Sono tutti locali: la push la fa il developer.
 | 69 | 15/10 23:45 | W: W-B20 (un savepoint per broker nella cancellazione multipla; `begin_writes` in `db/session.py`) | `23ff56b95` |
 | 70 | 16/10 00:42 | J: CP-16 (decisione 47 nei lotti: la rettifica in uscita con costo chiude i lotti al costo medio della riga, valore ceduto nei proventi; J-9; etichetta «Valore ceduto al costo») | `240675ad1` |
 | 71 | 16/10 00:55 | X: CP11a (impostazioni dei plugin, backend: `configured` nel catalogo, `providers_not_configured` e `error_code` nello stream di ricerca, preferenze justETF/Borsa D-X14, `PROVIDER_ERROR` mascherato; CHANGELOG con CP11b) | `a6453571d` |
+| 72 | 16/10 01:38 | W: lotto di doc (A-14 regola dell'ultimo OWNER, W-B10 rotte di accesso, W-B33; tolte due chiavi i18n inutilizzate di W-B27) | `6fa3f8936` |
+| 73 | 16/10 01:44 | Z: Z3 (`run_due_jobs` con lock e `busy("scheduler")`, recupero al ritorno, slot perso fino a 7 giorni, istanza bloccata senza job; Z-6 chiusa) | `c0dbc98a0` |
+| 74 | 16/10 01:46 | J: CP-15 (totali di controllo del registro per il backup: `financial_math/ledger_totals.py`, versione 1, somme esatte; nessun chiamante ancora) | `fd41a0996` |
+| 75 | 16/10 01:48 | E: E4a (parti solo di E: «Invia per email», modulo «password dimenticata», avviso al vecchio indirizzo; non raggiungibili fino a E4b) | `73a68d95f` |
+| 76 | 16/10 01:53 | Y: Y7 (tabelle su telefono: colonne di selezione e azioni scorrono sotto 768 px, D-Y17; ridimensionamento con Pointer Events e `min-width`, D-Y18/C-62; galleria mobile 11/11 contro G-13, 174 scatti cambiati, tutti di Y7) | `a613a217c` |
+| 77 | 16/10 01:57 | Z: Z4 (`POST /system/wake-sync` con `LIBREFOLIO_WAKE_TOKEN`, 409 `wake_in_progress`, risposta in streaming, ammessa su istanza bloccata; pagina admin «Sleep and Wake»; security-review pulita) | `2980e2a00` |
+| 78 | 16/10 02:08 | W: W-B31 + W-B36 (le regole 5–12 leggono `TX_TYPE_METADATA`; tolto `EVENT_COMPATIBLE_TYPES`; i 4 casi di P6 restano eccezioni esplicite; messaggi invariati) | `4e69b5271` |

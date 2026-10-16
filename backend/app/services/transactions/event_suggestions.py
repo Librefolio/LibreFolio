@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetEvent, AssetEventType, TransactionType
 from backend.app.schemas.transactions.event_suggest import TXEventSuggestCandidate, TXEventSuggestRequestItem, TXEventSuggestResultItem
-from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES
+from backend.app.schemas.transactions.type_metadata import event_compatible
 
 
 class TransactionEventSuggestionsMixin:
@@ -47,7 +47,7 @@ class TransactionEventSuggestionsMixin:
 
         results: List[TXEventSuggestResultItem] = []
         for req in requests:
-            if req.type not in EVENT_COMPATIBLE_TYPES:
+            if not event_compatible(req.type):
                 results.append(
                     TXEventSuggestResultItem(
                         asset_id=req.asset_id,

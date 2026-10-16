@@ -138,6 +138,12 @@ class Activity:
         with self._lock:
             self._listeners[name] = (after_seconds, callback)
 
+    def remove_return_listener(self, name: str) -> None:
+        """Stop calling the return listener registered as ``name``; an unknown name is not an error."""
+        _require_name(name, "a return listener's name")
+        with self._lock:
+            self._listeners.pop(name, None)
+
     @contextmanager
     def _busy_block(self, reason: str) -> Iterator[None]:
         with self._lock:

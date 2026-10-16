@@ -3,8 +3,9 @@
  *
  * The categories with a fixed colour (asset types, sectors) and the sequences of the charts that colour by order (the
  * owners of the semi-donut, the countries of the geography history) live in `./chartCategories`, the designer's round 2
- * (GR1–GR5, D-T17). What stays here are the lists still read as they are: the signals' default line colours (S9, after
- * the 1.3 moves), the world maps' scale (GR5.1) and the broker lines of the Growth chart (GR5).
+ * (GR1–GR5, D-T17). What stays here are the lists still read as they are, the signals' default line colours (S9, after
+ * the 1.3 moves) and the world maps' scale (GR5.1), and the broker lines of the Growth chart (GR5), read through
+ * `categoryColor` at each draw.
  *
  * A pair is read with `themed(pair, dark)` (`./themePair`).
  *
@@ -24,7 +25,10 @@ export const GEO_CHOROPLETH_SCALE: ThemePair<string[]> = {
 };
 
 /**
- * The Growth chart's P&L broker lines, cycled by the broker's index: the first eight asset types of the designer's
- * table, in its order (GR5: «devono tutte seguire la nuova famiglia cromatica»), read once.
+ * The colour of the Growth chart's P&L broker line `index`: the first eight asset types of the designer's table, in its
+ * order, cycled (GR5: «devono tutte seguire la nuova famiglia cromatica»). Read at each draw through `categoryColor`, so
+ * a Designer Lab edit of a category reaches the lines (C1, TD-1b).
  */
-export const GROWTH_BROKER_PALETTE: ThemePair<string>[] = CATEGORY_SEQUENCE.map((key) => ({light: categoryColor('type', key, false), dark: categoryColor('type', key, true)}));
+export function growthBrokerColor(index: number, dark: boolean): string {
+    return categoryColor('type', CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length], dark);
+}

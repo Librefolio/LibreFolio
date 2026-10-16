@@ -71,6 +71,9 @@ El planificador mantiene actualizados por sí solo los precios y los tipos de ca
   tipos de cada par FX con un proveedor, durante el **Horizonte de recuperación**, para rellenar cualquier hueco. Los pares
   que solo tienen tipos manuales se omiten.
 
+Si el servidor está apagado o en suspensión a una hora de sincronización, la sincronización histórica
+que se ha perdido se ejecuta en cuanto el servidor vuelve, sin esperar a la siguiente hora de sincronización.
+
 ### ⚙️ Configurar la programación
 
 Desbloquea la pestaña, abre **Tarea de actualización** y haz clic en **Configurar…** en la fila **Configuración del Horario**.
