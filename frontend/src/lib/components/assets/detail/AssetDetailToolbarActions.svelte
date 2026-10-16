@@ -56,7 +56,7 @@
     onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
 />
 <button
-    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     data-testid="asset-detail-edit-btn"
     disabled={editDisabled}
     onclick={() => onedit()}
@@ -67,7 +67,7 @@
 {#if syncBlocked}
     <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
         <button
-            class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors opacity-50 cursor-not-allowed"
             data-testid="asset-detail-sync-btn"
             disabled={syncing || syncBlocked}
             onclick={onsync}
@@ -78,7 +78,7 @@
     </Tooltip>
 {:else}
     <button
-        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
         data-testid="asset-detail-sync-btn"
         disabled={syncing || syncBlocked || !providerAssignmentLoaded}
         onclick={onsync}
@@ -87,12 +87,7 @@
         {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
     </button>
 {/if}
-<button
-    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-    data-testid="asset-detail-refresh-btn"
-    disabled={loading}
-    onclick={() => onrefresh()}
->
+<button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="asset-detail-refresh-btn" disabled={loading} onclick={() => onrefresh()}>
     <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
     {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
 </button>

@@ -140,6 +140,24 @@ async def settings_cache_part_for(code: str) -> str:
     return settings_cache_part(provider) if provider is not None else ""
 
 
+def asset_cache_key(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None, settings_part: str) -> tuple[str, str, str, str, str]:
+    """The key of a provider's answers in `_asset_history_cache` and `_asset_current_cache`: the inputs of the call.
+
+    The one function for every reader, writer and drop of those entries (X-R27, X-R28): the provider, the identifier as
+    the assignment stores it (none as ""), its stored input type, the hash of the parameters (#R3-4) and the provider's
+    settings (`settings_cache_part`). A provider sees nothing else, so equal keys always mean equal answers, and other
+    parameters or settings never share one.
+    """
+    return (provider_code, identifier or "", str(identifier_type), _provider_params_hash(_parse_provider_params(provider_params)), settings_part)
+
+
+async def drop_asset_cache_entries(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None) -> None:
+    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now."""
+    key = asset_cache_key(provider_code, identifier, identifier_type, provider_params, await settings_cache_part_for(provider_code))
+    _asset_history_cache.delete(key)
+    _asset_current_cache.delete(key)
+
+
 def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:
     """The part of ``provider`` a pause applies to for this identifier: the plugin's ``cooldown_scope``, else None.
 
