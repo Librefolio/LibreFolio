@@ -1071,6 +1071,22 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
 
 
+def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cache policy of the web app's files: hashed chunks immutable, the rest of /_app and the HTML revalidated (F28)."""
+    print_section("Services: Static Cache Policy")
+    print_info("Testing: backend/app/services/platform/static_site.py (the /_app mount, the HTML documents)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_cache_policy.py", test_names)
+    return run_command(cmd, "Static cache policy tests", verbose=verbose)
+
+
+def services_security_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the security headers every response carries: nosniff and Referrer-Policy, never overwritten (F15, D5)."""
+    print_section("Services: Security Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware), middleware.py (MIDDLEWARE_STACK), the app of backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_security_headers.py", test_names)
+    return run_command(cmd, "Security headers tests", verbose=verbose)
+
+
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
     print_section("Services: Instance Backup Archive")
@@ -1828,6 +1844,27 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "static-cache-policy",
+        services_static_cache_policy,
+        name="Static Cache Policy",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
+        # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "security-headers",
+        services_security_headers,
+        name="Security Headers",
+        desc="F15 (D5, always): MIDDLEWARE_STACK holds one security_headers entry, SecurityHeadersMiddleware, outside gzip (relative order), and the app carries it outside GZip; every response has X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin exactly once (JSON, HTML, streamed, the router's 404, a CORS preflight, a gzip-compressed body, a start without headers); a route's Referrer-Policy: no-referrer is kept and its nosniff not repeated; lifespan and websocket scopes pass untouched; on the app, the health route, the SPA catch-all and the 500 of an exception (still re-raised to the server) carry both",
+        # Raw ASGI calls on fresh apps holding the stack's own entries and on the global app (its lifespan never runs);
+        # the health route's session dependency, the catch-all's build and frontend_available swapped by monkeypatch.
+        # No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "backup-archive",
