@@ -5515,16 +5515,42 @@ da Y il 15/10.
     - `riskAnalysisHelpers.ts`.
   - La tabella con i valori di oggi è nel piano di Y, «Y12b».
 - **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
-  decisione del coordinatore delle 21:20). ◐ 16/10: correzione nel checkpoint di Y-21. Ci sono le scadenze vere
-  (`L4_OFFER_DEADLINE_MS`, 10 s) sui quattro `poll` di D377. In più, dopo la corsa delle 23:25 (36/38, due rossi del
-  benchmark di L3 con la stessa causa), un budget di 90 s per tutto il blocco «functional integration» (opzione A del
-  coordinatore). Si chiude con la nuova corsa di `front-portfolio risk` sulla revisione combinata.
+  decisione del coordinatore delle 21:20). ✅ 17/10: D377 è verde nelle due corse, in 11,7 s e in 22,2 s, con le
+  scadenze vere (`L4_OFFER_DEADLINE_MS`, 10 s) sui suoi quattro `poll`. Il budget di 90 s per tutto il blocco
+  «functional integration» (opzione A del coordinatore) rende verdi D378 e il benchmark condiviso, rossi alle 23:25
+  per la stessa causa. Prova sulla revisione combinata `a49a86a7b`; commit `92e04271d`. Due rossi d'altro tipo, sotto
+  carico 100+, vanno in Y-22.
   - In `risk-analysis.spec.ts:2812`, alla riga 2828, `expect.poll(offered)` usa il limite predefinito di 3 s.
   - Il 16/10 alle 21:17, con il carico fra 72 e 83, il predicato (`evaluateAll`) non è nemmeno tornato: subito dopo
     l'apertura del replay storico il thread principale è rimasto occupato per più di 3 s. Alla fine il DOM era giusto.
     Alle 20:45, con il carico a 35, era verde.
   - Rimedio: una scadenza vera per i `poll` di quel test, oppure un'apertura del replay che costi meno.
   - Prove in `files/logs/y12b_l4_*` della sessione di Y. Dettagli: piano di Y, «Y12b · E2E».
+- **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
+  corsa di Y-21 sulla revisione combinata `a49a86a7b`, carico 94–115). Tutti e due i test erano verdi nelle tre corse
+  precedenti. ✅ 17/10: `:3736` ha una scadenza più larga (20 s, con 3 s per tentativo), e da solo ×4 è verde.
+  `:2871` ha la sua traccia: ×4 verde, il clic è subito eseguibile. Il verdetto è ambiente, non riprodotto; il test
+  resta com'è. Nel checkpoint successivo a Y-21.
+  - `:3736`, la tabella di L3 («each holding's beta and correlation are their own…»). `hoverUntilHelpOpens` non apre
+    l'aiuto del «—» entro `HELP_OPEN_DEADLINE_MS`, 10 s.
+    - La fotografia mostra la tabella completa: è un'assunzione sull'orologio.
+    - Rimedio: una scadenza più larga, per esempio 20 s.
+  - `:2871` («a benchmark chosen on the Dashboard is the benchmark in force on Broker Detail»). In `chooseBenchmark`
+    (`:1476`), `option.click()` aspetta fino alla fine dei 90 s che l'opzione diventi «visible, enabled and stable»;
+    un attimo prima era visibile.
+    - Mancano fotografia e traccia, quindi nessun verdetto.
+    - Primo passo: quel test da solo con `--trace on`, in uno slot tranquillo.
+    - Da guardare anche il `.first()` su tutta la pagina (`search-select-option-*`).
+    - Se ricompare, serve la traccia del caso rosso: la configurazione traccia solo `on-first-retry`, e in locale
+      non ci sono tentativi ripetuti.
+  - Prove in `files/logs/y21_reds_rerun/` e `files/logs/y22_*` della sessione di Y. Dettagli: piano di Y, «Y-21 ·
+    seconda corsa» e «Y-22».
+- ✅ **Y-23 · I mock di `$app/navigation` nei test del layout non esportano `onNavigate`** — minimo; difetto di Y
+  (`ec018afdf`, Y11 passo 2), trovato da A in dev il 17/10.
+  - `layout.gate.test.ts` e `layout.authGate.test.ts` (di H) avevano 20 rossi su `front-utility
+    onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
+  - Allora quell'azione non era fra le mie prove leggere.
+  - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
 
 ## MF · Matematica finanziaria (fase 01)
 
