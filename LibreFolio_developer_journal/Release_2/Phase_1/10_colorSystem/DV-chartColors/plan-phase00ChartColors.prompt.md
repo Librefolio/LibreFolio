@@ -962,6 +962,146 @@ entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
 - Restano come prima i campi numerici e di testo (lotto di T sull'input) e i 4 interruttori dell'estetica (lotto di T
   sugli interruttori).
 
+### W6 — Ruoli di colore in rischio, dashboard, strumenti e grafici ⏳ (dal 16/10/2026)
+
+**Mandato.**
+- Coordinatore, 16/10 alle 10:43, dopo D-T28 del developer (10:16): «è importante migrare il prima possibile i
+  componenti prima di metterci a sviluppare funzioni grandi». Il programma colori si divide in sei aree; DV ha
+  `features/risk/**`, `features/dashboard/**`, `routes/(app)/dashboard/**`, `features/tools/**` e `components/charts/**`.
+- I broker sono passati a BK, che parte dal mio inventario.
+- Elenco, ordine e scelte approvati alle 10:58.
+- Il coordinatore manda il «chi parte prima» alla 1.3 e mi gira ogni cambio prima che io arrivi a quei file.
+
+**Base:** `8f2824046`. `/tmp` è vuota dopo il riavvio delle 10:16, quindi il convertitore l'ho ricostruito nella
+cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'indentazione di W5-charts.
+
+**Area: 57 file, m1 1.493, m2 0.** L'inventario usa le regole del gate (`listSources`, `codeOf`, `LEGACY_CLASS_RE`).
+
+| Lotto | File | m1 | Resto atteso |
+|---|---|---|---|
+| W6-c · strumenti e grafici | 9 | 348 | 0 |
+| W6-a · rischio | 30 | 763 | 4 |
+| W6-b · dashboard | 10 | 295 | 6 + 4 |
+| W6-d · dopo l'ingresso di Y (W7) | 2 | 48 | — |
+| Restano | 6 | 39 | — |
+
+- **W6-c:**
+  - in `features/tools/`: `ToolsHub` 84, `ToolDiagnosticsPanel` 78, `ToolAboutPanel` 58, `ToolHost` 56,
+    `components/ToolExecutionMetrics` 24, `pac-allocator/planner/result/ExposureMaps` 4;
+  - in `components/charts/`: `PriceChartFull` 36, `ScatterChart` 4, `GeographyMap` 4.
+- **W6-a,** in `features/risk/`:
+  - `RiskAnalysisPanel` 192, `AssetSetRiskPanel` 71, `CorrelationHeatmap` 33, `AssetSetLossComparisonSection` 26,
+    `CorrelationPairsList` 25, `AssetSetRiskReturnSection` 22, `AssetSetCorrelationSection` 20, `RiskReturnLevel` 14,
+    `AssetRiskScenariosView` 13, `LabAssetPicker` 8, `BenchmarkSelect` 3, `AssetChip` 2, `assetSetTable.ts` 2;
+  - `levels/`: `l4/L4Simulation` 45, `l4/L4Replay` 29, `RiskLevelSection` 29, `L4WhatIf` 27, `l4/L4Shock` 25,
+    `L2Diversification` 23, `RiskPanelHeader` 22, `RiskPartialNotice` 20, `SimulationProvenance` 20,
+    `l1/ReturnHistogram` 16, `L1HowMuchItHurts` 11, `l1/UnderwaterChart` 8, `RiskLevelsPanel` 6, `L3RiskAdjusted` 4,
+    `l4/TornadoChart` 4, `L3Benchmark` 2.
+- **W6-b:**
+  - in `features/dashboard/`: `GrowthChart` 86, `KpiSection` 50, `OtherPeriodEffectsTable` 28, `ContributionTable` 14,
+    `KpiCard` 14, `ExposureTreemap` 10, `YieldOnCostCell` 8, `AllocationHistoryChart` 4, `PerformanceChart` 4;
+  - `routes/(app)/dashboard/+page.svelte` 77.
+- **W6-d:** `ExposureTable` 2 e `PositionsPanel` 46. Y (W7) ci ha scritto modifiche di sola logica, non ancora
+  committate: si migrano dalla versione di Y dopo il suo ingresso (coordinatore, 10:43).
+- **Restano:**
+  - `ChartAestheticsSection` 16: i 4 interruttori, per il lotto di T;
+  - i residui DV-7 del PAC: `AssetTable` 1, `ResultCell` 1, `TargetsStep` 2, `BackendTimingBar` 16 e
+    `DistributionDialog` 3;
+  - `DistributionDialog` è anche riservato a J-17 (coordinatore, 11:0x): non lo tocco.
+
+**Resto atteso, da annotare in DV-7:**
+- `KpiSection` 6: catene verso `KpiMetricBar`, ancora legacy (18, in `components/ui/display`).
+  - Sono `valueColor`@354 e le due barre @398/@409, «valore contabile» blu e «liquidità» smeraldo.
+  - La catena la prende T, che ha `ui/display` nel suo resto (coordinatore, 10:58).
+- `OtherPeriodEffectsTable` 4: i badge di segno (coordinatore, 10:58).
+  - `--lf-gain` e `--lf-loss` hanno oggi i valori di success e danger, ma restano ruoli distinti.
+  - Il coordinatore chiede a T gli alias `gain-soft`/`loss-soft` dopo lo skill (D-T29); poi li migro.
+- `RiskReturnLevel` 4: le forme della legenda, categorie uguali alla serie ECharts (punto 2.5 della designer).
+
+**Scelte approvate (coordinatore, 10:58):**
+1. **Campi semplici del rischio** (10): la convenzione di T, `border-lf-input bg-lf-field text-lf-primary
+   hover:border-lf-input-hover`, focus `lf-focus`.
+   - Righe: `L4Shock`:175, `L4Simulation`:181, 185 e 209, `RiskAnalysisPanel`:641, 779, 795, 900, 904 e 1012.
+   - Select e lotto input di T sono entrati, quindi il motivo di W5-charts per lasciarli non vale più.
+2. **Numeri con segno:** `LOSS_CLASS` di `AssetSetLossComparisonSection` → `text-lf-loss`; le barre dell'istogramma
+   sotto il taglio → `bg-lf-loss/80`, come `SIGN_BAR.tornado`.
+3. **Preset di `L4Shock`:145:** pieni, `bg-lf-checked text-lf-on-checked` (D-T16). Le card dei modi di
+   `L4Simulation`:157 → `border-lf-checked bg-lf-selected`, come le card scelte del PAC.
+4. **Filtro dei broker della dashboard** (`+page` 886–936): attivo → `bg-lf-selected text-lf-link border-lf-focus`,
+   come `FxProviderSelect` aperto e `TabBar`; spento → bottone secondario; spunta della voce scelta → `text-lf-link`.
+   Va fra i «da rivedere» del developer.
+
+**Scelte per significato:**
+- bottoni d'azione L4 (`hover:bg-primary-600`) → ruoli `action`;
+- suggerimento bordato di `L4Replay`:318 → `border-lf-link text-lf-link hover:bg-lf-selected`;
+- segmenti di `GrowthChart`, `PriceChartFull` e `CorrelationHeatmap` → D-T16;
+- linea di 1 px di `RiskAnalysisPanel`:683 → `bg-lf-input`;
+- barrato di `AssetChip` → `decoration-lf-input`;
+- sottolineatura e sfumatura di bordo di `CorrelationHeatmap` → `decoration-lf-link` e `from-lf-card`;
+- regola 3 sulle radici.
+
+**Verifiche fatte prima di cominciare:**
+- **C4 simulato:** nessuna regola del rimappaggio di `app.css` muore.
+- **Test che asseriscono classi colore:** nessuno nell'area, né unit né E2E, quindi test-author non serve.
+- **Condivisi:** baseline (`--update` per lotto), questo piano, la sezione DV del backlog.
+
+**Passi:**
+- [x] ✅ (16/10/2026) W6-c: conversione, ritocchi, `--update`/`--check`, prove leggere (carico sotto 50), checkpoint
+  consegnato al coordinatore (11:1x), in attesa del commit.
+  > **Note implementazione** (16/10, 11:00–11:12): il convertitore ha cambiato 116 stringhe in 9 file, senza resti.
+  >
+  > **Ritocchi a mano:**
+  > - **Testo di stato fuori da una tinta.** `ToolDiagnosticsPanel`:138 (disponibilità del pool) e `ToolAboutPanel`:313
+  >   e 318 (interfaccia compatibile o no) erano `text-green-800` e `text-amber-800`, ma senza un fondo tenue dietro.
+  >   - La regola del convertitore (gradino 800 → `-on-soft`) vale solo su una tinta, quindi qui vanno `text-lf-success`
+  >     e `text-lf-warning`.
+  >   - Contrasti su `card`: 5,21 e 5,20 in chiaro, 9,61 e 8,13 in scuro.
+  > - **Anello di focus verde.** `ToolExecutionMetrics`:94 è `focus-visible:outline-green-700`: un focus, non uno
+  >   stato, quindi `focus-visible:outline-lf-focus`. Ho corretto anche il convertitore: un anello verde sotto `focus`
+  >   va a `lf-focus`.
+  > - **Ombra delle card dei tool** (`ToolsHub`:218): `hover:shadow-sm` prende anche `hover:shadow-lf-shadow-card`, come
+  >   le card di pagina di T (`PageToolbar`, `DataEditor`, `AllocationPanel`).
+  > - **Regola 3:** `text-lf-primary` sulla radice di `ToolsHub`, `ToolHost`, `ToolAboutPanel` e
+  >   `ToolDiagnosticsPanel`; `ToolExecutionMetrics` ce l'aveva già (`text-gray-900`).
+  >   - Nelle primitive dei grafici (`PriceChartFull`, `ScatterChart`, `GeographyMap`) e in `ExposureMaps` nessun testo
+  >     eredita il colore: ogni elemento con testo ha il suo ruolo, quindi la radice resta com'è.
+  >
+  > **Scelte già approvate, applicate:**
+  > - segmenti di `PriceChartFull` (linea/candele, assoluto/%) → `bg-lf-checked text-lf-on-checked` (D-T16), 6,17/5,32;
+  > - bottoni secondari di `ToolsHub`, `ToolHost`, `ToolAboutPanel` e `ToolDiagnosticsPanel` → `border-lf-input`,
+  >   `hover:bg-lf-hover`; con `bg-lf-card` dove l'originale aveva `bg-white`;
+  > - riquadri d'errore e d'avviso → terne `danger` e `warning`;
+  > - icone del marchio (chiave inglese, freccia, icona del tool) → `text-lf-link`, come i link.
+  >
+  > - Prettier ha riscritto 4 file (`PriceChartFull`, `ToolAboutPanel`, `ToolHost`, `ToolsHub`), puliti a `HEAD`: solo
+  >   elementi convertiti, che con classi più corte stanno su meno righe.
+  > - Compilatore Svelte 9 file, 0 avvisi; `git diff --check` pulito.
+  > - `--update`: m1 8.249 → 7.901 (−348), m2 54 invariato. Tutti i 9 file escono dal baseline a zero, poi `--check`
+  >   pulito.
+  > - **Prove leggere** (carico 43, sotto 50), un file per volta:
+  >   - 18 file che importano o nominano i componenti, 853/853, tra cui `ToolsHub` 3, `ToolHost` 4, `PriceChartFull` 36,
+  >     `PriceChartFull.tooltipEscape` 17, `ScatterChart` 14, `geographyMapHelpers` 25, `chartFlagFont` 16,
+  >     `AssetSetRiskReturnSection` 136 e `scanColors` 67;
+  >   - 7 gate, 156/156: `themeRoles` 47, `themeTokens` 18, `themeComponentTokens` 18, `themeColorMeta` 15,
+  >     `themeModeReads` 24, `designerLabImports` 27, `htmlSink` 7.
+  > - **Regola 4 dello skill `design-system`** (D-T29, `6e569084a`: «un colore, una ternaria»). In Tailwind 4 due
+  >   utility sulla stessa proprietà si ordinano per nome, e vince la seconda. Il passaggio ai ruoli rovescia l'ordine:
+  >   un `border-lf-subtle` fisso batte un `border-lf-checked` condizionale.
+  >   - Ho scritto un controllo in sola lettura, `files/dv_rule4_check.mjs` nella cartella della sessione. Cerca un ruolo
+  >     fisso e uno condizionale sulla stessa proprietà, risolvendo anche le costanti importate (`ui.ts`) e i template.
+  >   - Prova su un file sintetico: 2 errori e 2 casi «fortunati» trovati, il caso corretto ignorato.
+  >   - Su W5-PAC, W5-charts e W6-c: **0 casi**. Lo rilancio a ogni lotto di W6.
+  >
+  > **⚠️ Fuori pista: rilettura dello skill `design-system`** (coordinatore, 11:1x): sezione «Charts» e righe dei
+  > grafici della mappa di `lib/theme/`, controllate sul codice; correzioni mandate al coordinatore per T. Fra queste,
+  > un difetto mio: `growthBrokerColor` ripete gli 8 colori dal nono broker, senza la sfumatura di GR5 (DV-8).
+- [ ] W6-a: idem.
+- [ ] W6-b: idem.
+- [ ] Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i gate Vitest
+  `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
+  pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`.
+- [ ] W6-d, dopo l'ingresso di Y.
+
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
 **Richiesta del coordinatore** (16/10 alle 02:06): per ciascun file dei grafici, cosa resta in m1 (classi colore

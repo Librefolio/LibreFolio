@@ -2717,6 +2717,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - `ExposureMaps` (4) aspetta Y9.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
     «W5-PAC» e «W5-charts».
+- **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
+  `design-system`).
+  - `growthBrokerColor(index, dark)` (`frontend/src/lib/theme/chartPalettes.ts`) prende
+    `CATEGORY_SEQUENCE[index % 8]`: il nono broker ha il colore del primo.
+  - GR5 vuole, oltre la fine di una sequenza, gli stessi colori una sfumatura più in là, come già fanno la
+    semi-ciambella e lo storico geografico con `sequenceColor(…, shadePoles(dark, card))`.
+  - Rimedio: `growthBrokerColor` passa da `sequenceColor` con i poli della card letti da `chartRoles`. Tocca
+    `chartPalettes.ts`, `features/dashboard/growthChartSeries.ts` e i loro test; è logica, non classi, quindi dopo W6.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «W6», passo W6-c.
 
 ---
 
