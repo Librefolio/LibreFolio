@@ -183,12 +183,12 @@
                     if (stale > 0) {
                         return {
                             type: 'html',
-                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-lf-warning" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
                         };
                     }
                     return {
                         type: 'html',
-                        html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span></span>`,
+                        html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span></span>`,
                     };
                 },
                 getValue: (r) => r.date,
@@ -212,7 +212,7 @@
                                 const display = val != null ? Number(val).toLocaleString(uiLocale(), {maximumFractionDigits: 4}) : '—';
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,
+                                    html: `<span class="text-xs font-mono text-lf-secondary">${display}</span>`,
                                 };
                             }
                             // F.5 — erasable columns use the ErasableNumberCell with sentinel -1 semantics.
@@ -255,7 +255,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -292,14 +292,14 @@
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
                                         type: 'html',
-                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
+                                        html: `<span class="text-xs text-lf-secondary">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
                                         tooltip: tooltipMeta,
                                     };
                                 }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(label)}${readonlyBadge}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(label)}${readonlyBadge}</span>`,
                                     tooltip: tooltipMeta,
                                 };
                             }
@@ -324,7 +324,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -351,7 +351,7 @@
                     type: 'number',
                     cell: (r) => ({
                         type: 'html',
-                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                        html: `<span class="text-xs font-mono text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,
@@ -617,24 +617,16 @@
 <!-- Toolbar -->
 <!-- ========================================================================= -->
 
-<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="data-editor-root">
-    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-gray-100 dark:border-slate-700">
+<div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle" data-testid="data-editor-root">
+    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-lf-subtle">
         <!-- Left: actions -->
         <div class="flex items-center gap-2">
             {#if !isReadonly}
-                <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={() => (importModalOpen = true)}
-                    data-testid="fx-data-import-btn"
-                >
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (importModalOpen = true)} data-testid="fx-data-import-btn">
                     <Upload size={13} />
                     {$t('dataEditor.importCsv')}
                 </button>
-                <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleAddRow}
-                    data-testid="fx-data-add-row-btn"
-                >
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleAddRow} data-testid="fx-data-add-row-btn">
                     <Plus size={13} />
                     {$t('common.addRow')}
                 </button>
@@ -642,11 +634,11 @@
         </div>
 
         <!-- Right: Selection bar + Counters + Stale toggle + Column visibility -->
-        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex items-center gap-3 text-xs text-lf-muted">
             {#if hasStaleRows}
                 <div class="flex items-center gap-1.5" data-testid="data-editor-stale-toggle">
                     <Tooltip text={$t('dataEditor.staleTooltip')} position="bottom" maxWidth="220px">
-                        <span class="text-[10px] text-amber-600 dark:text-amber-400 cursor-help">⚠️ {staleCount}</span>
+                        <span class="text-[10px] text-lf-warning cursor-help" data-testid="data-editor-stale-count">⚠️ {staleCount}</span>
                     </Tooltip>
                     <!-- Horizontal switch lever -->
                     <button
@@ -665,18 +657,18 @@
                 </div>
             {/if}
             {#if modifiedCount > 0}
-                <span class="text-blue-600 dark:text-blue-400">{$t('dataEditor.counter.edited', {values: {n: modifiedCount}})}</span>
+                <span class="text-lf-info">{$t('dataEditor.counter.edited', {values: {n: modifiedCount}})}</span>
             {/if}
             {#if deletedCount > 0}
-                <span class="text-red-600 dark:text-red-400">{$t('dataEditor.counter.deleted', {values: {n: deletedCount}})}</span>
+                <span class="text-lf-danger">{$t('dataEditor.counter.deleted', {values: {n: deletedCount}})}</span>
             {/if}
             {#if appendedCount > 0}
-                <span class="text-emerald-600 dark:text-emerald-400">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
+                <span class="text-lf-success">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
             {/if}
             {#if selectedIds.length > 0}
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-lf-selected text-lf-link font-medium hover:bg-lf-checked/20 transition-colors"
                     onclick={() => {
                         dataTableRef?.clearSelection();
                         selectedIds = [];
@@ -688,7 +680,7 @@
                 </button>
                 <button
                     type="button"
-                    class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    class="flex items-center justify-center w-7 h-7 rounded-md bg-lf-danger-soft text-lf-danger hover:bg-lf-danger-line transition-colors"
                     onclick={() => {
                         handleBulkDelete(selectedIds);
                         dataTableRef?.clearSelection();
