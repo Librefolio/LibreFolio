@@ -102,6 +102,8 @@ $$
 \text{TotalPnL} = \text{MarketPnL} + \text{RealizedPnL} + \text{AssetIncome}
 $$
 
+Every amount is in the analysis's target currency. For a lot bought or sold in another currency, each closure converts its two legs at their own dates — see [Lots in Another Currency](#lots-in-another-currency).
+
 For the scalar lot summary, the return percentage is:
 
 $$
@@ -121,6 +123,58 @@ This answers: _"What is full economic return of this lot, including both price m
 </div>
 
 The **Value / Return** comparison chart, switched to **Return** mode, plots exactly this percentage — one line per lot, each measured from its own opening date, over the currently selected lot set.
+
+### 💱 Lots in Another Currency {: #lots-in-another-currency }
+
+A closure's two legs convert into the target currency **each in its own currency, at its own date**: the cost of the units in the lot's currency at the lot's opening date — the purchase rate — and the closing price in the closing transaction's currency at the closing date — the sale rate. With $\text{Convert}(x, ccy, D)$ the amount $x$ in currency $ccy$ converted into the target currency at the rate of date $D$, a closure of $q$ units of a LONG lot opened on $D_{\text{open}}$ at $\text{LotUnitCost}$ in $ccy_{\text{lot}}$, and closed on $D_{\text{close}}$ at $\text{ClosePrice}$ in $ccy_{\text{close}}$, gives:
+
+$$
+\text{Closure Proceeds} = \text{Convert}\left(q \cdot \text{ClosePrice},\ ccy_{\text{close}},\ D_{\text{close}}\right)
+$$
+
+$$
+\text{Closure Cost} = \text{Convert}\left(q \cdot \text{LotUnitCost},\ ccy_{\text{lot}},\ D_{\text{open}}\right)
+$$
+
+$$
+\text{Closure Realized PnL} = \text{Closure Proceeds} - \text{Closure Cost}
+$$
+
+$\text{ClosePrice}$ is a sale's unit price, in the sale's currency, or the per-unit cost basis at which an outgoing adjustment hands its units over, in that cost basis's currency — zero, in the lot's currency, without one (see [Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)). $ccy_{\text{close}}$ need not be $ccy_{\text{lot}}$: a lot moved to a broker of another currency and sold there converts the sale from that currency. A SHORT lot mirrors the rule: it realizes the proceeds of its opening sale, $\text{Convert}(q \cdot \text{LotUnitCost}, ccy_{\text{lot}}, D_{\text{open}})$, minus the cost of the purchase that closes it, $\text{Convert}(q \cdot \text{ClosePrice}, ccy_{\text{close}}, D_{\text{close}})$.
+
+When a lot is bought and sold in one currency, with rates $r_{\text{open}}$ and $r_{\text{close}}$ on the two dates, its realized result splits into the price gain at the sale rate and the exchange-rate move on the cost of the units sold:
+
+$$
+\text{Closure Realized PnL} = q\,(\text{ClosePrice} - \text{LotUnitCost})\,r_{\text{close}} + q\,\text{LotUnitCost}\,(r_{\text{close}} - r_{\text{open}})
+$$
+
+The exchange-rate move between purchase and sale is therefore realized with the units, as on the Dashboard, where a sale's proceeds convert at the sale date and the units sold leave at their historical cost (see [WAC](../weighted-average-cost.md)). A missing rate leaves the closure's realized P&L unknown, and with it the lot's $\text{RealizedPnL}$: it is never computed from the native amounts.
+
+Every closure's cost converts at the opening date, like $\text{OriginalCost}$, so a LONG lot's market P&L is the value of its open units minus their cost at the purchase rate:
+
+$$
+\text{MarketPnL} = \text{PnL} - \text{RealizedPnL} = \text{OpenValue} - \left(\text{OriginalCost} - \sum \text{Closure Cost}\right)
+$$
+
+A fully closed LONG lot has no market P&L: its closures' costs add up to its $\text{OriginalCost}$, and its whole P&L is realized.
+
+!!! example "A dollar lot, target currency EUR"
+
+    Buy 1 unit at 100 USD when 1 USD = 1.00 EUR; sell it at 110 USD when 1 USD = 0.90 EUR.
+
+    $$
+    \text{Closure Proceeds} = 110 \times 0.90 = 99 \text{ EUR}
+    \qquad
+    \text{Closure Cost} = 100 \times 1.00 = 100 \text{ EUR}
+    $$
+
+    $$
+    \text{RealizedPnL} = 99 - 100 = -1 \text{ EUR}
+    \qquad
+    \text{MarketPnL} = \text{PnL} - \text{RealizedPnL} = (99 - 100) - (-1) = 0
+    $$
+
+    The price gain, $10 \times 0.90 = +9$ EUR, is outweighed by the dollar's fall on the cost, $100 \times (0.90 - 1.00) = -10$ EUR. Converting the native realized P&L, 10 USD, at the sale rate would instead report $+9$ EUR realized and $-10$ EUR of market P&L on a lot no longer held; the total, $-1$ EUR, is the same either way.
 
 ---
 
