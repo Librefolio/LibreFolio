@@ -171,6 +171,9 @@ the current password and ends the account's other sessions. No other route chang
   new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
   the device that made the change carries on, and every other session gets `401` at its next request. A
   username-only change ends no session, nor does a refused one.
+- **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
+  profile updated* carry `user_id`, `username` and `email_changed`, true only when the address changed (lot A7c,
+  workstream E's rule: no address in any log).
 
 | Answer | `detail` | When |
 |--------|----------|------|
@@ -186,10 +189,11 @@ passwords: limiting the guesses here is planned with the login attempt limit (lo
 The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
 user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
 
-Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-016: the
+Tests: `./dev.py test api profile` (`backend/test_scripts/test_api/test_profile_api.py`, PROF-010 to PROF-019: the
 refusals, the taken address not revealed without the password, the sessions with two devices, the username-only and
-same-email guards), `./dev.py test services user-profile` (`backend/test_scripts/test_services/test_user_profile.py`,
-`TestUpdateProfileEmailVerification`: `email_verified_at`), and for the tab
+same-email guards, and no address in the log of the route, in-process), `./dev.py test services user-profile`
+(`backend/test_scripts/test_services/test_user_profile.py`, `TestUpdateProfileEmailVerification`: `email_verified_at`;
+UPROF-001 and UPROF-002: no address in the service's log), and for the tab
 `./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
 (`frontend/e2e/settings.spec.ts`, its «A6e» block).
 
