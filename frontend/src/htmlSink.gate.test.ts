@@ -71,7 +71,7 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},
     {
         file: 'src/lib/components/assets/PriceDataImportModal.svelte',
-        expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})`,
+        expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-lf-neutral/50 px-1 rounded">;</code>'}})`,
         why: 'A static i18n message with a static <code> value: nothing in it comes from a user, a file or a provider.',
     },
     {file: 'src/lib/features/transactions/cells/TxLinksCell.svelte', expr: 'eventHtml', why: TX_CELL_BUILDERS},

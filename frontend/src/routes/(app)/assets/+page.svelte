@@ -1704,8 +1704,8 @@
     {:else if filteredAssets.length === 0}
         <!-- Empty state -->
         <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
-                <BarChart3 class="text-green-600 dark:text-green-400" size={32} />
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <BarChart3 class="text-lf-link" size={32} />
             </div>
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$t('assets.empty.noAssets')}</h3>
