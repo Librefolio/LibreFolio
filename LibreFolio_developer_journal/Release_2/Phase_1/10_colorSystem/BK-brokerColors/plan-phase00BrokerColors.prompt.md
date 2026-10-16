@@ -263,6 +263,12 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `front-portfolio data-quality-legacy|data-quality-real|privacy-masking`. Server spento, porta 6158 libera.
 
 ### S7 — L4 · modale di custodia ⏳ (dopo l'ingresso di Y, su avviso del coordinatore)
+> **Nota del coordinatore (17:54, da G-18):** `lot-custody-modal > div` è un elemento misto composto a runtime:
+> `ModalBase` mette `border border-lf-raised text-lf-primary {contentClass}`, `LotCustodyModal` gli passa
+> `contentClass="bg-white dark:bg-slate-800"`. In scuro vince la regola legacy `html.dark .bg-white { … !important }`
+> (slate di prima) sul `background: var(--lf-surface-card)` dello `<style>` di `ModalBase`. In L4: via quel fondo dalla
+> prop (`ModalBase` dà già la superficie card); un fondo diverso solo con un ruolo. Si vede negli scatti `brokers` e
+> `dashboard/fifo-lots-custody-modal`.
 `LotCustodyModal` dalla versione di Y — 205 → 20: `contentClass` di `ModalBase` senza colore (o `bg-lf-card`);
 commissioni e tasse `text-lf-loss`; riga selezionata dello storico `border-lf-checked bg-lf-selected`; restano i
 marcatori degli eventi e le icone «in transito».
