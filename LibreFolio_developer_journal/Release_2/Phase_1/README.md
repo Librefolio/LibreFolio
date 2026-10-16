@@ -182,3 +182,4 @@ Sono tutti locali: la push la fa il developer.
 | 93 | 16/10 04:56 | Z: cura del rosso `services config-package` (1/693 da Z2b): `fly_machine_identity()` in `config/sleep_wake.py`, `suspend.py` senza `os.environ`; trovato da H | `3648a6155` |
 | 94 | 16/10 06:47 | X: X-R12 (eventi del fornitore datati oggi arrivano lo stesso giorno) + X-R13 (emoji morta dei settori nella pagina asset, primo pezzo di FE5c) | `92a0d4daf` |
 | 95 | 16/10 06:47 | W per cherry-pick: W-B41 (test multiutente puliscono i broker), W-B29 (E2E eventi con asset propri), W-B38 (messaggi delle regole impacchettate col tipo) | `5eb8e4103` `09e7d5a4e` `b89ddbba9` |
+| 96 | 16/10 06:54 | X per cherry-pick: K-16 (ETC/ETN di Borsa Italiana come `ETF_COMMODITY`) + O-9 (etichette dei parametri di justETF e css_scraper in 4 lingue) | `bfc0db8aa` |
