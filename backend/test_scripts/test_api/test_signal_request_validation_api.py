@@ -11,7 +11,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXConversionRequest
 from backend.app.schemas.signals import SignalRequest
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.signal_service import (
+from backend.app.services.signals.service import (
     SignalRequestValidationError,
     SignalService,
 )

@@ -31,7 +31,7 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 

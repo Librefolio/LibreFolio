@@ -35,7 +35,7 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services import provider_registry as registry_module
 from backend.app.services.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 # I10 added the calendar plugin as an executable, catalog-hidden entry. Developer's decision 29
