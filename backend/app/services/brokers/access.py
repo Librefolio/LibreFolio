@@ -93,7 +93,8 @@ class BrokerAccessMixin:
         List all users with access to a broker: role, share and profile fields.
 
         Checks no access: the route decides who may read the list (today any authenticated user, for any existing
-        broker). ``user_id`` and ``is_superuser`` are not read; they are kept for a check the route may add.
+        broker). ``user_id`` and ``is_superuser`` are not read: every authenticated user may read the list (the
+        developer's decision P4, 16/10: users need to know other brokers exist, to see why a name is taken and whom to ask).
 
         Args:
             broker_id: Broker ID
