@@ -336,7 +336,8 @@ async def confirm_email(session: AsyncSession, token: str, *, now: datetime | No
         # account's only one, and revoking it would end the wait. Signing in offers a new link.
         logger.info("Email verification refused: the link's email did not go out", user_id=user_id, token_id=token_id)
         raise EmailVerificationLinkInvalidError(token_service.TokenStatus.REVOKED.value)
-    if record.email.strip().casefold() != user.email.strip().casefold():
+    # The address the link went to against the account's, as A compares two addresses (decision P18).
+    if not user_service.same_email(record.email, user.email):
         await token_service.revoke_tokens(session, token_id=token_id, now=moment)
         await session.commit()
         logger.info("Email verification refused: the link was sent to another address", user_id=user_id, token_id=token_id)
