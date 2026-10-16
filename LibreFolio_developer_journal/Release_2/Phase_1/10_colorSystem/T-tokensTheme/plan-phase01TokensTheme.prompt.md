@@ -582,7 +582,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `078d4dcf8`; validato nello slot unico; ingresso unico |
 | 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
-| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | 🔄 applicati su `503dce683`, prove leggere verdi; tre commit; secondo slot dopo L-16 (~04:00–04:15) |
+| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 bozza su copie, patch pronta; dopo l'ingresso di DV (~07:20), slot verso le 07:30 |
 
 ## Avanzamento
 
@@ -1869,3 +1870,56 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   sottile, l'ombra.
 > - **W2-a:** il benvenuto del primo accesso, il tour guidato (bagliore, fondale, pannello), il ripasso dell'onboarding
 >   nelle impostazioni, il banner del bootstrap.
+
+> **Commit:** `a5c7714ca` (W1-c), `d27fdef4a` (W1-e), `a0ced5980` (W2-a, con baseline e piano), dal coordinatore sopra
+> `503dce683`; base `91bae7f2e` (target `d0efca910`: H CP7b-1, J CP-6 backend).
+
+### Secondo slot — ✅ 16/10/2026 (W1-c, W1-e, W2-a)
+
+> **Via** del coordinatore: valida `91bae7f2e`; corsia 6155, carico 27 alla partenza (dalle 04:00 alle 04:30 un `all-backend`
+> di H sotto `nice -n 19`); script `/tmp/libreFolio_T_r2/slot2.sh`, che apre con `api sync`; stop a 65 minuti; un rosso
+> di valore e non di colore sulla dashboard sarebbe stato CP-6.
+
+> ✅ **Esito** (03:54–04:50, 55 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; `front check` 0 e 0;
+> `component-unit` 3.940/3.940; `onboarding-component-unit` 449/449; E2E a 1 worker: `transactions-modals` 25,
+> `settings` 51, `onboarding-tour` 10 (l'alfa del puntatore regge, `oklab(… / 0.7)`), `onboarding-guides` 24, `fx-list` 12
+> e `asset-data-editor` 26 (le asserzioni nuove su `data-active` e `aria-selected`), `asset-modal` 17, `dashboard` 27,
+> `toolbar-width-sweep` 24, `files` 29, `support-copy-and-go` 16, `asset-list` 28. Porta libera.
+> - **⚠️ Fuori pista — un rosso mio:** `core-unit` 1 su 6.146, `themeRoles.gate.test.ts › keeps LITERAL_EXCEPTIONS and
+>   ARBITRARY_ALLOWED current and explained`: «These entries let nothing through: delete them — ARBITRARY_ALLOWED
+>   OnboardingCoachmark.svelte». Con W2-a il bagliore è sui ruoli e il gate vuole che l'eccezione si tolga. Avevo scritto
+>   (TC-12) che la voce orfana non faceva danni: sbagliato. Le mie prove leggere lanciavano il gate da riga di comando
+>   (`--check`), che questo controllo non lo fa, e non il suo file Vitest. **Regola, da ora:** le prove leggere di ogni
+>   lotto includono `src/themeRoles.gate.test.ts` e `src/themeTokens.gate.test.ts`, non solo `--check`.
+> - **Correzione** (OK del coordinatore durante lo slot; a slot finito, commit a parte prima dell'ingresso): via la riga 84 di
+>   `frontend/scripts/theme/theme-roles.mjs` (Y5 cambia la riga 70: 13 righe in mezzo, il merge a tre vie resta pulito in
+>   tutti e due gli ordini; il coordinatore avvisa la 1.3); `test-author` riscrive i due commenti di
+>   `themeRoles.gate.test.ts` (~218, ~547) che descrivevano il vecchio bagliore `rgba`. `themeRoles.gate.test.ts` 47/47,
+>   `--check` pulito, Prettier verde. TC-12 chiusa.
+
+### Lotto input — 🔄 16/10/2026 (bozza su copie: i campi numerici e i loro chiamanti; D-T27)
+
+> **Avvio** (coordinatore, prima e durante il secondo slot). Il disegno approvato: il bordo d'errore del campo come variante,
+> `aria-invalid:border-lf-danger`. Tailwind 4.1 registra `aria` dopo `hover`, `focus` e `disabled` (prima di `dark`), quindi
+> la variante viene dopo ogni utility base e vince sul `border-lf-input` che un chiamante passa in `className`. **Da
+> rivedere:** un campo non valido resta rosso anche col fuoco (oggi diventava verde). OK della 1.3, per W e J, a `ui.ts`
+> (`INPUT`/`TITLE_INPUT`), ai due `TxForm*` e ai test di W (righe 791–792, 803–813, 826, 828, 829, 831, 834–838 di
+> `TransactionFormModal.test.ts`; 1168, 1171, 1173, 1176, 1198, 1203 di `transactions-modals.spec.ts`). `ui.ts` e i tre file
+> dei grafici sono di DV (W5-PAC, W5-charts, commit `7d3896011`, entra verso le 07:20): la bozza parte dalla sua versione
+> (`git show 7d3896011:<path>`; il target non li ha toccati dalla base di DV, `20558ead5`). Slot dopo quello di DV, verso le
+> 07:30.
+
+> ✅ **1 · Bozza** (`files/INPUT-draft` della sessione, `input.patch`, 11 file, la base di ogni file in `BASES`):
+> - `ExactDecimalInput`: una sola stringa di classi sui ruoli, l'hover del campo (D-T18), il segnaposto, la variante
+>   `aria-invalid:border-lf-danger`; via il ternario su `locallyInvalid` (il campo mette già `aria-invalid={locallyInvalid}`);
+> - `ExactQuantityInput`: il bordo del segno (stile in linea, che batte ogni classe) su `color-mix(in oklab,
+>   var(--lf-danger|success) 70%, transparent)`, la stessa alfa di oggi;
+> - `INPUT`: ruoli del campo, hover, segnaposto (non l'errore: i campi semplici del pianificatore non l'hanno mai avuto);
+>   `TITLE_INPUT`: `text-lf-primary`, segnaposto, `hover:border-lf-input`; i 37 usi in 8 file non si toccano;
+> - i tre campi quantità dei form delle transazioni: via `!bg-white dark:!bg-slate-800`, `focus:!ring-lf-focus/30`;
+> - i 6 campi dei grafici di DV (`ChartSignalsSection` 609 e 798, `ChartAestheticsSection` 221 e 237, `SignalParamControl`
+>   79 e 93): `border-lf-input bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-lf-focus`;
+> - `test-author` su copie: `ExactQuantityInput.test.ts` (i due bordi come costanti, nessun `border-color` per il segno
+>   neutro); `TransactionFormModal.test.ts` (la variante presente in tutti e due gli stati, nessun `border-lf-danger` di
+>   base, `aria-invalid="false"` a riposo; la tabella dei segni su `'success'`/`'danger'`); `transactions-modals.spec.ts`
+>   (l'helper risolve il colore atteso nella pagina: le espressioni coi ruoli).
