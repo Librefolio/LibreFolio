@@ -3641,3 +3641,16 @@ quantity × cost basis converted at the adjustment's date, and the difference fr
 as the lots do since CP-7a. Two pages that stated the historical-cost rule got a dated note.
 Updated: [[entities/portfolio-engine]], [[concepts/inline-wac-computation]].
 Graph: not updated; graphify is not available in this worktree.
+## [2026-10-16] file | Domain: EMAIL — optional SMTP email of release 1.3 (workstream E, F04)
+Workstream E's lot E6 asked for the domain page of the optional email. Filed from plan 08
+(`Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`, committed at `b22747e52`, read with the uncommitted
+E6.0–E6.2 notes), the backlog section «E · Email (fase 01)», developer decisions 44 and 45, `admin/email.en.md`,
+`developer/backend/email.md` and the code at `b22747e52`. The page covers what the domain sends and why, the
+architecture, decisions D-E1…D-E14 with 44 and 45, the security decisions of E3s, E5b and E4b, P1 and the E4c rule,
+the known limits (per process, behind a proxy, no queue, E-7, E-8, F19), 16 problems solved, mostly from the plan's
+«Fuori pista» notes, and what comes next (A7a, E4c, E6, the backlog). No email feature code exists: `features: []`.
+Decisions and problems stay inside the page, as the coordinator asked. `build_admin_setup()` has no caller yet:
+pending A7a. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all pre-existing; the page cites
+50 paths, all present.
+Filed: [[domains/email]].
+Graph not rebuilt: not available in the worktree.

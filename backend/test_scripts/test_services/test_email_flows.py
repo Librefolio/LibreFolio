@@ -46,11 +46,12 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     with the ``LIBREFOLIO_PUBLIC_URL`` link of the token, the host of that address as the instance, the administrator as
     the inviter and the administrator's role sentence when the invitation grants it; one unit spent. The token is in no
     log event.
-11. ``admit_forgotten_password`` ships held (``FORGOT_PASSWORD_HELD``, until lot E4): ``ForgottenPasswordHeldError``
-    (``FORGOT_PASSWORD_DISABLED``) before anything else, nothing counted. Lifted, it reads the configuration first —
-    email, then links —, counting nothing when it refuses; then 10 requests per 15 minutes per client address — keyed
-    by ``address_key``: an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4,
-    anything else as written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
+11. ``admit_forgotten_password`` ships open (lot E4 removed its hold, ``FORGOT_PASSWORD_HELD``, once changing an
+    account's email asked for the current password). It reads the configuration first — email, then links —,
+    counting nothing when it refuses; then 10 requests per 15 minutes per client address — keyed
+    by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17; ``flows`` keeps no copy):
+    an IPv4 address as is, an IPv6 one by its /64 (a zone ignored), an IPv4-mapped one as the IPv4, anything else as
+    written — and 3 per hour per identifier (stripped, case-insensitive), each refusal an
     ``EmailRateLimitedError`` with the seconds until the window frees; then the instance's hourly budget, peeked, never
     spent. Without a client address (a unix socket) the limit per address does not apply — one shared count would let
     a single client block everyone —, while the limit per identifier and the budget still do. The shipped limits are
@@ -79,21 +80,34 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     message to the OLD address only — never the new one —, exactly what ``build_email_changed`` writes in the account's
     language, the new address masked, the instance being the host of ``LIBREFOLIO_PUBLIC_URL`` when links are ready and
     ``INSTANCE_FALLBACK`` («LibreFolio») otherwise — never a request's host —; one unit spent. Nothing when the two
-    addresses are the same (letter case and spaces aside), nothing logged either; email off — the self-hosted default
-    — is an ``info`` line and no warning, decided before any session is opened; the account gone is an ``info`` line;
-    email set but unusable or the instance blocked, the budget spent, the server refusing, an old address that is not
-    one address: a warning ``not sent`` with the reason's type and code; any other error an error with its type alone,
-    without a traceback. It never raises, reads the configuration off the event loop, and no log event holds either
-    address.
+    addresses are the same by ``user_service.same_email`` — A's one rule of decision P18 (lot E4c): A–Z in any case,
+    every other character as written, nothing stripped —, nothing logged either; a letter beyond A–Z in another case
+    makes another address, whose notice goes to the old one as written. Email off — the self-hosted default — is an
+    ``info`` line and no warning, decided before any session is opened; the account gone is an ``info`` line, and so is
+    a notice past its limits (contract 15); email set but unusable or the instance blocked, the budget spent, the server
+    refusing, an old address that is not one address: a warning ``not sent`` with the reason's type and code; any other
+    error an error with its type alone, without a traceback. It never raises, reads the configuration off the event
+    loop, and no log event holds either address.
+15. The limits of the notice (lot E4b, security review): ``EMAIL_CHANGE_NOTICES_BY_ACCOUNT`` and
+    ``EMAIL_CHANGE_NOTICES_BY_MAILBOX`` ship as two ``SlidingWindowLimiter`` of 3 per 3600 s, keyed by the account's id
+    and by the old mailbox, letter case aside. Before it writes anything, the work asks both: when the account, or the
+    old mailbox — whatever the account and however its letters are written —, already had 3 notices in the window, one
+    ``info`` line «past its limits, nothing sent» with the account's id, no warning and neither address; nothing is
+    composed, no SMTP conversation is opened, no unit of the budget is spent, and neither limiter counts it. A notice
+    counts under both only once it went: one the server refused counts for neither, so the next one goes. The window
+    slides: 3600 s after the first of three notices, the next one goes.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown), users written as rows, tokens issued by A's token service with the ``now``
 the case needs; no server of the lane, no network beyond 127.0.0.1. An autouse fixture removes every inherited
 ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOCKED`` (C-96 removes them from the lanes; a
 developer's shell may still carry them) and each test sets its own with ``monkeypatch``; others replace
-``delivery.INSTANCE_BUDGET`` and the three «forgot password» limiters (``flows.FORGOT_BY_ADDRESS``,
-``flows.FORGOT_BY_IDENTIFIER``, ``flows.FORGOT_BY_MAILBOX``, with the shipped limits) with private limiters on a fake
-clock, and lift the hold of «forgot password» (``flows.FORGOT_PASSWORD_HELD``), which the tests of the hold set back;
+``delivery.INSTANCE_BUDGET``, the three «forgot password» limiters (``flows.FORGOT_BY_ADDRESS``,
+``flows.FORGOT_BY_IDENTIFIER``, ``flows.FORGOT_BY_MAILBOX``) and the two of the notice
+(``flows.EMAIL_CHANGE_NOTICES_BY_ACCOUNT``, ``flows.EMAIL_CHANGE_NOTICES_BY_MAILBOX``), these five with the shipped
+limits, with private limiters on a fake clock — «forgot password» has no hold left to lift (lot E4); the accounts of
+these new databases repeat their ids and addresses from test to test, which the process's limiters would count across
+tests —;
 ``smtp.SMTP_TIMEOUT_SECONDS`` is 5 s, a bound for a defect that hangs, never a wait. Every SMTP conversation is with
 ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks. Nothing is timed.
 """
@@ -131,6 +145,7 @@ from backend.app.services.email.delivery import EmailError, EmailRateLimitedErro
 from backend.app.services.email.flows import account_language, send_test_email
 from backend.app.services.email.links import EmailLinksUnavailableError, email_link
 from backend.app.services.email.messages import EmailRecipientError, build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
@@ -179,8 +194,9 @@ DEAD_KINDS = ("expired", "consumed", "revoked", "unknown", "other-purpose")
 SHIPPED_BY_ADDRESS = flows.FORGOT_BY_ADDRESS
 SHIPPED_BY_IDENTIFIER = flows.FORGOT_BY_IDENTIFIER
 SHIPPED_BY_MAILBOX = flows.FORGOT_BY_MAILBOX
-#: Whether «forgot password» ships held, read before the autouse fixture lifts it for the rest of the module.
-SHIPPED_HELD = flows.FORGOT_PASSWORD_HELD
+#: The limiters of the email-change notice as the module ships them (lot E4b), read before any fixture replaces them.
+SHIPPED_NOTICES_BY_ACCOUNT = flows.EMAIL_CHANGE_NOTICES_BY_ACCOUNT
+SHIPPED_NOTICES_BY_MAILBOX = flows.EMAIL_CHANGE_NOTICES_BY_MAILBOX
 #: The fake clock's start: the first request of every limiter test.
 START = 1_000.0
 
@@ -255,10 +271,24 @@ def forgot_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> ForgotLi
     return limits
 
 
+@dataclass(frozen=True)
+class NoticeLimits:
+    """The two limiters of the email-change notice of a test: per account, per old mailbox."""
+
+    by_account: SlidingWindowLimiter
+    by_mailbox: SlidingWindowLimiter
+
+
 @pytest.fixture(autouse=True)
-def _forgot_password_lifted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """«Forgot password» ships held (``FORGOT_PASSWORD_HELD``, until lot E4): lifted here so that the admission's other steps can be tested; the tests of the hold set it back themselves."""
-    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", False)
+def notice_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> NoticeLimits:
+    """Private limiters of the email-change notice with the shipped limits, on the fake clock: every database here is new, so its accounts repeat their ids and addresses from test to test, and the process's limiters would count them across tests."""
+    limits = NoticeLimits(
+        by_account=SlidingWindowLimiter(SHIPPED_NOTICES_BY_ACCOUNT.limit, SHIPPED_NOTICES_BY_ACCOUNT.window_seconds, clock=clock),
+        by_mailbox=SlidingWindowLimiter(SHIPPED_NOTICES_BY_MAILBOX.limit, SHIPPED_NOTICES_BY_MAILBOX.window_seconds, clock=clock),
+    )
+    monkeypatch.setattr(flows, "EMAIL_CHANGE_NOTICES_BY_ACCOUNT", limits.by_account)
+    monkeypatch.setattr(flows, "EMAIL_CHANGE_NOTICES_BY_MAILBOX", limits.by_mailbox)
+    return limits
 
 
 @pytest.fixture(autouse=True)
@@ -1358,55 +1388,14 @@ async def test_the_block_is_asked_before_anything_else_by_every_flow(monkeypatch
 ONE_MAILBOX = ["zq-sh\u00e4r\u00f6d@example.com", "zq-sh\u00c4r\u00d6d@example.com", "zq-sh\u00e4r\u00d6d@example.com", "zq-sh\u00c4r\u00f6d@example.com"]
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("also", ["nothing-else", "email-off", "links-missing", "blocked", "budget-spent"])
-async def test_forgot_password_ships_held_and_the_hold_comes_first(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits, also: str) -> None:
-    """EMF-035 — contract 11: «forgot password» ships held (``FORGOT_PASSWORD_HELD`` is ``True`` until lot E4). Held, ``admit_forgotten_password`` raises ``ForgottenPasswordHeldError`` — an ``EmailError``, ``FORGOT_PASSWORD_DISABLED`` — before anything else: email ready, off, without links, on a blocked instance or with the hourly budget spent, the hold is what the caller hears; no limiter counts the address nor the identifier."""
-    print_section(f"EMF-035: held, and {also}")
-    assert SHIPPED_HELD is True, "«forgot password» must ship held until changing an account's email asks for its password"
-    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", True)
-    if also != "email-off":
-        _usable_without_a_server(monkeypatch, max_per_hour="1")
-    if also == "links-missing":
-        monkeypatch.delenv(PUBLIC_URL_VARIABLE)
-    elif also == "blocked":
-        monkeypatch.setenv(BLOCKED_VARIABLE, "1")
-    elif also == "budget-spent":
-        assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+def test_the_key_of_a_client_address_has_one_home() -> None:
+    """EMF-036 — contract 11: one home for the per-client key (decision P17). ``flows`` keys ``FORGOT_BY_ADDRESS`` with workstream H's ``client_rate_key`` — the very object ``backend.app.services.platform.client_address`` defines, not a copy — and keeps no key of its own: no ``address_key`` any more. The rule itself — an IPv4 address as is, an IPv4-mapped IPv6 one as the IPv4 it maps, any other IPv6 one by its /64 in canonical form, a zone ignored, anything that is not an IP address as written, no key without an address or with an empty one — is H's to pin, value by value, in ``test_services/test_client_address.py``, section (f); EMF-037 proves the limit per address counts by it."""
+    print_section("EMF-036: one home for the per-client key")
+    used = getattr(flows, "client_rate_key", None)
 
-    with pytest.raises(EmailError) as held:
-        await flows.admit_forgotten_password(ADDRESS, ALICE)
-
-    assert (type(held.value), held.value.code) == (flows.ForgottenPasswordHeldError, "FORGOT_PASSWORD_DISABLED"), repr(held.value)
-    assert (len(forgot_limits.by_address), len(forgot_limits.by_identifier)) == (0, 0)
-    print_success("FORGOT_PASSWORD_DISABLED first, nothing counted")
-
-
-@pytest.mark.parametrize(
-    ("address", "key"),
-    [
-        pytest.param("198.51.100.7", "198.51.100.7", id="ipv4-as-is"),
-        pytest.param("2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64", id="ipv6-by-its-64"),
-        pytest.param("2001:db8:1:2::abcd", "2001:db8:1:2::/64", id="ipv6-another-address-of-the-same-64"),
-        pytest.param("2001:DB8:1:2::1", "2001:db8:1:2::/64", id="ipv6-in-capitals"),
-        pytest.param("2001:db8:1:3::1", "2001:db8:1:3::/64", id="ipv6-the-next-64"),
-        pytest.param("::1", "::/64", id="ipv6-loopback"),
-        pytest.param("fe80::1%eth0", "fe80::/64", id="ipv6-with-a-zone-the-zone-ignored"),
-        pytest.param("::ffff:198.51.100.7", "198.51.100.7", id="ipv4-mapped-as-the-ipv4"),
-        pytest.param("testclient", "testclient", id="a-name-as-written"),
-        pytest.param("/run/librefolio/zq.sock", "/run/librefolio/zq.sock", id="a-socket-path-as-written"),
-        pytest.param("", None, id="an-empty-address"),
-        pytest.param(None, None, id="no-address"),
-    ],
-)
-def test_the_key_of_a_client_address(address: str | None, key: str | None) -> None:
-    """EMF-036 — contract 11: ``address_key``: an IPv4 address as is; an IPv6 one by its /64 network — which one subscriber usually holds whole —, in its canonical form, a zone (``%eth0``) ignored; an IPv4-mapped IPv6 address as the IPv4 it maps; anything that is not an IP address as written; no address, or an empty one, no key."""
-    print_section(f"EMF-036: address_key({address!r})")
-
-    answer = flows.address_key(address)
-
-    assert answer == key, f"address_key({address!r}) is {answer!r}, expected {key!r}"
-    print_success(f"{address!r} → {answer!r}")
+    assert used is client_rate_key, f"flows.client_rate_key is {used!r}, not workstream H's client_rate_key: the key of FORGOT_BY_ADDRESS has one home (P17)"
+    assert not hasattr(flows, "address_key"), "flows still carries address_key, a second copy of the per-client key: its home is workstream H's client_rate_key (P17)"
+    print_success("flows holds H's client_rate_key itself, and no address_key of its own")
 
 
 @pytest.mark.asyncio
@@ -1430,7 +1419,7 @@ async def test_the_limit_per_address_counts_by_the_key(monkeypatch: pytest.Monke
     await flows.admit_forgotten_password(outsider, "zq_user_outsider")
 
     assert refused.value.retry_after == pytest.approx(900)
-    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(flows.address_key(outsider))) == (10, 1)
+    assert (forgot_limits.by_address.count(key), forgot_limits.by_address.count(client_rate_key(outsider))) == (10, 1)
     print_success(f"ten under {key}, the eleventh refused; another key passes")
 
 
@@ -1572,7 +1561,7 @@ async def test_a_database_error_is_logged_as_its_type_without_the_identifier(mon
 
 
 # =============================================================================
-# 14. THE NOTICE OF AN EMAIL CHANGE (lot E4a)
+# 15. THE NOTICE OF AN EMAIL CHANGE (lot E4a)
 # =============================================================================
 
 #: The address an account changes to: a local part of its own, never shown, never a recipient.
@@ -1580,6 +1569,10 @@ NEW_ADDRESS = "zq.new-alice.secret@example.org"
 NEW_LOCAL_PART = "zq.new-alice.secret"
 #: An old address that is not one address.
 NOT_ONE_ADDRESS = "zq_alice@example.com, zq-other@example.com"
+#: An address and the same letters with ``á`` in another case, in NFC (one code point each): beyond A–Z
+#: ``user_service.same_email`` compares a letter as written, so they are two addresses (EMF-059).
+ACCENTED_OLD = "zq_\u00e1lice@example.com"
+ACCENTED_NEW = "zq_\u00c1lice@example.com"
 
 
 def _notices(events: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -1666,9 +1659,9 @@ async def test_the_instance_is_the_public_host_or_librefolio(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("new", [pytest.param("zq_alice@example.com", id="the-same-address"), pytest.param("  ZQ_Alice@Example.COM ", id="the-same-address-in-other-letters-and-spaces")])
+@pytest.mark.parametrize("new", [pytest.param("zq_alice@example.com", id="the-same-address"), pytest.param("ZQ_Alice@Example.COM", id="the-same-address-in-other-capitals")])
 async def test_nothing_when_the_address_did_not_change(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, new: str) -> None:
-    """EMF-046 — contract 14: the same address, whatever its letter case and the spaces around it: nothing is sent, no account is looked up, nothing is spent, nothing is logged."""
+    """EMF-046 — contract 14: the same address by ``user_service.same_email`` (decision P18), as written or with A–Z in other capitals: nothing is sent, no account is looked up, nothing is spent, nothing is logged. No case with spaces around: both addresses come from the database, where ``EmailStr`` stripped them, and ``same_email`` strips nothing (A's contract), so a space would make another address. The boundary, a letter beyond A–Z in another case, is EMF-059."""
     print_section(f"EMF-046: {new!r}")
     alice = await _add_user(engine, ALICE)
     lookups = _lookups(monkeypatch)
@@ -1682,6 +1675,26 @@ async def test_nothing_when_the_address_did_not_change(monkeypatch: pytest.Monke
     assert (fake.connections, budget.count(), lookups) == (0, 0, [])
     assert _notices(events) == []
     print_success("nothing")
+
+
+@pytest.mark.asyncio
+async def test_another_case_beyond_a_to_z_is_another_address_and_the_notice_goes(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter) -> None:
+    """EMF-059 — contract 14, the boundary of EMF-046: Alice's address ``zq_álice@example.com`` changes to ``zq_Álice@example.com``, apart in the case of ``á`` alone, a letter beyond A–Z, which ``user_service.same_email`` compares as written (decision P18's documented limit): two addresses. The notice goes as for any change: the account looked up, one message, to the old address exactly as written (the envelope's recipient: the fake server takes an address beyond ASCII with ``SMTPUTF8``), one unit spent, the notice sent logged with her id."""
+    print_section("EMF-059: another case beyond A–Z")
+    assert ACCENTED_OLD.casefold() == ACCENTED_NEW.casefold() and not user_service.same_email(ACCENTED_OLD, ACCENTED_NEW), "precondition: one mailbox for casefold, two addresses for P18's rule"
+    alice = await _add_user(engine, ALICE, email=ACCENTED_OLD)
+    lookups = _lookups(monkeypatch)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, alice.email, ACCENTED_NEW, engine=engine)
+
+    assert returned is None
+    assert [message.rcpt_tos for message in fake.messages] == [[ACCENTED_OLD]], "one message, to the old address exactly as written"
+    assert (lookups, budget.count()) == ([alice.id], 1)
+    assert [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in _notices(events)] == [("Email change notice sent to the previous address", "info", alice.id)]
+    print_success("two addresses: the notice to the old one, as written")
 
 
 @pytest.mark.asyncio
@@ -1836,3 +1849,164 @@ async def test_the_notice_reads_the_configuration_off_the_event_loop(monkeypatch
     assert len(fake.messages) == 1
     assert on_the_loop and not any(on_the_loop), f"read on the event loop: {on_the_loop}"
     print_success(f"{len(on_the_loop)} reads, all in a worker thread")
+
+
+# =============================================================================
+# 16. «FORGOT PASSWORD» SHIPS OPEN (lot E4b)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_ships_open(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
+    """EMF-053 — contract 11: «forgot password» ships open (lot E4). ``flows`` carries no hold any more — no ``FORGOT_PASSWORD_HELD``, no ``ForgottenPasswordHeldError`` — and nothing in this module lifts one: with email and links ready, the first request of an address for an identifier is admitted, counted once under each, the hourly budget peeked, not spent. Where the hold used to answer first (EMF-035, removed with it) the configuration now answers, as EMF-020 (email off, links missing or invalid), EMF-034 (a blocked instance) and EMF-023 (the budget spent) pin."""
+    print_section("EMF-053: «forgot password» ships open")
+    leftovers = [name for name in ("FORGOT_PASSWORD_HELD", "ForgottenPasswordHeldError") if hasattr(flows, name)]
+    _usable_without_a_server(monkeypatch)
+
+    await flows.admit_forgotten_password(ADDRESS, ALICE)
+
+    assert leftovers == [], f"«forgot password» ships open since lot E4: flows still carries {leftovers}"
+    assert (forgot_limits.by_address.count(ADDRESS), forgot_limits.by_identifier.count(ALICE), budget.count()) == (1, 1, 0)
+    print_success("admitted as shipped: counted once per address and per identifier, the budget peeked")
+
+
+# =============================================================================
+# 17. THE LIMITS OF THE NOTICE (lot E4b)
+# =============================================================================
+
+#: The two lines of the notice this section reads: it went, or it was past its limits.
+NOTICE_SENT = "Email change notice sent to the previous address"
+PAST_ITS_LIMITS = "Email change notice: past its limits, nothing sent"
+#: One old mailbox written four ways, each the address an account of its own leaves (EMF-056): every one deliverable, so
+#: a limiter that told them apart would let the fourth through. Letter case aside, the limiter keys them all as OLD_MAILBOX.
+OLD_MAILBOX_VARIANTS = ("Zq-Old@Example.com", "zq-old@example.com", "ZQ-OLD@EXAMPLE.COM", "zQ-oLd@eXaMpLe.CoM")
+OLD_MAILBOX = "zq-old@example.com"
+
+
+def _composed(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Records the language of every notice the work composes — none means nothing was written."""
+    composed: list[str] = []
+    build = flows.build_email_changed
+
+    def recording(**arguments: object) -> object:
+        composed.append(str(arguments["language"]))
+        return build(**arguments)
+
+    monkeypatch.setattr(flows, "build_email_changed", recording)
+    return composed
+
+
+def _notice_lines(events: list[dict[str, object]]) -> list[tuple[object, object, object]]:
+    """``(event, level, user_id)`` of each line of the notice among ``events``."""
+    return [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in _notices(events)]
+
+
+def test_the_notices_shipped_limits() -> None:
+    """EMF-054 — contract 15: the module ships ``EMAIL_CHANGE_NOTICES_BY_ACCOUNT`` and ``EMAIL_CHANGE_NOTICES_BY_MAILBOX``, two ``SlidingWindowLimiter`` of 3 per 3600 s each."""
+    print_section("EMF-054: the notice's shipped limits")
+
+    assert isinstance(SHIPPED_NOTICES_BY_ACCOUNT, SlidingWindowLimiter) and (SHIPPED_NOTICES_BY_ACCOUNT.limit, SHIPPED_NOTICES_BY_ACCOUNT.window_seconds) == (3, 3600)
+    assert isinstance(SHIPPED_NOTICES_BY_MAILBOX, SlidingWindowLimiter) and (SHIPPED_NOTICES_BY_MAILBOX.limit, SHIPPED_NOTICES_BY_MAILBOX.window_seconds) == (3, 3600)
+    assert SHIPPED_NOTICES_BY_ACCOUNT is not SHIPPED_NOTICES_BY_MAILBOX, "two limiters: one per account, one per mailbox"
+    print_success("3/h per account, 3/h per old mailbox")
+
+
+@pytest.mark.asyncio
+async def test_three_notices_an_hour_per_account_the_fourth_skipped(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, budget: SlidingWindowLimiter, notice_limits: NoticeLimits) -> None:
+    """EMF-055 — contract 15: Alice changes her email four times, a minute apart, each time from the address the change before gave her, so no mailbox counts twice. The first three notices go, each to the address its change left, each counted once under her account and once under that mailbox. The fourth is skipped: one ``info`` line «past its limits, nothing sent» with her id, no warning, neither of its addresses; nothing composed, no SMTP conversation, no budget unit, nothing counted for it under either limiter."""
+    print_section("EMF-055: three notices an hour per account")
+    alice = await _add_user(engine, ALICE)
+    moves = (alice.email, *(f"zq-alice-{index}@example.org" for index in range(1, 5)))
+    composed = _composed(monkeypatch)
+    logged: list[list[dict[str, object]]] = []
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for index in range(4):
+            clock.now = START + 60 * index
+            with capture_logs() as events:
+                await flows.email_changed_work(alice.id, moves[index], moves[index + 1], engine=engine)
+            logged.append(events)
+
+    assert [_notice_lines(events) for events in logged] == [[(NOTICE_SENT, "info", alice.id)]] * 3 + [[(PAST_ITS_LIMITS, "info", alice.id)]]
+    assert [event for event in logged[3] if event.get("log_level") in ("warning", "error")] == [], logged[3]
+    assert [event for event in logged[3] if moves[3] in repr(event) or moves[4] in repr(event)] == [], "the skipped notice's line holds neither address"
+    assert [message.rcpt_tos for message in fake.messages] == [[old] for old in moves[:3]], "three notices, each to the address its change left"
+    assert (len(composed), fake.connections, budget.count()) == (3, 3, 3), "the fourth: nothing composed, no SMTP conversation, no budget unit"
+    assert notice_limits.by_account.count(alice.id) == 3
+    assert [notice_limits.by_mailbox.count(old) for old in moves[:4]] == [1, 1, 1, 0], "each mailbox left once; the fourth's counted for nothing"
+    print_success("three notices; the fourth skipped with an info line, nothing sent or spent")
+
+
+@pytest.mark.asyncio
+async def test_three_notices_an_hour_per_old_mailbox_whatever_the_account_and_the_case(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, budget: SlidingWindowLimiter, notice_limits: NoticeLimits) -> None:
+    """EMF-056 — contract 15: four accounts, a minute apart, each leave one mailbox written its own way — ``Zq-Old@Example.com``, ``zq-old@example.com``, ``ZQ-OLD@EXAMPLE.COM``, then ``zQ-oLd@eXaMpLe.CoM``, every one deliverable —. The first three notices go, each to the address as written, and the mailbox counts three; the fourth account's notice, its first, is skipped: one ``info`` line «past its limits, nothing sent» with its id, no warning, neither of its addresses in any spelling; no SMTP conversation, no budget unit, nothing counted for it under either limiter."""
+    print_section("EMF-056: three notices an hour per old mailbox")
+    assert {written.casefold() for written in OLD_MAILBOX_VARIANTS} == {OLD_MAILBOX}, "precondition: four spellings of one mailbox"
+    accounts = [await _add_user(engine, f"zq_owner_{index}", email=f"zq-moved-{index}@example.org") for index in range(4)]
+    logged: list[list[dict[str, object]]] = []
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for index, (account, old) in enumerate(zip(accounts, OLD_MAILBOX_VARIANTS, strict=True)):
+            clock.now = START + 60 * index
+            with capture_logs() as events:
+                await flows.email_changed_work(account.id, old, account.email, engine=engine)
+            logged.append(events)
+
+    assert [_notice_lines(events) for events in logged] == [[(NOTICE_SENT, "info", account.id)] for account in accounts[:3]] + [[(PAST_ITS_LIMITS, "info", accounts[3].id)]]
+    assert [event for event in logged[3] if event.get("log_level") in ("warning", "error")] == [], logged[3]
+    assert [event for event in logged[3] if OLD_MAILBOX in repr(event).casefold() or accounts[3].email in repr(event)] == [], "the skipped notice's line holds neither address"
+    assert [message.rcpt_tos for message in fake.messages] == [[old] for old in OLD_MAILBOX_VARIANTS[:3]], "three notices, each to the address as written"
+    assert (fake.connections, budget.count()) == (3, 3), "the fourth: no SMTP conversation, no budget unit"
+    assert notice_limits.by_mailbox.count(OLD_MAILBOX) == 3
+    assert [notice_limits.by_account.count(account.id) for account in accounts] == [1, 1, 1, 0], "the fourth account counted for nothing"
+    print_success("one mailbox in four spellings: three notices, the fourth skipped")
+
+
+@pytest.mark.asyncio
+async def test_a_notice_the_server_refused_counts_for_neither_limit(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, notice_limits: NoticeLimits) -> None:
+    """EMF-057 — contract 15: three notices of Alice's to her old address, a minute apart, meet an SMTP server that refuses it — each a warning «not sent», ``EmailDeliveryError`` ``RECIPIENT_REFUSED`` —: counted under neither her account nor that mailbox. So the fourth, to the same address with a server that takes it, goes: one message, counted once under each. A notice that did not go is not one."""
+    print_section("EMF-057: a refused notice counts for neither limit")
+    alice = await _add_user(engine, ALICE)
+
+    with FakeSmtpServer(refuse_recipients={alice.email}) as refusing:
+        _ready(monkeypatch, refusing)
+        with capture_logs() as events:
+            for index in range(3):
+                clock.now = START + 60 * index
+                await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+    counted_after_the_refusals = (notice_limits.by_account.count(alice.id), notice_limits.by_mailbox.count(alice.email))
+    clock.now = START + 180
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    refused = [(event.get("event"), event.get("log_level"), event.get("reason"), event.get("code")) for event in _notices(events)]
+    assert refused == [("Email change notice: not sent", "warning", "EmailDeliveryError", "RECIPIENT_REFUSED")] * 3, f"barrier: three attempts, three refusals: {refused}"
+    assert refusing.messages == []
+    assert counted_after_the_refusals == (0, 0)
+    assert [message.rcpt_tos for message in fake.messages] == [[alice.email]]
+    assert (notice_limits.by_account.count(alice.id), notice_limits.by_mailbox.count(alice.email)) == (1, 1)
+    print_success("three refusals counted nothing; the fourth went")
+
+
+@pytest.mark.asyncio
+async def test_an_hour_after_the_first_of_three_notices_the_next_goes(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, notice_limits: NoticeLimits) -> None:
+    """EMF-058 — contract 15: three notices of Alice's to one old address, at 0, 60 and 120 s, fill both limits. At 3599 s the next is still skipped, «past its limits»; at 3600 s the first has left the window — a sliding hour — and the notice goes, counted under both."""
+    print_section("EMF-058: an hour later, notices go again")
+    alice = await _add_user(engine, ALICE)
+    logged: list[list[object]] = []
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for offset in (0, 60, 120, 3599, 3600):
+            clock.now = START + offset
+            with capture_logs() as events:
+                await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+            logged.append([event.get("event") for event in _notices(events)])
+
+    assert logged == [[NOTICE_SENT]] * 3 + [[PAST_ITS_LIMITS], [NOTICE_SENT]]
+    assert [message.rcpt_tos for message in fake.messages] == [[alice.email]] * 4
+    assert (notice_limits.by_account.count(alice.id), notice_limits.by_mailbox.count(alice.email)) == (3, 3), "the notices of 60, 120 and 3600 s"
+    print_success("skipped at 3599 s, sent again at 3600 s")

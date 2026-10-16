@@ -157,6 +157,32 @@ describe('AssetSyncModal — target selection', () => {
 });
 
 // =========================================================================
+// What the page already holds in the range (C-66)
+// =========================================================================
+
+/**
+ * The Assets list knows which assets already have stored prices in the range it is
+ * about to sync, and hands their ids over as `withDataInRange`. This modal passes
+ * them on to its one section as `existingIds` — strings, like its targets — and
+ * SyncModalBase warns before Start. What the warning says and when it shows are
+ * SyncModalBase.test.ts's; the hand-over is this modal's own.
+ *
+ * Red today: the prop does not exist, and no warning is rendered.
+ */
+describe('AssetSyncModal — the assets that already hold data in the range', () => {
+    it('hands the ids to its section, counted among the assets it will sync', async () => {
+        respondWith();
+        // 4 has stored prices but no provider: it is not synced, so nothing of it is replaced.
+        mount({assets: [asset(1), asset(2), asset(3), asset(4, {provider_code: null})], withDataInRange: [1, 3, 4]});
+
+        const warning = screen.getByTestId('asset-sync-modal-overwrite-warning');
+        expect(warning).toHaveAttribute('data-section', 'assets');
+        expect(warning).toHaveAttribute('data-existing', '2');
+        expect(warning).toHaveAttribute('data-total', '3');
+    });
+});
+
+// =========================================================================
 // The response that arrives
 // =========================================================================
 

@@ -105,7 +105,7 @@ pipenv run ./dev.py user activate <username>
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
-- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
+- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
 

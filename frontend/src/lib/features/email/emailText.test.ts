@@ -32,11 +32,14 @@
  *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
  *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
  *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
- *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited), and
- *     `…errors.generic` for anything else —; `forgotFailureMessage` one per failure — the hold's own message, one
- *     `…errors.unavailable` for both ways the instance cannot send, the minutes for a rate limit, `…errors.generic` for
- *     anything else, a 422 included —; every key they produce, and the components' own, is in the four catalogues with
- *     exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate limits).
+ *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited) but
+ *     `email.sendLink.errors.RECIPIENT_REFUSED` for a refused recipient (the invitee's or the account's address, not
+ *     the administrator's own as for the test email), and `…errors.generic` for anything else —;
+ *     `forgotFailureMessage` one per failure — one `…errors.unavailable` for both ways the instance cannot send, the
+ *     minutes for a rate limit, `…errors.generic` for anything else, a 422 included, and the code of the hold lot E4b
+ *     removed with its message (`FORGOT_PASSWORD_DISABLED`) too —; every key they produce, and the components' own, is
+ *     in the four catalogues with exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate
+ *     limits).
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -435,17 +438,18 @@ const LINK_SEND_FAILURES: Array<{label: string; failure: LinkSendFailure; key: s
     ...LINK_SEND_CODES.map((errorCode) => ({label: errorCode, failure: {errorCode}, key: `email.sendLink.errors.${errorCode}`})),
     {label: 'EMAIL_RATE_LIMITED, 1800 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 1800}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 30}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
-    ...SMTP_CODES.map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED ${smtpCode}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: `email.smtpErrors.${smtpCode}`})),
+    ...SMTP_CODES.filter((smtpCode) => smtpCode !== 'RECIPIENT_REFUSED').map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED ${smtpCode}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: `email.smtpErrors.${smtpCode}`})),
+    {label: 'EMAIL_DELIVERY_FAILED RECIPIENT_REFUSED (the recipient, not your own address)', failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode: 'RECIPIENT_REFUSED'}, key: 'email.sendLink.errors.RECIPIENT_REFUSED'},
     ...[undefined, 'SMTP_SOMETHING_NEW', ...INHERITED_NAMES].map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED with ${String(smtpCode)}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: 'email.smtpErrors.SEND_FAILED'})),
     ...['UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.sendLink.errors.generic'})),
 ];
 
 const FORGOT_FAILURES: Array<{label: string; failure: ForgotFailure; key: string; values?: Values}> = [
-    {label: 'FORGOT_PASSWORD_DISABLED (the hold)', failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'}, key: 'email.forgot.errors.FORGOT_PASSWORD_DISABLED'},
     {label: 'EMAIL_UNAVAILABLE', failure: {errorCode: 'EMAIL_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
     {label: 'EMAIL_LINKS_UNAVAILABLE', failure: {errorCode: 'EMAIL_LINKS_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
     {label: 'EMAIL_RATE_LIMITED, 840 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 14}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
+    {label: 'FORGOT_PASSWORD_DISABLED (the hold, removed with its message in lot E4b)', failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'}, key: 'email.forgot.errors.generic'},
     ...['INVALID', 'UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.forgot.errors.generic'})),
 ];
 

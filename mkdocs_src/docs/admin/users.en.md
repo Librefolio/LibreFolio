@@ -123,7 +123,7 @@ To invite someone:
 3. Tick **Administrator** if the new account should manage the instance.
 4. Click **Create the link**: *Share this link: it works once, for 7 days.* Check the
    [server address](#server-address), click **Copy** and send the link yourself, by message or
-   e-mail: LibreFolio does not send e-mails yet.
+   e-mail, or let LibreFolio email it: [Send by Email](#send-by-email).
 5. Click **Done**: the invitation joins **Open invitations**.
 
 The person opens the link and creates their account with the username, e-mail and password they
@@ -150,12 +150,14 @@ once, and its place is freed.
 
 ## 🔑 Password-Reset Links {: #reset-links }
 
-When someone forgot their password, send them a link to choose a new one themselves:
+When someone forgot their password, send them a link to choose a new one themselves. With email,
+they can also ask for one from the login page: see [Forgotten Passwords](email.md#forgot-password).
 
 1. Open their row and click **Password-reset link**.
 2. The dialog explains: *A single-use link to set a new password, valid 30 minutes. The links
    created before for this account stop working.* Click **Create the link**.
-3. Check the [server address](#server-address), click **Copy**, send the link, then click **Done**.
+3. Check the [server address](#server-address), click **Copy** and send the link, or click
+   **Send by email** ([Send by Email](#send-by-email)); then click **Done**.
 
 - ⏱️ The link works once, for 30 minutes, and only the newest link of an account works.
 - 🔒 It also stops working as soon as the person changes their password or email address, or you
@@ -201,6 +203,29 @@ advises. Back on the filled-in address, the message goes away. How the check wor
     Set `LIBREFOLIO_PUBLIC_URL` to the address your users open, and the panel starts from it: see
     «Accounts and Sign-ups» in [Environment Variables](configuration.md). The
     [command line](cli_tools.md) puts it in front of the links it prints, too.
+
+---
+
+## 📧 Send by Email {: #send-by-email }
+
+While the instance can send emails with a link — email **Ready** and `LIBREFOLIO_PUBLIC_URL` set to
+an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — both link dialogs have
+**Send by email** under the link:
+
+- **An invitation**: **Send to** starts with the address written in the invitation, and you can
+  change it. Left empty, the email goes to the address written in the invitation; without one, the
+  dialog asks for an address.
+- **A password-reset link** has no field: the email goes to the address of the account, and only
+  while the account is active.
+- **The link in the email starts with `LIBREFOLIO_PUBLIC_URL`**, whatever the **Server address**
+  above shows: the dialog says so.
+- **The language**: an invitation goes in the instance's **Default Language**, a reset link in the
+  account's.
+- **The result** shows in the dialog: *Sent to …* with the address, or why the email did not go out
+  ([Sending Errors](email.md#sending-errors)).
+
+Without email, the button is not there: copy the link as before. The rules and the limits:
+[Links Sent by an Administrator](email.md#admin-links).
 
 ---
 

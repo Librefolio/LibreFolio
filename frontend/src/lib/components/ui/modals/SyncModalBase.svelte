@@ -4,7 +4,7 @@
   progress bar with countdown, per-section result lists via snippets,
   retry logic (single item + all-failed), and aggregated summary.
 
-  Specializations (FxSyncModal, AssetSyncModal, PageSyncAllModal) build
+  Specializations (FxSyncModal, AssetSyncModal, PageSyncModal) build
   SyncSection[] and pass them here. Each section has its own doSyncFn
   and resultRow snippet. Sections with empty targetIds are hidden.
   All sections are synced in parallel with a unified countdown.
@@ -75,6 +75,14 @@
 
     /** Count label combining all section labels */
     let countLabel = $derived(activeSections.map((s) => `${s.targetIds.length} ${s.countLabel}`).join(' · '));
+
+    /** Per active section, how many of its targets already hold stored data in the range (C-66): warned before the start. */
+    let overwriteWarnings = $derived(
+        activeSections.flatMap((section) => {
+            const existing = section.existingIds?.length ? section.targetIds.filter((id) => section.existingIds!.includes(id)).length : 0;
+            return existing > 0 ? [{id: section.id, title: section.title, existing, total: section.targetIds.length}] : [];
+        }),
+    );
 
     /** All results flattened */
     let allResults = $derived(Array.from(sectionResults.values()).flat());
@@ -372,6 +380,18 @@
             <span class="mx-1">·</span>
             <span>{countLabel}</span>
         </div>
+
+        <!-- C-66: the range already holds stored data, which the sync replaces (manual edits included). Shown before the
+             start only; the counts are republished as numbers, the sentence is translated. -->
+        {#if !hasResults && !syncing}
+            {#each overwriteWarnings as warning (warning.id)}
+                <div data-existing={warning.existing} data-section={warning.id} data-testid="{testId}-overwrite-warning" data-total={warning.total}>
+                    <InfoBanner variant="warning">
+                        <span class="text-xs">{activeSections.length > 1 ? `${warning.title}: ` : ''}{$t('fx.sync.overwriteWarning', {values: {existing: warning.existing, total: warning.total}})}</span>
+                    </InfoBanner>
+                </div>
+            {/each}
+        {/if}
 
         <!-- Timeout setting -->
         {#if !hasResults || failedItems.length > 0 || isTimeout}
