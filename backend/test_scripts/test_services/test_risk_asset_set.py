@@ -138,6 +138,9 @@ REFERENCE_ASSET_ID = 103
 FLAT_GAINER_ASSET_ID = 104
 STILL_UNDERWATER_ASSET_ID = 105
 RECOVERED_ASSET_ID = 106
+TOTAL_LOSS_ASSET_ID = 107
+FIFTH_BELOW_PEAK_ASSET_ID = 108
+SECOND_TOTAL_LOSS_ASSET_ID = 109
 
 
 def _wave(amplitude: float, phase: float, drift: float) -> list[float]:
@@ -157,6 +160,12 @@ FLAT_GAINER = [0.002] * OBSERVATIONS
 STILL_UNDERWATER = [0.01] * 10 + [-0.015] * 10 + [0.002] * 10
 # Rises, falls, climbs back through the old peak, then stands still on it.
 RECOVERED = [0.01] * 5 + [-0.02] * 5 + [0.03] * 10 + [0.0] * 10
+# Two observations, not OBSERVATIONS: the float total loss of test_risk_metrics.py. Two falls of 99.99999999 % leave
+# about 1e-20 of the value — still a positive price — and a drawdown of exactly -1.0, from which no finite gain climbs
+# back. A joint calendar gives every asset the same number of returns, so its neighbour has two as well: up 25 %, down
+# 20 %, a fifth below its peak with a quarter to climb.
+TOTAL_LOSS = [-0.9999999999] * 2
+FIFTH_BELOW_PEAK = [0.25, -0.2]
 
 ASSET_SET_ANALYTIC_CLASSES: tuple[type[RiskAnalytic], ...] = (
     AssetSetKpiAnalytic,
@@ -995,6 +1004,102 @@ def test_asset_set_drawdown_states_one_window_once_and_one_episode_per_asset():
     # It ended on its peak, so it owes nothing — and a zero here *is* a measurement.
     assert recovered.current_drawdown == pytest.approx(0.0, abs=1e-12)
     assert recovered.remaining_to_peak_ratio == pytest.approx(0.0, abs=1e-12)
+
+    # P19: each row also carries the climb from its worst trough back to the peak before it, computed the same way
+    # from its own maximum drawdown. It describes the depth, not the recovery state: the recovered row keeps its climb
+    # from 0.98**5 of the peak, and the open row's climb from 0.985**10 of the peak is larger than what it still owes,
+    # because it has since come off its trough.
+    for episode in (open_episode, recovered):
+        assert episode.maximum_drawdown_trough_to_peak_ratio == pytest.approx(-episode.maximum_drawdown / (1.0 + episode.maximum_drawdown), rel=1e-12)
+    assert recovered.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.98**5 - 1.0, rel=1e-9)
+    assert open_episode.maximum_drawdown_trough_to_peak_ratio == pytest.approx(1.0 / 0.985**10 - 1.0, rel=1e-9)
+    assert open_episode.maximum_drawdown_trough_to_peak_ratio > open_episode.remaining_to_peak_ratio
+    # Every gain is a number, the recovered row's 0.0 included: there is no total loss to warn about.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
+
+
+def test_asset_set_drawdown_states_no_climb_for_an_asset_that_never_fell():
+    """A row with no drawdown carries a measured 0.0, beside a row whose climb is real, on the wire too."""
+    context = asset_set_context(
+        {FLAT_GAINER_ASSET_ID: FLAT_GAINER, RECOVERED_ASSET_ID: RECOVERED},
+        scope_asset_ids=(FLAT_GAINER_ASSET_ID, RECOVERED_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+    output = computation.output
+    by_asset = {item.asset_id: item for item in output.items}
+
+    never_fell = by_asset[FLAT_GAINER_ASSET_ID]
+    assert never_fell.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.NO_DRAWDOWN
+    assert never_fell.maximum_drawdown_trough_to_peak_ratio == 0.0
+    assert never_fell.remaining_to_peak_ratio == 0.0
+    wire = {item["asset_id"]: item for item in output.model_dump(mode="json")["items"]}
+    assert wire[FLAT_GAINER_ASSET_ID]["maximum_drawdown_trough_to_peak_ratio"] == 0.0
+    assert wire[RECOVERED_ASSET_ID]["maximum_drawdown_trough_to_peak_ratio"] == pytest.approx(1.0 / 0.98**5 - 1.0, rel=1e-9)
+    # 0.0 is a number, not a total loss, falsy as it is: no warning.
+    assert "total_loss_no_recovery" not in {warning.code for warning in computation.warnings}
+
+
+def test_asset_set_drawdown_publishes_a_total_loss_row_with_null_gains_and_one_warning():
+    """A wiped-out asset keeps its row, both gains null, and one warning names it; its neighbour keeps its numbers.
+
+    An undefined value is None plus a warning (risk architecture, «Adding a Risk Analytic», item 4). Here the warning
+    is a per-asset sentence: the service fills its count and names from ``details.asset_ids``. It informs and does
+    not degrade: a RiskWarning degrades unless told otherwise, and the service turns a result partial for a degrading
+    warning or an excluded asset — the computation hands it neither, so the status stays ok.
+    """
+    context = asset_set_context(
+        {TOTAL_LOSS_ASSET_ID: TOTAL_LOSS, FIFTH_BELOW_PEAK_ASSET_ID: FIFTH_BELOW_PEAK},
+        scope_asset_ids=(TOTAL_LOSS_ASSET_ID, FIFTH_BELOW_PEAK_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+    by_asset = {item.asset_id: item for item in computation.output.items}
+
+    wiped_out = by_asset[TOTAL_LOSS_ASSET_ID]
+    assert wiped_out.current_drawdown == -1.0
+    assert wiped_out.maximum_drawdown == -1.0
+    assert wiped_out.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.OPEN
+    assert wiped_out.remaining_to_peak_ratio is None
+    assert wiped_out.maximum_drawdown_trough_to_peak_ratio is None
+
+    neighbour = by_asset[FIFTH_BELOW_PEAK_ASSET_ID]
+    assert neighbour.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.OPEN
+    assert neighbour.maximum_drawdown_trough_to_peak_ratio == pytest.approx(0.25)
+    assert neighbour.remaining_to_peak_ratio == pytest.approx(0.25)
+
+    total_loss_warnings = [warning for warning in computation.warnings if warning.code == "total_loss_no_recovery"]
+    assert len(total_loss_warnings) == 1, computation.warnings
+    (warning,) = total_loss_warnings
+    assert warning.message_i18n_key == "risk.warnings.total_loss_no_recovery_assets"
+    assert warning.details == {"asset_ids": [TOTAL_LOSS_ASSET_ID]}
+    assert warning.degrades_result is False
+    assert not any(item.degrades_result for item in computation.warnings)
+    assert computation.excluded_assets == ()
+
+
+def test_asset_set_drawdown_names_every_total_loss_in_one_warning():
+    """Two assets wiped out: one warning names both, rather than one warning each."""
+    context = asset_set_context(
+        {TOTAL_LOSS_ASSET_ID: TOTAL_LOSS, FIFTH_BELOW_PEAK_ASSET_ID: FIFTH_BELOW_PEAK, SECOND_TOTAL_LOSS_ASSET_ID: TOTAL_LOSS},
+        scope_asset_ids=(TOTAL_LOSS_ASSET_ID, FIFTH_BELOW_PEAK_ASSET_ID, SECOND_TOTAL_LOSS_ASSET_ID),
+    )
+
+    computation = AssetSetDrawdownAnalytic().compute(AssetSetDrawdownParams(), context)
+
+    total_loss_warnings = [warning for warning in computation.warnings if warning.code == "total_loss_no_recovery"]
+    assert len(total_loss_warnings) == 1, computation.warnings
+    (warning,) = total_loss_warnings
+    assert warning.message_i18n_key == "risk.warnings.total_loss_no_recovery_assets"
+    assert set(warning.details) == {"asset_ids"}
+    # The contract names the assets, not their order: compared sorted, so an asset named twice still shows.
+    assert sorted(warning.details["asset_ids"]) == sorted([TOTAL_LOSS_ASSET_ID, SECOND_TOTAL_LOSS_ASSET_ID])
+
+
+def test_asset_set_drawdown_trough_to_peak_gain_is_a_new_algorithm_version():
+    # 1.1.0 (CP-13a, developer's decision P19): every row gains maximum_drawdown_trough_to_peak_ratio, and a total
+    # loss publishes remaining_to_peak_ratio as null instead of failing. Every number 1.0.0 published is unchanged.
+    assert AssetSetDrawdownAnalytic.algorithm_version == "1.1.0"
 
 
 # ---------------------------------------------------------------------------
