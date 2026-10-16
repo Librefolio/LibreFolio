@@ -3393,6 +3393,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - scaldare il grafo una volta sola, in un `beforeAll` con un timeout ampio, prima dei `resetModules`;
     - dare a ogni caso il suo mock, così un timeout non si propaga.
   - Mio, perché è nell'area del FE4. Dettagli: piano 03, sezione «CP13».
+  ✅ **Chiusa da X il 16/10**:
+  - un mock nuovo per caso, installato con `vi.doMock`, così una lettura in sospeso non viene contata nel caso dopo;
+  - il grafo dello store si scalda una volta in `beforeAll`;
+  - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
+  - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
+  - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
 - **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
   testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
   - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
@@ -3416,6 +3422,31 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     ridisegnare lo stato della pagina (una classe o uno store `.svelte.ts` con le richieste e le loro generazioni), con
     rischio alto e conflitti con J, Y e Z.
   - **Cura**: un lotto dopo la 1.3, con le E2E della pagina come rete. Dettagli: piano 03, sezione «FE5c», pezzo 9.
+- **X-R24 · La ricerca senza `providers` interroga anche il provider dei test** — basso, API; X, 16/10 (test-author di
+  F21, in lettura). `AssetSearchService.search` e `search_stream` (`services/assets/search.py`), quando la richiesta non
+  dice quali provider, prendono tutto `AssetProviderRegistry.list_providers()`, compreso `mockprov`, che è `test_only` e
+  sa cercare.
+  - **Effetto**: una chiamata diretta a `/assets/provider/search?q=…` senza `providers` restituisce anche i risultati
+    «Mock Asset» in produzione. L'interfaccia passa sempre `providers`, quindi l'utente non li vede.
+  - **Cura**: escludere i provider `test_only` dalla lista di default, come fa già `GET /assets/provider`. Prima va
+    controllato che nessun test, API o E2E, cerchi senza `providers` aspettandosi i risultati del mock.
+  - **Collegato, minimo**: la docstring di `services/assets/__init__.py` dice che `AssetSourceProvider` e
+    `AssetSourceError` stanno in `core.py`, ma sono in `base.py`.
+  - Dettagli: piano 03, sezione «CP13», F21.
+- **X-R25 · `test_complete_e2e_flow_justetf` va in timeout alla ricerca quando un fornitore esterno è lento** — basso,
+  test; trovato da J in `all-backend`, girato a X dal coordinatore il 16/10.
+  - **Il caso**: `backend/test_scripts/test_e2e/test_search_to_prices.py`, step 1, chiede
+    `/assets/provider/search?q=iShares Core MSCI World` **senza `providers`**, con `TIMEOUT = 30.0`. Da solo passa 3/3
+    in 18 s.
+  - **Perché**: senza `providers` la ricerca interroga tutti i fornitori in parallelo. Ognuno ha 30 s sul server
+    (`services/assets/search.py`, `timeout=30.0`), più il ripiego del link finder quando non trova niente. L'attesa
+    del test, 30 s, è uguale al budget di un solo fornitore, non a quello della richiesta. **Verdetto: assunzione
+    (il tempo)**; il prodotto è corretto.
+  - **Cura**, nel test:
+    - `providers=justetf` allo step 1, perché il test è su justETF, così non dipende dagli altri fornitori, `mockprov`
+      compreso (X-R24);
+    - un tempo di attesa per la ricerca sopra quello del server, almeno 60 s con la risoluzione degli URL.
+  - Un lotto piccolo, quando c'è tempo.
 
 ## W · Import e transazioni (fase 01)
 

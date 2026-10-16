@@ -4003,3 +4003,159 @@ toccato file. Durante lo STOP:
 - consegnati il codice, la doc e il journal, con le prove leggere verdi;
 - i test di F21 (test-author) e la riparazione di X-R21 (test-author) **non sono ancora scritti**: i due test-author sono
   fermi («HOLD») fino a dopo il merge, perché i file che toccheranno possono cambiare. Arrivano in commit separati.
+
+Merge of `dev_release2` `69c95454b` (Z7c-1) committed: `950b94667`. Conflicts resolved by me: `themeRoles.baseline.tsv`
+(`--resolve`, colour `--check` clean) and `charts.md` (my sentence on `parseAssetPriceQueryWithSignalIsolation()`, dev's
+paragraph on the rolling return in the catalog; dropped the stale `catalog_visible = False`). Combined revision:
+`api sync`, `front check` 0/0, `core-unit` 184 files 6630/6630.
+
+**Nuove regole del coordinatore (10:55)**:
+- **Aree dei colori**: sette workstream lavorano sulle classi. Prima di scrivere in un `.svelte` delle loro aree va
+  chiesto al coordinatore; `assets/detail/**` e `assets/[id]` restano miei fino all'ingresso del FE5c.
+- **`/tmp` si svuota al riavvio**: patch, script e log che servono di nuovo vanno nella cartella di sessione. Il
+  wrapper dei controlli ora è `files/checks/check.sh`, con i log in `files/checks/logs/`.
+
+#### X-R21 · la riparazione di `fxRoutesStore.test.ts` ✅ scritta e provata (11:02; commit dopo quelli di F21)
+
+> **Note implementazione** (test-author):
+> - un solo meccanismo di mock: via `vi.hoisted` e il `vi.mock` in cima; un `vi.fn()` nuovo per caso, installato con
+>   `vi.doMock('$lib/api', …)`, così una lettura rimasta in sospeso chiama il mock del suo caso e non viene contata nel
+>   successivo;
+> - il grafo dello store si scalda una volta in `beforeAll` (60 s, come `GapFixStep` e `ParseDetailModal`):
+>   `resetModules` butta i moduli valutati ma tiene il codice trasformato;
+> - `afterEach` aspetta `vi.dynamicImportSettled()`, prima volta nel repo: un caso finisce solo quando i suoi import
+>   sono finiti.
+> - **Prova**: il file da solo → **5/5**; il primo caso passa da 437 ms a **57 ms**.
+> - Il percorso della cascata sotto carico non si può osservare a carico basso: è argomentato dal sorgente di Vitest.
+> - **⚠️ Fuori pista**: il test-author ha lanciato una volta `vitest --version` (nessun test). Innocuo, annotato.
+
+#### FE5c-9a · le azioni della barra ✅ scritto e controllato (10:53–11:00; commit dopo F21 e X-R21)
+
+> **Note implementazione**:
+> - `lib/components/assets/detail/AssetDetailToolbarActions.svelte`, generato da `files/checks/fe5c_piece9a.py` (cartella
+>   di sessione): il contenuto dello snippet `actions` di `PageToolbar` copiato alla lettera, con le proprietà al posto
+>   dello stato della pagina. Contiene AI export, Modifica, Sincronizza (barrata con il motivo quando è bloccata) e
+>   Aggiorna.
+> - Lo snippet resta nella pagina come una sola chiamata.
+> - I callback senza argomenti (`onedit`, `onrefresh`) si chiamano da una closure, così non ricevono l'evento.
+>   `onsync={handleSync}` riceve l'evento come prima.
+> - L'`onerror` dell'AI export è rimasto quello di prima, dentro il componente (`toasts` + `getAiExportErrorMessage`).
+> - Dalla pagina escono gli import inutili: `RotateCw`, `Tooltip`, `AiExportMenu` e `getAiExportErrorMessage`.
+> - La pagina passa da 2972 a 2937 righe.
+> - **`--split`**: la pagina scende da 155 a 123, il componente ne prende 32. La somma resta 155.
+> - **Prove**: `front check` → 0/0; Prettier → nessuna modifica.
+
+#### FE5c-9b · la parte dal vivo ⏳ (modulo scritto alle 11:05; l'innesto aspetta il commit del 9a)
+
+> **Note implementazione**:
+> - `lib/components/assets/detail/assetDetailLive.svelte.ts`, generato da `files/checks/fe5c_piece9b_module.py` dai
+>   blocchi della pagina, con sostituzioni esplicite, ognuna contata.
+>   - La classe `AssetDetailLive` ha lo stato dal vivo (`currentPrice`, `conversionFailed`, `updatesState`,
+>     `direction`, `flashToken`; privati il valore precedente e il timer del lampeggio).
+>   - Il suo costruttore registra l'`$effect` del polling.
+>   - `#pollLivePriceOnce` sono le righe di Z7c-1, così come sono, e con loro `#applyLiveSummary` e
+>     `#applyLiveChartHead`, con la spiegazione I-bis #24.
+>   - Legge la pagina da `AssetDetailLiveInput`, getter più il setter di `chartData` e `loadChartData`: le stesse
+>     letture di prima.
+> - L'innesto (`files/checks/fe5c_piece9b_splice.py`, prova a secco 2937 → 2757):
+>   - l'istanza si crea **nel punto del vecchio `$effect`**, così il polling resta nell'ordine degli effetti della
+>     pagina;
+>   - `lastPrice` legge `live.currentPrice`; `reloadPage()` chiama `live.resetPrice()`;
+>   - il template legge `live.updatesState`, `live.conversionFailed`, `live.direction` e `live.flashToken`;
+>   - escono gli import del polling.
+
+**P20 deciso dal developer (11:12, via coordinatore)**:
+- **«Prezzo manuale / import» non si fa**: dalla creazione si salva l'asset senza fonte, e l'utente aggiunge i prezzi.
+- **«Segnalacelo» resta**, e deve mandare una email con tutti i dati: cosa ha cercato, quali provider ha interrogato,
+  valuta ed exchange se c'erano. Il supporto risponde spiegando come usare altri provider.
+
+**Mia proposta** (11:15, in attesa dell'ok; serve anche quello di H per la variabile):
+- **Il canale**: niente invio dal server.
+  - Se il supporto è un indirizzo email: `mailto:` con oggetto e corpo precompilati.
+  - Se è una pagina http(s): si apre la pagina e il rapporto va negli appunti.
+  - Se non è impostato: una issue di GitHub precompilata, pubblica, che l'utente rivede prima di inviarla.
+- **I dati**:
+  - il testo cercato;
+  - i provider interrogati con il loro esito, solo i codici;
+  - valuta, tipo e identificativo del modulo, se c'erano;
+  - versione, profilo e lingua.
+  - **Mai**: utente, email, indirizzo dell'istanza, dati del portafoglio.
+- **La configurazione**: una sola variabile. `LIBREFOLIO_SUPPORT_URL` accetta anche `mailto:<indirizzo>`, con una variante
+  della regola; `env_url` resta solo http(s) per `PUBLIC_URL` e `BILLING_URL`.
+
+**P20 approvato (coordinatore, 11:20)**:
+- la segnalazione parte dal client dell'utente: `mailto:`, oppure la pagina con il rapporto negli appunti, oppure la
+  issue di GitHub se non c'è niente di impostato;
+- i dati proposti, senza dati personali;
+- dopo ogni ricerca.
+- `LIBREFOLIO_SUPPORT_URL` con `mailto:` aspetta l'ok di H; intanto il frontend presuppone la variabile unica.
+
+**Il frontend dopo i lotti di AF** (decisione del developer: prima la migrazione dei colori, poi le funzioni nuove). AF
+passa per primo sui file dei miei lotti futuri:
+- lotto 1: `FxSyncModal`, per C-66;
+- lotto 4: `AssetModal`, per O-20;
+- lotto 5: `AssetSearchAutocomplete` e `ProviderAssignmentSection`, per F21 e C-90;
+- lotto 6: `AssetDataEditorSection`, per O-8;
+- lotto 8: `assets/+page.svelte`, per O-20.
+
+Il frontend del CP13 e O-8, O-20 e C-66 partono quando il coordinatore lo dice. Restano ora: i test di F21, la correzione
+dell'ordine con i duplicati, X-R21 e il pezzo 9; la pagina di dettaglio resta mia. I colori spostano su `data-lifecycle`
+due miei test (`AssetTable.test.ts`, `e2e/assets/asset-list.spec.ts`), che non avevo aperti.
+
+3b. ✅ (11:17–11:44) **Correzione di F21: la ricerca tiene i provider ripetuti** (trovata dal test-author).
+   > **Note implementazione**:
+   > - **Il difetto**: `search()` costruiva un dizionario codice → posizione e ordinava per codice. Con un codice ripetuto
+   >   (`providers=a,b,a`) e nessuna sovrascrittura la ricerca diventava `[b, a, a]` invece di `[a, b, a]`, contro D-X3.
+   >   `search_order` era giusto; il difetto era solo in `search.py`.
+   > - **La cura**: `provider_policy.search_rank(code)`, cioè (0 premium | 1 community, priorità effettiva).
+   >   `search_order` diventa `sorted(codes, key=search_rank)`, e `search.py` fa `valid_providers.sort(key=…search_rank)`.
+   >   Un ordinamento stabile tiene i pari, i ripetuti compresi, nell'ordine dato.
+   > - **Rosso prima**: `services provider-policy` sul codice di prima → **3 failed, 45 passed**, esattamente i 3
+   >   previsti. Due cadono per `AttributeError` su `search_rank`; il terzo è la ricerca da capo a fondo con un provider
+   >   ripetuto, che dava `standin_beta` prima di `standin_alpha`.
+   > - Dopo la cura: **48/48**.
+
+3c. ✅ **I test di F21** (test-author; 48 casi, 30 funzioni, nessun DB né server):
+   > - `backend/test_scripts/test_services/test_provider_policy.py` (nuovo), registrato come `services provider-policy`,
+   >   `isolation="pure"`, accanto a `provider-contracts`;
+   > - una riga in `test_assets_crud.py::test_list_asset_providers`: ogni provider dal vivo è `community` a 100.
+   > - **Coprono**:
+   >   - gli accessori;
+   >   - il livello e la priorità, dichiarati e sovrascritti, con un codice sconosciuto registrato una volta;
+   >   - una variabile PREMIUM che elenca solo codici sconosciuti non rende premium nessuno;
+   >   - `search_order` e `search_rank`, con il premium prima di ORDER e i ripetuti;
+   >   - il controllo delle dichiarazioni (`"gold"`, `None`, `-1`, `True`, `"1"`, `1.0`);
+   >   - la ricerca da capo a fondo, con solo `core.configured_provider` sostituito.
+   > - **Due scostamenti del test-author, accettati**: `provider_policy.search_rank` letto dentro il test invece di un
+   >   `getattr` (la regola B009 di ruff riscrive `getattr` con una stringa fissa), e `dict.fromkeys` (C420).
+   > - **Prove**:
+   >   - `services provider-policy` 48;
+   >   - `api assets-crud` **35**, con l'asserzione dal vivo;
+   >   - **le suite che chiamano la ricerca, verdi**: `services asset-source` 61, `rate-limit-results` 23,
+   >     `plugin-settings-runtime` 120, `web-link-finder` 29;
+   >   - ruff e black puliti sui 5 file.
+   > - **Trovati in lettura, non corretti** (precedenti a F21): `mockprov` nella ricerca senza `providers` e una docstring
+   >   vecchia, ora **X-R24**.
+
+**Prove del lotto (F21 correzione e test, X-R21, 9a)**, 11:36–11:54, ognuna con `nice` dopo il controllo del carico. Il
+carico è salito più volte a ~150 per gli slot pesanti delle altre corsie, e il wrapper ha aspettato.
+- le suite della ricerca, come detto in 3c;
+- `front check` → **0/0**, compresi il 9a e il modulo del 9b, non ancora innestato;
+- `front-utility core-unit` → **184 file, 6630/6630**, con X-R21 e i cancelli dei colori del `--split` del 9a;
+- `check-orphans` → tutti raggiungibili (488 test frontend, 356 backend, 134 E2E);
+- Prettier pulito; `git diff --check` pulito; porta 6183 libera.
+
+**Arrivati nel frattempo**:
+- **Icone in Impostazioni › Plugin** (richiesta del developer, proposta approvata dal coordinatore alle 11:52), un lotto
+  suo **dopo il 9b**:
+  - `icon_url` in `PluginSettingsPluginRead`, letto dall'istanza del plugin con una tabella per famiglia (`asset` →
+    `get_icon`, `fx` → `icon`);
+  - `FAMILY_ICONS` (`ChartColumn`, `Coins`) accanto a `FAMILY_TITLE_KEYS`;
+  - il ripiego `Puzzle` se l'icona manca o non si carica;
+  - tre `data-testid`;
+  - test di servizio e di componente.
+  - Cambia lo scatto `settings/plugins` della galleria: il coordinatore avvisa i colori e G.
+- **Skill `design-system`** (D-T29, `6e569084a`): da ora il markup nuovo la segue dall'inizio, solo ruoli `-lf-`.
+  Arriva col prossimo aggiornamento della base; prima del lotto delle icone la leggo dal checkout principale, in sola
+  lettura, come indicato dal coordinatore.
+- **X-R25** (da J): il test della ricerca justETF in `all-backend` va in timeout; aperta nel backlog.
