@@ -17,7 +17,8 @@ holds the whole rule, so that the API and the command line apply the same one. T
      anything else → ``ValueError``;
    - ``public_url()`` and ``billing_url()`` — ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BILLING_URL``, stripped and
      without their trailing ``/``, nothing else changed; unset, empty or blank → ``None``; not starting with ``http://``
-     or ``https://`` → ``ValueError``.
+     or ``https://`` → ``ValueError``; with user info in the authority, an ``@`` in it (X-R35) → ``ValueError`` naming
+     the variable, whose message holds neither the user name nor the password.
 4. ``registration_service``:
    - ``effective_registration_mode`` → ``RegistrationModeState(mode, locked)``: the variable when it is set, locked;
      otherwise the row, ``invite`` without one (A6d). An invalid variable closes — ``disabled``, locked —, and so does an invalid
@@ -33,6 +34,8 @@ holds the whole rule, so that the API and the command line apply the same one. T
      closed until it is fixed» for the variable, the stored mode and the limit; «links show the bare path until it is
      fixed» for the public URL; «the billing link stays hidden until it is fixed» for the billing URL. An invalid URL
      closes nothing — the mode, the limit and the registrations are those of a valid one — and its log never says it does;
+     a URL with user info is invalid like the others, and no record of its log holds the user name or the password
+     (X-R35);
    - ``create_invite`` issues an invitation (the token service's ``IssuedToken``) unless registration is disabled
      (``REGISTRATION_DISABLED``) or the limit is reached, ``used >= max_users`` (``USER_LIMIT_REACHED``); a refusal
      writes nothing;
@@ -73,6 +76,11 @@ Lot A6d (decision 36) changes the default: a new install registers by invitation
 creatable while the instance has none, in every mode, as the administrator. A case about something else than the
 default sets the mode it needs on the row. Red until A6d: the default of the registry, the mode without a row or a
 variable, and a second registration without an invitation on an instance without a row.
+
+X-R35 (workstream E's security review «R13-SEC2»): an address whose authority holds user info would be handed out as it
+is — the billing link of an administrator's pages, the invitation and reset links — and an error quoting it would write
+the credentials into the operator's log. Red until X-R35 lands: ``public_url()`` and ``billing_url()`` take such an
+address, and ``public_link()`` and ``billing_link()`` hand it out.
 """
 
 from __future__ import annotations
@@ -150,6 +158,10 @@ LOG_CANARY = "canary: the capture reaches the registration service's own logger"
 #: A token in the alphabet issue_token uses (URL-safe base64), and the page each purpose of a link opens.
 SAMPLE_TOKEN = "Zm9v_YmFy-0123456789abcdefghijklmnopqrstuv"
 PAGES = {INVITE: "/invite", PASSWORD_RESET: "/reset-password"}
+#: X-R35: the user name and the password of the addresses with user info, distinctive enough that either one found in a
+#: message or a log record can only be the value leaking.
+USER_INFO_NAME = "alice"
+USER_INFO_PASSWORD = "s3cr3t-pw"
 
 Outcome = Union[User, RegistrationError]
 
@@ -382,6 +394,11 @@ def _reported(events: list[dict[str, Any]]) -> list[tuple[Any, Any]]:
     return [(event.get("event"), event.get("consequence")) for event in _errors(events)]
 
 
+def _user_info_in(text: str) -> list[str]:
+    """The parts of the user info of X-R35 that ``text`` holds, in any case: anything but ``[]`` is the value leaking."""
+    return [part for part in (USER_INFO_NAME, USER_INFO_PASSWORD) if part.casefold() in text.casefold()]
+
+
 # =============================================================================
 # 2. THE SETTINGS REGISTRY
 # =============================================================================
@@ -513,6 +530,21 @@ def test_a_url_variable_must_start_with_http_or_https(monkeypatch: pytest.Monkey
 
     with pytest.raises(ValueError):
         accessor()
+
+
+@pytest.mark.parametrize(("accessor", "variable"), URL_ACCESSORS)
+@pytest.mark.parametrize("raw", [pytest.param("https://alice:s3cr3t-pw@folio.example.com", id="user-name-and-password")])
+def test_a_url_variable_refuses_user_info_and_never_quotes_it(monkeypatch: pytest.MonkeyPatch, accessor: Callable[[], Optional[str]], variable: str, raw: str) -> None:
+    """Contract 3 (X-R35): a URL whose authority holds user info is a ``ValueError`` naming the variable, its message holding neither the user name nor the password: the URL becomes a link the instance hands out, and the error is logged.
+
+    Red today: both accessors give it back, credentials included.
+    """
+    monkeypatch.setenv(variable, raw)
+
+    with pytest.raises(ValueError) as raised:
+        accessor()
+    message = str(raised.value)
+    assert variable in message and _user_info_in(message) == [], f"the error must name {variable} without quoting its user info, neither {USER_INFO_NAME!r} nor {USER_INFO_PASSWORD!r}: {message!r}"
 
 
 def _env_example_section(title: str) -> list[str]:
@@ -740,6 +772,10 @@ INVALID_SETTINGS = [
     pytest.param(INVALID_BILLING_URL, id="LIBREFOLIO_BILLING_URL"),
 ]
 INVALID_URLS = [pytest.param(INVALID_PUBLIC_URL, id="LIBREFOLIO_PUBLIC_URL"), pytest.param(INVALID_BILLING_URL, id="LIBREFOLIO_BILLING_URL")]
+#: X-R35: a URL with user info is invalid too — each read as an administrator's page reads it.
+USER_INFO_PUBLIC_URL = _InvalidSetting(PUBLIC_URL_VARIABLE, "https://alice:s3cr3t-pw@folio.example.com/", False, _read_public_link, None, LINKS_SHOW_THE_BARE_PATH)
+USER_INFO_BILLING_URL = _InvalidSetting(BILLING_URL_VARIABLE, "https://alice:s3cr3t-pw@billing.example.com/acme", False, _read_billing_link, None, BILLING_LINK_STAYS_HIDDEN)
+USER_INFO_URLS = [pytest.param(USER_INFO_PUBLIC_URL, id="LIBREFOLIO_PUBLIC_URL"), pytest.param(USER_INFO_BILLING_URL, id="LIBREFOLIO_BILLING_URL")]
 
 
 def test_report_invalid_logs_one_error_per_distinct_problem_and_consequence() -> None:
@@ -826,6 +862,30 @@ async def test_an_invalid_url_closes_nothing_and_its_log_never_says_it_does(engi
     assert claims == [], f"an invalid {invalid.name} closes nothing, and the log must not say it does — an operator would look for the fault in the wrong place: {claims}"
     assert _reported(events) == [(INVALID_CONFIGURATION, invalid.consequence)], f"the one error must say what an invalid {invalid.name} costs, «{invalid.consequence}»: {_errors(events)}"
     print_success(f"open, no limit, a regular account registered; «{invalid.consequence}»")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", USER_INFO_URLS)
+async def test_a_url_with_user_info_is_no_link_and_no_log_record_holds_it(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, invalid: _InvalidSetting) -> None:
+    """Contract 4 (X-R35): a URL variable with user info is invalid like the others: no link at every reading, and one error for the process, ``Invalid account configuration``, naming the variable and what it costs.
+
+    The invitation and reset links show the bare path, the billing link stays hidden. No captured record holds the
+    user name or the password; the one error, and the canary of the capture, are the presence barriers that give that
+    absence its meaning. Red today: both links carry the credentials, and nothing is logged.
+    """
+    print_section(f"Contract 4 (X-R35): {invalid.name} with user info")
+    await invalid.put(engine, monkeypatch)
+
+    with _captured() as events:
+        answers = [await invalid.read(engine) for _ in range(2)]
+
+    errors = _errors(events)
+    assert answers == [invalid.fallback] * 2, f"{invalid.name} with user info: every reading must fall back to {invalid.fallback!r}, got {answers}"
+    assert _reported(events) == [(INVALID_CONFIGURATION, invalid.consequence)], f"two readings of {invalid.name} with user info must log exactly one error, {INVALID_CONFIGURATION!r}, whose consequence is {invalid.consequence!r}; got {errors}"
+    assert invalid.name in str(errors[0].get("problem")), f"the problem must name {invalid.name}: {errors[0]}"
+    leaking = [event for event in events if _user_info_in(repr(event))]
+    assert leaking == [], f"no log record may hold the user name {USER_INFO_NAME!r} or the password {USER_INFO_PASSWORD!r}: {leaking}"
+    print_success(f"{invalid.name} with user info: no link twice, «{invalid.consequence}», no credential logged")
 
 
 # =============================================================================

@@ -26,18 +26,18 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.risk.signal_helpers import (
+from backend.app.services.signals.base import (
+    SignalPlugin,
+    SignalUnavailableError,
+)
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.risk_adapters import (
     build_line_computation,
     prepared_comparison_returns,
     prepared_primary_returns,
     rolling_beta_values,
     undefined_window_warnings,
 )
-from backend.app.services.signal_plugins.base import (
-    SignalPlugin,
-    SignalUnavailableError,
-)
-from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class RollingBetaParams(BaseModel):

@@ -14,6 +14,14 @@ plugin icon. Each case that expects a refusal first proves that its path, joined
 without any check, names an existing file outside it, so a refusal is never satisfied by a path
 that names nothing.
 
+Inside the build, the catch-all serves no hidden file either (H-28): a path that, once its dot
+segments are resolved, has a part below the build folder starting with ``.`` — dev.py's
+``.build-debug`` and ``.build-version``, the ``.tool-contract-inputs`` a build records, the emoji
+font's ``.cache_manifest.json``, anything in a hidden folder — gets the SPA fallback, as a path
+leaving the folder does. Each such case first writes the file into the build with a content of its
+own, so the fallback never stands for a file that is not there; a name with a dot anywhere else
+(``robots.txt``, a ``v1.2`` folder) is still served.
+
 The requests are raw ASGI calls. An HTTP client normalises dot segments before sending, so the route
 would not receive the path written in the test; here ``path`` reaches the app as the server hands it
 over once percent-decoded. A plain ``http`` scope never runs the lifespan, and without
@@ -309,3 +317,90 @@ async def test_plugin_icon_route_serves_an_icon_of_the_plugin(served: Served, re
 
     assert reply.status == 200
     assert reply.body == ICON
+
+
+# ---------------------------------------------------------------------------
+# Frontend catch-all: the hidden files of the build (H-28)
+# ---------------------------------------------------------------------------
+
+#: The hidden files a build holds, by path relative to it, each with what it is: only the tooling reads them, from disk,
+#: and the app never requests one.
+HIDDEN_BUILD_FILES = {
+    ".build-debug": "dev.py's mark of a debug or production build, written after every build",
+    ".build-version": "the version an image-bound build carries, written by dev.py",
+    ".tool-contract-inputs": "the listing of the Tool codegen inputs the last build recorded (H-24r)",
+    "fonts/noto-color-emoji/.cache_manifest.json": "the JS cache's manifest, shipped from frontend/static",
+    ".hidden-dir/file.txt": "a file inside a hidden folder",
+}
+
+#: Files the app may request, whose names hold a dot that starts no part of their path: served before H-28 and after.
+DOTTED_BUILD_FILES = {
+    "robots.txt": "a dot in the name",
+    "fonts/noto-color-emoji/noto-color-emoji.0.woff2": "the font beside the hidden manifest",
+    "fonts/v1.2/x.woff2": "a dot inside a folder's name",
+}
+
+
+def add_build_file(served: Served, relative: str) -> bytes:
+    """Write ``relative`` into the build with a content no other file holds, prove it is a file inside, return the content.
+
+    A fallback then never stands for a file that is not there, and a reply can carry that content only if the route
+    sent this very file.
+    """
+    path = served.build / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = f"content of the build file {relative}".encode()
+    path.write_bytes(content)
+    assert path.is_file() and path.read_bytes() == content, f"premise: {relative} is a file of the build"
+    assert path.resolve().is_relative_to(served.build), f"premise: {relative} lies inside the build folder"
+    return content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("relative", list(HIDDEN_BUILD_FILES))
+async def test_frontend_route_never_serves_a_hidden_file_of_the_build(served: Served, relative: str) -> None:
+    content = add_build_file(served, relative)
+
+    reply = await raw_get(app_main.app, "/" + relative)
+
+    assert content not in reply.body, f"H-28: GET /{relative} sent {HIDDEN_BUILD_FILES[relative]}"
+    assert reply.status == 200
+    assert reply.body == FALLBACK_HTML
+
+
+@pytest.mark.asyncio
+async def test_frontend_route_resolves_parent_segments_before_it_judges_a_hidden_file(served: Served) -> None:
+    # /assets/../favicon.png is served (above): the same segments landing on a hidden file get the SPA fallback.
+    content = add_build_file(served, ".build-debug")
+    relative = "assets/../.build-debug"
+    assert (served.build / relative).resolve() == served.build / ".build-debug", f"premise: {relative} lands on the hidden file"
+
+    reply = await raw_get(app_main.app, "/" + relative)
+
+    assert content not in reply.body, f"H-28: GET /{relative} sent {HIDDEN_BUILD_FILES['.build-debug']}"
+    assert reply.status == 200
+    assert reply.body == FALLBACK_HTML
+
+
+@pytest.mark.asyncio
+async def test_frontend_route_without_200_html_answers_a_hidden_file_with_index_html(served: Served) -> None:
+    (served.build / "200.html").unlink()
+    content = add_build_file(served, ".tool-contract-inputs")
+
+    reply = await raw_get(app_main.app, "/.tool-contract-inputs")
+
+    assert content not in reply.body, f"H-28: GET /.tool-contract-inputs sent {HIDDEN_BUILD_FILES['.tool-contract-inputs']}"
+    assert reply.status == 200
+    assert reply.body == INDEX_HTML
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("relative", list(DOTTED_BUILD_FILES))
+async def test_frontend_route_still_serves_a_dotted_name_that_is_not_hidden(served: Served, relative: str) -> None:
+    # Green before H-28 and after it: only a part of the path that starts with a dot hides a file.
+    content = add_build_file(served, relative)
+
+    reply = await raw_get(app_main.app, "/" + relative)
+
+    assert reply.status == 200, f"GET /{relative} ({DOTTED_BUILD_FILES[relative]}) was not served"
+    assert reply.body == content

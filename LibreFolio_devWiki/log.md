@@ -3682,4 +3682,20 @@ backward-filled lookup), the guard that freezes the time zone as well as the clo
 still carry the idiom, not re-audited. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all
 pre-existing; the five new rows exist.
 Updated: [[problems/utc-today-vs-user-calendar]].
+## [2026-10-16] update | CP-9a: the risk service split by theme, T-R1 risk half closed
+The risk service is split into `risk/{plan,scope,replay,results,data_quality}.py`, `RiskService` keeping the
+orchestration; the risk side reads the FX routes through the home's `load_configured_fx_pair_sets`. Source-file rows
+that sent moved behaviour to `risk/service.py` now point to its new module.
+Updated: [[decisions/financial-math-one-home]], [[entities/portfolio-service]], [[features/F-110]],
+[[problems/asset-set-scope-has-no-primary-series]], [[problems/stale-price-banner-never-emitted]],
+[[problems/fx-backward-fill-unbounded-stale-rates]], [[decisions/asset-global-page-shows-no-money]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | CP-10b: the signals runtime moves into services/signals/
+The signals runtime (service, runtime, annotations, series), the plugin contract and the risk adapters moved into
+`services/signals/`, which ends the risk-signals import cycle. Source-file rows follow the new paths; a dated note on
+the plugin-folder decision says the family root no longer keeps a contract.
+Updated: [[decisions/plugin-folders-and-split-i18n]], [[decisions/ai-export-technical-series-and-density-contract]],
+[[decisions/drawdown-full-history-warmup]], [[decisions/risk-library-versus-own-maths]],
+[[decisions/signal-backend-plugin-architecture]], [[domains/signals]].
 Graph: not updated; graphify is not available in this worktree.

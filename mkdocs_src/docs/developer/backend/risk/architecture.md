@@ -39,13 +39,18 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/api/v1/risk.py` | The four routes; maps scope errors to 403 and 404. |
 | `backend/app/schemas/risk.py` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
 | `backend/app/schemas/risk_scenarios.py` | Typed scenario catalogue contracts. |
-| `backend/app/services/risk/service.py` | `RiskService`: scope resolution, one series preparation, gates, per-analytic isolation, statuses, warning enrichment, eligibility verdicts. |
+| `backend/app/services/risk/service.py` | `RiskService`: `execute()` orchestrates a query through the five modules below (pre-flight, gates, per-analytic isolation, the `failed` envelope); `asset_eligibility()` gives the eligibility verdicts; `catalog()` lists the analytics. |
+| `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
+| `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
+| `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
+| `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
+| `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
 | `backend/app/services/risk/eligibility.py` | Per-asset window facts, analysis eligibility, replay coverage, common and suggested periods. |
 | `backend/app/services/risk/metrics.py` | Pure numeric primitives: volatility, Sharpe and Sortino, drawdown episodes, VaR/CVaR, correlation, risk contributions, buy-and-hold replay. |
 | `backend/app/services/risk/acquired.py` | Measures re-implemented from the Riskfolio-Lib catalogue in the project's sign conventions; the library is their test oracle, never a runtime dependency. |
 | `backend/app/services/risk/analytic_helpers.py` | Extraction helpers that turn a missing input into a declared refusal (`require_primary_returns`, `prepared_scope_series`, …). |
-| `backend/app/services/risk/signal_helpers.py` | Adapters reused by the four risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) that read the prepared series (drawdown and rolling volatility, Sharpe, beta). |
+| `backend/app/services/signals/risk_adapters.py` | Adapters reused by the four risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) that read the prepared series (drawdown and rolling volatility, Sharpe, beta). |
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
@@ -114,15 +119,15 @@ flowchart TD
    not an HTTP error: that item comes back `unavailable` with `analytic_not_found`,
    `incompatible_scope`, `incompatible_mode` or `invalid_parameters` (the Pydantic messages go in
    `details.validation_errors`), and the other analytics still run.
-2. **Scope inputs** (`_load_scope_inputs`). An `asset` or `asset_set` scope is just its ids, with no
-   weights. A `portfolio` scope checks a requested `broker_ids` subset against the user's access
-   rows (an inaccessible broker → **403**), then reads one `PortfolioService.get_report()` for the
-   holdings, today's weights and the zero-return cash residual. `asset_ids` narrows a portfolio to
-   a *slice*: weights are renormalized to 100 % of the slice and no cash residual remains;
-   requested assets that are not held are dropped with a `slice_assets_not_held` warning, and a
-   slice that holds none of them → **404**. Negative asset values, a scope value that is not
-   positive, or holdings worth more than the scope (negative cash) are recorded as a composition
-   error.
+2. **Scope inputs** (`load_scope_inputs()` in `risk/scope.py`). An `asset` or `asset_set` scope is
+   just its ids, with no weights. A `portfolio` scope checks a requested `broker_ids` subset
+   against the user's access rows (an inaccessible broker → **403**), then reads one
+   `PortfolioService.get_report()` for the holdings, today's weights and the zero-return cash
+   residual. `asset_ids` narrows a portfolio to a *slice*: weights are renormalized to 100 % of the
+   slice and no cash residual remains; requested assets that are not held are dropped with a
+   `slice_assets_not_held` warning, and a slice that holds none of them → **404**. Negative asset
+   values, a scope value that is not positive, or holdings worth more than the scope (negative
+   cash) are recorded as a composition error.
 3. **Existence check.** A scope asset id that does not exist → **404**. A benchmark named by
    `comparison_asset_id` that does not exist only makes its own analytic `invalid_parameters`.
 4. **One preparation.** The market holiday table is awaited once; the prices of the scope assets
@@ -131,9 +136,10 @@ flowchart TD
    `prepare_asset_series_set()`, which converts them to the target currency and aligns them on one
    joint calendar. Every analytic of the request reads that same set, so their figures are
    commensurable; a benchmark joins that calendar too.
-5. **Execution context** (`_build_context`). A frozen, DB-free `RiskExecutionContext` carries the
-   prepared set, the scope's *primary* series and its basis (table below), the observed
-   annualization factor, coverage, data quality, exclusions, weights and cash weight.
+5. **Execution context** (`build_execution_context()` in `risk/results.py`). A frozen, DB-free
+   `RiskExecutionContext` carries the prepared set, the scope's *primary* series and its basis
+   (table below), the observed annualization factor, coverage, data quality, exclusions, weights
+   and cash weight.
 6. **Per-analytic gates.** A current-composition portfolio analytic that needs valid weights
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
@@ -143,10 +149,11 @@ flowchart TD
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
    `portfolio_optimization` override it to submit a job to a spawn worker pool
    ([Simulation and Optimization Workers](#quant)).
-8. **Result assembly** (`_success`). Context and plugin warnings are merged and deduplicated,
-   data-quality warnings are added, the status is chosen and the metadata built. The service then
-   names the assets every warning mentions and, for an `asset_set` scope, builds the data-quality
-   banner issues the lab shows.
+8. **Result assembly** (`success_result()` in `risk/results.py`). Context and plugin warnings are
+   merged and deduplicated, data-quality warnings are added, the status is chosen and the metadata
+   built. The service then names the assets every warning mentions (`with_warning_asset_names()`,
+   also in `risk/results.py`) and, for an `asset_set` scope, builds the data-quality banner issues
+   the lab shows (`with_asset_set_quality_issues()` in `risk/data_quality.py`).
 
 ### 📈 The Primary Series {: #primary-series }
 
@@ -169,7 +176,7 @@ their data-quality report is the one of the series they actually consumed.
 
 ### 🚦 The Observation Gate {: #observation-gate }
 
-`_available_observations()` decides what is counted against `min_observations`:
+`available_observations()`, in `risk/results.py`, decides what is counted against `min_observations`:
 
 - `correlation` is not gated here: the plugin applies its own per-pair floor and coverage
   (`min_observations` and `min_coverage` parameters) and marks the cells `insufficient`;
@@ -443,15 +450,16 @@ returns on the joint calendar of the whole selection.
 
 A [historical replay](../../../financial-theory/technical-analysis/risk-metrics/historical-replay.md)
 compares values at the two ends of a crisis window, so it prepares its **own** series over
-`replay_range` (`_prepare_historical_replay_context`). Before that preparation, every scope asset
-the user neither proxied nor excluded is checked with `replay_coverage()`. An asset that is not
-priced at both ends within the staleness threshold is excluded automatically
-(`no_prices_in_window`, `starts_after_window_start`, `stale_at_window_start`,
-`stale_at_window_end`, `missing_fx`) instead of blocking the replay, or of moving the joint
-baseline and shortening the replay of every other asset. When a shorter window would bring back
-the assets its edges exclude, the service proposes it (`suggested_replay_range`, verified by a
-second reading) and never applies it. `proxy_assets` and `excluded_assets` must belong to the
-scope, and every proxy must exist, or the replay is `invalid_parameters`.
+`replay_range` (`prepare_historical_replay_context()` in `risk/replay.py`). Before that
+preparation, every scope asset the user neither proxied nor excluded is checked with
+`replay_coverage()`. An asset that is not priced at both ends within the staleness threshold is
+excluded automatically (`no_prices_in_window`, `starts_after_window_start`,
+`stale_at_window_start`, `stale_at_window_end`, `missing_fx`) instead of blocking the replay, or of
+moving the joint baseline and shortening the replay of every other asset. When a shorter window
+would bring back the assets its edges exclude, the service proposes it (`suggested_replay_range`,
+verified by a second reading in `verified_replay_range()`) and never applies it. `proxy_assets`
+and `excluded_assets` must belong to the scope, and every proxy must exist, or the replay is
+`invalid_parameters`.
 
 ### 🚫 Exclusions and Warnings {: #exclusions }
 
@@ -465,7 +473,10 @@ prices, incomplete dates. Which results inherit an exclusion is described in
 
 For an `asset_set` scope the service also builds the `data_quality.issues` that the lab's
 data-quality banner renders with its *Sync* actions: one issue per category, with the same
-categories and actions as the Dashboard's banner. See [Data Quality Banner](../../frontend/data-quality-banner.md).
+categories and actions as the Dashboard's banner. It reads the configured FX routes with
+`load_configured_fx_pair_sets()` (`financial_math/portfolio/data_quality.py`), as the portfolio
+report does, so a missing pair falls in the same category on both banners. See
+[Data Quality Banner](../../frontend/data-quality-banner.md).
 
 ### 🗂️ Scenario Catalogue {: #scenario-catalog }
 
@@ -848,12 +859,14 @@ class MyAnalytic(RiskAnalytic):
 
 !!! warning "Code-keyed decisions in the service"
 
-    `RiskService` still keys a few decisions on `analytic_code`. `_available_observations()` lists
-    the analytics that count the prepared set: an analytic that reads one series per asset must be
-    added there, or an `asset_set` scope, which has no primary series, is refused for insufficient
-    history before `compute()` ever runs. `_requires_valid_composition()` lists the
-    current-composition portfolio analytics that need valid weights. `stress` has its own branches
-    for the replay window and the hypothetical shock. Review all three for a new code.
+    The service still keys a few decisions on `analytic_code`. `available_observations()`
+    (`risk/results.py`) lists the analytics that count the prepared set: an analytic that reads one
+    series per asset must be added there, or an `asset_set` scope, which has no primary series, is
+    refused for insufficient history before `compute()` ever runs. `requires_valid_composition()`
+    (`risk/results.py`) lists the current-composition portfolio analytics that need valid weights.
+    `stress` has its own branches for the replay window and the hypothetical shock, recognized by
+    the predicates of `risk/plan.py` (`is_historical_replay_plan()`, `is_hypothetical_plan()`).
+    Review all three for a new code.
 
 ### 🧪 Where the Tests Are {: #tests }
 

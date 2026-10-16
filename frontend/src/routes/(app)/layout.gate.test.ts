@@ -58,7 +58,7 @@ const mocks = await vi.hoisted(async () => {
 });
 
 vi.mock('$app/environment', () => ({browser: false, dev: true, building: false, version: 'test'}));
-vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
+vi.mock('$app/navigation', () => ({goto: mocks.goto, afterNavigate: vi.fn(), onNavigate: vi.fn(), preloadCode: vi.fn(() => Promise.resolve())}));
 vi.mock('$app/stores', async () => {
     const {readable} = await import('svelte/store');
     return {page: readable({route: {id: '/(app)/dashboard'}, url: new URL('http://librefolio.test/dashboard')})};

@@ -182,20 +182,25 @@ def env_url(name: str) -> str | None:
 
     - An empty or blank value counts as unset: ``None``.
     - Otherwise the value, stripped, must be an ``http://`` or ``https://`` address (the scheme in any case) with a host
-      name, and no space, tab or line break inside. One trailing slash is removed, so a path can be appended to it;
-      nothing else changes, the case included.
-    - Any other value raises ``ValueError``, which names the variable and the value: the caller decides what an invalid
-      address costs, and logs it.
+      name, no user info (no ``@`` in its authority: a user name or a password would be published with the address,
+      X-R35), and no space, tab or line break inside. One trailing slash is removed, so a path can be appended to it;
+      nothing else changes, the case included. An ``@`` in the path, the query or the fragment is no user info.
+    - Any other value raises ``ValueError``, which names the variable and quotes the value, unless the value holds an
+      ``@``: it may carry a user name or a password, and the caller logs the error. The caller decides what an invalid
+      address costs.
     """
     value = os.environ.get(name, "").strip()
     if not value:
         return None
     try:
+        parts = urlsplit(value)
         # urlsplit drops tabs and line breaks before parsing: the whitespace check reads the raw value.
-        valid = not any(character.isspace() for character in value) and value.lower().startswith(("http://", "https://")) and bool(urlsplit(value).hostname)
+        valid = not any(character.isspace() for character in value) and value.lower().startswith(("http://", "https://")) and bool(parts.hostname) and "@" not in parts.netloc
     except ValueError:  # a malformed address, such as an unclosed IPv6 bracket
         valid = False
     if not valid:
+        if "@" in value:
+            raise ValueError(f"{name} (its value is not shown: it holds an @, which may carry a user name or a password): expected an http:// or https:// address with a host name and no user name or password")
         raise ValueError(f"{name}={value!r}: expected an http:// or https:// address with a host name")
     return value[:-1] if value.endswith("/") else value
 
