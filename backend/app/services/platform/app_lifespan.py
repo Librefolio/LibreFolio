@@ -46,8 +46,8 @@ from backend.app.services.risk.quant.workers import (
 from backend.app.services.risk.scenario_catalog import (
     initialize_risk_scenario_catalog,
 )
-from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.runtime import validate_signal_runtime
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.services.transactions.lone_transfer_legs import convert_lone_giving_legs_at_startup
