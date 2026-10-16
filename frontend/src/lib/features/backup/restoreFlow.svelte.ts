@@ -40,6 +40,7 @@ import {
     startRestoreCheck,
     uploadRestoreArchive,
     type RestoreOutcomeRead,
+    type RestoreRestartAccepted,
     type RestoreStage,
     type RestoreStatus,
     type RestoreUpload,
@@ -92,9 +93,9 @@ export interface RestoreApi {
     dropCheck(stageId: string): Promise<void>;
     confirm(stageId: string): Promise<RestoreStatus>;
     cancelPending(): Promise<void>;
-    restart(): Promise<RestoreStatus>;
+    restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
-    restoreOutcome(): Promise<RestoreOutcomeRead>;
+    restoreOutcome(ticket: string | null): Promise<RestoreOutcomeRead>;
 }
 
 export type RestoreStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -180,6 +181,8 @@ export class RestoreFlowController {
     #restartAskedAt = 0;
     #downSince: number | null = null;
     #seenDown = false;
+    // The one-time ticket of the restart under way (lot B5c): in memory only, never stored nor announced.
+    #ticket: string | null = null;
 
     constructor(options: RestoreFlowOptions = {}) {
         this.#api = options.api ?? SERVER_API;
@@ -198,6 +201,7 @@ export class RestoreFlowController {
         this.outcome = null;
         this.outcomeStatus = null;
         this.slow = false;
+        this.#ticket = null;
         let status: RestoreStatus;
         try {
             status = await this.#api.status();
@@ -358,14 +362,12 @@ export class RestoreFlowController {
         await this.#restart(generation);
     }
 
-    /** Drop the restore waiting for the next start, and its checked copy, as `backup pending --cancel` does. */
+    /** Drop the restore waiting for the next start: the server drops its checked copy too (B-17). */
     async cancelPending(): Promise<void> {
         if (this.state !== 'pending') return;
-        const stageId = this.status?.stage_id ?? null;
         const generation = this.#next();
         this.state = 'cancelling';
         this.#setError(null, null);
-        let cancelled = true;
         try {
             await this.#api.cancelPending();
         } catch (error) {
@@ -375,15 +377,8 @@ export class RestoreFlowController {
                 this.#fail(backupFailureCode(error), 'cancel');
                 return;
             }
-            // No longer pending, maybe being applied by a start: its copy is left alone.
-            cancelled = false;
         }
         if (this.#stale(generation)) return;
-        if (cancelled && stageId !== null) {
-            // Best effort: a copy already gone, or kept by the server, takes nothing from the cancel.
-            await this.#api.dropCheck(stageId).catch(() => undefined);
-            if (this.#stale(generation)) return;
-        }
         this.#emit('backup.restore.cancelled', {what: 'pending'});
         await this.load();
     }
@@ -399,9 +394,11 @@ export class RestoreFlowController {
         this.outcome = 'waiting';
         this.outcomeStatus = null;
         this.slow = false;
+        this.#ticket = null;
         this.#setError(null, null);
+        let accepted: RestoreRestartAccepted;
         try {
-            await this.#api.restart();
+            accepted = await this.#api.restart();
         } catch (error) {
             if (this.#stale(generation)) return;
             const code = backupFailureCode(error);
@@ -418,6 +415,7 @@ export class RestoreFlowController {
             return;
         }
         if (this.#stale(generation)) return;
+        this.#ticket = accepted.outcome_ticket ?? null;
         this.#emit('backup.restore.restart.requested', {});
         this.#restartAskedAt = Date.now();
         this.#downSince = null;
@@ -434,6 +432,7 @@ export class RestoreFlowController {
     /** Stop for good: no more reads, the upload aborted, and no answer still on its way changes the state. */
     dispose(): void {
         this.#disposed = true;
+        this.#ticket = null;
         this.#abort?.abort();
         this.#abort = null;
         this.#next();
@@ -544,7 +543,7 @@ export class RestoreFlowController {
         this.#downSince = null;
         const fast = !this.#seenDown && now - this.#restartAskedAt >= this.#fastRestartMs;
         if (this.#seenDown || fast) {
-            const read = await this.#api.restoreOutcome();
+            const read = await this.#api.restoreOutcome(this.#ticket);
             if (this.#stale(generation)) return;
             if (this.#settle(read, fast)) return;
         }

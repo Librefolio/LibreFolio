@@ -198,3 +198,25 @@ class RestoreStatus(BaseModel):
     reason: Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"] | None = None
     waiting: Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"] | None = None
     upload_limit_mb: int | None = Field(default=None, ge=0)
+
+
+# The restart accepted (POST /backup/restore/restart, lot B5c): the status, and the one-time ticket with which the page
+# reads the outcome once the server is back (GET /backup/restore/outcome), without a session: a restore ends every
+# session, and without JWT_SECRET every start does. Valid one hour, one per restart (decision N53), in this answer only.
+class RestoreRestartAccepted(RestoreStatus):
+    """The restore waiting, and the one-time ticket of its outcome."""
+
+    outcome_ticket: str
+
+
+# What became of a restore, for the holder of its one-time ticket: only what the restart's page shows, nothing about
+# the backup or who confirmed it. state: pending (a start left it waiting: waiting says why; or the server is not
+# back yet), in_progress, committed, rolled_back (reason says why).
+class RestoreOutcome(BaseModel):
+    """The outcome of a restore, read with the ticket its restart gave."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: Literal["pending", "in_progress", "committed", "rolled_back"]
+    reason: Literal["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"] | None = None
+    waiting: Literal["backup_running", "other_data_directory", "server_running", "instance_blocked"] | None = None

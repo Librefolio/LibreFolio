@@ -1092,6 +1092,14 @@ def services_backup_apply(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Instance backup restore tests", verbose=verbose)
 
 
+def services_backup_outcome(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the outcome of a restore read with a one-time ticket, without a session (lot B5c)."""
+    print_section("Services: Instance Backup Restore Outcome")
+    print_info("Testing: backend/app/services/platform/instance_backup/outcome.py, paths.py (the ticket's file), schemas/backup.py (RestoreOutcome)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_outcome.py", test_names)
+    return run_command(cmd, "Instance backup restore outcome tests", verbose=verbose)
+
+
 def services_backup_totals(verbose: bool = False, test_names: list = None) -> bool:
     """Test the ledger's control totals of a backup: read read-only from a database file, compared at a restore's check."""
     print_section("Services: Instance Backup Ledger Totals")
@@ -1851,11 +1859,22 @@ Note: No backend server required.
         "backup-apply",
         services_backup_apply,
         name="Instance Backup Restore",
-        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged",
+        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore",
         # PURE: every data directory, database and archive under tmp_path, with a production data directory of the test
         # configured (which must stay absent); two alembic processes make the module's databases, two spawn children
         # play two workers on a tmp_path instance; send_signal and os.kill replaced: no signal. No lane DB, no server,
         # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-outcome",
+        services_backup_outcome,
+        name="Instance Backup Restore Outcome",
+        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock",
+        # PURE: every data directory under tmp_path, with a production data directory of the test configured (which must
+        # stay absent) but in the one case that configures the test's own instance; the restore's state is a model built
+        # in the test. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -1874,7 +1893,7 @@ Note: No backend server required.
         "logging-access-filter",
         services_logging_access_filter,
         name="Credentials in uvicorn's Request Lines",
-        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature, judged percent-decoded, masked in any case; a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error",
+        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature/ticket, judged percent-decoded, masked in any case (a ticker kept); a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error",
         # PURE: uvicorn's protocol objects get one request or handshake in memory through a fake transport, no socket
         # and no server; records go to private loggers or to the real uvicorn loggers inside a block that puts every
         # logger and structlog's configuration back (configure_logging with file logging off). No DB, no network, no

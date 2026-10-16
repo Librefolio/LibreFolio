@@ -6,7 +6,9 @@ state of the one restore of a data directory, until a start applies it: the star
 
 - **The swap.** The four folders an archive carries (``SWAPPED_FOLDERS``) swap places with those of the checked copy,
   by renames inside the data directory, each instant whatever its size: the live ones go to ``.restore/previous/``, the
-  copy's take their place. ``secrets/``, ``logs/``, ``scheduler_state.json`` and ``backups/`` stay as they are. A
+  copy's take their place. ``secrets/``, ``logs/``, ``scheduler_state.json``, ``backups/`` and ``.restore`` itself
+  stay as they are, so the one-time ticket of the outcome (``.restore/outcome-ticket.json``, ``outcome.py``) outlives
+  the swap, the commit and a rollback; a new confirmation and a cancel remove it. A
   journal, written before the first move, records what existed: a start that dies during the swap is undone by the next
   one, from what the files say, and again by the one after if that too is cut.
 - **The first start must complete.** Its step ``restore-commit`` ends every session (decision 40: each account's
@@ -70,6 +72,7 @@ from backend.app.config.platform import instance_blocked
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup import restart
 from backend.app.services.platform.instance_backup.jobs import _lock_held
+from backend.app.services.platform.instance_backup.outcome import drop_ticket, issue_ticket
 from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
     SWAPPED_FOLDERS,
@@ -457,6 +460,8 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
             action=report.action,
         )
         _write_state(data_dir, state)
+        # A new restore: no ticket of an older one reads it.
+        drop_ticket(data_dir=data_dir)
     logger.warning("Restore confirmed: the next start of the server applies it", stage_id=stage_id, confirmed_by=confirmed_by, action=report.action)
     return state
 
@@ -465,7 +470,7 @@ def cancel_restore(*, data_dir: Path | None = None, drop_copy: bool = False) -> 
     """Drop the restore waiting for the next start; the state it had. ``RestoreNotPendingError`` when none waits.
 
     ``drop_copy`` also removes its checked copy; otherwise the copy stays until it expires, and can be confirmed again.
-    Without a restore nothing is created, not even the lock.
+    The one-time ticket of its outcome goes too. Without a restore nothing is created, not even the lock.
     """
     data_dir = data_dir or get_data_dir()
     if not _has_state(data_dir):
@@ -476,10 +481,30 @@ def cancel_restore(*, data_dir: Path | None = None, drop_copy: bool = False) -> 
             raise RestoreNotPendingError("No restore waits for the next start")
         restore_state_path(data_dir).unlink()
         _fsync_dir(restore_dir(data_dir))
-    if drop_copy:
-        _remove_leftovers(data_dir, state.stage_id)
+        drop_ticket(data_dir=data_dir)
+        if drop_copy:
+            # Inside the lock: a confirmation of the same copy, from another page, cannot come in between.
+            _remove_leftovers(data_dir, state.stage_id)
     logger.info("Pending restore cancelled", stage_id=state.stage_id, copy_dropped=drop_copy)
     return state
+
+
+def prepare_restart(*, data_dir: Path | None = None) -> tuple[RestoreState, str]:
+    """The restore waiting for the next start, and a new one-time ticket of its outcome (``outcome.issue_ticket``),
+    issued under the restore's lock: a cancel or a confirmation cannot come in between, and two restart requests take
+    turns on the ticket's file. ``RestoreNotPendingError`` when none waits; then nothing is written, not even the lock.
+    ``BackupPathError`` or an ``OSError`` when the ticket cannot be written.
+    """
+    data_dir = data_dir or get_data_dir()
+    # Read first without the lock, as a refused restart writes nothing (not even the lock); then again under it.
+    waiting = read_restore(data_dir)
+    if waiting is None or waiting.status != "pending":
+        raise RestoreNotPendingError("No restore waits for the next start")
+    with _apply_lock(data_dir):
+        state = _read_state(data_dir)
+        if state is None or state.status != "pending":
+            raise RestoreNotPendingError("No restore waits for the next start")
+        return state, issue_ticket(state.stage_id, data_dir=data_dir)
 
 
 # =============================================================================

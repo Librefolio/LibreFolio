@@ -11,17 +11,20 @@ a time.
 The restore (lot B3, ``services/platform/instance_backup/apply.py``): ``POST /backup/restore/stage/{stage_id}/confirm``
 confirms the restore of a checked copy, which changes nothing yet: the next start of the server applies it, before any
 step reads the data, and ends every session. ``POST /backup/restore/restart`` stops the server for that start, once its
-answer is sent; whatever supervises the server starts it again. ``GET /backup/restore/status`` follows the restore: waiting,
+answer is sent; whatever supervises the server starts it again. Its answer carries a one-time ticket (lot B5c): with
+it in the ``X-Restore-Ticket`` header, ``GET /backup/restore/outcome`` tells the page what became of the restore,
+without a session (a restore ends every session, and without ``JWT_SECRET`` every start does). ``GET /backup/restore/status`` follows the restore: waiting,
 then committed, or rolled back when its first start did not complete. ``DELETE /backup/restore/pending`` drops it before
-that start.
+that start, with its checked copy (B-17).
 
 None of these routes is allowed on an instance its hosting provider blocked (``api/v1/instance_block.py``): the block
-lets the data leave (the backup routes), never come in.
+lets the data leave (the backup routes), never come in. The outcome, read with its ticket, is: it starts nothing, and
+it tells the page that the restore waits for the unblock.
 """
 
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response, status
 from starlette.requests import ClientDisconnect
 
 from backend.app.api.v1.backup.job_views import backup_error
@@ -30,9 +33,9 @@ from backend.app.config import get_data_dir
 from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import RestoreMigration, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreTotalsDifference, RestoreUpload
-from backend.app.services.platform.instance_backup import restart, restore_jobs
-from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, read_restore
+from backend.app.schemas.backup import RestoreMigration, RestoreOutcome, RestoreRestartAccepted, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreTotalsDifference, RestoreUpload
+from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
+from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, prepare_restart, read_restore
 from backend.app.services.platform.instance_backup.paths import BackupPathError
 from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingReport, read_report
 
@@ -48,6 +51,8 @@ _MEGABYTE = 1024 * 1024
 _FOLDER_UNUSABLE = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`)"}
 _UPLOAD_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the archive could not be written (code `backup_upload_failed`)"}
 _STAGE_NOT_FOUND = {"description": "No check has this id (code `restore_stage_not_found`)"}
+_OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, malformed, unknown, expired, replaced or removed, or of another restore, all alike (code `restore_outcome_not_found`)"}
+_RESTART_NOT_PREPARED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the ticket of the outcome could not be written (code `restore_restart_failed`): no restart"}
 
 
 def _folder_unusable() -> HTTPException:
@@ -304,23 +309,54 @@ def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
 
 @restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}})
 def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
-    """Drop the restore waiting for the next start: the data stays as it is. The checked copy stays until it expires."""
+    """Drop the restore waiting for the next start, with its checked copy, as ``backup pending --cancel`` does: the data
+    stays as it is."""
     try:
-        cancel_restore(data_dir=get_data_dir())
+        cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@restore_router.post("/restore/restart", status_code=status.HTTP_202_ACCEPTED, response_model=RestoreStatus, responses={409: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}})
-def restart_for_restore(background_tasks: BackgroundTasks, _admin: User = Depends(require_admin)) -> RestoreStatus:
+@restore_router.post(
+    "/restore/restart",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=RestoreRestartAccepted,
+    responses={409: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}, 500: _RESTART_NOT_PREPARED},
+)
+def restart_for_restore(background_tasks: BackgroundTasks, response: Response, _admin: User = Depends(require_admin)) -> RestoreRestartAccepted:
     """Stop the server once this answer is sent, so that its next start applies the restore waiting. Whatever supervises
-    the server (Docker, systemd, a hosting provider) starts it again; without one it stays stopped until someone does."""
-    state = read_restore(get_data_dir())
-    if state is None or state.status != "pending":
-        raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING)
+    the server (Docker, systemd, a hosting provider) starts it again; without one it stays stopped until someone does.
+
+    The answer carries a one-time ticket, valid one hour: ``GET /backup/restore/outcome`` with it tells what became of the
+    restore, without a session. A new restart request replaces it."""
+    data_dir = get_data_dir()
+    try:
+        state, ticket = prepare_restart(data_dir=data_dir)
+    except RestoreNotPendingError:
+        raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING) from None
+    except BackupPathError:
+        raise _folder_unusable() from None
+    except OSError as exc:
+        logger.error("The ticket of the restore's outcome could not be written: no restart", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_restart_failed", "The restart could not be prepared: the server's log has the cause") from None
     background_tasks.add_task(_restart)
-    return _status_view(state)
+    response.headers["Cache-Control"] = "no-store"
+    return RestoreRestartAccepted(**_status_view(state).model_dump(), outcome_ticket=ticket)
+
+
+@restore_router.get("/restore/outcome", response_model=RestoreOutcome, responses={404: _OUTCOME_NOT_FOUND})
+def get_restore_outcome(response: Response, x_restore_ticket: str | None = Header(default=None, alias="X-Restore-Ticket")) -> RestoreOutcome:
+    """What became of a restore, for the page that asked its restart: no session (a restore ends every session, and
+    without ``JWT_SECRET`` every start does), the one-time ticket of the restart in the ``X-Restore-Ticket`` header
+    instead, never in the URL. The same 404 for every ticket that does not give it. The outcome can be read again until
+    the ticket expires, a final one included (decision N53)."""
+    data_dir = get_data_dir()
+    found = outcome.read_outcome(x_restore_ticket, read_restore(data_dir), data_dir=data_dir)
+    if found is None:
+        raise backup_error(status.HTTP_404_NOT_FOUND, "restore_outcome_not_found", "No restore outcome for this ticket")
+    response.headers["Cache-Control"] = "no-store"
+    return found
 
 
 def _restart() -> None:
