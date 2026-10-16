@@ -34,9 +34,9 @@
     import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct} from '$lib/components/charts/geographyMapHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {themed} from '$lib/theme/themePair';
-    import {CHART_NEUTRALS, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
     import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -104,10 +104,12 @@
 
     onMount(() => {
         registerWorldMap();
-        // Re-render on dark mode toggle
+        // Re-render on dark mode toggle, and on the Designer Lab's colour edits (C4)
         const observer = onThemeClassChange(() => renderChart());
+        const chartColors = onChartColorsChange(() => renderChart());
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -264,6 +266,7 @@
         }
 
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
 
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData = buildChoroplethData(data, iso3ToGeoName);
@@ -283,9 +286,9 @@
         const fixedLabelStyle = {
             show: true,
             formatter: labelFormatter,
-            color: themed(GEO_MAP_COLORS.label, isDark),
+            color: neutrals.geoMap.label,
             fontSize: 10,
-            backgroundColor: themed(GEO_MAP_COLORS.labelBackground, isDark),
+            backgroundColor: neutrals.geoMap.labelBackground,
             borderRadius: 4,
             padding: [1, 3],
         };
@@ -300,7 +303,7 @@
                 inRange: {
                     color: themed(GEO_CHOROPLETH_SCALE, isDark),
                 },
-                textStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 11},
+                textStyle: {color: neutrals.dashboard.text, fontSize: 11},
                 left: 'left',
                 bottom: 10,
                 orient: 'horizontal',
@@ -325,7 +328,7 @@
                     },
                     itemStyle: {
                         areaColor: themed(GEO_MAP_COLORS.land, isDark),
-                        borderColor: themed(GEO_MAP_COLORS.border, isDark),
+                        borderColor: neutrals.geoMap.border,
                         borderWidth: 0.5,
                     },
                     // Always show translated fixed labels for countries that have data.
