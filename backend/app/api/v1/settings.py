@@ -43,6 +43,7 @@ from backend.app.services.accounts.onboarding_service import (
 from backend.app.services.accounts.settings_service import (
     GlobalSettingLockedError,
     GlobalSettingNotFoundError,
+    GlobalSettingUnavailableError,
     GlobalSettingValueError,
     get_all_global_settings,
     get_global_setting,
@@ -330,7 +331,9 @@ async def bulk_update_global_settings(
     """Bulk update global settings. Admin only.
 
     All or nothing: an unknown key answers 404, a value its setting refuses answers 422 with a ``detail``
-    string naming every refused key, and in both cases nothing is saved.
+    string naming every refused key, a setting an environment variable pins answers 409 ``SETTING_LOCKED_BY_ENV``,
+    and email verification turned on while no email with a link can go out answers 409
+    ``EMAIL_VERIFICATION_UNAVAILABLE``; in every case nothing is saved.
     """
     try:
         return await update_global_settings([(item.key, item.value) for item in update.items], admin.id, session)
@@ -338,6 +341,8 @@ async def bulk_update_global_settings(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{exc.key}' not found") from None
     except GlobalSettingLockedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SETTING_LOCKED_BY_ENV", "message": str(exc), "key": exc.key, "variable": exc.variable}) from None
+    except GlobalSettingUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": exc.code, "message": str(exc), "key": exc.key}) from None
     except GlobalSettingValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
 

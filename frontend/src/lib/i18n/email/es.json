@@ -106,7 +106,11 @@
         "ACCOUNT_DISABLED": "Esta cuenta está desactivada: pregunta al administrador de esta instancia.",
         "unavailable": "Ahora no se puede enviar el correo: inténtalo más tarde o pregunta al administrador de esta instancia.",
         "generic": "No se pudo enviar el enlace: inténtalo de nuevo."
-      }
+      },
+      "registered": "Cuenta creada. Te hemos enviado un correo con un enlace para activarla: ábrelo en las próximas 24 horas y luego inicia sesión.",
+      "signUpUnavailable": "Ahora no es posible registrarse: esta instancia no puede enviar el correo de verificación. Inténtalo más tarde o pregunta a su administrador.",
+      "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Correo).",
+      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Correo."
     },
     "sendLink": {
       "button": "Enviar por correo",

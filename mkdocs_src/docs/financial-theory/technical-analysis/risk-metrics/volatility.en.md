@@ -82,7 +82,7 @@ Implied volatility is forward-looking but only available for optionable assets.
 
 ## 🔄 Rolling Window Volatility {: #rolling-window-volatility }
 
-Rather than computing a single volatility number for the entire period, **rolling window volatility** computes $\sigma$ over a sliding window (e.g., 30 days), producing a time series that shows how volatility evolves:
+Rather than computing a single volatility number for the entire period, **rolling window volatility** computes $\sigma$ over a sliding window of $w$ return observations — one per quote day with a return, e.g., $w = 30$ — producing a time series that shows how volatility evolves:
 
 $$
 \sigma_t^{(w)} = \text{StdDev}(R_{t-w+1}, R_{t-w+2}, \ldots, R_t)
