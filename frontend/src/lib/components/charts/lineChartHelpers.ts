@@ -10,8 +10,7 @@
 import * as echarts from 'echarts';
 import type {RenderedSignal} from '$lib/charts/signals';
 import {toRgba} from '$lib/theme/colorAlpha';
-import {themed} from '$lib/theme/themePair';
-import {CHART_GAIN_LOSS, CHART_NEUTRALS, PRICE_SERIES} from '$lib/theme/chartTheme';
+import {CHART_GAIN_LOSS, chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Staleness
@@ -538,7 +537,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
             },
             label: {
                 show: true,
-                color: themed(CHART_NEUTRALS.referenceLevelLabel, isDark),
+                color: chartNeutrals(isDark).referenceLevelLabel,
                 fontSize: 9,
                 formatter: (params: {name?: string}) => params.name ?? '',
             },

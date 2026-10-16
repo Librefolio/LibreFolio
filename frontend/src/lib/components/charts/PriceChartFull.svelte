@@ -56,9 +56,8 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
-    import {themed} from '$lib/theme/themePair';
-    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Event Marker types and constants
@@ -258,11 +257,14 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = onThemeClassChange(() => {
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
             resizeObserver?.disconnect();
             dataZoomTouchPanHandle?.dispose();
@@ -714,6 +716,7 @@
         }
 
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const isPercentage = valueUnit === 'percentage' || viewMode === 'percentage';
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
@@ -795,7 +798,7 @@
                 symbol: 'none',
                 showSymbol: false,
                 sampling: 'lttb',
-                lineStyle: {color: themed(PRICE_SERIES.baseline, isDark), type: 'dashed', width: 1},
+                lineStyle: {color: neutrals.price.baseline, type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true},
                 tooltip: {show: false},
@@ -893,9 +896,9 @@
                             }
                             return html;
                         },
-                        backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-                        borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-                        textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                        backgroundColor: neutrals.tooltip.box.background,
+                        borderColor: neutrals.tooltip.box.border,
+                        textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                     },
                     z: 20,
                 });
@@ -903,7 +906,7 @@
         }
 
         const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0, true, secondaryAxisScales);
-        const colors = getChartColors(isDark);
+        const colors = getChartColors(isDark, chartContainer);
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
         for (const point of resolvedLineData) {
@@ -928,9 +931,9 @@
                     type: 'category',
                     data: dates,
                     gridIndex: 0,
-                    axisLine: {lineStyle: {color: themed(CHART_NEUTRALS.priceAxis.line, isDark)}},
+                    axisLine: {lineStyle: {color: neutrals.priceAxis.line}},
                     axisLabel: {
-                        color: themed(CHART_NEUTRALS.priceAxis.label, isDark),
+                        color: neutrals.priceAxis.label,
                         fontSize: 14,
                         formatter: xAxisPolicy.formatter,
                         ...(xAxisPolicy.axisLabel ?? {}),
@@ -942,9 +945,9 @@
             dataZoom: [{...buildDataZoom([0])[0], start: zoomWindow.start, end: zoomWindow.end}],
             tooltip: {
                 trigger: 'axis',
-                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                 confine: true,
                 position: tooltipPositionSide,
                 formatter: (params: any) => {
@@ -984,7 +987,7 @@
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
-                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
+                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
 
                         // Use signalLabelToHtml for proper icon rendering. The label (crown, icon, name)
                         // gives way on a narrow chart, ending in an ellipsis; the currency travels with
@@ -1047,18 +1050,18 @@
                             const context = mainPointContext?.get(date);
                             if (context) {
                                 const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.referencePriceDate)}})}` : '';
-                                rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
+                                rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
                                 if (context.currentPriceDate !== date) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
                                 }
                                 if (context.currentFxDate || context.referenceFxDate) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${neutrals.tooltip.aside}">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
                                 }
                             }
                         }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                            rowHtml += ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                            rowHtml += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                         }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
@@ -1069,7 +1072,7 @@
                             html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
-                    html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), staleLabel, fxStaleLabel);
+                    html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), neutrals.tooltip.staleWarning, staleLabel, fxStaleLabel);
                     // No wider than the chart, minus ECharts' padding and tooltipPositionSide's 8 px
                     // margins: on a phone a long name otherwise pushed the value off-screen.
                     const chartWidth = chartInstance?.getWidth() ?? 0;

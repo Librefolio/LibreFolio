@@ -16,7 +16,9 @@
  * owns: that `selectedId` reaches the builder and is re-applied when it moves; that the
  * container publishes it as `data-selected-id`, because an E2E cannot read a canvas; and
  * that an ECharts `click` comes back as the point's id. Props in, calls out — component-test
- * territory.
+ * territory. The tooltip box is wiring of the same kind (B4): the builder never sees it; the
+ * component reads it for the page's theme when it draws, and draws again when the Designer
+ * Lab's colours change (C4).
  *
  * ## What is mocked
  *
@@ -24,7 +26,10 @@
  * `AllocationPieChart.test.ts`. It keeps every `setOption` payload and every listener
  * handed to `on()`, so a test reads what the component decided to draw and delivers a
  * click the way ECharts does: to the listener the component registered. The component,
- * its runes, the option builder and the chart helpers are the real ones.
+ * its runes, the option builder and the chart helpers are the real ones. So are the roles
+ * of tokens.css, read as jsdom has them — no stylesheet, so each reads its stand-in —
+ * except where one test injects a reader (`setRoleReader`, the seam `roleColors.ts` keeps
+ * for tests) to change the card under a drawn chart.
  *
  * ## What is not asserted
  *
@@ -116,8 +121,11 @@ import {locale, waitLocale} from 'svelte-i18n';
 import {cleanup, render, screen, waitFor} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
+import {setRoleReader} from '$lib/theme/roleColors';
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
+import {buildTooltipTheme} from './echartsTooltipHelpers';
 import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
 import ScatterChart from './ScatterChart.svelte';
 
@@ -204,6 +212,27 @@ function lastOption(chart: FakeChart): DrawnOption {
     return call.option as unknown as DrawnOption;
 }
 
+/**
+ * The shared tooltip box of a theme, in the keys an ECharts tooltip takes it. Derived from `buildTooltipTheme`, never
+ * written out: it is whatever the roles read here — their stand-ins, since jsdom loads no tokens.css, unless a test
+ * injects a reader.
+ */
+function sharedBox(dark: boolean): {backgroundColor: string; borderColor: string; textStyle: {color: string}} {
+    const box = buildTooltipTheme(dark);
+    expect([box.bg, box.border, box.textColor], `barrier: buildTooltipTheme(${dark}) names three colours — toEqual takes an undefined key for an absent one, so a box of nothing would match a tooltip that names none`).toEqual([
+        expect.stringMatching(/\S/),
+        expect.stringMatching(/\S/),
+        expect.stringMatching(/\S/),
+    ]);
+    return {backgroundColor: box.bg, borderColor: box.border, textStyle: {color: box.textColor}};
+}
+
+/** The colours of the tooltip box in the last `setOption`: what ECharts paints it with. */
+function drawnBox(chart: FakeChart): Record<string, unknown> {
+    const tooltip = (chart.setOptionCalls.at(-1)?.option.tooltip ?? {}) as Record<string, unknown>;
+    return {backgroundColor: tooltip.backgroundColor, borderColor: tooltip.borderColor, textStyle: tooltip.textStyle};
+}
+
 /** Where the datum carrying `id` is drawn, and how. Fails unless it is drawn exactly once. */
 function locate(series: readonly DrawnSeries[], id: string): {seriesId: string; seriesIndex: number; dataIndex: number; datum: Datum} {
     const hits = series.flatMap((entry, seriesIndex) => (entry.type === 'scatter' ? (entry.data as Datum[]).map((datum, dataIndex) => ({seriesId: entry.id, seriesIndex, dataIndex, datum})) : [])).filter((hit) => hit.datum.id === id);
@@ -252,17 +281,19 @@ describe('ScatterChart', () => {
             const {host} = mount();
             const chart = await firstDraw();
             const built = unselected();
+            const box = sharedBox(false);
             const call = chart.setOptionCalls.at(-1)!;
 
             // Today's option, key for key: the builder's grid and series untouched, the
-            // percent formatters on both axes, the tooltip, the house animation.
+            // percent formatters on both axes, the tooltip in the light theme's shared box
+            // (B4: ECharts drew its own, white in both themes), the house animation.
             expect(call.option).toEqual({
                 ...CHART_ANIMATION_CONFIG,
                 grid: built.option.grid,
                 series: built.option.series,
                 xAxis: {...built.option.xAxis, axisLabel: {...built.option.xAxis.axisLabel, formatter: expect.any(Function)}},
                 yAxis: {...built.option.yAxis, axisLabel: {...built.option.yAxis.axisLabel, formatter: expect.any(Function)}},
-                tooltip: {position: expect.any(Function), confine: true, formatter: expect.any(Function)},
+                tooltip: {position: expect.any(Function), confine: true, backgroundColor: box.backgroundColor, borderColor: box.borderColor, textStyle: {color: box.textStyle.color}, formatter: expect.any(Function)},
             });
             expect(call.opts).toEqual(CHART_SET_OPTION_OPTS);
 
@@ -452,6 +483,61 @@ describe('ScatterChart', () => {
             // Presence first: the name and both coordinates are there, so the count is about the extra line.
             expect(lines[0]).toBe('Asset Two');
             expect(lines, 'the name and where the dot sits, and nothing else').toHaveLength(3);
+        });
+    });
+
+    /**
+     * The tooltip box, on the roles (B4, DV). ECharts drew its own box, white in both themes, so a dark page showed a
+     * white tooltip: the chart now hands it the shared box, `buildTooltipTheme(dark, container)` — the card, the raised
+     * border and the primary text, read on its own element when it draws — and draws again when the Designer Lab's
+     * colours change without a theme switch (C4), the roles read anew.
+     *
+     * The expectations come from `buildTooltipTheme` (`sharedBox`), never from hex literals: jsdom loads no tokens.css,
+     * so a role reads its stand-in, which `roleColors.test.ts` keeps equal to tokens.css. Where a role must change under
+     * a drawn chart, a reader injected with `setRoleReader` answers it, and `afterEach` takes it away.
+     */
+    describe('the tooltip box, on the roles (B4)', () => {
+        afterEach(() => {
+            setRoleReader(null);
+        });
+
+        it("draws the dark theme's box on a dark page, not the light one", async () => {
+            const lightBox = sharedBox(false);
+            const darkBox = sharedBox(true);
+            // Barrier: the two themes' boxes differ in every colour, so matching the dark one is about the theme.
+            expect(darkBox.backgroundColor, 'barrier: both themes have one background, so the check below could not tell them apart').not.toBe(lightBox.backgroundColor);
+            expect(darkBox.borderColor, 'barrier: both themes have one border, so the check below could not tell them apart').not.toBe(lightBox.borderColor);
+            expect(darkBox.textStyle.color, 'barrier: both themes have one text colour, so the check below could not tell them apart').not.toBe(lightBox.textStyle.color);
+
+            // Before mounting, as the theme store leaves <html>; the file's beforeEach takes the class off again.
+            document.documentElement.classList.add('dark');
+            mount();
+            const chart = await firstDraw();
+
+            await waitFor(() => expect(drawnBox(chart), "the tooltip box of a dark page is not the dark theme's: the theme does not reach it, and a dark page shows a light tooltip").toEqual(darkBox), WAIT);
+        });
+
+        it("draws the box again, with the roles read anew, when the Designer Lab's colours change (C4)", async () => {
+            const standIn = sharedBox(false).backgroundColor;
+            const before = '#0a1b2c';
+            const after = '#c2b1a0';
+            expect(new Set([standIn, before, after]).size, "barrier: the card's two injected colours differ from each other and from its stand-in, so a background names the read it came from").toBe(3);
+
+            // `#rrggbb`, which chartRoles takes as it is: jsdom has no canvas to resolve another notation. Every other
+            // role answers nothing, and reads its stand-in.
+            let card = before;
+            setRoleReader((role) => (role === '--lf-surface-card' ? card : ''));
+            mount();
+            const chart = await firstDraw();
+            await waitFor(() => expect(drawnBox(chart).backgroundColor, 'barrier: the first draw did not read the card through the roles, so a change of the role could not show').toBe(before), WAIT);
+
+            const draws = chart.setOptionCalls.length;
+            card = after;
+            notifyChartColorsChange();
+            flushSync();
+            await waitFor(() => expect(chart.setOptionCalls.length, "no setOption followed the Designer Lab's colour signal: the chart keeps the colours of its last draw until the theme switches").toBeGreaterThan(draws), WAIT);
+            await waitFor(() => expect(drawnBox(chart).backgroundColor, 'the chart drew again with the card it read before the signal: the box was not read anew').toBe(after), WAIT);
+            expect(theChart(), 'the signal redrew the same chart').toBe(chart);
         });
     });
 
