@@ -3719,14 +3719,17 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   falso, e la data è scartata come «impossible OHLC (close outside [low, high])» invece di svuotare il campo. Cura: il
   controllo sui valori dopo la fusione delle sentinelle (`merged_low`, `merged_high`), con un rosso. Dettagli: piano 04,
   sezione C-97a.
-- **W-B53 · La prima analisi BRIM dopo l'avvio supera i 30 s del test** — minimo, test e prestazioni; W, 16/10 (J-30 di J,
+- ✅ **W-B53 · La prima analisi BRIM dopo l'avvio supera i 30 s del test** — minimo, test e prestazioni; W, 16/10 (J-30 di J,
   passato dal coordinatore; visto da H, J e forse MF). Il primo `POST /brokers/import/files/{id}/parse` dopo l'avvio del
   server crea il pool di processi BRIM (`_get_pool`, `backend/app/services/brim/brim_parse_pool.py`, `forkserver`): sotto carico
   ci mette 31–49 s, contro i 30 s fissi di `backend/test_scripts/test_api/test_brim_api.py` (`TIMEOUT`, `TestParseEndpoint`);
   poi circa 1 s. Anche un utente aspetta il primo import. Cura (proposta di J): **scaldare il pool all'avvio**, in background,
   come fa già il calendario dei mercati (`start_market_holiday_prewarm`, `backend/app/services/platform/app_lifespan.py`),
   oppure una fixture che lo scaldi prima dei test a tempo; **non** un tempo più lungo. Un lotto piccolo dopo C-97a. Dettagli:
-  messaggio del coordinatore, 16/10 17:45.
+  messaggio del coordinatore, 16/10 17:45. **Chiusa da W il 16/10** (commit al checkpoint di W-B53): il forkserver precarica
+  il modulo BRIM e i plugin (`backend/app/services/brim/brim_parse_preload.py`), e il passo d'avvio `brim-parse-pool` lo
+  scalda in background, **opzionale** (decisione N56: `LIBREFOLIO_BRIM_PREWARM`, `backend/app/config/brim.py`, spento in
+  produzione, acceso in modalità test); `api brim` 118/118 col server di test scaldato. Dettagli: piano 04, sezione W-B53.
 - **W-B54 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** — minimo, test; W, 16/10 (C-97a, slot API). Il
   setup della categoria `api` (`_api_setup`, `scripts/test_runner/_backend_api.py`: `db_populate(force=True)`) gira solo con
   la categoria intera; `dev.py test … api brim` da solo usa il DB com'è, e dopo una prova `services` (che lo ricrea vuoto) i
