@@ -25,9 +25,9 @@
     let {mode, open, measureModeActive, canAddMeasure, ontoggle, onaddmeasure, children}: Props = $props();
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="asset-detail-measures-section" data-mode={mode}>
+<div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle" data-testid="asset-detail-measures-section" data-mode={mode}>
     <div
-        class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
+        class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-lf-hover transition-colors rounded-t-xl"
         role="button"
         tabindex="0"
         data-testid="asset-detail-measures-toggle"
@@ -39,7 +39,7 @@
             }
         }}
     >
-        <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+        <div class="flex items-center gap-2 text-sm font-medium text-lf-secondary">
             <Ruler class="text-violet-500" size={15} />
             {$t('common.measures')}
             {#if measureModeActive}
@@ -64,7 +64,7 @@
                 <span class="text-sm leading-none">+</span>
                 <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
             </button>
-            <ChevronDown class="transition-transform text-gray-400 {open ? 'rotate-180' : ''}" size={15} />
+            <ChevronDown class="transition-transform text-lf-muted {open ? 'rotate-180' : ''}" size={15} />
         </div>
     </div>
     {@render children()}
