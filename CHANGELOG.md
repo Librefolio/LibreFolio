@@ -183,6 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.** Fonts and source maps are served with their own type, also without the system's MIME table.
 - `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`, off by default: frame protection (`X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'`) and a report-only Content-Security-Policy on the web app's pages, which blocks nothing and lists in the browser console what an enforced policy would block.
 
+#### 📚 Documentation
+
+- The admin guide says what to do when LibreFolio has replaced a lost instance key: put your copy of `secrets/instance.key` back before anyone enters a plugin secret again.
+- Backups inside Docker are documented: `dev.py backup` works in the image, the archives go to `backups/` and, like `secrets/`, only LibreFolio's user can read them.
+
 ### ⚠️ Breaking changes
 
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
