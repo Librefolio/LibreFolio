@@ -93,8 +93,9 @@ If a broker has only one user with the `OWNER` role:
   EDITOR/VIEWER always succeed. An OWNER may leave when at least one other OWNER remains —
   otherwise leaving as the **last OWNER deletes the broker entirely**. Its transactions do not
   go by a database cascade: `delete_by_broker()` deletes them, and the other half of a pair held
-  on another broker stays there as a standalone row, without its link (see
-  [Broker Deletion](../backend/transactions/service.md#broker-deletion)). BRIM report files are
+  on another broker stays there without its link — as the standalone row a split of the pair
+  leaves or, for the giving leg of a `TRANSFER` whose cost needs a missing conversion, still a
+  `TRANSFER` (see [Broker Deletion](../backend/transactions/service.md#broker-deletion)). BRIM report files are
   cleaned up by the API layer.
 - ⬇️ **Self-demotion** (`update_own_role`): EDITOR → VIEWER is always allowed; OWNER →
   EDITOR/VIEWER is allowed only when another OWNER remains, and demoting from OWNER **zeroes
