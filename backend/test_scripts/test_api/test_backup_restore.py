@@ -1325,9 +1325,12 @@ async def test_a_regular_user_is_refused_403_and_nothing_happens(instance, route
 
 
 def test_no_restore_route_is_allowed_on_a_blocked_instance():
-    """(d) The block lets the data leave (the backup routes), never come in: none of the four is in ALLOWED_WHEN_BLOCKED."""
+    """(d) The block lets the data leave (the backup routes), never come in: none of the four is in ALLOWED_WHEN_BLOCKED.
+    ``restore.py`` holds lot B3's four routes too (confirm, status, cancel, restart): ``test_backup_restore_apply.py``
+    pins them."""
     endpoints = {restore.upload_restore_archive, restore.start_restore_check, restore.get_restore_check, restore.delete_restore_check}
-    assert {route.endpoint for route in restore.restore_router.routes} == endpoints, "precondition: these are the routes of restore.py"
+    missing = sorted(endpoint.__name__ for endpoint in endpoints - {route.endpoint for route in restore.restore_router.routes})
+    assert missing == [], f"precondition: these are routes of restore.py: {missing} missing"
     allowed = sorted(endpoint.__name__ for endpoint in endpoints & ALLOWED_WHEN_BLOCKED)
     assert allowed == [], f"a restore route allowed on a blocked instance: {allowed}"
 

@@ -1084,6 +1084,14 @@ def services_backup_staging(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Instance backup staging tests", verbose=verbose)
 
 
+def services_backup_apply(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a checked restore confirmed, applied at the next start, committed or rolled back; the restart."""
+    print_section("Services: Instance Backup Restore")
+    print_info("Testing: backend/app/services/platform/instance_backup/apply.py, restart.py, paths.py (the restore's state and folders), app_lifespan.py (the two steps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_apply.py", test_names)
+    return run_command(cmd, "Instance backup restore tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1828,6 +1836,18 @@ Note: No backend server required.
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-apply",
+        services_backup_apply,
+        name="Instance Backup Restore",
+        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the two startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision",
+        # PURE: every data directory, database and archive under tmp_path, with a production data directory of the test
+        # configured (which must stay absent); two alembic processes make the module's databases, two spawn children
+        # play two workers on a tmp_path instance; send_signal and os.kill replaced: no signal. No lane DB, no server,
+        # no network.
         isolation="pure",
     )
     add_test(

@@ -31,6 +31,7 @@ from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
+from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
@@ -195,8 +196,11 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("configuration-checks", lambda: _check_configuration()),
     Step("signal-plugins", lambda: _load_signal_plugins()),
     Step("tool-catalog", lambda: _load_tool_catalog()),
+    Step("pending-restore", lambda: asyncio.to_thread(apply_pending_restore)),
     # Ensure all data directories exist (prod or test based on mode)
     Step("data-directories", lambda: ensure_data_dirs()),
+    # Before any step reads the data: from here on a restore never swaps or undoes under this process
+    Step("serving-lock", lambda: asyncio.to_thread(hold_serving_lock)),
     Step("risk-scenarios", lambda: _load_risk_scenarios()),
     Step("default-avatars", lambda: _seed_avatars()),
     # Ensure database exists and is migrated
@@ -205,6 +209,7 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),
