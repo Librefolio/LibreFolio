@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: circa il 90 % delle classi sui ruoli (m1 1.185 nel target), il resto aspetta la designer o la 1.3 |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -2485,6 +2485,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «G-18 · Guardia G3 a runtime nella galleria (16/10)».
+- **G-19 · «Asset detail rolling return» legge il selettore prima che la pagina si assesti** — basso; G, 16/10, verifica
+  FE5c.
+  - `gallery.spec.ts` 5361–5363 legge il pulsante «Rolling Return» subito dopo l'apertura e il clic su 1W, senza
+    aspettare `data-busy="false"` o `data-series-state`.
+  - Un ricaricamento in corso svuota `chartData` e smonta il selettore finché i prezzi non rispondono: il clic stesso,
+    o il ricaricamento completo del poll live su un grafico convertito.
+  - Sotto carico (richieste ferme 25 s) il test va in timeout a 20 s.
+  - Proposta (test-author, perimetro G): aspettare la pagina assestata prima di leggere il selettore.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», verifica di FE5c.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2927,7 +2938,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 > Workstream AF del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/assets/**`, `routes/(app)/assets/**`, `components/fx/**`, `routes/(app)/fx/**`.
-> Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) aspetta l'ingresso di X FE5c.
+> Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) è entrato dopo X FE5c, con il lotto 9.
+> **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
+> solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
+> chiudere AF-8 (conferma) e AF-10 (ruolo di T).
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -2936,9 +2950,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - l'accento viola della sezione misure;
   - le icone di sezione: segnali blu, metadati azzurro.
 
-  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e in `routes/(app)/assets/[id]` o, dopo FE5c, `components/assets/detail/`
-  (55). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la designer o T. Dettagli:
-  [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md), sezione «7. Restano legacy».
+  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e, dopo FE5c, in `routes/(app)/assets/[id]` (42: i tre interruttori)
+  e in `components/assets/detail/` (13: `AssetDetailMetadataPanel` 1, `AssetDetailMeasuresSection` 11,
+  `AssetDetailSignalsPanel` 1). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la
+  designer o T. Dettagli: [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md),
+  sezione «7. Restano legacy».
 - **AF-2 · Tipi distinti dalla tinta** — basso; AF, 16/10. Il badge `txScope` di `AssetTable` (proprio smeraldo, altri
   blu, analisi grigio; 12 classi) e l'origine dell'identificativo di `IdentifierPrimaryChooser` (fornitore blu, salvato
   verde; 7 classi) restano categoriali, come `KIND_TONES`. I test `AssetTable.test.ts:190–192, 209` e
@@ -2949,14 +2965,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **AF-4 · Bordo rosso di `AssetCurrencyChangeModal` attraverso `ModalBase.contentClass`** — medio-basso; AF, 16/10.
   Va portato con TC-10 e con la regola 9 dello skill `design-system`. Con un ruolo (`border-lf-danger-line`)
   perderebbe contro `border-lf-raised`: serve una variante di `ModalBase` (T). Intanto la catena resta legacy (2
-  classi). Dettagli: piano AF, sezione «2. Catene», C1.
+  classi). Dettagli: piano AF, sezione «2. Catene», C1. ✅ 16/10: T ha aggiunto `ModalBase tone="danger"`
+  (`4d8ae68c4`); `AssetCurrencyChangeModal` lo usa e non passa più colori in `contentClass` (checkpoint D, piano AF passo
+  13).
 - **AF-5 · Chip `<code>` sulle tinte dei banner** — minimo; AF, 16/10. In `PriceDataImportModal` (6 classi) ed
   `EventDataImportModal` (12) i chip sono `bg-white/30 dark:bg-slate-700/50` dentro `InfoBanner`. Nessun ruolo dà un
   chip su una tinta in tutti e due i temi, e `htmlSink.gate.test.ts:73` ne fissa uno alla lettera. Restano legacy fino a
   un ruolo di T. Dettagli: piano AF, sezione «2», C5.
 - **AF-6 · Velo e icona bianca sull'immagine dell'asset** — minimo; AF, 16/10. In `AssetModalDetails:104–107`
-  (`bg-black/40`, `text-white`) manca un ruolo «testo sul velo»: restano legacy (2 classi). Dettagli: piano AF,
-  sezione «7».
+  (`bg-black/40`, `text-white`) mancava un ruolo «testo sul velo». ✅ 16/10: T ha creato `text-lf-on-overlay`
+  (`f043c1b58`); il velo va su `bg-lf-overlay` e l'icona su `text-lf-on-overlay` (checkpoint AF dopo `bfd33a0f5`).
+  Da rivedere: il velo è più scuro (60 % invece del 40 %). Dettagli: piano AF, passo 12.
 - **AF-7 · Tre interruttori dell'area** — basso; AF, 16/10. `AssetModalFooter` attivo/benchmark e l'interesse di mora
   di `ScheduledInvestmentEditor` (12 classi) restano per il lotto unico degli interruttori di T, già nel suo
   inventario. Dettagli: piano di T, «Il lotto degli interruttori (Q2)».
@@ -2966,7 +2985,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   piano AF, sezione «6».
 - **AF-9 · Dettaglio asset in attesa di X FE5c** — medio; AF, 16/10. In `routes/(app)/assets/[id]/+page.svelte` (155
   classi dopo FE5c) e nei 6 componenti di `components/assets/detail/` (145) la migrazione parte dopo l'ingresso di FE5c
-  (lotto 9). Dettagli: piano AF, sezione «5. Lotti».
+  (lotto 9). Dettagli: piano AF, sezione «5. Lotti». ✅ 16/10: FE5c è entrato (`a44951cf5`) e il lotto 9 è migrato sui file
+  reali, da 300 a 55 classi (tutte AF-1; checkpoint D, piano AF passo 13).
 - **AF-10 · Un bottone secondario su una superficie `panel` non ha un ruolo** — minimo; AF, 16/10. Il piede `panel` di
   `AssetCurrencyChangeModal` ha un «Annulla» grigio che prima era due passi sopra il piede (slate-200 su slate-50). Con
   `bg-lf-panel` sparirebbe: ha preso `bg-lf-neutral hover:bg-lf-input/30`, il ruolo più vicino. È la domanda aperta 3
@@ -3249,6 +3269,17 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     girare ad A.
 
   Dettagli: piano H, §14 «H-3, il resto».
+- **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
+  16/10.
+  - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
+    che scrive su un file. In un `all-backend -q` il file resta fermo per mezz'ora alle righe della build: quelle
+    escono da un sottoprocesso. Le righe del runner, come «Starting shared test backend» e «Shared backend ready»,
+    arrivano solo all'uscita. Chi segue un run lungo non ne vede l'avanzamento, salvo leggere i log per unità di
+    `.testLog`.
+  - Cura possibile: `sys.stdout.reconfigure(line_buffering=True)` all'avvio del runner, oppure `PYTHONUNBUFFERED=1`
+    nei comandi documentati. Nessuna fretta: il run non ne soffre.
+
+  Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
 
 ## A · Account e accessi (fase 01)
 
@@ -3759,7 +3790,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
     esecuzione romperebbe il caso «keeps no trace of a dropped answer».
   - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
-- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — basso, backend; colori (slot TR,
+- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — ✅ risolto il 16/10 (lotto X-R27/28: un
+  rosso per ogni difetto, poi la chiave unica `core.asset_cache_key()`; SHA nel commit del coordinatore) — basso,
+  backend; colori (slot TR,
   corsia 6154, 16/10 13:43), girato a X dal coordinatore il 16/10.
   - **Il sintomo nel log**: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
     'provider_code'`.
@@ -3768,13 +3801,41 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     (`AssetProviderAssignment`). L'eccezione è presa e solo registrata: dopo un cambio di valuta le cache della storia
     e del prezzo corrente restano fino alla loro scadenza (15 min e 2 min).
   - **Cura**, con un rosso prima: leggere l'assegnazione e costruire la chiave da lì.
-- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — basso, backend; X, 16/10,
-  trovato misurando X-R27.
+- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — ✅ risolto il 16/10 (stesso
+  lotto, con la riga 🐛 nel CHANGELOG; nessuna riparazione, per decisione del developer) — **medio** (rivisto il
+  16/10 alle 17:35: tocca tutti gli investimenti programmati e scrive dati), backend; X, 16/10, trovato misurando
+  X-R27.
   - **Il caso**: `services/assets/price_query.py:764` mette in `_asset_current_cache` la chiave `(codice,
     identificativo, tipo, impostazioni)`. `refresh.py:229` e le invalidazioni (`provider_management.py` ~236,
     `currency_change.py`) usano invece la chiave a cinque elementi, con l'hash dei parametri (#R3-4).
   - **Effetti**: due assegnazioni con stesso codice, identificativo e tipo ma parametri diversi si scambierebbero il
     prezzo corrente per 2 minuti. Nessuna invalidazione raggiunge quelle voci.
+  - **Il caso grave** (17:35): ogni investimento programmato ha l'identificativo `NULL` (`AUTO_GENERATED`,
+    `provider_management.py:119`). Quindi tutti condividono la stessa voce. In più `/assets/prices/current` salva
+    anche i risultati presi dalla cache come prezzo di oggi (`price_query.py:845`): la riga di oggi degli altri
+    riceve il valore del primo.
+    - Un giorno passato tiene il valore sbagliato **solo fino alla sincronizzazione notturna**, che lo corregge.
+      - La «resume» che avevo trovato è quella delle sincronizzazioni del frontend (`dashboard/+page.svelte:438`,
+        `AssetModal.svelte:1241`), non quella dello scheduler.
+      - La sincronizzazione notturna della storia (`run_history_sync`, `scheduler/jobs.py:163`) riscrive gli ultimi
+        14 giorni (`horizon_days`) dalla storia del fornitore, e gli investimenti programmati la espongono.
+      - Restano solo il massimo e il minimo allargati, nei giorni colpiti. Correzione del coordinatore, 17:33.
+    - **Decisione del developer (17:33)**: correzione del codice più una riga 🐛 nel CHANGELOG, senza riparazione.
+      La riga dice chi è colpito, che cosa ha visto, e che le chiusure si correggono da sole entro 2 settimane.
+    - **Risposte al coordinatore** (17:45, sola lettura):
+      1. Un aggiornamento completo rimette giusta la chiusura (upsert `bulk_upsert_prices`). Non sistema invece
+         `open`/`high`/`low` di una riga creata o allargata da un poll (F.2, F.3), perché il plugin manda solo la
+         chiusura.
+      2. Le righe sbagliate si riconoscono.
+         - Il poll scrive `source_plugin_key = 'provider:scheduled_investment'`, il refresh `'scheduled_investment'`.
+         - Fra le righe col prefisso, sono sbagliate quelle la cui chiusura è diversa dal valore del piano, che si
+           può ricalcolare.
+      3. Chi è esposto:
+         - anche lo scheduler, senza pagine aperte: `run_current_price_refresh`, `scheduler/jobs.py:81`, ogni 10
+           minuti di default;
+         - con stesso identificativo e parametri diversi: `css_scraper`, `borsa_italiana`, `justetf`.
+         - Non lo è `yahoo_finance`, che ignora i parametri.
+    - Decisione: vedi sopra (developer, 17:33).
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
@@ -4394,6 +4455,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   aspetta 30 s fissi (`TIMEOUT`), quindi il primo test della classe scade. Verdetto `test-triage`: lentezza.
   Strade possibili: scaldare il pool all'avvio del server, oppure una fixture che lo scaldi prima dei test temporizzati.
   Allungare il tempo no. Dettagli: piano J, §10 «J-17», slot 2.
+- **J-31 · Debito di traduzione di CP-13a (il guadagno che recupera un drawdown)** — basso, documentazione; J, 16/10.
+  Pagine EN cambiate di senso, senza stamp: `financial-theory/technical-analysis/risk-metrics/max-drawdown` (dopo
+  l'avviso dell'asimmetria, in `#recovery-time`: il risultato porta il guadagno dal minimo al picco; prima diceva che il
+  sistema calcola solo la lettura corrente, e IT/FR/ES lo dicono ancora) e `…/risk-metrics/current-drawdown` (il
+  paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
+  `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
+  a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
 
 ## Z · Sospensione e risveglio (fase 01)
 

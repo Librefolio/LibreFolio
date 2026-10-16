@@ -200,8 +200,11 @@ forbid `output`.
 
     A metric that is genuinely undefined for well-formed data is never raised. A Sharpe ratio over
     a series with zero volatility comes back as `None` with a `sharpe_undefined` warning
-    (`historical_kpi`); a correlation cell over a flat series is marked `RiskValueStatus.UNDEFINED`
-    (`correlation`). The rest of the result stays usable.
+    (`historical_kpi`); the gain that would recover a total loss comes back as `None` with a
+    `total_loss_no_recovery` warning, which does not degrade the result (`drawdown_summary`,
+    `asset_set_drawdown`; see [The Drawdown Episode](#drawdown-episode)); a correlation cell over a
+    flat series is marked `RiskValueStatus.UNDEFINED` (`correlation`). The rest of the result stays
+    usable.
 
     The generic `except Exception` branch of `RiskService.execute()` exists for bugs. It logs the
     exception with `logger.exception` (analytic code and error type) and answers
@@ -314,6 +317,40 @@ registry described in [Registry Pattern](../../architecture/patterns/registry_pa
 one dimension) and `historical_replay` (a crisis window, with proxies and exclusions). The five
 `*_set` output kinds are lists of per-asset rows with no set-level figure: a selection has no
 weights, so there is nothing to aggregate.
+
+#### 📉 The Drawdown Episode {: #drawdown-episode }
+
+`drawdown_summary` (`RiskDrawdownOutput`) and `asset_set_drawdown` (one `RiskAssetSetDrawdownItem`
+per asset) publish the same episode, built by `drawdown_episodes()` in
+`backend/app/services/risk/metrics.py`: the current drawdown with its running peak and duration,
+and the maximum drawdown with its dates, recovery status (`no_drawdown`, `recovered` or `open`),
+duration and recovered fraction. Two of its fields are the gain that takes a value back to its
+peak, `-d / (1 + d)` for a drawdown `d` at or below zero (−20 % needs +25 %, −50 % needs +100 %).
+Both come from `required_recovery_return()` in `backend/app/services/financial_math/returns.py`,
+the one home of that formula ([Financial Math Layer](../financial_math.md)):
+
+- `remaining_to_peak_ratio` — the gain from the **current** value back to the running peak.
+  Required but nullable, `ge=0`: `0` when the current value is not underwater (a current drawdown
+  within `ZERO_TOLERANCE` of zero), `null` for a total loss, a current drawdown of −100 %.
+- `maximum_drawdown_trough_to_peak_ratio` — the gain from the **maximum** drawdown's trough back
+  to the peak before it, for an open episode and a recovered one alike: it describes the depth of
+  the fall, not its recovery. Optional (default `null`), `ge=0`: `0` with `no_drawdown`, where the
+  episode validator rejects a positive value, and `null` for a total loss, a maximum drawdown of
+  −100 %.
+
+A total loss is an undefined value, not a failure ([Result Statuses](#statuses)). When either
+ratio is `null`, the result also carries one `total_loss_no_recovery` warning, whose
+`message_i18n_key`, `risk.warnings.total_loss_no_recovery`, belongs to the shared warning
+vocabulary of the `risk` subsystem ([Warnings, Errors and Localization](#localization)). The
+warning sets `degrades_result=False`: the drawdown itself is exact, only the gain that would
+recover it is undefined, so on its own the warning leaves the result `ok`. `asset_set_drawdown`
+emits a single warning for the whole set, with its own key, `risk.warnings.total_loss_no_recovery_assets`:
+it lists the assets concerned in `details.asset_ids`, and the service turns them into the
+sentence's `count` and `names`.
+
+The trough-to-peak field, the `null` of `remaining_to_peak_ratio` and the `total_loss_no_recovery`
+warning came with `algorithm_version` 1.2.0 of `drawdown_summary` and 1.1.0 of
+`asset_set_drawdown`; the numbers both analytics already reported did not change.
 
 ### 🔢 By Level {: #by-level }
 

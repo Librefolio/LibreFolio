@@ -101,10 +101,10 @@
         <div class="group relative cursor-pointer" onclick={onpickicon} title={$t('uploads.selectIcon')}>
             <AssetIcon {iconUrl} {assetType} size="lg" />
             <div
-                class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100
+                class="absolute inset-0 rounded-full bg-lf-overlay opacity-0 group-hover:opacity-100
                     flex items-center justify-center transition-opacity"
             >
-                <Upload class="text-white" size={16} />
+                <Upload class="text-lf-on-overlay" size={16} />
             </div>
         </div>
 
