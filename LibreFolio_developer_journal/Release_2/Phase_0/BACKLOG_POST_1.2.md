@@ -3303,6 +3303,36 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
 
   Dettagli: piano 04 di W, sezione C-97a; piano H, §14 «Lotto «H-12, il resto»», passo 14.
+- **H-22 · Due funzioni di `client_address.py` servono solo ai test** — molto basso; H (nota di E dal rapporto
+  dead-code, girata dal coordinatore), 16/10.
+  - `mask_client_address()` (P17) non ha consumatori, né oggi né in programma: nessun log del codice scrive
+    l'indirizzo di un client (verificato su `dev_release2` il 16/10). Cura proposta: toglierla, insieme al blocco (g)
+    di `test_client_address.py`, alla sua riga nella docstring del modulo e alle due frasi di
+    `developer/architecture/security.md` (la riga della tabella, e «a log holds only the `mask_client_address()`
+    form», da sostituire con «a log never holds a client address»). Se un log ne avrà bisogno, torna con il suo
+    primo chiamante.
+  - `reset_client_address_cache()` è un aggancio per i test dentro il codice di produzione. Cura proposta: i test
+    azzerano da soli `_configured_header.cache_clear()` e `_warned`, come fanno già i test di E con
+    `delivery._report_invalid.cache_clear()`, e la funzione va via, con la sua frase in `security.md`. L'alternativa
+    è `ignore_names` in `pyproject.toml`, con il motivo. La scelta vale anche per `reset_provider_cooldowns` e
+    `reset_shutdown_budget_state` di Z, quindi la convenzione la decide il coordinatore.
+  - Solo i miei test usano le due funzioni, su dev e sui rami di E e di B: toglierle non rompe nessun merge. In
+    `security.md` le due frasi sono mie, scritte in P17.
+  - **Non sono codice morto**, e restano:
+    - `client_rate_key`: lo adotta E con `2ef892b3f`, non ancora in dev;
+    - `profile_default`: H-17, aspetta che B lo usi in `backup_max_upload_mb()`;
+    - `derive_key_from`: H-14, aspetta il rekey di X (P24).
+  - `dev.py lint --dead-code --scope backend` conta oggi 5 simboli senza riferimenti e 50 usati solo dai test, in
+    molte aree: non è un cancello attivo. Quattro sono in `services/files/` e nello scheduler, che H ha spostato nel
+    riordino: `get_upload_mime_type` e `get_upload_by_user` (gennaio 2026), `read_supported_preview_type` (giugno),
+    `_local_times_to_utc` (giugno). Sono nati prima della 1.3: debito vecchio, fuori da questa voce.
+
+  - **Decisione N58** (coordinatore, 20:35, convenzione da rivedere col developer): via `mask_client_address`;
+    nessuna funzione di produzione solo per i test, perché i test azzerano da soli lo stato (`cache_clear()`, o il
+    fixture del modulo); `ignore_names` con il motivo solo quando non si può. Cura nel lotto «H-22» (piano H, §14),
+    provata il 16/10. Resta il testo del selettore in `_backend_services.py` (MF e A): patch pronta, dal coordinatore.
+
+  Dettagli: piano H, §14 «Revisioni della sera», punto 4, e lotto «H-22».
 
 ## A · Account e accessi (fase 01)
 
