@@ -4914,6 +4914,21 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   username, testo libero di 50 caratteri. Il tetto resta `LIBREFOLIO_SMTP_MAX_PER_HOUR` per processo. Da valutare: una
   chiave che tolga il `+tag` (e i punti per i domini che li ignorano), oppure un controllo sullo username nelle
   email. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E6.9».
+- **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
+  minimo; E, 16/10 (E-10, nota del `test-author`).
+  - `POST /email/verification/resend` è fuori da `ALLOWED_WHEN_BLOCKED`, quindi un chiamante anonimo riceve il 401 di
+    `get_current_user`, e `readResendFailure()` legge ogni 401 come `INVALID_CREDENTIALS`: l'avviso dice che username
+    o password sono sbagliati.
+  - Lo incontra solo un account in attesa di verifica che si era registrato prima del blocco.
+  - I due 401 si distinguono solo dal testo di `detail`: «Invalid credentials» della rotta, contro «Not authenticated»
+    o «Session expired or invalid» del blocco. La configurazione pubblica, poi, non dice se l'istanza è bloccata
+    (`GET /system/block` è per chi ha una sessione).
+  - Le strade:
+    - `blocked` in `GET /system/instance`, pubblico, così l'avviso lo dice (di H);
+    - un codice proprio nel rifiuto anonimo del blocco (di H);
+    - leggere il testo di `detail`, che è fragile.
+
+  Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-10».
 
 ## Y · Cruscotto e grafici (fase 01)
 
