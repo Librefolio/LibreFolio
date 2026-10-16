@@ -26,7 +26,7 @@ backend/data/
 │   ├── 🎭 scenario_catalog/          # Optional: your own stress scenarios
 │   ├── 🔐 secrets/                   # Created when LibreFolio first needs the key
 │   │   └── 🔑 instance.key           # The instance key: back it up, never change it
-│   └── 📋 scheduler_state.json       # Last run of the scheduled syncs
+│   └── 📋 scheduler_state.json       # Scheduled syncs: last run, pending retry
 │
 └── 🧪 test/                          # Test data (completely isolated)
     ├── 🗃️ sqlite/app.db
