@@ -2828,6 +2828,72 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `check-links` **96 validi**; `utils gate-docs-links` **63 passati**. `dev-cli-image` e `release-image-contract`
 >   leggono pagine che B6a-bis non tocca. Porta 6187 libera.
 
+### B-13 — i totali di controllo del registro nel backup (2026-10-16, 07:00-08:40) ✅ — 🧊 FROZEN
+
+> - **Via del coordinatore** (05:25, poi 07:00 dopo il commit di B6a-bis: `2c917e3aa` docs, `ccc92b5a2` journal, HEAD
+>   `ccc92b5a2`): `changed` è un avviso, mai un rifiuto; il manifest resta v1; commit separati da B3.
+> - **Contratto** (`files/b13-contract.md` della sessione): `instance_backup/totals.py` con `ledger_totals_of(database)`
+>   (la funzione di J su un motore dedicato in sola lettura, `aiosqlite` con `?mode=ro` come la `describe_database` di
+>   B1, mai il DB vivo, mai un'eccezione) e `compare_totals(recorded, current)` (`same`, `changed` con al più 20 righe di
+>   differenza e il conteggio, `absent`, `other_version`, `unreadable`); `ManifestDatabase.control_totals`, letto sulla
+>   copia di `VACUUM INTO` prima che entri nello zip; nel report della prova i tre campi e gli avvisi
+>   `control_totals_changed` e `control_totals_unreadable` (mai un blocco; valori di default, così un report scritto
+>   prima si legge ancora); i campi nell'API (`RestoreTotalsDifference`, docstring di una riga: E-5); una riga nel report
+>   della CLI; l'e2e confronta sorgente, manifest e destinazione (via il `TODO(CP-15)`).
+> - **⚠️ Fuori pista — l'ordine della decisione**: `ControlTotals.from_json` di J rifiuta anche un'altra versione, quindi
+>   la versione si guarda prima di leggere (un `int` diverso → `other_version`; `true` o `"1"` → `absent`, illeggibili).
+>   Corretto nel contratto e detto a test-author 1 prima che scrivesse quei casi.
+> - **Rossi**: test-author 1 (`test_backup_totals.py` nuovo, registrato come `services backup-totals`; archivio, prova,
+>   API, CLI) e test-author 2 (l'e2e), in parallelo su file diversi, solo controlli statici; le prove le lancio io.
+> - **Codice in bozza fuori dal repo** (`files/b13-wip/`: `totals.py`, `apply_b13.py` con le ancore), provato a secco su
+>   una copia dei sei file in `/tmp`: ogni ancora una volta sola, sintassi a posto. Entra nel worktree dopo il giro rosso.
+> - **Rossi scritti** (07:15): test-author 1 — `test_backup_totals.py` 60 test (nuovo, `services backup-totals`), più 13 in
+>   `test_backup_archive.py`, 15 in `test_backup_staging.py`, 6 in `test_backup_restore.py`, 10 in `test_backup_cli.py`;
+>   test-author 2 — l'e2e (3 test; un registro scritto a mano alla `005` con i totali calcolati a mano: 8772 EUR,
+>   2500.5 USD, 10 quote).
+> - **⚠️ Fuori pista — i rilievi di test-author 1, decisi da me** (contratto §7; scelte tecniche nel mio perimetro):
+>   1. ogni motore del processo esegue `PRAGMA journal_mode=WAL` alla connessione (ascoltatore globale in
+>      `db/session.py`), che una connessione `mode=ro` a un file con il giornale di rollback (ogni copia di
+>      `VACUUM INTO`) rifiuta: con l'indirizzo del contratto il manifest avrebbe sempre `null`. Lettura `immutable=1`,
+>      che non crea niente accanto al file; per sicurezza un `-wal` non vuoto accanto al file dà `unreadable` invece di
+>      totali vecchi;
+>   2. `control_totals` di tipo qualsiasi nel manifest: un valore malformato non rende l'archivio invalido, risulta
+>      `absent`;
+>   3. gli importi registrati devono essere testo decimale semplice prima che J li legga: `from_json` espande un
+>      esponente per intero (`1E+50000000`: 121 MB) → `absent`; segnalato al coordinatore per J;
+>   4. lo stato viene dalle differenze riga per riga (righe zero escluse): righe in altro ordine o una riga zero
+>      esplicita danno `same`, e `changed` ha sempre almeno una riga;
+>   5. la frase «changed by the upgrade» era falsa senza migrazioni: ora «differ from the backup's»;
+>   6. `_report(..., totals=None)` e i tre campi del report con un default: i test di prima e i `report.json` di prima
+>      restano validi.
+>   Anche: un archivio senza manifest non arriva mai al confronto (`not_a_backup`), il contratto sbagliava.
+> - **Giro rosso** (07:53-07:57, dal runner, uno alla volta, `nice`, carico sotto 50 per la regola del coordinatore delle
+>   07:48): `services backup-totals` 84 errori (il modulo che manca, importato in una fixture: ognuno da sé);
+>   `services backup-archive` 13 rossi e 142 verdi; `services backup-staging` 27 e 118; `api backup-restore` 7 e 114;
+>   `utils backup-cli` 11 e 91; `e2e backup-roundtrip` 2 e 1. Ogni rosso per la ragione giusta: il modulo, il campo del
+>   manifest o i campi del report che mancano; tutti i test di prima verdi.
+> - **Codice nel worktree** (07:57): `totals.py` nuovo, più le modifiche ancorate di `apply_b13.py` (manifest, archivio,
+>   prova su copia, schemi e API, CLI); ruff e black puliti.
+> - **Giro verde** (07:57-08:11, una prova alla volta, carico sotto 50): `services backup-archive` 155, `backup-staging` 145,
+>   `backup-jobs` 69, `api backup-restore` 121 (con `api sync` e `svelte-check` 0/0), `api backup` 23 (la regola del
+>   coordinatore), `api backup-restore-apply` 83, `utils backup-cli` 102, `utils backup-cli-restore` 46,
+>   `e2e backup-roundtrip` 3, `services backup-apply` 194; `services backup-totals` 84 verdi e **2 errori**.
+> - **⚠️ Fuori pista — una connessione aiosqlite lasciata aperta** (la guardia delle perdite del progetto, ai due casi
+>   «non è un database» e «troncato»): l'ascoltatore globale `connect` fallisce dopo che `aiosqlite` ha già aperto la
+>   connessione, e il pool la scarta senza chiuderla, fuori dalla portata di `engine.dispose()`. Corretto: le connessioni
+>   aperte dal nostro `async_creator` si tengono in una lista e si chiudono nel `finally`. Riprova (08:11-08:23):
+>   `backup-totals` **84**, `backup-archive` 155, `backup-staging` 145, `e2e backup-roundtrip` 3.
+> - **Statici**: `git diff --check` pulito; `check-orphans` 348 file, tutti raggiungibili; vulture niente nei file di B-13
+>   (e `compute_control_totals` di J non è più «usato solo dai test»).
+> - **Doc** (docs-writer `a769f9f9`, verificata sul codice): in `cli_tools` («🧪 Try a Restore on a Copy») un punto con
+>   le cinque righe della CLI alla lettera, gli avvisi nuovi e il riquadro di `manifest.json`; in `backup_restore` la
+>   riga di `manifest.json`, la colonna di `--dry-run` e una voce «Ledger totals differ» fra gli avvisi (non nella
+>   tabella dei rifiuti: non ha codice); in `security.md` due frasi sulla lettura immutabile e sugli importi semplici,
+>   con il link alla pagina di J. Nota per J: `financial_math.md` dice che i totali si confrontano «after a restore», ma
+>   il codice li confronta durante la prova, prima della conferma.
+> - **Verifiche della doc** (08:31-08:34): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63.
+> - **Backlog**: B-13 chiusa ✅.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
