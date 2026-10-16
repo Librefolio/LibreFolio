@@ -13,7 +13,7 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 | Module | What it holds |
 |--------|---------------|
 | `prices.py` | `PriceHistoryLookup` (the asset's `price_history` rows, resolved by date) and `opening_reference_price()` |
-| `conversions.py` | `FxRateResolver`, and the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
+| `conversions.py` | `FxRateResolver`; `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
 | `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
 | `histories.py` | The value, return, price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `trim_dates()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
 | `average_cost_lines.py` | `ALL_BROKERS`, and the broker and cumulative WAC history points (`build_broker_wac_history()`, `build_cumulative_wac_history()`, `average_cost_points()`) |
@@ -134,14 +134,14 @@ Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the use
 
 - `need(currency, as_of_date)` registers required pairs
 - `load(session)` calls `convert_bulk(...)` once, for the pairs registered since the previous load
-- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency`; a conversion it cannot make — a non-`None` amount in a currency other than the target, with no loaded rate for that `(currency, date)` — returns `None` and is recorded
+- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency` — an amount without a currency is taken as already in it; a conversion it cannot make — a non-`None` amount in a currency other than the target, with no loaded rate for that `(currency, date)` — returns `None` and is recorded
 - `missing_pairs()` returns the recorded misses as `WACMissingPairInfo(pair, dates)`, one entry per `FROM/TO` pair with its dates sorted
 
 Service converts:
 
 - lot opening cost and opening unit price
 - event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); for these rows `collect_fx_needs()` registers the lot's currency on every opening event
-- closure proceeds / realized P&L, from the lot's currency at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included
+- closures, through `convert_closure()` alone: each leg in its own currency at its own date — the lot's side at the lot's opening date, the closing side at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included (see [Closures: each leg at its own date](#closure-conversion))
 - Gantt fragment unit prices
 - native resolver marks from `build_asset_price_series()`
 - dividend / interest and FEE / TAX amounts, and the BUY / SELL amounts that weight the FEE / TAX split (economic-stage inputs)
@@ -151,8 +151,8 @@ Service converts:
 
 - **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
 - **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
-- **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date.
-- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `realized_pnl` (`known_realized_pnl()`) and `cumulative_proceeds` (`known_cumulative_proceeds()`) are `None` when one closure's rate is missing — for a SHORT lot's proceeds, the opening-date rate. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
+- **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate — the sale's currency at its date — set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date.
+- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `cumulative_proceeds` (`known_cumulative_proceeds()`) when one closure's closing rate is missing — for a SHORT lot's proceeds, the opening-date rate — and `realized_pnl` (`known_realized_pnl()`) when one closure misses either of the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); `reference_unit_price` when the rate at the reference date is missing, and `reference_price_source` whenever `reference_unit_price` is `None` — a reference that could not be converted has no source, as in the return history. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
 - **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
 - **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
 
@@ -160,9 +160,34 @@ The misses are reported once, after every builder: `_report_gaps()` merges `miss
 
 The WAC lines do not go through `FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
 
-**Known limit (pre-existing).** The engine's `_close_position_piece()` (`financial_math/fifo/engine.py`) computes a closure's realized P&L from the sale's unit price minus the lot's, and its proceeds from the sale's unit price, with no conversion: a lot opened in one currency and closed by a sale in another mixes the two currencies, and the service converts the closure with the lot's currency.
+#### 💱 Closures: each leg at its own date {: #closure-conversion }
 
-An ADJUSTMENT-out's cost basis does not mix them: `_handover_unit_price()` applies the cost only to a lot in its currency — a lot without a currency counts in the report currency, a cost basis without a currency in the lot's — and hands a lot in any other currency over at its own FIFO cost, realizing nothing on it: a declared fallback, until closures carry their own currency (see [Hand-over at cost](fifo_lot_engine.md#handover-at-cost)). The performance history reads the row instead, so its outflow is always the whole `|quantity| × cost_basis_override`, converted from the cost basis's currency.
+A closure has two legs, and each converts in its own currency at its own date (developer decision 26): the lot's side from the lot's currency at the lot's `opening_date` — the opening rate, a LONG lot's purchase rate — and the closing side from the closure's `close_currency` at its `close_date` — the closing rate, a LONG lot's sale rate. `close_currency` is the currency of the closing price, which need not be the lot's: a lot moved to a broker of another currency is sold in that currency, an `ADJUSTMENT_OUT` hands its units over in its cost basis's currency (see [Closure currency](fifo_lot_engine.md#closure-currency)).
+
+The rule has one home, `convert_closure(closure, lot, fx_resolver)` (`financial_math/lots/conversions.py`), which returns a `ConvertedClosure` in the target currency:
+
+| Field | Converted from |
+|-------|----------------|
+| `open_unit_price` | `closure.open_unit_price`, at the opening rate |
+| `close_unit_price` | `closure.close_unit_price`, at the closing rate |
+| `proceeds` | `closure.proceeds`, at the closing rate: a sale's cash, or the value an `ADJUSTMENT_OUT` hands over at cost; 0 on a SHORT closure |
+| `cost` | The leg the closure gives up: for a LONG lot, the purchase cost of the units, `quantity × open_unit_price` at the opening rate; for a SHORT lot, the purchase that closes it, `quantity × close_unit_price` at the closing rate |
+| `realized_pnl` | `realized_gain(proceeds, cost)` (`financial_math/returns.py`), the proceeds minus `cost`: for a LONG lot its closing leg, the `proceeds` above; for a SHORT lot its opening leg, the proceeds of its opening sale, `quantity × open_unit_price` at the opening rate |
+
+`realized_gain()` is the function the Dashboard applies to its realized sales too (`portfolio_service.py`: proceeds at the sale date, cost at the purchase dates), and each caller keeps its own rule for summing: the Dashboard sums the sales it can value and reports the others in the data quality, while a lot with one unknown closure has an unknown realized P&L.
+
+The engine's native `LotClosure.realized_pnl` is never read: it is `None` whenever `close_currency` is not the lot's. A missing rate leaves `None` the figures that need it, never one computed from native amounts — `close_unit_price` and `proceeds` need the closing rate, `open_unit_price` the opening rate, `cost` the rate of its leg, `realized_pnl` both. `need_closure_rates()` registers the two, `(close_currency, close_date)` and `(lot.currency, opening_date)`: `collect_fx_needs()` calls it for the closures of the lot summary, the return history and the event rows, `collect_performance_fx_needs()` for a LONG lot's SELL closures.
+
+Every reader converts closures through `convert_closure()`:
+
+- **Lot summary**: `realized_pnl` (`known_realized_pnl()`) sums the closures' and is `None` as soon as one of them is; `cumulative_proceeds` (`known_cumulative_proceeds()`) sums a LONG lot's closure proceeds — a SHORT lot's are those of its opening sale, converted at the opening date;
+- **Value and return histories**: the proceeds prefix (`_closure_proceeds_prefix()`);
+- **Performance history**: the SELL closures' proceeds, its inflows;
+- **Event history**: the closure rows (`_build_closure_rows()`) — `unit_price` and `close_unit_price` at the closing rate, `open_unit_price` at the opening rate, `proceeds` and `realized_pnl` as above.
+
+The lot summary keeps `market_pnl = pnl − realized_pnl`. Every closure's cost converts at the opening date, like `original_cost`, so a LONG lot's `market_pnl` is its open value minus the cost of its open units at the purchase rate: a fully closed LONG lot has a `market_pnl` of 0 and a `realized_pnl` equal to its `pnl`, and the exchange-rate move between purchase and sale is realized with the units, as on the Dashboard. The theory page [FIFO Lot Analysis](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) works an example through.
+
+An `ADJUSTMENT_OUT` with a cost basis hands every fragment over at the row's per-unit cost, in that cost's currency — `cost_basis_currency`, the lot's when empty (see [Hand-over at cost](fifo_lot_engine.md#handover-at-cost)): its proceeds convert from that currency at the row's date and realize against the lot's cost at the opening date, whatever the lot's currency. The performance history reads the row instead, so its outflow is always the whole `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date.
 
 #### 🧾 Economic events and degraded pools {: #degraded-economic-pools }
 
