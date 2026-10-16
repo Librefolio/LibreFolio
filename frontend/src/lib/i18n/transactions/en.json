@@ -239,7 +239,8 @@
       "costBasisRequired": "❌ <b>{type}</b> with positive quantity requires a cost basis. Use <b>Auto</b> mode (WAC) or enter a <b>manual</b> value.",
       "pairDeleteIncomplete": "Linked transaction: deleting this row also requires deleting its pair (transaction #{partnerId}). If the pair belongs to a broker you cannot edit, ask its owner to delete it.",
       "pairQuantityMismatch": "A transfer must move the same quantity out of one broker and into the other (found {qtyA} and {qtyB})",
-      "pairAssetMismatch": "Both sides of a transfer must be the same asset"
+      "pairAssetMismatch": "Both sides of a transfer must be the same asset",
+      "wacFxUnavailableSplit": "The units that leave are valued at their average cost, which needs the {pairs} exchange rate: sync the FX rates, then split the pair again."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

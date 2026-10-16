@@ -76,7 +76,7 @@ The workspace is a grid of draft rows â€” marked **new**, **edit** or **del** â€
     <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Bulk workspace with the banner of fields to verify unfolded and the clicked entry's row highlighted in the grid">
 </div>
 
-After a save, a **Promote pair** or a **Split pair**, the Transactions page clears its selection, since those rows may have changed; closing or cancelling keeps it.
+After a save, a **Promote pair** or a **Split pair**, the Transactions page clears its selection, since those rows may have changed; closing or cancelling keeps it. If a **Promote pair** or a **Split pair** is refused, nothing changes: an error message says why, and the confirmation stays open.
 
 ---
 

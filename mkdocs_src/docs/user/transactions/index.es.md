@@ -76,7 +76,7 @@ El espacio de trabajo es una cuadrícula de filas en borrador — marcadas como 
     <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Espacio de trabajo masivo con el banner de campos a verificar desplegado y la fila de la entrada seleccionada resaltada en la cuadrícula">
 </div>
 
-Después de guardar, de **Promover par** o de **Separar par**, la página Transacciones borra su selección, ya que esas filas pueden haber cambiado; cerrar o cancelar la conserva.
+Después de guardar, de **Promover par** o de **Separar par**, la página Transacciones borra su selección, ya que esas filas pueden haber cambiado; cerrar o cancelar la conserva. Si se rechaza un **Promover par** o un **Separar par**, no cambia nada: un mensaje de error indica el motivo y la confirmación sigue abierta.
 
 ---
 
