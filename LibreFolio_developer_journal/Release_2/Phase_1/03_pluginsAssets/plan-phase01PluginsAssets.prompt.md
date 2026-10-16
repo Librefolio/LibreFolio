@@ -3902,3 +3902,30 @@ il blocco di A.
      - `asset_plugin_guide.md` (le due dichiarazioni);
      - `search_link_finder.md` (l'ordine);
      - `settings.md` (gli accessori di `plugins.py`).
+
+CP13-2 committed: `25d4c75c7` + journal `efd7b0174`.
+
+2b. ✅ (08:27–08:36) **N48, `env_url` vuole un host** (decisione del coordinatore, «da rivedere»; avvisa A e H).
+   > **Note implementazione**:
+   > - **Rosso prima**: test-author ha aggiunto 7 casi non validi a `test_config_package.py`:
+   >   - `https://` e `http://` da soli;
+   >   - host vuoto (`https:///path`);
+   >   - porta senza host;
+   >   - spazio nell'host;
+   >   - spazio o tab nel percorso.
+   >   - Sul codice di prima: **7 failed, 733 passed**, esattamente quelli.
+   > - Anche 4 controlli validi: IPv4 con porta, IPv6, query, maiuscole conservate.
+   > - **La cura in `env_url`**:
+   >   - lo spazio si controlla sul valore grezzo, perché `urlsplit` toglie tab e a capo prima di analizzare;
+   >   - si chiede `urlsplit(value).hostname`, e non `netloc`, che per `https://:443` vale `:443`;
+   >   - un `ValueError` di `urlsplit`, come una parentesi IPv6 non chiusa, diventa lo stesso errore che nomina la
+   >     variabile;
+   >   - il valore restituito resta quello scritto, maiuscole comprese.
+   > - Messaggio: «expected an http:// or https:// address with a host name». I test di A non leggono il testo.
+   > - Doc: il punto su `env_url` in `developer/architecture/settings.md`. Tolta dalla docstring del test la nota «Red
+   >   until N48».
+   > - **Prove**:
+   >   - `services config-package` → **740 passed**;
+   >   - `services registration` → 147;
+   >   - `services email-links` → 74;
+   >   - ruff e black puliti; `git diff --check` pulito.
