@@ -4,29 +4,34 @@
  * The first wiring: the Dashboard's `sync-button` and the Files page's `files-refresh-button` are disabled, and publish
  * `data-busy="true"`, while a request the page decided to make is pending — a period change, a Refresh, a tab change —
  * with no click on the button needed; and only the requests of the page on screen: a route change drops the old page's
- * (`onNavigate` → `pageBusy.reset()`, `routes/(app)/+layout.svelte`).
+ * (`onNavigate` → `pageBusy.reset()`, `routes/(app)/+layout.svelte`). Then a broker's page (`broker-refresh`), the list
+ * of brokers (`brokers-refresh`) and Transactions (`tx-refresh-button`): each Refresh holds its own button until what it
+ * asked again is back — the broker's overview report, the list of brokers, the list of transactions.
  *
  * A localhost answer lands before an assertion can look, so every busy state here is made observable by holding the
- * request that causes it (`page.route`, let through with `route.continue()` when the test decides): the state belongs
+ * request that causes it (`page.route`, let through with `route.fallback()` when the test decides): the state belongs
  * to the test instead of a race. A hold picks its request by method, path and body — the one the trigger sends, checked
  * rather than assumed — and lets every other request through; its `held` list is the presence barrier, so a trigger
  * that never reaches the network fails by name instead of leaving a button that was never asked to wait. Every hold is
  * released and unrouted in `finally`: no request outlives its test.
  *
- * And a request the button must not wait for (P3): the Dashboard's reload in background once the server has caught up
- * on prices (Z5, Z-13: `notifyPricesCaughtUp()` sends `{kind: 'prices'}`, and `reloadAfterPriceCatchUp()` asks the
- * report again without `pageBusy`). The catch-up is a stub's, on the mechanism of price-refresh-reload.spec.ts: one
- * route on every API path answers the status route in the browser and gives every other answer back from the real
- * backend with the header the case sets — or with none, a real one removed too, so that a catch-up the lane really runs
- * cannot reach the case. Every value the button's `data-busy` takes is recorded in the page meanwhile, so «it never
- * waited» means never, not «it was not waiting when the test looked»; the period change that follows in the same page is
- * the control that the button, and the recording, do move.
+ * And a request the button must not wait for (P3): the reload in background of the Dashboard or of a broker's page
+ * once the server has caught up on prices (Z5, Z-13: `notifyPricesCaughtUp()` sends `{kind: 'prices'}`, and the
+ * page's `reloadAfterPriceCatchUp()` asks its report again without `pageBusy`). The catch-up is a stub's, on the
+ * mechanism of price-refresh-reload.spec.ts: one route on every API path answers the status route in the browser and
+ * gives every other answer back from the real backend with the header the case sets — or with none, a real one removed
+ * too, so that a catch-up the lane really runs cannot reach the case. Every value the button's `data-busy` takes is
+ * recorded in the page meanwhile, so «it never waited» means never, not «it was not waiting when the test looked»; the
+ * period change that follows in the same page is the control that the button, and the recording, do move. A broker's
+ * page publishes no `data-busy` on its root to say that the reload is back: there the landing is read from a count of
+ * the reports, kept in the page.
  *
  * Busy or idle is read only from `data-busy` and `disabled`: no class (the spin is one), no colour, no text.
  *
  * Read-only on the shared database: TEST_USER, nothing written. «Aggiorna» re-reads and syncs nothing
  * (`requestPortfolioRefresh` is a client-side mark); the period and the Files tab live in this context's own
- * sessionStorage and localStorage.
+ * sessionStorage and localStorage, and the filters the Transactions Refresh clears in this page's URL. The broker is the
+ * mock's broker with positions, found by name through `page.request`, never by position.
  */
 
 import type {APIResponse, Route} from '@playwright/test';
@@ -39,6 +44,10 @@ const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
 const UPLOADS_PATH = `${API}/uploads`;
 const BROKER_REPORTS_PATH = `${API}/brokers/import/files`;
+const BROKERS_PATH = `${API}/brokers`;
+const TRANSACTIONS_PATH = `${API}/transactions`;
+/** The mock's broker with positions, shared with TEST_USER (populate_mock_data.py): found by name, never by position. */
+const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
 /**
  * The price catch-up's status route, header and notice (`lib/features/price-refresh/priceRefresh.ts`), written out as
  * price-refresh-reload.spec.ts writes them: that module imports `$lib` aliases and runes, which Playwright's loader does
@@ -53,12 +62,24 @@ const ROUND_TRIP_MS = 30_000;
 /** Login, a full page load and a held round trip; the route-change case pays two pages. */
 const TEST_MS = 120_000;
 
-type ReportBody = {include_history?: boolean; date_range?: {start?: string; end?: string}};
+type ReportBody = {include_history?: boolean; broker_ids?: number[]; date_range?: {start?: string; end?: string}};
 
-/** The report that draws the Dashboard: history on. The contribution and the P&L candles ask without it. */
+/**
+ * The report that draws the Dashboard, or a broker's overview: history on. The contribution and the P&L candles ask
+ * without it.
+ */
 function isMainReport(request: Request): boolean {
     if (request.method() !== 'POST' || new URL(request.url()).pathname !== REPORT_PATH) return false;
     return (request.postDataJSON() as ReportBody | null)?.include_history === true;
+}
+
+/** The overview of broker `brokerId` (`loadOverview` on its page): a main report, for that broker alone. */
+function isBrokerOverview(brokerId: number): (request: Request) => boolean {
+    return (request) => {
+        if (!isMainReport(request)) return false;
+        const ids = (request.postDataJSON() as ReportBody | null)?.broker_ids ?? [];
+        return ids.length === 1 && ids[0] === brokerId;
+    };
 }
 
 /** The period a report asks for, as one comparable string. */
@@ -67,16 +88,29 @@ function periodOf(request: Request): string {
     return `${range?.start ?? ''}..${range?.end ?? ''}`;
 }
 
-/** Every main report the page sends from now on, in order. */
-function recordMainReports(page: Page): Request[] {
+/** Every report `picks` chooses — a main report unless told otherwise — that the page sends from now on, in order. */
+function recordMainReports(page: Page, picks: (request: Request) => boolean = isMainReport): Request[] {
     const sent: Request[] = [];
     page.on('request', (request) => {
-        if (isMainReport(request)) sent.push(request);
+        if (picks(request)) sent.push(request);
     });
     return sent;
 }
 
 const isGet = (request: Request): boolean => request.method() === 'GET';
+
+/** The list of brokers (`refreshAllBrokers`, brokerStore): always asked with the inaccessible ones included. */
+function isBrokerList(request: Request): boolean {
+    return isGet(request) && new URL(request.url()).searchParams.get('include_inaccessible') === 'true';
+}
+
+/**
+ * The list of transactions (`loadMainRows`): every transaction the user sees, asked with no query — the filters are
+ * client-side (W28). The partner rows and a highlighted row are asked by `ids`, and are not it.
+ */
+function isTransactionList(request: Request): boolean {
+    return isGet(request) && new URL(request.url()).search === '';
+}
 
 /** Requests the test holds, and owns until it lets them through. */
 interface Hold {
@@ -163,6 +197,53 @@ async function openFiles(page: Page, tab: 'static' | 'brim'): Promise<Locator> {
     await expect(page.getByTestId(`files-tab-${tab}`), `the Files page did not open on its ${tab} tab`).toHaveAttribute('aria-selected', 'true');
     const refresh = page.getByTestId('files-refresh-button');
     await expectIdle(refresh, 'the Files page settled with its Refresh button still waiting');
+    return refresh;
+}
+
+/** The id of a broker TEST_USER sees, by name, read with `page.request`: no route of the page intercepts it. */
+async function brokerIdByName(page: Page, name: string): Promise<number> {
+    const response = await page.request.get(BROKERS_PATH);
+    expect(response.ok(), `GET ${BROKERS_PATH} → HTTP ${response.status()}`).toBe(true);
+    const items = ((await response.json()) as {items?: Array<{id: number; name: string}>}).items ?? [];
+    const broker = items.find((item) => item.name === name);
+    if (!broker) throw new Error(`${name} is the mock's broker with positions, shared with ${TEST_USER.username}: check populate_mock_data.py (brokers seen: ${items.map((item) => item.name).join(', ') || 'none'})`);
+    return broker.id;
+}
+
+/**
+ * A broker's page on its overview tab, loaded from scratch and settled. Its root publishes no `data-busy`: the button's
+ * is the barrier, held by the first load (`broker-first-load`) until the broker, its overview and the broker and asset
+ * caches are all in. On the overview tab, where no risk or lots panel adds loads of its own to the button.
+ */
+async function openBrokerDetail(page: Page, brokerId: number): Promise<Locator> {
+    await navigateTo(page, `/brokers/${brokerId}?tab=panoramica`);
+    await expect(page.getByTestId('broker-name'), `the page of broker ${brokerId} did not load its broker`).toBeVisible({timeout: ROUND_TRIP_MS});
+    const refresh = page.getByTestId('broker-refresh');
+    await expectIdle(refresh, "the broker's page settled with its Refresh button still waiting");
+    return refresh;
+}
+
+/**
+ * The list of brokers, loaded from scratch and settled: the brokers and the report of their cards in (the root's
+ * `data-busy`), and nothing of the page pending (the button's).
+ */
+async function openBrokers(page: Page): Promise<Locator> {
+    await navigateTo(page, '/brokers');
+    await waitForSettled(page.getByTestId('brokers-page'), ROUND_TRIP_MS);
+    const refresh = page.getByTestId('brokers-refresh');
+    await expectIdle(refresh, 'the list of brokers settled with its Refresh button still waiting');
+    return refresh;
+}
+
+/**
+ * Transactions with no filter, loaded from scratch and settled: the reference lists and the transactions in (the root's
+ * `data-busy`), and nothing of the page pending (the button's).
+ */
+async function openTransactions(page: Page): Promise<Locator> {
+    await navigateTo(page, '/transactions');
+    await waitForSettled(page.getByTestId('transactions-page'), ROUND_TRIP_MS);
+    const refresh = page.getByTestId('tx-refresh-button');
+    await expectIdle(refresh, 'Transactions settled with its Refresh button still waiting');
     return refresh;
 }
 
@@ -256,6 +337,65 @@ async function recordBusy(page: Page, testId: string): Promise<() => Promise<str
         {key, selector: `[data-testid="${testId}"]`},
     );
     return () => page.evaluate((key) => [...((window as unknown as Record<string, string[] | undefined>)[key] ?? [])], key);
+}
+
+/** The reports the page has sent since `countReports`, and how many of them have landed. */
+interface ReportCount {
+    sent: number;
+    landed: number;
+}
+
+/**
+ * Every report (`POST /portfolio/report`) the page sends from now on, and how many of them have landed — in the page,
+ * not only on the network: a report counts as landed one task after its `loadend`, once the microtasks its answer set
+ * off (axios, the store, the page's own load, the DOM it redraws) have run. How a test knows that a report it let
+ * through is back, on a page whose root publishes no `data-busy`. Counted on XHR, the transport axios uses: a test
+ * checks that its report is counted in flight before it believes a landing.
+ */
+async function countReports(page: Page): Promise<() => Promise<ReportCount>> {
+    const key = '__lfSpecReports';
+    await page.evaluate(
+        ({key, path}) => {
+            const count = {sent: 0, landed: 0};
+            Object.defineProperty(window, key, {value: count, configurable: true});
+            const reports = new WeakSet<XMLHttpRequest>();
+            const nativeOpen = XMLHttpRequest.prototype.open;
+            const nativeSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
+                let pathname = '';
+                try {
+                    pathname = new URL(String(args[1]), window.location.href).pathname;
+                } catch {
+                    // Not a URL a report could have gone to.
+                }
+                if (String(args[0]).toUpperCase() === 'POST' && pathname === path) reports.add(this);
+                else reports.delete(this);
+                return Reflect.apply(nativeOpen, this, args);
+            } as XMLHttpRequest['open'];
+            XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, ...args: unknown[]) {
+                if (reports.has(this)) {
+                    count.sent += 1;
+                    // Added at the send, so after axios's own handler, set before it: the answer's microtasks run in between.
+                    this.addEventListener('loadend', () => {
+                        const nextTask = new MessageChannel();
+                        nextTask.port1.onmessage = () => {
+                            count.landed += 1;
+                            nextTask.port1.close();
+                        };
+                        nextTask.port2.postMessage(null);
+                    });
+                }
+                return Reflect.apply(nativeSend, this, args);
+            } as XMLHttpRequest['send'];
+        },
+        {key, path: REPORT_PATH},
+    );
+    return () =>
+        page.evaluate((key) => {
+            const count = (window as unknown as Record<string, ReportCount | undefined>)[key];
+            if (count === undefined) throw new Error('the report count is gone: a full load since countReports() started a fresh document');
+            return {...count};
+        }, key);
 }
 
 test.describe('Page busy: the Refresh button waits for the big requests of its own page (Y11)', () => {
@@ -416,6 +556,119 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
         } finally {
             for (const gate of holds) await gate.dispose();
             await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('Broker detail: the reload in background after a price catch-up never makes the Refresh button wait, while a period change in the same page does', async ({page}) => {
+        const brokerId = await brokerIdByName(page, BROKER_WITH_HOLDINGS);
+        const isOverview = isBrokerOverview(brokerId);
+        const overviews = recordMainReports(page, isOverview);
+        // After the sign-in, before the page loads: the document under test hears no catch-up but the stub's.
+        const catchUp = await simulateCatchUp(page);
+        const holds: Hold[] = [];
+        try {
+            const refresh = await openBrokerDetail(page, brokerId);
+            // The tracker saw the job run (the notice is put up by the call that notes it) and asks the status route: an
+            // idle answer that updated something now sends `{kind: 'prices'}`.
+            await expect(page.locator(CATCH_UP_NOTICE), 'precondition: the running catch-up shows its notice (Z5)').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect.poll(() => catchUp.served.includes('running'), {message: 'precondition: the tracker never asked the status route', timeout: ROUND_TRIP_MS}).toBe(true);
+            expect(overviews.length, "precondition: the broker's page asked its overview").toBeGreaterThan(0);
+            const onScreen = overviews[overviews.length - 1];
+            const busySeen = await recordBusy(page, 'broker-refresh');
+            // The page's root says nothing of the reload: the reports are counted in the page, and the count says when it is back.
+            const reports = await countReports(page);
+
+            // 1. The catch-up ends having updated something. Held: this broker's overview sent once the stub has said so —
+            //    nothing else on the settled overview tab asks one.
+            const reload = await hold(page, REPORT_PATH, (request) => isOverview(request) && catchUp.served.includes('idle'));
+            holds.push(reload);
+            catchUp.header = null;
+            catchUp.status = catchUpOverWithUpdates();
+            const sent = await heldRequest(reload, 'the reload in background after the catch-up');
+            expect(sent.postDataJSON(), 'the held report is not the overview on screen asked again').toEqual(onScreen.postDataJSON());
+            const inFlight = await reports();
+            expect(inFlight.sent - inFlight.landed, 'the page does not count the held reload in flight (is a report still sent by XHR?): its landing could not be read').toBeGreaterThan(0);
+            await expect(refresh, 'the Refresh button waits for the reload in background after a price catch-up (P3)').toHaveAttribute('data-busy', 'false');
+            await expect(refresh, 'the Refresh button cannot be pressed during the reload in background after a price catch-up (P3)').toBeEnabled();
+            expect(await busySeen(), 'the Refresh button waited at some moment since the catch-up ended (P3)').not.toContain('true');
+
+            await reload.release();
+            await expect
+                .poll(
+                    async () => {
+                        const count = await reports();
+                        return count.sent - count.landed;
+                    },
+                    {message: 'the reload in background never landed in the page', timeout: ROUND_TRIP_MS},
+                )
+                .toBe(0);
+            expect(await busySeen(), 'the Refresh button waited at some moment of the reload, from its send to its landing (P3)').not.toContain('true');
+
+            // 2. The control, in the same page and under the same recording: a request the page waits for moves the
+            //    button, and the recording sees it move.
+            const asked = new Set(overviews.map(periodOf));
+            const sixMonths = page.getByTestId('date-preset-6m');
+            await expect(sixMonths, "precondition: 6M is a change of period (the broker's page opens on 3M)").toHaveAttribute('data-active', 'false');
+            const period = await hold(page, REPORT_PATH, (request) => isOverview(request) && !asked.has(periodOf(request)));
+            holds.push(period);
+            await sixMonths.click();
+            await expect(sixMonths).toHaveAttribute('data-active', 'true');
+            await heldRequest(period, 'the overview of the new period');
+            await expectBusy(refresh, 'the control: the overview of the new period is pending, and the Refresh button does not wait for it');
+            expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
+            await period.release();
+            await expectIdle(refresh, 'the control: the overview of the new period is back, and the Refresh button still waits');
+        } finally {
+            for (const gate of holds) await gate.dispose();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('Broker detail: Refresh holds its button until the overview it asked again is back', async ({page}) => {
+        const brokerId = await brokerIdByName(page, BROKER_WITH_HOLDINGS);
+        const refresh = await openBrokerDetail(page, brokerId);
+        // The overview only: the broker's summary, asked again beside it, goes through.
+        const gate = await hold(page, REPORT_PATH, isBrokerOverview(brokerId));
+        try {
+            await refresh.click();
+            await heldRequest(gate, 'the overview Refresh asks again');
+            await expectBusy(refresh, 'Refresh asked the overview again, and its button does not wait for it');
+
+            await gate.release();
+            await expectIdle(refresh, 'the overview is back, and the Refresh button still waits');
+        } finally {
+            await gate.dispose();
+        }
+    });
+
+    test('Brokers list: Refresh holds its button until the list of brokers is back', async ({page}) => {
+        const refresh = await openBrokers(page);
+        const gate = await hold(page, BROKERS_PATH, isBrokerList);
+        try {
+            await refresh.click();
+            await heldRequest(gate, 'the list of brokers Refresh asks again');
+            await expectBusy(refresh, 'Refresh asked the list of brokers again, and its button does not wait for it');
+
+            await gate.release();
+            await expectIdle(refresh, 'the list of brokers is back, and the Refresh button still waits');
+        } finally {
+            await gate.dispose();
+        }
+    });
+
+    test('Transactions: Refresh holds its button until the list of transactions is back', async ({page}) => {
+        const refresh = await openTransactions(page);
+        const gate = await hold(page, TRANSACTIONS_PATH, isTransactionList);
+        try {
+            // The click clears the column and URL filters too: a page opened with none has none to clear.
+            await refresh.click();
+            await heldRequest(gate, 'the list of transactions Refresh asks again');
+            await expectBusy(refresh, 'Refresh asked the list of transactions again, and its button does not wait for it');
+
+            await gate.release();
+            await expectIdle(refresh, 'the list of transactions is back, and the Refresh button still waits');
+        } finally {
+            await gate.dispose();
         }
     });
 });
