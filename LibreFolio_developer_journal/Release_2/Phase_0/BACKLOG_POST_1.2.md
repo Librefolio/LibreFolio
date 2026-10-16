@@ -3366,6 +3366,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
   del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
   `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
+  ✅ 16/10: gli scenari 1 e 2 su un asset proprio (il 2 anche con broker e transazione propri), righe segnate per id, pulizia
+  in `afterEach`; aiuti comuni in `frontend/e2e/assets/asset-events-owned.ts`. E2E `asset-event-delete` 4/4 e
+  `asset-event-editor-save` 4/4. Dettagli: piano 04, sezione W-B29. Residuo negli scenari 3 e 4 → W-B42.
 - **W-B30 · Svuotare un costo manuale non lo toglie: la modifica lo tiene in silenzio** — basso, numeri; W, 15/10 (N2,
   test-author). In un aggiornamento `cost_basis_override: null` vale «invariato», come un campo assente
   (`_apply_update_values`, `backend/app/services/transactions/batch_edits.py`): il modulo, quando l'utente svuota un costo
@@ -3413,6 +3416,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `BRIMValidationIssue.message` (import) come «{type} requires asset_id». Cura: `e.message()` (i parametri restano in
   `ctx`); cambia testi visibili nelle risposte (in meglio). W-B36 tiene apposta i testi di prima (letterali per tipo dove
   lo erano). Dettagli: piano 04, sezione W-B36.
+  ✅ 16/10: il pacchetto porta `e.message()`, i parametri restano in `ctx`; rossi visti (TX-S-109 rovesciato, G.3.13 nuovo,
+  l'import di BRIM), poi `schemas transactions` 105/105, `services brim-create-transaction` 14/14, `api
+  transactions-validate` 12/12. Dettagli: piano 04, sezione W-B38.
 - **W-B39 · Uno split rifiutato non dice niente all'utente** — basso, chiarezza; W, 16/10 (decisione 47, docs-writer).
   `confirmSplit()` (`frontend/src/routes/(app)/transactions/+page.svelte`) scrive i problemi del batch solo in console.
   Con la 47 uno split si rifiuta anche per un cambio mancante (`WAC_FX_UNAVAILABLE` sull'operazione `split`), e prima già
@@ -3427,6 +3433,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   W, 16/10 (W-B12, test-author). Tutti i test di `TestMultiUserRoles` e `TestEditorRestrictions` tranne
   `test_owner_can_delete_broker` lasciano il loro broker (`create_broker`); MULTI-007, 008b e 008c anche transazioni. Il
   modello è quello di W-B12 (`_Owned`, `_new_broker`, cancellazione in un `finally`). Dettagli: piano 04, sezione W-B12.
+  ✅ 16/10: un context manager `_owning` negli 11 test (broker `MULTI00x_<hex>`); `api broker-multiuser` 20/20 senza broker
+  né transazioni rimaste (prima +11 e +3). Dettagli: piano 04, sezione W-B41.
+- **W-B42 · `asset-event-delete.spec.ts`: gli scenari 3 e 4 sondano e prendono «il primo»** — minimo, test; W, 16/10
+  (W-B29, test-author). Lo scenario 3 (`delete asset with events shows appropriate warning`) usa sonde `isVisible().catch`,
+  un `.first()` senza filtro e un filtro per testo `/delete|elimina/i`, e può passare senza asserire nulla; lo scenario 4
+  (`event badge reflects current link state`) prende il primo pallino degli eventi e dipende dai collegamenti del mock.
+  Solo letture: nessun dato condiviso a rischio. Cura: asset e collegamenti propri, come gli scenari 1 e 2
+  (`frontend/e2e/assets/asset-events-owned.ts`), e asserzioni esplicite. Dettagli: piano 04, sezione W-B29.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
