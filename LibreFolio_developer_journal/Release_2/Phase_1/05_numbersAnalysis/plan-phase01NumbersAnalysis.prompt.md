@@ -3541,3 +3541,22 @@ le vendite misurate contro quel costo).
     `entities/portfolio-engine.md` e `problems/stale-price-banner-never-emitted.md`; `check_source_paths.py`: nessun
     percorso mancante nella pagina nuova (i 5 mancanti del sito sono vecchi, output generati). Grafo non aggiornato
     (graphify assente nel worktree).
+- ✅ **J-17 committato** dal coordinatore: `638213507` (67 percorsi); **base aggiornata**: merge `54c5f8f95` (genitori
+  `638213507` + `26dda1a26`), pulito. Prove leggere sulla revisione combinata (carico < 50, log
+  `files/j/j17/merged_*.log`, 15:12–15:53): `api sync` senza file tracciati cambiati, svelte-check 0/0,
+  `roi-fifo-utils` 781, `portfolio-engine` 40, `portfolio-allocation-source` 90, `lots-analysis-pure` 163, `ai-export`
+  (filtro J-17) 425, `risk-dq` 31, `api portfolio` 51, Vitest 92/92 (renderer e sorgente del PAC). Porta libera.
+  In attesa dello slot 2 per `all-backend`.
+- **Slot 2, `all-backend --workers 2` su `54c5f8f95`** (16:14–17:00, log `files/j/j17/slot2_*` e un log per unità in
+  `slot2_units/`): **6/7** categorie verdi, 17 024 verdi + 6 saltati nel passaggio parallelo; External, DB, Services,
+  Utils, Schema ed E2E verdi. **API: 2 rossi** su 1 260 (worker 0): `test_brim_api.py::TestParseEndpoint::
+  test_parse_file_success` e `::test_parse_returns_asset_mappings`, tutti e due `httpx.ReadTimeout` su
+  `POST /brokers/import/files/{id}/parse`.
+  - **Triage** (skill `test-triage`): non è la forma della risposta (timeout del client, nessun valore); è il tempo. Il
+    log del server (`/tmp/librefolio-r13-j/logs/librefolio.log`): il primo parse dopo l'avvio fa partire il pool dei
+    processi del BRIM (`BRIM parse pool started`, forkserver) e nello slot è finito in **48,8 s** (14:37:58 → 14:38:47
+    UTC) contro i 30 s del test (`TIMEOUT = 30`); i parse seguenti, a pool caldo, ~1 s. Rilancio dei soli
+    `TestParseEndpoint` (17:03, carico 142): 1 rosso su 5, di nuovo il primo parse, **31,2 s** di avvio a freddo, gli
+    altri 0,2–0,3 s. Percorso BRIM non toccato da J-17; gli stessi test erano verdi in `all-backend` di CP-7a (carico
+    più basso). **Verdetto: lentezza** (avvio a freddo del pool sotto un host sovraccarico, carico 100–158), voce
+    propria → **J-30** nel backlog, da smistare dal coordinatore. Porta 6185 libera.
