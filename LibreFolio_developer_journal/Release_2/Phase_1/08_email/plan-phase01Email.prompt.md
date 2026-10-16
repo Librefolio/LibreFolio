@@ -3011,3 +3011,59 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > **La simulazione del coordinatore** su `dev_release2` di adesso (`e5c80ad7c`, con A-25 e W-B53): due conflitti
 > nelle docs, `admin/configuration.en.md` (la riga `LIBREFOLIO_BRIM_PREWARM` di W-B53) e `user/settings/profile.en.md`
 > (A-25). Dopo il checkpoint di E4c arriva un secondo piccolo aggiornamento della base, poi lo slot `all-backend`.
+>
+> **E4c committato dal coordinatore** (20:31): `8e7f2df65` (refactor), `6899bc34f` (docs) e `3fab58174` (journal).
+> Sul CHANGELOG il coordinatore dice che il testo di E4b è salvato, e che il link di setup per email va nella riga di
+> A7a e A7b.
+
+#### E6.10 — Il secondo aggiornamento della base, con A-25 e W-B53 ✅ (2026-10-16, 20:31–20:34)
+> **Il merge aperto dal coordinatore** (`git merge e5c80ad7c`): HEAD `3fab58174`, base comune `68355911f`, 35 file
+> portati dal merge, e i due conflitti che la sua simulazione aveva previsto, tutti e due nelle docs, risolti
+> aggiungendo:
+> - `admin/configuration.en.md`: la riga `LIBREFOLIO_BRIM_PREWARM` di W-B53, poi le mie sette righe SMTP, che restano
+>   insieme in fondo a «Main Options»;
+> - `user/settings/profile.en.md`: il mio punto sull'avviso, poi il punto di A-25 su «Only the capitals changed»,
+>   nella forma nuova («the tab asks for no password, you save it straight away»).
+>
+> **Controllati gli altri file cambiati da tutte e due le parti**:
+> - il backlog, con E-8 ed E-9;
+> - `features/settings.md`, con il mio paragrafo su `send-by-email`;
+> - il runner: le mie registrazioni (`email-send-link`, `forgot-password-email`, le Vitest FCE e LSR) e quelle di A
+>   (`email-case`, `emailCase.test.ts`).
+>
+> In stage solo le due risoluzioni.
+>
+> **Prove**: `mkdocs build` stretto a 0 e `check-links` 97 ✅, con la porta 6188 libera.
+>
+> **Dopo**: il coordinatore committa il merge, poi lo slot 2 per `all-backend` (`files/tools/e6_all_backend.sh`,
+> `--workers 2`, come gli altri workstream).
+>
+> **Il merge committato dal coordinatore, solo l'indice** (20:34): `9758eecbb`, con genitori `3fab58174` ed
+> `e5c80ad7c`.
+
+#### E6.11 — `all-backend`, slot 2 del coordinatore ✅ (2026-10-16, 20:34–21:19)
+> Su HEAD `9758eecbb`: `files/tools/e6_all_backend.sh`, `--workers 2` (come gli altri workstream), `nice`, taglio alle
+> 21:30. Il log è `files/logs/e6_all_backend.log`, più i log per unità in `.testLog/`.
+>
+> **Esito: «ALL BACKEND TESTS PASSED»**, exit 0, 2 672 s. Tutte e sette le categorie sono verdi: external, db,
+> services, utils, schemas, api, e2e.
+>
+> | Fase | Esito |
+> |---|---|
+> | Prerequisiti del server (`--build-only`: frontend, docs, cache JS), dopo l'aggiornamento della base | ✅ (20:34–20:41) |
+> | Parallela 1, worker 0 e 1 | 6 869 passati e 5 saltati; 5 532 passati |
+> | Parallela 2 | 1 695; 1 396 |
+> | Seriale (`test_container_registry`, `aiosqlite_leak_gate`, `cache_utils`…) e parallela 3 | 932; 901 |
+> | Popolamento dei dati finti | ✅ |
+> | API sul server della corsia, due worker | 979; 947 e 2 saltati; `api__consolidated` 117 |
+> | Coda seriale (`test_db`, BRIM, JustETF…, con il server riavviato) | ✅ |
+> | **Totale**, sommando i log per unità | **21 506 passati, 32 saltati, 0 falliti, 0 errori** |
+>
+> La porta 6188 era libera alle 21:19:13; lo slot l'ho restituito subito. Le righe con «FAIL» nel log sono solo il
+> nome del provider finto `MOCKFX_FAIL`.
+>
+> **Resta per E6**:
+> - l'E2E del dominio, in uno slot E2E del coordinatore: `email-tab`, `email-verification`, `email-send-link`,
+>   `forgot-password-email`, più `auth` e `admin-users` di A, toccate dagli agganci;
+> - la galleria `settings/email`, con G, che la mette nello stesso giro di B5b e X;
+> - E-4, con l'ok di A.
