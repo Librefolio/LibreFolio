@@ -1,8 +1,10 @@
 """
-The profile defaults of the settings (workstream H, platform, checkpoint CP7b-2; developer decisions D5 and F27).
+The profile defaults of the settings (workstream H, platform, checkpoint CP7b-2; developer decisions D5 and F27), and of
+the variables read outside them (H-17).
 
 Under test: ``PROFILE_DEFAULTS`` and the validator of ``Settings`` that applies it, both in ``backend/app/config/__init__.py``,
-and the two fields D5 adds there. The contract:
+and the two fields D5 adds there; next to them, ``ENVIRONMENT_PROFILE_DEFAULTS`` and ``profile_default()`` (H-17). The
+contract:
 
 (a) ``PROFILE_DEFAULTS`` maps each profile ``LIBREFOLIO_PROFILE`` accepts, and no other, to the values that profile gives
     the fields it lists. ``selfhosted`` lists none: an install run by its owner keeps every code default. ``managed``
@@ -19,17 +21,36 @@ and the two fields D5 adds there. The contract:
     written in the field's own type, as a code default is (``60.0``, ``True``), never as the text an environment variable
     carries (``"60"``) nor as ``1`` for a flag. Every listed field has a code default: no required field.
 (e) The profile is read as today, spaces and case aside: ``MANAGED`` and `` Managed `` give the managed defaults.
+(f) ``ENVIRONMENT_PROFILE_DEFAULTS`` does for the variables a section module of ``backend/app/config/`` reads from the
+    environment outside ``Settings`` what ``PROFILE_DEFAULTS`` does for the fields: for each profile, the value such a
+    variable takes while it is unset. The section module keeps its own parsing (what blank or invalid means) and calls
+    ``profile_default(name, fallback)`` only while the variable is unset. The table has one entry per profile
+    ``LIBREFOLIO_PROFILE`` accepts; ``selfhosted`` lists none; ``managed`` lists ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` at
+    ``500`` (decision 43), an ``int``: never ``"500"``, ``500.0`` nor ``True``. No key is a field of ``Settings`` (those
+    belong in ``PROFILE_DEFAULTS``) and no name is in both tables. Every key is written as a string constant in the code
+    of a section module, any module of ``backend/app/config/`` but ``__init__.py`` (a comment or a docstring does not
+    count), and has a variable line in ``.env.example`` (``NAME=`` or ``# NAME=``, as ``test_env_example.py`` reads them).
+    ``profile_default(name, fallback)`` gives the active profile's entry for ``name``, as the table holds it, or else
+    ``fallback`` itself: always when self-hosted (the profile unset or ``selfhosted``), and in managed for a name it does
+    not list. The profile is ``get_settings().LIBREFOLIO_PROFILE``, read at each call: ``MANAGED`` and `` Managed `` are
+    managed, and a profile changed between two calls is followed.
 
 ``Settings`` is built with ``_env_file=None`` after the profile and every listed field are removed from the environment
 with ``monkeypatch``, so neither the shell nor the instance's ``.env`` reaches a case. The one case about ``.env`` writes
 its own file under ``tmp_path`` and turns test mode off for the call: in test mode ``Settings`` reads no ``.env`` at all
-(``settings_customise_sources``). ``PROFILE_DEFAULTS`` is read with ``getattr`` when a test runs, so this file collects
-before it exists and each test fails on its own. No DB, no server, no network.
+(``settings_customise_sources``). ``profile_default()`` reads ``get_settings()``, which takes no ``_env_file``: the cases
+that call it set ``LIBREFOLIO_TEST_MODE=1`` (no ``.env``) and ``LIBREFOLIO_TEST_DATA_DIR`` under ``tmp_path`` (never the
+lane's data), remove the profile and every variable of the environment table, set the profile they mean, all with
+``monkeypatch``, and check that ``get_settings()`` reads it so; their fallback is a fresh ``object()``, for which only the
+very object can pass. ``PROFILE_DEFAULTS``, ``ENVIRONMENT_PROFILE_DEFAULTS`` and ``profile_default`` are read with
+``getattr`` when a test runs, so this file collects before they exist and each test fails on its own. The sources of
+``backend/app/config/`` and ``.env.example`` are only read, as text. No DB, no server, no network.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import ast
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import get_args
 
@@ -38,10 +59,11 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic.fields import FieldInfo
 
 from backend.app import config
+from backend.test_scripts.test_services.test_env_example import ENV_EXAMPLE, _variable_lines
 from backend.test_scripts.test_utils import print_section, print_success
 
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
-#: What LIBREFOLIO_PROFILE accepts today, and so the keys PROFILE_DEFAULTS must have.
+#: What LIBREFOLIO_PROFILE accepts today, and so the keys PROFILE_DEFAULTS and ENVIRONMENT_PROFILE_DEFAULTS must have.
 PROFILES = ("selfhosted", "managed")
 
 #: D5 and F27: the value the managed profile gives each field it lists, when nobody set the field.
@@ -53,11 +75,22 @@ MANAGED_DEFAULTS: dict[str, object] = {
 }
 #: The two switches D5 adds to Settings, off in the code.
 NEW_SWITCHES = ("LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY")
+#: H-17 (decision 43): the value the managed profile gives each variable a section module of backend/app/config/ reads
+#: from the environment outside Settings, while that variable is unset.
+ENVIRONMENT_MANAGED_DEFAULTS: dict[str, object] = {"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}
+#: (f): a variable no profile lists: profile_default() gives its fallback back, whatever the profile.
+UNLISTED_VARIABLE = "LIBREFOLIO_NO_PROFILE_LISTS_THIS"
+#: (f): one variable of the decided table, for the cases about how the profile is read.
+SAMPLE_VARIABLE = next(iter(ENVIRONMENT_MANAGED_DEFAULTS))
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+#: (f): the section modules of the configuration are the modules of this folder but __init__.py, where both tables live.
+CONFIG_ROOT = REPO_ROOT / "backend" / "app" / "config"
 
 
-def _collected_table() -> dict[str, dict[str, object]]:
-    """``PROFILE_DEFAULTS`` as it is when this file is collected; empty before it exists."""
-    table = getattr(config, "PROFILE_DEFAULTS", None)
+def _collected_table(name: str = "PROFILE_DEFAULTS") -> dict[str, dict[str, object]]:
+    """The table ``name`` of ``backend.app.config`` as it is when this file is collected; empty before it exists."""
+    table = getattr(config, name, None)
     if not isinstance(table, Mapping):
         return {}
     return {profile: dict(values) for profile, values in table.items() if isinstance(values, Mapping)}
@@ -71,6 +104,13 @@ LISTED_FIELDS = sorted({name for values in _COLLECTED.values() for name in value
 MANAGED_FIELDS = sorted(set(_COLLECTED.get("managed", {})) | set(MANAGED_DEFAULTS))
 #: (d): every entry (profile, field) of the table, and the managed entries of the contract.
 TABLE_ENTRIES = sorted({(profile, name) for profile, values in _COLLECTED.items() for name in values} | {("managed", name) for name in MANAGED_DEFAULTS})
+
+_COLLECTED_ENVIRONMENT = _collected_table("ENVIRONMENT_PROFILE_DEFAULTS")
+#: (f): every variable any profile of the environment table lists, and the decided ones: never empty, so that before the
+#: table exists each case fails on its own.
+ENVIRONMENT_VARIABLES = sorted({name for values in _COLLECTED_ENVIRONMENT.values() for name in values} | set(ENVIRONMENT_MANAGED_DEFAULTS))
+#: (f): every variable the managed profile of the environment table lists, and the decided ones.
+ENVIRONMENT_MANAGED_VARIABLES = sorted(set(_COLLECTED_ENVIRONMENT.get("managed", {})) | set(ENVIRONMENT_MANAGED_DEFAULTS))
 
 
 # =============================================================================
@@ -133,6 +173,81 @@ def value_of(settings: config.Settings, name: str) -> object:
 def wrong_values(settings: config.Settings, expected: Mapping[str, object]) -> dict[str, tuple[object, object]]:
     """``{field: (value, expected)}`` for every field of ``expected`` whose value is not the expected one."""
     return {name: (value_of(settings, name), value) for name, value in expected.items() if not same(value_of(settings, name), value)}
+
+
+def environment_defaults() -> Mapping[str, Mapping[str, object]]:
+    """``ENVIRONMENT_PROFILE_DEFAULTS`` (H-17): before it exists, the test that asks for it fails here, and only that test."""
+    table = getattr(config, "ENVIRONMENT_PROFILE_DEFAULTS", None)
+    assert table is not None, "ENVIRONMENT_PROFILE_DEFAULTS is missing from backend/app/config/__init__.py (H-17)"
+    assert isinstance(table, Mapping), f"ENVIRONMENT_PROFILE_DEFAULTS is a {type(table).__name__}, not a mapping of profiles: {table!r}"
+    return table
+
+
+def environment_values(profile: str) -> Mapping[str, object]:
+    """The values ``profile`` gives the variables it lists in ``ENVIRONMENT_PROFILE_DEFAULTS``."""
+    table = environment_defaults()
+    values = table.get(profile)
+    assert isinstance(values, Mapping), f"ENVIRONMENT_PROFILE_DEFAULTS has no mapping for the profile {profile!r} (found {values!r}); its keys: {sorted(table)}"
+    return values
+
+
+def listed_in_the_environment_table() -> set[str]:
+    return {name for values in environment_defaults().values() for name in values}
+
+
+def profile_default_function() -> Callable[[str, object], object]:
+    """``profile_default`` (H-17): before it exists, the test that calls it fails here, and only that test."""
+    function = getattr(config, "profile_default", None)
+    assert function is not None, "profile_default is missing from backend/app/config/__init__.py (H-17)"
+    assert callable(function), f"profile_default is a {type(function).__name__}, not a function: {function!r}"
+    return function
+
+
+def configure_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, written: str | None, profile: str) -> None:
+    """Make ``get_settings()`` read ``LIBREFOLIO_PROFILE`` as ``written`` (``None``: unset) from this environment alone, and
+    check that it reads the profile ``profile``. Every variable of the environment table is unset, as it is whenever a
+    section module asks ``profile_default()``."""
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")  # get_settings() reads no .env in test mode: only this environment
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))  # get_settings() never looks at the lane's data
+    for name in (PROFILE_VARIABLE, *ENVIRONMENT_VARIABLES, UNLISTED_VARIABLE):
+        monkeypatch.delenv(name, raising=False)
+    if written is not None:
+        monkeypatch.setenv(PROFILE_VARIABLE, written)
+
+    resolved = config.get_settings().LIBREFOLIO_PROFILE
+
+    assert resolved == profile, f"barrier: with {PROFILE_VARIABLE}={written!r}, get_settings() reads the profile {resolved!r}, not {profile!r}"
+
+
+def exactly(actual: object, expected: object) -> bool:
+    """Equal, and of the very same type: ``500``, never ``"500"``, ``500.0`` nor ``True``. Stricter than ``same()``."""
+    return type(actual) is type(expected) and actual == expected
+
+
+def described(result: object, fallback: object) -> str:
+    """``result`` for a message: the fallback named as such, any other value with its type."""
+    return "the fallback itself" if result is fallback else f"{result!r} ({type(result).__name__})"
+
+
+def section_modules() -> list[Path]:
+    """The section modules of the configuration: every module of ``backend/app/config/`` but ``__init__.py``."""
+    return sorted(path for path in CONFIG_ROOT.glob("*.py") if path.name != "__init__.py")
+
+
+def _docstring_node(scope: ast.AST) -> ast.Constant | None:
+    """The docstring of a module, a class or a function, as its node; ``None`` for any other node, and for one without."""
+    if not isinstance(scope, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) or not scope.body:
+        return None
+    first = scope.body[0]
+    return first.value if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str) else None
+
+
+def string_constants(path: Path) -> set[str]:
+    """The strings the code of the module at ``path`` writes: its ``ast.Constant`` nodes, its docstrings aside (a comment is
+    not in the tree at all). A variable name a module passes to ``os.environ`` or to ``profile_default()`` is one of them."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    docstrings = {id(docstring) for docstring in map(_docstring_node, ast.walk(tree)) if docstring is not None}
+    return {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings}
 
 
 # =============================================================================
@@ -358,3 +473,167 @@ def test_a_profile_written_in_another_case_gives_the_managed_defaults(monkeypatc
     wrong = wrong_values(settings, values)
     assert not wrong, f"LIBREFOLIO_PROFILE={written!r} is the managed profile, yet these fields lack its value ({{field: (value, managed)}}): {wrong}"
     print_success(f"✓ {sorted(values)} managed")
+
+
+# =============================================================================
+# (f) THE ENVIRONMENT TABLE AND profile_default() (H-17)
+# =============================================================================
+
+
+def test_the_environment_table_has_one_entry_per_profile_settings_accepts() -> None:
+    print_section("ENVIRONMENT_PROFILE_DEFAULTS: one entry per profile")
+    accepted = get_args(field(PROFILE_VARIABLE).annotation)
+    assert set(accepted) == set(PROFILES), f"barrier: LIBREFOLIO_PROFILE accepts {accepted}, this file knows {PROFILES}"
+
+    table = environment_defaults()
+
+    assert set(table) == set(accepted), f"ENVIRONMENT_PROFILE_DEFAULTS has the profiles {sorted(table)}: it must have exactly those LIBREFOLIO_PROFILE accepts, {sorted(accepted)}, as PROFILE_DEFAULTS does"
+    print_success(f"✓ {sorted(table)}")
+
+
+def test_selfhosted_lists_no_variable() -> None:
+    print_section("ENVIRONMENT_PROFILE_DEFAULTS['selfhosted']")
+
+    values = environment_values("selfhosted")
+
+    assert dict(values) == {}, f"ENVIRONMENT_PROFILE_DEFAULTS['selfhosted'] lists {dict(values)}: an install run by its owner keeps the fallback of every section module"
+    print_success("✓ empty")
+
+
+def test_managed_lists_the_decided_variables_with_their_types() -> None:
+    print_section("ENVIRONMENT_PROFILE_DEFAULTS['managed']")
+
+    values = environment_values("managed")
+
+    assert dict(values) == ENVIRONMENT_MANAGED_DEFAULTS, f"ENVIRONMENT_PROFILE_DEFAULTS['managed'] is {dict(values)}, decided {ENVIRONMENT_MANAGED_DEFAULTS}"
+    mistyped = {name: type(values[name]).__name__ for name, expected in ENVIRONMENT_MANAGED_DEFAULTS.items() if not exactly(values[name], expected)}
+    assert not mistyped, f"equal but not of the decided type ({{variable: type found}}): {mistyped}. Write each value as its section module returns it once parsed, {ENVIRONMENT_MANAGED_DEFAULTS}: not as text, a float or a flag"
+    print_success(f"✓ {ENVIRONMENT_MANAGED_DEFAULTS}")
+
+
+def test_no_variable_of_the_environment_table_is_a_setting() -> None:
+    print_section("ENVIRONMENT_PROFILE_DEFAULTS: no field of Settings, no name of PROFILE_DEFAULTS")
+    variables = listed_in_the_environment_table()
+    assert variables, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS lists no variable, so this case would prove nothing: {dict(environment_defaults())}"
+    fields, settings_listed = set(config.Settings.model_fields), listed_by_any_profile()
+    assert settings_listed and settings_listed <= fields, f"barrier: PROFILE_DEFAULTS must list fields of Settings, and only fields, for this case to recognise one: {sorted(settings_listed)}, not fields: {sorted(settings_listed - fields)}"
+
+    fields_listed = sorted(variables & fields)
+    in_both = sorted(variables & settings_listed)
+
+    assert not fields_listed, f"ENVIRONMENT_PROFILE_DEFAULTS lists fields of Settings: {fields_listed}. Settings reads them itself, so their profile values go in PROFILE_DEFAULTS, which its validator applies"
+    assert not in_both, f"in both ENVIRONMENT_PROFILE_DEFAULTS and PROFILE_DEFAULTS: {in_both}. One table per name: two would be two defaults that can disagree"
+    print_success(f"✓ {sorted(variables)}: none is a setting")
+
+
+@pytest.mark.parametrize("name", ENVIRONMENT_VARIABLES)
+def test_every_variable_of_the_environment_table_is_read_by_a_section_module(name: str) -> None:
+    print_section(f"{name}: written in a section module of backend/app/config/")
+    assert name in listed_in_the_environment_table(), f"barrier: no profile of ENVIRONMENT_PROFILE_DEFAULTS lists {name}"
+    modules = section_modules()
+    assert modules, f"barrier: {CONFIG_ROOT} holds no module but __init__.py"
+
+    writers = [path.name for path in modules if name in string_constants(path)]
+
+    assert writers, f"no section module of backend/app/config/ ({', '.join(path.name for path in modules)}) writes the string {name!r} in its code, docstrings and comments aside: a profile value for a variable no module reads is a default nobody asks for"
+    print_success(f"✓ {name} in {writers}")
+
+
+@pytest.mark.parametrize("name", ENVIRONMENT_VARIABLES)
+def test_every_variable_of_the_environment_table_is_in_env_example(name: str) -> None:
+    print_section(f"{name}: {ENV_EXAMPLE.name}")
+    assert name in listed_in_the_environment_table(), f"barrier: no profile of ENVIRONMENT_PROFILE_DEFAULTS lists {name}"
+    lines = _variable_lines(ENV_EXAMPLE.read_text(encoding="utf-8"))
+    assert lines, f"barrier: {ENV_EXAMPLE} yields no variable line"
+
+    numbers = [line.number for line in lines if line.name == name]
+
+    assert numbers, f"{ENV_EXAMPLE.name} has no line {name}= nor # {name}=: a variable a profile changes is an option, and every option LibreFolio reads is listed there"
+    print_success(f"✓ {ENV_EXAMPLE.name}, line {numbers}")
+
+
+#: (f) Asked under selfhosted: every variable of the environment table, listed by a profile; and one no profile lists.
+ASKED_UNDER_SELFHOSTED = [*(pytest.param(name, True, id=name) for name in ENVIRONMENT_VARIABLES), pytest.param(UNLISTED_VARIABLE, False, id="unlisted")]
+
+
+@pytest.mark.parametrize("profile", [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted")])
+@pytest.mark.parametrize(("name", "listed"), ASKED_UNDER_SELFHOSTED)
+def test_selfhosted_gives_back_the_fallback_itself(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: str, listed: bool, profile: str | None) -> None:
+    print_section(f"LIBREFOLIO_PROFILE={profile or '(unset)'}, profile_default({name!r}, fallback)")
+    profile_default = profile_default_function()
+    listing = sorted(table_profile for table_profile, values in environment_defaults().items() if name in values)
+    assert bool(listing) is listed, f"barrier: {name} is listed by the profiles {listing} of ENVIRONMENT_PROFILE_DEFAULTS, and this row expects it listed by {'some' if listed else 'none'}"
+    configure_profile(monkeypatch, tmp_path, profile, "selfhosted")
+    fallback = object()
+
+    result = profile_default(name, fallback)
+
+    assert result is fallback, f"self-hosted ({PROFILE_VARIABLE}={profile!r}): profile_default({name!r}, fallback) gives {described(result, fallback)}, not the fallback itself: a self-hosted install keeps the fallback of every section module"
+    print_success("✓ the fallback itself")
+
+
+@pytest.mark.parametrize("name", ENVIRONMENT_MANAGED_VARIABLES)
+def test_managed_gives_the_value_it_lists_as_the_table_holds_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: str) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, profile_default({name!r}, fallback)")
+    profile_default = profile_default_function()
+    values = environment_values("managed")
+    assert name in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {name}: {dict(values)}"
+    expected = values[name]
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+    fallback = object()
+
+    result = profile_default(name, fallback)
+
+    assert exactly(result, expected), f"{PROFILE_VARIABLE}=managed: profile_default({name!r}, fallback) gives {described(result, fallback)}, not the managed {expected!r} ({type(expected).__name__}) as the table holds it"
+    print_success(f"✓ {name} = {result!r}")
+
+
+def test_managed_gives_back_the_fallback_itself_for_a_variable_it_does_not_list(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, profile_default({UNLISTED_VARIABLE!r}, fallback)")
+    profile_default = profile_default_function()
+    values = environment_values("managed")
+    assert values and UNLISTED_VARIABLE not in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] must list some variables, and not {UNLISTED_VARIABLE}: {dict(values)}"
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+    fallback = object()
+
+    result = profile_default(UNLISTED_VARIABLE, fallback)
+
+    assert result is fallback, f"{PROFILE_VARIABLE}=managed: profile_default({UNLISTED_VARIABLE!r}, fallback) gives {described(result, fallback)}, not the fallback itself, for a variable the managed profile does not list"
+    print_success("✓ the fallback itself")
+
+
+@pytest.mark.parametrize("written", [pytest.param("MANAGED", id="upper-case"), pytest.param(" Managed ", id="spaces-and-mixed-case")])
+def test_a_profile_written_in_another_case_is_managed_for_profile_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, written: str) -> None:
+    print_section(f"LIBREFOLIO_PROFILE={written!r}, profile_default({SAMPLE_VARIABLE!r}, fallback)")
+    profile_default = profile_default_function()
+    values = environment_values("managed")
+    assert SAMPLE_VARIABLE in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {SAMPLE_VARIABLE}: {dict(values)}"
+    expected = values[SAMPLE_VARIABLE]
+    configure_profile(monkeypatch, tmp_path, written, "managed")
+    fallback = object()
+
+    result = profile_default(SAMPLE_VARIABLE, fallback)
+
+    assert exactly(result, expected), f"{PROFILE_VARIABLE}={written!r} is the managed profile, as Settings reads it, yet profile_default({SAMPLE_VARIABLE!r}, fallback) gives {described(result, fallback)}, not the managed {expected!r}: read the profile from get_settings()"
+    print_success(f"✓ {SAMPLE_VARIABLE} = {result!r}")
+
+
+def test_profile_default_reads_the_profile_at_each_call(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    print_section(f"profile_default({SAMPLE_VARIABLE!r}, fallback): managed, then selfhosted")
+    profile_default = profile_default_function()
+    values = environment_values("managed")
+    assert SAMPLE_VARIABLE in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {SAMPLE_VARIABLE}: {dict(values)}"
+    expected, fallback = values[SAMPLE_VARIABLE], object()
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+
+    first = profile_default(SAMPLE_VARIABLE, fallback)
+
+    assert exactly(first, expected), f"{PROFILE_VARIABLE}=managed: profile_default({SAMPLE_VARIABLE!r}, fallback) gives {described(first, fallback)}, not the managed {expected!r}"
+    monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")  # between the two calls, and nothing else changes
+    resolved = config.get_settings().LIBREFOLIO_PROFILE
+    assert resolved == "selfhosted", f"barrier: with {PROFILE_VARIABLE}=selfhosted, get_settings() reads the profile {resolved!r}"
+
+    second = profile_default(SAMPLE_VARIABLE, fallback)
+
+    assert second is fallback, f"{PROFILE_VARIABLE} went from managed to selfhosted between two calls, yet profile_default({SAMPLE_VARIABLE!r}, fallback) still gives {described(second, fallback)}: the profile is read at each call, never kept"
+    print_success("✓ managed, then the fallback itself")

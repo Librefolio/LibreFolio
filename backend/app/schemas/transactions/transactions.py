@@ -502,7 +502,11 @@ class TXUpdateItem(StrictModel):
     # Frozen cost basis override (for TRANSFER_IN) — object {code, amount}
     cost_basis_override: Optional[Currency] = Field(
         default=None,
-        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+        description=(
+            "Frozen cost basis {code, amount}, where the type and side take one (TRANSFER or ADJUSTMENT received). "
+            "Omitted: unchanged. null: removes the manual cost basis where the type and side take one, refused with "
+            "costBasisRequired where one is required; ignored elsewhere, and with cost_basis_mode auto or auto-detail."
+        ),
     )
 
     # WAC computation mode — session-only instruction (not persisted in DB).
