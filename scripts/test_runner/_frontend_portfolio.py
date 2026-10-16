@@ -523,7 +523,7 @@ def populate_registry(registry: dict) -> None:
         "price-refresh",
         front_portfolio_price_refresh,
         name="Price Refresh E2E",
-        desc="Lots Z5 and Z-13, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated",
+        desc="Lots Z5, Z-13 and Z-18, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated; through that reload in background neither the Dashboard's root nor a Refresh button says busy (data-busy recorded in the page), the Positions tab's contribution included, while a Refresh the user asks for does",
         tests="portfolio/price-refresh-reload.spec.ts",
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")

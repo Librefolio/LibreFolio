@@ -4999,16 +4999,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
   rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
-- **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso, accessibilità;
-  Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). La ricarica in background dopo un recupero
-  (`reloadAfterPriceCatchUp()` → `loadAll()`) mette `reportLoading = true` mentre chiede di nuovo il report stale, e la
-  radice della pagina (`data-testid="dashboard-page"`, `routes/(app)/dashboard/+page.svelte:841`) passa a
-  `aria-busy="true"` e `data-busy="true"`: un lettore di schermo annuncia «occupato» per un semplice aggiornamento dei
-  prezzi. P3 di Y11 copre solo il pulsante. Cura possibile, da decidere dopo l'ingresso di Y11: una variante in
-  background di `loadAll()` che non tocca il `reportLoading` della radice (la logica è di Z, il markup della radice è
-  nell'area di DV). La pagina del broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue
-  `reportLoading` e gira durante la stessa ricarica (scritto in `live-ticker.md`): da guardare con la stessa cura.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Chiusura del piano».
+- ✅ **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso,
+  accessibilità; Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). **Chiusa il 16/10 col lotto B** (il commit è del
+  coordinatore): dopo un recupero il Dashboard ricarica con `loadAll(false, false, {background: true})`, che non accende
+  né `reportLoading` né `contributionRefreshing` (al suo posto `contributionInBackground`, che la radice non legge):
+  `aria-busy` e `data-busy` della radice restano spenti; un caricamento chiesto dall'utente li accende ancora. I
+  pulsanti «Aggiorna» seguono `pageBusy.busy` da Y11 e non girano: lo fissano (d), (e) e (f) dello spec di Z-13, e
+  i due casi «reload in background» di `page-busy.spec.ts` attendono ora la radice a `false`. Era: la radice passava
+  a `aria-busy="true"` e un lettore di schermo annunciava «occupato» per un semplice aggiornamento dei prezzi.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto B».
 - **Z-19 · N58: due funzioni di produzione che servono solo ai test** — basso; coordinatore (da H-22), 16/10. La
   convenzione N58 vuole che nessuna funzione di produzione esista solo per i test: un test azzera da sé la sua cache
   (`cache_clear()`, una fixture), e solo quando non si può una voce `ignore_names` del dead-code con la ragione.
