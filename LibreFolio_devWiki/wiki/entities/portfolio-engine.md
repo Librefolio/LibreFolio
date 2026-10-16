@@ -144,6 +144,9 @@ The LAST_BUY_PRICE fallback is broker-scope-independent. Example: if VWCE's last
 > `last_buy_prices` no longer exists. Commit `1c5082f81` (2026-07-31,
 > "remove legacy valuation engine — resolver is the single brain") made that change. This section still describes the
 > earlier LAST_BUY_PRICE design and was not realigned here: valuation was not part of workstream P.
+> **J-17 (2026-10-16):** the enum gained `ESTIMATED_AT_COST` (no quote, BUY or SELL on or before the day: book
+> cost, a declared estimate), and an ADJUSTMENT is no longer a price observation. See
+> [[decisions/adjustment-is-never-a-price]].
 
 ## Inline WAC (Single-Pass) — 2026-06-30 model, superseded 2026-10-07
 

@@ -15,7 +15,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
 )
-from backend.app.services.assets import core, web_link_finder
+from backend.app.services.assets import core, provider_policy, web_link_finder
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
@@ -225,6 +225,11 @@ class AssetSearchService:
                 providers_queried=[],
                 providers_with_errors=[],
             )
+
+        # F21: premium providers first, then lower priority. The sort is stable: ties, a repeated code included, keep the
+        # order of today, so with every value at its default the order does not change (D-X3). The results keep the
+        # providers' order (asyncio.gather).
+        valid_providers.sort(key=lambda pair: provider_policy.search_rank(pair[0]))
 
         # Create search tasks for parallel execution
         async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None, str | None]:

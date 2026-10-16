@@ -942,3 +942,226 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
 
     > **⚠️ Fuori pista**: la mediana di `stability` è quella alta, e sbilancia gli scatti con viewport diversi.
     > `sheet` usa `statistics.median`: solo così le fasce tornano uguali a quelle della notte.
+
+## G-18 · Guardia G3 a runtime nella galleria (16/10)
+
+Richiesta del coordinatore alle 10:43; il developer gli aveva detto «vedi tu». Piano approvato alle 10:53. Base
+`8f2824046`.
+
+**Il problema.** Il gate G3 di `theme-roles` trova gli elementi misti solo se sono scritti così nel sorgente. Non vede
+le classi composte a runtime:
+- le prop di classe passate fra aree (`className`, `contentClass`…);
+- le costanti importate;
+- le concatenazioni.
+
+In tema scuro un elemento misto si rompe: `app.css` esenta dal rimappaggio legacy chi porta una classe `-lf-`.
+
+**La guardia.** A ogni scatto la galleria scandisce il DOM con le regex del gate, `ROLE_CLASS_RE` e `LEGACY_CLASS_RE`,
+esportate da `theme-roles.mjs` e lette, non copiate. Gli elementi misti finiscono in `mixed_elements.json`, nella
+cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
+
+**Decisioni del coordinatore**
+- **D1:** la guardia è attiva solo negli snapshot. `gallery_snapshot.sh` imposta `LF_GALLERY_MIXED_DIR`; CI e
+  `dev.py mkdocs gallery` restano come sono.
+- **D2:** il riassunto raggruppa di default per la cartella del file candidato, con `--by section` come opzione.
+  - Il testid è un indizio, non una prova: la classe può arrivare dal chiamante.
+
+**Il contratto fra la fixture e il toolkit.** Una riga JSON per scatto, in `worker-<pid>.jsonl`:
+- `shot`, `t`, `ms`;
+- i conteggi `elements`, `role`, `legacy`;
+- `mixed`: per ogni elemento distinto `tag`, `testid`, `owner`, `selector`, `legacy`, `role`, `classes`, `onScreen`,
+  `count`;
+- oppure `error`.
+
+**Passi**
+1. ✅ 16/10 — La fixture `frontend/e2e/fixtures/galleryMixed.ts` e la chiamata dentro `captureShot` (`galleryShot.ts`),
+   dopo lo scatto. Le scrive test-author.
+   - DoD: `tsc` E2E con i soli 2 errori di base;
+   - una prova Node con Chromium headless su un HTML fisso, senza server.
+
+   > **Note implementazione** (test-author):
+   > - `recordMixedElements(page, shot)` legge `LF_GALLERY_MIXED_DIR` a ogni chiamata; senza, esce subito e non
+   >   importa nemmeno il gate.
+   > - Le regex del gate arrivano con un `import()` dallo specificatore non letterale, una volta per worker, e solo il
+   >   loro `.source` entra nella pagina.
+   > - Una sola `page.evaluate` in sola lettura, al massimo 10 s, scrive una riga per scatto in `worker-<pid>.jsonl`.
+   > - Mai un `expect`, mai un'eccezione: un gate non caricato o una scrittura fallita danno un ⚠️ per worker, una
+   >   scansione fallita un record `error` e un ⚠️ per scatto.
+   > - `galleryShot.ts`: l'import, una frase nel commento, la chiamata come ultima istruzione di `captureShot`.
+   >
+   > Prove:
+   > - `tsc` E2E: i soli 2 errori di base (`/tmp/libreFolio_g18_tsc.log`);
+   > - Prettier pulito sui due file;
+   > - la sonda `/tmp/libreFolio_g18_probe.mjs`, PASS in 1 s. Copre misti con e senza testid, SVG e `foreignObject`, i
+   >   doppioni (`count` 2), gli invisibili, il selettore oltre 4 livelli, `data-[…]:`. Verifica anche che DOM, scroll e
+   >   focus restino uguali, e il record `error` a pagina chiusa;
+   > - la sonda dei guasti (`/tmp/libreFolio_g18_probe_failures.mjs`): il gate che non si carica, la scansione bloccata
+   >   a 10 s, la scrittura che fallisce.
+   >
+   > Prova congiunta: i JSONL della sonda, passati da `gallery_tool mixed --collect` e dal riassunto, danno 11 misti in
+   > 1 di 2 scatti, 1 errore e 0 PNG senza record. Non resta nessun browser aperto.
+2. ✅ 16/10 — `gallery_tool mixed`: `--collect` fonde le parti in `mixed_elements.json`; senza, stampa il riassunto per area.
+   - DoD: ruff e black puliti; JSONL sintetici con due worker, un retry e un errore.
+
+   > **Note implementazione**: sottocomando `mixed` in `scripts/visual_review/gallery_tool.py`.
+   > - `--collect` tiene una riga per scatto: su un retry vince la più recente (`t`). Conta errori, righe illeggibili e
+   >   record sostituiti, scrive `mixed_elements.json` con regola e commit, poi cancella le parti (`--keep-parts`).
+   > - Senza parti scrive niente ed esce 0: una checkout prima di G-18 non sporca lo snapshot.
+   > - Il riassunto:
+   >   - raggruppa gli elementi distinti (tag, testid, owner, classi di ruolo e legacy) per cartella del file candidato;
+   >     `--by section` per sezione della galleria; `--area`, `--on-screen`;
+   >   - conta i PNG senza un record, che è la DoD della run;
+   >   - avverte che il testid è un indizio e non una prova.
+   > - File candidati: il testid, dell'elemento o del suo antenato, scritto intero fra virgolette nei sorgenti di
+   >   produzione. Se non c'è, il prefisso più lungo composto (`global-settings-category-{cat.id}`, `` `tag-chip-${i}` ``).
+   >   I sorgenti sono quelli del gate (`isProductionSource`): niente test, mock, Designer Lab, file generati.
+   >
+   > Prova: `/tmp/libreFolio_g18_toolkit_test.py`, PASS, con due worker, un retry, un errore, una riga illeggibile, un
+   > PNG senza record e testid reali (`profile-save-all` intero, `global-settings-category-display` composto,
+   > `app-header` come antenato). ruff e black puliti.
+
+   > **⚠️ Fuori pista**: ruff C901 su `print_mixed` (complessità 14). L'ho divisa in intestazione, gruppi ed elemento.
+
+   > **⚠️ Fuori pista**: la prova congiunta ha mostrato candidati sbagliati. Il testid `pair` della sonda trovava 9 file
+   > solo perché `'pair'` è una stringa del codice. Ora la ricerca va a gradini:
+   > - prima il testid dopo una chiave di test id (`data-testid=`, `testid=`, `testId:`), intero o composto;
+   > - poi come stringa qualsiasi. Questo è un indizio debole: quegli elementi stanno in un gruppo a parte e non decidono
+   >   l'area.
+   >
+   > La ricerca si fa una volta per testid: molti elementi hanno lo stesso antenato.
+3. ✅ 16/10 — `gallery_snapshot.sh` esporta la variabile e a fine run raccoglie.
+   - DoD: `bash -n`; la raccolta provata su una cartella finta.
+
+   > **Note implementazione**:
+   > - Esporta `LF_GALLERY_MIXED_DIR=<snapshot>/mixed` solo per il comando della galleria.
+   > - Dopo `meta.json` chiama `gallery_tool.py mixed <snapshot> --collect`, quello accanto allo script. Se fallisce
+   >   stampa un WARNING e lascia le parti: il codice d'uscita resta quello della galleria.
+   > - L'intestazione, e quindi `usage`, lo dice in tre righe.
+   >
+   > Prova: `bash -n`; `usage`; lo stesso blocco eseguito su uno snapshot finto, sia il successo sia la cartella
+   > mancante, con lo script che va avanti. La variabile passa il filtro della corsia: `cli_base` toglie solo i
+   > `LIBREFOLIO_*` e i nomi documentati.
+4. ✅ 16/10 — README del toolkit, questa sezione, la voce G-18 del backlog.
+
+   > **Note implementazione**: nel README le righe della tabella (`gallery_snapshot.sh` scrive anche
+   > `mixed_elements.json`; `gallery_tool.py` ha `mixed`) e una sezione 6, «Mixed elements (the runtime twin of G3)»:
+   > perché, cosa c'è nel file, i tre comandi, l'avvertenza sul file candidato, `--collect` a mano. Backlog: G-18 ⏳.
+5. ✅ 16/10 — Checkpoint al coordinatore (codice in `07fe58276`, base `5489d7a28`). Poi, nello slot della coda pesante:
+   - la run filtrata `gallery_snapshot.sh g-mixed-probe … -- -f "Settings" --workers 4`;
+   - DoD: un record per PNG, 0 errori, conteggi di ruolo e legacy maggiori di 0, il riassunto per area;
+   - e quanti elementi misti ci sono oggi.
+
+   > **Note implementazione**: partenza alle 11:35:35, quando il carico a 1 minuto è sceso a 56,2. La regola del
+   > coordinatore era sotto 60, attesa al massimo 20 min; alle 11:28 il carico era 145. Fine alle 11:55:24.
+   > - La cartella dati della corsia era sparita col riavvio: l'ha ripopolata il comando stesso.
+   > - Il build ha preso 427 s, poi 36 test: 23 passati e 13 rossi.
+   > - **DoD della guardia, tutta verde:**
+   >   - 192 scatti scansionati e 192 PNG, nessuno senza record;
+   >   - 0 errori di scansione, 0 righe illeggibili, 0 troncati;
+   >   - ruolo e legacy maggiori di 0 in ogni scatto (mediane 66 e 115 su 374 elementi con classi);
+   >   - scansione in 4 ms di mediana e 24 ms al massimo, a carico 110;
+   >   - `live_price_check` pulito.
+   > - **Misti oggi in Settings: 0**, su 22 scatti distinti e 192 varianti. Il riassunto per area è vuoto.
+   >
+   > Controllo positivo del ramo dei misti, che la run non ha attraversato: la stessa fixture nel runner vero di
+   > Playwright, con la sua trasformazione TS, su una pagina fissa (`files/g18/pw/` nella sessione), PASS. Trova
+   > `div`, `span`, `rect` SVG e `p` doppio; ogni selettore nomina un solo elemento.
+
+   > **⚠️ Fuori pista — triage dei 13 rossi** (skill `test-triage`). Verdetto: **ambiente**, la macchina satura da
+   > processi fuori dalla corsia: carico 110–145 su 10 CPU, le 2 corsie pesanti della 1.3 e un render Remotion.
+   > - 11 test desktop sono rossi al login: l'app resta su `auth-loading` per 30 s. Sono i primi 12 della run, in tre
+   >   ondate da 4 nei primi 3 minuti (il 10° è verde). Dal 13° in poi è tutto verde.
+   >   - `POST /auth/login` risponde in 5,8–11,5 s, contro i 251 ms dell'unico normale.
+   >   - Un test chiude con 27 richieste statiche ancora in volo: i blocchi JS, quindi l'app non parte.
+   > - 2 test mobile (diagnostica plugin e tool) sono rossi con «an image on screen is still loading»: i loghi
+   >   `deposit.png` e `broker.png` arrivano in 16–18 s.
+   > - Le ipotesi in ordine:
+   >   - la forma della risposta non c'entra: non si legge un dato;
+   >   - nessun orologio fisso: si attendono lo stato d'arrivo e le immagini complete;
+   >   - nessuno stato condiviso: gli stessi test sono verdi minuti dopo su mobile, e lo erano in r2 e r3;
+   >   - la cascata ha una causa sola, il carico all'avvio del server.
+   > - **G-18 è escluso per costruzione:** ogni test rosso cade prima della sua prima cattura, e la scansione gira solo
+   >   dopo una cattura. Da quei test non c'è nessun record.
+   >
+   > Il coordinatore credeva la run morta col turno della sessione, caduto per la rete fra le 11:53 e le 11:57. In
+   > realtà era già finita da sola alle 11:55:24, e lo script ha raccolto i record.
+
+## Dopo G-18: lavori chiesti dal coordinatore (16/10)
+
+- **Verifica in galleria di FE5c (X) ✅, 16/10 pomeriggio.** X ha diviso la pagina di dettaglio dell'asset (da 3.603 a
+  2.757 righe), senza cambiare classi né `data-testid`.
+  - Due snapshot filtrati sui 15 test che aprono il dettaglio, `-f "Asset (detail|chart settings|distribution)"`, a 6
+    worker nella corsia 6153:
+    - A `d69e14a6e`: la testa di X con i 27 file di FE5c riportati a dev;
+    - B `668d27837`: la testa di X.
+  - Kit di sessione, `files/fe5c/`: `fe5c_verify.sh` (preflight, prebuild, snap, fill, compare) e `fe5c_check.py`
+    (lockcheck, select, paths, merge, verdict).
+  - I rossi di carico (carico 80–166) li hanno recuperati dei fill sullo stesso SHA e nello stesso giorno: 6 su A, 5 su B.
+  - Verdetto: **identiche entro il rumore.**
+    - 288 immagini contro 288: 223 identiche, 40 dentro il rumore, 10 trascurabili, 13 su scatti instabili, 0
+      strutturali.
+    - 2 «oltre il rumore»: l'antialiasing di un'icona SVG, in 1 variante su 16.
+    - Pixel oltre 12 livelli: 6 immagini, ognuna allo 0,002 % al massimo.
+    - Misti a runtime: 0 e 0.
+
+  > **⚠️ Fuori pista**:
+  > - «rolling return» desktop si è ripetuto rosso nel fill di B. `test-triage`: verdetto ambiente.
+  >   - Richieste ferme per 25 s.
+  >   - Lo stesso percorso di codice in A e in B.
+  >   - Verde da solo a carico normale.
+  >   - Resta una debolezza della spec: G-19 nel backlog.
+  > - Su mobile `detail-events` tre icone SVG cambiano a due stati, con lo stesso schema esatto fra r1 e r2, che sono
+  >   dello stesso commit: rumore noto.
+  > - Durante `snap a` ho modificato lo script che stava girando: errore di sintassi a fine run, dopo il salvataggio dei
+  >   risultati. Nessun dato perso. Non si modifica uno script mentre gira.
+- **Pacchetto per la designer, giro 3 ⏳.** Chiesto dal developer (testuale, via coordinatore): rifare il lavoro
+  comparativo dall'output della galleria e preparare uno zip con:
+  - le schermate;
+  - il prima e dopo;
+  - i colori residui;
+  - le domande aperte;
+  - ogni pagina anche in Markdown.
+
+  Piano approvato con D1 (WebP lossless) e D2 (checkpoint del builder prima della galleria).
+  - Nuovo `scripts/visual_review/build_designer_round.py`.
+    - I colori residui da `color_inventory.py`, tenuti solo dove li conta il gate: codice di produzione, fuori dai
+      commenti. Su HEAD dà gli stessi 185 file del baseline del gate.
+    - Durante lo sviluppo, la regex dei vecchi token prendeva anche i ruoli (`text-lf-primary`): 100 file di troppo,
+      corretto.
+  - Prova a secco: diff `baseline-r2` → `g-cand16a`, inventario di HEAD.
+  - Poi la galleria completa `designer-16b` sul target con il lotto di T, i fill dei rossi, il diff con `sheet` e il
+    pacchetto `LibreFolio_review_colori_giro3_2026-10-16`.
+
+  > **Note implementazione**: builder committato dal coordinatore in `390aa3b11` (README §3b).
+  > - Prova a secco su `baseline-r2` → `g-cand16a`: zip da 133 MB in 630 s.
+  > - Link controllati: 6.543, tutti presenti nel pacchetto, tranne `SKILL.md` nella palette copiata così com'è.
+
+  > **⚠️ Fuori pista — pacchetto rimandato dal developer (16/10, 17:55)**: oggi la designer non ha tempo. Lo zip si
+  > farà quando sarà disponibile, su una galleria nuova, perché nel frattempo entreranno altri lotti.
+  > - La galleria `designer-16b` è finita; i fill non servono più e `package` non è stato lanciato.
+  > - Il builder resta pronto: `files/g16b/g16b.sh package` della sessione rifà inventario, diff, `sheet` e zip.
+- **Riferimento della sera del 16/10: lo snapshot `designer-16b`** (lasciato così com'è, su richiesta del coordinatore).
+  - Commit `fa374e41d`: il target con il lotto di T, più il builder.
+  - Cattura 16:53–17:52, 6 worker, carico 60–170: in parallelo W e Y della 1.3 e un vitest di B.
+  - 2.862 PNG; 249 test verdi, 1 saltato (`mobile menu open`, solo mobile), **10 rossi di carico, non recuperati**:
+    - desktop: dashboard empty state, data-quality banner, profile tab, transaction form modal e le varianti es/dark
+      e fr/light;
+    - import wizard conditional steps, image edit modal crop view, FX add pair direct routes, Asset detail signals RSI.
+  - Le loro immagini mancano dallo snapshot: sono in `stale_not_regenerated.txt`, 42 file.
+  - `live_price_check` pulito.
+  - **G-18, primo conto su una galleria completa:** 2.862 scatti scansionati, nessuno senza record, 0 errori.
+    - Per scatto, di mediana: 506 elementi con classi, 173 con un ruolo, 7 con una classe legacy.
+    - **72 elementi misti, 2 distinti**, tutti e due composti a runtime: il gate statico non li vede.
+      - `pac-planner-timing-segment` (`BackendTimingBar.svelte`): `border-white dark:border-gray-800` insieme a
+        `bg-lf-neutral`. 4 scatti PAC, 40 varianti.
+      - `lot-custody-modal > div` (`LotCustodyModal.svelte`): `border-lf-raised text-lf-primary` del modale insieme
+        a `bg-white dark:bg-slate-800`, probabilmente da una prop del chiamante. 2 scatti, 32 varianti; motivo
+        «attesa-1.3». In scuro lo sfondo resta il vecchio slate.
+- **`settings/plugins` per la 1.3 ✅, 16/10 18:27–18:34.** Commit `ccfabfd6d`: la punta, con X-R27 e X-R28. Due run
+  identiche, `g-plugins-a` e `g-plugins-b`, sullo stesso build, filtro `-f "Settings plugins"`, 2 worker, carico 23–28.
+  - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito.
+  - **a↔b: 16 immagini identiche su 16**: lo scatto è `stable`.
+  - Misti a runtime (G-18): 0.
+  - Le impronte sono uguali in tutte le varianti: desktop `dh` 761, schermo allungato a 745 per un blocco di 656 px;
+    mobile `dh` 887.
+  - Guardate a occhio es/light desktop e it/dark mobile: rese corrette, nessun trabocco della barra delle schede.

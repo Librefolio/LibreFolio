@@ -196,7 +196,8 @@
           "weight": "Poids",
           "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
           "changeColumn": "Cible",
-          "confirmApply": "Remplacer"
+          "confirmApply": "Remplacer",
+          "valuedAtCost": "valorisé au coût · aucun prix"
         },
         "fx": {
           "intro": "Les taux dont le calcul a besoin, un pour chaque paire de devises en jeu. « Auto » utilise le taux enregistré dans LibreFolio, « Manuel » un taux à vous.",

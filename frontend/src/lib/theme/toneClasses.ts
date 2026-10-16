@@ -51,6 +51,11 @@ export const SIGN_TEXT = {
         gain: 'text-lf-gain',
         loss: 'text-lf-loss',
     },
+    /** The risk tables (DV, W6-a). */
+    riskTable: {
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
+    },
 } as const;
 
 /** Fill of a signed bar or accent line: the gain and loss roles of the figures they stand beside. */
@@ -70,6 +75,21 @@ export const SIGN_BAR = {
         gain: 'bg-lf-gain/80',
         loss: 'bg-lf-loss/80',
     },
+    /** The bars of the returns histogram (DV, W6-a), translucent like the tornado. */
+    histogram: {
+        gain: 'bg-lf-gain/80',
+        loss: 'bg-lf-loss/80',
+    },
+} as const;
+
+/**
+ * A sign on a tint: a badge or a chip that says gain or loss, not a state — the income and cost effects of the dashboard
+ * (`OtherPeriodEffectsTable`). The gain and loss tints, not the success and danger ones, so the designer can part them
+ * (rule 7 of the design-system skill).
+ */
+export const SIGN_BADGE = {
+    gain: 'bg-lf-gain-soft text-lf-gain-on-soft',
+    loss: 'bg-lf-loss-soft text-lf-loss-on-soft',
 } as const;
 
 /** Signed values coloured by polarity rather than by gain or loss. */
@@ -135,14 +155,16 @@ export const STATUS_TONES = {
         success: 'border-lf-success-line bg-lf-success-soft text-lf-success-on-soft',
     },
     /**
-     * PAC asset distribution editor, bar fill by total: success at 100 %, danger above, warning below. `unknown` takes
-     * the neutral fill: its track in `TargetsStep` is still a palette class, so the two stay apart.
+     * PAC asset distribution editor, bar fill by total: success at 100 %, danger above, warning below. `unknown`, a
+     * total that cannot be read, takes the colour the target already has in the result (`ResultCell`, the legend of
+     * `AssetTable`): `secondary`, 5.8:1 on the `neutral` track of `TargetsStep`, the fill the track must stand apart
+     * from (W6-e, 16/10: provisional, for the designer's review).
      */
     pacTargetBar: {
         balanced: 'bg-lf-success',
         excess: 'bg-lf-danger',
         missing: 'bg-lf-warning',
-        unknown: 'bg-lf-neutral',
+        unknown: 'bg-lf-secondary',
     },
     /** PAC asset distribution editor, total figure. */
     pacTargetTotal: {

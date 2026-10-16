@@ -191,23 +191,63 @@
   - È citato in `.github/instructions/frontend.instructions.md`: non c'è un agente frontend in `.github/agents/`, e
     quelle istruzioni sono il file che il lavoro sul frontend segue. È citato anche nella riga dei colori di
     `.github/copilot-instructions.md`.
+- **Esito del 16/10, sera.** 21 ingressi nel target fra le 11:02 e le 20:26, ognuno con l'albero uguale alla
+  simulazione: T (skill, ruoli, scanner, resto della UI), G (G-18, builder, record), AF (lotti 1–9, AF-4, AF-6), IM,
+  L-20, DV (W6, C4, TC-15, G-18 di `BackendTimingBar`, W6-e, W6-d), BK (lotto dei broker, L4), TR, IW. Cronaca nel
+  [registro](coordination/registro.md).
+  - **m1 8.249 → 697 nel target** alle 20:26: è migrato il 93,9 % delle 11.435 classi della v1.2. m2 54 → 2. Ogni ramo
+    committato è nel target, e nessun file riservato alla 1.3 ha più classi da migrare.
+  - **Il resto non è migrazione 1:1 e aspetta la designer:**
+    - 561 classi sono colori di categoria;
+    - 109 sono interruttori;
+    - 27 non hanno ancora un ruolo.
+  - Il resto aspetta la designer o la 1.3. Nella cartella di sessione del coordinatore:
+    - i motivi, file per file: `designer/colori-residui-motivi.csv`;
+    - le domande per lei: `designer/domande-per-la-designer.md`, 30 punti.
+- **Regole nuove del 16/10:**
+  - **Gate prima di ogni ingresso, sul merge col target:** `--check` più i tre gate Vitest dei colori
+    (`tools/pre_entry_gates.sh`, nella cartella di sessione del coordinatore).
+    - C4, che segnala le regole morte del rimappaggio scuro in `app.css`, sta solo nel gate Vitest.
+    - Il 16/10 un ingresso l'ha rotto. L'ha corretto DV con `1c7b9def2`.
+  - **Chi toglie l'ultimo uso di una classe toglie anche la sua regola** del rimappaggio scuro (C4).
+  - **Due controlli prima di ogni checkpoint di migrazione**, scritti dal coordinatore:
+    - `dark_only_check.py` trova le classi che hanno solo il colore `dark:`. Se la conversione lo toglie senza dare un
+      ruolo, il colore scuro si perde: un campo torna bianco.
+    - `native_field_check.py` trova i campi nativi già sui ruoli senza il ruolo del testo o del placeholder (G6).
+  - **G-18 nella galleria** conta gli elementi misti composti a runtime, che il gate statico non vede. Sulla prima
+    galleria completa ne ha trovati 2:
+    - `BackendTimingBar`, corretto da DV;
+    - `LotCustodyModal`, a BK (L4) dopo Y.
+  - **I test non leggono le classi di colore:** usano `aria-pressed`, `data-selected`, `data-lifecycle` o il
+    comportamento.
+- **Scelte provvisorie, nella raccolta per la designer:**
+  - i link su `text-lf-link`, il verde del fuoco;
+  - le barre dei KPI con i colori di categoria (scelta a);
+  - `ModalBase` `tone="danger"`;
+  - nelle righe evidenziate delle select il testo passa da muted a secondary (TC-15).
+- **Pausa 13:21–14:14**, su richiesta del developer. Il riepilogo è in `review/pausa-16-10/riepilogo-pausa.md`. Dalla
+  ripresa, le domande per la designer si accumulano in un solo file, per un riepilogo unico.
+- **Il pacchetto per la designer è rimandato** (17:52). Richiesto alle 16:12. Testuale: «lo zip della designer
+  posticipalo, oggi non ha tempo».
+  - Il riferimento della sera è la galleria `designer-16b` (`fa374e41d`, 2.862 PNG).
+  - Il builder `build_designer_round.py` è nel target (`0ab2b6095`). Lo zip si farà su una galleria nuova.
 
 ## 🛤️ Workstream e corsie
 
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | nessuna porta fissa (prove leggere); 6150 è usata dalla 1.3 per il server di review del developer (16/10) | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-18** (`f96043473`, 16/10): livello delle categorie e segnale C4 (L-16, `2c485d3d4`), percorsi dei grafici dopo gli spostamenti di Y (L-18). Aperte L-17 e L-19 (esempi scaduti della doc), peso basso; sessione ferma |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-13 chiusa** (`7f58a6292`): coppia di riferimento e regola della data UTC, catture vietate fra le 00:00 e le 02:00 locali; `gallery_tool sheet` nel toolkit (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie di fine giornata con il foglio di confronto |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-20** (`460529690`, 16/10): il test `picker` passa davvero su un colore del rimappaggio scuro. Prima: livello delle categorie e segnale C4 (L-16, `2c485d3d4`), percorsi dei grafici dopo gli spostamenti di Y (L-18, `f96043473`). Aperte L-17 e L-19 (esempi scaduti della doc), peso basso; sessione ferma |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-18 nel target** (`005ebcbf9`, 16/10): conta nelle gallerie gli elementi misti composti a runtime. Il builder del pacchetto del giro 3 è nel target (`0ab2b6095`); la galleria `designer-16b` (`fa374e41d`) è il riferimento del 16/10 sera; run filtrata `settings/plugins` per la 1.3, stabile (`b9679a7d8`). Prima: G-13 (`7f58a6292`, coppia di riferimento e regola della data UTC) e `gallery_tool sheet` (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie e le run filtrate |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori` a `eb4040cd1`; dati nuovi dopo il riavvio del 16/10 (`db populate`); si aggiorna dopo gli ingressi |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al quarto lotto** (`eb4040cd1`, 16/10): W1, W2, W3, Q10, input, sync, banner, changelog, AI Export, editor dei dati. Ora lo skill comune di D-T29; poi il resto della UI (~250); il lotto unico degli interruttori (13 in 9 file) dopo la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W5** (`1d37087f8`): TD-1/TD-1b, PAC, impostazioni dei grafici. Ora l'area: `features/risk`, `features/dashboard`, `routes/(app)/dashboard`, `features/tools`, `components/charts` (~1.500). Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
-| IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | nuovo (16/10, D-T28): `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal` (~1.300) |
-| TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | nuovo (16/10): il resto di `components/transactions/**` e `routes/(app)/transactions/**` (~1.050) |
-| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | nuovo (16/10): `components/assets/**`, `routes/(app)/assets/**`, `components/fx/**`, `routes/(app)/fx/**` (~1.950); il dettaglio asset dopo X FE5c |
-| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | nuovo (16/10): `features/brokers/**` (lotti compresi) e `routes/(app)/brokers/**` (~1.150) |
-| IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | nuovo (16/10): `features/settings/**`, `routes/(app)/settings/**`, `features/support/**`, `features/update-check/**` (~1.050) |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo sulla punta `81bc305b9` (16/10, 18:53; m1 934), worktree `preview-colori`, DB nuovo (`001_initial.py` cambiato da C-97a), shell staccata `preview6160j` |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al resto della UI** (`4d8ae68c4`, 16/10): skill comune `design-system` (`6e569084a`, D-T29), ruoli (`f043c1b58`), scanner e regola dei campi nativi (`be911db7e`), gate G5/G6, token di componente 1, 2a, 2b e 2c, TC-15. Ferma: il lotto degli interruttori e i ruoli di categoria aspettano la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6-d** (`3805bf2ca`, 16/10): W6 (`adbc2a4b7`: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`), fix C4 (`1c7b9def2`), TC-15 e G-18 di `BackendTimingBar` (`81bc305b9`), binari del PAC (W6-e, `e3d85fdc8`), `PositionsPanel` ed `ExposureTable` con `aria-pressed` (W6-d; `AllocationPanel` resta su `action`, TD-3). Restano categorie, TD-1 e DV-7: aspettano la designer. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
+| IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | **chiuso**, integrato (`e9b4ac6b0`, 16/10): `components/transactions/import/**`, `wizard/**` e le modali dell'import |
+| TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | **chiuso**, integrato (`e402d3b87`, 16/10). Categorie, interruttore e scrollbar aspettano la designer |
+| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **tecnicamente completo**, tutto nel target (`c179a5144` e docs `5eaf67ff1`, 16/10): lotti 1–9, AF-4 (`ModalBase` `tone="danger"`), AF-6, `app.css` C4. Area m1 1.946 → 170, m2 6 → 0; 323 E2E verdi in 3 slot. Restano AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (punti 26 e 12 della raccolta). Revisione del developer da fare (piano AF, sezione 12) |
+| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **area chiusa** (`979d0a151`, 16/10): lotto dei broker (`939e4998a`) e L4 `LotCustodyModal` (205 → 20, con la prop mista di G-18 tolta). Area m1 1.153 → 159, tutte annotate: BK-1 69, BK-2 84, BK-3 4, BK-5 2, più i `<style>` di T (BK-6); aspettano la designer o il lotto degli interruttori di T |
+| IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | **chiuso**, integrato (`1248b7908`, 16/10) |
 
 Superfici condivise e relativi proprietari:
 

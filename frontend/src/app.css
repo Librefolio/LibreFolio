@@ -205,11 +205,6 @@ html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-800,
-html.dark .text-gray-900 {
-    color: var(--theme-text-primary) !important;
-}
-
 html.dark .text-gray-600,
 html.dark .text-gray-700 {
     color: var(--theme-text-secondary) !important;
@@ -247,34 +242,14 @@ html.dark textarea:where(:not([class*='-lf-']))::placeholder {
     color: var(--theme-text-tertiary);
 }
 
-/* Dark mode: Main background and beige areas */
-html.dark .bg-libre-beige {
-    background-color: var(--theme-bg-primary) !important;
-}
-
-/* Dark mode: Text colors on brand elements */
-html.dark .text-libre-dark {
-    color: var(--theme-text-primary) !important;
-}
-
 html.dark .text-libre-green {
     color: #39af50 !important; /* Lighter green for dark mode */
-}
-
-/* Dark mode: Cards and modals */
-html.dark .bg-white\/90 {
-    background-color: rgba(30, 41, 59, 0.95) !important;
 }
 
 /* Dark mode: Rounded containers */
 html.dark .rounded-xl:where(:not([class*='-lf-'])),
 html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
     border-color: var(--theme-border-primary);
-}
-
-/* Dark mode: Hover states */
-html.dark .hover\:bg-gray-50:hover {
-    background-color: var(--theme-bg-hover) !important;
 }
 
 /* Dark mode: Focus rings */
@@ -341,7 +316,7 @@ html.dark .bg-libre-green {
 
 /* Reduced motion: plain colour swap communicating direction, no keyframe
    sweep. The JS-driven decay-to-neutral timer (same one used for the
-   animated case, in +page.svelte) removes the class again after the flash
+   animated case, in assetDetailLive.svelte.ts) removes the class again after the flash
    window regardless of this media query, so the colour still settles back
    on its own — just as an instant swap instead of an eased fade. */
 @media (prefers-reduced-motion: reduce) {

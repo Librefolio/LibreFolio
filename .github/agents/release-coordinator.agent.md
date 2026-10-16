@@ -240,6 +240,36 @@ Rules:
   `npm install/update`, or `npm audit fix`. Shared Python-environment changes are
   developer-performed while every lane is frozen.
 
+### One machine, many sessions: heavy slots and load
+
+Release 2 runs two coordinators and up to twenty children on one laptop. Lanes keep the
+data apart, not the CPU. On 16/10 the 1-minute load passed 140, and an `all-backend` run
+at load 78 failed five green tests with 30 s `ReadTimeout`s that passed alone.
+
+- **Heavy runs go through slots.** A heavy run is `all-backend`, a whole category, any
+  E2E block, the gallery. Each coordinator owns a fixed number of slots, agreed between
+  coordinators (1.3: two for the release, one for colour). A child runs heavy work only
+  inside a slot you granted, with a cut-off time, and tells you when the slot is free.
+- **Light checks wait for the load.** `front check`, single unit files, Vitest of a few
+  files, ruff/black/Prettier, docs builds: only while the 1-minute load
+  (`sysctl -n vm.loadavg`) is below 50, so that they never starve a running slot.
+- **A slot idle for more than 30 minutes goes to the other coordinator** for that time.
+- **Machine-wide pauses** (a gallery block, a release image build) stop every lane;
+  announce start and end to the children.
+- **A timeout under load is not yet a verdict.** Use `test-triage`; re-run alone at
+  normal load before calling a red product or flaky.
+- **Is a suite alive?** Read the runner's own log and its port, not `ps` alone: the
+  runner, its server and its workers are separate processes, and a stopped run can leave
+  a worker behind.
+- Scripts, logs and slot helpers live in session folders, not `/tmp`: a reboot wipes
+  `/tmp`. Lane data directories in `/tmp` are fine, because the runner recreates them.
+
+### Real data
+
+Reviews and checks on the developer's demo data use the skill `real-data-copy`: one
+reference copy made by the coordinator from stopped production, one working copy per
+workstream, never a `dev.py test` on either, credentials only through a `0600` file.
+
 ## Shared writers
 
 Assign one owner for each shared surface:
