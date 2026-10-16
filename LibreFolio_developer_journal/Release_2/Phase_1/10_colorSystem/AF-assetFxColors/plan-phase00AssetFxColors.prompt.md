@@ -823,6 +823,21 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        >
        > **Restano per uno slot di recupero:** `front-broker detail`, `front-asset asset-list`,
        > `front-transaction tx-import-upload`, e F1 da solo.
+    5. ✅ (16/10, 22:49–23:00) **La correzione di `image-crop` F1** (AF-12; OK del coordinatore alle 22:49, «nel tuo lotto,
+       con un commit solo test»): test-author, sulla sola spec `frontend/e2e/image-crop.spec.ts`, blocco «Dark Mode - Image
+       Crop Components».
+       > **Note implementazione:** prima ho verificato che nessun ramo locale ha commit sulla spec oltre il mio HEAD
+       > (`332b9e268`, letti solo i ref). Il `beforeEach` aspetta il toggle del tema (`toBeVisible`), legge la classe di
+       > `<html>`, clicca solo se non è scuro e asserisce `html.dark` con `toHaveClass`; F1 asserisce lo stesso con la
+       > modale aperta, dopo la navigazione a `/files` e il caricamento. Niente più ripiego sulle classi `dark:`, nessun
+       > `isVisible()` istantaneo usato come attesa. Il tema regge alla navigazione: `app.html` lo riapplica da
+       > `localStorage` prima del primo disegno, e lo cambiano solo il login, il toggle e il salvataggio delle preferenze.
+       > Prove leggere: Prettier verde; `tsc` sul solo file con le opzioni di `tsconfig.e2e.json` verde; `git diff --check`
+       > pulito. L'E2E va nello slot di recupero: il runner non filtra per titolo, quindi gira tutta `image-crop` (42
+       > test), che copre F1–F3 (lo stesso `beforeEach`).
+       >
+       > **Resta debole** (fuori dall'OK): F2 e F3 decidono con `isVisible()` istantanei se aprire le modali, e possono
+       > passare senza aprirne nessuna; nessuno dei due verifica il tema. Seguito possibile, annotato in AF-12.
 
 ## 12. Dove guardarlo (per il developer)
 
