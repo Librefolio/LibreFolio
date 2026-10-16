@@ -2485,6 +2485,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «G-18 · Guardia G3 a runtime nella galleria (16/10)».
+- **G-19 · «Asset detail rolling return» legge il selettore prima che la pagina si assesti** — basso; G, 16/10, verifica
+  FE5c.
+  - `gallery.spec.ts` 5361–5363 legge il pulsante «Rolling Return» subito dopo l'apertura e il clic su 1W, senza
+    aspettare `data-busy="false"` o `data-series-state`.
+  - Un ricaricamento in corso svuota `chartData` e smonta il selettore finché i prezzi non rispondono: il clic stesso,
+    o il ricaricamento completo del poll live su un grafico convertito.
+  - Sotto carico (richieste ferme 25 s) il test va in timeout a 20 s.
+  - Proposta (test-author, perimetro G): aspettare la pagina assestata prima di leggere il selettore.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», verifica di FE5c.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
