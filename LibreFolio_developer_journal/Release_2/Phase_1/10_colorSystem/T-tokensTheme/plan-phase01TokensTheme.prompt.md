@@ -606,7 +606,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
 | 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
-| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | 🔄 scritto e controllato contro `tokens.css` (95/95); checkpoint |
+| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
+| 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | 🔄 prove leggere verdi (gate 66/66, `front check` 0 e 0); checkpoint |
 
 ## Avanzamento
 
@@ -2274,3 +2275,70 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   un'utility di un altro ruolo e una riga tolta dà 4 errori e rc 1.
 > - Link relativi: i 12 dello skill risolvono tutti; i percorsi tra apici esistono. Forma delle 15 tabelle: ogni riga
 >   con le celle dell'intestazione. `git diff --check` pulito.
+
+> ✅ **4 · Integrato** dal coordinatore: `6e569084a` (11:02), il mio ramo portato avanti con fast-forward.
+
+### Palette a parte, ruoli nuovi e correzioni di DV (D-T29, seguito) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 11:02–11:2x). Tre punti, approvati dopo l'elenco dei file:
+> 1. alleggerire lo skill, caricato nel contesto di ogni worker (ora sette): la palette completa in `palette.md`, accanto;
+> 2. ruoli nuovi: `--lf-gain-soft`, `--lf-gain-on-soft`, `--lf-loss-soft`, `--lf-loss-on-soft` (alias delle tinte di
+>    success e danger, per i badge di segno di `OtherPeriodEffectsTable`, chiesti da DV), `--lf-success-hover` e
+>    `--lf-info-hover` (chiesti da IW, D2, e da TR, punto 4), il testo sul fondale (chiesto da IM e BK), con le coppie
+>    nel gate; più `SIGN_BADGE` in `toneClasses.ts`;
+> 3. le nove correzioni di DV alla sezione «Charts», verificate sul codice.
+
+> ✅ **1 · La palette in `palette.md`.** Lo script `/tmp/libreFolio_T_r2/skill_split.py` ha spostato le 11 tabelle (i
+> ruoli, coi valori e l'uso) in `.github/skills/design-tools/design-system/palette.md`; in `SKILL.md` restano i temi, la
+> mappa di `lib/theme/`, una tabella corta dei ruoli per famiglia (utility e uso, nessun valore), le regole, i grafici,
+> come si chiede un ruolo, le decisioni, le domande aperte. `SKILL.md` passa da 45,6 a ~35 KB. Il rimando inverso di
+> `theme-roles` punta anche a `palette.md`. Lo script di controllo ha un modo nuovo, `names`: ogni utility e ogni
+> `--lf-*` nominati nei file devono esistere in `tokens.css` (controllo positivo: due nomi sbagliati, rc 1).
+
+> ✅ **2 · I ruoli** in `frontend/src/lib/theme/tokens.css`, tutti nel blocco derivato, con 7 utility:
+> - `--lf-gain-soft` = `var(--lf-success-soft)`, `--lf-gain-on-soft` = `var(--lf-success-on-soft)`, e lo stesso per
+>   `loss` su danger; niente `-line` (i badge non hanno bordo);
+> - `--lf-success-hover` e `--lf-info-hover` = `color-mix(in oklab, var(--lf-X) 80%, var(--lf-text-primary))`,
+>   provvisori: l'hover si allontana sempre dal testo `on-status` (chiaro `#1f6744` 6,58:1, `#1854c2` 6,54:1; scuro
+>   `#81dcab` 10,63:1, `#639efa` 6,47:1). Un hover più scuro in scuro farebbe scendere info sotto 4,5:1 (la pastiglia
+>   piena è a 4,99:1). I valori calcolati con il risolutore del gate (`/tmp/libreFolio_T_r2/candidates.mjs`);
+> - `--lf-on-overlay` = `#ffffff` nei due temi, provvisorio: 4,98:1 nel caso peggiore, il fondale composto su un campo
+>   bianco (`#edf2f0` farebbe 4,40:1).
+>
+> 102 ruoli, 98 utility. `SIGN_BADGE = {gain, loss}` in `toneClasses.ts`, dopo `SIGN_BAR`. Prettier verde sui due file.
+> Nello skill: le 7 righe in `palette.md` (102 su 102, OK), le famiglie in `SKILL.md`, le coppie nella regola 5, i tre
+> ruoli fra le domande aperte (5), insieme al fatto che gli hover della designer scuriscono anche in scuro.
+
+> ✅ **3 · Le nove correzioni di DV** in `SKILL.md`: i ranghi 4–6 di GR4 verso il polo opposto (`#1C2420` in chiaro, il
+> bianco in scuro; oltre il sesto il ciclo riparte, `familyShade`); l'eccezione delle linee dei broker (`index % 8`: il
+> nono ripete il primo, DV-8); la riga di `chartPalettes.ts` (`growthBrokerColor` legge `categoryColor` a ogni disegno,
+> TD-1b; `SIGNAL_DEFAULT_PALETTE` ancora unica, S9); la riga di `chartTheme.ts` (per allocazione, semi-ciambella, mappe
+> e correlazione solo la cornice: mai una categoria lì); la riga di `roleColors.ts` (un ruolo si aggiunge col suo primo
+> lettore, o fallisce il controllo dei ruoli morti); i proprietari (`drawnColors.ts` di T, creato da R in `0b660632f`;
+> `chartColorScales.ts` di T e DV); il ridisegno al segnale C4 (TD-1b, `renderChart(true)`); le decisioni 6 e 7 di DV
+> sui segnali; la domanda aperta 1 con 2.2, 2.8, 2.9 (verificato: 2,61:1 in chiaro, 2,65:1 in scuro sulla card) e
+> l'eccezione di TD-1.
+
+> ✅ **4 · Il gate** (`test-author`, solo `frontend/src/themeTokens.gate.test.ts`): 168 coppie (erano 140): `gain` e
+> `loss` sulle 6 superfici; le quattro coppie degli stati sulle tinte `gain-soft` e `loss-soft`; `on-status` anche su
+> `success-hover` e `info-hover`; `on-overlay` sul fondale composto su ciascuna superficie. **L'estensione `over`:** una
+> coppia può nominare la superficie opaca su cui il suo fondo traslucido va composto (`over()` di `theme-roles.mjs`); un
+> fondo traslucido senza `over` è rifiutato come prima; un `over` traslucido o inesistente ha il suo messaggio; il nome
+> della coppia, il controllo «una volta sola» e le eccezioni contano anche `over`. La misura è in `measurePair`, con un
+> controllo positivo nuovo (mezzo velo nero sul bianco: grigio opaco, il bianco a 3,98:1). 18 test → 19. Mutazioni
+> (fatte e annullate da test-author nel solo file del gate): `over` traslucido o sbagliato, coppia senza `over`,
+> doppione, eccezione senza `over`, riga della composizione tolta: tutte rosse come atteso.
+> - Le coppie più strette (4,52, 4,53, 4,54) ripetono coppie degli stati già misurate, perché i ruoli di segno copiano
+>   i valori degli stati: saranno le prime da guardare se la designer separa le tinte.
+> - Suggerimento di test-author, non fatto: un controllo che il fondale abbia lo stesso valore nei due temi (la
+>   misura sul campo bianco del tema chiaro copre il caso peggiore del tema scuro solo finché è così).
+
+> ✅ **5 · Due voci in più** (DV, dal coordinatore, 11:3x): `SIGN_TEXT.riskTable` (le tabelle del rischio) e
+> `SIGN_BAR.histogram` (le barre dell'istogramma dei rendimenti, traslucide come `tornado`), con i valori che DV usa già in
+> W6-a; le adotta dopo l'ingresso di questo lotto.
+
+> ✅ **6 · Prove leggere** (sotto `nice`; carico 141 alle 11:28, la 1.3 ha le sue corsie pesanti): Prettier verde su
+> `tokens.css`, `toneClasses.ts` e il gate; `--check` pulito; Vitest dei due gate 66/66; i 10 file mirati (i due gate,
+> `roleColors.test.ts`, i test del Designer Lab che leggono `tokens.css`) 414/414; `front check` 0 e 0 (copre i tipi del
+> gate, che test-author non poteva controllare); `svelte-check` 0 e 0 dopo le due voci; `palette.md` 102 su 102 contro
+> `tokens.css`; nomi di `SKILL.md` e `palette.md` tutti esistenti; `git diff --check` pulito.
