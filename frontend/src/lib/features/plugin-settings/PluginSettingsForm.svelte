@@ -210,7 +210,7 @@
                                 <div class="min-w-0 flex-1">
                                     <PasswordInput
                                         autocomplete="new-password"
-                                        bind:value={() => form.texts[field.key] ?? '', (text) => update(field.key, typed(form, field.key, text))}
+                                        bind:value={() => own(form.texts, field.key) ?? '', (text) => update(field.key, typed(form, field.key, text))}
                                         disabled={saving}
                                         hasError={!!problem || !!refusal}
                                         id={inputId}

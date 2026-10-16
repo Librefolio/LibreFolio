@@ -316,6 +316,14 @@ The Onboarding category of Preferences with each guide's status and its Replay b
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Guide Replay">
 </div>
 
+### 🧩 Plugin Settings
+
+The Plugins tab on mobile: each plugin's settings in a form of its own.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Plugin Settings">
+</div>
+
 ### 🛡️ Global Settings (Admin)
 
 System-wide configuration on mobile.
