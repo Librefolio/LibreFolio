@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Check a backup before restoring it**: `dev.py backup restore ARCHIVE --dry-run` and `/api/v1/backup/restore/*` unpack the archive into a copy, bring it to this version's schema, check it and report what a restore would do — the backup's administrators, the migrations applied, the rows — without touching the instance. Hosting providers can cap the upload with `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB by default in the managed profile).
 - **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again. A server variable can set the instance-wide ones and lock them.
 - **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
+- **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
 
 ### 🔄 Changed
 
