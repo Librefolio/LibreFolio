@@ -186,7 +186,7 @@
 
 <PlannerDialog open title={$t('tools.pacAllocator.planner.distribution.title', {default: 'Copy current distribution'})} {testid} {onclose} maxWidth="3xl">
     <div class="space-y-3" data-testid="{testid}-body" data-state={load.status} data-status={proposal?.status ?? ''} aria-busy={reading}>
-        <p class="flex items-start gap-0.5 text-sm text-gray-700 dark:text-gray-300" data-testid="{testid}-subtitle">
+        <p class="flex items-start gap-0.5 text-sm text-lf-secondary" data-testid="{testid}-subtitle">
             <span>{$t('tools.pacAllocator.planner.distribution.subtitle', {default: 'How much each of these Assets weighs today in the ticked Brokers, counting only these Assets: together they make 100%. Cash and the other Assets you hold do not count.'})}</span>
             <HelpTip
                 label={$t('tools.pacAllocator.planner.distribution.title', {default: 'Copy current distribution'})}
@@ -254,24 +254,24 @@
 <!-- R13.1: a two-column table (name | before → after), not a list of «name: x% → y%» lines. -->
 <PlannerDialog open={confirming} title={$t('tools.pacAllocator.planner.distribution.confirmTitle', {default: 'Replace the targets you set?'})} testid="{testid}-confirm" onclose={() => (confirming = false)} maxWidth="lg" zIndex={70}>
     <p data-testid="{testid}-confirm-message">{$t('tools.pacAllocator.planner.distribution.confirmMessage', {default: 'These targets change:'})}</p>
-    <div class="max-h-80 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <div class="max-h-80 overflow-auto rounded-lg border border-lf-subtle">
         <table class="{TABLE} w-full table-fixed" data-testid="{testid}-confirm-table">
-            <thead class="sticky top-0 bg-gray-50 dark:bg-gray-900">
+            <thead class="sticky top-0 bg-lf-panel">
                 <tr>
                     <th scope="col" class={TH}>{$t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'})}</th>
                     <th scope="col" class="{TH} w-48 text-right">{$t('tools.pacAllocator.planner.distribution.changeColumn', {default: 'Target'})}</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
+            <tbody class="divide-y divide-lf-subtle">
                 {#each proposal?.changes ?? [] as change (change.assetKey)}
                     {@const asset = draft.asset(change.assetKey)}
                     <tr data-testid="{testid}-confirm-change" data-asset-key={change.assetKey}>
-                        <td class="px-3 py-2 align-middle text-gray-800 dark:text-gray-200">
+                        <td class="px-3 py-2 align-middle text-lf-primary">
                             <AssetNameCell label={change.label} iconUrl={asset?.iconUrl ?? null} assetType={asset?.assetClass.toUpperCase() ?? null} />
                         </td>
-                        <td class="whitespace-nowrap px-3 py-2 text-right align-middle tabular-nums text-gray-800 dark:text-gray-200">
-                            <span class="text-gray-500 dark:text-gray-400" data-testid="{testid}-confirm-from">{formatPlannerPercentUnits(change.from)}</span>
-                            <span class="px-1 text-gray-400" aria-hidden="true">→</span>
+                        <td class="whitespace-nowrap px-3 py-2 text-right align-middle tabular-nums text-lf-primary">
+                            <span class="text-lf-muted" data-testid="{testid}-confirm-from">{formatPlannerPercentUnits(change.from)}</span>
+                            <span class="px-1 text-lf-muted" aria-hidden="true">→</span>
                             <span class="font-semibold" data-testid="{testid}-confirm-to">{formatPlannerPercentUnits(change.to)}</span>
                         </td>
                     </tr>

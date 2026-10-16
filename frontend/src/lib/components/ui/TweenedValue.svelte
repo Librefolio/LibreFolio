@@ -65,7 +65,7 @@
 </script>
 
 {#if loading}
-    <span class="inline-block h-6 w-20 bg-gray-200 dark:bg-slate-700 rounded animate-pulse align-middle"></span>
+    <span class="inline-block h-6 w-20 bg-lf-neutral rounded animate-pulse align-middle"></span>
 {:else}
     <span class={className}>{format($displayValue)}</span>
 {/if}

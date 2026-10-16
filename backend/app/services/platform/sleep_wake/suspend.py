@@ -4,16 +4,18 @@ Owner: workstream Z. A Fly Machine reaches the Machines API of its own app throu
 without a token: ``POST http://flaps/v1/apps/<app>/machines/<machine>/suspend`` freezes the machine (memory and CPU
 state) until a request reaches it again, when Fly's proxy resumes it where it stopped. The process does not see the
 suspension: the call may return after the machine has been resumed. ``FLY_APP_NAME`` and ``FLY_MACHINE_ID`` are set by
-Fly on every machine; without them this is not a Fly machine, and nothing is sent.
+Fly on every machine and read through ``config/sleep_wake.py``; without them this is not a Fly machine, and nothing is
+sent.
 
 Only the idle monitor calls it (``idle_monitor.py``), with ``LIBREFOLIO_IDLE_SUSPEND_MODE=fly``.
 """
 
-import os
 from collections.abc import Mapping
 from urllib.parse import quote
 
 import httpx
+
+from backend.app.config.sleep_wake import fly_machine_identity
 
 #: The Unix socket of the Machines API inside a Fly Machine.
 FLY_API_SOCKET = "/.fly/api"
@@ -43,16 +45,12 @@ class FlySuspender:
             return self._transport
         return httpx.AsyncHTTPTransport(uds=FLY_API_SOCKET)
 
-    def _identity(self) -> tuple[str, str]:
-        if self._environ is None:
-            return os.environ.get("FLY_APP_NAME", "").strip(), os.environ.get("FLY_MACHINE_ID", "").strip()
-        return self._environ.get("FLY_APP_NAME", "").strip(), self._environ.get("FLY_MACHINE_ID", "").strip()
-
     async def suspend(self) -> None:
         """Ask for the suspension of this machine; return once the Machines API has accepted it (any 2xx)."""
-        app, machine = self._identity()
-        if not app or not machine:
+        identity = fly_machine_identity(self._environ)
+        if identity is None:
             raise SuspendError("not_on_fly", "FLY_APP_NAME and FLY_MACHINE_ID are not set: this is not a Fly.io machine")
+        app, machine = identity
         url = f"{FLY_API_BASE_URL}/v1/apps/{quote(app, safe='')}/machines/{quote(machine, safe='')}/suspend"
         try:
             async with httpx.AsyncClient(transport=self.transport_factory(), timeout=self._timeout) as client:

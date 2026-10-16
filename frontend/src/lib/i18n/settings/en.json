@@ -162,7 +162,9 @@
           "last6h": "Last 6 hours",
           "last24h": "Last 24 hours",
           "last7d": "Last 7 days",
-          "last30d": "Last 30 days"
+          "last30d": "Last 30 days",
+          "deferred": "Deferred: provider paused",
+          "retryAt": "Retry at {time}"
         },
         "status": {
           "title": "Scheduler Status",
@@ -170,7 +172,9 @@
           "neverRun": "Never run yet",
           "details": "Details…",
           "configure": "Configure…",
-          "configSummary": "Every {freq}min · {times} · {days}"
+          "configSummary": "Every {freq}min · {times} · {days}",
+          "retryAt": "Paused items retried at {time}",
+          "nextAttemptAt": "Failed: next attempt at {time}"
         },
         "timezone": "Timezone",
         "timezoneChangeWarning": "Changing the timezone keeps these clock times and weekdays unchanged, but changes the actual UTC execution instant.",

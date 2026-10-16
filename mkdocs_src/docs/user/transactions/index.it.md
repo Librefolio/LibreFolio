@@ -76,7 +76,7 @@ Il workspace è una griglia di righe in bozza — contrassegnate **nuova**, **mo
     <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Workspace bulk con il banner dei campi da verificare aperto e la riga della voce cliccata evidenziata nella griglia">
 </div>
 
-Dopo un salvataggio, un **Promuovi coppia** o uno **Scollega coppia**, la pagina Transazioni cancella la sua selezione, poiché quelle righe potrebbero essere cambiate; chiudere o annullare la mantiene.
+Dopo un salvataggio, un **Promuovi coppia** o uno **Scollega coppia**, la pagina Transazioni cancella la sua selezione, poiché quelle righe potrebbero essere cambiate; chiudere o annullare la mantiene. Se un **Promuovi coppia** o uno **Scollega coppia** viene rifiutato, non cambia nulla: un messaggio d'errore dice perché, e la conferma resta aperta.
 
 ---
 
