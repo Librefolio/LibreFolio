@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
 - Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
 - Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
+- Live prices on the Assets pages: after a failed refresh the next one waits longer, up to 10 minutes, and while every provider asked about is paused after too many requests, the page waits for the pause to end instead of asking every 30–60 s. Administrators find how provider pauses work in Admin › Sleep and Wake › Provider Pauses.
 
 #### 🎨 A new colour palette
 
@@ -166,6 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With negative cash, the Dashboard allocation history no longer cuts the holdings at 100 %: the overdraft is drawn below zero and listed on its own tooltip row, and a note under the pie states it, masked in privacy mode.
 - Flags in chart legends, labels, axes and tooltips are drawn with the app's flag font on every system; Windows showed two letters.
 - Chart tooltips show names, captions, currency codes and flags as plain text, so a name with HTML in it stays text.
+- API: a **Currency Exchange** whose two legs are on different brokers is refused (`pairBrokerMismatch`): the app always writes both legs on one broker, but the API accepted such a pair.
 
 #### 🔒 Security
 
