@@ -23,7 +23,7 @@ from backend.app.schemas.signals import (
     SignalPreviewResponse,
     SignalPricePoint,
 )
-from backend.app.services.signal_service import (
+from backend.app.services.signals.service import (
     SignalRequestValidationError,
     SignalService,
 )
