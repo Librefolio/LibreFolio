@@ -1344,7 +1344,11 @@ async def test_close_and_rebuy_does_not_reset_pair_age(session):
 
 
 @pytest.mark.asyncio
-async def test_each_income_and_residual_wac_use_their_own_fx_date(session):
+async def test_each_income_uses_its_own_fx_date_and_wac_is_used_as_given(session):
+    """Every income row is converted at its own date; the WAC, already in the report currency, is not converted at all.
+
+    200 ZAR @ 20 + 300 ZAR @ 30 = 10 + 10 XTS over 10 units -> 2 XTS per unit; 2 / WAC 10 XTS = 0.2.
+    """
     as_of = date(2042, 12, 31)
     ledger = await _make_ledger(session)
     first_income_date = date(2042, 3, 1)
@@ -1380,13 +1384,6 @@ async def test_each_income_and_residual_wac_use_their_own_fx_date(session):
                 rate=Decimal("30"),
                 source="TEST",
             ),
-            FxRate(
-                date=as_of,
-                base="XTS",
-                quote="ZAR",
-                rate=Decimal("40"),
-                source="TEST",
-            ),
         ]
     )
     await session.flush()
@@ -1398,24 +1395,160 @@ async def test_each_income_and_residual_wac_use_their_own_fx_date(session):
             YieldOnCostPositionInput(
                 asset_id=ledger.asset_id,
                 broker_id=ledger.broker_id,
-                wac_per_unit=Decimal("400"),
-                wac_currency="ZAR",
+                wac_per_unit=Decimal("10"),
+                wac_currency="XTS",
             )
         ],
         target_currency="XTS",
         as_of_date=as_of,
     )
-    result = calculations[(ledger.asset_id, ledger.broker_id)].result
+    calculation = calculations[(ledger.asset_id, ledger.broker_id)]
+    result = calculation.result
 
     assert result.status == YieldOnCostStatus.AVAILABLE
     assert result.value == Decimal("0.2")
     assert result.provenance.gross_income_per_unit is not None
     assert result.provenance.gross_income_per_unit.code == "XTS"
     assert result.provenance.gross_income_per_unit.amount == Decimal("2")
+    assert calculation.wac_per_unit == Decimal("10")
+    wac_entries = [entry for entry in result.provenance.fx if entry.purpose == "wac"]
+    assert wac_entries == [], f"the WAC must not be converted, got FX provenance {wac_entries}"
     fx_by_purpose_and_date = {(entry.purpose, entry.requested_date): entry for entry in result.provenance.fx}
+    assert set(fx_by_purpose_and_date) == {
+        ("income", first_income_date),
+        ("income", second_income_date),
+    }
     assert fx_by_purpose_and_date[("income", first_income_date)].rate_date == first_income_date
     assert fx_by_purpose_and_date[("income", second_income_date)].rate_date == second_income_date
-    assert fx_by_purpose_and_date[("wac", as_of)].rate_date == as_of
+
+
+@pytest.mark.asyncio
+async def test_wac_in_another_currency_than_report_currency_is_refused(session):
+    """A WAC is a dateless historical average: it must arrive in the report currency, never be converted at as_of.
+
+    The XTS/ZAR rate seeded on as_of is the trap: the pre-MF-O code used it to convert the
+    ZAR WAC at that day's rate and returned a number instead of refusing the input. The
+    valid XTS position alongside proves that one foreign WAC refuses the whole call.
+    """
+    as_of = date(2043, 12, 31)
+    ledger = await _make_ledger(session)
+    other_broker_id = await _add_broker(session, user_id=ledger.user_id)
+    session.add_all(
+        [
+            _transaction(ledger, TransactionType.BUY, on=date(2042, 1, 1), quantity="10", amount="-100"),
+            _transaction(
+                ledger,
+                TransactionType.DIVIDEND,
+                on=date(2043, 6, 1),
+                amount="20",
+                currency="XTS",
+            ),
+            FxRate(
+                date=as_of,
+                base="XTS",
+                quote="ZAR",
+                rate=Decimal("40"),
+                source="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    with pytest.raises(ValueError, match="report currency"):
+        await calculate_yield_on_cost_for_positions(
+            session,
+            user_id=ledger.user_id,
+            positions=[
+                YieldOnCostPositionInput(
+                    asset_id=ledger.asset_id,
+                    broker_id=other_broker_id,
+                    wac_per_unit=Decimal("10"),
+                    wac_currency="XTS",
+                ),
+                YieldOnCostPositionInput(
+                    asset_id=ledger.asset_id,
+                    broker_id=ledger.broker_id,
+                    wac_per_unit=Decimal("400"),
+                    wac_currency="ZAR",
+                ),
+            ],
+            target_currency="XTS",
+            as_of_date=as_of,
+        )
+
+
+@pytest.mark.asyncio
+async def test_wac_in_report_currency_is_never_sent_to_fx_conversion(
+    session,
+    monkeypatch,
+):
+    """Only income rows reach convert_bulk; the WAC is used exactly as supplied.
+
+    100 ZAR @ 25 = 4 XTS over 10 units -> 0.4 XTS per unit; 0.4 / WAC 8 XTS = 0.05.
+    """
+    as_of = date(2044, 12, 31)
+    income_date = date(2044, 4, 1)
+    wac = Decimal("8")
+    ledger = await _make_ledger(session)
+    session.add_all(
+        [
+            _transaction(ledger, TransactionType.BUY, on=date(2043, 1, 1), quantity="10", amount="-100"),
+            _transaction(
+                ledger,
+                TransactionType.DIVIDEND,
+                on=income_date,
+                amount="100",
+                currency="ZAR",
+            ),
+            FxRate(
+                date=income_date,
+                base="XTS",
+                quote="ZAR",
+                rate=Decimal("25"),
+                source="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    real_convert_bulk = yoc_module.convert_bulk
+    sent: list[tuple[str, Decimal, str, date]] = []
+
+    async def recording_convert_bulk(db, inputs, *, raise_on_error):
+        sent.extend((amount.code, amount.amount, target_currency, requested_date) for amount, target_currency, requested_date in inputs)
+        return await real_convert_bulk(db, inputs, raise_on_error=raise_on_error)
+
+    monkeypatch.setattr(yoc_module, "convert_bulk", recording_convert_bulk)
+
+    calculations = await calculate_yield_on_cost_for_positions(
+        session,
+        user_id=ledger.user_id,
+        positions=[
+            YieldOnCostPositionInput(
+                asset_id=ledger.asset_id,
+                broker_id=ledger.broker_id,
+                wac_per_unit=wac,
+                wac_currency="XTS",
+            )
+        ],
+        target_currency="XTS",
+        as_of_date=as_of,
+    )
+    calculation = calculations[(ledger.asset_id, ledger.broker_id)]
+    result = calculation.result
+
+    wac_inputs = [entry for entry in sent if entry[1] == wac or entry[3] == as_of]
+    assert wac_inputs == [], f"the WAC reached convert_bulk: {wac_inputs}"
+    assert sent == [("ZAR", Decimal("100"), "XTS", income_date)]
+    assert result.status == YieldOnCostStatus.AVAILABLE
+    assert result.value == Decimal("0.05")
+    assert result.provenance.gross_income_per_unit is not None
+    assert result.provenance.gross_income_per_unit.code == "XTS"
+    assert result.provenance.gross_income_per_unit.amount == Decimal("0.4")
+    assert [(entry.purpose, entry.requested_date, entry.rate_date) for entry in result.provenance.fx] == [
+        ("income", income_date, income_date),
+    ]
+    assert calculation.wac_per_unit == wac
 
 
 @pytest.mark.asyncio
@@ -1499,66 +1632,53 @@ async def test_missing_or_nonpositive_wac_is_unavailable(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "converted_wac",
-    [Decimal("0"), Decimal("-1")],
-    ids=["zero", "negative"],
+    ("wac", "wac_currency", "expected_status", "expected_value", "expected_reason", "expected_wac"),
+    [
+        (Decimal("10"), "eur", YieldOnCostStatus.AVAILABLE, Decimal("0.2"), None, Decimal("10")),
+        (None, "USD", YieldOnCostStatus.UNAVAILABLE, None, YieldOnCostUnavailableReason.MISSING_WAC, None),
+        (Decimal("10"), None, YieldOnCostStatus.UNAVAILABLE, None, YieldOnCostUnavailableReason.MISSING_WAC, None),
+        (Decimal("10"), "", YieldOnCostStatus.UNAVAILABLE, None, YieldOnCostUnavailableReason.MISSING_WAC, None),
+    ],
+    ids=["lowercase-report-currency", "no-wac-in-foreign-currency", "no-currency", "empty-currency"],
 )
-async def test_converted_nonpositive_wac_is_typed_unavailable(
+async def test_wac_refusal_spares_normalized_report_currency_and_missing_wac(
     session,
-    monkeypatch,
-    converted_wac,
+    wac,
+    wac_currency,
+    expected_status,
+    expected_value,
+    expected_reason,
+    expected_wac,
 ):
-    """Positive native WAC may not become zero/negative after conversion."""
+    """Only a priced WAC whose normalized code differs from the report currency is refused.
+
+    Replaces test_converted_nonpositive_wac_is_typed_unavailable: nothing converts the WAC any
+    more, so a positive WAC can no longer turn non-positive (pinned by
+    test_wac_in_report_currency_is_never_sent_to_fx_conversion) and the foreign-WAC refusal is
+    test_wac_in_another_currency_than_report_currency_is_refused; what is left to pin is where
+    the refusal stops: codes compared after normalization, missing WAC still typed MISSING_WAC.
+    """
     ledger = await _make_ledger(session)
     session.add_all(
         [
-            _transaction(
-                ledger,
-                TransactionType.BUY,
-                on=date(2024, 1, 1),
-                quantity="10",
-                amount="-100",
-            ),
-            _transaction(
-                ledger,
-                TransactionType.DIVIDEND,
-                on=date(2025, 5, 1),
-                amount="20",
-            ),
+            _transaction(ledger, TransactionType.BUY, on=date(2024, 1, 1), quantity="10", amount="-100"),
+            _transaction(ledger, TransactionType.DIVIDEND, on=date(2025, 5, 1), amount="20"),
         ]
     )
     await session.flush()
 
-    async def convert_with_nonpositive_wac(
-        _db,
-        inputs,
-        *,
-        raise_on_error,
-    ):
-        assert raise_on_error is False
-        results = []
-        for amount, target_currency, requested_date in inputs:
-            converted = Currency(code=target_currency, amount=converted_wac) if amount.code == "USD" else amount
-            results.append((converted, requested_date, False))
-        return results, []
-
-    monkeypatch.setattr(
-        yoc_module,
-        "convert_bulk",
-        convert_with_nonpositive_wac,
-    )
-
     calculation = await _calculate(
         session,
         ledger,
-        wac=Decimal("10"),
-        wac_currency="USD",
+        wac=wac,
+        wac_currency=wac_currency,
     )
 
-    assert calculation.result.status == YieldOnCostStatus.UNAVAILABLE
-    assert calculation.result.value is None
-    assert calculation.result.reason == YieldOnCostUnavailableReason.NON_POSITIVE_WAC
-    assert calculation.wac_per_unit == converted_wac
+    assert calculation.result.status == expected_status
+    assert calculation.result.value == expected_value
+    assert calculation.result.reason == expected_reason
+    assert calculation.result.provenance.fx == []
+    assert calculation.wac_per_unit == expected_wac
 
 
 @pytest.mark.asyncio
