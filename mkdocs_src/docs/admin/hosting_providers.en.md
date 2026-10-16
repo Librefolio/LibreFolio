@@ -37,7 +37,7 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes four things:
+Today the profile changes seven things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
@@ -45,12 +45,33 @@ Today the profile changes four things:
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Listed read-only by `GET /api/v1/settings/plugins` | Not listed, and a save to it is refused as if it did not exist |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
+| Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
+| Frame protection: only the app's own pages may show it in a frame | Off | On |
+| A report-only Content-Security-Policy on the pages of the web app | Off | On |
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
 - The interface is the same in both profiles.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
+- Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
+  either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
+  for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
+  «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
+  set always wins over the profile, even one equal to the `selfhosted` default:
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+- **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
+  `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
+  LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
+  another address, shows the app in a frame, the browser refuses to display it there: set
+  `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
+- **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
+  documentation, not the API), it tells the browser where a page may load its content from; the
+  browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
+  has no address to collect them. Today the console shows at least the web app's own inline scripts:
+  the one that applies the theme before the page appears, and the start script SvelteKit writes into
+  the page. These reports are expected: listing what an enforced policy would block is what this
+  report-only phase is for.
 
 ### 🔑 A Session Key of 32 Characters or More {: #managed-jwt-secret }
 
@@ -87,6 +108,8 @@ your users sign in again after each restart. See
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+- If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
+  managed profile turns frame protection on.
 
 ---
 
@@ -357,3 +380,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
+- 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
+  The headers of the managed profile, directive by directive
