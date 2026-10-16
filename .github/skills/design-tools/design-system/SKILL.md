@@ -56,7 +56,7 @@ themes, and every later change of the designer, with no `dark:` at all.
 | File | What it holds | A component uses it when… | Owner | To add an entry |
 |---|---|---|---|---|
 | `tokens.css` | The 102 roles of the two themes (a light, a derived and a dark block) and the `@theme inline` table that turns 98 of them into utilities (`bg-lf-card`…) | it draws any colour: as a utility, or `var(--lf-…)` in a `<style>` | T | Only T: «Asking for a new role» below |
-| `components/dialogs.css`, `files.css`, `media.css`, `table.css` | The component tokens `--lf-cmp-<component>-<role>` (with `-dark` twins) that workstream R moved out of the `<style>` blocks of the dialogs, files, media and tables, at pixel parity: legacy values | it is one of those components; it loads its file with a side-effect import (`import '$lib/theme/components/table.css'`) | T | **Never a new token**: a new colour is a role. Migrating such a component replaces its `var(--lf-cmp-…)` with roles and deletes the tokens nobody reads any more (`src/themeComponentTokens.gate.test.ts`: each token defined once, imported where read, read by someone) |
+| `components/media.css`, `table.css` | The last component tokens `--lf-cmp-<component>-<role>` (with `-dark` twins) that workstream R moved out of the `<style>` blocks at pixel parity, all categorical and waiting for the categorical roles: the image icon of `FileUploader` (`media.css`, 2 tokens, one colour per file type, AF-11) and the portfolio and benchmark row tints of `RiskReturnLevel` (`table.css`, 4, the designer's point 2.5). The dialogs, the files, the rest of the media and the tables, `CompactCashCell` included, read the roles | it is `FileUploader` or `RiskReturnLevel`; it loads its file with a side-effect import (`import '$lib/theme/components/table.css'`) | T | **Never a new token**: a new colour is a role. Migrating such a component replaces its `var(--lf-cmp-…)` with roles, deletes the tokens nobody reads any more, and deletes the file once it holds none (`src/themeComponentTokens.gate.test.ts`: each token defined once, imported where read, read by someone; every area file defines tokens) |
 | `toneClasses.ts` | Whole class strings on the roles: signed figures (`SIGN_TEXT`, `SIGN_BAR`, `SIGN_BADGE`), diverging measures (`POLARITY_TONES`), states (`STATUS_TONES`: sync, PAC, toasts, import report and file sets, risk chips, data quality, live updates). The kinds told apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are categorical, still palette classes | it colours a sign, a polarity, a state or a kind: it takes the entry by name; the threshold (`>= 0`, `> 0`) stays with the caller | T | A new named entry, a whole literal string of role utilities (never assembled), in the table of its meaning. An entry keeps its own name even when its classes equal another's |
 | `chartCategories.ts` | The fixed colour of every asset type and sector, of the cash and of «unclassified», in both themes (GR1–GR3); the key sequences (GR5); `categoryColor`, `sequenceColor`, `lookupKey`, `isUnclassifiedCountry` | it draws a category: a chart, its legend, its tooltip | DV | A new key (a new asset type or sector) takes the designer's pair, one literal per line (C2), in her table order. Until then it reads as unclassified |
 | `chartShades.ts` | The colour arithmetic of the category charts: `mixOklab`, `familyShade` (subtypes, GR4; rounds past a sequence, GR5), `shadePoles`, `scaleColor` | it draws a subtype, a sequence past its end, a value on a continuous scale | DV | A new mixing rule here, with its test. Never mix colours in a component |
@@ -201,7 +201,8 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). The selects of `ui/select` do
   it for every option, a caller's snippet included, with one rule in their `<style>`:
   `[data-highlighted='true'] :global(.text-lf-muted) { color: var(--lf-text-secondary) }` (`TreeSelect`: its active and
-  hovered options). A new list that tints its rows does the same, and publishes the state it keys on. A selected chip
+  hovered options); so does `DataTable` for its selected, highlighted and analyzed rows, HtmlCell cells included. A new
+  list that tints its rows does the same, and publishes the state it keys on. A selected chip
   under the pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to
   3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
@@ -418,6 +419,12 @@ Until she answers, follow what is written here and do not decide them in a compo
 
    Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
    never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
+7. **The accent of an empty page.** The empty states of the asset and the FX lists draw an icon in a tinted circle: the
+   assets' now takes the app's accent (`bg-lf-selected`, `text-lf-link`), the FX's is still amber, a page colour no role
+   covers (`warning` would read as a warning). Under review: one accent per page, or the app's green for every empty
+   state.
+
+   Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
 
 **Values waiting for her confirmation** (backlog TC-8):
 - the seven minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in

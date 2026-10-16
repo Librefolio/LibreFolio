@@ -5,7 +5,6 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import '$lib/theme/components/table.css';
 
     interface BulkActionInfo {
         id: string;
@@ -75,17 +74,18 @@
         padding: 0.25rem 0.5rem;
         border: 1px solid transparent;
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-bg);
+        background: var(--lf-selected);
         font-size: 0.8125rem;
-        color: var(--lf-cmp-datatable-toolbar-selected-count-btn-text);
+        color: var(--lf-link);
         font-weight: 500;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .selected-count-btn:hover {
-        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-bg);
-        border-color: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-border);
+        background: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        border-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        color: var(--lf-text-primary);
     }
 
     .selected-count-btn .clear-icon {
@@ -96,16 +96,6 @@
 
     .selected-count-btn:hover .clear-icon {
         opacity: 1;
-    }
-
-    :global(.dark) .selected-count-btn {
-        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-bg-dark);
-        color: var(--lf-cmp-datatable-toolbar-selected-count-btn-text-dark);
-    }
-
-    :global(.dark) .selected-count-btn:hover {
-        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-bg-dark);
-        border-color: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-border-dark);
     }
 
     .bulk-actions {
@@ -121,42 +111,23 @@
         height: 28px;
         border: none;
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-bg);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .bulk-btn:hover {
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-bg);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .bulk-btn.danger {
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-text);
+        color: var(--lf-danger);
     }
 
     .bulk-btn.danger:hover {
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text);
-    }
-
-    :global(.dark) .bulk-btn {
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-bg-dark);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-text-dark);
-    }
-
-    :global(.dark) .bulk-btn:hover {
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-text-dark);
-    }
-
-    :global(.dark) .bulk-btn.danger {
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-text-dark);
-    }
-
-    :global(.dark) .bulk-btn.danger:hover {
-        background: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg-dark);
-        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text-dark);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger-on-soft);
     }
 </style>

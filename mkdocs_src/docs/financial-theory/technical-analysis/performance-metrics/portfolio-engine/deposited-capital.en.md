@@ -149,7 +149,7 @@ For example, $A$ receives a deposit of 1,000 USD on day 0 at 0.90 EUR per USD ($
 
 In a view with only some brokers, a TRANSFER leg whose other leg is outside $S$ — or missing, or never linked — cannot form an internal pair. It is in-kind capital at market value on its own date: $+\mathrm{MV}$ for securities received, $-\mathrm{MV}$ for securities sent, at that broker's share — at cost for a security with no price at all, as above — and nothing if the security cannot be valued that day. Unlike an internal flow, it moves the view's CapitalBaseline, so the view's TotalPnL, ROI, TWRR and MWRR treat it as capital, like an in-kind ADJUSTMENT. A CASH\_TRANSFER or FX\_CONVERSION leg in the same position is external cash at its amount, like a deposit or a withdrawal.
 
-A leg loses its link when the broker holding the other leg is deleted. Such an orphan follows the same rules in every view, the full one included.
+When the broker holding the other leg is deleted, the remaining leg becomes what a split of the pair leaves, and the legs older versions left are converted the same way at startup: securities become an ADJUSTMENT — in-kind capital at cost when it carries a cost basis (table above), no longer at market value — and cash a DEPOSIT or a WITHDRAWAL. A leg that sent securities stays a TRANSFER without its link when its average cost at its broker cannot be computed, for instance for a missing exchange rate. Such an orphan follows the same rules in every view, the full one included.
 
 Comparing a broker's own view with the combined view:
 

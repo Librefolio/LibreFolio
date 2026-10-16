@@ -69,10 +69,12 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
@@ -317,8 +319,9 @@
     // Derived
     // =========================================================================
 
-    /** True when the chart end date is today (or later) → show live price from provider */
-    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
+    /** True when the chart end date is today (or later) → show live price from provider. Today on the user's calendar,
+     *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
+    let isHeadToday = $derived(dateEnd >= todayIso());
 
     let lineData: LineDataPoint[] = $derived(
         chartData.map((p: any) => ({
@@ -1683,6 +1686,11 @@
 
     let syncAllFxPairs = $derived(requiredFxPairs.filter((p) => p.status !== 'missing').map((p) => p.slug));
 
+    /** The sync dialog's targets whose shown data holds a stored row in its range (C-66), for its warning: this asset
+     * from its chart, a pair from its rate store; a comparison asset is not counted. */
+    let syncAssetsWithData = $derived(showPageSyncModal && hasStoredPointInRange(chartData, syncDateStart, dateEnd) ? [data.assetId] : []);
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     function handleSync() {
         showPageSyncModal = true;
     }
@@ -2747,6 +2755,16 @@
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+        <PageSyncModal
+            bind:open={showPageSyncModal}
+            dateStart={syncDateStart}
+            {dateEnd}
+            assets={syncAllAssets}
+            fxPairs={syncAllFxPairs}
+            assetsWithDataInRange={syncAssetsWithData}
+            fxPairsWithDataInRange={syncFxPairsWithData}
+            onsynced={handlePageSyncComplete}
+            onclose={() => (showPageSyncModal = false)}
+        />
     {/if}
 </div>

@@ -784,8 +784,8 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
     it('rejects the local escapers that leave quotes alone, whatever they escape', () => {
         // `esc` and `escHtml` stop `<` but not `"`: in `title="${esc(raw)}"` a quote still closes the
         // attribute. So the call is the finding even when its argument is no text field at all.
-        expect(caught('src/lib/utils/transactions/importCompare.ts', 'const h = `<span>${escHtml(label)}</span>`;')).toEqual(['1  escHtml(label)']);
-        expect(caught('src/lib/components/transactions/modals/ImportWizardModal.svelte', '<script lang="ts">\n    const h = `<b title="${esc(raw)}">${esc(file.name)}</b>`;\n</script>')).toEqual(['2  esc(raw)', '2  esc(file.name)']);
+        expect(caught('src/lib/features/transactions/import/importCompare.ts', 'const h = `<span>${escHtml(label)}</span>`;')).toEqual(['1  escHtml(label)']);
+        expect(caught('src/lib/features/transactions/import/ImportWizardModal.svelte', '<script lang="ts">\n    const h = `<b title="${esc(raw)}">${esc(file.name)}</b>`;\n</script>')).toEqual(['2  esc(raw)', '2  esc(file.name)']);
         // The same call on a value no HTML ever sees is not a finding.
         expect(caught('a.ts', 'const plain = `${esc(raw)} (${count})`;')).toEqual([]);
     });
@@ -902,7 +902,7 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
 
         // The walk reaches the files that build HTML by hand: a scan of the wrong directory, or a
         // parser that silently reads nothing, would report them clean too.
-        expect(files).toEqual(expect.arrayContaining(['src/lib/components/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/components/transactions/modals/ImportWizardModal.svelte']));
+        expect(files).toEqual(expect.arrayContaining(['src/lib/components/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/features/transactions/import/ImportWizardModal.svelte']));
         const markupTemplatesIn = (file: string): number => templates.filter((t) => t.file === file && t.markup).length;
         expect(markupTemplatesIn('src/lib/components/assets/AssetTable.svelte')).toBeGreaterThan(0);
         expect(markupTemplatesIn('src/lib/utils/providerHelpers.ts')).toBeGreaterThan(0);
@@ -955,7 +955,7 @@ interface ReviewedMarkup {
 
 /**
  * Translations that carry markup on purpose (item 10). All three are validation errors produced only by
- * `resolveIssueMessage()` in `src/lib/utils/transactions/resolveValidationMessage.ts`, as
+ * `resolveIssueMessage()` in `src/lib/features/transactions/resolveValidationMessage.ts`, as
  * `transactions.errors.<code>`, and every caller of `resolveIssueMessage` renders its result through
  * `{@html sanitizeHtml(…)}`: TransactionFormModal, TransactionBulkModal, ParseDetailModal. Never in a
  * tooltip. Add a key only with such a consumer.

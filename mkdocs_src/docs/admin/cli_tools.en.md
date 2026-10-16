@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create`, `backup inspect` and `backup restore --dry-run` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create`, `backup inspect`, `backup restore` and `backup pending` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -105,7 +105,7 @@ pipenv run ./dev.py user activate <username>
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
-- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
+- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
 
@@ -230,7 +230,7 @@ The second fix, **`orphan_pair_halves`**, repairs, once, the transfers that an e
 
 - 📈 Securities received from the deleted broker become an opening position at their transfer cost, starting on the transfer date. That broker's capital then counts them at that cost instead of their market value on arrival, so its gain also counts what they gained before the transfer. When no cost was recorded, they stay without one and the app reports an acquisition without a purchase cost: enter the cost in the transaction.
 - 💶 Cash transfers with the deleted broker become deposits or withdrawals: capital and gain do not change.
-- ⏳ Transfers that sent securities **to** the deleted broker are left as they are for now: the log lists them at every start.
+- 📤 Securities sent **to** the deleted broker: right after the fixes, at the same start, each of these transfers becomes an adjustment that takes the securities out of the sending broker at their average cost there — capital that leaves, not a loss. The log has one line for each (`Lone transfer leg converted at its Auto cost`). When that cost needs an exchange rate LibreFolio does not have, the transfer stays as it is (`Lone transfer leg left as it is`) and the next start tries again. On a database that fails SQLite's quick check, every one of them is left as it is (`Lone transfer legs left as they are: the database failed its quick check`). If the whole step fails (`Lone transfer legs could not be converted; starting normally`), nothing is changed and the server starts anyway.
 
 The fix **`event_types`** repairs, once, the asset events stored with a type LibreFolio does not know, such as `dividend` or `dividendo` written by hand in a CSV file. Until now such an event made the whole list of that asset's events fail to load, so none of them was shown:
 
@@ -249,9 +249,9 @@ The fix **`event_types`** repairs, once, the asset events stored with a type Lib
     pipenv run python -m backend.app.db.post_migration
     ```
 
-    The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
+    The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, then one line for each transfer of securities sent to a deleted broker (`Lone transfer leg …`), and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
 
-    To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers left as they are. The script also prints, on the console, what the server would log: the warning and, on a real run, one line per transaction changed (with `LOG_LEVEL` at `INFO`, the default). It writes no log file: keep its output if you want a record of a repair made by hand.
+    To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers of securities sent to a deleted broker. Those transfers get a line each after the fixes: the average cost each would leave at (`would become an ADJUSTMENT at … per unit`), or why it would stay a transfer. The script also prints, on the console, what the server would log: the warning and, on a real run, one line per transaction changed (with `LOG_LEVEL` at `INFO`, the default). It writes no log file: keep its output if you want a record of a repair made by hand.
 
 🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
 
@@ -277,7 +277,7 @@ pipenv run ./dev.py db create-clean
 
 ## 💾 Back Up the Instance {: #backup }
 
-`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds, and `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
+`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
 
 ### 📦 Create an Archive
 
@@ -346,7 +346,7 @@ Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `bac
 
     - the format, `librefolio-backup`, and its version;
     - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface, `panel` for a [hosting panel](hosting_providers.md#panel-backups)) and when, in UTC;
-    - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations and the rows in each table;
+    - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations, the rows in each table and the ledger's control totals, the cash of every broker in each currency and the quantity of every position (an archive made before them has none);
     - every entry, the database first, with its path, its size and its SHA-256;
     - whether the instance key is included: it is not.
 
@@ -372,7 +372,7 @@ pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-2026101
 pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip --dry-run
 ```
 
-`backup restore --dry-run` unpacks the archive into a copy, brings it up to date and checks it, then tells you what a restore would do. The copy is made in the data directory, in `.restore/stage/<id>/`, and removed at the end: the database and the files of the instance are never touched, so the server can keep running. This version only checks: without `--dry-run`, the command stops with `❌ Only --dry-run is available for now: it checks the archive on a copy and leaves the instance as it is`.
+`backup restore --dry-run` unpacks the archive into a copy, brings it up to date and checks it, then tells you what a restore would do. The copy is made in the data directory, in `.restore/stage/<id>/`, and removed at the end: the database and the files of the instance are never touched, so the server can keep running. Without `--dry-run`, the same check is the first half of a restore: see [Restore an Archive](#backup-restore).
 
 The check goes through five steps, and stops at the first one that refuses the archive:
 
@@ -394,8 +394,14 @@ It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`,
 - 🩹 The post-migration fixes that changed something on the copy, if any.
 - 🔢 The rows, the tables and the size of the database, then the tables whose rows the upgrade changed, as `<table> (<before> → <after>)`, with `—` for a table that did not exist.
 - 📁 The number and size of the files, and whether the instance key is included.
-- 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.`
-- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, or `The upgrade added broken references to the copy`.
+- ⚖️ The ledger's control totals: the cash of every broker in each currency and the quantity of every position, summed from the transactions alone, with no price, exchange rate, cost or date. The backup recorded them in its manifest, and the check reads them again on the copy once it is up to date. A difference is a warning, never a refusal: a migration may correct data. The report says one of:
+    - `Ledger totals: the same as when the backup was made`;
+    - `⚠️ Ledger totals differ from the backup's (<n> lines):`, then the lines that differ, cash first, at most 20: `broker <id>, <currency> cash: <before> → <after>` or `broker <id>, asset <id> quantity: <before> → <after>`, the backup's amount before the arrow and the copy's after it, with `—` for zero. `… and <n> more` counts the lines left out;
+    - `Ledger totals: not recorded in this archive`: an archive made by an earlier LibreFolio, from before the totals, records none, nor does one whose totals could not be read when it was made;
+    - `Ledger totals: recorded by another version of the method, not compared`;
+    - `⚠️ Ledger totals: could not be read on the copy`.
+- 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.` and `Invitations and links sent before the restore will have expired: send them again if needed.`
+- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)` or `The ledger's totals could not be read on the copy`.
 - ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
 
 It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
@@ -428,14 +434,105 @@ It ends with `✅ The archive can be restored. Dry run: the instance was left as
     | `post_migration_failed` | A post-migration fix failed on the copy: the error printed just above gives the cause |
     | `head_unknown` | This LibreFolio cannot read its own migration scripts |
 
+### ♻️ Restore an Archive {: #backup-restore }
+
+```bash
+# Check the archive on a copy, then restore it at the next start of the server
+pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip
+```
+
+Without `--dry-run`, `backup restore` runs the same check on a copy and shows the same report ([Try a Restore on a Copy](#backup-restore-dry-run)). When the archive can be restored, it asks you to confirm:
+
+```text
+   Type "restore" to restore this archive at the next start of the server:
+```
+
+- ⌨️ Type `restore`, in lower case; spaces around it do not count. Anything else, `Restore` or an empty line included, ends with `Nothing restored: the copy was removed.` and exit code `1`.
+- 🤖 `--yes` (`-y`) confirms without asking. Without a terminal to ask on, in a script for instance, it is required: otherwise the command stops with `❌ No terminal to ask on: add --yes to confirm the restore. Nothing restored: the copy was removed.` and exits with `1`.
+
+Once confirmed, the command exits with `0` and says:
+
+```text
+✅ The restore waits for the next start of the server: restart LibreFolio to apply it.
+   That start replaces the database and the files, and ends every session: sign in with an administrator of the backup.
+   ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.
+```
+
+Nothing has changed yet: the server keeps running on its data, and the checked copy waits in `.restore/stage/<id>/`, however long it takes. Restart LibreFolio when it suits you: stop the whole server, then [start it](#start-the-server) again; with Docker, `docker compose restart librefolio` ([Back Up with Docker](#backup-docker)). If the server is stopped, its next start applies the restore.
+
+That start applies it before it reads any data:
+
+1. 🛑 **Only a start of the whole server.** Every LibreFolio server process holds a lock on the data directory from early in its start, before it reads any data, until it exits. A start that finds it held by another process, such as a worker that uvicorn starts again beside its running siblings with `--workers` or a second server on the same data directory, leaves the restore waiting (`server_running`). Restart the whole server, never one worker. A start that finds the restore applied by another server that still runs, or by another start, stops instead of serving data whose restore is not committed.
+2. 🔀 **The swap.** The instance's `sqlite/`, `custom-uploads/`, `broker_reports/` and `scenario_catalog/` swap places with those of the copy. Each move is a rename inside the data directory: instant, whatever the size. The instance's own folders are set aside in `.restore/previous/`.
+3. 🔒 **What stays.** `secrets/`, `logs/`, `scheduler_state.json` and `backups/` are not touched: the instance keeps its [instance key](configuration.md#instance-key), its logs and its archives.
+4. ✅ **The first start must complete.** The start goes on, on the restored data, which the check already brought to this LibreFolio's revision. Once it gets through, before it answers anyone, it ends every session, revokes the one-time links of the backup, and removes the instance's former data and the copy: the restore is done.
+5. ↩️ **Otherwise, back as before.** If that first start fails, on a migration that fails or a damaged file, the next start puts the data as it was before back by itself, and records the restore as rolled back, with the reason ([Follow or Cancel a Restore](#backup-pending)). With Docker, the container starts again by itself after a failed start, so the data comes back without you; with nothing that starts the server again, start it yourself.
+
+After the restore:
+
+- 🔑 Everyone signs in again, on every device, with an account of the backup and the password it had then. The report of the check names the administrators of the backup.
+- 🔗 No link sent before the restore works any more (invitations, password resets, email verifications), not even those the backup still held: send new ones.
+- 📧 An account the backup held still waiting for its email verification loses its link too, and stops waiting: the sign-in page can no longer send it another link, and answers that the account is disabled. An administrator activates it in [Users & Invitations](users.md#actions), and its address stays unverified; or deletes it ([Delete an Account](users.md#delete)), so that its owner signs up again and receives a new link. Such an account never signed in, so it holds no data.
+- 🆘 If nobody remembers an administrator's password of then, whoever runs the server creates a reset link with [`user reset-link`](#reset-link), or sets a new password with `user reset`. Once signed in, an administrator sends reset links to the others from [Users & Invitations](users.md#reset-links).
+
+Good to know:
+
+- 🔒 On an instance its hosting provider blocked (`LIBREFOLIO_BLOCKED`), the command confirms all the same, and adds `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the first start after the unblock applies it.
+- 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. `--dry-run` still works.
+- ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation, `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile. Run the command again.
+- 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
+- 🔗 Keep the four folders real folders of the data directory: one that is a link, or that is mounted on its own, cannot be swapped. The start then leaves the data as it is, and records the restore as rolled back with `swap_failed`.
+- 💽 The swap needs no space of its own: the copy the check made becomes the instance's data, and the former data is removed once the first start completes.
+- 🗝️ An archive made by another installation brings no instance key, and the restore keeps this one's: what the other installation encrypted cannot be read with it. See «The instance key is not in the archive» above.
+
+### ⏳ Follow or Cancel a Restore {: #backup-pending }
+
+```bash
+# The restore waiting for the next start, or the last one
+pipenv run ./dev.py backup pending
+
+# Drop the restore waiting, and its checked copy
+pipenv run ./dev.py backup pending --cancel
+```
+
+`backup pending` changes nothing and exits with `0`. It shows one of these:
+
+| It prints | What it means |
+| --- | --- |
+| `ℹ️ No restore waits for the next start` | No restore was confirmed, or the last one was dropped |
+| `⏳ A restore waits for the next start of the server`, then `backup made by LibreFolio <version> on <date> UTC; confirmed by <who> on <date> UTC` | Confirmed, not applied yet. `<who>` is `cli` for this command, otherwise the username of the administrator who confirmed it |
+| `⏳ A restore is being applied by the server` | A start applied it and has not completed yet. If that start died, the next one puts the data back |
+| `✅ The last restore was applied on <date> UTC: backup made by LibreFolio <version> on <date> UTC` | The restore is done |
+| `⚠️ The last restore was rolled back on <date> UTC, the data is as it was before: <reason> (<code>)` | The restore was undone, for the reason below |
+
+When a start found a restore waiting and did not apply it, one more line says why, and the restore keeps waiting:
+
+- `⚠️ At the last start a backup was running: the next start applies it (backup_running)`: a backup was running when the server started, a `backup create` from the command line for instance.
+- `⚠️ It was confirmed for another data directory (<path>): this one does not apply it (other_data_directory)`: the server found its data directory under another path than the one where the restore was confirmed, such as a copy of the data directory. Drop it with `--cancel`, then run `backup restore` where the server runs.
+- `⚠️ At the last start another server process was serving the data directory: restart the whole server to apply it (server_running)`: a worker was started again while the others kept serving (`--workers`), or another server uses the same data directory. Restart the whole server.
+- `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the last start found the instance blocked (`LIBREFOLIO_BLOCKED`), or it is blocked now, and a restore is never applied on a blocked instance. The first start after the unblock applies it, and migrates it first if LibreFolio was updated meanwhile. Until then its checked copy keeps its disk space: `--cancel` drops the restore and frees it.
+
+| Code | `<reason>` | What to do |
+| --- | --- | --- |
+| `first_start_failed` | `the first start after it did not complete` | The log of that start has the cause |
+| `swap_interrupted` | `the start that applied it was interrupted` | Nothing: a start stopped during the swap, and the next one undid it |
+| `swap_failed` | `its folders could not be moved into place` | Make the four folders real folders of the data directory, neither links nor separate mounts |
+| `stage_missing` | `its checked copy was gone` | The copy in `.restore/stage/` was removed or changed: check the archive again |
+
+A rollback also removes the restored data and the copy: to try again, run `backup restore` again. If even putting the data back fails, on a disk or permission error for instance, LibreFolio does not start: its log has `The data directory is half restored: the restore could not be undone, and LibreFolio does not start on it`, and every start tries again.
+
+`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
+
 ### 🚚 Use an Archive on Another Installation
 
-`backup restore` only checks an archive for now. To start LibreFolio on the data of an archive, by hand:
+[`backup restore`](#backup-restore) restores an archive on the installation where you run it, and keeps that installation's `secrets/`. To start another installation on the data of an archive by hand instead, with the `secrets/` of the installation that made it, such as when you move LibreFolio:
 
 1. **Stop LibreFolio** on the installation that receives the data.
 2. **Unzip the archive into an empty [data directory](filesystem.md)** (`LibreFolio-data/` with Docker Compose): if it holds anything, move it aside first. Nothing of the old data may mix with the archive's, not even SQLite's `app.db-wal` and `app.db-shm`.
 3. **Put `secrets/` back** in the data directory, from the copy you saved separately.
 4. **Start LibreFolio**, the version that made the archive or a newer one: the pending migrations run by themselves at start.
+
+Good to know:
 
 - 🧪 Before step 1, check the archive on the installation that receives it, with `backup restore <archive> --dry-run` ([Try a Restore on a Copy](#backup-restore-dry-run)): without changing anything, it tells you whether that LibreFolio can take the archive, which migrations its start will apply, and which administrators you will sign in with.
 - ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive, and `backup restore --dry-run` refuses such an archive with `revision_unknown`.
@@ -453,11 +550,22 @@ docker compose exec librefolio python dev.py backup inspect /app/backend/data/pr
 
 # Try a restore of it on a copy: the instance stays as it is
 docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --dry-run
+
+# Restore it: the same check, then type "restore" to confirm
+docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
+
+# Restart the container: its start applies the restore
+docker compose restart librefolio
+
+# Then see how it went
+docker compose exec librefolio python dev.py backup pending
 ```
 
 - 👤 `docker compose exec` runs as root: the command switches to the owner of the data directory, so everything it writes belongs to the server's user. If it cannot switch, it stops and asks you to run it as that user: `docker compose exec --user <uid>:<gid> librefolio python dev.py backup create`, with the numbers from the message.
 - 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
 - 🔑 `restore` also reads the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or the check stops with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
+- ⌨️ `docker compose exec` gives the command a terminal to ask on. Without one, such as with `docker compose exec -T` in a script, add `--yes`.
+- 🔁 After a first start that fails on the restored data, the container starts again by itself (`restart: unless-stopped`, in both compose files LibreFolio ships), and that start puts the data as it was before back.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.
 - 💻 From a source checkout, `./dev.py docker exec backup create` does the same.
 

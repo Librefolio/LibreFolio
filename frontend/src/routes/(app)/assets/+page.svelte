@@ -45,7 +45,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import {hasStoredPointInRange, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -57,6 +57,7 @@
     import AssetSetRiskPanel from '$lib/features/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -207,9 +208,13 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    /** The sync dialog's assets whose shown prices hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived(syncModalOpen ? syncModalAssets.filter((a) => hasStoredPointInRange(getAssetPriceStore(a.id, a.currency).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)).map((a) => a.id) : []);
 
-    /** True when the date range ends today (or later) → show live prices from providers */
-    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
+    /** True when the date range ends today (or later) → show live prices from providers. Today on the user's calendar,
+     *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
+    let isHeadToday = $derived(dateEnd >= todayIso());
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -1701,8 +1706,8 @@
     {:else if filteredAssets.length === 0}
         <!-- Empty state -->
         <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
-                <BarChart3 class="text-green-600 dark:text-green-400" size={32} />
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <BarChart3 class="text-lf-link" size={32} />
             </div>
             {#if assets.length === 0}
                 <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$t('assets.empty.noAssets')}</h3>
@@ -1868,6 +1873,7 @@
     bind:open={syncModalOpen}
     {dateEnd}
     dateStart={syncDateStart}
+    withDataInRange={syncModalWithData}
     onclose={() => {
         syncModalOpen = false;
     }}

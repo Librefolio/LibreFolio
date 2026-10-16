@@ -42,7 +42,7 @@
     }
 </script>
 
-<div class="space-y-3" data-testid="email-verification-notice" data-busy={sending ? 'true' : 'false'} aria-busy={sending}>
+<div class="space-y-3 text-lf-primary" data-testid="email-verification-notice" data-busy={sending ? 'true' : 'false'} aria-busy={sending}>
     <div class="space-y-3 rounded-lg border border-lf-info-line bg-lf-info-soft px-4 py-3 text-sm text-lf-info-on-soft" role="alert">
         <p class="flex items-start gap-2">
             <MailCheck class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

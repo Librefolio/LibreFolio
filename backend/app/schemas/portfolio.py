@@ -868,7 +868,9 @@ class LotSummarySchema(StrictModel):
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
     annualized_return: Optional[SafeDecimal] = Field(None, description="Net annualized return (CAGR) of net_total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+net_total_return)^(365/days)-1. Fraction. None if net metrics unavailable / <30 days.")
-    value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
+    value_source: Optional[LotValueSource] = Field(
+        None, description="MARKET_PRICE when the asset has a current price — a market quote or a BUY/SELL price, carried forward; ESTIMATED_AT_COST when it has no observation at all (open value assumed at cost, market_pnl=0); null when the current price cannot be converted."
+    )
     allocated_fees: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative FEE allocated to this lot, target_currency (positive magnitude); None when a FEE pool reaching the lot cannot be valued in target_currency.")
     allocated_taxes: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative TAX allocated to this lot, target_currency (positive magnitude); None when a TAX pool reaching the lot cannot be valued in target_currency.")
     net_total_pnl: Optional[SafeDecimal] = Field(None, description="total_pnl - allocated_fees - allocated_taxes, in target_currency.")

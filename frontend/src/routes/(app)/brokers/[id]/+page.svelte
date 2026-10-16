@@ -27,9 +27,13 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {
@@ -102,7 +106,7 @@
     /** Bulk workspace (create / import) — same engine as /transactions, pre-populated
      *  with this page's broker (still editable, never skips a step). */
     let bulkOpen = false;
-    let bulkIntent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
+    let bulkIntent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
 
     function openImportTransactions() {
         bulkIntent = {action: 'import'};

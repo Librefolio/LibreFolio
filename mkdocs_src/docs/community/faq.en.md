@@ -55,7 +55,7 @@ If the login page shows no **Register here**, this server accepts new accounts o
 
 ### 🔑 I forgot my password, what do I do?
 
-Recovery by e-mail is not available yet: ask your instance administrator. They can send you a password-reset link, with which you choose the new password yourself ([how it works](../user/getting-started.md#password-reset-link)), or set a new password for you from the command line ([Reset a Password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
+On the login page, click **Forgot Password?**. If your instance can send emails, type your username or email address there and you receive a reset link valid for 30 minutes ([how it works](../user/getting-started.md#forgot-password)). Otherwise ask your instance administrator. They can send you a password-reset link, with which you choose the new password yourself ([how it works](../user/getting-started.md#password-reset-link)), or set a new password for you from the command line ([Reset a Password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
 ## 🔧 Troubleshooting
 

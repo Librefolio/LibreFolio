@@ -3724,3 +3724,585 @@ seguono da CP-7a; la Dashboard no. Contratto (letto sul codice di oggi):
   test_csv_freezes_entire_output[securities]` e `::test_xlsx_matches_entire_literal_csv_output[securities]`, i rossi
   noti di W (forma D6 di C-97a) già curati in dev (`0c3275057`), fuori dal perimetro di J-24. Porta 6185 libera.
   **J-24 pronto per l'ingresso.**
+
+#### CP-7b — V1: il prezzo di riferimento dei lotti dalla casa (analisi, 16/10 ~20:40, sola lettura)
+
+Via del coordinatore all'analisi (20:32), dopo l'ingresso di J-24 (merge `31a59bdb1`, treno 134). Base `896963d81`
+(contiene J-17, CP-13a, J-24, MF ondata 1b con il lotto 1: `_load_split_ratios` chiama la casa, corpo da tenere).
+- **Stato reale** (verificato):
+  - `financial_math/lots/prices.py::PriceHistoryLookup` legge solo le chiusure di mercato salvate (ultima ≤ data,
+    `exact` se del giorno, `fallback` se più vecchia), senza scambi. Decide tre cose:
+    1. il **modo stimato** (`lots_analysis_service.py:142`, `estimated_mode = price_lookup.latest() is None`), che oggi
+       accende l'avviso `CURRENT_PRICE_ASSUMED_AT_COST` per un asset senza quotazioni anche quando BUY e SELL lo prezzano
+       (**J-28**);
+    2. il **riferimento** che il motore FIFO dà ai lotti aperti da una rettifica (`:146-152`, `reference_price_lookup`);
+    3. `opening_reference_price` (sintesi `:743`, storici `lots/histories.py:274-288`, cambi `lots/conversions.py:126-141`),
+       convertito alla data della chiusura usata (`resolved_date`), non alla data d'apertura.
+  - I prezzi di valutazione dei lotti vengono già dalla casa (`build_asset_price_series`, `:313`), ma la serie si
+    costruisce **dopo** il motore, che il riferimento lo vuole **durante**.
+  - Regola della casa (`AssetPriceSeries.resolve`): ultima osservazione ≤ data, quotazione o media degli scambi del
+    giorno (BUY/SELL; una rettifica non lo è più, J-17), portata avanti; una quotazione vince solo nel suo giorno. Quindi
+    differisce da `PriceHistoryLookup` quando un BUY/SELL è più recente dell'ultima quotazione, o quando non c'è
+    quotazione ma ci sono scambi.
+  - `reference_price_source` (`exact | fallback | unavailable`): il frontend non lo legge; l'AI Export lo porta come
+    stringa (`asset.lot_detail`, `opening_reference_price_source`).
+- **Contratto proposto**:
+  1. La serie della casa si costruisce prima del motore (stessi ingressi: righe di prezzo, transazioni, split, quota
+     base) e alimenta il riferimento: `exact` solo per una quotazione del giorno; `fallback` per una quotazione portata
+     avanti o un segno da scambi (stimato); niente riferimento se il giorno è MISSING (resta il ripiego al prezzo del
+     lotto, come oggi).
+  2. `estimated_mode = not price_series.has_observations` (nessuna quotazione e nessun BUY/SELL): l'avviso dei lotti si
+     accende solo quando i lotti sono davvero al costo → **J-28 chiusa**, con la descrizione di
+     `LotSummarySchema.value_source` (`schemas/portfolio.py:829`: anche un prezzo di scambio è `MARKET_PRICE`; `None`
+     senza segno con l'asset quotato) e `api sync`.
+  3. `opening_reference_price`, gli storici e il fabbisogno dei cambi leggono la serie; il riferimento si converte **alla
+     data d'apertura** (la data che rappresenta, come la casa converte ogni segno al giorno chiesto), non a quella
+     dell'osservazione. `PriceHistoryLookup` sparisce (regola 5: una sola regola del prezzo).
+  4. Docstring di `fifo/engine.py::_handover_currency` («the average cost the units leave with» → il costo della riga,
+     segnalato dal docs-writer di J-24).
+- **Valori che cambiano** (solo lotti aperti da una rettifica, che leggono il mercato; un lotto aperto da un BUY ha il
+  suo prezzo):
+  - riferimento, rendimento relativo, valore di mercato d'apertura (anche `opening_reference_unit_price` e
+    `opening_market_value` di `asset.lot_detail` nell'AI Export, builder invariato, nessun aumento) quando un BUY/SELL
+    è più recente dell'ultima quotazione alla data d'apertura, o non c'è quotazione ma c'è uno scambio prima;
+  - riferimento in valuta estera: il cambio della data d'apertura al posto di quello dell'osservazione (scarto piccolo,
+    solo con una chiusura portata avanti);
+  - `CURRENT_PRICE_ASSUMED_AT_COST` non compare più per un asset prezzato da scambi senza quotazioni (i suoi lotti erano
+    già valutati agli scambi).
+- **Superfici**: `lots_analysis_service.py`, `financial_math/lots/{prices,conversions,histories}.py`,
+  `financial_math/fifo/engine.py` (solo docstring), `schemas/portfolio.py` (una descrizione); test dei lotti; doc
+  (`fifo-lot-analysis`, `developer/backend/transactions/lots_analysis_service.md`, `price_resolver.md`). Nessun `.svelte`,
+  nessuna voce della mappa del renderer.
+- **Conflitti**: MF-E (sintesi del lotto nella casa) aspetta CP-7b; tengo questi file fino all'ingresso. Il corpo di
+  `_load_split_ratios` di MF resta.
+- **Prove**: rossi (test-author) per il riferimento da scambi, la conversione alla data d'apertura, `estimated_mode` e
+  l'avviso (J-28), il fabbisogno dei cambi; verdi `lots-analysis-pure`, `roi-fifo-utils`, `ai-export` (asset), `api`
+  dei lotti; `api sync`; doc. Peso: medio-piccolo.
+- **Per Y** (domanda del coordinatore): i campi rimasti di Y12b (R17, W8, P4, P5, V11) sono di **MF-P**, onda 3 di MF
+  dopo CP-7b: R17, W8, V11 direttamente; P4 dopo MF-A (onda 2); P5 dopo MF-E, che aspetta questo CP-7b. CP-7b è il
+  mio solo pezzo sul cammino di Y; J-26 (sonda reale) non lo tocca.
+
+#### CP-7b — codice (via del coordinatore 20:58, decisioni 1–3 come proposte; 16/10 dalle 21:00)
+
+- ✅ **Passo 1 — il codice (2026-10-16)**. I rossi li scrive il test-author in parallelo, senza lanciare nulla
+  (contratto in `files/j/cp7b/test_author_prompt.md` della sessione).
+  > **Note implementazione**:
+  > - `financial_math/lots/prices.py`: `PriceHistoryLookup` e `PricePoint` tolti. `opening_reference_price(lot, price_series,
+  >   quote_base_quantity)` legge la serie della casa; la data restituita è sempre quella d'apertura (P21).
+  > - `lots_analysis_service.py`: la serie (`build_asset_price_series`) e `quote_base_quantity` si costruiscono prima del
+  >   motore, e la seconda costruzione sparisce. `reference_price_lookup` legge `price_series.resolve(opened_at)`:
+  >   MISSING → nessun riferimento; `exact` solo con `MarkSource.MARKET`, altrimenti `fallback`. I parametri
+  >   `price_lookup` → `price_series` (sintesi, storici, fabbisogno dei cambi).
+  > - `lots/conversions.py::collect_fx_needs` e `lots/histories.py::build_return_history`: `price_series: AssetPriceSeries`.
+  > - `schemas/portfolio.py`: la descrizione di `LotSummarySchema.value_source` (J-28).
+  > - `fifo/engine.py::_handover_currency`: la docstring dice il costo della riga, non il costo medio.
+  > - `ai_export/components/asset_payloads.py`: solo il commento F6 sul riferimento d'apertura. Il contratto e le
+  >   versioni non cambiano.
+  > - ruff e black verdi.
+  >
+  > **⚠️ Fuori pista — un nuovo codice d'avviso**. Un segno da scambi è `fallback` (decisione 1). Così un lotto aperto da
+  > una rettifica, su un asset senza quotazioni ma con scambi prima, passa da `REFERENCE_PRICE_UNAVAILABLE` (riferimento
+  > = prezzo del lotto) a `REFERENCE_PRICE_FALLBACK` («ultimo prezzo noto {reference_price}»). È coerente con la decisione,
+  > e il testo resta vero. Nessun caso nella demo.
+  >
+  > **⚠️ Fuori pista — decisione 2 alla lettera lasciava un buco**. Prima, gli storici dei lotti (valore, rendimento)
+  > valutavano al costo i giorni senza prezzo solo se l'asset non aveva quotazioni. Con «nessuna osservazione»
+  > per-asset, un asset senza quotazioni il cui primo possesso è una rettifica prima del primo BUY avrebbe perso i punti
+  > al costo fra la rettifica e il BUY. La Dashboard (J-17) invece li valuta al costo, giorno per giorno.
+  > Domanda al coordinatore (21:15), risposta **(a)**: «the Dashboard's per-day rule in the lots too. That's J-17/P2:
+  > one rule in the whole app, and no gap the Dashboard doesn't have. Pin it in the tests with the warning range.»
+  > Codice:
+  > - `lots/prices.py::last_day_without_observation(price_series, days)`: l'ultimo dei giorni senza osservazione ≤ sé
+  >   (sono sempre i giorni prima della prima osservazione).
+  > - Il servizio calcola `at_cost_until` su `history_dates` (ogni giorno, dalla prima transazione alla fine).
+  > - `build_value_history`/`build_return_history`: `estimated_mode: bool` → `at_cost_until: date | None`. Lo snapshot
+  >   del giorno riceve `at_cost`; un prezzo senza cambio resta un buco, come sulla Dashboard.
+  > - La sintesi resta al costo solo se la fine non ha osservazione (`at_cost_until == actual_to`).
+  > - L'avviso `CURRENT_PRICE_ASSUMED_AT_COST` ha lo stesso cancello e un intervallo esatto: `date_to = at_cost_until`
+  >   al posto della fine.
+  > - Lo storico della performance (ROI/TWRR) non ha mai valutato al costo: salta i giorni senza prezzo per ogni asset.
+  >   CP-7b non lo cambia; voce J-33 nel backlog.
+  > - Test-author e docs-writer avvisati della modifica al contratto.
+  >
+  > **Demo** (`db populate --force` nella corsia, poi lettura in sola lettura, `files/j/cp7b/demo_probe.py`):
+  > - il riferimento cambia per un solo lotto: la rettifica in entrata tx 60, AAPL su Interactive Brokers (utente 8),
+  >   11/10, 1,5 pezzi. Da 300,0201 USD (quotazione del 09/10, `fallback`) a 299,8200 USD (scambio dello stesso giorno,
+  >   `fallback`), con il cambio dell'11/10 invece del 09/10;
+  > - tx 74 (AAPL su eToro, 04/10): stesso prezzo (quotazione del 02/10), solo la data del cambio va al 04/10;
+  > - l'avviso al costo sparisce per «Test KRW Stock» (#17: scambi, nessuna quotazione);
+  > - nessun asset ha il primo possesso da rettifica prima della prima osservazione: la regola per giorno non cambia la
+  >   demo.
+- ✅ **Passo 2 — rossi e documentazione dagli specialisti (2026-10-16)**.
+  > **Note implementazione**:
+  > - **Test-author** (nessuna esecuzione). Rossi e test migrati in `test_lots_analysis_pure.py` e
+  >   `test_financial/test_lots_analysis_service.py`.
+  >   - Casi (a)–(d) del riferimento: guidano il vero `get_lots_analysis` su righe in memoria, con loader e sessione
+  >     finti, in EUR; nessun DB.
+  >   - (e)–(f): data e valuta del riferimento, fabbisogno del cambio alla data d'apertura.
+  >   - `last_day_without_observation`: 6 casi.
+  >   - Lo storico al costo fino a `at_cost_until`.
+  >   - Servizio, (g)–(l): J-28; la sola rettifica al costo con l'intervallo dell'avviso; il riferimento dal BUY più
+  >     recente; il cambio del giorno d'apertura; la rettifica prima della prima quotazione e prima del primo BUY, al costo
+  >     fino a lì.
+  >   - `TestPriceHistoryLookup` tolto; `test_adjustment_before_the_first_quote_has_no_value_point` sostituito da (k).
+  >     La decisione (a) ne rovescia l'attesa.
+  >   - Il test rinominato perché diceva il contrario di ciò che fissa.
+  > - **Docs-writer** (EN, nessuna esecuzione), sei pagine:
+  >   - `fifo-lot-analysis` (Open Return per Lot, Estimated-at-Cost riscritta per giorno, un paragrafo in From Lots to
+  >     Aggregate Metrics);
+  >   - `developer/.../lots_analysis_service.md` (sottosezione nuova `#reference-price`), `price_resolver.md`,
+  >     `financial_math.md`, `fifo_lot_engine.md`;
+  >   - `user/dashboard/positions` (due punti).
+  >   - Poi `price-resolution` (la frase dei lotti), la nota sulla rettifica senza costo e il nome
+  >     `_closure_prefix` in `lots_analysis_service.md`.
+  >
+  > **⚠️ Fuori pista — le scoperte del docs-writer**:
+  > - Un **valore che cambia** e non era nella lista: un asset prezzato solo da scambi in valuta estera, in un giorno
+  >   senza cambio, prima era al costo (il modo stimato valeva per tutto l'asset). Ora è un buco, e la sintesi ha
+  >   `value_source` null. È la regola della Dashboard (un prezzo senza cambio non è «nessun prezzo») e la descrizione
+  >   nuova di `value_source`. Nella demo nessun caso: lo scambio di «Test KRW Stock» è in EUR.
+  > - **Rettifica senza costo** (vecchie righe): il lotto FIFO è a costo zero, il costo medio della Dashboard lo conta
+  >   ignoto. Nei giorni al costo i lotti mostrano 0, la Dashboard nulla. Differenza documentata e preesistente (pagina
+  >   `adjustment`), che CP-7b allarga ai giorni prima della prima osservazione di un asset prezzato dopo. Non la decido
+  >   qui: è la gemella in entrata di J-11. → **J-35**, e una frase onesta nella pagina dei lotti.
+  > - Due **messaggi del riferimento** inesatti, uno anche per la decisione 1 (la media degli scambi del giorno è
+  >   `fallback`) → **J-36**.
+  > - Nella performance dei lotti, la gamba di un trasferimento che attraversa il perimetro in un giorno al costo svuota
+  >   ROI/TWRR → aggiunta a **J-33**.
+  > - Commenti fermi corretti in passando (solo commenti):
+  >   - `ai_export/components/asset_core.py`, il commento F6 sul valore d'apertura;
+  >   - `financial_math/lots/economic_events.py:157`, `_closure_proceeds_prefix`, che non esiste.
+  > - Il commento del catalogo di `lots-analysis-pure` (`scripts/test_runner/_backend_services.py:893, 1895-1899`) ora è
+  >   fermo: l'unità resta pura, ma ha casi asincroni con loader e sessione finti. Il file è condiviso: lo propongo nel
+  >   passaggio di consegne, non lo tocco.
+- ✅ **Passo 3 — rossi sul codice vecchio (2026-10-16, 21:19–21:24)**. Comando: `files/j/cp7b/red.sh` (toglie la patch del
+  codice, lancia `services lots-analysis-pure` e `services roi-fifo-utils` nella corsia 6185, rimette la patch; «worktree
+  back to the saved state»).
+  > **Note implementazione**:
+  > - `roi-fifo-utils`: **6 rossi**, 844 verdi. I rossi sono esattamente quelli del servizio: (g), (i), (j), (k), (l) e il
+  >   test di J-28 rinominato. La guardia (h) passa.
+  > - `lots-analysis-pure`: 73 rossi, 104 verdi. 67 tracce lette:
+  >   - 3 `AssertionError`, i rossi di valore: due BUY più recenti dell'ultima chiusura (100 invece di 120) e nessuna
+  >     chiusura con un BUY prima (90/`unavailable` invece di 120/`fallback`);
+  >   - 6 `AttributeError`: manca `last_day_without_observation`;
+  >   - 58 `TypeError` sulle firme nuove (`price_series=`, `at_cost_until=`): i test spostati e i rossi che chiamano l'API
+  >     nuova.
+  > - Le guardie (una chiusura del giorno vince su un BUY dello stesso giorno, una chiusura di tre giorni prima, niente
+  >   prima dell'apertura, il lotto di un BUY) passano sul codice vecchio.
+  >
+  > **⚠️ Fuori pista**: il primo parser delle cause ha letto male il formato del log (le righe `FAILED` sono senza
+  > motivo). Ho rifatto la lettura sulle tracce.
+- ✅ **Passo 4 — verdi sul codice nuovo (2026-10-16, 21:25–22:02)**. Comando: `files/j/cp7b/runs.sh green` (corsia 6185,
+  un'azione alla volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi: `services financial-math` **488**, `lots-analysis-pure` **177**, `roi-fifo-utils` **850**,
+  >   `ai-export` `-k components_asset` **121**, `db populate --force`, `api portfolio` **51**;
+  > - porta 6185 libera.
+  >
+  > **⚠️ Fuori pista**: il carico è salito a 185 (altre corsie) fra `ai-export` e `db populate`; la corsa ha atteso 25 minuti
+  > da sola.
+  >
+  > **Valori della demo, misurati sul populate del 16/10** (sola lettura, `files/j/cp7b/demo_probe.py` e calcolo sul DB
+  > della corsia):
+  > - **AAPL, il lotto della rettifica tx 60** (+1,5 su Interactive Brokers, 11/10, costo 175 USD). Visibile a chi vede
+  >   quel broker: utenti 1–6 e 8.
+  >   - Riferimento: da 300,0201 USD a 299,82 USD. Prima la quotazione del 09/10 portata avanti; ora la vendita tx 10
+  >     dello stesso broker l'11/10, a 299,82. Resta `fallback`.
+  >   - Il cambio non cambia: l'11/10 è una domenica e la demo non ha cambi nel fine settimana, quindi vale il 09/10
+  >     come prima.
+  >   - In EUR: da 268,2032 a 268,0243.
+  >   - «Open Return»: dal **2,342 % al 2,410 %** (+0,068 punti, con la quotazione del 16/10).
+  >   - `opening_market_value` di `asset.lot_detail` (AI Export): −0,27 EUR.
+  >   - Il banner `REFERENCE_PRICE_FALLBACK` mostra 299,82 invece di 300,0201006729037.
+  > - **AAPL, il lotto della rettifica tx 74** (eToro, 04/10): prezzo invariato (la quotazione del 02/10). Anche il 04/10
+  >   è una domenica, quindi lo stesso cambio. Nulla di visibile.
+  > - **«Test KRW Stock»** (#17, un BUY in EUR su Directa: utenti 1, 2, 5): sparisce il banner «No market price
+  >   available … estimated at cost». I valori sono invariati: il BUY lo prezzava già.
+  > - La regola per giorno non tocca la demo: nessun asset ha giorni prima della sua prima osservazione.
+- ✅ **Passo 5 — controlli statici e doc (2026-10-16, 22:03–22:20)**. Comandi: `files/j/cp7b/checks.sh` (ONLY: api-sync,
+  check-orphans, mkdocs-build, check-links) e `files/j/cp7b/tv.sh`.
+  > **Note implementazione**:
+  > - `api sync`: esito 0. Il client generato è ignorato da git, quindi nessuna differenza tracciata.
+  > - `check-orphans`, `mkdocs build` (rigoroso, 3076 URL relativi risolti) e `mkdocs check-links`: esito 0.
+  > - `translate-validate` con la patch della doc tolta e rimessa: da 882 a 891 errori strutturali, tutti in
+  >   `fifo-lot-analysis` → **J-34**.
+  > - Non lanciati: `front check` (nessun file del frontend toccato; il client rigenerato cambia solo una descrizione),
+  >   `i18n check` (nessuna chiave), `all-backend` (la corsa la decide il coordinatore).
+  >
+  > **⚠️ Fuori pista**: il primo conteggio di `tv.sh` dava 0 righe, perché le righe d'errore sono rientrate. Rifatto
+  > togliendo gli spazi in testa.
+  >
+  > **Backlog**: J-28 chiusa; nuove J-33 (performance dei lotti), J-34 (traduzioni), J-35 (rettifica senza costo),
+  > J-36 (due messaggi del riferimento). DevWiki: nota datata in `decisions/adjustment-is-never-a-price.md` e voce in
+  > `log.md`.
+
+#### Checkpoint CP-7b ✅ (2026-10-16) — committato dal coordinatore (`0bd9ecd82`, journal `4416623a7`), entrato (merge `48da9bf3c`, treno 145)
+
+Il testo del catalogo in `_backend_services.py` diventa **J-37**: A ha il file aperto (A7b), quindi lo scrivo dopo
+l'ingresso di A. Notte (coordinatore, 22:22): una domanda che solo il developer può sciogliere va nel piano e al
+coordinatore, poi si passa alla voce seguente.
+
+#### J-26 — la sonda reale dell'AI Export (analisi, 16/10 ~22:30)
+
+P26 del developer (16/10 11:37): la sonda gira su una copia dei suoi dati demo (utente `alfy`, skill `real-data-copy`,
+copia mia, porta 6195, password solo nella variabile della sonda), su slot. Prova tre cose: le versioni di J-17 rese
+compatte, la sorgente nuova nei prompt, e che nient'altro sia cambiato. Le gambe in valuta di CP-7a non si possono
+verificare su dati solo in EUR.
+- **Copia di lavoro** `/tmp/librefolio-r2-j-realdata`: presa alle 22:27 dalla copia di riferimento, che nessun
+  processo teneva aperta. 31 MB, `integrity_check` ok, Alembic 008, come la mia HEAD.
+- **Cosa c'è nei dati** (solo conteggi, `files/j/j26_counts.py` della sessione):
+  - un utente, 2 broker, 216 righe: BUY, SELL, DEPOSIT, WITHDRAWAL, INTEREST, TAX, FEE;
+  - **nessuna** ADJUSTMENT o TRANSFER;
+  - solo EUR, nessun cambio;
+  - 10 asset in posizione, nessuno al costo; 3 hanno scambi ma nessuna quotazione (valutati all'ultimo scambio).
+  - Conseguenza: sui dati reali J-24, CP-7b e il valore al costo di J-17 non hanno nulla da cambiare. J-17 si vede solo
+    nelle versioni e nei testi (la gerarchia di valutazione che nomina `ESTIMATED_AT_COST`, la frase della
+    provenienza). L'avviso dei lotti di J-28 non entra nell'AI Export.
+  - Non verificabili sui dati reali, coperti dai test funzionali: CP-7a (cambi), J-24 (rettifiche in uscita), CP-7b
+    (riferimenti delle rettifiche, giorni al costo), J-17 (posizioni al costo), J-35.
+- **Base per «nient'altro di cambiato»**: `dev_release2` subito prima dell'ingresso di J-17, `4f0a5d323` (primo
+  genitore del merge `94321d7db`). Da lì alla mia HEAD l'AI Export cambia in 12 file: i miei (J-17, J-24, CP-7b) e
+  quelli di MF (ondata 1b: `portfolio.income_timeline` e `broker.cost_efficiency` v2, `fx_timing_context`,
+  `technical_shared`). Le dipendenze non cambiano (`package.json`, lock, `Pipfile`, `Pipfile.lock`).
+- **Come girare la base senza toccare git**:
+  - `git archive 4f0a5d323 backend Pipfile Pipfile.lock` in `/tmp/librefolio-j26-base`; `frontend/` è un link al
+    frontend del mio worktree.
+  - Il link basta. Fra la base e la HEAD il frontend dell'AI Export cambia solo nella mappa delle versioni compatte,
+    che tiene la v1. Gli schemi dell'API dell'AI Export (`schemas/ai_export_runtime.py`) non cambiano. Il ponte del
+    renderer legge client e cataloghi generati, ignorati da git, che un archivio non avrebbe.
+  - Così la sonda della base rende i prompt della base byte per byte, e ogni differenza viene dal backend.
+- **Casi** (le stesse 9 righe nelle due corse, utente `alfy`, 1Y):
+  - `portfolio.overview_and_history`, `standard` e `compact`, `all`;
+  - `broker.overview_and_history`, `standard`, per **ciascuno** dei due broker (`broker=<nome>`; il nome lo legge una
+    variabile dalla copia al momento del lancio e non va nel giornale);
+  - `asset.position_and_history`, `standard`, `representative`;
+  - analisi `portfolio.fiscal_lots`, `portfolio.pac_planning` e `broker.review` (`representative`), e
+    `asset.position_review` (`representative`), tutte `standard`.
+  - Coprono le posizioni e la provenienza di portafoglio, broker e asset (J-17), il dettaglio dei lotti, i lotti FIFO,
+    le sezioni di drawdown (CP-13a: invariate senza perdita totale), il calendario dei proventi e l'efficienza dei
+    costi (MF).
+- **Comandi**:
+  - prima la base, da `/tmp/librefolio-j26-base`;
+  - poi la corrente, dal worktree, con `--compare-with <base>/metrics.json`;
+  - per tutte e due: `--source-db /tmp/librefolio-r2-j-realdata/sqlite/app.db --port 6195 --output-dir
+    <sessione>/files/j/j26/{base,current} --keep-canonical`, password solo in
+    `LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD_ALFY`;
+  - nessuna corsia di test toccata.
+- **Controlli e definizione di fatto**:
+  - nessun «PAYLOAD YAML FALLBACK» nella corrente;
+  - le intestazioni portano le versioni nuove (J-17: le 6; MF: le 2);
+  - la gerarchia di valutazione nomina `ESTIMATED_AT_COST`;
+  - i 3 asset senza quotazione sono all'ultimo scambio;
+  - ogni differenza fra le due corse è attribuita (J-17, J-24, MF o altro); una non attribuita è un reperto e va al
+    coordinatore;
+  - equivalenza UI/sonda e scansione dei segreti della sonda;
+  - hash della sorgente invariato;
+  - leggo ogni diff fino in fondo, e la struttura di ogni prompt corrente.
+- **Igiene**:
+  - uscite e copie restano nella cartella della sessione finché il developer non ha letto il resoconto;
+  - poi si cancellano la copia di lavoro, l'albero della base e le uscite (`lsof +D`, `rm -rf`, `ls` come prova);
+  - nel giornale solo conteggi e riferimenti A#/B#.
+- Peso: piccolo, una ventina di minuti di slot. Nessun codice previsto: un reperto diventa una voce del backlog.
+- **Preparazione (22:33, sola lettura per git)**:
+  - `files/j/j26/base_tree.sh` ha creato `/tmp/librefolio-j26-base`: 52 MB, 992 file Python. La sonda e la sua app
+    sono identiche a quelle della HEAD. `frontend/` e `scripts/` sono link al mio worktree.
+  - `scripts/` serve perché la sonda importa `scripts.i18n_catalog`, che rigenera i cataloghi i18n del frontend (file
+    ignorati). Con il link, tutte e due le corse usano i cataloghi della HEAD.
+  - Pronti anche `probe.sh` e `analyze.py`. `analyze.py` confronta l'hash canonico per componente, conta il fallback
+    YAML e le sorgenti di valutazione, e scrive i diff dei prompt nella cartella della sessione.
+  - Coordinatore (22:40): piano approvato; slot 2 verso le 22:50, 25 minuti, con conferma.
+
+#### J-27 — `_as_amount` limita l'importo che legge (analisi, 16/10 ~22:45, sola lettura)
+
+- **Stato reale**:
+  - `financial_math/ledger_totals.py::_as_amount` accetta qualunque testo decimale finito, e `_canonical` lo scrive per
+    esteso (`format(value, "f")`): `"1E+50000000"` costa 121 MB.
+  - B-13 (in dev con `c374313c0`, **non ancora nella mia base**) si protegge da sé:
+    `instance_backup/totals.py::_PLAIN_AMOUNT = -?[0-9]{1,60}(\.[0-9]{1,60})?`, controllato prima di
+    `ControlTotals.from_json`. Un `ValueError` diventa «absent»: un avviso, nessun confronto.
+- **Proposta**: la regola nella casa, per ogni chiamante. `_as_amount` accetta solo testo decimale semplice: un `-`
+  facoltativo, al più 60 cifre ASCII prima del punto e 60 dopo, il limite di `_EXACT.prec` e di B-13. Tutto il resto è
+  `ValueError` «not plain decimal text»: esponente, `+`, spazi, `_`, cifre non ASCII, oltre il limite.
+  - Il ciclo `from_json(to_json(t))` non cambia: `to_json` scrive solo testo semplice.
+  - I totali reali sono lontanissimi dal limite: importi `Numeric(18, 6)`, quantità `RealDecimal(22, 10)`, circa 30
+    cifre.
+  - `CANONICAL_TEXT` dei test serve solo a `to_json` e resta verde.
+- **Con lo stesso lotto**:
+  - la frase di `developer/backend/financial_math.md` (`#ledger-totals`, «after a restore, compares them with the totals
+    recomputed on the restored database»). Il codice di B li ricalcola sulla copia della prova del ripristino, una volta
+    aggiornata, e li confronta prima della conferma; una differenza è un avviso del rapporto, mai un rifiuto;
+  - la stessa frase nella docstring del modulo.
+- **Per B**, via il coordinatore: dopo J-27 `_plain` / `_PLAIN_AMOUNT` ripete il controllo di `from_json`. Può toglierlo
+  (una regola, una casa) o tenerlo come difesa innocua: decide B.
+- **Prove**:
+  - rossi del test-author in `test_ledger_totals.py`, `services financial-math`: `"1E+100"`, `"1e5"`, 61 cifre per
+    parte, `"+5"`, `" 5"`, `"1_000"`, cifre arabo-indiane → `ValueError`; il limite di 60 per parte accettato;
+  - verdi `financial-math` e le unità di B sui totali (`test_backup_totals.py`, `test_backup_staging.py`) sulla
+    revisione combinata; `mkdocs build` e `check-links`.
+- **Dipendenza**: prima l'aggiornamento della mia base con `dev_release2`, perché B3 deve stare nel mio albero per la
+  doc e per le prove di B. Peso: piccolo.
+
+#### CP-9 — il servizio del rischio diviso per tema, T-R1, gli schemi del rischio in un pacchetto (analisi, 16/10 ~23:00, sola lettura)
+
+Base letta: la mia HEAD `e36bc3016`. Le differenze di `dev_release2` sui file del rischio vengono da `git show`. PL2 di X
+è nella mia base (`9426c1bae`).
+- **Stato reale**:
+  - `risk/service.py`, 1 456 righe. La classe `RiskService` va da :126 a :1116: `catalog`, `execute` :136-350,
+    `asset_eligibility` :351, l'ambito :450-651, le serie :652, il replay :692-809, i risultati :810-1116. Le funzioni di
+    modulo :1117-1456 sono replay, ambito e avvisi, più la qualità dei dati :1289-1456.
+  - Importatori: nell'app solo `api/v1/risk.py` e `ai_export/components/drawdown_context.py`. Nei test cinque file, con
+    15 chiamate a `service._load_scope_inputs(...)`, 6 a `service._build_context(...)` e 11 `monkeypatch` sul modulo
+    (`load_price_window_facts`, `ensure_market_holidays`, `prepare_asset_series_set`).
+  - Due test legati al percorso: lo scan degli avvisi i18n (`test_risk_warnings_i18n.py:70`, barriera di presenza su
+    `risk/service.py`) e la mappa dei consumatori delle soglie (`test_data_quality_thresholds.py:64`).
+  - **T-R1**: `risk/service.py:440` chiama il privato `PortfolioService(self.db)._get_configured_fx_pair_sets()`, che
+    avvolge `load_configured_fx_pair_sets` della casa (`financial_math/portfolio/data_quality.py`).
+  - `schemas/risk.py`: 1 843 righe, 86 classi, **45 file** che lo importano direttamente (29 nell'app, 16 nei test).
+    `schemas/__init__.py` (l'hub, D-P3) lo riesporta.
+  - In `dev_release2`, dopo la mia HEAD:
+    - MF-C ha toccato `risk/service.py` (`3fcce359d`, i pesi nella casa, 3 righe);
+    - MF-D, ancora da fare, toccherà `risk/service.py` ~:1150 (R6, la copia dell'annualizzazione osservata) e
+      `ai_export/components/drawdown_context.py:498`, che importa gli schemi del rischio.
+- **Proposta in tre lotti**:
+  1. **CP-9a — T-R1 e il taglio del servizio** (medio-basso). `RiskService` resta in `risk/service.py`: catalogo,
+     `execute` (l'orchestrazione) e `asset_eligibility`. Il resto va in quattro moduli di `risk/`, come funzioni con
+     `db` esplicito:
+     - `scope.py`: `_ScopeInputs`, `load_scope_inputs`, accessi, esistenza, mai prezzati, classificazioni, gruppi
+       geografici, riferimento ed esclusioni dell'ambito, i due errori;
+     - `replay.py`: contesto del replay storico, intervallo verificato, date quotate, rendimenti TWRR del portafoglio,
+       predicati dei piani;
+     - `results.py`: contesto, osservazioni disponibili, composizione valida, successo, metadati, non disponibile,
+       intervallo analizzato, avvisi e loro deduplica, nomi degli asset negli avvisi;
+     - `data_quality.py`: rapporto, problemi e avvisi di qualità, fusione, qualità dell'insieme di asset.
+     T-R1 nello stesso lotto: `scope.py` chiama `load_configured_fx_pair_sets(db)` della casa (`portfolio_service.py`
+     è di MF e non lo tocco).
+     Niente shim; le `patch` vanno sui moduli che usano i nomi. I due test legati al percorso puntano ai moduli nuovi.
+     Le 21 chiamate private dei test passano alle funzioni di modulo (test-author).
+  2. **CP-9b — `schemas/risk.py` rinominato** (medio). `git mv` in `schemas/risk/outputs.py`, il pezzo più grande, più
+     i 45 importatori e le righe dell'hub. Niente `__init__` che riesporti: nessun barile nuovo (P2.0, regola 4).
+  3. **CP-9c — il taglio degli schemi** (medio). Accanto a `outputs.py`, quattro moduli: `vocabulary.py` (gli enum,
+     :20-240 e :1713-1735), `series.py` (le serie preparate e `RiskFreeReference`, :326-519), `scope.py` (ambiti,
+     richieste, catalogo, idoneità, :634-762 e :1736-1760) e `results.py` (esclusi, audit del replay, metadati, avvisi,
+     errori, risultato, risposta). Gli importatori cambiano solo per i nomi spostati. Facoltativo:
+     `schemas/risk_scenarios.py` → `schemas/risk/scenarios.py`.
+- **Prove** per ogni lotto: `services risk-all`, `schemas risk`, `api risk`, `services ai-export -k drawdown_context`,
+  `services financial-math` (la guardia dello strato), `api sync` **senza differenze** (i nomi dei componenti OpenAPI
+  restano), ruff e black, grep dei percorsi vecchi a zero (`backend/`, `scripts/`, `.github/`, doc per sviluppatori),
+  `check-orphans`.
+  Doc e devWiki:
+  - `developer/backend/risk/architecture.md` e `developer/api/overview.md`;
+  - `backend-risk.instructions.md`: l'`applyTo` `services/risk/**` copre già i moduli nuovi; vanno aggiornate le
+    citazioni;
+  - 15 pagine della devWiki: le citazioni di simboli spostati; `check_source_paths.py` non deve salire.
+- **Dipendenze e domande al coordinatore**:
+  - CP-9a dopo MF-D, oppure MF-D sui moduli nuovi. Chiedo i tempi di MF-D.
+  - CP-9b e CP-9c toccano 45 file, fra plugin del rischio, AI Export, segnali e test. Ci vuole una finestra quieta:
+    nessun ramo attivo su quegli importatori. Li propongo dopo CP-10 (PL1, segnali), che tocca gli stessi import in
+    `schemas/signals.py`, `signal_service.py` e `series_preparation.py`; oppure subito prima, a lotti nostri in fila.
+  - Chi riscrive i test: il test-author, su file distinti, senza lanciare nulla.
+- **Coordinatore (22:41)**:
+  - i tre lotti e l'ordine **9a → CP-10 → 9b/9c** approvati;
+  - CP-9a viene **prima** di MF-D (è un riordino, i numeri non cambiano) e MF-D cade sui moduli nuovi. Se MF sta per
+    partire, ci accordiamo direttamente;
+  - 9b e 9c in una finestra quieta, col blocco annunciato, come FE8b.
+  - Coda: J-26, aggiornamento della base, J-27, CP-9a.
+- **Mappa di CP-9a**, dalle dipendenze lette con `ast`:
+  - `execute` è il solo orchestratore. Usano `db` solo i caricamenti: ambito, accessi, esistenza, mai prezzati,
+    classificazioni, serie, replay, nomi negli avvisi, qualità dell'insieme. Contesto, successo, metadati, non
+    disponibile e qualità dei dati sono puri.
+  - `risk/plan.py`: `AnalyticPlan` e i predicati (replay storico, ipotetico, ipotetico geografico, legge solo il TWRR).
+    Il modulo piccolo evita un ciclo d'import, perché i predicati servono a quattro moduli.
+  - `risk/scope.py`: i due errori, `ScopeInputs`, `load_scope_inputs(db, …)`, accessi, asset esistenti e mai prezzati,
+    classificazioni, gruppi geografici, `prepare_asset_series(db, …)`, riferimento ed esclusioni dell'ambito. Vi
+    seguono le `patch` su `prepare_asset_series_set`, `load_price_window_facts` ed `ensure_market_holidays`, da
+    verificare uso per uso.
+  - `risk/replay.py`: `prepare_historical_replay_context(db, …)`, `verified_replay_range(db, …)`.
+  - `risk/results.py`: `build_context`, osservazioni disponibili, composizione valida, `success`, `metadata`,
+    `unavailable`, intervallo analizzato, date quotate tenute, `portfolio_twrr_returns` (qui cade R6 di MF-D), avvisi e
+    loro deduplica, `with_warning_asset_names(db, …)`.
+  - `risk/data_quality.py`: rapporto, problemi e avvisi di qualità, fusione, `with_asset_set_quality_issues(db, …)`.
+    Qui sta la riga di **T-R1** (oggi `:440`): chiama `load_configured_fx_pair_sets(db)` della casa.
+  - In `risk/service.py` restano `RiskService` (`catalog`, `execute`, `asset_eligibility`) e il suo aiuto
+    `_every_asset_eligible`.
+  - Le funzioni usate fra moduli hanno nomi pubblici; gli aiuti interni a un modulo tengono il trattino basso.
+
+#### J-26 — esecuzione (slot 2, dalle 22:50)
+
+- **⚠️ Fuori pista 1, credenziali**. Prima corsa della base: `credential_check: mismatch`, login HTTP 401, 0 prompt.
+  - Rimedio: l'opzione documentata `--normalize-copy-credentials`. Riscrive l'hash solo nella copia usa e getta della
+    sonda, e il manifesto dice `source_credentials_modified: false`.
+  - Aggiunta a `probe.sh` per tutte e due le corse.
+- **⚠️ Fuori pista 2, il ponte del renderer è rotto sulla HEAD**. La seconda corsa della base muore dopo 17 s
+  («Broken pipe»). Il ponte (`frontend/scripts/run-ai-export-render-prompt-probe.mjs`), lanciato a mano dal mio
+  worktree, esce con `rune_outside_svelte`.
+  - Causa: Vite gira con `configFile: false` e senza il plugin di Svelte, mentre il grafo d'import dell'AI Export
+    arriva a un modulo `.svelte.ts` con le rune: `$lib/api` → `zodios-client.ts` → `price-refresh/priceRefresh.ts` →
+    `instance/instanceNotices.svelte.ts`. L'ultimo anello è arrivato con `3b016dd4e` (16/10 11:18), quindi ogni sonda
+    reale è rotta su dev da allora, base compresa.
+  - Correzione provata su una copia temporanea, poi cancellata: `svelte({configFile: false})` di
+    `@sveltejs/vite-plugin-svelte` 6.2.4 fra i plugin del ponte. Il ponte carica il renderer e risponde.
+  - Chiesto il via al coordinatore (file condiviso). Reperto per il padrone di `3b016dd4e`: il client dell'API dipende
+    dallo stato degli avvisi della UI.
+- Coordinatore (22:53): via alla correzione del ponte («entra con J-26/J-27») e a `--normalize-copy-credentials`. Il
+  reperto va a Z nel backlog.
+- ✅ **Ponte corretto (2026-10-16)**: `frontend/scripts/run-ai-export-render-prompt-probe.mjs`, l'import di `svelte` da
+  `@sveltejs/vite-plugin-svelte` e `svelte({configFile: false})` fra i plugin, con un commento. `dev_release2` non tocca
+  il file.
+- ✅ **Le due corse (2026-10-16, slot 2, 22:53–22:55)**, `files/j/j26/probe.sh base|current`:
+  - base: backend `4f0a5d323`; frontend e `scripts/` della mia HEAD `e36bc3016`, il cui codice è quello di
+    `4416623a7`, più la correzione del ponte;
+  - corrente: la mia HEAD più la correzione del ponte, con `--compare-with` sulla base;
+  - tutte e due: **9/9 prompt**, 0 fallimenti, sorgente invariata, scansione dei segreti passata, porta 6195 libera.
+  > **Note implementazione — esito** (`files/j/j26/analyze.py`; diff in `files/j/j26/diffs/`, privati):
+  > - **Equivalenza UI/sonda esatta** in tutti e 9: stessa stringa, stessi byte UTF-8.
+  > - **Versioni**: esattamente gli aumenti attesi.
+  >   - J-17: `portfolio.positions` 1→2, `broker.positions` 1→2, `asset.positions_by_broker` 1→2,
+  >     `portfolio.provenance` 2→3, `broker.provenance` 2→3, `asset.provenance` 1→2.
+  >   - MF, ondata 1b: `portfolio.income_timeline` 1→2, `broker.cost_efficiency` 1→2.
+  > - **Nessun «PAYLOAD YAML FALLBACK»**: le versioni nuove si rendono compatte.
+  > - **Tutti gli altri componenti hanno lo stesso hash canonico della base**: drawdown (CP-13a), dettaglio dei lotti
+  >   (CP-7a/7b), lotti e sintesi FIFO, performance, riconciliazione, allocazioni, concentrazione, contesto di mercato,
+  >   copertura tecnica.
+  > - Posizioni, efficienza dei costi e calendario dei proventi cambiano **solo** in `component_version`: il payload è
+  >   identico su questi dati, e così il blocco reso.
+  > - **Il testo del prompt cambia solo nella provenienza**, letto per intero:
+  >   - `asset.provenance`: la gerarchia guadagna `ESTIMATED_AT_COST` (rango 3), e la descrizione di `LAST_TRADE_PRICE`
+  >     dice «an ADJUSTMENT is never a price» (J-17);
+  >   - `portfolio.provenance` e `broker.provenance` (`valuation_semantics`): la gerarchia
+  >     `MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING` col significato del costo, «An ADJUSTMENT is
+  >     never a price» (J-17), e «or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its
+  >     date» (J-24).
+  > - Misure: +254 caratteri per prompt (+273 per l'asset), lo 0,4–1,7 %; il più grande dei 9 sta sui 16 800 token
+  >   stimati (`portfolio.fiscal_lots`).
+  > - **Sorgente nuova nei prompt**: `ESTIMATED_AT_COST` compare nelle semantiche di tutti e 9. Nessuna posizione dei
+  >   dati è al costo (nessuna rettifica), quindi nessuna riga lo porta. I 3 asset senza quotazione restano all'ultimo
+  >   scambio (`LAST_TRADE_PRICE`), con righe identiche alla base.
+  > - **Nient'altro è cambiato**: ogni differenza è attribuita a J-17, J-24 o MF; nessun reperto. CP-13a, J-24 sui
+  >   valori, CP-7a e CP-7b non hanno casi in questi dati (nessuna perdita totale, nessuna rettifica, solo EUR) e sono
+  >   coperti dai test funzionali.
+  > - Lettura: ogni diff per intero e i blocchi cambiati. Il resto di ogni prompt è uguale byte per byte alla base,
+  >   come provano gli hash canonici e il confronto blocco per blocco.
+  > - Igiene: la copia di lavoro `/tmp/librefolio-r2-j-realdata`, l'albero `/tmp/librefolio-j26-base` e le uscite della
+  >   sessione restano fino alla lettura del developer, poi si cancellano. Le due corse fallite (login, ponte) restano
+  >   nella cartella della sessione con le altre.
+- ✅ **Base aggiornata** (coordinatore, 22:58): merge `90b0e1bcc` (genitori `e36bc3016` e dev `b89985a8b`, con B3, E,
+  C-90, Y-14/19/20, Z-18…), pulito; i miei file non committati sono intatti. Il reperto del ponte va a Z come **Z-20**
+  (lo ha scritto il coordinatore).
+
+#### J-27 — codice (via del coordinatore 22:40; base `90b0e1bcc`)
+
+- ✅ **Passo 1 — rossi** (test-author, 22:41–22:52, nessuna esecuzione), in `test_ledger_totals.py`:
+  - `test_l7_from_json_refuses_an_amount_that_is_not_plain_decimal_text`: 43 casi, 35 rossi e 8 guardie. Esponenti
+    (anche `"1E+50000000"`, solo sul saldo), `+`, spazi, newline finale, `_`, cifre arabo-indiche e a tutta larghezza,
+    61 cifre per parte (anche zeri iniziali o finali), `".5"`, `"5."`, `"-.5"`. Le guardie sono `Infinity`, `NaN`, `"-"`
+    e lo spazio interno.
+  - `test_l7_from_json_reads_plain_decimal_text_canonically`: 14 guardie (60 cifre per parte, anche insieme e negative,
+    `"-0"`, `"007"`, `"10.500"`).
+  - ruff e black puliti.
+- ✅ **Passo 2 — codice e doc (2026-10-16)**.
+  > **Note implementazione**:
+  > - `financial_math/ledger_totals.py`: `_PLAIN_AMOUNT = -?[0-9]{1,prec}(?:\.[0-9]{1,prec})?`, legata a `_EXACT.prec`
+  >   e letta con `fullmatch`, quindi la newline finale non passa. `_as_amount` rifiuta tutto il resto con `ValueError`
+  >   «… is not plain decimal text». L'anteprima del testo nel messaggio è di al più 40 caratteri, perché un testo
+  >   enorme non diventi un messaggio enorme.
+  > - Docstring del modulo: la frase del ripristino, che li ricalcola sulla copia della prova una volta aggiornata e li
+  >   confronta prima della conferma; una differenza è un avviso, mai un rifiuto. Poi la regola di lettura e il limite
+  >   entro cui vale l'andata e ritorno.
+  > - Doc, `developer/backend/financial_math.md#ledger-totals`: le stesse due cose. La frase «after a restore, compares
+  >   them with the totals recomputed on the restored database», segnalata da B, ora dice la prova del ripristino prima
+  >   della conferma; un paragrafo con un elenco dice la regola di `from_json`.
+  > - Dentro il lotto, col via del coordinatore: la correzione del ponte della sonda (vedi J-26).
+- ✅ **Passo 3 — rossi sul codice vecchio (2026-10-16, 23:01–23:02)**. Comando `files/j/j27/red.sh`: toglie la patch del
+  codice, lancia `services financial-math` nella corsia 6185, rimette la patch; «worktree back to the saved state».
+  > **Note implementazione**: **35 rossi** (esattamente i 35 casi attesi) e 613 verdi, guardie comprese.
+- ✅ **Passo 4 — verdi sulla revisione combinata (23:02–23:12)**, `files/j/j27/runs.sh green`:
+  > **Note implementazione**:
+  > - `services financial-math` **648**, `services backup-totals` **84** e `services backup-staging` **145**: le unità
+  >   di B, sulla base `90b0e1bcc`;
+  > - porta 6185 libera.
+- ✅ **Passo 5 — controlli (23:20–23:28)**:
+  > **Note implementazione**:
+  > - `mkdocs build` rigoroso, con 3 084 URL relativi risolti, e `mkdocs check-links`: esito 0;
+  > - Prettier sul ponte, lanciato da `frontend/`, e `git diff --check`: puliti; ruff e black puliti;
+  > - la pagina toccata è solo EN (sviluppatori): nessun debito di traduzione;
+  > - nessuna API toccata, quindi nessun `api sync`.
+  >
+  > **⚠️ Fuori pista**: Prettier lanciato dalla radice del repo non trova `prettier-plugin-svelte`. Va lanciato da
+  > `frontend/`.
+  >
+  > **Backlog**: J-26 e J-27 chiuse.
+
+#### Checkpoint J-27 ✅ (2026-10-16) — tre commit del coordinatore (`7336722ad` fix, `985b10cbd` ponte, `e2a956999` journal), entrato in dev
+
+#### CP-9a — il servizio del rischio diviso per tema, con T-R1 (via del coordinatore 23:3x; base `e2a956999`)
+
+- ✅ **Passo 1 — il codice (2026-10-16)**.
+  > **Note implementazione**:
+  > - Generatore AST (`files/j/cp9a/split.py`): sposta le porzioni esatte del sorgente, cioè classi, funzioni, metodi
+  >   con decoratori e commenti sopra. I metodi diventano funzioni di modulo: `self.db` → `db`; `self._x(` → la funzione
+  >   nuova, con `db` in testa quando legge il database. Poi rinomina a confine di parola. Ogni modulo riceve tutto il
+  >   blocco d'import e `ruff --fix` toglie quelli inutili.
+  > - Risultato: `risk/service.py` passa da 1 456 a 336 righe; i moduli nuovi sono `plan.py` (47), `data_quality.py`
+  >   (~225), `scope.py` (~360), `replay.py` (152) e `results.py` (~485).
+  > - Grafo d'import aciclico: `plan` ← `data_quality` ← `replay`/`results` ← `service`; `scope` non dipende da altri.
+  > - Nomi che non oscurano le variabili locali di `execute`: `load_existing_asset_ids`,
+  >   `load_never_priced_asset_ids`, `build_execution_context`, `success_result`, `result_metadata`,
+  >   `unavailable_result`, `plan_data_quality`.
+  > - Le funzioni usate fra moduli hanno nomi pubblici; gli aiuti interni di `data_quality.py` tengono il trattino
+  >   basso.
+  > - **T-R1**: `with_asset_set_quality_issues` chiama `load_configured_fx_pair_sets(db)` della casa. L'import di
+  >   `PortfolioService` sparisce dal rischio.
+  > - `api/v1/risk.py` importa i due errori da `risk.scope`. `__all__` di `service.py` = `["RiskService"]`: nessuna
+  >   riesportazione.
+  > - Commenti e istruzioni aggiornati: `risk_plugins/asset_set_comparison/plugin.py:132` e
+  >   `.github/instructions/backend-risk.instructions.md:33-34`. L'`applyTo` `services/risk/**` copre già i moduli nuovi.
+  > - ruff (tutte le regole) e black puliti; l'import dei sei moduli riesce. `RiskService` ha `catalog`, `execute`,
+  >   `asset_eligibility` e `_every_asset_eligible`.
+  >
+  > **⚠️ Fuori pista**: il generatore spostava solo funzioni e classi, e ha perso tre assegnazioni di modulo:
+  > `_COMPOSITION_WARNING_CODES` (col suo commento), `_PRICE_EXCLUSION_REASONS` e `__all__`. Le ha segnalate ruff
+  > (F821). Rimesse a mano accanto a chi le legge: `results.py`, `data_quality.py` e `service.py`. Ripristinato l'import
+  > di `DataQualityExclusionReason`.
+- Test (test-author) e doc (`developer/backend/risk/architecture.md`, docs-writer) in parallelo, senza lanciare nulla.
+- ✅ **Passo 2 — test, doc e devWiki (2026-10-16)**.
+  > **Note implementazione**:
+  > - **Test** (test-author, nessuna esecuzione): sei file migrati; valori e asserzioni identici, nessuna asserzione
+  >   tolta.
+  >   - `test_risk_service.py`: import dai moduli nuovi; 15 `load_scope_inputs(db, …)` con un `db` locale (il servizio
+  >     teneva solo la sessione); 6 `build_execution_context`; 29 patch dall'istanza al modulo che legge il nome.
+  >   - `test_risk_asset_set.py` e `test_risk_eligibility.py`: `prepare_asset_series(db, …)` da `risk.scope`. Gli spy
+  >     condivisi (`loader_calls`, `holiday_table_plumbing`) coprono **tutti e due** i lettori, `risk.service` e
+  >     `risk.replay`.
+  >   - `test_risk_api.py`: gli errori da `risk.scope`.
+  >   - `test_risk_warnings_i18n.py`: la barriera di presenza va su `risk/{data_quality,results,scope}.py`.
+  >   - `test_data_quality_thresholds.py`: `CONSUMERS` guadagna `risk/data_quality.py`.
+  >   - Le patch nuove tengono `raising=True`: un modulo sbagliato fallisce forte.
+  >   - Io: due docstring di `test_weights.py` (il chiamante di `share_of` è ora `risk/scope`).
+  >   - ruff e black puliti sui 7 file.
+  > - **Doc** (docs-writer): `developer/backend/risk/architecture.md`.
+  >   - I 7 nomi vecchi puntano alla funzione e al modulo nuovi.
+  >   - La Source Map ha una riga per modulo; una frase dice T-R1.
+  >   - Ancore e numerazione dei passi invariate, così il link di `risk-lab.md` al passo 4 regge.
+  > - **`.github`**: in `backend-risk.instructions.md` la riga «Runtime» (:15) dice la mappa dei moduli. In
+  >   `skills/risk-tools/risk-plugin/SKILL.md:61` le decisioni legate al codice puntano a `risk/results.py` e
+  >   `risk/plan.py`.
+  > - **devWiki**: T-R1 lato rischio chiusa, nota datata in `decisions/financial-math-one-home.md` ed
+  >   `entities/portfolio-service.md`. Le righe «Source files» che mandavano comportamento spostato a `risk/service.py`
+  >   puntano al modulo nuovo, in 5 pagine. `check_source_paths.py` resta a 5 percorsi mancanti, tutti preesistenti.
+  >   Voce in `log.md`.
+  > - **Al coordinatore, non miei**:
+  >   - `TODO_FUTURI.md:141,169,178` nomina `RiskService._prepare_historical_replay_context`;
+  >   - T-R1 nella sezione T: il lato rischio è chiuso da CP-9a, resta `_compute_tx_fingerprint` di `portfolio_service`;
+  >   - `developer/api/overview.md`: «40 today», che sono 56, e l'elenco della regola 3 senza `schemas/portfolio.py` e
+  >     `schemas/tools.py`; non legato a CP-9a.
+- ✅ **Passo 3 — cancelli (2026-10-17, 00:03–00:27)**, `files/j/cp9a/runs.sh green` e `checks.sh` (corsia 6185, uno alla
+  volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi: `services risk-all` **903**, `services ai-export drawdown_context` **19**, `services financial-math`
+  >   **648**, `db populate --force`, `api risk` **15**;
+  > - `api sync`: `openapi.json` **identico byte per byte** a prima, quindi il contratto dell'API non cambia;
+  > - `mkdocs build` rigoroso e `check-links`: esito 0; `git diff --check` pulito; porta 6185 libera;
+  > - **niente perso e niente aggiunto**: per ogni file di test toccato, lo stesso numero di funzioni `test_` e di
+  >   `parametrize`/`pytest.param` della HEAD (13, 7, 33, 44, 34, 59, 6);
+  > - nessun nome vecchio rimasto in `backend/`, `scripts/`, `.github/` e doc per sviluppatori;
+  > - nessun numero cambia (riordino), quindi nessuna riga di CHANGELOG.

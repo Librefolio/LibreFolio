@@ -16,7 +16,7 @@
     "accountCreated": "Account creato con successo! Effettua l'accesso.",
     "registrationFailed": "Registrazione fallita. Riprova.",
     "registrationDisabled": "La registrazione di nuovi utenti è al momento disabilitata dall'amministratore.",
-    "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
+    "emailRecoveryNotAvailable": "Il recupero via email non è disponibile su questa istanza. Reimposta la password dal terminale del server, oppure chiedi al tuo amministratore un link per reimpostarla.",
     "serverTerminalInstructions": "Esegui questo comando sul server:",
     "contactAdministrator": "Contatta l'amministratore di sistema se non hai accesso al server.",
     "backToLogin": "Torna al Login",
@@ -78,6 +78,21 @@
       "submit": "Imposta la nuova password",
       "done": "La password è stata cambiata: accedi con quella nuova.",
       "failed": "Non è stato possibile cambiare la password. Riprova."
-    }
+    },
+    "setup": {
+      "title": "Configura il tuo account amministratore",
+      "intro": "Scegli la password dell'account amministratore di questa istanza.",
+      "account": "Account:",
+      "submit": "Attiva l'account",
+      "failed": "Non è stato possibile configurare l'account. Riprova.",
+      "blocked": "Questa istanza è bloccata dal suo fornitore: l'account si potrà configurare quando sarà sbloccata.",
+      "newLinkHint": "Chiedi un nuovo link al tuo fornitore. Sul tuo server, esegui «dev.py user setup-link»."
+    },
+    "notices": {
+      "openRegistration": "La registrazione è aperta e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account.",
+      "openRegistrationLocked": "La registrazione è aperta, fissata da LIBREFOLIO_REGISTRATION, e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account. Cambia la variabile per chiuderla.",
+      "openRegistrationAction": "Cambia chi può registrarsi"
+    },
+    "instanceBlocked": "Questa istanza è bloccata dal suo fornitore: riprova quando sarà sbloccata."
   }
 }

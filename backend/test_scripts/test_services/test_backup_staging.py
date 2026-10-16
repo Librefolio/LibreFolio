@@ -33,14 +33,26 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     and backups: every path of it but ``.restore/`` keeps its mode, size and SHA-256 through every check of the module.
 (j) The warnings: ``rows_changed`` with the post-migration fix that removed rows (``event_types``),
     ``foreign_key_violations`` for the backup's own broken references, ``foreign_key_violations_added`` for new ones.
+(k) The ledger's control totals (lot B-13, as the contract's §7 decided them): the manifest records J's totals of the
+    snapshot; the check reads them again on the copy, after its upgrade and its post-migration fixes, and compares.
+    ``same`` for a ledger as recorded (at the head, after a real upgrade, after a fix that only reclassifies lone pair
+    halves, and for totals written otherwise but equal: lines in another order, zero lines, trailing zeros);
+    ``changed`` when only the manifest's totals were rewritten (the manifest is not in its own list of checksums:
+    nothing else tells), when the upgrade or a fix moved an amount, each difference listed (the first 20, all counted)
+    and the warning ``control_totals_changed``; ``absent`` for a manifest without them, with ``null``, a value of
+    another type, an amount that is not plain text or what J's reading refuses; ``other_version`` for totals of another
+    method; ``unreadable``, warned ``control_totals_unreadable``, when they cannot be read on the copy. Never a blocker:
+    ``restorable`` and ``blockers`` as they would be without them. ``_report`` without a comparison says ``absent``,
+    with one carries it; a ``report.json`` written before lot B-13 still reads, its totals ``absent``.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
 are the product's: the upgrade of a copy that succeeds, and one that fails on the copy (a trigger refuses any change of
 its revision). Every other failure is simulated in this process, for one test: ``staging.subprocess`` (an ``alembic``
 that ends badly, times out or cannot start), ``staging._upgrade``, ``staging.run_post_migration_fixes``, ``staging.os``
-(files that fail to write), ``staging.shutil`` (a disk with little room), ``staging.ALEMBIC_INI`` and
-``staging.MAX_ENTRIES``.
+(files that fail to write), ``staging.shutil`` (a disk with little room), ``staging.ALEMBIC_INI``,
+``staging.MAX_ENTRIES`` and ``ledger_totals_of`` (as ``staging`` and ``totals`` name it). ``instance_backup.totals`` is
+imported by the tests that need it, never at collection: until lot B-13 writes it, each of them fails on its own.
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
@@ -54,6 +66,7 @@ from __future__ import annotations
 import ast
 import errno
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -70,14 +83,16 @@ import zipfile
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
 from backend.app.config import get_data_dir
 from backend.app.db.post_migration.base import PostMigrationReport
+from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, control_totals
 from backend.app.services.platform.instance_backup import staging
 from backend.app.services.platform.instance_backup.archive import BuiltArchive, build_archive
 from backend.app.services.platform.instance_backup.jobs import _RunLock
@@ -231,6 +246,40 @@ LIVE_FILES = {
     "backups/librefolio-backup-20261014-090000.zip": b"PK an older backup of the live instance",
     "logs/librefolio.log": b'{"event": "a log line"}\n',
 }
+
+#: The brokers and assets the ledger's rows refer to: (id, name) and (id, name, currency, asset type).
+LEDGER_BROKERS = ((1, "Broker Alpha"), (2, "Broker Beta"), (3, "Broker Gamma"))
+LEDGER_ASSETS = ((1, "Asset One", "EUR", "STOCK"), (2, "Asset Two", "USD", "ETF"), (3, "Asset Three", "CHF", "BOND"))
+#: A ledger as the app keeps it: (broker id, asset id, type, date, quantity, amount, currency), the numbers as SQL text
+#: (the columns' NUMERIC affinity stores them as it stores the app's). Cash in several currencies and positions in
+#: several brokers, negatives, the smallest amount and quantity, a row of nothing, a position without cash and lines
+#: whose rows cancel out: broker 3 is left with none. No TRANSFER, CASH_TRANSFER or FX_CONVERSION: alone, such a row
+#: is a lone pair half, which a post-migration fix converts (one test does it on purpose).
+LEDGER = (
+    (1, None, "DEPOSIT", "2026-01-02", "0", "10000", "EUR"),
+    (1, 1, "BUY", "2026-01-05", "10", "-1500.5", "EUR"),
+    (1, 1, "SELL", "2026-02-01", "-4", "700.25", "EUR"),
+    (1, 1, "DIVIDEND", "2026-03-01", "0", "12.34", "EUR"),
+    (1, None, "FEE", "2026-03-02", "0", "-2.5", "EUR"),
+    (1, None, "DEPOSIT", "2026-01-02", "0", "500", "USD"),
+    (1, 2, "BUY", "2026-01-06", "0.000001", "-0.01", "USD"),
+    (1, 3, "ADJUSTMENT", "2026-04-01", "5", "0", None),
+    (2, None, "DEPOSIT", "2026-01-03", "0", "100", "EUR"),
+    (2, None, "WITHDRAWAL", "2026-05-03", "0", "-100", "EUR"),
+    (2, 1, "ADJUSTMENT", "2026-01-10", "3", "0", None),
+    (2, 1, "ADJUSTMENT", "2026-01-11", "-3", "0", None),
+    (2, None, "INTEREST", "2026-06-30", "0", "0.000001", "CHF"),
+    (2, None, "TAX", "2026-06-30", "0", "-7", "GBP"),
+    (2, 2, "ADJUSTMENT", "2026-07-01", "0", "0", "USD"),
+    (3, None, "DEPOSIT", "2026-01-04", "0", "50", "JPY"),
+    (3, None, "WITHDRAWAL", "2026-01-05", "0", "-50", "JPY"),
+)
+INSERT_BROKER = "INSERT INTO brokers (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+INSERT_ASSET = "INSERT INTO assets (id, display_name, currency, asset_type, active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)"
+INSERT_TRANSACTION = "INSERT INTO transactions (broker_id, asset_id, type, date, quantity, amount, currency, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+#: The module of the ledger's control totals in a backup (lot B-13), and the fields it adds to a check's report.
+TOTALS_MODULE = "backend.app.services.platform.instance_backup.totals"
+TOTALS_FIELDS = ("control_totals", "control_totals_differences", "control_totals_differences_count")
 
 
 # =============================================================================
@@ -644,6 +693,85 @@ def refused(archive: Path, instance: Instance, **kwargs) -> tuple[StagingError, 
 
 def never_upgrade(database: Path) -> None:
     raise AssertionError("this archive must be refused before its copy is upgraded: _upgrade ran")
+
+
+# -----------------------------------------------------------------------------
+# The ledger and its control totals (lot B-13)
+# -----------------------------------------------------------------------------
+
+
+def totals_module() -> ModuleType:
+    """``instance_backup.totals`` (lot B-13). Imported when a test needs it, never at collection: until it exists, each
+    test that needs it fails on its own, with this message."""
+    try:
+        return importlib.import_module(TOTALS_MODULE)
+    except ModuleNotFoundError as exc:
+        if exc.name != TOTALS_MODULE:
+            raise
+        pytest.fail(f"{TOTALS_MODULE} does not exist: lot B-13 is not written yet ({exc})")
+
+
+def add_ledger(database: Path, rows=LEDGER) -> None:
+    """``LEDGER_BROKERS``, ``LEDGER_ASSETS`` and the ledger ``rows``, inserted by SQL into a LibreFolio database."""
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.executemany(INSERT_BROKER, [(broker_id, name, CREATED, CREATED) for broker_id, name in LEDGER_BROKERS])
+        conn.executemany(INSERT_ASSET, [(asset_id, name, currency, kind, CREATED, CREATED) for asset_id, name, currency, kind in LEDGER_ASSETS])
+        conn.executemany(INSERT_TRANSACTION, [(*row, CREATED, CREATED) for row in rows])
+
+
+def ledger_rows(database: Path) -> list[SimpleNamespace]:
+    """The rows of the ledger as J's ``compute_control_totals`` reads them, read here with ``sqlite3`` alone: its eight
+    columns, by id; a ``Numeric(18, 6)`` as SQLAlchemy gives it back on SQLite (the stored value, at six places)."""
+    with closing(read_only(database)) as conn:
+        rows = conn.execute("SELECT id, type, date, broker_id, asset_id, currency, amount, quantity FROM transactions ORDER BY id").fetchall()
+    return [SimpleNamespace(id=row_id, type=kind, date=date.fromisoformat(day), broker_id=broker_id, asset_id=asset_id, currency=currency, amount=Decimal(f"{amount:.6f}"), quantity=Decimal(f"{quantity:.6f}")) for row_id, kind, day, broker_id, asset_id, currency, amount, quantity in rows]
+
+
+def ledger_archive(root: Path, database: Path, *, accounts=ACCOUNTS, rows=LEDGER) -> BuiltArchive:
+    """The archive of a data directory (``root/data``) made from ``database``, with ``accounts``, ``FILES`` and the
+    ledger ``rows``."""
+    data = make_data_dir(root / "data", database, accounts=accounts)
+    add_ledger(data / DATABASE_ENTRY, rows)
+    return build_into(data, root / "work")
+
+
+def recorded_totals(manifest: BackupManifest) -> object:
+    """What the manifest records of the ledger's totals (lot B-13)."""
+    assert "control_totals" in type(manifest.database).model_fields, "ManifestDatabase has no control_totals: lot B-13 is not written yet"
+    return manifest.database.control_totals
+
+
+def manifest_with_totals(archive: BuiltArchive, recorded: object = None, *, drop: bool = False) -> bytes:
+    """The manifest of ``archive`` as JSON, its ``database.control_totals`` replaced by ``recorded`` (any JSON value), or
+    left out (``drop``, as a backup made before lot B-13 has it); every other field as the build wrote it."""
+    document = archive.manifest.model_dump(mode="json")
+    database = dict(document["database"])
+    if drop:
+        database.pop("control_totals", None)
+    else:
+        database["control_totals"] = recorded
+    return json.dumps({**document, "database": database}).encode("utf-8")
+
+
+def totals_in(report: StagingReport) -> tuple[str, list[dict], int]:
+    """What a check's report says of the ledger's totals (lot B-13): the status, the differences (as JSON) and how many
+    there are in all."""
+    dumped = report.model_dump(mode="json")
+    missing = [field for field in TOTALS_FIELDS if field not in dumped]
+    assert not missing, f"the report of a check has no {', '.join(missing)}: lot B-13 is not written yet"
+    return dumped["control_totals"], dumped["control_totals_differences"], dumped["control_totals_differences_count"]
+
+
+def totals_difference(kind: str, broker_id: int, key: str | int, before: str | None, after: str | None) -> dict:
+    """A difference as a report gives it: ``key`` is the currency of a cash line, the asset of a quantity line."""
+    return {"kind": kind, "broker_id": broker_id, "currency": key if kind == "cash" else None, "asset_id": key if kind == "quantity" else None, "before": before, "after": after}
+
+
+def replace_ledger_totals(patch: pytest.MonkeyPatch, replacement) -> None:
+    """``ledger_totals_of`` replaced wherever a check may read it: the totals module's own, and the name ``staging``
+    imported (set even if it has none: the module's is then the one it reads)."""
+    patch.setattr(totals_module(), "ledger_totals_of", replacement)
+    patch.setattr(staging, "ledger_totals_of", replacement, raising=False)
 
 
 # =============================================================================
@@ -1730,3 +1858,271 @@ def test_broken_references_the_upgrade_adds_are_warned(instance, older_archive, 
     assert report.warnings == ["rows_changed", "foreign_key_violations_added"], f"both warned, in this order: {report.warnings}"
     assert (report.tables["user_settings"], report.restorable) == (TableRows(before=0, after=1), True), f"{report.tables['user_settings']}"
     print_success("rows_changed, foreign_key_violations_added")
+
+
+# =============================================================================
+# (k) The ledger's control totals (lot B-13)
+# =============================================================================
+
+
+def test_a_ledger_as_the_backup_recorded_it_reads_the_same(instance, databases, tmp_path):
+    """(k) The manifest records J's totals of the ledger the backup copied; at the head the copy is that very database,
+    read again: ``same``, no difference, no warning; the report written with them."""
+    print_section("The ledger's control totals")
+    built = ledger_archive(tmp_path / "source", databases.head)
+    recorded = recorded_totals(built.manifest)
+    expected = control_totals(ledger_rows(tmp_path / "source" / "data" / DATABASE_ENTRY)).to_json()
+    assert expected["cash"] and expected["quantities"], f"precondition: a ledger with cash and positions: {expected}"
+    assert recorded == expected, f"the manifest records J's totals of the ledger: {recorded} != {expected}"
+    report = stage_archive(built.path, instance.root)
+    assert totals_in(report) == ("same", [], 0), f"the ledger as recorded: same, nothing listed: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"nothing to warn, nothing blocking: {report.warnings}, {report.blockers}"
+    assert read_report(instance.root, report.stage_id) == report, "report.json keeps the totals' verdict"
+    print_success(f"same: {len(expected['cash'])} cash lines, {len(expected['quantities'])} positions")
+
+
+def test_an_older_backup_upgraded_for_real_keeps_the_same_totals(upgraded):
+    """(k) The real ``alembic upgrade`` of (c): the totals recorded at ``OLDER`` (made by this code) are those read on the
+    copy after the upgrade, which leaves it in WAL mode: ``same``, no warning of the totals."""
+    recorded = recorded_totals(upgraded.archive.manifest)
+    assert isinstance(recorded, dict) and recorded.get("version") == CONTROL_TOTALS_VERSION, f"precondition: the backup at {OLDER} records its totals: {recorded}"
+    assert totals_in(upgraded.report) == ("same", [], 0), f"upgraded to {HEAD}: same totals: {totals_in(upgraded.report)}"
+    assert not [code for code in upgraded.report.warnings if code.startswith("control_totals")], f"no warning of the totals: {upgraded.report.warnings}"
+    print_success(f"{OLDER} → {HEAD}: same")
+
+
+def test_totals_rewritten_in_the_manifest_alone_are_changed_listed_and_warned(instance, databases, tmp_path):
+    """(k) Only the manifest's totals are rewritten; every other entry is the archive's own, byte for byte, and the
+    manifest is not in its own list of checksums: the check accepts the archive and only the totals tell. ``changed``,
+    each difference in order (cash first, by broker, then currency or asset), J's canonical text, ``None`` where a line
+    is absent; a warning, never a blocker; report.json keeps the differences."""
+    built = ledger_archive(tmp_path / "source", databases.head)
+    assert MANIFEST_ENTRY not in [entry.path for entry in built.manifest.files], f"precondition: the manifest lists every entry but itself: {[entry.path for entry in built.manifest.files]}"
+    real = recorded_totals(built.manifest)
+    assert isinstance(real, dict) and real["cash"] and real["quantities"], f"precondition: the totals of a ledger with cash and positions: {real}"
+    first_cash, last_quantity = real["cash"][0], real["quantities"][-1]
+    bumped = str(Decimal(first_cash["balance"]) + 1)
+    recorded = {
+        **real,
+        "cash": [{**first_cash, "balance": bumped}, *real["cash"][1:], {"broker_id": 99, "currency": "SEK", "balance": "12"}],
+        "quantities": real["quantities"][:-1],
+    }
+    archive = pack(tmp_path / "changed.zip", entries_of(built), manifest_with_totals(built, recorded))
+    report = stage_archive(archive, instance.root)
+    expected = [
+        totals_difference("cash", first_cash["broker_id"], first_cash["currency"], bumped, first_cash["balance"]),
+        totals_difference("cash", 99, "SEK", "12", None),
+        totals_difference("quantity", last_quantity["broker_id"], last_quantity["asset_id"], None, last_quantity["quantity"]),
+    ]
+    assert totals_in(report) == ("changed", expected, 3), f"the three lines that differ, in order: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_changed"], [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
+    assert read_report(instance.root, report.stage_id) == report, "report.json keeps the differences"
+    print_success(f"changed: {[(line['kind'], line['broker_id']) for line in expected]}")
+
+
+def test_past_20_differences_a_report_keeps_the_first_20_and_counts_them_all(instance, head_archive, tmp_path):
+    """(k) 25 cash lines recorded, none in the backup's empty ledger: the first 20 in order, 25 counted."""
+    recorded = {"version": CONTROL_TOTALS_VERSION, "cash": [{"broker_id": 7, "currency": f"C{index:02d}", "balance": str(index + 1)} for index in range(25)], "quantities": []}
+    report = stage_archive(pack(tmp_path / "many.zip", entries_of(head_archive), manifest_with_totals(head_archive, recorded)), instance.root)
+    expected = [totals_difference("cash", 7, f"C{index:02d}", str(index + 1), None) for index in range(20)]
+    assert totals_in(report) == ("changed", expected, 25), f"the first 20 of 25: {totals_in(report)}"
+    print_success("20 listed, 25 counted")
+
+
+#: What a manifest may record that is not a comparable total: (left out, the value recorded). §7.2: the field is ``Any``,
+#: so a value of another type keeps the archive valid; §7.3: an amount that is not plain text is never read.
+NOT_RECORDED = [
+    pytest.param(True, None, id="left-out-a-backup-made-before"),
+    pytest.param(False, None, id="null"),
+    pytest.param(False, {"version": CONTROL_TOTALS_VERSION}, id="malformed-no-lines"),
+    pytest.param(False, {"version": "1", "cash": [], "quantities": []}, id="a-version-that-is-not-an-int"),
+    pytest.param(False, [{"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}], id="a-list"),
+    pytest.param(False, "version 1", id="a-string"),
+    pytest.param(False, 42, id="a-number"),
+    pytest.param(False, {"version": CONTROL_TOTALS_VERSION, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "1E+3"}], "quantities": []}, id="an-amount-not-plain-text"),
+]
+
+
+@pytest.mark.parametrize(("drop", "recorded"), NOT_RECORDED)
+def test_totals_a_manifest_does_not_record_are_absent_without_a_warning(instance, head_archive, tmp_path, drop, recorded):
+    """(k) Nothing to compare: the archive is checked as usual, ``absent``, nothing listed, no warning. An archive
+    without a manifest is not a backup (``not_a_backup``, (e); §7.7): what a backup made before lot B-13, or by hand, can
+    lack or spoil is the field."""
+    report = stage_archive(pack(tmp_path / "absent.zip", entries_of(head_archive), manifest_with_totals(head_archive, recorded, drop=drop)), instance.root)
+    assert totals_in(report) == ("absent", [], 0), f"nothing comparable recorded: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"no warning: {report.warnings}"
+    print_success("absent")
+
+
+def test_totals_recorded_otherwise_but_equal_read_the_same(instance, databases, tmp_path):
+    """(k) §7.4: the lines in another order, an explicit zero line and amounts with trailing zeros, in an otherwise equal
+    document: the lines are compared as maps, in J's canonical text, zero lines dropped: no difference, ``same``."""
+    built = ledger_archive(tmp_path / "source", databases.head)
+    real = recorded_totals(built.manifest)
+    assert isinstance(real, dict) and len(real["cash"]) > 1 and len(real["quantities"]) > 1, f"precondition: several lines of each: {real}"
+    first = real["cash"][0]
+    recorded = {
+        **real,
+        "cash": [{**first, "balance": first["balance"] + ("0" if "." in first["balance"] else ".000")}, *real["cash"][:0:-1], {"broker_id": 3, "currency": "JPY", "balance": "0"}],
+        "quantities": [{"broker_id": 2, "asset_id": 1, "quantity": "-0.0"}, *real["quantities"][::-1]],
+    }
+    report = stage_archive(pack(tmp_path / "otherwise.zip", entries_of(built), manifest_with_totals(built, recorded)), instance.root)
+    assert totals_in(report) == ("same", [], 0), f"equal as maps: same: {totals_in(report)}"
+    assert report.warnings == [], f"no warning: {report.warnings}"
+    print_success("reordered, zero lines, trailing zeros: same")
+
+
+def test_a_report_made_without_totals_says_absent():
+    """(k) §7.6: ``_report`` without ``totals`` (as every call of this module's (j) makes it): ``absent``, nothing
+    listed, no warning of the totals."""
+    tables = {"users": 3}
+    report = _report(VALID_ID, synthetic_manifest(tables), description(tables), description(tables), "same", [], HEAD, [], ADMINISTRATORS)
+    assert totals_in(report) == ("absent", [], 0), f"no comparison given: absent: {totals_in(report)}"
+    assert (report.warnings, report.blockers) == ([], []), f"nothing to warn: {report.warnings}"
+
+
+#: (recorded, current, the status, the warning of the report): ``_report`` given each comparison.
+REPORTED_COMPARISONS = [
+    pytest.param({"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}, {"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}, "same", None, id="same"),
+    pytest.param(
+        {"version": CONTROL_TOTALS_VERSION, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "10"}], "quantities": [{"broker_id": 2, "asset_id": 3, "quantity": "1"}]},
+        {"version": CONTROL_TOTALS_VERSION, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "12.5"}], "quantities": []},
+        "changed",
+        "control_totals_changed",
+        id="changed",
+    ),
+    pytest.param({"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}, None, "unreadable", "control_totals_unreadable", id="unreadable"),
+    pytest.param(None, {"version": CONTROL_TOTALS_VERSION, "cash": [], "quantities": []}, "absent", None, id="absent"),
+    pytest.param({"version": 99}, None, "other_version", None, id="other-version"),
+]
+
+
+@pytest.mark.parametrize(("recorded", "current", "status", "warning"), REPORTED_COMPARISONS)
+def test_a_report_carries_the_comparison_it_is_given(recorded, current, status, warning):
+    """(k) §7.6: ``_report(..., totals=<TotalsComparison>)``: the status, each difference with its six fields, the count;
+    a warning for ``changed`` and ``unreadable`` alone, never a blocker."""
+    comparison = totals_module().compare_totals(recorded, current)
+    assert comparison.status == status, f"precondition: {status}: {comparison.status}"
+    tables = {"users": 3}
+    report = _report(VALID_ID, synthetic_manifest(tables), description(tables), description(tables), "same", [], HEAD, [], ADMINISTRATORS, totals=comparison)
+    differences = [totals_difference(line.kind, line.broker_id, line.currency if line.kind == "cash" else line.asset_id, line.before, line.after) for line in comparison.differences]
+    assert totals_in(report) == (status, differences, comparison.differences_count), f"{status}: carried as given: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == ([warning] if warning else [], [], True), f"{status}: {report.warnings}, {report.blockers}"
+
+
+def test_a_report_written_before_lot_b13_still_reads_its_totals_absent(instance, head_archive):
+    """(k) §7.6: a ``report.json`` a check of before lot B-13 wrote (no field of the totals) is read, its totals
+    ``absent``, nothing listed, everything else as written."""
+    report = stage_archive(head_archive.path, instance.root)
+    written = report.model_dump(mode="json")
+    assert set(TOTALS_FIELDS) <= set(written), f"precondition: the report has the totals' fields: lot B-13 is not written yet: {sorted(written)}"
+    old = {key: value for key, value in written.items() if key not in TOTALS_FIELDS}
+    (stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).write_text(json.dumps(old, indent=2) + "\n", encoding="utf-8")
+    read = read_report(instance.root, report.stage_id)
+    assert totals_in(read) == ("absent", [], 0), f"a report of before: absent: {totals_in(read)}"
+    assert read.model_dump(mode="json", exclude=set(TOTALS_FIELDS)) == old, "everything else as written"
+    print_success("report.json of before B-13: read, absent")
+
+
+def test_totals_of_another_version_of_the_method_are_not_compared(instance, head_archive, tmp_path):
+    """(k) Version 99, of a shape this LibreFolio does not know: the manifest is read all the same (J's JSON is kept as
+    it is), and the totals are not compared: ``other_version``, nothing listed, no warning."""
+    recorded = {"version": 99, "lines": "of a method this LibreFolio does not know"}
+    report = stage_archive(pack(tmp_path / "other.zip", entries_of(head_archive), manifest_with_totals(head_archive, recorded)), instance.root)
+    assert totals_in(report) == ("other_version", [], 0), f"not comparable: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == ([], [], True), f"no warning: {report.warnings}"
+    print_success("other_version")
+
+
+def test_totals_that_cannot_be_read_on_the_copy_are_unreadable_and_warned(instance, head_archive, monkeypatch):
+    """(k) ``ledger_totals_of`` answers ``None`` (it has logged why): ``unreadable``, warned, never blocking. It was asked
+    once, for the copy's database, never for the live one."""
+    recorded = recorded_totals(head_archive.manifest)
+    assert recorded is not None, "precondition: the archive records its totals"
+    asked: list[Path] = []
+
+    def unreadable(database: Path) -> None:
+        asked.append(Path(database).resolve())
+
+    replace_ledger_totals(monkeypatch, unreadable)
+    stage_id = new_stage_id()
+    report = stage_archive(head_archive.path, instance.root, stage_id=stage_id)
+    copy = (stage_dir(instance.root, stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY).resolve()
+    assert asked == [copy], f"read once, on the copy (never {instance.root / DATABASE_ENTRY}): {asked}"
+    assert totals_in(report) == ("unreadable", [], 0), f"unreadable: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report.warnings}"
+    print_success("unreadable, warned")
+
+
+@pytest.mark.parametrize("status", ["changed", "unreadable"])
+def test_the_totals_never_block_a_restore_nor_lift_a_blocker(instance, databases, tmp_path, monkeypatch, status):
+    """(k) Without an active administrator, the restore stays blocked by that alone: the totals add their warning, never a
+    blocker."""
+    built = build_into(make_data_dir(tmp_path / "data", databases.head, accounts=WITHOUT_ADMINISTRATOR), tmp_path / "work")
+    archive = built.path
+    if status == "changed":
+        recorded = {"version": CONTROL_TOTALS_VERSION, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "1"}], "quantities": []}
+        archive = pack(tmp_path / "changed.zip", entries_of(built), manifest_with_totals(built, recorded))
+    else:
+        replace_ledger_totals(monkeypatch, lambda database: None)
+    report = stage_archive(archive, instance.root)
+    assert totals_in(report)[0] == status, f"precondition: {status}: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == ([f"control_totals_{status}"], ["no_administrator"], False), f"{status}: {report.warnings}, {report.blockers}"
+    print_success(f"{status}: no_administrator alone blocks")
+
+
+def test_the_totals_are_read_on_the_copy_after_its_upgrade(instance, databases, tmp_path, monkeypatch):
+    """(k) An upgrade that moves a position (simulated, as in (c)): the difference is the upgrade's, so the totals were
+    read after it."""
+    built = ledger_archive(tmp_path / "source", databases.older)
+    real = recorded_totals(built.manifest)
+    assert isinstance(real, dict), f"precondition: the backup at {OLDER} records its totals: {real}"
+    position_line = next(line for line in real["quantities"] if (line["broker_id"], line["asset_id"]) == (1, 3))
+
+    def upgrade_moving_a_position(database: Path) -> None:
+        stamp_head(database)
+        execute(database, "UPDATE transactions SET quantity = quantity + 1 WHERE id = (SELECT min(id) FROM transactions WHERE broker_id = 1 AND asset_id = 3)")
+
+    monkeypatch.setattr(staging, "_upgrade", upgrade_moving_a_position)
+    report = stage_archive(built.path, instance.root)
+    expected = [totals_difference("quantity", 1, 3, position_line["quantity"], str(Decimal(position_line["quantity"]) + 1))]
+    assert report.action == "upgrade", f"precondition: an upgrade: {report.action}"
+    assert totals_in(report) == ("changed", expected, 1), f"the position the upgrade moved: {totals_in(report)}"
+    assert report.warnings == ["control_totals_changed"], f"warned: {report.warnings}"
+    print_success(f"broker 1, asset 3: {expected[0]['before']} → {expected[0]['after']}")
+
+
+def test_the_totals_are_read_on_the_copy_after_the_post_migration_fixes(instance, databases, tmp_path, monkeypatch):
+    """(k) A fix that moves cash on the copy (simulated): the difference is the fix's, so the totals were read after
+    the fixes."""
+    built = ledger_archive(tmp_path / "source", databases.head)
+    real = recorded_totals(built.manifest)
+    assert isinstance(real, dict), f"precondition: the archive records its totals: {real}"
+    cash_line = next(line for line in real["cash"] if (line["broker_id"], line["currency"]) == (2, "GBP"))
+
+    def fix_moving_cash(database, data_root) -> PostMigrationReport:
+        execute(database, "UPDATE transactions SET amount = amount - 2.5 WHERE id = (SELECT min(id) FROM transactions WHERE broker_id = 2 AND currency = 'GBP')")
+        return PostMigrationReport(outcomes={"a_ledger_fix": "applied"})
+
+    monkeypatch.setattr(staging, "run_post_migration_fixes", fix_moving_cash)
+    report = stage_archive(built.path, instance.root)
+    expected = [totals_difference("cash", 2, "GBP", cash_line["balance"], str(Decimal(cash_line["balance"]) - Decimal("2.5")))]
+    assert report.post_migration_fixes == ["a_ledger_fix"], f"precondition: the fix ran on the copy: {report.post_migration_fixes}"
+    assert totals_in(report) == ("changed", expected, 1), f"the cash the fix moved: {totals_in(report)}"
+    print_success(f"broker 2, GBP: {expected[0]['before']} → {expected[0]['after']}")
+
+
+def test_a_fix_that_reclassifies_lone_pair_halves_changes_no_total(instance, databases, tmp_path):
+    """(k) For real: a received TRANSFER and a CASH_TRANSFER without their partners, as a deleted broker left them before
+    1.3; ``orphan_pair_halves`` makes them an ADJUSTMENT and a WITHDRAWAL on the copy. J's totals do not depend on the
+    type of a row: ``same``, so a restore of such a backup warns of nothing."""
+    rows = (*LEDGER, (1, 3, "TRANSFER", "2026-08-01", "5", "0", None), (1, None, "CASH_TRANSFER", "2026-08-02", "0", "-20", "EUR"))
+    built = ledger_archive(tmp_path / "source", databases.head, rows=rows)
+    stage_id = new_stage_id()
+    report = stage_archive(built.path, instance.root, stage_id=stage_id)
+    copy = stage_dir(instance.root, stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
+    assert report.post_migration_fixes == ["orphan_pair_halves"], f"precondition: the fix ran on the copy: {report.post_migration_fixes}"
+    assert rows_of(copy, "SELECT type FROM transactions ORDER BY id DESC LIMIT 2") == [("WITHDRAWAL",), ("ADJUSTMENT",)], "precondition: both halves reclassified on the copy"
+    assert totals_in(report) == ("same", [], 0), f"reclassified rows change no total: {totals_in(report)}"
+    assert report.warnings == [], f"nothing to warn: {report.warnings}"
+    print_success("orphan_pair_halves applied: same")

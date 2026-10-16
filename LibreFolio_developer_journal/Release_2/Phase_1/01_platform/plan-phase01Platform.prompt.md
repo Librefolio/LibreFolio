@@ -4049,3 +4049,361 @@ CP7a, e dire lo stato di C-96. HEAD `91cfe34b3`.
    > Lasciata così: l'ingranaggio la lega al «⚙️ Populating…» di `_api_setup()` che segue. Nessuna modifica a
    > `_backend_utils.py` (in stage da MF), quindi il `desc` del selettore `test-runner-cli` non nomina i casi nuovi:
    > lo dice la docstring del file di test.
+6. ✅ **Entrata** (19:24): commit `74b420db8` (fix), `e0dbc23a2` (docs), `c2a842653` (journal); in `dev_release2` con
+   il merge `946e02d55` (treno 126), senza conflitti. HEAD `c2a842653` verificato, albero pulito. Il coordinatore
+   chiude W-B54 come «spostato in H-21».
+
+### Revisioni della sera (2026-10-16) — in FROZEN, su richiesta del coordinatore
+
+Tutte in sola lettura. Le due nei worktree di W e di B sono un'eccezione alla regola d'isolamento, concessa dal
+coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altre leggono oggetti git già committati.
+
+1. ✅ **W-B53 / N56** (19:35, worktree di W): il passo `brim-parse-pool`, che avvia il forkserver di BRIM in
+   background. **OK**, con due modifiche e alcune prove in più.
+   - La posizione è giusta: dopo `market-holidays` e prima di `scheduler`, con gli altri prewarm.
+   - Modifica 1: il suo test di posizione usi `assert_in_relative_order(…, ("market-holidays", "brim-parse-pool",
+     "scheduler"))`, non `index + 1`.
+   - Modifica 2: `LIBREFOLIO_BRIM_PREWARM` riga **commentata** in `.env.example`, con il suo default (regole 1 e 5
+     del mio guardiano `services env-example`), e doc secondo C-99. Per la modalità test, `is_test_mode()`.
+   - Prontezza e risveglio non ritardati: `/system/ready` controlla solo DB e migrazioni; il risveglio di Fly
+     riprende dalla memoria senza rifare il lifespan.
+   - Prove in più per W: `services shutdown-budget`, `services shutdown-budget-process` e `services env-example`,
+     perché il forkserver ora è un figlio fin dall'avvio. Lo termina il mio passo `child-processes`.
+2. ✅ **L'ordine d'avvio con B3** (20:30). Il mio passo `plugin-secrets-check` non vuole commenti: non solleva mai,
+   come fissa `test_at_startup_a_check_that_cannot_run_is_a_warning_and_never_raises`.
+   - Il punto vero: `admin-bootstrap` (A, su dev da `a39b67944`) e `restore-commit` (B, su un ramo indietro di 49
+     commit) entrano entrambi subito dopo `global-settings`, e i pin di B e il mio non decidono quale va prima.
+   - Proposta, **adottata come N57**: `global-settings` → `admin-bootstrap` → `restore-commit` →
+     `plugin-secrets-check`. Il passo di A legge e scrive i dati ripristinati, e in `run_admin_bootstrap` un
+     `OperationalError` che non sia «locked» si propaga. Prima del commit, un errore riporta indietro il ripristino
+     all'avvio seguente; dopo, il server cade a ogni avvio.
+   - B fissa l'ordine nel suo test e mette un commento sul suo passo; A è informato.
+3. ✅ **Revisione di B5c** (18:30): vedi il passo 12 del lotto H-12. OK, con N53 accettata.
+4. ✅ **La nota di E sul rapporto dead-code** (20:31) → **H-22** nel backlog. `mask_client_address` e
+   `reset_client_address_cache` sono davvero usate solo dai test.
+   - Nessun log del codice scrive l'indirizzo di un client (grep su `dev_release2`), quindi la prima non ha
+     consumatori; la seconda è un aggancio per i test.
+   - Le usa solo `test_client_address.py`, su dev e sui rami di E e di B.
+   - `client_rate_key`, `profile_default` e `derive_key_from` sono nello stesso rapporto, ma aspettano un consumatore
+     già previsto: E `2ef892b3f`, B per H-17, X per P24.
+   - Il rapporto completo: 55 voci in molte aree (5 senza riferimenti, 50 usate solo dai test), quindi non è un
+     cancello attivo. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+     lint --dead-code --scope backend`, carico 31; log in `files/runs/dead-code-backend.log`.
+5. ✅ **A7b / A-13** (21:45, worktree di A, `git --no-optional-locks`): in `zodios-client.ts`, un 401 sulle pagine
+   anonime dei link (`/setup`, `/invite`, `/reset-password`, `/verify-email`) non manda più al login. **OK, nessuna
+   modifica alla logica.**
+   - Il 423 è intatto; la corrispondenza è esatta, con al più una barra finale; la query non conta.
+   - Le quattro pagine coincidono con `_TOKEN_PATHS` di `token_service.py`. Il token sta nel frammento, che
+     `loginUrl(pathname + search)` perdeva.
+   - Quelle pagine non fanno chiamate legate alla sessione: `/auth/me` è solo in `(app)/+layout` e in `/`. Gli unici
+     401 sono quindi quelli del blocco, su `register`, `setup` ed `email/verification/confirm`.
+   - Il test ha controlli positivi e ripristina `localStorage`.
+   - **Due richieste non bloccanti**: (1) il commento «which the page says itself» è falso per `/verify-email` (E).
+     Un 401 di `confirm` finisce nell'errore generico, con un «riprova» inutile: una voce per E, il 401 come testo del
+     blocco; intanto A scriva «which the page receives». (2) `LINK_PAGES` ↔ `_TOKEN_PATHS`: un commento che rimandi
+     dall'una all'altra, e un test di confronto se A vuole.
+   - Da parte, esisteva già, solo `vite dev`: `hooks.server.ts` `PUBLIC_ROUTES` non elenca le pagine di link.
+   - **Dovuto a me**: A7 è su dev (`a39b67944`), quindi la riga della docstring di `instance_block.py` per `/auth/setup`,
+     più `/email/verification/confirm`, entra al prossimo lotto, dopo l'aggiornamento della base (368 commit indietro).
+
+### Lotto «H-22: niente funzioni di produzione solo per i test in `client_address.py`» (N58, 2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (20:35), **N58**, convenzione da rivedere col developer:
+> - via `mask_client_address`, con i suoi test e le mie due frasi di `security.md`; la regola diventa «un log non
+>   contiene mai l'indirizzo di un client»;
+> - niente funzioni di produzione che servono solo ai test: un test azzera da sé la cache (`cache_clear()` della
+>   funzione in cache, oppure il fixture a livello di modulo); `ignore_names`, con il motivo, solo quando non si può,
+>   per esempio uno stato che non è una cache.
+>
+> Un lotto piccolo, con rossi e verdi, e checkpoint insieme al journal. Z riceve dal coordinatore la stessa nota per
+> `reset_provider_cooldowns` e `reset_shutdown_budget_state`.
+
+1. ✅ **Analisi** (20:40, sola lettura).
+   - Sulla testa di ogni ramo locale (dev e i 15 rami dei workstream) le due funzioni compaiono solo in
+     `client_address.py` e in `test_client_address.py`. Più le descrizioni del selettore in
+     `scripts/test_runner/_backend_services.py` (docstring, `print_info`, `desc`), file in stage da MF e aperto da A:
+     non lo tocco, e il testo sostitutivo va al coordinatore.
+   - La doc admin (`connection_checks`, 4 lingue) e `.env.example` non promettono alcun mascheramento: cambiano solo la
+     pagina developer `security.md`, solo in inglese, e la docstring del modulo.
+   - Nel test: il fixture `fresh_client_address_cache` e `api.reset()` (11 usi) passano da
+     `reset_client_address_cache()`; il blocco (g) ha `MASKS` e un test.
+   > **⚠️ Fuori pista**: la regola di N58 detta così è falsa per l'access log di uvicorn. L'immagine lo avvia con i
+   > suoi default (`CMD ["uvicorn", …]`), quindi l'access log è attivo, e ogni riga di richiesta porta `ip:porta`:
+   > l'ho visto anche in `shared-backend.log` (`127.0.0.1:63629`). Vera invece la versione circoscritta: nessun record
+   > che LibreFolio scrive contiene l'indirizzo. Nessun `bind_contextvars` nel backend, nessun log con l'indirizzo
+   > (grep su `dev_release2`), e la connessione non registra il peer. La specifica del cloud non parla di indirizzi nei
+   > log. In `security.md` va la formula circoscritta, con il fatto dell'access log; lo dico al coordinatore. Se un
+   > giorno si vorrà mascherare l'access log, il filtro su `uvicorn.access` (`logging_config.py`) è il posto giusto,
+   > e la funzione tornerà con quel primo chiamante.
+2. ✅ **Rossi, doc e cura a secco** (20:40–20:47, in parallelo).
+   - **Test** (test-author, solo `test_client_address.py`). `start_over()` sostituisce `_reset_if_there()`: chiama
+     `module._configured_header.cache_clear()` e `module._warned.clear()`. La usano il fixture
+     `fresh_client_address_cache` (prima e dopo ogni test) e `UnderTest.reset`, così i 3 `api.reset()` restano com'erano.
+   - Il blocco (g) di `mask_client_address` è tolto: 11 casi di `MASKS`. Al suo posto c'è un (g) nuovo, la guardia
+     `test_the_module_has_no_function_only_for_the_tests[reset_client_address_cache|mask_client_address]`, che
+     controlla prima che `client_address` e `client_rate_key` ci siano ancora. I contratti (d) ed (e) dicono ora «un
+     nuovo processo», riprodotto dai test (N58).
+   - Black ha spezzato una sola asserzione, con un messaggio oltre i 300 caratteri: applicato al file, che resta
+     pulito con ruff e black.
+   - **Doc** (docs-writer, `security.md`): tolta la riga della tabella; in «Read once per process.», «There is no
+     reset function: a test itself clears that cache and `_warned`… (decision N58…)»; in «Callers.», «LibreFolio's
+     own log records never hold a client's address (a refusal logs at most the account, never the address); uvicorn's
+     access log, like any web server's, writes the connection's address on each request line (see Request Logs)».
+   > **⚠️ Fuori pista**: il docs-writer aveva tolto anche «and its key from `client_rate_key()`», perché oggi nessun
+   > limite lo chiama (usano `flows.address_key`). L'ho rimesso io: è la regola per chi scrive un limite nuovo, e
+   > diventa vera alla lettera con `2ef892b3f` di E; «Their key follows the rule of `client_rate_key()`» è già vera.
+   > Una riga di 122 colonne c'era già a HEAD, con lo stesso testo: lasciata.
+   - **Cura** (`files/h22/apply_cure.py`): 3 sostituzioni in `client_address.py`, +3 −24. Tolte le due funzioni; al
+     posto del punto della docstring, la regola «No log record LibreFolio writes holds a client's address (decision
+     N58)…». Il controllo sulla fine del file ha fermato il primo tentativo, che lasciava una riga vuota in fondo.
+     Ruff e black puliti.
+   - **Testo per `_backend_services.py`**, che non tocco: `files/h22/apply_backend_services_desc.py`, 4 sostituzioni su
+     ancore di testo (docstring, `print_info`, due tratti del `desc`). Provato a secco sulla mia base e sulla versione
+     di `dev_release2`, ruff pulito.
+3. ✅ **Rosso** (20:47, carico 34): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+   test --test-port 6181 --data-dir /tmp/librefolio-r13-h services client-address` → **2 failed, 120 passed**: sono
+   solo i due casi della guardia, sui messaggi «still has … (N58, H-22)». Il resto, già sul reset dei test, era verde
+   sul modulo invariato. Log in `files/runs/h22-red.log`.
+4. ✅ **Cura e verdi** (20:47–20:49, carico < 50; `files/runs/h22-light.sh`, log in `files/runs/h22-light/`).
+   - Cura applicata: coincide byte per byte con la prova a secco.
+   - `services client-address` **122/122**.
+   - L'app si importa (`backend.app.main`, `auth`, `email`).
+   - `dev.py lint --dead-code --scope backend`: i simboli usati solo dai test scendono **da 50 a 48**; di
+     `client_address.py` resta solo `client_rate_key`, che aspetta E.
+   - `mkdocs build`: solo l'avviso noto di `wac.md`, quindi `#request-logs` si risolve. `check-links`: 97.
+   - Nessun riferimento alle due funzioni in `backend/app`, `scripts` e `dev.py`, fuori dalle descrizioni di
+     `_backend_services.py`.
+5. ✅ **Commit e testo del selettore** (20:50–20:54). Il coordinatore ha committato `420cc6d13` (refactor),
+   `9afcf93bf` (docs) e `9b6fc7486` (journal), e ha registrato **N58 nella forma circoscritta**: «nessun record che
+   LibreFolio scrive contiene l'indirizzo di un client; l'access log di uvicorn sì, vedi Request Logs».
+   `_backend_services.py` non lo modificava nessuno (X e W lo avevano solo in stage dai loro merge con dev), quindi
+   l'ha dato a me. Ho applicato `files/h22/apply_backend_services_desc.py`: 4 sostituzioni, 3+/3−, coincide byte per
+   byte con la prova a secco, ruff e black puliti. Prove a carico < 50: `services client-address` **122/122**, con la
+   nuova riga «Testing: … (client_address, client_rate_key)»; `check-orphans` verde. Porta libera.
+
+### Mini-lotto «La docstring di `instance_block.py`: `/auth/setup` ed `/email/verification/confirm`» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (21:48), dopo la revisione di A7b. La base è portata in avanti (fast-forward) alla punta di
+> dev, `5b916aa28`, 368 commit, con A7 (`POST /auth/setup`, `a39b67944`). La nota non committata della revisione di
+> A7b è passata intatta nel fast-forward ed entra con questo checkpoint.
+
+1. ✅ **Analisi** (21:50, sola lettura).
+   - `setup_admin` (`auth.py`) e `confirm_email_verification` (`email.py:173`) non dipendono da `get_current_user` e
+     sono fuori da `ALLOWED_WHEN_BLOCKED`. Su un'istanza bloccata, quindi, `refuse_when_blocked` dà a un chiamante
+     anonimo il 401 di `get_current_user`, e a uno con sessione il 423.
+   - Il meccanismo generale, «una rotta pubblica fuori lista risponde 401 solo da bloccata», lo fissa già
+     `test_instance_block.py` con la registrazione e le letture pubbliche, e la lista è fissata: **nessun test nuovo**.
+   > **⚠️ Fuori pista**: in `test_admin_setup_api.py:31-32`, A scrive ancora che `/auth/setup` su un'istanza bloccata
+   > «aspetta una decisione del developer (A7)». La decisione P16(d) l'ha presa: resta fuori lista e risponde 401.
+   > Testo di A: lo giro al coordinatore.
+2. ✅ **Docstring** (21:51). Nel primo paragrafo: «Registration stays out, and so does the initial administrator's setup
+   (decision P16(d))». Nel secondo: `POST /auth/setup` e `POST /email/verification/confirm` tra le rotte pubbliche fuori
+   lista, e una frase sulle pagine anonime dei link (`/invite`, `/setup`, `/verify-email`): A7b le tiene sul 401
+   invece di mandarle al login (`frontend/src/lib/api/zodios-client.ts`), così la pagina può dire che l'istanza è
+   bloccata. Righe entro 120 colonne; la riga 8 da 121 c'era già. Ruff e black puliti; nessun test legge la docstring.
+3. ✅ **Prova leggera** (21:52–22:02, partita con carico 47; `files/runs/mini-docstring.sh`, log in
+   `files/runs/mini-docstring/`). `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+   test --test-port 6181 --data-dir /tmp/librefolio-r13-h api instance-block` → **62/62**; porta libera.
+   - Il passo build-only ha ricostruito frontend debug e sito in **472 s**, in primo piano e fuori dal limite d'avvio
+     (C-94).
+   - Il backend condiviso ha scritto in `.testLog/shared-backend.log` (H-12) e ha applicato la migrazione `009` senza
+     errori.
+   - **H-21 in pratica**: «⚙️ api: the test database … has no fixture user e2e_test_admin, e2e_test_user — running the
+     category setup before this action», poi il seed.
+   > **⚠️ Fuori pista**, la causa e **H-23** nel backlog. Le mie tre corse `services client-address` di H-22
+   > avevano svuotato il DB della corsia: ciascuna stampa «Removing existing test database» e `db create`.
+   > `_run_exclusive_setups()` esegue il setup esclusivo di `services` anche per una sola azione, perfino `pure`: è la
+   > causa iniziale delle corse perse da W e da J. Proposta: per una singola azione, il setup esclusivo solo se
+   > l'azione non è `pure`, oppure un `setup_needed` anche per `services`.
+
+### Lotto «H-23: un'azione `pure` da sola non ricrea il DB della corsia» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (22:08). H è scrittore del registro del runner per questo lotto, ma non tocca
+> `_frontend_transaction.py` e `_frontend_utility.py`, dove W (FE8b) cambia righe di percorso. La voce `.DS_Store`
+> che il coordinatore dice di avermi mandato diventa **H-24**, dopo H-23; il messaggio non mi è arrivato.
+
+1. ✅ **Analisi** (22:10, sola lettura; HEAD `3a482b478`, il mio commit di journal del mini-lotto, già in dev).
+   - `_run_exclusive_setups()` (`_cli.py`) gira per ogni invocazione: `_categories_in_scope()` restituisce la
+     categoria qualunque sia l'azione, e il setup esclusivo di `services` (`_services_setup` → `db_create`) parte
+     anche per un solo test `pure`.
+   - Le classi sono nel catalogo: `exclusive_because` → `write-global`, altrimenti `isolation` dell'azione,
+     altrimenti `default_isolation` della categoria (`build_inventory()` in `_inventory.py`). Senza nulla di
+     dichiarato decide `classify()` con la scansione statica.
+   - `services` ha `default_isolation="write-scoped"` e 73 azioni dichiarate `pure`: sono queste che smettono di
+     svuotare la corsia. `services` è l'unica categoria con un setup esclusivo.
+   - I test oggi nominano `_run_exclusive_setups` solo per sostituirlo o per l'ordine (`test_test_runner_cli.py:177`,
+     `test_runtime_isolation.py:1222`); la decisione del sollevamento non ha test.
+   - **Disegno**: `_inventory.declared_isolation(category, action)`, un'unica definizione della classe dichiarata,
+     usata da `build_inventory()` e dal sollevamento. In `_run_exclusive_setups()`, un'azione da sola dichiarata `pure`
+     salta il setup esclusivo, con una riga che lo dice; tutto il resto resta com'è: la categoria intera, `all`, un'azione
+     non `pure`, o non dichiarata (prudente, come `classify()`).
+   > **⚠️ Fuori pista** (fuori perimetro): il pre-passaggio parallelo (`--workers > 1`) non guarda l'azione.
+   > `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, a differenza dei pre-passaggi consolidati,
+   > che vogliono `action in (None, "all")`; con le classi server (READ, WRITE_SCOPED) chiama anche
+   > `run_category_setup("services")`. Quindi `--workers 2 services client-address` gira la categoria e ricrea il
+   > DB. Lo segnalo al coordinatore come voce a parte; H-23 copre il percorso normale.
+2. ✅ **Rossi, doc e cura a secco** (22:10–22:25, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 37 casi in 4 classi.
+     - `TestDeclaredIsolation`, 15: `exclusive_because` vince su un `pure` dichiarato; la classe propria vince sul
+       default; il default della categoria; nulla di dichiarato → `None`; categoria o azione sconosciute → `None`; il
+       registro letto al momento della chiamata.
+     - `TestBuildInventoryClassifiesThroughDeclaredIsolation`, 6: `collect_launches` sostituita da lanci finti;
+       `isolation` = `classify(engine, path, declared_isolation(…))`, e un caso in cui `declared_isolation` sostituita
+       viene davvero chiamata per nome.
+     - `TestRunExclusiveSetupsSparesASinglePureAction`, 13: dai casi (a)–(h) del contratto. Ognuno lancia prima l'azione
+       `pure` della stessa categoria, così il «gira ancora» non passa a vuoto oggi.
+     - `TestServicesClientAddressKeepsTheLaneDatabase`, 3: `client-address` è `pure` e non arriva al setup;
+       `asset-source` (default `write-scoped`) sì.
+
+     I setup veri falliscono se raggiunti: `_services_setup`, `db_create`, `subprocess.run`.
+   - **Doc** (docs-writer): la voce `setup_exclusive` di «Registry Entry Shape» in `runner_architecture.md`, con
+     l'eccezione e «with `--workers` above 1, the parallel pass may run it as well»: il passaggio parallelo non lo
+     chiama con `--no-shared-server` né con un piano di un gruppo o nessuno.
+   - **Cura** (`files/h23/apply_cure.py`): `_inventory.declared_isolation()`, che `build_inventory()` ora usa, e in
+     `_cli.py` `_single_pure_action()` più il salto con una riga. Ruff come a HEAD (4 `PLC0415` già esistenti in
+     `_inventory.py`; il mio import interno ha `noqa` con il motivo); black non tocca le righe nuove.
+   > **⚠️ Fuori pista**: il test-author ha seguito il contratto alla lettera, «un'azione sconosciuta → `None`». La mia
+   > prima cura per un'azione assente restituiva il default della categoria, perché leggeva `entry = {}`. Corretta:
+   > un'azione che il catalogo non ha non dichiara nulla, e anche `_meta` non è un'azione. Per `build_inventory()`
+   > non cambia nulla, perché i suoi lanci vengono sempre da azioni del registro.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (22:26–23:11, ogni passo a carico < 50: il carico è salito fino
+   a 204 per lavoro di altre corsie; `files/runs/h23-run.sh`, log in `files/runs/h23/`).
+   - **Rosso** (`utils test-runner-cli`): **37 failed / 66 passed**: 23 su «H-23: declared_isolation is missing», 14
+     su «H-23: the exclusive setup ran for a single pure action».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **103/103**, `utils runtime-isolation` **200/200**, `utils coverage-combine`
+     **11/11** (usa `PURE` dell'inventario), `check-orphans` verde.
+   - **Prova reale, azione `pure`** (`services client-address`): **122/122**; il DB della corsia è **invariato**
+     (inode, mtime e dimensione uguali prima e dopo: `331446094 1792180946 1314816`); stampata la riga «services:
+     client-address is pure, it opens no database: the category's setup is skipped and the lane's database is left as
+     it is».
+   - **Prova reale, azione non `pure`** (`services asset-sync-counts`, default `write-scoped`): **1/1**; il DB è
+     **ricreato** («Removing existing test database», inode nuovo), come prima.
+   - **Doc**: `mkdocs build` **exit 0**, senza avvisi: la base nuova contiene `ed500643f` per `wac.md`.
+     `check-links`: 97. Porta 6181 libera.
+4. ✅ **Backlog**: **H-24** (`.DS_Store` e test nel controllo della build vecchia, da E via coordinatore) e **H-25**
+   (il pre-passaggio parallelo solo per la categoria intera), approvate dal coordinatore alle 22:14; si fanno in
+   quest'ordine dopo H-23.
+5. ✅ **Entrata** (23:12): commit `9541c0667` (fix), `d0a349cf3` (docs), `7ea30903e` (journal), entrati in dev.
+
+### Lotto «H-24: un file nascosto o un test non fanno ricostruire il frontend» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:12): prima H-24, da E (`.DS_Store`), poi H-25. Ci scrivo io: `scripts/cli_base.py`,
+> superficie condivisa, è il file della voce stessa.
+
+1. ✅ **Analisi** (23:15, sola lettura; HEAD `7ea30903e`, già in dev).
+   - `check_frontend_needs_build()` (`scripts/cli_base.py` ~584): `src_dir.rglob("*")`; ogni file più recente di
+     `build/index.html` che non sia in `_BUILD_GENERATED_SOURCES` → rebuild.
+   - **Misura reale prima della cura**: build `21:59:40`; l'unico file più recente in `frontend/src` è
+     `frontend/src/.DS_Store` (`22:01:48`, Finder, ignorato da git), e `check_frontend_needs_build()` risponde
+     **True**. Il prossimo run con server ricostruirebbe a vuoto: 472 s l'ultima volta.
+   - File nascosti in `src`: `.DS_Store`, `lib/api/.gitignore`, `lib/i18n/.generated` (lo stamp di
+     `scripts/i18n_catalog.py`: generato; i cataloghi `<lang>.json` restano nella scansione). Poi 504 file
+     `*.test.*`/`*.spec.*` di Vitest: Vite non li impacchetta e nessun codice dell'app li importa (verificato), ma
+     oggi una modifica a un test fa ricostruire il frontend.
+   - **Regola**: la scansione salta i percorsi con una parte nascosta, il nome che inizia con `.`, e i file di test,
+     `.test.` o `.spec.` nel nome. Tutto il resto conta come oggi: `.ts`, `.svelte`, `.json`, i `prefixes.txt` del
+     catalogo i18n, `.css`, `.html`… Una build creduta fresca a torto costa più di una ricostruzione in più.
+   - Test esistenti: `TestFrontendBuildStaleness` in `test_runtime_isolation.py` (~2300; radice finta sotto
+     `tmp_path`, mtime impostate a mano); selettore `utils runtime-isolation`. Doc: `test-walkthrough/front-overview.md:42`,
+     solo in inglese. `dev_workflow.en.md:132`, tradotta, resta vera («sources newer than…»): non la tocco, quindi
+     nessun debito di traduzione.
+   - Residuo (nel backlog): `_tool_contract_sources()` conta anche le mtime delle cartelle Python, per accorgersi di
+     un file tolto; un `.DS_Store` creato lì cambia la mtime della cartella.
+2. ✅ **Rossi** (test-author) e **doc** (docs-writer), in parallelo; la cura la preparo io, a secco
+   (`files/h24/apply_cure.py`: `_counts_for_the_build()` e `_TEST_ONLY_FOLDERS` accanto a
+   `_BUILD_GENERATED_SOURCES`, usate dalla scansione di `src`; ruff pulito, black non tocca le mie righe; la regola
+   provata a parte su 24 casi, `files/h24/check_rule.py`).
+   > **⚠️ Fuori pista** (23:25, dal docs-writer): restavano 33 file di supporto ai test senza `.test.` nel nome, in
+   > `src/__tests__/` (le imbracature dei test dei componenti, l'alias `$test` di `svelte.config.js`),
+   > `src/__mocks__/$app/` e le cartelle `__tests__/fixtures`. Ognuno avrebbe ancora fatto ricostruire la build.
+   > Nessun codice dell'app li importa, né per percorso né con `$test` (verificato), e `frontend/vitest.config.ts` li
+   > esclude già dalla copertura come codice non dell'app. **Regola estesa**: anche un file in una cartella, una parte
+   > genitrice e non il nome del file, che si chiama esattamente `__tests__` o `__mocks__`. Emendamento mandato al
+   > test-author prima che finisse, con controlli: `lib/my__tests__/x.ts` e il file `lib/__tests__.ts` contano
+   > ancora. La riga di doc va adeguata.
+   - **Test** (test-author, solo `test_runtime_isolation.py`): 32 casi in `TestFrontendBuildStaleness`.
+     - 14 rossi oggi: i nascosti (`.DS_Store` in `src` e in una sottocartella, `._App.svelte`, `lib/api/.gitignore`,
+       `lib/i18n/.generated`, file in `lib/.cache/`), i test (`x.test.ts`, `x.dom.test.ts`, `x.spec.ts`,
+       `routes/x/page.test.ts`), le cartelle `__tests__`/`__mocks__`.
+     - 13 controlli che devono restare True: tra cui `latest.ts`, `contest.svelte`, `x.testing.ts`, `testing/helpers.ts`,
+       `lib/tests/x.ts`, `lib/my__tests__/x.ts`, il file `lib/__tests__.ts`, un `prefixes.txt`.
+     - 3 casi «salta, non si ferma» e 2 «una cartella sopra `src`»: `.hidden-root` e `__tests__`.
+
+     Il fixture `frontend_project` è diventato `make_frontend_project(monkeypatch, root)`, uguale per i test esistenti.
+   - **Doc** (docs-writer): la parentesi in `front-overview.md:42`: «(under `frontend/src/`, hidden files and folders,
+     such as the macOS Finder's `.DS_Store`, do not count, nor do `*.test.*` / `*.spec.*` files and the `__tests__/` /
+     `__mocks__/` folders, which only the tests use)».
+3. ✅ **Rossi → cura → verdi → prova reale → doc** (23:24–23:40, carico < 50; `files/runs/h24-run.sh`, log in
+   `files/runs/h24/`).
+   - **Prova reale prima**: `check_frontend_needs_build()` → **True**, perché l'unico file più recente della build è
+     `frontend/src/.DS_Store`.
+   - **Rosso** (`utils runtime-isolation`): **14 failed / 218 passed**, i 14 casi nuovi su «H-24: …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils runtime-isolation` **232/232**, `utils dev-cli-docker` **96/96**, `utils
+     test-server-preparation` **83/83**.
+   - **Prova reale dopo**: **False**, con lo stesso `.DS_Store` ancora l'unico file più recente: il caso di E è risolto.
+   - `mkdocs build` exit 0; `check-links` 97; porta libera.
+4. ✅ **Entrata** (23:45): commit `c53012fcb` (fix), `43ebc1a3f` (docs), `cf6e5e455` (journal), entrati in dev.
+
+### Lotto «H-25: il pre-passaggio parallelo solo per la categoria intera» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:45), più la regola di `-k` approvata (23:52). Base: fast-forward fatto dal
+> coordinatore a `4bf824362`; me l'aveva chiesto come compito mio, ma le mie regole mi vietano di muovere la storia, e
+> ho iniziato su `cf6e5e455` senza toccare `BACKLOG_POST_1.2.md`, l'unico mio file cambiato dai 99 commit in arrivo.
+> Notte: il developer dorme, quindi una domanda solo sua va nel piano e al coordinatore, e si va avanti.
+
+1. ✅ **Analisi** (23:50, sola lettura).
+   - `_run_parallel_prepass()` (`_cli.py` ~926): per una categoria del registro chiama
+     `_parallel_for_scope(args, category, …)` qualunque sia `args.action`. `plan(scope)` pianifica tutta la categoria;
+     con le classi server (READ, WRITE_SCOPED) c'è anche `run_category_setup(scope)`, cioè per `services` `db create`.
+   - I pre-passaggi consolidati invece (`_backend_consolidation_scope`, e il gemello del frontend) girano solo per la
+     categoria intera o la suite: con un'azione singola o con `-k` (`test_names`) tengono la forma 1:1.
+   - Quindi oggi `--workers 2 services client-address` fa girare i test parallelizzabili di tutto `services` e ricrea
+     il DB (contro H-23), e `--workers 4 services all -k foo` li fa girare tutti, ignorando il `-k`.
+   - **Cura**: `_parallel_prepass_applies(args)`, la stessa regola dei consolidati: niente con `test_names`, sì solo
+     con `action in (None, "all")`. `all` e `all-backend` restano come sono; le categorie frontend già non hanno
+     pre-passaggio.
+   - Test esistenti: `test_coverage_combine.py` chiama `_parallel_for_scope` direttamente, non toccato;
+     `test_runtime_isolation.py:1223` sostituisce `_apply_parallel`. Doc: la riga `--workers` di `index.md` e la
+     sezione «`--workers`» di `runner_architecture.md`. La clausola di H-23 «with `--workers` above 1, the parallel
+     pass may run it as well» diventa falsa e va tolta.
+2. ✅ **Rossi, doc e cura a secco** (23:52–00:10, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 35 casi in 4 classi, 26 rossi oggi.
+     - `TestParallelPrepassApplies`, 16 casi, la regola su tutte le forme di `args`: `action` e `test_names` assenti,
+       `None`, `[]`.
+     - `TestRunParallelPrepassRunsNothingForOneActionOrTestNames`, 8: anche `services asset-source`, `write-scoped`,
+       per mostrare che la regola non guarda la classe; due casi «sostituto» fissano che `_run_parallel_prepass`
+       chiami `_parallel_prepass_applies` una volta, per nome.
+     - `TestRunParallelPrepassStillServesTheWholeCategoryOrSuite`, 8 guardie verdi.
+     - `TestApplyParallelLeavesOneActionToTheSerialPass`, 3.
+
+     Un fixture fa fallire, se raggiunti, `run_category_setup`, `plan`, `run_groups` e `subprocess.run`.
+   - **Doc** (docs-writer):
+     - la riga `--workers` di `index.md`;
+     - una voce nella sezione «`--workers`» di `runner_architecture.md` («the same scope rule as the consolidated
+       pre-passes»);
+     - la clausola di H-23 su `setup_exclusive` sostituita da «The skip holds at any `--workers`, since the parallel
+       pass does not run for one action». Il docs-writer ha verificato tutti i punti da cui si raggiunge il setup di
+       `services` per un'azione singola.
+   - **Cura** (`files/h25/apply_cure.py`): `_parallel_prepass_applies()` prima di `_run_parallel_prepass()`, e un
+     ritorno subito all'inizio di quest'ultima. +16/−1; ruff e black puliti; complessità 7.
+   > **⚠️ Fuori pista** (dal test-author): l'azione `all` di ogni categoria è registrata con `test_names=False`, quindi
+   > il passaggio seriale **scarta i nomi**: `--workers 4 services all foo` li ignorava prima della cura e li ignora
+   > dopo. La regola di `-k` approvata stanotte non fa funzionare `-k` su `all`, toglie solo il pre-passaggio
+   > parallelo in quella combinazione, che costa velocità senza cambiare cosa gira. La tengo: il pre-passaggio non sa
+   > applicare i nomi, quindi con dei nomi si fa da parte, come i consolidati. Se un giorno `all` applicherà i nomi, la
+   > regola sarà già quella giusta. Lo scarto silenzioso dei nomi dopo `all` è un difetto a parte: **H-26** nel backlog.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (23:59–00:15, ogni passo a carico < 50; `files/runs/h25-run.sh`,
+   log in `files/runs/h25/`). Niente prova reale «prima» sull'azione singola: prima della cura,
+   `--workers 2 services client-address` avrebbe fatto girare tutto `services` in parallelo, una prova pesante.
+   - **Rosso** (`utils test-runner-cli`): **26 failed / 112 passed**: 16 su «H-25: _parallel_prepass_applies is
+     missing», 10 su «H-25: the parallel pre-pass ran for …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **138/138**, `utils runtime-isolation` **232/232**, `utils coverage-combine`
+     **11/11**, `check-orphans` verde.
+   - **Prova reale, azione singola** (`dev.py test --workers 2 … services client-address`): **122/122**, **nessun**
+     «Parallel pass», la riga di H-23, DB della corsia **invariato** (inode, mtime e dimensione).
+   - **Prova reale, categoria intera** (`--workers 2 … schemas all`): exit 0, «Parallel pass — 12 isolation-safe
+     unit(s) across 2 worker(s)», **166 + 1667 passed**, verde in 31,6 s.
+   - **Doc**: `mkdocs build` exit 0; `check-links` 97; porta libera.
