@@ -231,6 +231,35 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
     return False
 
 
+def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run chart tooltip escaping and chart flag-font unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Chart safety Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts",
+            "src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts",
+            "src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts",
+            "src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts",
+            "src/lib/utils/core/escapeHtml.single.test.ts",
+            "src/lib/components/charts/chartFlagFont.test.ts",
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Chart safety Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Chart safety Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_portfolio_risk_levels_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the four-level risk UI pure-logic unit tests."""
     print(f"\n{Colors.BLUE}Running: Risk levels Vitest unit tests{Colors.NC}")
@@ -458,6 +487,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "risk-levels-unit", front_portfolio_risk_levels_unit, test_names=False, name="Risk Levels Unit Tests", desc="Four-level pure logic: L1 scale of harm (CVaR leads, omission never zero-fill, required-recovery asymmetry), L1 tail readings (underwater curve pre-scaled to percent because the chart converts nothing, VaR cut located by half-open inequality and kept when it is exactly zero, worst-realization null honoured as a refusal rather than zero-filled), L2 weight-vs-contribution divergence ordering with negative contributions, L3 figure collection plus the perimeter choice (current composition preferred, historical fallback, perimeter read from the payload even when it contradicts the wave) and the risk/return points (portfolio sized as the whole, assets by un-renormalized weight, cash never plotted), L4 simulation modes with the seed each one carries, L4 drift uncertainty applied to the median and the band it is compared against, L4 simulation provenance read from the payload instead of asserted in a translation string, L4 scenario presets and tornado ordering by signed damage, level provenance collapsed by agreement so a disagreement about the window splits instead of being represented by one analytic, and catalogue values degraded to the backend token rather than to a printed i18n key; backend warnings worded through their own i18n key and params (the catalogue sentence when it formats, the backend sentence otherwise — never the key, never raw ICU braces from a missing value, checked for every risk.warnings sentence with arguments read off en.json at test time, with plausible values and without them; a list the backend did not join reads like one it did, any other non-scalar value is left out rather than printed) and reasons deduplicated by the worded sentence, while the one-argument call keeps its verbatim output byte for byte; the one partial notice above L1–L3 (decision of 24/09): one entry per instance with the first one kept, so historical_kpi read by L1 and L3 is counted once and its warning once, only partial results named (per instance, the two VaR horizons told apart by their labels), warnings deduplicated by sentence with their arity, level health reduced to what did not come back at all, and analytic names keyed by the camelCase rule for every name the catalogue ships; and a share of the portfolio worded by its size, so a small one is never printed as zero: from 1% up the caller's own decimals, below it one decimal, below 0.1% two, «< 0.01%» (or «> -0.01%») where two would still read zero, joined by a no-break space, and only a true zero as zero; and the shared L3 table's pure rules: a figure column as wide as its title as DataTable draws it (upper-case, letter-spaced, with its padding and sort icon, rounded up) and no wider, one id per row and per dot (the portfolio and a benchmark nobody holds added as ref-portfolio and ref-<id>, a held benchmark keeping its holding's ids, a dot without a row selecting nothing), the portfolio then the benchmark opening the table with every other row in the page's order, and the notes under the chart in reading order, each only where it applies and never describing a line that is not drawn", tests="src/lib/features/risk/levels/levelHelpers.test.ts, src/lib/features/risk/levels/levelMetadata.test.ts, src/lib/features/risk/levels/l1/l1Helpers.test.ts, src/lib/features/risk/levels/l3Helpers.test.ts, src/lib/features/risk/levels/simulationProvenance.test.ts, src/lib/features/risk/levels/l4/simulationModes.test.ts, src/lib/features/risk/levels/l4/driftUncertainty.test.ts, src/lib/features/risk/levels/l4/scenarioHelpers.test.ts, src/lib/features/risk/levels/partialNotice.test.ts, src/lib/features/risk/levels/shareFormat.test.ts, src/lib/features/risk/riskReturnLevel.test.ts")
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
     add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="Category colours of the allocation charts (DV, GR1–GR4): each type family and sector keeps its key's colour whatever its rank, in both themes, read through categoryColor; subtypes are OKLab shades of their family (familyShade: ranks 1–3 toward the near pole, 4–6 toward the far one); subtype grouping and ordering with the K2 resolver; two-ring type donut, rings aligned by construction and the fast path refreshing both series; the mounted pie (jsdom, ECharts recorded) draws type and sector slices in their key's colour, sector emoji from the sector store and never from the data, rebuilt whole on the chart-colour signal (C4), no option.color; the mounted history chart draws one area per family in its key's colour with no shade, sectors by key, countries by sequence with Unknown/Other grey and shade rounds past the fourteenth; the palette guard (distinct #rrggbb, slots = keys) over both category tables; hexToHsl/hslToHex round trip on the category colours", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts, src/lib/components/charts/__tests__/allocationRings.test.ts, src/lib/components/charts/AllocationPieChart.test.ts, src/__tests__/palettes.test.ts, src/lib/components/dashboard/AllocationHistoryChart.test.ts")
+    add_test(
+        cat,
+        "chart-safety-unit",
+        front_portfolio_chart_safety_unit,
+        test_names=False,
+        name="Chart Safety Unit Tests",
+        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption",
+        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts",
+    )
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
     add_test(
         cat,
