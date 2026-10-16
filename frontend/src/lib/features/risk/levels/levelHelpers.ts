@@ -402,7 +402,7 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
             id: 'worst',
             loss,
             secondaryLoss: null,
-            durationDays: finite(drawdown?.maximum_drawdown_duration_days) ?? finite(kpi?.max_drawdown_duration_days),
+            durationDays: summaryDepth !== null ? finite(drawdown?.maximum_drawdown_duration_days) : finite(kpi?.max_drawdown_duration_days),
             // The asymmetry that makes drawdowns expensive (−50% needs +100%), as the backend states it. It belongs to
             // the summary's own depth: none when the depth came from the KPI, nor for a zero fall with nothing to recover.
             requiredRecovery: summaryDepth !== null && loss > 0 ? finite(drawdown?.maximum_drawdown_trough_to_peak_ratio) : null,

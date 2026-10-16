@@ -2559,7 +2559,7 @@ Commands by Category:
       user                User management (create, list, reset, promote...)
 
   💾  Backup
-      backup              Instance backup (create, inspect, restore --dry-run)
+      backup              Instance backup (create, inspect, restore, pending)
 
   📚  Documentation
       mkdocs              MkDocs commands (build, serve, clean, deploy)

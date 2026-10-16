@@ -36,6 +36,14 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     entry, writing it or closing it is ``PartialEntryError(entry)``, the ``OSError`` as its ``__cause__``: a zip entry
     cannot be taken back, so the build stops instead of leaving the file out, and no archive reaches the target (the
     ``.part`` is the caller's to remove).
+(g) The ledger's control totals (lot B-13): ``build_archive`` reads them once with ``ledger_totals_of``, on the snapshot
+    (the very bytes the archive carries, never the live database), in the phase ``database``, before the zip is opened,
+    and writes J's JSON as it is into ``manifest.database.control_totals``: equal to ``ledger_totals_of`` of the
+    archived database, and to J's ``control_totals`` of its rows. Totals that cannot be read (``None``; a database
+    without the ledger's table, for real) leave the field ``null``: the backup is done, without a new warning. The
+    format stays version 1: a manifest without the field reads as ``None``; the field (``Any``, contract §7.2) holds any
+    JSON value as it is, never refused nor read into amounts at reading (a document of another version or shape, a
+    list, a string, a number, an amount that is not plain text: the archive stays readable).
 
 Pure: every data directory, database and archive lives in ``tmp_path``; ``LF_APP_VERSION`` is set so the manifest's
 ``app_version`` is exact and no git process runs. No lane database, no server, no network. The concurrent writer of (b)
@@ -45,12 +53,16 @@ skipped as root, which bypasses it. A file that fails half-way is simulated in t
 ``archive`` is replaced, for one test, by a stand-in whose one file reads its first block, then fails (``EIO``); the
 stages of a zip entry fail through a stand-in for the archive given to ``_add_file``. The descriptors left open are
 found in ``/dev/fd``, the list of this process's own, by the device and inode of the test's folder or FIFO.
+``ledger_totals_of`` is replaced, for the tests of (g) that say so, wherever ``archive`` may read it (the totals
+module's own, and the name ``archive`` imported); ``instance_backup.totals`` is imported by the tests that need it,
+never at collection: until lot B-13 writes it, each of them fails on its own.
 """
 
 from __future__ import annotations
 
 import errno
 import hashlib
+import importlib
 import json
 import os
 import shutil
@@ -63,12 +75,15 @@ import warnings
 import zipfile
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
+from structlog.testing import capture_logs
 
+from backend.app.services.financial_math.ledger_totals import control_totals
 from backend.app.services.platform.instance_backup import archive, snapshot
 from backend.app.services.platform.instance_backup.archive import ArchiveError, BackupNoSpaceError, BuiltArchive, PartialEntryError, build_archive, check_archive, collect_files, required_space
 from backend.app.services.platform.instance_backup.manifest import FORMAT, FORMAT_VERSION, MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestError, ManifestFile, check_entry_path
@@ -1615,3 +1630,165 @@ def test_a_file_that_fails_before_its_entry_starts_is_left_out_and_the_build_goe
     assert (built.skipped, built.warnings) == ((ENTRY,), ("files_skipped",)), f"{replacement}: left out and reported: {built.skipped}, {built.warnings}"
     assert ENTRY not in entry_names(built.path) and check_archive(built.path).ok, f"{replacement}: not in the archive, which checks ok without it"
     print_success(f"{replacement} in place of a file → left out, build done")
+
+
+# =============================================================================
+# (g) The ledger's control totals in the manifest (lot B-13)
+# =============================================================================
+
+
+TOTALS_MODULE = "backend.app.services.platform.instance_backup.totals"
+READ_ERROR = "The ledger's control totals could not be read"
+#: The ledger of the cases of (g): the eight columns J reads of ``transactions``, declared as the app declares them.
+LEDGER_TABLE = "CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, broker_id INTEGER NOT NULL, asset_id INTEGER, type VARCHAR(32) NOT NULL, date DATE NOT NULL, quantity NUMERIC(18, 6) NOT NULL DEFAULT 0, amount NUMERIC(18, 6) NOT NULL DEFAULT 0, currency VARCHAR(3))"
+#: (broker id, asset id, type, date, quantity, amount, currency): cash of two brokers in two currencies, two positions,
+#: one of them without cash.
+LEDGER_ROWS = (
+    (1, None, "DEPOSIT", "2026-01-02", "0", "100", "EUR"),
+    (1, 1, "BUY", "2026-01-05", "2", "-30.5", "EUR"),
+    (2, None, "DEPOSIT", "2026-01-03", "0", "7", "USD"),
+    (2, 1, "ADJUSTMENT", "2026-01-04", "0.5", "0", None),
+)
+#: J's totals of ``LEDGER_ROWS``, as its ``to_json`` writes them.
+LEDGER_TOTALS = {
+    "version": 1,
+    "cash": [{"broker_id": 1, "currency": "EUR", "balance": "69.5"}, {"broker_id": 2, "currency": "USD", "balance": "7"}],
+    "quantities": [{"broker_id": 1, "asset_id": 1, "quantity": "2"}, {"broker_id": 2, "asset_id": 1, "quantity": "0.5"}],
+}
+
+
+def totals_module() -> ModuleType:
+    """``instance_backup.totals`` (lot B-13). Imported when a test needs it, never at collection: until it exists, each
+    test that needs it fails on its own, with this message."""
+    try:
+        return importlib.import_module(TOTALS_MODULE)
+    except ModuleNotFoundError as exc:
+        if exc.name != TOTALS_MODULE:
+            raise
+        pytest.fail(f"{TOTALS_MODULE} does not exist: lot B-13 is not written yet ({exc})")
+
+
+def recorded_totals(manifest: BackupManifest) -> object:
+    """What the manifest records of the ledger's totals (lot B-13)."""
+    assert "control_totals" in ManifestDatabase.model_fields, "ManifestDatabase has no control_totals: lot B-13 is not written yet"
+    return manifest.database.control_totals
+
+
+def ledger_data_dir(root: Path) -> Path:
+    """``small_data_dir``, its database holding the ledger ``LEDGER_ROWS``."""
+    data = small_data_dir(root)
+    with closing(sqlite3.connect(data / DATABASE_ENTRY)) as conn, conn:
+        conn.execute(LEDGER_TABLE)
+        conn.executemany("INSERT INTO transactions (broker_id, asset_id, type, date, quantity, amount, currency) VALUES (?, ?, ?, ?, ?, ?, ?)", LEDGER_ROWS)
+    return data
+
+
+def replace_ledger_totals(monkeypatch, replacement) -> None:
+    """``ledger_totals_of`` replaced wherever a build may read it: the totals module's own, and the name ``archive``
+    imported (set even if it has none: the module's is then the one it reads)."""
+    monkeypatch.setattr(totals_module(), "ledger_totals_of", replacement)
+    monkeypatch.setattr(archive, "ledger_totals_of", replacement, raising=False)
+
+
+def test_the_ledger_of_these_cases_sums_as_j_says():
+    """(g) The precondition of the cases: ``LEDGER_TOTALS`` is J's ``control_totals`` of ``LEDGER_ROWS``."""
+    rows = [SimpleNamespace(id=row_id, type=kind, date=date.fromisoformat(day), broker_id=broker_id, asset_id=asset_id, currency=currency, amount=Decimal(amount), quantity=Decimal(quantity)) for row_id, (broker_id, asset_id, kind, day, quantity, amount, currency) in enumerate(LEDGER_ROWS, start=1)]
+    assert control_totals(rows).to_json() == LEDGER_TOTALS, f"J sums the ledger of these cases otherwise: {control_totals(rows).to_json()}"
+
+
+def test_the_manifest_records_the_ledger_totals_of_the_snapshot(tmp_path, monkeypatch):
+    """(g) Read once, on the snapshot (the very bytes the archive then carries as its database, never the live file), in
+    the phase ``database``, before the zip is opened; the manifest holds J's JSON as it is, equal to ``ledger_totals_of``
+    of the archived database; the format is still version 1."""
+    print_section("The ledger's control totals in the manifest")
+    real = totals_module().ledger_totals_of
+    data = ledger_data_dir(tmp_path / "data")
+    work = tmp_path / "work"
+    progress: list[tuple[str, int, int]] = []
+    calls: list[tuple[Path, str, list[str], tuple[str, int, int] | None]] = []
+
+    def recording(database: Path):
+        path = Path(database)
+        calls.append((path.resolve(), sha256(path.read_bytes()), sorted(part.name for part in work.glob("*.part")), progress[-1] if progress else None))
+        return real(database)
+
+    replace_ledger_totals(monkeypatch, recording)
+    built = build_into(data, work, progress=lambda phase, done, total: progress.append((phase, done, total)))
+    manifest = built.manifest
+    assert len(calls) == 1, f"read once: {calls}"
+    path, read_sha256, parts, phase = calls[0]
+    assert path != (data / DATABASE_ENTRY).resolve(), "read on the snapshot, never on the live database"
+    assert read_sha256 == manifest.files[0].sha256, "the file read holds the bytes the archive carries as its database: the snapshot"
+    assert (parts, phase) == ([], ("database", 0, 0)), f"in the phase database, before the zip is opened: {parts}, {phase}"
+    extracted = tmp_path / "extracted" / "app.db"
+    extracted.parent.mkdir()
+    with zipfile.ZipFile(built.path) as zf:
+        document = json.loads(zf.read(MANIFEST_ENTRY))
+        extracted.write_bytes(zf.read(DATABASE_ENTRY))
+    assert recorded_totals(manifest) == real(extracted) == LEDGER_TOTALS, f"the manifest records J's totals of the archived database: {recorded_totals(manifest)}"
+    assert document["database"]["control_totals"] == LEDGER_TOTALS, f"written into manifest.json as they are: {document['database']}"
+    assert document["format_version"] == FORMAT_VERSION == 1, f"the format stays version 1: {document['format_version']}"
+    assert (built.warnings, built.skipped) == ((), ()), f"nothing to warn: {built.warnings}"
+    print_success(f"control_totals: {len(LEDGER_TOTALS['cash'])} cash lines, {len(LEDGER_TOTALS['quantities'])} positions")
+
+
+@pytest.mark.parametrize("case", ["read-as-none", "no-ledger-table"])
+def test_totals_that_cannot_be_read_leave_the_field_null_and_the_backup_goes_on(tmp_path, monkeypatch, case):
+    """(g) ``ledger_totals_of`` answers ``None`` (it has logged why): the field is ``null``, the backup done and intact,
+    no new warning. For real: B1's small database has no ledger table, and one error says so."""
+    if case == "read-as-none":
+        data = ledger_data_dir(tmp_path / "data")
+        asked: list[Path] = []
+        replace_ledger_totals(monkeypatch, lambda database: asked.append(database))
+    else:
+        totals_module()
+        data = small_data_dir(tmp_path / "data")
+    with capture_logs() as events:
+        built = build_into(data, tmp_path / "work")
+    assert recorded_totals(built.manifest) is None, f"{case}: no totals: {recorded_totals(built.manifest)}"
+    with zipfile.ZipFile(built.path) as zf:
+        database = json.loads(zf.read(MANIFEST_ENTRY))["database"]
+    assert "control_totals" in database and database["control_totals"] is None, f"{case}: the field is there, null: {database}"
+    assert (built.warnings, built.skipped) == ((), ()), f"{case}: no new warning: {built.warnings}"
+    assert check_archive(built.path).ok, f"{case}: the backup is done and intact"
+    errors = [event for event in events if event.get("log_level") == "error"]
+    if case == "read-as-none":
+        assert (len(asked), errors) == (1, []), f"asked once; the build itself logs no error: {asked}, {errors}"
+    else:
+        assert [event.get("event") for event in errors] == [READ_ERROR], f"one error, the totals': {errors}"
+    print_success(f"{case}: control_totals null, backup done")
+
+
+def test_a_manifest_without_the_totals_reads_them_as_none():
+    """(g) An archive made before lot B-13: the same format, version 1, without the field."""
+    document = manifest_document()
+    assert "control_totals" not in document["database"], "precondition: a manifest of before lot B-13"
+    read = BackupManifest.from_bytes(encoded(document))
+    assert recorded_totals(read) is None, f"no totals: {recorded_totals(read)}"
+    assert read.format_version == FORMAT_VERSION == 1, f"version 1: {read.format_version}"
+
+
+#: What the field may hold, kept as it is: B reads, stores and compares J's JSON, never reshapes it at reading.
+KEPT_TOTALS = [
+    pytest.param(LEDGER_TOTALS, id="version-1"),
+    pytest.param({"version": 99, "method": "another one", "lines": [[1, "EUR", 2.5]]}, id="another-version-another-shape"),
+    pytest.param({"version": 1, "cash": [{"broker_id": 1, "currency": "EUR", "balance": "1E+3"}], "quantities": []}, id="an-amount-not-plain-text"),
+    pytest.param({}, id="an-empty-object"),
+    pytest.param(None, id="null"),
+    pytest.param([LEDGER_TOTALS], id="a-list"),
+    pytest.param("totals", id="a-string"),
+    pytest.param(42, id="a-number"),
+    pytest.param(True, id="true"),
+]
+
+
+@pytest.mark.parametrize("recorded", KEPT_TOTALS)
+def test_a_manifest_keeps_the_totals_as_they_were_written(recorded):
+    """(g) §7.2, ``control_totals: Any = None``: any JSON value is read and written back as it is, never refused and never
+    read into amounts here; a document of another version or of another shape, or a value of another type, keeps the
+    archive readable (the check then says ``other_version`` or ``absent``)."""
+    database = {**manifest_document()["database"], "control_totals": recorded}
+    read = BackupManifest.from_bytes(encoded(manifest_document(database=database)))
+    assert recorded_totals(read) == recorded, f"read as written: {recorded_totals(read)!r}"
+    assert json.loads(read.to_bytes())["database"]["control_totals"] == recorded, "written back as read"
+    assert BackupManifest.from_bytes(read.to_bytes()) == read, "and read back equal"

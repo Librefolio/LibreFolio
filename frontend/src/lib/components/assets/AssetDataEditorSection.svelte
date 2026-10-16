@@ -23,9 +23,9 @@
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {eventSaveErrorMessage} from '$lib/components/transactions/events/eventSaveError';
+    import {eventSaveErrorMessage} from '$lib/features/transactions/events/eventSaveError';
     import {_ as t, locale} from '$lib/i18n';
-    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
+    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/features/transactions/events/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
 

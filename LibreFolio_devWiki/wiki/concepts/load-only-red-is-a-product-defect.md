@@ -138,7 +138,7 @@ Its missing half, learned here: **the enclosing budget has to be raised too**. I
 | Reprise of the first case | `.github/skills/devpy-tools/testing-frontend/SKILL.md` (~313) |
 | Triage protocol | `.github/skills/devpy-tools/test-triage/SKILL.md` |
 | Isolation classes | `scripts/test_runner/_inventory.py` |
-| Anti-bounce key sampling | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
+| Anti-bounce key sampling | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
 | Debounced query, provider list | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
-| WAC preview consumer | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| WAC preview consumer | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Shared date helpers for specs | `frontend/e2e/fixtures/dates.ts` |

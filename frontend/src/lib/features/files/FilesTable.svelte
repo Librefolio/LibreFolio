@@ -31,7 +31,7 @@
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import FileSetBadges from '$lib/features/files/FileSetBadges.svelte';
     import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
-    import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/features/transactions/import/importReportSets';
     import type {BrimPlugin, BrimSetPreview} from '$lib/types';
 
     interface Props {

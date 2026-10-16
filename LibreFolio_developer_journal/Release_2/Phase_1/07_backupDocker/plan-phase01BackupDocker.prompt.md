@@ -2525,7 +2525,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   - lo scatto della galleria lo concorda lui con i colori quando B5b è pronto;
 >   - l'ordine resta B3, B5, B4.
 
-### B3 applicato e tolto; `all-backend` di B2 (2026-10-16, 01:33-) — in corso
+### B3 applicato e tolto; `all-backend` di B2 (2026-10-16, 01:33-02:50) ✅ — B2 entrato
 
 > - **01:33, ripresa**: «applica B3 e lancia le prove leggere; il tuo `all-backend` per B2 fra ~15 minuti». Applicato
 >   B3 (moduli nuovi, script di modifica, registrazione dei quattro file); test-author 1 ha aggiornato i due test
@@ -2561,6 +2561,1023 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `restart.py`, le modifiche in `paths`, `restore_jobs`, schemi, API, CLI, `app_lifespan` con le due righe dichiarate),
 >   la registrazione dei quattro file, i due test registrati che B3 rompe, il verde mirato, `api sync`, `front check`, la
 >   doc (docs-writer).
+> - **`all-backend` di B2 su `94a95284d`** (slot pesante 1, 01:48:55-02:30:00, 41 min, `--workers 2`, `nice -n 10`,
+>   corsia 6187; log `/tmp/libreFolio_b_all_backend_94a95.log`): **verde**, 7/7 categorie, **18 359 passati, 29 saltati,
+>   0 falliti**:
+>   - 4 passate parallele (147, 47, 11 e 65 unità, 2 worker): 16 180 passati e 4 saltati;
+>   - sessioni sequenziali e consolidate: 2 179 passati e 25 saltati (26 riepiloghi pytest); il DB 18/18.
+>
+>   Dopo: porta 6187 libera, `backups/.jobs` vuota. Risultato al coordinatore alle 02:31.
+> - **B3 rimesso** (02:31, `restore_b3.sh`: 19 file uguali alla copia salvata). Nel worktree: ruff pulito sui file di B3
+>   (i 43 rilievi di `dev.py` sono già in HEAD); black segnala solo righe già in HEAD (`dev.py`, i due `print_info` dei
+>   cataloghi); `check-orphans`: tutti i 335 file del backend registrati e raggiungibili.
+> - **02:33, aggiornamento di base per l'ingresso di B2**: il coordinatore committa il piano (`e05ccd1b4`) e chiede il
+>   worktree pulito per un merge con 4 conflitti di doc (contro Z4, Z3, A6d). B3 di nuovo fuori: questa volta come
+>   **patch** dei 13 file tracciati (`files/b3-wip/b3-tracked.patch`, 885 righe) più i 6 file nuovi della copia salvata,
+>   perché dopo il merge una copia dei file sovrascriverebbe le sue modifiche. Worktree pulito su `e05ccd1b4`.
+> - **Merge di base `db384eaf5`** (aperto dal coordinatore alle 02:34; Z3, Z4, A6d e altro): 4 file di doc in
+>   conflitto, 7 blocchi, risolti spostando le righe dei due lati (`files/b3-wip`, script in Python), in stage solo quei 4:
+>   - `configuration.en.md`: le nostre due righe (`BACKUP_DOWNLOAD_TOKEN`, `BACKUP_MAX_UPLOAD_MB`) poi `WAKE_TOKEN` di Z;
+>     in «Secrets» la frase di Z senza numero (richiesta del coordinatore); nella tabella dei segreti
+>     `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` poi la riga di Z;
+>   - `hosting_providers.en.md`: i due punti di «For Each Instance» (token del pannello, poi token del risveglio);
+>   - `admin/index.en.md`: la nostra riga «Hosting for Others», più completa, più «Sleep and Wake» di Z;
+>   - `security.md`, endpoint privati: il paragrafo di Z (due tipi di rotta con un token proprio) più una frase con il
+>     nostro dettaglio sul pannello (`require_panel_token` a tempo costante, `401`, `404` senza token); elenco del
+>     blocco: il lato di `dev_release2`, che copre già backup e risveglio.
+>
+>   File fusi da soli e cambiati dai due lati, riletti: `.env.example` (il blocco del risveglio di Z, prima della nostra
+>   sezione), l'indice del backlog (solo altre sezioni), i 3 cataloghi del runner (solo voci di altri, nessun nome che
+>   scontra B2 o B3).
+> - **Prove sulla revisione combinata** (02:35-02:43, `/tmp/libreFolio_b_mergedb3.sh`, una alla volta, `nice`, carico
+>   sotto 70): `api backup-restore` 114, `services backup-staging` 118, `services config-env-example` 36, `mkdocs build`
+>   stretta con 0 avvisi, `check-links` 96 validi, `check-orphans` 342 file del backend tutti raggiungibili. Porta libera.
+> - **Merge `db384eaf5` committato dal coordinatore**: `cc439f696`. Dentro c'è anche CP-15 di J (`fd41a0996`):
+>   `financial_math/ledger_totals.py` (`CONTROL_TOTALS_VERSION = 1`, `ControlTotals` con `to_json()`/`from_json()`,
+>   `compute_control_totals(session)`), da usare quando il lotto arriva a manifest e controllo (TODO(CP-15) dell'e2e).
+> - **Secondo merge, `a2f658097`** (A6d e A6e entrati nel frattempo; aperto dal coordinatore alle 02:44, B3 ancora
+>   fuori): un conflitto, `security.md`, «Private Endpoints». Tenute la frase di A sulle impostazioni globali (lette da
+>   ogni utente con una sessione, scritte solo da un admin; la pagina di login legge `/system/instance`), quella di Z sui
+>   due tipi di rotta con un token proprio e la nostra sul pannello, presa alla lettera dal nostro lato. In stage solo
+>   quel file. Fusi da soli e cambiati dai due lati: `cli_tools`, `configuration`, `hosting_providers` (le modifiche di
+>   A), il backlog, un `print_info` di `_backend_services.py` riformattato: niente di B. `mkdocs build` stretta 0
+>   avvisi, `check-links` 96 validi (02:45-02:48).
+> - **✅ B2 entrato in `dev_release2`** (treno 82, merge `5441b96ed`), con la riga ✨ nel CHANGELOG. Il secondo merge di
+>   base è committato dal coordinatore: `62004e530`.
+> - **B3 rimesso come patch** (02:50): `git apply --reject` di `files/b3-wip/b3-tracked.patch` sui 13 file tracciati,
+>   nessun `.rej`; i 6 file nuovi dalla copia salvata. I 10 file tracciati non toccati dai merge e i 6 nuovi sono uguali
+>   alla copia salvata; nei 3 cataloghi del runner le voci di B3 sono sopra quelle portate dai merge (`system-wake`,
+>   `email-verification`, `rate-limit-*`, `scheduler-catchup`). Ruff pulito sui file di B3; black segnala solo il
+>   `print_info` già in HEAD di `_backend_utils.py`; `check-orphans`: 347 file del backend, tutti raggiungibili.
+
+### B3 — il verde (2026-10-16, 02:50-03:00) ✅
+
+> Prove mirate dal runner, una alla volta, `nice -n 10`, carico sotto 70 (`/tmp/libreFolio_b3_green.sh`, log in
+> `/tmp/libreFolio_b3_green_*.log`), tutte al primo colpo:
+>
+> | Selettore | Esito |
+> |---|---|
+> | `services backup-apply` | 169 (43 s) |
+> | `utils backup-cli-restore` | 44 |
+> | `utils backup-cli` | 88 |
+> | `services backup-staging` | 118 |
+> | `services app-lifecycle` (H, i due passi nuovi) | 42 |
+> | `api backup-restore-apply` | 75 |
+> | `api backup-restore` | 114 |
+> | `api instance-block` (H, le rotte nuove bloccate) | 62 |
+> | `e2e backup-roundtrip` | 3 (68 s) |
+>
+> - **L'accettazione del fondatore**, automatizzata (`e2e backup-roundtrip`):
+>   - un'istanza popolata, ripristinata su una vuota, dà gli stessi totali: 18 tabelle, 65 file, 8 report del motore
+>     ufficiale (populate 13 s);
+>   - un backup a `005_accounts_invites` passa alla head (`008_registration_invite_default`) con la prova e la conferma,
+>     ed è committato con le righe del report;
+>   - un backup più nuovo è rifiutato (`revision_unknown`), la destinazione invariata.
+> - **`api sync` e `front check`**: li fa il runner prima della build del server di prova (OpenAPI esportata,
+>   `generated.ts` rigenerato, `svelte-check` 0 errori e 0 avvisi), nel log di `api backup-restore-apply`.
+> - Porta 6187 libera.
+> - **Prossimo**: doc (docs-writer, con il brief `files/b3-docs-brief.md`), revisione di sicurezza di metà percorso,
+>   checkpoint FROZEN; l'`all-backend` di B3 lo chiedo al coordinatore.
+
+### B3 — revisione di sicurezza di metà percorso (2026-10-16, 03:00-04:05) ✅ — corretta
+
+> **Esito** (agente `security-review`, sola lettura sul diff di B3): nessuna vulnerabilità raggiungibile dall'API o
+> dall'archivio; due allarmi MEDIUM (7/10), finestre in cui il commit (sessioni chiuse e link revocati) può saltare
+> mentre il server serve già i dati ripristinati; quattro punti di robustezza.
+>
+> 1. **L'identità del boot segue l'orologio**: psutil, su Linux, ricava `create_time` dall'ora d'avvio del sistema, che
+>    un salto d'orologio (NTP all'avvio di un Pi senza orologio) sposta. Fra `pending-restore` e `restore-commit` il
+>    boot cambiava, il commit saltava, e il server serviva i dati ripristinati con le sessioni e i link del backup;
+>    all'avvio dopo, il ripristino veniva disfatto, con la perdita di quanto inserito nel frattempo.
+>    **Corretto**: il boot si legge una volta per processo (`_boot_of`, in cache); `finish_pending_restore` con un
+>    ripristino «applicato da un altro boot» ferma l'avvio (`RestoreInUseError`, codice `restore_in_use`) invece di
+>    proseguire.
+> 2. **Più worker**: un worker che uvicorn rilancia sotto i fratelli vivi (crash, `SIGHUP`, `SIGTTIN`), o un secondo
+>    server sulla stessa cartella, applicava un ripristino in attesa sotto chi serve. **Corretto** con il lock di «server
+>    acceso» dell'analisi approvata (§3.4, punto 2), che avevo tolto dal contratto di B3: ogni processo tiene un `flock`
+>    condiviso sulla cartella dati stessa (nessun file) dalla fine del suo avvio (passo nuovo `serving-lock`, una riga in
+>    più dichiarata in `app_lifespan.py` di H); lo scambio, e il ritorno indietro di un boot morto, solo se nessuno lo
+>    tiene. Altrimenti il ripristino aspetta (`waiting = server_running`), o l'avvio si ferma (`restore_in_use`) per un
+>    ritorno indietro sotto un server. Anche «applicato da un altro server ancora vivo» ora ferma l'avvio.
+> 3. **Robustezza**, tutto corretto: modelli stretti per `restore.json` (nomi delle cartelle scambiate,
+>    `stage_id` di 32 cifre esadecimali); `server_pid` usa il genitore solo se è vivo; la CLI stampa i valori presi
+>    da un archivio o dallo stato (versione, revisione, tabelle, admin, `confirmed_by`) con i caratteri di controllo
+>    sostituiti da `?`. Il ripristino in attesa su un'istanza poi bloccata resta la proposta nella lista di domattina.
+> - **⚠️ Fuori pista — B-12 riscritta**: in uvicorn 0.52.4 un worker che fallisce all'avvio (codice 3) ferma anche il
+>   master (`supervisors/multiprocess.py`, `keep_subprocess_alive`): il ciclo che avevo descritto non c'è. Il residuo
+>   vero è un salto d'orologio fra i worker di un server con più worker durante l'avvio (identità senza orologio su
+>   Linux: `/proc/<pid>/stat` e `boot_id`).
+> - **⚠️ Fuori pista — il lock va preso prima, rilettura mia (03:45)**: preso dopo `restore-commit`, lasciava una
+>   finestra: un secondo worker (salto d'orologio, B-12) o un secondo contenitore sulla stessa cartella poteva annullare
+>   il ripristino sotto un processo che aveva già aperto il DB ripristinato. Ora `serving-lock` sta subito dopo
+>   `data-directories`, prima di `risk-scenarios` (che legge `scenario_catalog/`) e di `default-avatars` (che scrive in
+>   `custom-uploads/`): chi non lo tiene ancora non ha letto niente, e un annullamento sotto di lui non fa danni. B-12
+>   scende a «il ripristino va rifatto», senza rischio per i dati. Riga dichiarata in `app_lifespan.py`: lo stesso passo,
+>   più un commento di una riga. **Decisione notturna, da rivedere.**
+> - **⚠️ Fuori pista — `backup inspect` stampava i valori dell'archivio senza `_safe`** (trovato da test-author 1,
+>   03:55): `app_version`, `alembic_revision`, `integrity_check` e i nomi delle voci, che arrivano dritti dallo zip, su
+>   un comando fatto per gli archivi sospetti. Corretto in `cmd_inspect`; per coerenza anche i nomi lasciati fuori da
+>   `backup create` (`_print_warnings`). I messaggi delle eccezioni stampati dalla CLI sono testo fisso o interi: nient'altro.
+> - **⚠️ Fuori pista — il lock resta esclusivo per tutte le rinomine** (nota di test-author 2, 04:00): la sonda di
+>   `_someone_serves` si prendeva e si lasciava subito, quindi un processo arrivato a `serving-lock` durante le rinomine
+>   di un annullamento (B-12, o un worker orfano di un master ucciso con SIGKILL) poteva leggere le cartelle a metà, e
+>   aprire il DB ripristinato un attimo prima che finisse in `failed/`. Ora `_exclusive_serving_lock` (gestore di
+>   contesto, al posto della sonda) tiene il lock esclusivo, senza attesa, dai controlli all'ultima rinomina: nello
+>   scambio, nell'annullamento di un boot morto e in quello di uno scambio interrotto (lì senza guardare chi serve: solo
+>   l'annullamento rimette insieme la cartella). Chi arriva a `serving-lock` aspetta che le cartelle siano ferme.
+>   Nessun blocco reciproco: l'esclusivo non aspetta mai. **Decisione notturna, da rivedere.**
+> - **Doc di B3 riletta** (docs-writer `a55a587f`; `cli_tools`, `hosting_providers`, `security.md` con la sezione nuova
+>   «💾 Restoring a Backup», `users_access`, `users_and_brokers`): le 17 frasi della CLI citate sono tutte nel codice;
+>   la sostituzione «uno alla volta» di `SIGHUP` è vera in uvicorn 0.52.4 (`restart_all`: il nuovo worker parte prima
+>   che il vecchio esca); l'uscita con `0` nell'immagine torna con il sorgente (SIGTERM rilanciato da uvicorn, ignorato
+>   dal PID 1; `os._exit(1)` quando scade il budget di Z); `on-fail` è il default di `fly launch` e `fly deploy`
+>   (docs.fly.io, letta alle 04:00): nel cloud, dopo il riavvio la Machine resta ferma finché il Proxy non la sveglia, e
+>   lo farà il sondaggio di `/system/ready` della scheda (B5). Corretto solo il paragrafo sul lock, per il gestore di
+>   contesto. `mkdocs build` stretta 0 avvisi, `check-links` 96 validi. Proposte di docs-writer per dopo:
+>   `.restore/` nell'albero di `filesystem.en.md` (H), il riavvio del ripristino fra gli arresti di
+>   `configuration.en.md` (B6), la pagina `developer/backend/backup.md` (B6).
+> - Dopo le correzioni: `services backup-apply` 166 passati e 3 rossi, proprio i tre che fissavano il vecchio «non si fa
+>   niente»; `utils backup-cli-restore` 44, `services app-lifecycle` 42. Test aggiornati e nuovi a test-author 2
+>   (servizio) e 1 (CLI, API); doc a docs-writer. Le prove le lancio io, una alla volta.
+
+### B3 — verde finale e controlli statici (2026-10-16, 04:05-04:16) ✅ — pronto per l'`all-backend`
+
+> - **Le ultime due note di test-author 2**, applicate: un errore nel log quando lo scambio interrotto si annulla sotto un
+>   server («…that server must be restarted»), e un avviso prima che `hold_serving_lock` si metta ad aspettare uno
+>   scambio in corso (prima `LOCK_SH | LOCK_NB`, poi il bloccante). Test: `test_backup_apply.py` a 194 (era 169), con le
+>   prove deterministiche del lock tenuto a ogni rinomina dello scambio e dei tre annullamenti, e libero dopo, anche
+>   quando il passo solleva; `test_backup_cli.py` 92 (era 88), `test_backup_cli_restore.py` 46 (era 44),
+>   `test_backup_restore_apply.py` 83 (era 75), di test-author 1.
+> - **Tutti i selettori di B3**, dal runner, uno alla volta, `nice -n 10`, carico sotto 70, sul codice finale
+>   (`/tmp/libreFolio_b3_green_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `services backup-apply` | 194 (69 s) |
+>   | `services backup-staging` | 118 |
+>   | `services app-lifecycle` | 42 |
+>   | `utils backup-cli-restore` | 46 |
+>   | `utils backup-cli` | 92 |
+>   | `api backup-restore-apply` | 83 (il runner rigenera il client: `svelte-check` 0 e 0) |
+>   | `api backup-restore` | 114 |
+>   | `api instance-block` | 62 |
+>   | `e2e backup-roundtrip` | 3 (43 s) |
+>
+> - **Statici** (`/tmp/libreFolio_b3_static.sh`): `git diff --check` pulito; ruff pulito sui 18 file di B3; black pulito,
+>   tranne il `print_info` del Designer Lab in `_backend_utils.py`, che fallisce già su HEAD; `check-orphans`: 347 file,
+>   tutti raggiungibili; vulture (`lint --dead-code --scope backend`): niente nei file di B3 (`backup_in_progress` di B2
+>   aspetta Z2b; `compute_control_totals` di J aspetta B-13). `mkdocs build` stretta 0 avvisi, `check-links` 96.
+>   Porta 6187 libera. Lo snapshot del DB di prova che il runner scrive va in `.testLog/00_archive/` (ignorato).
+> - **Backlog**: B-12 riscritta (il residuo vero: un salto d'orologio fra i worker, senza rischio per i dati), B-11
+>   estesa alle sezioni nuove di `cli_tools`.
+> - **04:22, coordinatore su P11** (la revoca dei link monouso, nella lista di domattina): «vai avanti con la revoca; nel
+>   report e nella doc scrivi anche l'effetto sugli account in attesa di verifica». Verificato nel codice di E
+>   (`email/verification.py`): l'attesa non ha una colonna, un account aspetta se è inattivo **e** ha un token di
+>   verifica non speso; revocati tutti i token, «hold» compreso, l'account non aspetta più. Il «rimanda» della pagina di
+>   accesso risponde 403 `ACCOUNT_DISABLED`, e nessuna rotta dell'admin rimanda il link: l'admin lo attiva
+>   (`PATCH /users/{id}`, `email_verified_at` resta `NULL`) o lo cancella perché il proprietario si iscriva di nuovo
+>   (non ha dati: non è mai entrato). Così nel report della CLI (la riga dei link ora nomina anche le verifiche, più
+>   una riga sugli account in attesa), in `cli_tools` (il report e «After the restore») e in `security.md`
+>   («🚫 Revocation»). Al coordinatore: «l'admin rimanda la verifica» oggi non esiste; le alternative (un «rimanda»
+>   per l'admin, o il ripristino che rimette un «hold») sono nel codice di E. Test: test-author 1 fissa le due righe;
+>   `utils backup-cli` 92, `utils backup-cli-restore` 46 (04:28); `mkdocs build` stretta 0 avvisi, `check-links` 96.
+> - **04:29, nota di E-5** (la guardia `schemas openapi-client-text`, entrata in `dev_release2`, non ancora nella mia
+>   base): il generatore del client copia senza escape la docstring di un modello dove il modello tipizza un campo, e
+>   un testo su più righe con i backtick rompe il client all'import (E2b). Oggi nessuno dei nostri è tipo di un campo
+>   (risposte e membri di unioni), quindi niente si rompe; ma, per non lasciare la trappola, in `schemas/backup.py`
+>   tutte le docstring dei modelli sono ora di una riga, senza backtick né virgolette (`InstanceBackupJob`,
+>   `RestoreUpload`, `RestoreStageReport`, `RestoreStage`, `RestoreStatus`, `RestoreTableRows`), con il dettaglio in un
+>   commento sopra la classe e il perché in un commento in testa al file. Verificato leggendo le docstring; la guardia,
+>   presa da `dev_release2`, non gira fuori dal repo (calcola i percorsi dalla sua posizione): gira al prossimo
+>   aggiornamento di base. Ruff e black puliti.
+> - **`all-backend` di B3** (slot pesante 1, 04:37:16-05:14:59, 37 min 44 s, `--workers 2`, `nice -n 10`, corsia 6187,
+>   HEAD `62004e530` più B3; log `/tmp/libreFolio_b_all_backend_b3.log`): **6/7 categorie verdi**. Nell'API un solo
+>   rosso, deterministico e nostro: `test_backup_api.py::test_the_backup_router_registers_its_routes_in_order`
+>   (BACKUP-001, il pin dell'ordine delle rotte `/backup` di C2), che elenca ancora le 15 rotte di prima delle 4 nuove
+>   di `restore.py`. Passate parallele: 4 809 + 5 974, 75 + 2 852, 953 + 782, 1 067 (+1 rosso) + 807; DB 19/19. Porta
+>   6187 libera.
+>   - **⚠️ Fuori pista — un selettore mancava**: fra i mirati di B3 non c'era `api backup`, l'unità del pin delle rotte.
+>     Riparazione a test-author 1 (le 4 tuple nel pin, solo statici); `api backup` dopo le 06:45 (fermo della macchina
+>     05:30-06:45, deciso dal coordinatore; slot spostato alle 05:20 su richiesta dei colori).
+>   - Il primo lancio delle 04:36:45 è caduto subito sull'ordine degli argomenti (`--workers` va prima della
+>     categoria), senza eseguire nulla.
+> - **05:17, coordinatore**: per il checkpoint bastano `api backup` verde e questo `all-backend`; dopo le 06:45
+>   `api backup`, poi l'handoff FROZEN e il commit. **Ingresso non prima di domattina**: B3 aspetta il developer su P7
+>   (istanza bloccata prima del riavvio) e P11 (revoca dei link); prima dell'ingresso la base si aggiorna (A6c, X CP11c,
+>   H CP7b-2, la correzione di Z, i lotti di T) e sulla revisione fusa serve un `all-backend` intero, in uno slot del
+>   mattino. **Regola da qui in avanti**: `api backup` fra i mirati di ogni lotto che tocca le rotte `/backup`.
+> - **Pin riparato** (test-author 1, 05:18, solo statici: ruff e black puliti, 23 test raccolti): `BACKUP_ROUTES` ha le 4
+>   rotte di B3 dopo le 4 di B2 e prima dei 3 export, nell'ordine dei decoratori di `restore.py`; «the eight of
+>   restore.py» nella docstring e nel messaggio; corretti anche la riga BACKUP-001 della docstring del modulo (era
+>   rimasta a instance e panel) e il commento sopra `BACKUP_ROUTES`. Nessun conteggio o elenco di tag da aggiornare; i
+>   segnaposto tolti (BACKUP-010) non si scontrano con i percorsi nuovi.
+> - **Prossimo**: dopo le 06:45 `api backup`, poi l'handoff FROZEN.
+
+### B3 committato; B-13 e B6a-bis approvati (2026-10-16, 05:19-05:30) — fermo della macchina 05:30-06:45
+
+> - **B3 committato dal coordinatore** come checkpoint intermedio (non è un ingresso): `5f1543e81`
+>   `feat(backup): apply checked restore at next start` (20 file), `2c2c8fc3e` `docs(backup): restore an archive,
+>   follow or cancel it` (5), `887a24123` `docs(journal): B3 restore, security review, backlog B` (2). HEAD `887a24123`,
+>   worktree pulito. Il testo del CHANGELOG lo tiene il coordinatore per l'ingresso; le decisioni notturne (sessioni,
+>   P7, P11, `restore_in_use`, il lock) sono nella lista del developer.
+> - **B-13 approvato com'è analizzato** (`files/b13-analysis.md` della sessione): `changed` è un avviso, mai un
+>   rifiuto; il manifest resta v1. Dopo le 06:45: `api backup`, poi i rossi con test-author; commit separati da B3.
+> - **B6a-bis, via alle 05:24** (solo scrittura durante il fermo): la pagina nuova `admin/backup_restore.en.md` dalla
+>   scaletta (`files/b6-guide-outline.md`), senza la UI del ripristino (B5b) né gli archivi cifrati (B4), che vanno in
+>   B6b; una riga in `filesystem.en.md` «💾 Backup» (di H, permesso del coordinatore); la voce di navigazione sotto
+>   «🧹 Maintenance & Operations» con le tre `nav_translations` (etichette date da me); una riga in `admin/index.en.md`.
+>   docs-writer al lavoro; `mkdocs build` stretta e `check-links` dopo le 06:45, dopo `api backup`. Commit separato da
+>   B-13.
+
+### B6a-bis — la guida «Backup, Restore and Moving Your Instance» (2026-10-16, 05:24-06:55) ✅ — 🧊 FROZEN
+
+> - **docs-writer `a769f9f9`**, solo scrittura durante il fermo (nessuna build, nessun `dev.py`):
+>   - pagina nuova `admin/backup_restore.en.md` (301 righe; ancore `#contents`, `#what-follows`, `#create`,
+>     `#settings-backup`, `#command-line`, `#keep-copies`, `#check`, `#restore`, `#restore-command`, `#next-start`,
+>     `#supervisors`, `#bring-home`, `#to-your-server`, `#by-hand`, `#to-a-hosted-instance`, `#never-backwards`,
+>     `#troubleshooting`, `#check-refused`, `#restart-problems`, `#after-restore`);
+>   - una frase in testa a «💾 Backup» di `filesystem.en.md` (di H, permesso del coordinatore);
+>   - la voce di navigazione dopo «CLI Admin Tools» e le tre `nav_translations` (etichette mie, alla lettera);
+>   - un punto in `admin/index.en.md`.
+> - **Riletta da me**: i nomi di sezione citati fra «…» (che la build non controlla) esistono tutti, le etichette della
+>   UI («Reactivate», quelle della scheda) sono quelle dei cataloghi i18n; nessuna funzione inesistente (né il
+>   ripristino dalla scheda né gli archivi cifrati).
+> - **⚠️ Fuori pista — niente ancore di `cli_tools` nella pagina nuova**: le pagine it, fr ed es di `cli_tools` non
+>   hanno le sezioni del backup, e le build tradotte usano la pagina inglese come ripiego risolvendo i link sulle pagine
+>   tradotte: un link a `cli_tools.md#backup…` romperebbe la build stretta (regola della devWiki
+>   `docs-anchors-from-the-render`). Rimandi per nome di sezione, come già fa `hosting_providers`.
+> - **⚠️ Fuori pista — la scaletta sbagliava in quattro punti**, corretti nella pagina: la cartella è `./LibreFolio-data`
+>   (non `./data`); la pagina di blocco **non ha** il pulsante del backup (l'API, la CLI e il pannello sì) → **B-14** nel
+>   backlog, proposta per B5 con il permesso di H; per il ripristino da CLI su un'istanza nuova non serve creare prima
+>   l'admin; i totali di controllo non sono ancora nel manifest (B-13).
+> - **Corretto in `cli_tools`** (sezione mia, di B3): «🚚 Use an Archive on Another Installation» aveva una lista
+>   numerata seguita subito da una puntata, che Python-Markdown fonde: aggiunto «Good to know:» fra le due.
+> - **Trovati fuori dal perimetro, al coordinatore**: `user/settings/index.en.md` dice «five tabs» (per un admin ora
+>   sono sette: Backup ed Email); `configuration.en.md` dice che nessun plugin chiede impostazioni personali (justETF e
+>   Borsa Italiana ora le hanno).
+> - Debito di traduzione (nessun timbro): la pagina nuova, la frase di `filesystem`, il punto di `index` → B-11.
+> - **B-14 in corso, H** (coordinatore, 05:52): la pagina di blocco monta `BackupDownloadCard.svelte` senza props, con
+>   un `ToastContainer`; quando entra, B chiude la riga e aggiorna le due frasi della doc. **Vincolo per B5b**: non
+>   spostare, rinominare o dare props obbligatorie a quel componente senza dirlo al coordinatore.
+> - **H-17** (coordinatore, 06:03, opzione 2, comportamento invariato): dopo l'ingresso di B3, in
+>   `backup_max_upload_mb()` il ripiego diventa `profile_default(MAX_UPLOAD_VARIABLE, 0)` di H; proposto di togliere
+>   `MANAGED_MAX_UPLOAD_MB` e di fissare nel test (e) il valore del profilo gestito attraverso `profile_default`. B5 e B-13
+>   non toccano `config/backup.py`; B7 sì (le variabili di Litestream).
+> - **Dopo il fermo** (06:46-06:53, una prova alla volta, `nice`, carico sotto 70): `api backup` **23 passati** (il pin
+>   BACKUP-001 riparato, prova che chiude il checkpoint di B3); `mkdocs build` stretta **0 avvisi nostri** (141 s);
+>   `check-links` **96 validi**; `utils gate-docs-links` **63 passati**. `dev-cli-image` e `release-image-contract`
+>   leggono pagine che B6a-bis non tocca. Porta 6187 libera.
+
+### B-13 — i totali di controllo del registro nel backup (2026-10-16, 07:00-08:40) ✅ — 🧊 FROZEN
+
+> - **Via del coordinatore** (05:25, poi 07:00 dopo il commit di B6a-bis: `2c917e3aa` docs, `ccc92b5a2` journal, HEAD
+>   `ccc92b5a2`): `changed` è un avviso, mai un rifiuto; il manifest resta v1; commit separati da B3.
+> - **Contratto** (`files/b13-contract.md` della sessione): `instance_backup/totals.py` con `ledger_totals_of(database)`
+>   (la funzione di J su un motore dedicato in sola lettura, `aiosqlite` con `?mode=ro` come la `describe_database` di
+>   B1, mai il DB vivo, mai un'eccezione) e `compare_totals(recorded, current)` (`same`, `changed` con al più 20 righe di
+>   differenza e il conteggio, `absent`, `other_version`, `unreadable`); `ManifestDatabase.control_totals`, letto sulla
+>   copia di `VACUUM INTO` prima che entri nello zip; nel report della prova i tre campi e gli avvisi
+>   `control_totals_changed` e `control_totals_unreadable` (mai un blocco; valori di default, così un report scritto
+>   prima si legge ancora); i campi nell'API (`RestoreTotalsDifference`, docstring di una riga: E-5); una riga nel report
+>   della CLI; l'e2e confronta sorgente, manifest e destinazione (via il `TODO(CP-15)`).
+> - **⚠️ Fuori pista — l'ordine della decisione**: `ControlTotals.from_json` di J rifiuta anche un'altra versione, quindi
+>   la versione si guarda prima di leggere (un `int` diverso → `other_version`; `true` o `"1"` → `absent`, illeggibili).
+>   Corretto nel contratto e detto a test-author 1 prima che scrivesse quei casi.
+> - **Rossi**: test-author 1 (`test_backup_totals.py` nuovo, registrato come `services backup-totals`; archivio, prova,
+>   API, CLI) e test-author 2 (l'e2e), in parallelo su file diversi, solo controlli statici; le prove le lancio io.
+> - **Codice in bozza fuori dal repo** (`files/b13-wip/`: `totals.py`, `apply_b13.py` con le ancore), provato a secco su
+>   una copia dei sei file in `/tmp`: ogni ancora una volta sola, sintassi a posto. Entra nel worktree dopo il giro rosso.
+> - **Rossi scritti** (07:15): test-author 1 — `test_backup_totals.py` 60 test (nuovo, `services backup-totals`), più 13 in
+>   `test_backup_archive.py`, 15 in `test_backup_staging.py`, 6 in `test_backup_restore.py`, 10 in `test_backup_cli.py`;
+>   test-author 2 — l'e2e (3 test; un registro scritto a mano alla `005` con i totali calcolati a mano: 8772 EUR,
+>   2500.5 USD, 10 quote).
+> - **⚠️ Fuori pista — i rilievi di test-author 1, decisi da me** (contratto §7; scelte tecniche nel mio perimetro):
+>   1. ogni motore del processo esegue `PRAGMA journal_mode=WAL` alla connessione (ascoltatore globale in
+>      `db/session.py`), che una connessione `mode=ro` a un file con il giornale di rollback (ogni copia di
+>      `VACUUM INTO`) rifiuta: con l'indirizzo del contratto il manifest avrebbe sempre `null`. Lettura `immutable=1`,
+>      che non crea niente accanto al file; per sicurezza un `-wal` non vuoto accanto al file dà `unreadable` invece di
+>      totali vecchi;
+>   2. `control_totals` di tipo qualsiasi nel manifest: un valore malformato non rende l'archivio invalido, risulta
+>      `absent`;
+>   3. gli importi registrati devono essere testo decimale semplice prima che J li legga: `from_json` espande un
+>      esponente per intero (`1E+50000000`: 121 MB) → `absent`; segnalato al coordinatore per J;
+>   4. lo stato viene dalle differenze riga per riga (righe zero escluse): righe in altro ordine o una riga zero
+>      esplicita danno `same`, e `changed` ha sempre almeno una riga;
+>   5. la frase «changed by the upgrade» era falsa senza migrazioni: ora «differ from the backup's»;
+>   6. `_report(..., totals=None)` e i tre campi del report con un default: i test di prima e i `report.json` di prima
+>      restano validi.
+>   Anche: un archivio senza manifest non arriva mai al confronto (`not_a_backup`), il contratto sbagliava.
+> - **Giro rosso** (07:53-07:57, dal runner, uno alla volta, `nice`, carico sotto 50 per la regola del coordinatore delle
+>   07:48): `services backup-totals` 84 errori (il modulo che manca, importato in una fixture: ognuno da sé);
+>   `services backup-archive` 13 rossi e 142 verdi; `services backup-staging` 27 e 118; `api backup-restore` 7 e 114;
+>   `utils backup-cli` 11 e 91; `e2e backup-roundtrip` 2 e 1. Ogni rosso per la ragione giusta: il modulo, il campo del
+>   manifest o i campi del report che mancano; tutti i test di prima verdi.
+> - **Codice nel worktree** (07:57): `totals.py` nuovo, più le modifiche ancorate di `apply_b13.py` (manifest, archivio,
+>   prova su copia, schemi e API, CLI); ruff e black puliti.
+> - **Giro verde** (07:57-08:11, una prova alla volta, carico sotto 50): `services backup-archive` 155, `backup-staging` 145,
+>   `backup-jobs` 69, `api backup-restore` 121 (con `api sync` e `svelte-check` 0/0), `api backup` 23 (la regola del
+>   coordinatore), `api backup-restore-apply` 83, `utils backup-cli` 102, `utils backup-cli-restore` 46,
+>   `e2e backup-roundtrip` 3, `services backup-apply` 194; `services backup-totals` 84 verdi e **2 errori**.
+> - **⚠️ Fuori pista — una connessione aiosqlite lasciata aperta** (la guardia delle perdite del progetto, ai due casi
+>   «non è un database» e «troncato»): l'ascoltatore globale `connect` fallisce dopo che `aiosqlite` ha già aperto la
+>   connessione, e il pool la scarta senza chiuderla, fuori dalla portata di `engine.dispose()`. Corretto: le connessioni
+>   aperte dal nostro `async_creator` si tengono in una lista e si chiudono nel `finally`. Riprova (08:11-08:23):
+>   `backup-totals` **84**, `backup-archive` 155, `backup-staging` 145, `e2e backup-roundtrip` 3.
+> - **Statici**: `git diff --check` pulito; `check-orphans` 348 file, tutti raggiungibili; vulture niente nei file di B-13
+>   (e `compute_control_totals` di J non è più «usato solo dai test»).
+> - **Doc** (docs-writer `a769f9f9`, verificata sul codice): in `cli_tools` («🧪 Try a Restore on a Copy») un punto con
+>   le cinque righe della CLI alla lettera, gli avvisi nuovi e il riquadro di `manifest.json`; in `backup_restore` la
+>   riga di `manifest.json`, la colonna di `--dry-run` e una voce «Ledger totals differ» fra gli avvisi (non nella
+>   tabella dei rifiuti: non ha codice); in `security.md` due frasi sulla lettura immutabile e sugli importi semplici,
+>   con il link alla pagina di J. Nota per J: `financial_math.md` dice che i totali si confrontano «after a restore», ma
+>   il codice li confronta durante la prova, prima della conferma.
+> - **Verifiche della doc** (08:31-08:34): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63.
+> - **Backlog**: B-13 chiusa ✅.
+
+### B5b — la scheda del ripristino (2026-10-16, dalle 08:35) — rossi in scrittura
+
+> - **B-13 committato** dal coordinatore: `c374313c0` feat, `36bccad06` docs, `1ca7a52c6` journal (HEAD); entra con B3.
+> - **Via per B5** (coordinatore, 08:35): le tre raccomandazioni di P8, ognuna «da rivedere» e facile da cambiare;
+>   markup nuovo solo con i ruoli `-lf-`, nessun elemento misto; `BackupDownloadCard` resta dov'è, senza props
+>   obbligatorie (lo monta H nella pagina di blocco); prima i Vitest, prove leggere con carico sotto 50.
+> - **Contratto** (`files/b5b-contract.md` della sessione), dopo aver letto il codice di B5a e le basi:
+>   - API: le otto rotte del ripristino con gli alias zodios già generati; il caricamento come corpo grezzo
+>     (`requestFormat: 'binary'`) con `onUploadProgress`; la sonda del server (`/system/ready`) e l'esito
+>     (`GET /backup/restore/status`) con `fetch` semplice, mai zodios, il cui intercettore dei 401 porterebbe via la
+>     pagina;
+>   - un controllore `RestoreFlowController` sul modello di `BackupJobController` (stati `loading`, `idle`,
+>     `uploading`, `checking`, `report`, `confirming`, `pending`, `in_progress`, `cancelling`, `restarting`, `failed`;
+>     generazioni contro le risposte vecchie; ripresa dopo un ricaricamento da `sessionStorage`);
+>   - tre componenti nuovi (`RestoreCard`, `RestoreReportModal` su `ModalBase`, `RestartOverlay`), gli eventi
+>     `backup.restore.*`, i18n `backup.restore.*` in quattro lingue;
+>   - le tre scelte di P8 in un punto ciascuna: l'esito solo nella scheda; `AFTER_RESTORE_PATH =
+>     '/settings?tab=backup'` con il `loginUrl()` che c'è già; la parola tradotta, confrontata senza maiuscole e spazi.
+> - **Il riavvio**, deciso nel contratto: l'overlay aspetta il server visto giù e poi su (`/system/ready`), poi legge
+>   l'esito: un 401 vuol dire sessioni chiuse, cioè ripristino committato (accedi di nuovo); un 200 `rolled_back` mostra
+>   il motivo; un 200 `pending` dice che non è stato applicato. Un riavvio troppo veloce per vederlo giù: dopo 30 s
+>   si legge l'esito lo stesso; dopo 60 s senza server, «avvia di nuovo LibreFolio».
+> - **Rossi**: test-author `96c0577d` (Vitest: controllore, API, tre componenti, completezza i18n), solo scrittura; le
+>   prove le lancio io. Chieste al coordinatore quattro righe in `_frontend_utility.py` (liste core-unit e
+>   component-unit, file seguito dal programma colori).
+> - **09:05**: via del coordinatore alle quattro righe del runner e alle tre scelte di P8 come descritte. Contratto
+>   §2b: l'API pubblica del controllore, i nomi comuni a test e codice.
+> - **09:20-10:32, STOP del developer**: tutto fermo (nessuna prova in corso, porta libera); il test-author non aveva
+>   ancora scritto niente. Worktree lasciato com'era (solo questo piano modificato).
+> - **10:32, ripresa. P11 deciso dal developer**: al ripristino si revocano tutti i link monouso, come fatto; verso
+>   l'utente **solo un avviso**: inviti e link scaduti, da rimandare se serve, **niente di più**. Quindi:
+>   - il report della prova (CLI) dà una riga sola: «Invitations and links sent before the restore will have expired:
+>     send them again if needed.», al posto delle due (i link che smettono di funzionare e gli account in attesa di
+>     verifica);
+>   - la citazione in `cli_tools.en.md` allineata; in `security.md` la frase sul report («gives one notice only»);
+>   - la spiegazione degli account in attesa di verifica resta nella doc (comportamento reale e risoluzione dei
+>     problemi: `cli_tools` «After the restore», `backup_restore` «What the Next Start Does» e «After a Restore»),
+>     detto al coordinatore;
+>   - nella scheda (B5b) la stessa riga sola (`restore-report-links`), contratto §3 aggiornato.
+>   - I due test-author di prima non esistevano più dopo lo stop: uno nuovo (`3d0a7a3b`) ripara le righe fissate nei
+>     test della CLI, un altro (`a30e058d`) riparte con i rossi di B5b. Contratto §2c: l'annullamento di una prova
+>     ancora in corso (409 `restore_stage_running`: si aspetta la fine, poi si toglie).
+> - P7, P8 e P12: in attesa del developer, niente cambia.
+> - **P11, prove** (10:50-11:00; `/tmp` era stato cancellato al riavvio delle 10:03, con il mio script e la cartella
+>   dati della corsia: lo script ora sta nella cartella della sessione, `files/scripts/b_green.sh`, con i log in
+>   `files/logs/`, regola del coordinatore): `utils backup-cli` 102, `utils backup-cli-restore` 46 (la riga sola, e
+>   nessuna delle due vecchie, guardate anche con «send new ones» e «stop working»), `mkdocs build` stretta 0 avvisi,
+>   `check-links` 96, `utils gate-docs-links` 63. Porta libera.
+
+### Decisioni del developer su P7, P8 e P12 (2026-10-16, 11:11-11:25)
+
+> - **P11 committato** dal coordinatore: `51fa21b59` fix, `4ec25ade0` journal (HEAD). La doc sugli account in attesa di
+>   verifica resta com'è: spiega il comportamento reale.
+> - **P7** («se l'app è bloccata, che ripristino avvierei? Il ripristino resta bloccato anche lui finché non pagano, da UI
+>   e da API»): un ripristino confermato prima del blocco **non si applica** finché l'istanza è bloccata, aspetta lo
+>   sblocco (`waiting = instance_blocked`); le rotte restano bloccate come sono. La mia decisione notturna («applicato
+>   comunque») cade. Contratto B3 §11: l'ordine dei motivi (altra cartella dati, poi `instance_blocked`, poi server
+>   acceso e backup in corso); un `LIBREFOLIO_BLOCKED` illeggibile conta come bloccato; le riparazioni (annullamenti) e il
+>   commit restano anche da bloccata. Rossi al test-author `3deeac3c`.
+> - **P8**, la scheda del ripristino (approvato come l'ho letto alle 11:25):
+>   - dopo la prova e la conferma il server si riavvia subito (niente passo «Riavvia ora» separato; il blocco «in attesa»
+>     resta per un ripristino trovato in attesa: confermato da CLI, o un riavvio non partito);
+>   - **successo senza messaggio** («se ha funzionato lo vedi»): la pagina va dritta al login, poi alla solita pagina
+>     iniziale; la scheda non mostra «ripristino applicato» (`restoreNavigation`, un punto solo);
+>   - **fallimento sulla stessa schermata**, con il motivo (annullato, o non applicato, `instance_blocked` compreso);
+>   - **la parola di conferma**: una parola vera a caso, 6-10 lettere, nella lingua dell'interfaccia, scritta **senza
+>     copia e incolla** (incolla e trascina bloccati sul campo); liste curate in un frammento i18n
+>     (`backup.restore.confirm.words`, minuscole senza accenti: 59 en, 50 it, 46 fr, 46 es), un test sulle quattro liste;
+>     controllata **solo nella pagina** (protegge da un clic frettoloso, non da un attacco: un admin può sempre chiamare
+>     l'API). Valutato e scartato il controllo sul server (mezza giornata: rotta, prova, CLI, quattro liste anche lì).
+>   Contratto B5b §0 riscritto; bozze in `files/b5b-wip/` aggiornate (123 chiavi per lingua, tutte usate); il test-author
+>   `a30e058d` scrive i rossi sul contratto nuovo.
+> - **P12**, B4 (non adesso): scrypt `n = 2^15` (32 MiB); la password segue le regole e l'indicatore `PasswordStrength`
+>   della registrazione e del cambio password (A6c), più un minimo di 12 caratteri (contratto B4 §8).
+> - **11:30, domanda di A** (P18, migrazione 009, email unica senza badare alle maiuscole): il report della prova non
+>   mostra l'errore della migrazione così com'è (API e scheda: solo `upgrade_failed`; CLI: «the log of the server has the
+>   details»); il log del server ha gli ultimi 4000 caratteri dello `stderr` di alembic. A si accontenta di una riga di
+>   doc che rimandi al log; la scrivo io quando 009 entra nella mia base (testo e comando di A in
+>   `files/a009-doc-line.md`).
+> - **P7, i rossi** (test-author `3deeac3c`): `services backup-apply` 210 (16 nuovi), `api backup-restore-apply` 84,
+>   `utils backup-cli-restore` 51 e oltre. Rilievi decisi:
+>   - la CLI non rifiuta su un'istanza bloccata (la usa chi gestisce il server): conferma e aggiunge la riga
+>     `instance_blocked` (coordinatore d'accordo, 11:38);
+>   - `backup pending` legge il blocco anche al momento: una riga sola, dopo quella registrata da un avvio;
+>   - nessuna scadenza per un ripristino in attesa durante il blocco (coordinatore d'accordo); nella doc le due
+>     conseguenze: il disco occupato dalla copia (`backup pending --cancel`) e la migrazione al primo avvio dopo lo
+>     sblocco se LibreFolio è stato aggiornato nel frattempo.
+>   Codice e doc pronti in script ancorati (`files/b3-wip/apply_p7.py`, `apply_p7_docs.py`), provati a secco.
+> - **B5b, i rossi** (test-author `a30e058d`, solo Prettier): `restoreFlow.test.ts` 167, `backupApi.test.ts` +40,
+>   `RestoreCard.test.ts` 42, `RestoreReportModal.test.ts` 40, `RestartOverlay.test.ts` 14, `restoreI18n.test.ts` 96 (le
+>   chiavi nei quattro cataloghi e le liste delle parole). Moduli mancanti caricati con `import.meta.glob`: ogni test
+>   fallisce da sé. Decisione mia: un riavvio rifiutato con `restore_not_pending` (ripristino annullato da CLI nel
+>   frattempo) dà `failed`, non un blocco «in attesa» che non esiste più. Le bozze adattate alle scelte del test-author
+>   (l'overlay riceve lo `status`, `restore-cancel-check` ferma anche l'invio, `load()` azzera l'overlay); cinque righe
+>   del runner invece di quattro (`restoreI18n.test.ts` in core-unit), detto al coordinatore.
+
+### P7 — rosso, codice, verde (2026-10-16, 11:49-12:28) ✅ — committato
+
+> - **11:49, i casi di `backup pending`** (test-author `3deeac3c`): una matrice di 15 casi (ciò che ha registrato
+>   l'ultimo avvio × il blocco letto ora: `true`, illeggibile, assente) e una guardia di 12 (nessun ripristino, o non in
+>   attesa: mai la riga del blocco). Deciso: **`other_data_directory` vince anche qui**, come all'avvio: una copia della
+>   cartella dati non applica mai il ripristino, e la riga del blocco prometterebbe il falso. Regola: la riga del blocco
+>   esce quando `waiting == instance_blocked`, oppure quando l'istanza è bloccata ora e `waiting` non è
+>   `other_data_directory`; una volta sola, dopo la riga registrata. Bozza `apply_p7.py` e doc di `cli_tools`
+>   («the last start found the instance blocked, or it is blocked now») allineate. File della CLI: 77 test.
+> - **Giro rosso** (11:54-12:02, carico sotto 50): `services backup-apply` 8 rossi su 210, `api backup-restore-apply`
+>   2 su 84, `utils backup-cli-restore` 12 su 77. Tutti e soli i previsti (motivo nuovo nel `Literal`, attesa da
+>   bloccata con `true`, `1`, `yes`, `ON` e con un valore illeggibile, ordine prima di backup e server, OpenAPI, la riga
+>   dopo `restore --yes`, la matrice di `pending`).
+> - **⚠️ Fuori pista**: alle 11:55 un errore di rete del servizio ha interrotto il mio turno; il test-author di B5b
+>   (`a30e058d`) è morto sullo stesso errore durante la richiesta su `restore_not_pending`. La modifica era già salvata
+>   (11:51): i due casi (dopo la conferma e con `restartNow()`) danno `failed` (`restart`), annunciato, niente sonda, lo
+>   stato riletto solo da `retry()`; intestazione del file allineata. Prettier pulito sui sei file; la bozza
+>   `restoreFlow.svelte.ts` lo fa già. La prova della corsia (PID 76895) era la mia: lasciata finire.
+> - **12:03, applicati** `apply_p7.py` (`apply.py`: `_blocked()` e il controllo dopo `other_data_directory`;
+>   `schemas/backup.py`; `backup_cli.py`: `_instance_blocked()`, la riga dopo la conferma e in `pending`; descrizione
+>   del catalogo) e `apply_p7_docs.py` (`hosting_providers`, `security.md`, `cli_tools`, `backup_restore`). Ruff e black
+>   puliti sui sette file Python toccati. `config.platform` importa solo `os`, `datetime` e `config`: leggero per il
+>   primo passo d'avvio.
+> - Doc: `cli_tools` ha le traduzioni, ma le righe nuove sono comportamento nuovo: debito di traduzione vero, nessuno
+>   stamp. `hosting_providers` e `backup_restore` sono solo in inglese.
+> - **Giro verde** (12:03-12:22, `files/scripts/b_green.sh`, carico sotto 50): `services backup-apply` 210,
+>   `api backup-restore-apply` 84 (svelte-check 0/0 sul client rigenerato, con `instance_blocked`),
+>   `utils backup-cli-restore` 77, `utils backup-cli` 102, `api backup` 23, `services app-lifecycle` 42,
+>   `e2e backup-roundtrip` 3. Porta 6187 libera.
+> - **Doc** (12:22-12:27, `files/scripts/b_docs.sh`): `mkdocs build` stretta 0 avvisi, `check-links` 96,
+>   `utils gate-docs-links` 63. `git diff --check` pulito.
+> - **12:28, handoff del checkpoint P7** al coordinatore, 🧊 FROZEN: 12 file tracciati (7 codice e test, 4 doc, questo
+>   piano), nessun file nuovo. Esclusi i rossi di B5b (`backupApi.test.ts` e i cinque file nuovi di
+>   `features/backup/`): restano rossi finché il codice non entra. Il giro rosso di B5b dopo il commit (carico a 122).
+
+### B5b — rosso, allineamento al design system, codice, verde (2026-10-16, 12:28-13:25) ✅ — continua dopo la pausa
+
+> - **P7 committato** dal coordinatore: `e895fcd97` fix, `b63a00864` docs, `9686942c6` journal (HEAD). Approvata la
+>   scelta su `pending` (`other_data_directory` vince); l'aggiunta al CHANGELOG di B3 («never applied while the instance
+>   is blocked») la tiene il coordinatore.
+> - **Skill nuova `design-system`** (decisione D-T29, `6e569084a` in `dev_release2`, arriva al prossimo aggiornamento di
+>   base): letta con `git show 6e569084a:…` (copia in `files/design-system-SKILL.md` della sessione), non dai file del
+>   checkout principale. Vale subito per i componenti nuovi di B5b. Le bozze erano già solo ruoli `-lf-` (nessuna
+>   palette, nessun esadecimale, nessun `dark:`, testo primario sulla radice, ogni bordo col suo ruolo); corretti
+>   (`files/b5b-wip/align_design_system.py`):
+>   - **fuoco dei pulsanti** (regola 8): `focus-visible:outline-2 focus-visible:outline-offset-2
+>     focus-visible:outline-lf-focus` al posto di `focus:outline-none` più l'anello; il campo della parola
+>     `focus:border-lf-focus focus:ring-1 focus:ring-lf-focus` (lo schema dei campi in `dev`);
+>   - **hover sul pannello** (domanda aperta 3: `hover` = `panel`, non si vede): i pulsanti secondari della scheda, che
+>     sta su `bg-lf-panel`, passano a `hover:bg-lf-neutral`; quelli nel modale e nell'overlay (sulla carta) restano
+>     `hover:bg-lf-hover`;
+>   - **pulsanti rossi pieni**: `hover:bg-lf-danger-hover` (Q3); nel modale `enabled:hover:` e
+>     `disabled:cursor-not-allowed`, così un pulsante spento non cambia colore;
+>   - **nessuna seconda cornice dentro `ModalBase`** (regola 9): in `dev` il `ModalBase` disegna carta, bordo
+>     `raised`, ombra e raggio; il contenuto del report tiene solo `max-h-[85vh] space-y-4 overflow-y-auto p-5
+>     text-lf-primary`. Fino all'aggiornamento di base il `ModalBase` di questa base ha ancora la cornice legacy;
+>   - **l'overlay del riavvio su `ModalBase`** (regola 9: un modale usa `ModalBase`): non chiudibile
+>     (`closeOnBackdropClick={false}`, `closeOnEscape={false}`), `zIndex` 80, `trapFocus`; lo stato pubblicato
+>     (`restart-overlay`, `data-outcome`, `data-slow`) passa all'elemento interno, l'unico che i test leggono;
+>   - **riempimento della barra d'avanzamento**: `bg-lf-action` sul binario `bg-lf-neutral` fa **1,6:1 nel tema
+>     scuro** (`#215240` su `#222c28`), sotto il 3:1 di WCAG 1.4.11; `bg-lf-checked` (il ruolo del «segmento attivo»)
+>     fa 4,4:1 in scuro e 4,8:1 in chiaro. Ruolo più vicino, **«da rivedere»** (D-T27): da segnalare al coordinatore dei
+>     colori per T (un ruolo per l'avanzamento?).
+> - **Anche `BackupDownloadCard` (B5a)**, stessa scheda e stesse regole: lo stesso difetto della barra in scuro, lo
+>   stesso hover invisibile sul pannello, lo stesso fuoco. Solo classi, nessuna prop né test id (H lo monta sulla pagina
+>   di blocco): `files/b5b-wip/align_b5a.py`, applicato con B5b; da dire al coordinatore.
+> - **Giro rosso** Vitest sui sei file (`files/scripts/b_vitest.sh`, carico sotto 50): avviato alle 12:33, carico a 128.
+>   Alle 12:41: **396 rossi, 55 verdi** su 451 (i 51 di B5a in `backupApi.test.ts` e i 4 di `restoreI18n.test.ts` verdi
+>   per costruzione); tutti e soli i motivi previsti (modulo, export o chiave che mancano).
+> - **12:42, applicati** `apply_b5b.py` (cinque moduli nuovi, le funzioni in `backupApi.ts`, `RestoreCard` in
+>   `BackupTab.svelte`, le cinque righe del runner, 123 chiavi × 4 lingue) e `align_b5a.py`; Prettier.
+> - **Primo verde** (otto file, i sei più `BackupDownloadCard.test.ts` e `backupJob.test.ts`): 3 rossi, 96 saltati.
+>   - **⚠️ Fuori pista**: i tre file dei componenti scadono nel `beforeAll` da 60 s (il caricamento con
+>     `import.meta.glob`, lo schema di `GapFixStep.test.ts`): sotto carico la prima trasformazione (Svelte, `ModalBase`,
+>     il barile di `lucide-svelte`) ha superato il minuto (185 s di trasformazione sommati). `BackupDownloadCard.test.ts`,
+>     che monta la stessa scheda con un import statico, era verde. Rilanciati da soli, come vuole la regola del
+>     coordinatore: si caricano.
+>   - **Difetti veri delle bozze**, corretti nel worktree (da qui la fonte è il worktree, non le bozze):
+>     `pickConfirmationWord` ripiega da sé sulla parola tradotta `backup.restore.confirm.word` (prima lo faceva il
+>     modale); il testo del blocco «nessun amministratore» sotto una chiave che finisce col suo codice,
+>     `backup.restore.blocker.no_administrator` (era `report.noAdministrator`; `fix_blocker_key.py`, appena prima di
+>     `report`, l'ordine dei file conservato); il blocco della conferma (parola, campo, pulsante) **sempre disegnato**, e
+>     spento finché l'archivio non è ripristinabile o ha un blocco (`confirmable = restorable && blockers.length === 0`;
+>     prima spariva, e un report «ripristinabile» con il blocco si poteva confermare); `data-reason` e `data-waiting` sulla
+>     radice `restart-overlay` (erano sul paragrafo interno).
+> - **Verde** (12:53-12:56, a gruppi per il carico): `restoreFlow` + `restoreI18n` 264; i tre componenti 96;
+>   `BackupDownloadCard` + `backupJob` + `backupApi` 273. Totale 633, lo stesso conteggio del primo giro.
+> - **Controlli statici** (`files/scripts/b_static.sh`, uno alla volta, 13:03-13:08): ratchet dei colori pulito
+>   («0 files dropped below their record»); i nove file dei cancelli 177 verdi; `i18n check` pulito (4824 chiavi,
+>   «strict»); `lint --dead-code --scope frontend` esce 1, ma nessun reperto è in `features/backup` (file, export e tipi
+>   inutilizzati altrove, già nella base); **`front check`: 18 errori e 1 avviso, tutti nei file nuovi**:
+>   - **⚠️ Fuori pista**: i tipi TS espliciti che il generatore scrive per `RestoreStage` (e il `RestoreStageReport` che
+>     contiene) allargano ogni campo nullabile a `T | null | (T | null)[]`, un ramo che lo schema zod non lascia passare
+>     (la stessa stranezza che `safeScalar` di `$lib/types/common` scarta a run time altrove; 822 `| Array<` in
+>     `generated.ts`). `RestoreStatus` e il job di B5a sono inferiti, quindi puliti. Cura in `backupApi.ts`: un tipo
+>     `Unwidened` che toglie il ramo array dove convive con altri rami (un campo che è solo un array resta tale; nessun
+>     campo dei due schemi è un array nullabile, verificato su `openapi.json`), e un solo cast nelle due funzioni che
+>     restituiscono una prova, dopo la validazione zod;
+>   - l'avviso: `random()` letto una volta all'apertura del modale, ora con `untrack`, che dice l'intenzione.
+> - **Guida** (B6b, `docs-writer` in background, solo scrittura): la sezione «🖱️ Restore from Settings › Backup» e gli
+>   aggiornamenti di «Bring home», «to a hosted instance» e della risoluzione dei problemi; la frase «Today it runs on
+>   the server, from the command line» non è più vera.
+> - **13:16, la guida è scritta** (`docs-writer` `1a89fad1`): `backup_restore.en.md` (sezione nuova `#restore-settings`,
+>   tabella `#restore-settings-problems`, ritocchi in «Bring home», «to a hosted instance», «Who Starts LibreFolio
+>   Again», risoluzione dei problemi) e `hosting_providers.en.md` (tre ritocchi); solo inglese, nessun debito di
+>   traduzione. Nessuna build lanciata. Ha trovato cinque scarti fra codice e brief; decisi:
+>   1. **istanza bloccata durante il riavvio**: la rotta dello stato risponde 423 `instance_blocked` (`/system/ready` 200),
+>      l'esito diventa `down` e l'overlay aspetta per sempre; il «`instance_blocked` compreso» approvato per P8 non
+>      arriva mai alla pagina. **Si corregge in B5b**: `restoreOutcome()` 423 con quel codice → `{kind: 'blocked'}`; il
+>      controllore lo rende `still_pending` con `outcomeStatus = {state: 'pending', waiting: 'instance_blocked'}`, niente
+>      annuncio; «Back to Backup» arriva alla pagina di blocco con l'intercettore del client;
+>   2. **«Cancel the restore» lasciava la copia della prova sul disco** (la CLI `--cancel` la toglie): **si corregge in
+>      B5b**, dopo un annullamento riuscito `DELETE /stage/{stage_id}` best effort; con `restore_not_pending` niente;
+>   3. «Try again» rilegge lo stato e basta: solo doc;
+>   4. un 413 di un proxy dà il messaggio generico: backlog **B-15**;
+>   5. un server che non scende lascia l'overlay in attesa senza suggerimento: backlog **B-16**, e una riga di doc.
+> - **Ultimo giro prima della pausa**: con i tipi corretti, `restoreFlow` + `restoreI18n` + `backupApi` 355 verdi (13:19);
+>   `front check` sceso a 4 errori in un file (`tables` scritto `{}` dal tipo esplicito del generatore: corretto in
+>   `backupApi.ts` con `Record<string, RestoreTableRows>`, **non ancora riverificato**). Il gruppo dei componenti fermato
+>   apposta: il test-author stava per toccare i file.
+> - **Rossi in scrittura** (test-author `817f0858`, solo scrittura): `backupApi.test.ts` (423), `restoreFlow.test.ts`
+>   (esito `blocked`, `cancelPending` con il `DELETE /stage`), `RestoreCard.test.ts` (un caso per ciascuno). La guida
+>   aggiornata ai punti 1, 2, 3 e 5 (`docs-writer`, stesso agente).
+
+### ⏸️ PAUSA del developer (2026-10-16, 13:25-14:14) — ripresa
+
+> - HEAD `9686942c6`, nessun merge aperto, porta 6187 libera, nessun mio comando in corso. Ai due specialisti in corsa
+>   (test-author `817f0858`, `docs-writer` `1a89fad1`) chiesto di finire la modifica in corso e fermarsi.
+> - **Sporchi** (tutti di B5b, niente da committare a metà): `BackupDownloadCard.svelte`, `BackupTab.svelte`,
+>   `backupApi.ts`, `backupApi.test.ts`, i cinque moduli nuovi e i cinque test nuovi di `features/backup/`, i quattro
+>   `i18n/backup/*.json`, `_frontend_utility.py` (cinque righe), `backup_restore.en.md`, `hosting_providers.en.md`, il
+>   backlog (B-15, B-16), questo piano.
+> - **Alla ripresa**: leggere le note dei due specialisti; giro rosso su `backupApi`, `restoreFlow`, `RestoreCard`;
+>   applicare i due cambi (`restoreOutcome` 423 → `blocked`, `#settle` → `still_pending`/`instance_blocked`;
+>   `cancelPending` → `dropCheck` best effort, docstring); Prettier; `front check`; Vitest a gruppi (gli otto file);
+>   le liste del runner `front-utility core-unit` e `component-unit`; `mkdocs build`, `check-links`,
+>   `utils gate-docs-links`; diario; handoff FROZEN. Poi E2E e galleria negli slot pesanti.
+> - **Durante la pausa** (solo note nella cartella della sessione, `files/pause-1325-notes.md`, poi riportate qui):
+>   - il `docs-writer` aveva già finito i cinque punti in `backup_restore.en.md` (la riga dell'istanza bloccata durante
+>     il riavvio, con «Back to Backup» verso la pagina di blocco; «Cancel the restore» che toglie anche la copia, come
+>     `backup pending --cancel`; «Try again» che rilegge lo stato; la riga del 413 di un proxy com'era; una riga nuova per
+>     il server che non scende, con un rimando dall'esito «It takes long»). I punti 1 e 2 descrivono codice non ancora
+>     applicato: da ricontrollare quando entra;
+>   - il test-author si è fermato **senza aver toccato file**: casi disegnati, nessuno scritto;
+>   - a H (tramite il coordinatore): `RestoreCard` è un componente suo, montato solo in `BackupTab`, mai dentro
+>     `BackupDownloadCard`; la pagina di blocco, che monta `BackupDownloadCard`, resta solo con crea, scarica, cancella
+>     (P7). B5b tocca `BackupDownloadCard` solo nelle classi;
+>   - regola C-99 del developer (`b171c058e`): fino al riordino del manuale admin alla fine della 1.3, una variabile
+>     nuova si spiega per intero nella pagina della sua funzione e ha una sola riga, con il link, in
+>     `configuration.md` (vale per B7, Litestream);
+>   - regola dei colori (T `a317392d4`): un `<input>` di testo, una `<textarea>` o una `<select>` con classi `-lf-`
+>     nomina da sé `text-lf-primary`, e `placeholder:text-lf-placeholder` se ha un segnaposto. B5b la rispetta già (il
+>     campo della parola ha tutti e due; il selettore del file è `type="file"` e `hidden`); vale per i campi di B4.
+
+### ▶️ Ripresa (2026-10-16, 14:14-14:50) — B5b: i due fix, i controlli, l'handoff ✅ — 🧊 FROZEN
+
+> - Via del coordinatore («the developer has resumed»): i due fix dei rilievi del `docs-writer`, prima i rossi, poi i
+>   controlli e l'handoff di B5b; prove leggere con carico sotto 50. HEAD `9686942c6` e worktree come alla pausa.
+> - Il test-author `817f0858` scrive i casi disegnati; intanto i controlli della doc (non leggono i file dei test).
+> - **Doc** (14:14-14:20, `b_docs.sh`): `mkdocs build` stretta 0 avvisi, `check-links` 96, `utils gate-docs-links` 63;
+>   porta libera.
+> - **I rossi** (test-author, 14:20-14:23, solo Prettier): `backupApi.test.ts` (un 423 col corpo vero del backend →
+>   `blocked`, rosso; dieci righe che restano `down`: un altro codice, nessun codice, un dettaglio stringa, il codice
+>   fuori da `detail`, `null`, nessun corpo, non JSON, `instance_blocked` su 403, 409 e 200), `restoreFlow.test.ts`
+>   (`blocked` dopo giù e su, alla lettura veloce, e la riga della tabella degli esiti: `still_pending`, `outcomeStatus`
+>   esattamente `{state: 'pending', waiting: 'instance_blocked'}` con `toStrictEqual`, nessun annuncio, nessun
+>   `toSignIn`, nessun timer; `cancelPending` con `dropCheck(STAGE_ID)` fra l'annullamento e la rilettura, `cancelling`
+>   mentre la cancellazione è in corso; un rifiuto della cancellazione della copia ignorato, in quattro forme; dopo un
+>   riavvio rifiutato si toglie la copia della conferma; guardie verdi: `stage_id` nullo o assente,
+>   `restore_not_pending` e gli altri rifiuti non toccano la copia, con `not.toHaveBeenCalled()` esplicito),
+>   `RestoreCard.test.ts` (un caso da capo a fondo per `blocked`, e l'annullamento con `deleteRestoreCheck`).
+> - **⚠️ Fuori pista — rilievo del test-author, decisione chiesta al coordinatore (14:24)**: la rotta dello stato
+>   controlla la sessione prima del blocco, e un 401 vale «ripristinato». Ma **senza `JWT_SECRET`** il server fa una
+>   chiave casuale a ogni avvio (`auth_service.py:106`): **ogni** riavvio chiude tutte le sessioni, quindi su Docker di
+>   default e con `dev.py server` la pagina conclude sempre «ripristinato» e va al login senza messaggio; un ritorno
+>   indietro o un ripristino non applicato si vedono solo in Impostazioni › Backup dopo l'accesso. Con `JWT_SECRET`
+>   (il cloud) il fallimento è sull'overlay, come deciso. Proposte: **(A)** un biglietto monouso dell'esito
+>   (`GET /backup/restore/outcome` col biglietto in un header, il suo hash in `.restore/`, permesso anche da bloccata;
+>   lotto B5c, mezza giornata; la mia raccomandazione); **(B)** solo con esito incerto (un 401) il login torna a
+>   `/settings?tab=backup`, che sul successo non dice niente e sul fallimento dice perché; **(C)** solo doc. Intanto
+>   (C) nella guida, chiesta al `docs-writer`.
+> - **Giro rosso** (14:28-14:32): 12 rossi su 323, tutti e soli i previsti, più i quattro `TypeError` attesi del
+>   `#settle` di oggi sul tipo sconosciuto.
+> - **Codice** (14:33): `restoreOutcome()` 423 con `detail.code` `instance_blocked` → `{kind: 'blocked'}` (aiuto
+>   `refusedForTheBlock`), `#settle` → `still_pending` con `{state: 'pending', waiting: 'instance_blocked'}`, niente
+>   annuncio; `cancelPending()` tiene lo `stage_id` dello stato e, dopo un annullamento accettato, `dropCheck` best
+>   effort (con `restore_not_pending` niente); docstring aggiornata. **Verde** (14:34): 323 su 323.
+> - **Il resto** (14:35-14:45): `front check` **0 errori, 0 avvisi** (i tipi `Unwidened`, `tables` come
+>   `Record<string, RestoreTableRows>`, `untrack`); gli altri cinque file (`RestoreReportModal`, `RestartOverlay`,
+>   `restoreI18n`, `BackupDownloadCard`, `backupJob`) 332; le liste del runner **`front-utility core-unit` 173 file,
+>   6232 test** e **`component-unit` 149 file, 3957 test**, verdi (le cinque righe nuove registrate). Porta libera.
+> - **Guida, seconda passata** (`docs-writer`): punto 1 conforme al codice; il punto 2 no, per un caso: un ripristino
+>   **confermato dalla CLI** non ha il record della prova, il `DELETE /stage` della scheda è rifiutato (e ignorato), e
+>   la copia resta in `.restore/stage/` finché una prova avviata dalla scheda non la trova vecchia di 24 ore. La guida
+>   dice di annullarlo dalla riga di comando; la cura vera è lato server (`DELETE /pending` con
+>   `cancel_restore(drop_copy=True)`, come la CLI, e la scheda smette di chiamare `dropCheck`): backlog **B-17**, da fare
+>   con il biglietto dell'esito (B5c) se scelto, perché tocca la stessa API. Aggiunta (C): senza `JWT_SECRET` la pagina
+>   va al login qualunque sia l'esito, e Impostazioni › Backup dice perché (rimando a
+>   `index.md#session-persistence`); tolto «needed with several workers» (i worker di un `dev.py server` condividono
+>   la chiave da soli).
+> - `RestoreTableRows` non più esportato (lo usa solo `backupApi.ts`: knip l'avrebbe segnalato). Ultimi controlli
+>   (`files/scripts/b_final_static.sh`): Prettier su `features/backup` e `i18n/backup`, ratchet dei colori, knip,
+>   `front check`, poi `mkdocs build`, `check-links`, `utils gate-docs-links`.
+> - **Ultimi controlli** (14:46-14:49): Prettier pulito su `features/backup` e `i18n/backup`; ratchet dei colori pulito;
+>   knip con gli stessi reperti delle 13:08, nessuno in `features/backup` o `i18n/backup`; `front check` 0/0;
+>   `mkdocs build` stretta 0 avvisi; `check-links` 96; `utils gate-docs-links` 63; `git diff --check` pulito; porta
+>   libera.
+> - **14:50, handoff del checkpoint B5b** al coordinatore, 🧊 FROZEN: 13 file tracciati modificati e 10 nuovi
+>   (`features/backup/`: cinque moduli e cinque test). In attesa: la decisione (A)/(B)/(C) sull'esito senza
+>   `JWT_SECRET`; B-15, B-16, B-17 nel backlog; E2E (`e2e/settings/backup.spec.ts`) e galleria negli slot pesanti.
+
+### B5c — l'esito di un ripristino senza sessione (biglietto monouso) e B-17 (2026-10-16, 15:02-18:22) ✅ — 🧊 FROZEN
+
+> - **B5b committato** dal coordinatore: `1e2f6374a` feat (19 percorsi), `2efb36ffb` docs, `de4d0e293` journal (HEAD).
+>   **Il developer ha scelto (A)**, il biglietto monouso: lotto B5c dopo B5b, con B-17. E2E e galleria di B5b in coda
+>   per uno slot.
+> - **Analisi** (intera in `files/b5c-analysis.md` della sessione):
+>   - **biglietto** emesso da `POST /backup/restore/restart` (ogni richiesta ne emette uno nuovo, che sostituisce il
+>     precedente; non alla conferma: anche un ripristino trovato in attesa, confermato da CLI, si riavvia dalla
+>     scheda), `secrets.token_urlsafe(32)`, solo in quella risposta (`RestoreRestartAccepted`, `Cache-Control:
+>     no-store`), mai nei log;
+>   - **conservato** come hash in un file suo, `.restore/outcome-ticket.json` (`sha256`, `stage_id`, `issued_at`,
+>     `expires_at`; 0600, scrittura atomica senza seguire i link): fuori da `RestoreState`, così la macchina a stati
+>     di `apply.py`, rivista in B3, resta intatta; `.restore/` non si scambia mai, quindi il file sopravvive al
+>     riavvio, allo scambio, al commit e al ritorno indietro;
+>   - **scadenza** un'ora dalla richiesta di riavvio (costante, nessuna variabile nuova); **monouso**: consumato quando
+>     la rotta dà un esito finale (`committed`, `rolled_back`); `pending` e `in_progress` no; tolto anche da una
+>     conferma nuova, da un annullamento (API e CLI), da una lettura che lo trova scaduto; legato allo `stage_id`;
+>   - **rotta** `GET /backup/restore/outcome`, **senza sessione**, biglietto nell'header `X-Restore-Ticket` (mai
+>     nell'URL), risposta minima `{state, reason, waiting}` (niente nomi, date, versioni, percorsi), un 404 identico
+>     per ogni biglietto che non vale (`restore_outcome_not_found`), confronto a tempo costante;
+>   - **da bloccata deve rispondere** (P7/P8: «non applicato, bloccata» sull'overlay): una voce in
+>     `ALLOWED_WHEN_BLOCKED` di H (`instance_block.py`: import dopo la riga 34, voce dopo la riga 62, più la frase della
+>     docstring alle righe 9-14; `test_instance_block.py`: una voce in `ALLOWED_ROUTES` dopo la riga 146). Non avvia
+>     niente: riporta l'esito di un riavvio già chiesto alla pagina che l'ha chiesto. Un'aggiunta alla lista passa dal
+>     developer;
+>   - **B-17**: `DELETE /pending` con `cancel_restore(drop_copy=True)`, come la CLI; la scheda smette di chiamare
+>     `dropCheck`;
+>   - **frontend**: il controllore tiene il biglietto in memoria per quel riavvio (mai in storage); `restoreOutcome`
+>     col biglietto legge la rotta nuova, con un 404 ricade sulla lettura di oggi (riavvii da CLI, biglietto scaduto);
+>   - **doc**: `security.md` (rotta, biglietto, lista del blocco, `DELETE /pending`), la guida (via la limitazione
+>     (C) di `JWT_SECRET`; B-17), `hosting_providers.en.md` (la tabella di ciò che risponde da bloccata, riga 177).
+> - **Test** (test-author, prima i rossi): `api backup-restore-apply` (emissione, hash, 0600, sostituzione, senza
+>   cookie, solo header, 404 identici, consumo, campi minimi, `no-store`, niente log, istanza bloccata, conferma e
+>   annullamento che lo tolgono, B-17); `api instance-block` (la voce di H); frontend (`backupApi`, `restoreFlow`,
+>   `RestoreCard`). Poi `security-review` sul diff.
+> - **Coda per gli slot (B5b)**: l'E2E estende `e2e/settings/backup.spec.ts` (`front-utility backup`, nessun cambio al
+>   runner) col ripristino (caricamento, prova, report, parola scritta e incolla rifiutato, riavvio finto con
+>   `page.route`, gli esiti, il blocco in attesa); la galleria di G accanto a `settings/backup-ready` (scheda,
+>   report, overlay del fallimento).
+> - Stima: mezza giornata. Analisi al coordinatore; 🧊 FROZEN fino al via.
+> - **15:11, via del coordinatore** col disegno così com'è (B-17 compreso). Le due righe di `instance_block.py` e
+>   `test_instance_block.py` le concorda con H; intanto tutto il resto, prima i rossi; `security-review` sul diff finale;
+>   poi E2E e galleria di B5b in uno slot (li organizza con G dei colori).
+> - **Contratto** `files/b5c-contract.md` della sessione (nomi condivisi da codice e test). **Rossi** a due test-author
+>   in parallelo, su file distinti, solo scrittura: backend `628939b5` (`test_backup_outcome.py` nuovo, con la voce
+>   `services backup-outcome` del runner; `test_backup_apply.py`; `test_backup_restore_apply.py`), frontend `52dd383e`
+>   (`backupApi.test.ts`, `restoreFlow.test.ts`, `RestoreCard.test.ts`, con B-17: niente più `dropCheck`).
+> - **Bozze** in `files/b5c-wip/`: `outcome.py` (il modulo intero) e `apply_b5c_backend.py` (`paths.py`, `apply.py`
+>   con `drop_ticket` alla conferma e all'annullamento, gli schemi `RestoreRestartAccepted` e `RestoreOutcome`, le
+>   rotte, B-17), provato a secco su copie dei quattro file: si applica e compila; black pulito; ruff solo I001
+>   (l'ordine degli import, fuori dal repo ruff non riconosce `backend` come primo: `--fix` nel worktree). Le modifiche
+>   del frontend dopo i rossi, con il client rigenerato (`RestoreRestartAccepted`, `RestoreOutcome`).
+> - **Rossi del frontend** (test-author `52dd383e`, 15:15-15:45, solo Prettier): `backupApi.test.ts` 175 casi (71
+>   rossi: l'header, la richiesta col biglietto, gli esiti validi, il ripiego, la tabella dei `down`, la replica di
+>   `requestRestart` sul client generato, rossa finché il client non è rigenerato), `restoreFlow.test.ts` (14 rossi: B-17
+>   senza `dropCheck` in sei casi; il biglietto in sette: dopo giù e su, alla lettura veloce, un secondo riavvio,
+>   `restartNow()`, nessun biglietto sopravvive al suo riavvio, una risposta vecchia non porta il suo, solo in memoria),
+>   `RestoreCard.test.ts` (3 rossi). **Cambio mio al contratto** (15:40): un 401 o un 423 della rotta dell'esito
+>   ricadono sulla lettura di oggi come un 404 (la rotta non è raggiungibile per questo chiamante: la voce della lista del
+>   blocco che manca, un proxy), altrimenti l'overlay aspetterebbe per sempre senza suggerimento; un 5xx resta `down`
+>   (transitorio all'avvio).
+> - **Giro rosso del frontend** (15:53): 88 rossi su 407, 71 + 14 + 3, tutti e soli i previsti; nessun errore non gestito.
+> - **Rossi del backend** (test-author `628939b5`, 15:15-15:58; ruff, black e `--collect-only` puliti):
+>   `test_backup_outcome.py` nuovo, 95 casi (`services backup-outcome`, registrato accanto a `backup-apply`), tutti
+>   rossi; `test_backup_apply.py` +13 (sezione (n): la conferma riuscita toglie il biglietto, una rifiutata lo tiene;
+>   l'annullamento lo toglie con tutti e due i `drop_copy`, uno rifiutato lo tiene; scambio, commit e ritorni indietro lo
+>   tengono); `test_backup_restore_apply.py` da 84 a 136, 54 rossi (B-17 al posto del vecchio (d); il biglietto del
+>   riavvio; la rotta dell'esito senza sessione e solo nell'header; 17 biglietti che non valgono con lo stesso 404 fino ai
+>   byte; le fasi, i motivi d'attesa, il consumo; mai nei log; istanza bloccata, rossa finché manca la riga di H, e un
+>   controllo statico che l'esito sia l'unica rotta del ripristino nella lista; l'OpenAPI). Uno verde apposta: da
+>   bloccata, ogni altra rotta del ripristino risponde 423 a un admin. **Scelte fissate dal test-author, accolte**: un
+>   biglietto sbagliato non spende né toglie il file (nella bozza il confronto dell'hash passa prima della scadenza);
+>   le conferme e gli annullamenti rifiutati tengono il biglietto; l'header è esattamente `X-Restore-Ticket`
+>   (`alias`), facoltativo; i docstring dei due schemi nuovi in una riga, senza backtick; un `drop_ticket` fallito
+>   logga almeno un warning; niente rimozioni attraverso un link al posto di `.restore`. **Il caso non specificato**:
+>   se il biglietto non si scrive (disco pieno), il riavvio non parte, 500 `restore_restart_failed`, nel log; la scheda
+>   lo dice col messaggio generico «the server's log has the cause» (nessuna chiave nuova). Bozza aggiornata (anche i
+>   docstring della disposizione di `.restore` in `paths.py` e `apply.py` e la descrizione di `api
+>   backup-restore-apply` nel catalogo) e riprovata a secco.
+> - **Giro rosso del backend** (15:57-16:07): `services backup-outcome` 95 rossi su 95, `services backup-apply` 13 su
+>   223, `api backup-restore-apply` 54 su 136; tutti per il motivo giusto (modulo, nomi o comportamento che mancano).
+> - **Codice del backend** (16:08): `apply_b5c_backend.py` (`outcome.py` nuovo; `paths.py`; `apply.py` con
+>   `drop_ticket` dopo i controlli della conferma e dell'annullamento; gli schemi; le rotte; B-17; i docstring della
+>   disposizione di `.restore`; la descrizione del catalogo); `ruff --fix` (un ordine di import), black invariato.
+> - **Verde del backend** (16:14-16:42, col carico): `services backup-outcome` 95, `services backup-apply` 223,
+>   `utils backup-cli-restore` 77, `utils backup-cli` 102, `e2e backup-roundtrip` 3; `api backup-restore-apply` 133 su
+>   136 (i due rossi attesi della riga di H, l'esito da bloccata e il controllo statico della lista, più un errore del
+>   test); `api backup` 22 su 23 (il pin dell'ordine delle rotte, BACKUP-001, non conosceva la rotta nuova).
+>   - **⚠️ Fuori pista**: `test_the_ticket_is_never_logged` falliva sulla sua stessa richiesta: dentro la cattura
+>     mandava il biglietto in `?ticket=` (il caso «la query è ignorata») e il client httpx del test logga l'URL. Non è
+>     il prodotto (che non mette mai il biglietto in un URL): riparato dal test-author (dentro la cattura solo l'header;
+>     il caso della query resta nei suoi due test), e il pin di BACKUP-001 con nove rotte del ripristino. Nota sua per la
+>     revisione di sicurezza: la maschera del log d'accesso di uvicorn (`mask_query_credentials`) copre solo i nomi con
+>     parole da credenziale (token, secret, password); `ticket` no, quindi un biglietto scritto a mano in un URL finirebbe
+>     nel log d'accesso.
+> - **Codice del frontend** (16:46, col client rigenerato: `RestoreRestartAccepted`, `RestoreOutcome` non stretto):
+>   `apply_b5c_frontend.py` (`backupApi.ts`: il tipo, `requestRestart`, `RESTORE_TICKET_HEADER`, `restoreOutcome(ticket)`
+>   col ripiego `readStatusWithSession()` su 404, 401 e 423; `restoreFlow.svelte.ts`: `#ticket` in memoria, azzerato da
+>   `load()`, `dispose()` e a ogni riavvio, preso da `outcome_ticket ?? null`, passato a ogni lettura dell'esito; B-17:
+>   `cancelPending()` senza `dropCheck`). Prettier invariato.
+> - **Doc** (`docs-writer`, solo scrittura): `security.md` (le rotte, la sottosezione nuova «🎫 The Outcome Ticket»
+>   `#backup-restore-outcome`, la lista del blocco), la guida (via la limitazione di `JWT_SECRET`: il biglietto dice
+>   l'esito qualunque sia la configurazione; il ripiego onesto per una pagina ricaricata, più di un'ora d'attesa o un
+>   riavvio non chiesto dalla pagina; B-17), `hosting_providers.en.md` (una riga in «What Still Answers»). Quattro punti
+>   presuppongono la voce di H con l'alias `backup_restore`.
+> - **Verde completo** (16:44-16:59): Vitest `backupApi` + `restoreFlow` + `RestoreCard` 404 su 407 (i tre rossi
+>   dell'ambiente dei test: `localStorage` non c'è come globale sotto Node 26 con jsdom; riparati dal test-author con lo
+>   stub in memoria dello schema della base, `vi.stubGlobal`), gli altri cinque file 332, `front check` 0/0,
+>   `api backup-restore-apply` 134 su 136 (i due di H), `api backup` 23.
+> - **`security-review`** (`a8a19165`, 17:00-17:10): **nessuna vulnerabilità, a nessuna gravità.** Robustezza:
+>   (1) due riavvii insieme si pestano il file temporaneo del biglietto, e un annullamento può infilarsi fra la lettura
+>   dello stato e il biglietto → **corretto**: il biglietto si emette sotto il lock del ripristino
+>   (`apply.prepare_restart`, che la rotta usa); (2) con B-17 la copia si toglieva fuori dal lock, e una conferma della
+>   stessa copia da un'altra pagina l'avrebbe persa → **corretto**: dentro il lock. Ruff e black puliti. (3) **Disegno**:
+>   il «monouso» toglieva il biglietto prima che la risposta finale arrivasse; persa quella, il ripiego sulla sessione
+>   avrebbe detto «ripristinato» dopo un ritorno indietro senza `JWT_SECRET`. Chiesto al coordinatore.
+> - **17:20, decisione N53 del coordinatore** (da rivedere col developer): un esito finale si rilegge finché il
+>   biglietto non scade (un'ora); «monouso» vuol dire **un ripristino, un biglietto**, non più una lettura. Più `ticket`
+>   in `_CREDENTIAL_WORD` di `logging_config.py` (sono lo scrittore del file per questo lotto), con un caso nel test della
+>   maschera. Rossi al test-author `628939b5`; doc al `docs-writer`.
+> - **Doc di N53** (`docs-writer`): `security.md` (la riga della rotta: «as often as asked until the ticket expires»;
+>   «🎫 The Outcome Ticket»: il biglietto emesso sotto il lock, la query ignorata e mascherata nel log d'accesso, «One
+>   restore, one hour» col perché, «unknown» per mai emesso, sostituito o tolto; «📜 Request Logs» con `ticket`). La
+>   guida e la pagina dei fornitori non parlavano di una lettura sola: invariate.
+> - **17:22, sospensione del coordinatore** fino alle ~17:45 (la galleria intera dei colori, carico 130-170): niente
+>   prove nuove. Fermata la mia riesecuzione di Vitest, che aspettava ancora il carico (non era partita). Pronto
+>   `files/b5c-wip/apply_n53.py` (in `outcome.py` via `_FINAL` e la rimozione alla lettura finale; i docstring di
+>   `outcome.py`, della rotta e dello schema; `ticket` in `_CREDENTIAL_WORD` e nel docstring della maschera), provato a
+>   secco su copie.
+> - **Rossi di N53 e della maschera** (test-author `628939b5`, ruff, black e `--collect-only` puliti): `test_backup_outcome.py`
+>   97 (l'esito finale si rilegge uguale fino a un microsecondo prima di `expires_at`, a `expires_at` niente e il file
+>   tolto; il biglietto seguito da `pending` al commit letto due volte; un biglietto scaduto se ne va solo col suo
+>   portatore: rossi 4); `test_backup_restore_apply.py` 136 (l'esito finale tre volte uguale fino ai byte, rosso ×2; la
+>   riga `spent` del 404 identico diventa `dropped-by-a-cancel`; il log senza biglietto, anche con una lettura scaduta);
+>   `test_backup_apply.py` 228 (scambio, commit e ritorni indietro tengono il biglietto fino alla scadenza, rossi ×3; **in
+>   più, non chiesti e accolti**: `prepare_restart` emette il biglietto mentre il lock è tenuto, e senza un ripristino in
+>   attesa rifiuta senza scrivere niente, verdi ×5); `test_logging_access_filter.py` 110 (`ticket`, `outcome_ticket`,
+>   `TICKET`, `Restore-Ticket`, `tick%65t` dopo `?` e dopo `&`, rossi ×10; `q=ticket` e `ticker=AAPL` restano, guardia
+>   contro un'espressione troppo larga, verdi ×4). Il test-author ha toccato anche la descrizione del catalogo di
+>   `logging-access-filter` (voce di H, `/ticket`): da dire al coordinatore. Segnalati e aggiunti allo script i testi
+>   rimasti «used up»: la descrizione OpenAPI del 404 (`_OUTCOME_NOT_FOUND`) e la descrizione di `api
+>   backup-restore-apply` nel catalogo.
+> - **17:52, sospensione tolta** (prove leggere a carico sotto 50, una alla volta). **Giro rosso** (17:53-18:00):
+>   `services backup-outcome` 4 rossi, `services backup-apply` 3, `services logging-access-filter` 10, come previsti;
+>   `api backup-restore-apply` 9: i 2 di N53 e i 2 di H previsti, più 5 non previsti.
+>   - **⚠️ Fuori pista**: i 5 erano una regressione mia: `prepare_restart` prendeva il lock (creando `apply.lock`) prima di
+>     vedere che il ripristino non era in attesa, e `test_a_restart_refused_writes_no_ticket` (applying, applied,
+>     rolling_back, committed, rolled_back) fissa «un riavvio rifiutato non scrive niente». Corretto: prima la lettura
+>     senza lock (`read_restore`, come faceva la rotta), poi il lock e la rilettura solo se è in attesa.
+> - **18:02, applicati** `apply_n53.py` (in `outcome.py` niente rimozione alla lettura finale e via `_FINAL`; i
+>   docstring; `_OUTCOME_NOT_FOUND` senza «used up»; la descrizione del catalogo; `ticket` in `_CREDENTIAL_WORD` e nel
+>   docstring della maschera) e la correzione di `prepare_restart`; ruff e black puliti.
+> - **Verde** (18:00-18:13): `services backup-outcome` 97, `services backup-apply` 228, `services logging-access-filter`
+>   110, `api backup` 23, `utils backup-cli-restore` 77; `api backup-restore-apply` 134 su 136, i due rossi sono quelli
+>   della riga di H (l'esito da bloccata, il controllo statico della lista). Porta libera.
+> - **18:12, slot 2 offerto per un E2E**: non pronto (le prove della scheda del ripristino non erano scritte, la corsia
+>   finiva il giro leggero): lasciato ad A. Il coordinatore dà uno slot di 30 minuti dopo le 19:30 per
+>   `front-utility backup` con i casi nuovi. Test-author `332db941` sull'E2E (solo scrittura): estende
+>   `e2e/settings/backup.spec.ts` col ripristino; il riavvio, la sonda `/system/ready` e la rotta dell'esito sempre
+>   intercettati con `page.route` (un riavvio vero fermerebbe il server della corsia); un solo caso con la conferma
+>   vera, e ogni ripristino in attesa annullato nella pulizia; casi in serie (una prova e un ripristino alla volta).
+> - **Ultimi controlli** (18:14-18:20): Vitest `backupApi` + `restoreFlow` + `RestoreCard` 407 su 407 (con lo stub di
+>   `localStorage`); `front check` 0/0; `mkdocs build` stretta 0 avvisi; `check-links` 96; `utils gate-docs-links` 63;
+>   `git diff --check` pulito; porta libera.
+> - **18:22, handoff del checkpoint B5c** al coordinatore, 🧊 FROZEN per questi file: 20 tracciati modificati e 2 nuovi
+>   (`outcome.py`, `test_backup_outcome.py`). Fuori: `frontend/e2e/settings/backup.spec.ts`, che il test-author dell'E2E
+>   sta scrivendo (entra con il suo slot). Restano rossi due casi di `api backup-restore-apply`, finché entra la riga di H
+>   in `ALLOWED_WHEN_BLOCKED` (`instance_block.py`) e il suo pin (`test_instance_block.py`).
+> - **B5c committato** dal coordinatore: `9137e1ef8` feat, `b699be101` docs, `57564d321` journal (HEAD). La descrizione
+>   di `logging-access-filter` con `/ticket` resta.
+> - **18:29, le righe di H, scritte da me e riviste da H** (coordinatore): `instance_block.py` (l'import di
+>   `restore as backup_restore`; la voce `backup_restore.get_restore_outcome` dopo quelle del pannello, con un commento;
+>   una frase nel docstring del modulo) e `test_instance_block.py` (la voce in `ALLOWED_ROUTES`). Nessun ciclo d'import:
+>   il pacchetto `backup` carica già `restore`. Ruff e black puliti. **Verde** (18:30-18:32): `api instance-block`
+>   62 su 62, `api backup-restore-apply` **136 su 136**. Entrano con lo slot dell'E2E dopo le 19:30. **H le ha riviste
+>   (18:33): OK, nessun cambio**; accoglie anche N53.
+> - **18:50, l'E2E del ripristino è scritto** (test-author `332db941`, solo Prettier): sette casi FBKP-101…107 in
+>   `e2e/settings/backup.spec.ts`, in serie dopo i quattro di B5a: 101 troppo grande (lo stato con un limite di 1 MB, il
+>   `PUT` registrato e interrotto), 102 incolla rifiutato (un `ControlOrMeta+V` vero, con i permessi degli appunti), 103
+>   ritorno indietro, 104 bloccata (`instance_blocked`), 105 il ripiego (404 dell'esito, 401 dello stato → il login),
+>   106 un ripristino trovato in attesa (caricamento, prova e conferma veri dall'API; annullamento dalla scheda), 107 il
+>   percorso vero (il selettore del file, la prova, il report, la parola, la conferma vera; il riavvio, la sonda e
+>   l'esito `committed` finti). Il riavvio è sempre intercettato prima della prima navigazione e non passa mai; il
+>   biglietto controllato nell'header e in nessun'altra richiesta; una pulizia dopo ogni caso, riuscito o no, con una
+>   sessione admin a parte: annulla quel che attende, toglie le prove, verifica che lo stato non sia in attesa. Chiesto
+>   lo slot al coordinatore (`front-utility backup`, con la build del frontend in testa).
+> - **Slot 1** (18:49-18:53, il coordinatore: «con le righe di H»): `front-utility backup` **12 su 12** in 3 minuti
+>   (FBKP-001, 001b, 002, 003, 004 di B5a; FBKP-101…107 del ripristino, FBKP-102 con l'incolla vero compreso), la build
+>   del frontend fatta prima (`--build-only`). La cartella dati della corsia pulita dopo: in `.restore/` nessuno stato,
+>   nessun biglietto, nessuna copia, nessun caricamento, solo i file di lock vuoti. Porta libera.
+> - **Committato** dal coordinatore: `465c27939` feat (le righe di H), `78023380c` test (l'E2E del ripristino),
+>   `283466abb` journal.
+
+### Aggiornamento di base — merge di `dev_release2` `0c79932a7` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN, in attesa del commit
+
+> - Merge aperto dal coordinatore nel mio worktree (HEAD `283466abb`, MERGE_HEAD `0c79932a7`, base comune `62004e530`;
+>   oltre 446 commit: C-97a, H-12/21, MF, Y, X, i colori; non ancora P18 di A). Sei conflitti, risolti per somma; in
+>   staging solo quei sei (`git add` dei sei percorsi); nessun file fuori conflitto toccato.
+>   - `backend/app/services/platform/app_lifespan.py`: da me `restore-commit`, da H `plugin-secrets-check` (H-15),
+>     tutti e due subito dopo `global-settings`. Ordine scelto: `global-settings`, **`restore-commit`**,
+>     `plugin-secrets-check`, `provider-prewarm`. Perché: il passo di H non solleva mai (prende ogni eccezione e logga
+>     il nome della classe), quindi non cambia cosa fa tornare indietro un ripristino; i due pin sono d'ordine relativo
+>     (il mio `global-settings < restore-commit < provider-prewarm`, quello di H `global-settings <
+>     plugin-secrets-check < scheduler`) e reggono tutti e due; l'e2e `backup-roundtrip` esegue i passi da
+>     `pending-restore` a `restore-commit` compresi, e così la sua fetta resta quella provata; e il controllo di H legge
+>     i dati già confermati. Un commento sul passo del commit. Da dire a H.
+>   - `scripts/test_runner/_backend_services.py`: la descrizione di `logging-access-filter` scritta dai due lati (da me
+>     `ticket` e «a ticker kept», da H H-9: `configure_logging` chiude i gestori che toglie): unite. Nessuna unità doppia
+>     (controllo per file: le due `all` di `_backend_api.py` sono di due categorie, `api` ed `e2e`).
+>   - `admin/filesystem.en.md` (di H): da me il rimando alla guida, da H (il mio B-5) `./dev.py backup create`, i link a
+>     `cli_tools.md#backup` e `#backup-docker` e «It leaves out `secrets/`», vero anche per la mia guida: un paragrafo
+>     solo, prima la guida, poi il comando, poi la copia a mano.
+>   - `admin/index.en.md`: la riga di CLI Admin Tools di H («instance backups») e la mia voce della guida.
+>   - `admin/hosting_providers.en.md` (di H), tre: nell'elenco di ciò che serve a un'istanza ospitata i due punti di H
+>     (protezione dei frame, pagina di supporto) e il mio (la politica di riavvio); fra i punti del blocco la frase
+>     nuova del recupero (Z/Y: colma il buco fino a un anno) e il mio punto del ripristino che aspetta lo sblocco; nella
+>     tabella di «What Still Answers» la riga del backup di H (la scheda della pagina di blocco) e la mia dell'esito.
+>   - `developer/architecture/database/users_access.md`: la mia frase su `session_version` dopo un ripristino e il
+>     punto di `email_verified_at` riscritto da E.
+> - **Rivisti anche i nove file cambiati dai due lati e uniti da git**: `logging_config.py` (il mio `ticket` e H-9 tutti e
+>   due presenti), `test_logging_access_filter.py` (24 test, nessun nome doppio), `mkdocs.yml` (la pagina Plugins e la
+>   mia voce, separate), i tre file del runner (le mie voci di backup intatte, le otto righe Vitest di `features/backup`
+>   e l'azione `front-utility backup`), `cli_tools.en.md`, `security.md` (nessuna ancora doppia), il backlog. Nessun
+>   manifest di dipendenze cambiato.
+> - **Debito che il merge rende vero**: H-12/21 ha messo la scheda del backup nella pagina di blocco, quindi in
+>   `backup_restore.en.md` (riga 60) «that page has no backup button yet» non è più vero (B-14). Lo correggo dopo il
+>   commit del merge, nel prossimo checkpoint, con le altre frasi della guida sull'istanza bloccata. Le due frasi «no
+>   button for it yet» rimaste (`hosting_providers.en.md`, `security.md`) parlano della cancellazione del proprio
+>   account, e restano vere.
+> - **Prove leggere sulla revisione combinata** (`files/scripts/b_green.sh`, poi `b_docs.sh`, carico sotto 50): i 16
+>   selettori dei globi del coordinatore più `e2e backup-roundtrip` (prova direttamente l'ordine dei passi risolto), poi
+>   la doc. **Tutto verde** (20:04-20:24): `services app-lifecycle` 44, `backup-archive` 155 (più 1 saltato apposta: il
+>   file system di macOS rifiuta un nome non UTF-8), `backup-jobs` 69, `backup-staging` 145, `backup-apply` 228,
+>   `backup-outcome` 97, `backup-totals` 84; `api instance-block` 62 (svelte-check 0/0 sul client rigenerato),
+>   `backup` 23, `backup-instance-errors` 6, `backup-panel` 59, `backup-restore` 121, `backup-restore-apply` 136,
+>   `backup-export-extras` 8; `utils backup-cli` 102, `backup-cli-restore` 77; `e2e backup-roundtrip` 3; `mkdocs build`
+>   stretta 0 avvisi, `check-links` 97, `utils gate-docs-links` 63. Porta libera. Diff in staging pulito (`--check`).
+> - **⚠️ Fuori pista** (20:24): un `sed -i ''` per segnare chiusa questa sezione ha svuotato il piano (0 byte, uscita 1;
+>   probabilmente il `sed` di macOS su un carattere multibyte del modello, che lascia il file vuoto). Toccava solo questo
+>   piano, fuori staging; l'indice ne aveva la versione committata (`283466abb`, identica a HEAD). Ripreso senza
+>   scritture di git: `git show :<piano>` copiato nella cartella della sessione e sul file (3477 righe, uguale
+>   all'indice), poi questa sezione riscritta con lo strumento di modifica. Da ora niente `sed -i` su testo con caratteri
+>   non ASCII: lo strumento di modifica o Python.
+> - **20:30, handoff del merge** al coordinatore, 🧊 FROZEN: lui crea il commit del merge; fuori staging solo questo
+>   piano; poi lo slot di `all-backend` prima dell'ingresso.
+> - **Committato** dal coordinatore: `92a190efa` (il merge), `618fe8be4` (questo piano). L'ordine dei passi lo passa lui
+>   a H; B-14 nel prossimo checkpoint, d'accordo.
+
+### Secondo aggiornamento di base — merge di `dev_release2` `979d0a151` (2026-10-16, dalle 20:26) — in corso
+
+> - Nel frattempo in `dev_release2` sono entrati A (P18/A-27, la migrazione 009 e F02) e W-B53 (il passo
+>   `brim-parse-pool`). Merge aperto dal coordinatore (HEAD `618fe8be4`, MERGE_HEAD `979d0a151`, base `0c79932a7`).
+>   Tre conflitti, risolti per somma, in staging solo quei tre.
+>   - `app_lifespan.py`: il conflitto non era il passo di W (git l'ha messo da solo dopo `market-holidays` e prima di
+>     `scheduler`, come chiedeva il coordinatore), ma **`admin-bootstrap` di A (F02)**, anche lui subito dopo
+>     `global-settings`. Ordine scelto: `global-settings`, **`admin-bootstrap`, `restore-commit`**,
+>     `plugin-secrets-check`, `provider-prewarm`, `market-holidays`, `brim-parse-pool`, `scheduler`, `idle-monitor`.
+>     Perché: il test di A (STEP-001, `test_admin_bootstrap.py:1794`) fissa `admin-bootstrap` esattamente alla posizione
+>     di `global-settings` più uno, mentre il mio pin e quello di H sono d'ordine relativo: così reggono tutti e tre.
+>     Nel merito: su un database ripristinato il bootstrap trova gli account e li lascia stare (`IGNORED`: ogni archivio
+>     ripristinabile ha un amministratore attivo, il blocco `no_administrator`); se fallisse sui dati ripristinati, il
+>     ripristino tornerebbe indietro come per ogni passo prima del commit. **Caso limite, per A**: un archivio con
+>     l'amministratore iniziale ancora in attesa **e** un altro amministratore attivo (creato dalla CLI), ripristinato
+>     su un'istanza con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto: il bootstrap riarma il link prima del commit, e
+>     `_close_the_way_in` lo revoca con tutti gli altri link vivi; l'amministratore dovrebbe chiederne un altro con
+>     `./dev.py user setup-link`. Con `restore-commit` prima di `admin-bootstrap` il link sopravvivrebbe, ma servirebbe
+>     che A rilassi STEP-001 a ordine relativo: da decidere con A, non è un difetto della 1.3 per i flussi reali.
+>   - `developer/architecture/database/users_access.md`: la frase di A (il link di setup speso chiude le sessioni) e la
+>     mia (la versione di sessione dopo un ripristino), tutte e due nel punto di `session_version`.
+>   - `developer/architecture/security.md`: il paragrafo dei test della revoca, quello allargato di A (contratto 7,
+>     REVOKE-003…007) più la mia frase sulla versione del ripristino (`services backup-apply`).
+> - **⚠️ Fuori pista**: un controllo dei marcatori partito nello stesso lotto parallelo della modifica ha letto il file
+>   prima della scrittura (3 marcatori): riletto dopo, nessuno. D'ora in poi la verifica di un file mai nello stesso
+>   lotto della sua modifica.
+> - **Debito trovato (per il prossimo checkpoint, con B-14)**: `developer/architecture/overview.md` numera 18 passi
+>   d'avvio (di H, con `plugin-secrets-check`), ma il codice ne ha 21: mancano i miei `pending-restore`,
+>   `serving-lock` e `restore-commit`. Nessun test confronta quella lista con il codice.
+> - **Prove leggere sulla revisione combinata**: `services app-lifecycle`, `backup-apply`, `config-brim` (del
+>   coordinatore), più `services admin-bootstrap` (fissa l'adiacenza scelta) ed `e2e backup-roundtrip` (la sua fetta di
+>   passi, da `pending-restore` a `restore-commit`, ora comprende il bootstrap); poi `mkdocs build` stretta,
+>   `check-links`, `utils gate-docs-links`. **Tutto verde** (20:28-20:36): `services app-lifecycle` 51,
+>   `backup-apply` 228, `config-brim` 51, `admin-bootstrap` 156; `e2e backup-roundtrip` 3 (col bootstrap nella fetta);
+>   `mkdocs build` stretta 0 avvisi, `check-links` 97, `utils gate-docs-links` 63. Porta libera.
+> - **20:30, decisione N57** del coordinatore (proposta di H, da rivedere col developer): proprio quest'ordine,
+>   `global-settings` → `admin-bootstrap` → `restore-commit` → `plugin-secrets-check` → … Perché: il passo di A legge e
+>   scrive i dati ripristinati (conta gli utenti, crea l'amministratore in attesa, imposta `registration_mode`) e può
+>   sollevare su un errore dei dati; prima del commit un fallimento fa tornare indietro il ripristino, dopo il server
+>   cadrebbe a ogni avvio. Richieste: il pin `("admin-bootstrap", "restore-commit")` nel mio test, col perché (a un
+>   test-author nuovo, `2334eaf9`: il precedente non c'era più); un commento sul mio passo (fatto: «A step before this
+>   one that raises rolls the restore back at the next start; one after it no longer does (N57)», ruff e black puliti).
+> - **Frase diventata falsa col merge, corretta nella risoluzione**: in `security.md` il passo `plugin-secrets-check`
+>   era «right after `global-settings`»; ora «after `global-settings`, `admin-bootstrap` and `restore-commit`». Era nel
+>   file in conflitto; la build stretta l'ha già coperta.
+> - **Da H, per la guida (prossimo checkpoint, con B-14 e `overview.md`)**: un ripristino senza la chiave lascia
+>   illeggibili i segreti di sistema dei plugin, e da ogni avvio il passo `plugin-secrets-check` logga l'errore
+>   «Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore
+>   the instance key they were saved with», finché non sono reinseriti o la chiave vecchia non torna. La guida dice già
+>   «reported as set but unreadable: enter it again» (riga 33): ci aggiungo il log.
+> - **Il pin di N57** (test-author `2334eaf9`, ruff, black e `--collect-only` puliti): in `test_backup_apply.py`
+>   `assert_in_relative_order(STARTUP_STEPS, ("admin-bootstrap", "restore-commit"), why=…)`, relativo (STEP-001 di A
+>   intatto); l'aiuto, locale al file, prende un `why` facoltativo che chiude i due messaggi; docstring del test, riga di
+>   `print_success` e docblock (j) aggiornati. **`services backup-apply` 228 su 228** (20:37), il pin stampato.
+>   Il test-author segnala lo stesso caso limite del link di setup revocato dal commit; il suo primo caso (un database
+>   ripristinato senza account) non può darsi: la prova rifiuta un archivio senza amministratore attivo
+>   (`no_administrator`).
+> - **20:39, handoff del merge** al coordinatore, 🧊 FROZEN: in staging i tre conflitti più, per N57, il pin
+>   (`test_backup_apply.py`) e la frase corretta di `security.md` (file già in conflitto); fuori staging solo questo
+>   piano.
+> - **Committato** dal coordinatore: `4e866cead` (il merge), `cd06f240b` (questo piano); poi un merge pulito di `dev`
+>   `27994759a` (J-24, MF C/I2, A-25, il giornale di Z): HEAD **`dbc2324d5`**, pulito. Il caso limite del link di setup va
+>   nel backlog di A, tramite il coordinatore.
+
+### `all-backend` su `dbc2324d5`, il CHANGELOG, H-17 e il checkpoint di doc (2026-10-16, 20:49-22:32) ✅ — 🧊 FROZEN
+
+> - **Slot 1** (il coordinatore, 20:49; fine prevista 21:40, poi «lascialo finire»: nessuno aspettava lo slot prima delle
+>   22): `all-backend --workers 2` su **`dbc2324d5`** con l'albero pulito, nella mia corsia (6187,
+>   `/tmp/librefolio-r13-b`), `files/scripts/b_allbackend.sh`. Dalle 20:50 alle 21:35, **45 minuti 09 secondi: 7 su 7**
+>   (External, DB, Services, Utils, Schema, API, E2E), uscita 0. Le tre passate parallele: 6386 + 6628, 94 + 3089,
+>   365 + 1468 superati, nessun fallimento; la costruzione dei prerequisiti 280 s col carico a ~80. Le 7 righe «❌» del log
+>   sono messaggi stampati dai test External sui percorsi d'errore (`MOCKFX_FAIL: simulated provider failure…`), non
+>   fallimenti. Istantanea del DB `00_archive/test-db_20261016_213506.tar.xz`. Porta libera.
+>   - Durante la corsa nessuna modifica all'albero (la corsa doveva provare esattamente `dbc2324d5`): le note di questo
+>     piano tenute in `files/next-checkpoint/journal-notes.md` della sessione e riportate qui dopo.
+> - **Checkpoint di doc** (21:36, `files/next-checkpoint/apply_b14_docs.py`, provato a secco prima su copie):
+>   - **B-14** in `admin/backup_restore.en.md`: «Make a Backup», la pagina di blocco ora ha la stessa scheda, **Keep a
+>     copy of the data** (rimando a «What Users See» di `hosting_providers`); «Bring Your LibreFolio Home», un
+>     amministratore scarica l'archivio da quella scheda, altrimenti il fornitore. B-14 ✅ nel backlog.
+>   - **La nota di H** nello stesso file («Saved secrets stay behind»): per le impostazioni dell'istanza ogni avvio logga
+>     l'errore «Stored plugin secrets that the instance key cannot read: …» col loro numero, finché non sono reinseriti
+>     o la chiave vecchia non torna.
+>   - **`developer/architecture/overview.md`**: i tre passi del ripristino nella lista numerata (`pending-restore` dopo
+>     `tool-catalog`, `serving-lock` dopo `data-directories`, `restore-commit` dopo `admin-bootstrap`, con la regola di
+>     N57), rinumerata: 21 passi, gli stessi del codice e nello stesso ordine (confrontati con `STARTUP_STEPS`).
+>   - Pagine solo in inglese: nessun debito di traduzione.
+> - **B è entrato in `dev`** (coordinatore, 21:45): merge **`0cd910a7e`** (treno 141: B3, P7, B5b, B5c, B-17, N53, N57;
+>   64 file), nessun conflitto. **CHANGELOG**: mandato il blocco finale in inglese (`files/next-checkpoint/
+>   changelog-block.md` della sessione): in `✨ Added` sostituisce il punto di B2 («Check a backup before restoring it»)
+>   con «Restore an instance backup» (la prova su copia, la conferma con la parola, il riavvio, l'esito, `--dry-run` e il
+>   limite di caricamento conservati), più `backup pending`, le regole (mai indietro, un amministratore attivo, la chiave
+>   che resta), i totali del registro, l'API del biglietto e B-17, la guida nuova; in `🔒 Security` tre punti (le
+>   sessioni e i link che un ripristino chiude, mai applicato da bloccata, il biglietto fuori da log e URL). Coerente con
+>   N53 (rileggibile fino alla scadenza) e N57 (un avvio che non finisce rimette i dati). Applicato dal coordinatore così
+>   com'era (6 ✨ + 3 🔒).
+> - **H-17** (approvato, in questo checkpoint): `backup_max_upload_mb()` legge il valore del profilo dalla tabella di H
+>   con `profile_default(MAX_UPLOAD_VARIABLE, 0)`; via la mia costante `MANAGED_MAX_UPLOAD_MB` (una sola fonte, che il
+>   test di H fissa a 500); docstring del modulo e della funzione aggiornati; nessun ciclo d'import (provato), ruff e
+>   black puliti. In `developer/architecture/settings.md` la frase sulla prima voce della tabella dice ora chi la legge.
+>   Il test che fissava la costante lo ripara un test-author (`7cce1bbb`, solo scrittura): il nome della variabile, la
+>   voce della tabella di H a 500 e nessun valore proprio in `config/backup.py`.
+> - **Prove** dopo il test-author (carico sotto 50): **tutto verde** (21:53-22:31): `api backup-restore` 121 (il test
+>   riscritto: il nome della variabile, la voce della tabella di H a 500, nessuna costante propria in `config/backup.py`;
+>   il test parametrico invariato), `services profile-defaults` 52 (la guardia di H), `api backup-restore-apply` 136;
+>   `mkdocs build` stretta 0 avvisi (168 s sotto carico), `check-links` 97, `utils gate-docs-links` 63; `git diff
+>   --check` pulito; porta libera. Nota del test-author, non fatta (fuori dal perimetro approvato): il controllo
+>   `hasattr` coglie solo il vecchio nome; mettere nella tabella un valore di prova e verificare che la funzione lo segua
+>   chiuderebbe anche un 500 scritto a mano.
+> - **22:32, handoff del checkpoint** al coordinatore, 🧊 FROZEN: 7 file tracciati, nessuno nuovo.
+> - Controlli della doc: fermati prima di partire (carico ~100) per farli una volta sola, dopo anche H-17 (sotto).
+
+### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
+
+> Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
+> nei file della sessione (`b4-contract.md`).
+>
+> - **In base** (`62004e530`): `cryptography` 50.0.2; le funzioni di X per la copia (`count_unreadable_secrets`,
+>   `rekey_plugin_secrets`). Lo scopo persistito della chiave d'istanza è uno solo, `plugins.settings.v1`: il
+>   `key_id` di ogni riga di X fa già da valore di controllo H-3, nella copia non c'è altro da scrivere.
+> - **Manca ancora in `dev_release2`** (`2c485d3d4`, 03:56): `derive_key_from` di H (annunciata con CP7b) e una lettura
+>   pubblica della chiave generata. Quindi **B4a** (busta, creazione e ripristino con password, `decrypt`, conteggio dei
+>   segreti illeggibili nel report) non dipende da nessuno; **B4b** (la chiave nell'archivio e la ricifratura) aspetta
+>   le due funzioni di H.
+> - **Misura**: `Scrypt` di `cryptography` con `n = 2^17, r = 8` impiega 0,42 s e 128 MiB su questo Mac (carico ~30);
+>   `2^15` 0,10 s e 32 MiB. `hashlib.scrypt` rifiuta `2^17` col `maxmem` predefinito di OpenSSL: solo `cryptography`.
+>   Aggiunta al punto 1 della lista di domattina (una macchina cloud da 256 MB e il picco di 128 MiB).
+> - **Decisione notturna, da rivedere**: nell'intestazione (52 byte) un valore di verifica della password (byte 32-47
+>   dell'uscita di scrypt, lo schema di WinZip AES), così una password sbagliata (`wrong_password`) si distingue da un
+>   file rovinato (`envelope_damaged`) senza aiutare chi prova le password più del tag del primo blocco.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 

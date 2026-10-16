@@ -3879,3 +3879,218 @@ vengono dal catalogo generato alle 18:27.
     - **Verdetto: lentezza sotto carico.** Subito dopo l'apertura del replay storico il thread principale resta
       occupato per più di 3 s; non è un difetto di Y12b. Al coordinatore ho proposto una terza corsa sotto carico 50,
       oppure l'ingresso subito, con Y-21.
+- **21:19, coordinatore**: il W6-d di DV è entrato (`3805bf2ca`), e `PositionsPanel.svelte` ed `ExposureTable.svelte`
+  sono di nuovo liberi.
+  - DV ha chiuso la mia **Y-17**: `aria-pressed` sui 4 pulsanti Holdings/Performance e Table/Map di `PositionsPanel`.
+    È segnata ✅ nel BACKLOG con `3805bf2ca`, e va nel prossimo checkpoint.
+  - `3805bf2ca` non è ancora nella mia base: lo porterà il prossimo aggiornamento.
+  - Il test N55 sulla vista Performance del broker legge ancora `contribution-table`. Potrà leggere `aria-pressed`
+    dopo l'aggiornamento della base, ma non serve.
+- **21:20, coordinatore**: opzione 2. Y12b è entrato con la correzione: `8acf41fdf` (test) e `684560cd3` (journal, che
+  contiene solo il piano). Y-21 va nel BACKLOG, scritta alle 21:21 e da portare nel prossimo checkpoint.
+  - Prossimo: `assets/[id]` dopo il lotto A di Z; nel frattempo Y-14, oppure un'altra voce lontana dalle pagine degli
+    asset.
+
+### Y-14 · «Aggiorna» della lista dei broker ricalcola anche le schede (dalle 21:22, su `684560cd3`) — ✅ rosso e verde 21:43, prove leggere 22:05
+
+> **Note implementazione**.
+> - **Decisione** (coordinatore, 21:2x): il rimedio è «forzare», come nella Dashboard e nella pagina del broker.
+> - **Vincolo**: il lotto B di Z ha aperto `page-busy.spec.ts` fino alle 22:10 circa, quindi il rosso va in
+>   `e2e/brokers/brokers.spec.ts` (azione `front-broker list`).
+>   - `test-author` era partito su `page-busy.spec.ts`: l'ho reindirizzato, con l'ordine di riportare quel file a
+>     HEAD.
+> - **Patch** (`files/patches/y14_brokers_refresh.py`, provata a secco su una copia):
+>   - `loadBrokers(force = false)` passa `force` a `fetchReport` (riga 177);
+>   - il clic su `brokers-refresh` va a un nuovo `handleRefresh()`, che fa `requestPortfolioRefresh()` e poi
+>     `pageBusy.track('brokers-refresh', () => loadBrokers(true))`;
+>   - il primo caricamento, la valuta e i ricaricamenti dopo una modifica restano senza `force`;
+>   - **⚠️ Fuori pista, il pulsante «riprova» dello stato d'errore** (riga 404). Passava `loadBrokers` direttamente
+>     a `on:click`, quindi con il parametro nuovo l'evento del clic sarebbe finito in `force`. Ora è una chiamata
+>     esplicita, tracciata (`brokers-retry`) come ogni ricaricamento chiesto dall'utente: nel passo 4 mi era sfuggito.
+> - La pagina non ascolta il bus del portafoglio, quindi `requestPortfolioRefresh()` qui non provoca un secondo
+>   caricamento: segna come scadute le cache delle altre viste.
+> - **Il rosso di `test-author`** (dalle 21:22 alle 21:37, `e2e/brokers/brokers.spec.ts`, +160/−2). `page-busy.spec.ts`
+>   e `_frontend_portfolio.py` non li ha mai toccati.
+>   - Titolo: «Refresh asks the report of the cards again even when its cache is fresh, and holds its button until it
+>     is back (Y-14)», in un `describe` suo, con un limite di 90 s.
+>   - **Cosa fa**:
+>     1. la lista si carica da zero e si assesta;
+>     2. come precondizione, il primo caricamento ha chiesto il report delle schede (`include_breakdown: true`) e ha
+>        avuto risposta;
+>     3. trattiene ogni report successivo e fa clic su `brokers-refresh`;
+>     4. attende fino a 30 s un report trattenuto. Il suo corpo, tolti i `broker_ids`, deve essere uguale a quello in
+>        cache, e i `broker_ids` devono essere quelli con un ruolo nella risposta stessa di «Aggiorna»;
+>     5. intanto il pulsante deve essere occupato; dopo il rilascio torna libero, e il report ha risposto.
+>   - **Perché oggi è rosso**: con `force=false` la cache ancora fresca risponde, e nessun report parte.
+>   - **Limite**: con tutto `front-broker all` altre spec cambiano i broker di TEST_USER. Allora la cache può mancare per
+>     conto suo, e il test passerebbe senza dimostrare il `force`, anche se non può fallire per questo. Quindi il rosso
+>     va provato con la sola azione `front-broker list`.
+> - Al coordinatore ho chiesto uno slot di circa 12 minuti: il rosso, la patch con le prove leggere, poi il verde.
+> - **Rosso, patch e verde** (slot 1, dalle 21:38 alle 21:43, carico 87–98; script `files/scripts/y14_red_green.sh`):
+>   - **rosso**, `front-broker list` sul codice di oggi: 1 fallito su 10, cioè solo il test Y-14, alla riga 244, perché
+>     entro 30 s non è partito nessun report;
+>   - la patch applicata;
+>   - **verde**, `front-broker list` dopo la ricostruzione: **10/10**.
+> - **⚠️ Fuori pista, ordini incrociati**: il messaggio del coordinatore «solo il rosso, il verde dopo», scritto con il
+>   carico a 142, mi è arrivato quando lo script aveva già fatto anche il verde, secondo il via dello slot «rosso,
+>   patch, verde». Gliel'ho detto subito: lo slot si è liberato alle 21:43:37 e il verde non va ripetuto.
+> - **Prettier**: dopo la patch la pagina non era formattata. `--write` ha rimesso su una riga il pulsante «Aggiorna»,
+>   che con `on:click={handleRefresh}` è più corto. È solo formattazione: il verde vale lo stesso.
+> - **Prove leggere** (`files/scripts/y14_light.sh`, dalle 21:52 alle 22:05; ognuna è partita solo con il carico sotto 50):
+>   - Prettier pulito;
+>   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - core 6 830/6 830;
+>   - `git diff --check` pulito; la porta 6189 è libera.
+> - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
+>   sul W6-d.
+- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `daa2001ea` (fix) e `7c36f2129` (journal).
+  `assets/[id]` aspetta il lotto A di Z.
+
+### MF-P · contratti dei campi per il resto di Y12b (22:06–22:12, sola lettura)
+
+> **Note implementazione**.
+> - Il coordinatore (22:06): R17, W8 e V11 arrivano con MF-P (ondata 3 di MF); P4 dopo MF-A (ondata 2, che parte
+>   ora); P5 dopo MF-E, che aspetta CP-7b di J. I contratti e le date li concordo con MF direttamente.
+> - Fonti:
+>   - il piano MF in dev, letto con `git show dev_release2:…` e copiato in `files/mf_plan_dev.md`: MF-P è alla riga
+>     328, D-MF6 alla 381;
+>   - le righe di oggi del frontend.
+> - **Mandato a MF** (session `dfb94070…`), voce per voce: cosa calcola oggi il frontend e la mia proposta.
+>   - **R17**: `pnl_change_1d`, `…_vs_total_pnl_percent`, `…_vs_nav_percent` e `timing_effect_percent` in
+>     `PortfolioSummary`. Il giorno prima è il punto precedente della serie, con il segno della variazione e null su
+>     base 0.
+>   - **W8**: un valore di G/L % per ogni nodo broker e (broker, tipo) della treemap.
+>   - **P4**: `net_percent_of_start` negli item di `positions_contribution`, dopo MF-A.
+>   - **V11**: `opening_value` negli eventi BUY.
+>   - **P5**: con D-MF6(b) il piè della tabella somma le righe visibili, quindi è un aggregato interattivo da
+>     dichiarare. Un campo serve solo per un totale fisso di tutti i lotti. Anche il ribasamento in % di
+>     `lotWacPriceChartHelpers.ts:142` è una scala da dichiarare.
+>   - Ho chiesto le date.
+
+### Y-18 · indicatore proprio per le candele (analisi per le domande del developer, 22:12)
+
+> **Note implementazione** (sola lettura).
+> - **Oggi**:
+>   - `GrowthChart` ha uno scheletro solo per la storia: `{#if loading}` disegna
+>     `absolute inset-0 z-10 bg-lf-panel rounded animate-pulse` e nasconde il contenitore del grafico (righe
+>     1467–1474);
+>   - nella vista Candele, finché `pnlCandles` è null, il grafico mostra gli assi senza candele, e nessun indicatore
+>     lo segnala;
+>   - entrambe le pagine hanno già `pnlCandlesLoading` (Dashboard alla riga 100, broker alla 92), ma non lo passano al
+>     grafico;
+>   - dopo N55, con un passaggio diretto alle Candele a pagina ferma, il pulsante della pagina non gira più.
+> - **Proposta A (consigliata)**:
+>   - una prop `candlesLoading?: boolean`, passata dalle due pagine (`{pnlCandlesLoading}`);
+>   - con vista P&L → Candele, `candlesLoading` vero e `pnlCandles == null`, lo stesso scheletro della storia
+>     (`bg-lf-panel animate-pulse`): nessun colore nuovo;
+>   - `aria-busy` sul contenitore (riga 1377) e un `data-testid="growth-candles-loading"`;
+>   - il testo per i lettori di schermo è `common.loading`, una chiave che esiste già.
+>   - Costo: circa 1–1,5 ore. Un test Vitest in `GrowthChart.test.ts` e un controllo E2E nel test N55 della Dashboard,
+>     mentre la richiesta delle candele è trattenuta: `page-busy.spec.ts` si può toccare dopo l'ingresso di Z.
+>   - `GrowthChart` è nell'area DV: prima lo annuncio al coordinatore.
+> - **Proposta B**: un piccolo `LoadingSpinner` accanto al pulsante «Candele». È meno visibile, e il grafico vuoto
+>   resta.
+> - **Domanda collegata (P3)**: durante un ricaricamento di sfondo, `applyReport` e `applyOverview` azzerano
+>   `pnlCandles`, quindi oggi le candele spariscono fino alla nuova richiesta. Con A al loro posto comparirebbe lo
+>   scheletro. Invece la documentazione utente dice che durante un ricalcolo di sfondo «le cifre restano». In
+>   alternativa si possono tenere le candele vecchie finché arrivano le nuove, ma questo tocca il ricaricamento di Z-13
+>   e le due pagine: è una decisione a parte.
+- **22:12, la risposta di MF sui contratti di MF-P**:
+  - **Unità**: frazione ovunque (0.05 = 5 %), come oggi `twrr_percent`, `gain_loss_percent` e `period_pnl_percent`;
+    SafeDecimal come stringa; null si legge «—».
+  - **R17**, in `PortfolioSummary`: `pnl_change_1d: Currency|null`, `pnl_change_1d_vs_total_pnl_percent`,
+    `pnl_change_1d_vs_nav_percent` e `timing_effect_percent`.
+    - «Il giorno prima» è **D−1 di calendario** (`state_as_of(D−1)`), non il punto precedente della serie: se il
+      report campiona, oggi il frontend confronta due punti lontani.
+    - Le percentuali sono Δ/|base|; null con base 0 o senza un D−1.
+    - Il timing è null se manca l'MWRR, che dopo D-MF5/N54 può mancare.
+  - **W8**: `summary.holding_groups: list[{broker_id, asset_type: str|null, gain_loss: Currency|null,
+    gain_loss_percent: str|null}]`, dove `asset_type` null è il livello del broker.
+    - Si contano solo i titoli con valore e G/L entrambi noti.
+    - Oggi un titolo con G/L nullo mette il suo valore nella base come se fosse costo: è un 🐛 per il CHANGELOG.
+  - **P4**: nessun campo nuovo. Si usa `period_pnl_percent` (= `period_pnl/|start_value|`) così com'è; con MF-A i
+    valori migliorano.
+  - **V11**: `opening_value: Currency|null` sui BUY, nella valuta di `unit_price`. Arriva con MF-E, dopo CP-7b di J.
+  - **P5**:
+    - il piè della tabella sulle righe visibili e il ribasamento di `lotWacPriceChartHelpers.ts:142` si dichiarano nel
+      codice;
+    - il totale fisso c'è già (`LotSummarySchema`).
+  - **Date**: R17 e W8 il 17/10 mattina; P4 subito; V11 ed eventuali totali di P5 verso il 18/10. MF mi manda lo schema
+    dopo `api sync`, per i rossi.
+  - **La sua domanda sui periodi fissi dell'asset (1G, 1S…)**: non sono in Y12b. Stanno in
+    `lib/utils/assetPriceDerived.ts:193-196` (`computePeriodDelta`, lista degli asset) e in
+    `routes/(app)/fx/+page.svelte:236-240`, area di X. Gliel'ho risposto.
+
+### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `7c36f2129`) — ✅ 22:31
+
+> **Note implementazione**.
+> - **Analisi**: nello schema le due durate sono `int` obbligatori e ≥ 0, e il riepilogo controlla la coerenza fra
+>   durata e stato del recupero.
+>   - Con dati validi la profondità e la durata vengono dalla stessa fonte.
+>   - Si mescolano solo quando c'è il riepilogo ma la sua profondità ha il segno contrario, che `lossMagnitude` legge
+>     come assente.
+> - **Correzione**, una riga (`files/patches/y19_levelHelpers.py`):
+>   `durationDays: summaryDepth !== null ? finite(summary…) : finite(kpi…)`. Lo stesso schema vale per il recupero da
+>   Y12b. Non sposta i numeri di riga citati da `risk-lab.md`.
+> - **Rosso**: `test-author` scrive un caso con la profondità del riepilogo di segno contrario e un caso di guardia in
+>   cui vince un riepilogo valido.
+> - **Ciclo**: `files/scripts/y19_cycle.sh`, cioè rosso, patch, verde, Prettier, svelte-check e core, ogni passo solo
+>   con il carico sotto 50. Niente E2E.
+> - **`test-author`** (dalle 22:13 alle 22:15, `levelHelpers.test.ts`), due casi subito dopo quello Y12b del segno
+>   contrario:
+>   - il rosso: la profondità del riepilogo ha il segno sbagliato (`0.3`, durata 99), e il KPI ha `−0.4` con durata 30.
+>     Ci si aspettano una perdita di 0.4 e una durata di 30;
+>   - la guardia: un riepilogo valido (`−0.25`, durata 12) accanto a un KPI più profondo. Profondità e durata del
+>     riepilogo vincono insieme, cioè 0.25 e 12. Copre il verso opposto del test che già c'era, dove il KPI era meno
+>     profondo.
+> - **Ciclo** (`files/scripts/y19_cycle.sh`, dalle 22:19 alle 22:31, ogni passo solo con il carico sotto 50):
+>   - **rosso**: risk-levels-unit 1 fallito su 513, cioè proprio il caso atteso («expected 99 to be 30»);
+>   - la patch di una riga;
+>   - **verde**: 513/513;
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; core 6 830/6 830; `git diff --check` pulito; la porta 6189 è
+>     libera.
+> - Nel BACKLOG Y-19 è ✅. Nessuna E2E, perché le stub sono valide e il comportamento resta quello.
+- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 1b46178bd`), sui due casi «reload in background»
+  di `page-busy.spec.ts`:
+  - durante la richiesta trattenuta la radice della Dashboard deve essere `data-busy="false"` (Z-18);
+  - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
+  - `holds` esiste nel test.
+  - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
+- **22:32**: Y-19 committato (`9fd2dcdc0` fix e `54cce7263` journal) ed entrato in dev. Il via per Y-20 è arrivato
+  mentre Z lavora al lotto A.
+
+### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `54cce7263`) — ✅ 22:47
+
+> **Note implementazione**.
+> - **`docs-writer`** (dalle 22:33) aggiorna i sei riferimenti della tabella in «Y12b» (righe 119 e 302–310 della
+>   pagina), ognuno ricontrollato sul codice di oggi.
+>   - Controlla anche gli altri riferimenti `file:riga` della sezione «How Much Can It Hurt?» e del punto «Bad month».
+>   - Il resto della pagina non lo tocca: segnala soltanto.
+>   - Verifica con `dev.py mkdocs check-links`.
+> - **Primo giro di `docs-writer`** (dalle 22:33 alle 22:40): 9 riferimenti aggiornati, ognuno controllato sul codice,
+>   e `check-links` verde (97 validi).
+>   - **Requests**: `riskAnalysisHelpers.ts:334` → 336 e l.368-371 → 370-373; `:280` → 282, con l'uso alle righe
+>     321 e 342 invece della 340.
+>   - **Istogramma**: `l1Helpers.ts:136` → 138, e `holdsCut`/`belowCut` alle righe 94 e 103 invece di 92 e 101. Per
+>     la regola del bin a cavallo, al posto di `ReturnHistogram.svelte:51` ora ci sono il commento alla riga 18 e
+>     `barClass()` alle righe 40–43; `title` passa da 79 a 68.
+>   - **Cifre in denaro**: `lossMoney()` da 86 a 72.
+>   - **Etichette**: `RiskMetricCard.svelte` da 107 a 108; `DOC_PATHS`/`TAIL_DOCS` da 117/127 a 103/113.
+> - **Secondo giro**, le quattro osservazioni del primo giro, applicate:
+>   - **Worst fall**: ora la pagina dice che la durata segue la fonte della profondità (Y-19, riga 405).
+>   - **Money**: si aggiunge Broker Detail, che usa il patrimonio netto di quel broker (riga 718). La tabella degli host
+>     lo diceva già.
+>   - **Istogramma**: «neither», che era ambiguo, diventa: il bin a cavallo è quello ambra `holdsCut` e non conta mai
+>     come coda (`belowCut` falso, `l1Helpers.ts:175-176`).
+>   - **UnderwaterChart**: il riferimento va alla didascalia, righe 65–70 con il valore alla 67, invece che al suo
+>     link alla riga 69.
+> - **⚠️ Fuori pista**: con il primo giro la pagina citava due righe diverse per lo stesso fatto (718 nel punto, 686
+>   nella tabella degli host). Ho chiesto a `docs-writer` di aggiornare anche gli 11 numeri della tabella degli host e
+>   del punto «No owned broker», già verificati. Non si va oltre.
+> - **Terzo giro** (fino alle 22:47): gli 11 numeri della tabella degli host e del punto «No owned broker».
+>   - Ciascuno è stato confrontato con la stessa riga di `eee56b42a`, quando la pagina fu scritta: punta allo stesso
+>     codice, solo spostato (di 1, 31 o 32 righe).
+>   - Ora la pagina dà una riga sola per ogni fatto (`:718` sia nel punto sia nella tabella).
+>   - `check-links` verde, 97 link validi; `brokerStore.ts:262` era già giusto.
+> - **In tutto**: 20 riferimenti aggiornati e 4 precisazioni di testo, solo in `risk-lab.md`. Pagina solo in inglese,
+>   quindi niente traduzioni né marcatura. Y-20 ✅ nel BACKLOG.
