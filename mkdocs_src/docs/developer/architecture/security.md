@@ -777,6 +777,15 @@ the commit), `restart.py`, `restore_jobs.py` (the checks of the API) and `paths.
 `backend/app/api/v1/backup/restore.py`, the command line in `scripts/backup_cli.py`. The administrator's side is
 «Restore an Archive» in [Command-Line Tools](../../admin/cli_tools.md).
 
+The check also compares the ledger's control totals ([Ledger Control Totals](../backend/financial_math.md#ledger-totals))
+that the backup recorded in its manifest with the copy's, once it is up to date (lot B-13, `instance_backup/totals.py`):
+a difference is a warning (`control_totals_changed`), never a refusal, since a migration may correct data. The copy's
+totals, like the snapshot's at the backup, come from J's `compute_control_totals()` on an engine of their own over an
+immutable, read-only connection (`mode=ro&immutable=1`), because every engine of the process sets the journal mode when
+it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only connection to a rollback-journal file
+refuses; the amounts the manifest recorded must be plain decimal text, at most 60 digits on each side of the point,
+before J reads them, since an exponent would be expanded in full.
+
 ### 🔐 The Routes {: #backup-restore-routes }
 
 Every route under `/backup/restore` requires an administrator (`require_admin`), and none is in
