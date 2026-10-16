@@ -2792,16 +2792,19 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **TR-1 · Il sottotitolo di `/transactions` è ancora legacy** — minimo; TR, 16/10. `routes/(app)/transactions/+page.svelte:738`
   (`text-gray-500 dark:text-gray-400`) resta com'è, perché il test «dark-theme pick of a text-gray-500 element» di
   `e2e/designer-lab/designer-lab-picker.spec.ts` lo usa come elemento rimappato da `app.css`. Migra a `text-lf-muted`
-  quando L sposta il soggetto del test. Dettagli: [piano di TR](../Phase_1/10_colorSystem/TR-transactionColors/plan-phase00TransactionColors.prompt.md),
+  quando L sposta il soggetto del test: si sblocca con l'ingresso di L-20 (coordinatore, 16/10 12:12). Dettagli: [piano di TR](../Phase_1/10_colorSystem/TR-transactionColors/plan-phase00TransactionColors.prompt.md),
   sezione «Cosa resta, e perché».
-- **TR-2 · Due conferme verdi piene senza ruolo per l'hover** — basso; TR, 16/10. `PromoteMergeModal.svelte:262`
+- ✅ **TR-2 · Due conferme verdi piene senza ruolo per l'hover** — basso; TR, 16/10. `PromoteMergeModal.svelte:262`
   (`bg-green-600 hover:bg-green-700`) e `TransactionActionModal.svelte:387` (lo stesso verde, col ramo ambra dello split
   nello stesso ternario) restano legacy e interi: manca un `success-hover`. Serve un ruolo di T, oppure una decisione:
   `bg-lf-action`, o il ramo ambra su `bg-lf-warning hover:bg-lf-warning-hover text-lf-on-status`. Dettagli: piano di
   TR, sezione «Cosa resta, e perché».
+  ✅ 16/10, lotto 5 di TR (secondo checkpoint): con i ruoli nuovi di T (`f043c1b58`), le due conferme passano a
+  `bg-lf-success hover:bg-lf-success-hover text-lf-on-status`, e il ramo dello split a `bg-lf-warning
+  hover:bg-lf-warning-hover`, nello stesso ternario (OK del coordinatore, 12:12).
 - **TR-3 · Lo `<style>` di `TransactionsTable` tiene 13 letterali** — basso; TR, 16/10. Sono:
-  - la base della tinta del broker, `white`/`#0f0f18`: la stessa ricetta di `UnifiedLotsTable` di BK, da decidere
-    insieme;
+  - la base della tinta del broker, `white`/`#0f0f18`: la stessa ricetta di `UnifiedLotsTable` di BK. **Passa a T**, nel
+    lotto dei component tokens (coordinatore, 16/10 12:12);
   - l'hover traslucido dell'icona del tipo, `rgb(0 0 0/.05)`/`rgb(255 255 255/.08)`: nessun ruolo traslucido;
   - il pallino evento viola: categoria;
   - l'impulso indaco di riga: nessun ruolo d'evidenza.
