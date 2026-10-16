@@ -569,6 +569,17 @@ def api_admin_setup(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Initial administrator setup API tests", verbose=verbose)
 
 
+def api_validation_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of the 422 without the request's input (A-35): no password or token ever comes back."""
+    print_section("Validation Errors API Tests")
+    print_info("Testing that a 422 drops the input of every error, on the routes that carry a password or a token")
+    print_info("In-process on a small app for the handler; on the lane's server only refusals, and five accounts of its own")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_validation_errors_api.py", test_names)
+    return run_command(cmd, "Validation errors API tests", verbose=verbose)
+
+
 def api_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Run the registration API tests: modes, invitations, inspect, password reset, the public accounts block, the locked setting."""
     print_section("Registration API Tests")
@@ -1050,6 +1061,13 @@ Tests for REST API endpoints (server auto-started):
     # tested in-process on private databases; on the lane's server each case acts only on accounts it registers (its
     # administrator promoted through user_service) and on their tokens, never counts the lane, and deletes them afterwards.
     add_test(api, "admin-setup", api_admin_setup, name="Initial Administrator Setup API", desc="POST /auth/setup (password rules first, TOKEN_INVALID, the login's cookie), tokens/inspect admin_setup")
+    add_test(
+        api,
+        "validation-errors",
+        api_validation_errors,
+        name="Validation Errors API",
+        desc="A-35: every 422 keeps loc, msg, type and ctx and drops input, so no password or token comes back (login, register, change-password, password-reset, setup, tokens/inspect, profile, email resend); the OpenAPI schema unchanged",
+    )
     # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
     # lane's server only refusals that write nothing.
     add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")

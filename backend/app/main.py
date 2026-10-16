@@ -15,6 +15,7 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 from fastapi import FastAPI
 
 from backend.app.api.v1.router import router as api_v1_router
+from backend.app.api.validation_errors import install_validation_error_handler
 from backend.app.config import (
     API_V1_PREFIX,
     PROJECT_NAME,
@@ -55,6 +56,9 @@ app = FastAPI(
 
 # Middleware, outermost first: services/platform/middleware.py
 install_middleware(app)
+
+# A 422 never sends the request's input back (A-35): api/validation_errors.py
+install_validation_error_handler(app)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)
