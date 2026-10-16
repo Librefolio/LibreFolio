@@ -111,7 +111,8 @@ leggere lo stato e il log.
 </div>
 
 - Ogni voce è un'esecuzione: job, ora, durata e quanti elementi sono riusciti. 🟢 **OK**: tutti, o niente da
-  fare; 🟡 **Parziale**: alcuni non riusciti; 🔴 **Errore**: nessuno riuscito.
+  fare; 🟡 **Parziale**: alcuni non riusciti, o rimandati perché il loro fornitore è in pausa dopo troppe richieste;
+  🔴 **Errore**: nessuno riuscito e nessuno rimandato.
 - Fai clic su una voce per vedere ciascun asset o coppia FX, il relativo provider e i prezzi modificati (**Delta**).
   Passa il mouse su un errore per leggerlo per intero; fai doppio clic (pressione prolungata su un telefono) per copiarlo.
 - Filtra per job, stato o periodo, dall'ultima ora agli ultimi 30 giorni. Vengono conservate solo le esecuzioni più recenti.
