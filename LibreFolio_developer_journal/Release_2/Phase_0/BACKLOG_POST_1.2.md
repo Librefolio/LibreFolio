@@ -3438,6 +3438,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Con la 47 uno split si rifiuta anche per un cambio mancante (`WAC_FX_UNAVAILABLE` sull'operazione `split`), e prima già
   per altri codici: l'utente non vede il perché. Proposta: mostrare il problema (toast o pannello, con il codice tradotto).
   Frontend delle transazioni (FE8, dopo il lotto A dei colori). Dettagli: piano 04, sezione «Decisione 47».
+  ✅ 16/10: un rifiuto di split o di promozione dalla pagina Transazioni dà un toast d'errore col titolo e i motivi tradotti
+  (`utils/transactions/commitRefusal.ts`); un cambio mancante su uno split ha il suo testo (`wacFxUnavailableSplit`, 4
+  lingue); la conferma resta aperta. Vitest 63/63, E2E `tx-split-refusal` 2/2 (rosso prima). Toast invece di un riquadro:
+  decisione notturna. Dettagli: piano 04, sezione W-B39.
 - **W-B40 · Lo split di una coppia non ancora salvata nel Bulk non applica la 47** — basso, numeri; W, 16/10 (decisione
   47, docs-writer). `TransactionBulkModal.svelte` (~933) cambia solo i tipi di una coppia TRANSFER non salvata: l'ADJUSTMENT
   in uscita si crea senza costo e i lotti leggono le unità come distrutte. Da decidere: il backend dà il costo Auto a un
@@ -3455,6 +3459,19 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (`event badge reflects current link state`) prende il primo pallino degli eventi e dipende dai collegamenti del mock.
   Solo letture: nessun dato condiviso a rischio. Cura: asset e collegamenti propri, come gli scenari 1 e 2
   (`frontend/e2e/assets/asset-events-owned.ts`), e asserzioni esplicite. Dettagli: piano 04, sezione W-B29.
+  ✅ 16/10: scenario 3 su un asset proprio (card per id, conferma col nome, annulla, asset ed evento restano); scenario 4 su un
+  DIVIDEND proprio collegato (pallino visibile, scollegato con `asset_event_id: 0`, pallino sparito). E2E 4/4. Dettagli:
+  piano 04, sezione W-B42.
+- **W-B43 · Tre debolezze in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`** — minimo, test; W, 16/10 (TC-13,
+  trovate dal test-author di T, lotto dei colori). In `frontend/e2e/assets/asset-data-editor.spec.ts` il test 21 sta dentro
+  un `if (isVisible)` che non aspetta (può passare senza asserire nulla), e nessun controllo positivo verifica la ✗; in
+  `frontend/e2e/fx/fx-csv-import.spec.ts:56` l'asserzione dipende dalla parola «error» (testo tradotto). Cura: dopo il
+  lotto W1-g di T (~07:30, che tocca quei file: `asset-data-editor.spec.ts:287`, `fx-csv-import.spec.ts:53,56,289`), coi
+  `data-testid`/`data-state` che introduce. Dettagli: messaggio del coordinatore, 16/10 06:07.
+- **W-B44 · `PromoteMergeModal` senza `data-testid` univoci** — minimo, test; W, 16/10 (W-B39, test-author). Con la modale
+  aperta `promote-merge-modal` trova due elementi, e il suo «Annulla» non ha `data-testid`: un test della promozione con campi
+  diversi non li può prendere in modo stabile (oggi nessuno lo fa). Cura: un `data-testid` per elemento, in
+  `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte`. Dettagli: piano 04, sezione W-B39.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
