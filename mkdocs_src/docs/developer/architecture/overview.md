@@ -115,10 +115,11 @@ The lifespan (`lifespan()` in `backend/app/services/platform/app_lifespan.py`) p
 9. `database`: creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()` in `database_bootstrap.py`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
 10. `post-migration-fixes`: runs the [post-migration fixes](database/index.md#post-migration-fixes) in a thread; they never stop the startup.
 11. `global-settings`: seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
-12. `provider-prewarm`: starts the provider cache pre-warm in the background (`_prewarm_provider_caches()`).
-13. `market-holidays`: starts building the market-holiday table in the background, in its own process (`start_market_holiday_prewarm()`).
-14. `scheduler`: starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
-15. `idle-monitor`: only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`, registers the busy checks `tools` and `backup` on the activity record and starts the idle monitor task (`start_idle_monitor()`, in `sleep_wake/idle_monitor.py`), which asks Fly.io to suspend the machine when nothing is busy and no user's request has come for `LIBREFOLIO_IDLE_SUSPEND_MINUTES` ([Idle Suspension](../../admin/sleep_wake.md#idle-suspend)).
+12. `plugin-secrets-check`: runs the [plugin secrets check](security.md#plugin-secrets-check) (`log_plugin_secrets_check()`): stored system secrets of the plugin settings that the instance key cannot read are one error in the log, with their count; it never stops the startup.
+13. `provider-prewarm`: starts the provider cache pre-warm in the background (`_prewarm_provider_caches()`).
+14. `market-holidays`: starts building the market-holiday table in the background, in its own process (`start_market_holiday_prewarm()`).
+15. `scheduler`: starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
+16. `idle-monitor`: only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`, registers the busy checks `tools` and `backup` on the activity record and starts the idle monitor task (`start_idle_monitor()`, in `sleep_wake/idle_monitor.py`), which asks Fly.io to suspend the machine when nothing is busy and no user's request has come for `LIBREFOLIO_IDLE_SUSPEND_MINUTES` ([Idle Suspension](../../admin/sleep_wake.md#idle-suspend)).
 
 On shutdown, the lifespan's `finally` runs `FINALLY_STEPS`: `tool-executor` stops the Tool executor, also when serving ended with an error. Then, only after a normal end, it logs `Shutting down LibreFolio` and runs `SHUTDOWN_STEPS`: `idle-monitor` (sets the idle monitor's stop event and awaits its task, when it runs), `scheduler` (sets the scheduler's stop event and awaits its task), `providers` (the asset, FX and BRIM providers), `brim-parse-pool`, `quant-pools`, `market-holidays` (ends any holiday build at once), `caches` (closes the TTL caches) and `child-processes` (terminates the child processes still alive, such as parse, risk and Tool workers, so that none outlives the server; only where the watchdog is installed).
 

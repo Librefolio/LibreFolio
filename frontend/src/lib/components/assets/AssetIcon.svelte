@@ -50,7 +50,7 @@
     });
 </script>
 
-<div class="asset-icon {sizes[size].container} rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
+<div class="asset-icon {sizes[size].container} rounded-full bg-lf-selected flex items-center justify-center shrink-0 overflow-hidden">
     {#if showImg}
         <img
             src={iconUrl}
@@ -71,7 +71,7 @@
             }}
         />
     {:else}
-        <BarChart3 size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
+        <BarChart3 size={sizes[size].icon} class="text-lf-link" />
     {/if}
 </div>
 

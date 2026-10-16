@@ -222,11 +222,11 @@
     <!-- The two controls share one height (D376: «non mi piace che abbiano un altezza diversa
          dal periodo»), and Run sits on its own line, at the end. -->
     <div class="flex flex-wrap items-end gap-2">
-        <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex flex-col gap-1 text-xs text-lf-muted">
             <span>{$t('risk.stress.preset')}</span>
             <SimpleSelect value={presetId} options={presetOptions} compact triggerClass={CONTROL_HEIGHT} dropdownPosition="auto" ariaLabel={$t('risk.stress.preset')} onchange={applyPreset} testId="risk-replay-preset" />
         </div>
-        <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-replay-period">
+        <div class="flex flex-col gap-1 text-xs text-lf-muted" data-testid="risk-replay-period">
             <span>{$t('risk.levels.l4.replayPeriod')}</span>
             <!-- The quick ranges are back beside the dates (D376, reversing F3), MAX excepted: its
                  «all history» sentinel is resolved by the page's own date filter, not here. -->
@@ -234,7 +234,7 @@
         </div>
     </div>
     <div class="flex justify-end">
-        <button type="button" class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.replayLoading} data-testid="risk-replay-run">
+        <button type="button" class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.replayLoading} data-testid="risk-replay-run">
             <Play size={14} />
             {$t('risk.actions.runReplay')}
         </button>
@@ -243,13 +243,13 @@
     {#if output}
         {#if coverage}
             <!-- Above the total: it changes what the total means. -->
-            <p class="rounded-lg bg-amber-50 p-2 text-xs font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="risk-replay-coverage">{warningSentence(coverage, $t)}</p>
+            <p class="rounded-lg bg-lf-warning-soft p-2 text-xs font-medium text-lf-warning-on-soft" data-testid="risk-replay-coverage">{warningSentence(coverage, $t)}</p>
         {/if}
         <!-- What was left out comes before the numbers it shapes (D376), with the period that
              would bring it back. -->
         {#if exclusions}
             <div
-                class="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+                class="space-y-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-xs text-lf-warning-on-soft"
                 data-testid="risk-replay-excluded"
                 data-count={exclusions.count}
                 data-treatment={exclusions.treatment ?? undefined}
@@ -270,7 +270,7 @@
              per-asset bars below are the whole answer. -->
         {#if output.portfolio_return != null}
             {@const total = output.portfolio_return}
-            <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-replay-total">
+            <p class="text-sm text-lf-secondary" data-testid="risk-replay-total">
                 {$t('risk.levels.l4.replayTotal', {
                     values: {
                         percent: `${total < 0 ? '−' : '+'}${formatPercent(Math.abs(total), {scale: 100, signed: false})}`,
@@ -281,7 +281,7 @@
         {/if}
         <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
     {:else if nothingLeft}
-        <div class="space-y-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="risk-replay-nothing">
+        <div class="space-y-2 rounded-lg bg-lf-warning-soft p-3 text-xs text-lf-warning-on-soft" data-testid="risk-replay-nothing">
             <p class="font-medium">{$t('risk.levels.l4.replayNothing')}</p>
             {#if exclusions}
                 {@render excludedGroups(exclusions.groups)}
@@ -315,7 +315,7 @@
         <div class="flex flex-wrap items-center gap-2">
             <button
                 type="button"
-                class="flex items-center gap-1.5 rounded-lg border border-libre-green px-2.5 py-1 text-xs text-libre-green hover:bg-green-50 disabled:opacity-50 dark:hover:bg-green-900/20"
+                class="flex items-center gap-1.5 rounded-lg border border-lf-link px-2.5 py-1 text-xs text-lf-link hover:bg-lf-selected disabled:opacity-50"
                 onclick={applySuggestion}
                 disabled={controller.replayLoading}
                 data-testid="risk-replay-suggested"
@@ -327,7 +327,7 @@
                 {$t('risk.levels.l4.replaySuggested', {values: {start: formatReplayDate(suggestion.start, uiLocale()), end: formatReplayDate(suggestion.end, uiLocale()), count: suggestion.recovers.length}})}
             </button>
             {#if partOfCrisis}
-                <span class="text-gray-500 dark:text-gray-400" data-testid="risk-replay-suggested-partial">{$t('risk.levels.l4.replaySuggestedPartial')}</span>
+                <span class="text-lf-muted" data-testid="risk-replay-suggested-partial">{$t('risk.levels.l4.replaySuggestedPartial')}</span>
             {/if}
         </div>
     {/if}
