@@ -2715,14 +2715,19 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     133/141, 155/162 e 176/184.
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
       della skill), così in scuro non ce n'è uno diverso dagli altri.
+  - **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
+    classi: `bg-blue-500` e `bg-emerald-500` con le loro metà scure). Sono colori d'identità di due misure, non segni né
+    stati: restano categorie (coordinatore, 16/10 12:07, regola 11 dello skill `design-system`).
+    - **Per la designer:** quando decide il punto 2.2, la barra della liquidità potrebbe leggere il colore della
+      categoria Liquidità dei grafici: lo stesso salvia, e la stessa misura in tutta l'app.
+    - Il valore contabile resta da decidere insieme alle altre categorie.
   - **Non di DV**, annotati per non perderli:
     - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
     - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
     - ✅ `ExposureMaps` (4): migrato da DV in W6-c, `5d2c1ce62` (16/10), dopo Y9;
-    - `KpiSection` (W6-b), 6 classi: le catene verso `KpiMetricBar`, ancora legacy (`components/ui/display`).
-      - Sono `valueColor`@354 e le barre @405 (valore contabile, blu) e @417 (liquidità, smeraldo, legata anche al
-        punto 2.2).
-      - Le prende T con `ui/display` (coordinatore, 16/10 10:58).
+    - ✅ `KpiSection` (W6-b), le catene verso `KpiMetricBar`: `ui/display` è passato da T a DV (coordinatore, 16/10
+      11:48) e il lotto `ui/display` di DV le ha chiuse (`valueColor`@354 → `text-lf-primary`). Restano solo le due
+      barre di categoria, alla riga sopra.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
     «W5-PAC», «W5-charts» e «W6».
 - ✅ **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
