@@ -397,14 +397,18 @@ The limit per account counts the account's reset links in the database. The othe
 memory of each server process: with several processes, each keeps its own count, and a restart
 forgets them. A reset email that did not go out still counts, for the account and for the mailbox.
 
-**Behind a reverse proxy**, the address that counts is the one the server (uvicorn) sees:
+**Behind a reverse proxy**, the address that counts is the visitor's, as LibreFolio reads it (see
+*The Visitor's Address* in [Checking Connection Security](connection_checks.md)):
 
-- It takes the visitor's address from the proxy's `X-Forwarded-For` header only when the proxy's
-  address is listed in `FORWARDED_ALLOW_IPS` (`127.0.0.1` when not set). List your proxy's exact
-  addresses there, never `*`: with `*`, uvicorn takes the first address of the header, which the
-  visitor can write.
-- Behind a proxy it does not trust, every visitor shares the proxy's address, and one count of 10
-  requests every 15 minutes. The other limits still hold.
+- When `LIBREFOLIO_CLIENT_IP_HEADER` names the header your proxy sets with the visitor's address
+  (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), LibreFolio reads it there. Set it only if
+  every request crosses that proxy: a visitor who reaches LibreFolio directly could write the header.
+- Otherwise it is the address the server (uvicorn) sees, which takes the visitor's address from the
+  proxy's `X-Forwarded-For` header only when the proxy's address is listed in `FORWARDED_ALLOW_IPS`
+  (`127.0.0.1` when not set). List your proxy's exact addresses there, never `*`: with `*`, uvicorn
+  takes the first address of the header, which the visitor can write.
+- Behind a proxy LibreFolio does not trust, every visitor shares the proxy's address, and one count
+  of 10 requests every 15 minutes. The other limits still hold.
 
 ---
 
