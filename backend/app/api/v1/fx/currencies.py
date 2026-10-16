@@ -32,8 +32,8 @@ from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.storage import delete_rates_bulk, upsert_rates_bulk
 from backend.app.services.fx.sync import sync_pairs_bulk
-from backend.app.services.signal_service import SignalExecutionPlan, SignalRequestValidationError, SignalService
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalExecutionPlan, SignalRequestValidationError, SignalService
 
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 

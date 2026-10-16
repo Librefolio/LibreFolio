@@ -151,10 +151,13 @@
         github: 'assets.search.reportVia.github',
     };
     // The generated type of a nullable string with a description also admits an array (a quirk of the client
-    // generator); the response's validator accepts only a string or null.
+    // generator); the response's validator accepts only a string or null. N61: the public GitHub issue only on a
+    // self-hosted instance whose configuration was read; on a managed one, or when it could not be read, a missing
+    // support address means no report link at all.
     let channel = $derived.by(() => {
         const configured = instanceConfig.config.support_url;
-        return supportChannel(typeof configured === 'string' ? configured : null);
+        const githubFallback = instanceConfig.loaded && instanceConfig.config.profile === 'selfhosted';
+        return supportChannel(typeof configured === 'string' ? configured : null, {githubFallback});
     });
     let report = $derived.by(() => {
         if (searchedQuery === null) return null;
@@ -168,9 +171,9 @@
             language: $currentLanguage,
         });
     });
-    let reportLink = $derived(report ? reportHref(channel, report) : null);
+    let reportLink = $derived(report && channel ? reportHref(channel, report) : null);
     // Between the sections when they show, at the bottom of the dropdown otherwise; never while a search runs.
-    let reportPlacement = $derived(report === null || loading ? null : grouped && hasResults && !error ? 'sections' : 'bottom');
+    let reportPlacement = $derived(report === null || channel === null || loading ? null : grouped && hasResults && !error ? 'sections' : 'bottom');
 
     // =========================================================================
     // Lifecycle — Load providers
@@ -454,7 +457,7 @@
 
     /** P20, a support page: it opens in a new tab, and the report goes to the clipboard, to paste there. */
     function reportClicked() {
-        if (channel.kind !== 'page' || report === null) return;
+        if (channel?.kind !== 'page' || report === null) return;
         // The write starts inside the click, before anything is awaited (writeTextToClipboard). It may throw at once.
         let copied: Promise<void>;
         try {
@@ -617,8 +620,8 @@
                             <p class="px-3 py-2 text-xs text-lf-muted" data-testid="asset-search-premium-empty">{$t('assets.search.premiumEmpty')}</p>
                         {/if}
                     </div>
-                    {#if reportPlacement === 'sections'}
-                        {@render reportRow()}
+                    {#if reportPlacement === 'sections' && channel}
+                        {@render reportRow(channel)}
                     {/if}
                     {#if sections.community.length > 0}
                         <button
@@ -655,8 +658,8 @@
                     <p class="border-t border-lf-subtle px-3 py-1.5 text-xs text-lf-muted" data-testid="asset-search-crown-legend">{$t('assets.search.crownLegend')}</p>
                 {/if}
             {/if}
-            {#if reportPlacement === 'bottom'}
-                {@render reportRow()}
+            {#if reportPlacement === 'bottom' && channel}
+                {@render reportRow(channel)}
             {/if}
         </div>
     {/if}
@@ -718,7 +721,7 @@
     </button>
 {/snippet}
 
-{#snippet reportRow()}
+{#snippet reportRow(channel: SupportChannel)}
     <!-- P20: «Can't find it? Let us know», the report of this search through the instance's support address. -->
     <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 border-t border-lf-subtle px-3 py-2 text-xs text-lf-muted" data-testid="asset-search-report-row">
         <span>{$t('assets.search.reportQuestion')}</span>
