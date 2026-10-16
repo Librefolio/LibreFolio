@@ -228,3 +228,4 @@ Sono tutti locali: la push la fa il developer.
 | 138 | 16/10 21:30 | X: C-66 (l'avviso nella finestra di sincronizzazione quando l'intervallo ha già dati, modifiche manuali comprese); E2E combinata con Y11: asset-list 30, page-busy 12 | `4b2e0df80` |
 | 139 | 16/10 21:40 | E: E4b (password dimenticata per email, invio dei link per email, avviso di cambio email), E6, E6.8, E4c-H, E6.9 (revisione di sicurezza: nessuna vulnerabilità), E4c (`same_email`); all-backend 21 506/0; `log.md` della devWiki per unione | `56759b2c8` |
 | 140 | 16/10 21:42 | Y: Y12b (P19: la riga del recupero di L1 legge il campo del backend) + spec dei tooltip di L3 resa robusta; L4 lento sotto carico → Y-21 | `23f71e739` |
+| 141 | 16/10 21:36 | B: B3 ripristino (CLI e scheda Backup, B5b), P7 (mai applicato a istanza bloccata), B5c biglietto dell'esito (N53), B-17, B-13 totali di controllo, B6a-bis guida, ordine d'avvio N57; all-backend 7/7 | `0cd910a7e` |
