@@ -460,6 +460,27 @@ expires. The first account of a new instance can always be created.
 
 ---
 
+## 🥇 The Order of the Price Providers in the Search {: #provider-order }
+
+When you create an asset, the search asks every price provider at once and lists the results
+provider by provider. Each provider declares where it stands: its tier, **premium** for a source an
+instance vouches for, such as licensed data, or **community**, the default; and its priority inside
+the tier. When at least one premium provider is available, its results come first. None of the
+providers shipped with LibreFolio is premium, so without one the search keeps its order.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` | _not set_ | The providers to count as premium, by code, separated by commas, such as `yfinance,justetf`: exactly these, whatever they declare. Not set: what each provider declares. |
+| `LIBREFOLIO_ASSET_PROVIDERS_ORDER` | _not set_ | The providers to list first, in this order, by code, separated by commas; the others follow in their declared order. Premium providers still come before the others. Not set: what each provider declares. |
+
+- The codes of the providers shipped with LibreFolio are `yfinance`, `justetf`, `borsa_italiana`,
+  `css_scraper` and `scheduled_investment`; a provider you add has its own. Case and spaces around
+  them do not matter.
+- A code that no provider has is ignored, and the server logs it once.
+- The settings apply at the next search, with no restart: LibreFolio reads them at every search.
+
+---
+
 ## 🔎 Optional: Web Search for New Assets
 
 When you create an asset, also from the broker import wizard, and a provider's own search finds
