@@ -3067,3 +3067,67 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   `forgot-password-email`, più `auth` e `admin-users` di A, toccate dagli agganci;
 > - la galleria `settings/email`, con G, che la mette nello stesso giro di B5b e X;
 > - E-4, con l'ok di A.
+
+#### E6.12 — L'ingresso, il fast-forward, la build fuori dallo slot, l'E2E del dominio ed E-4 ✅ (2026-10-16, 21:20–22:06)
+> **E è entrato in `dev_release2`** (21:20): il merge `56759b2c8` porta dentro E4b, E6, E6.8, E4c-H, E6.9 ed E4c
+> (`devWiki/log.md` risolto per unione); il journal è `30c2459e6`. Il coordinatore ha aggiunto le tre righe salvate di
+> E4b al CHANGELOG.
+>
+> **Il CHANGELOG** (domanda del coordinatore, 21:2x): per E6, E6.8 ed E4c-H nessuna riga in più. Ho riletto le righe
+> email del capitolo in dev, e sono tutte ancora vere:
+> - la correzione di `RECIPIENT_REFUSED` sta dentro «Send by email», non ancora rilasciata;
+> - E6.8 tocca solo il finto dei test;
+> - E4c-H non cambia nessuna chiave, e la parte visibile è nella riga di P17 di H;
+> - per E4c, il cambio di sole maiuscole sta nelle righe di P18 di A.
+>
+> **Il fast-forward** (21:2x): il coordinatore ha portato il mio ramo alla punta di dev, **`102fa9ec1`** (l'ingresso, Y12b
+> e i registri), perché l'E2E del dominio controlli dev.
+>
+> **La build fuori dallo slot**, la lezione di E4b.6: `dev.py server --test --build-only`, carico sotto 50,
+> `files/tools/e6_build_e4.sh`. Fatta alle 21:31 in 359 s: frontend, documentazione e cache JS. Allo slot E2E, dopo Z
+> verso le 22:00, restano solo le spec (`files/tools/e6_e2e_slot.sh`).
+>
+> **E-4**, con il via del coordinatore (A non ha il file aperto):
+> - in `api/v1/settings.py`, le quattro righe 137, 165, 241 e 347 passano da `status.HTTP_422_UNPROCESSABLE_ENTITY` a
+>   `status.HTTP_422_UNPROCESSABLE_CONTENT`;
+> - in `backend/` non resta niente, né un filtro d'avviso, né un test che usi il nome vecchio;
+> - il backlog segna E-4 ✅.
+>
+> Prove: `ruff`, `black` e `api settings`.
+>
+> **L'E2E del dominio, come controllo su dev** (slot E2E del coordinatore, dopo Z, 21:47–22:02):
+> `files/tools/e6_e2e_slot.sh`, `--workers 2`, una spec alla volta, sulla punta di dev `102fa9ec1`. Nessuna
+> ricostruzione del frontend.
+>
+> | Spec | Esito |
+> |---|---|
+> | `front-utility email-tab` | 5 ✅ |
+> | `front-utility email-verification` | 5 ✅ |
+> | `front-utility email-send-link` | 4 ✅ |
+> | `front-utility forgot-password-email` | 3 ✅ |
+> | `front-utility auth-links` (di A) | 9 ✅ |
+> | `front-utility auth` (di A) | 34 ✅ |
+> | `front-utility admin-users` (di A) | 10 ✅ |
+> | **Totale** | **70 passati, 0 falliti** |
+>
+> La porta 6188 era libera alle 22:02:32, e l'ho detto subito al coordinatore.
+>
+> **⚠️ Fuori pista: un `.DS_Store` contava come sorgente.** Alle 21:35 il Finder ha creato `frontend/src/.DS_Store`,
+> più nuovo della build delle 21:31. Il controllo del runner (`scripts/cli_base.py:609`) passa tutti i file di
+> `frontend/src` tranne quelli generati, e allo slot avrebbe ricostruito il frontend per niente.
+> - Il file è ignorato da git e non è una sorgente: gli ho spostato indietro l'mtime (`touch -t 202610162130`), senza
+>   toccare il contenuto.
+> - L'ho segnalato al coordinatore: un filtro sui file nascosti nel runner spetta a chi tiene `cli_base.py`.
+>
+> **Le prove di E-4**: lo script si era fermato nell'attesa del carico, dopo la build-only, perché lo slot E2E non
+> condividesse la corsia. Si rifanno dopo lo slot.
+>
+> **Le prove di E-4** (`files/tools/e6_e4_checks.sh`, 22:03–22:06, carico sotto 50):
+> - `ruff` e `black` su `api/v1/settings.py`: puliti ✅;
+> - `api settings`: 98 passati ✅;
+> - nessun avviso con il nome vecchio;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Resta per E6**: lo scatto della galleria `settings/email`, che G mette nello stesso giro di B5b e X. Il dominio email
+> della 1.3 è così chiuso, salvo quello scatto e le decisioni del developer: il pulsante «Confirm», il messaggio
+> dell'email trattenuta, la revisione delle decisioni notturne.

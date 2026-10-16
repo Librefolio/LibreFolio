@@ -4870,10 +4870,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   `isAxiosError`). Da decidere: convertire nell'intercettore, oppure togliere `ApiError` e il commento.
   Dettagli: piano 08, «E2.6».
   - 16/10, coordinatore: rimandata alla 1.4, perché tocca file condivisi (il client condiviso `zodios-client.ts`).
-- **E-4 · `status.HTTP_422_UNPROCESSABLE_ENTITY` è deprecato in Starlette** — minimo; E, 15/10 (E2a). Dà un
+- ✅ **E-4 · `status.HTTP_422_UNPROCESSABLE_ENTITY` è deprecato in Starlette** — minimo; E, 15/10 (E2a). Dà un
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
   Dettagli: piano 08, «E2.4».
+  - 16/10, E: chiusa, con il via del coordinatore e di A (il file è di A). Le quattro righe ora usano
+    `status.HTTP_422_UNPROCESSABLE_CONTENT`, con lo stesso codice 422 e senza avviso. In `backend/` non resta nessun
+    `HTTP_422_UNPROCESSABLE_ENTITY`. Dettagli: piano 08, «E6.12».
 - ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
