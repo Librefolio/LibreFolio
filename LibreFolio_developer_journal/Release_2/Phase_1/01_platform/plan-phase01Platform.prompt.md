@@ -4284,3 +4284,63 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
 4. ✅ **Backlog**: **H-24** (`.DS_Store` e test nel controllo della build vecchia, da E via coordinatore) e **H-25**
    (il pre-passaggio parallelo solo per la categoria intera), approvate dal coordinatore alle 22:14; si fanno in
    quest'ordine dopo H-23.
+5. ✅ **Entrata** (23:12): commit `9541c0667` (fix), `d0a349cf3` (docs), `7ea30903e` (journal), entrati in dev.
+
+### Lotto «H-24: un file nascosto o un test non fanno ricostruire il frontend» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:12): prima H-24, da E (`.DS_Store`), poi H-25. Ci scrivo io: `scripts/cli_base.py`,
+> superficie condivisa, è il file della voce stessa.
+
+1. ✅ **Analisi** (23:15, sola lettura; HEAD `7ea30903e`, già in dev).
+   - `check_frontend_needs_build()` (`scripts/cli_base.py` ~584): `src_dir.rglob("*")`; ogni file più recente di
+     `build/index.html` che non sia in `_BUILD_GENERATED_SOURCES` → rebuild.
+   - **Misura reale prima della cura**: build `21:59:40`; l'unico file più recente in `frontend/src` è
+     `frontend/src/.DS_Store` (`22:01:48`, Finder, ignorato da git), e `check_frontend_needs_build()` risponde
+     **True**. Il prossimo run con server ricostruirebbe a vuoto: 472 s l'ultima volta.
+   - File nascosti in `src`: `.DS_Store`, `lib/api/.gitignore`, `lib/i18n/.generated` (lo stamp di
+     `scripts/i18n_catalog.py`: generato; i cataloghi `<lang>.json` restano nella scansione). Poi 504 file
+     `*.test.*`/`*.spec.*` di Vitest: Vite non li impacchetta e nessun codice dell'app li importa (verificato), ma
+     oggi una modifica a un test fa ricostruire il frontend.
+   - **Regola**: la scansione salta i percorsi con una parte nascosta, il nome che inizia con `.`, e i file di test,
+     `.test.` o `.spec.` nel nome. Tutto il resto conta come oggi: `.ts`, `.svelte`, `.json`, i `prefixes.txt` del
+     catalogo i18n, `.css`, `.html`… Una build creduta fresca a torto costa più di una ricostruzione in più.
+   - Test esistenti: `TestFrontendBuildStaleness` in `test_runtime_isolation.py` (~2300; radice finta sotto
+     `tmp_path`, mtime impostate a mano); selettore `utils runtime-isolation`. Doc: `test-walkthrough/front-overview.md:42`,
+     solo in inglese. `dev_workflow.en.md:132`, tradotta, resta vera («sources newer than…»): non la tocco, quindi
+     nessun debito di traduzione.
+   - Residuo (nel backlog): `_tool_contract_sources()` conta anche le mtime delle cartelle Python, per accorgersi di
+     un file tolto; un `.DS_Store` creato lì cambia la mtime della cartella.
+2. ✅ **Rossi** (test-author) e **doc** (docs-writer), in parallelo; la cura la preparo io, a secco
+   (`files/h24/apply_cure.py`: `_counts_for_the_build()` e `_TEST_ONLY_FOLDERS` accanto a
+   `_BUILD_GENERATED_SOURCES`, usate dalla scansione di `src`; ruff pulito, black non tocca le mie righe; la regola
+   provata a parte su 24 casi, `files/h24/check_rule.py`).
+   > **⚠️ Fuori pista** (23:25, dal docs-writer): restavano 33 file di supporto ai test senza `.test.` nel nome, in
+   > `src/__tests__/` (le imbracature dei test dei componenti, l'alias `$test` di `svelte.config.js`),
+   > `src/__mocks__/$app/` e le cartelle `__tests__/fixtures`. Ognuno avrebbe ancora fatto ricostruire la build.
+   > Nessun codice dell'app li importa, né per percorso né con `$test` (verificato), e `frontend/vitest.config.ts` li
+   > esclude già dalla copertura come codice non dell'app. **Regola estesa**: anche un file in una cartella, una parte
+   > genitrice e non il nome del file, che si chiama esattamente `__tests__` o `__mocks__`. Emendamento mandato al
+   > test-author prima che finisse, con controlli: `lib/my__tests__/x.ts` e il file `lib/__tests__.ts` contano
+   > ancora. La riga di doc va adeguata.
+   - **Test** (test-author, solo `test_runtime_isolation.py`): 32 casi in `TestFrontendBuildStaleness`.
+     - 14 rossi oggi: i nascosti (`.DS_Store` in `src` e in una sottocartella, `._App.svelte`, `lib/api/.gitignore`,
+       `lib/i18n/.generated`, file in `lib/.cache/`), i test (`x.test.ts`, `x.dom.test.ts`, `x.spec.ts`,
+       `routes/x/page.test.ts`), le cartelle `__tests__`/`__mocks__`.
+     - 13 controlli che devono restare True: tra cui `latest.ts`, `contest.svelte`, `x.testing.ts`, `testing/helpers.ts`,
+       `lib/tests/x.ts`, `lib/my__tests__/x.ts`, il file `lib/__tests__.ts`, un `prefixes.txt`.
+     - 3 casi «salta, non si ferma» e 2 «una cartella sopra `src`»: `.hidden-root` e `__tests__`.
+
+     Il fixture `frontend_project` è diventato `make_frontend_project(monkeypatch, root)`, uguale per i test esistenti.
+   - **Doc** (docs-writer): la parentesi in `front-overview.md:42`: «(under `frontend/src/`, hidden files and folders,
+     such as the macOS Finder's `.DS_Store`, do not count, nor do `*.test.*` / `*.spec.*` files and the `__tests__/` /
+     `__mocks__/` folders, which only the tests use)».
+3. ✅ **Rossi → cura → verdi → prova reale → doc** (23:24–23:40, carico < 50; `files/runs/h24-run.sh`, log in
+   `files/runs/h24/`).
+   - **Prova reale prima**: `check_frontend_needs_build()` → **True**, perché l'unico file più recente della build è
+     `frontend/src/.DS_Store`.
+   - **Rosso** (`utils runtime-isolation`): **14 failed / 218 passed**, i 14 casi nuovi su «H-24: …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils runtime-isolation` **232/232**, `utils dev-cli-docker` **96/96**, `utils
+     test-server-preparation` **83/83**.
+   - **Prova reale dopo**: **False**, con lo stesso `.DS_Store` ancora l'unico file più recente: il caso di E è risolto.
+   - `mkdocs build` exit 0; `check-links` 97; porta libera.
