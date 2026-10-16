@@ -74,6 +74,13 @@ downloads Noto Color Emoji from Google Fonts and keeps only the flags range
 (`keep_unicode_ranges`). `./dev.py front build` and `./dev.py docker build` run it first and stop
 when the font is missing and cannot be fetched; `./dev.py server` runs it too.
 
+Chart text is out of the stacks' reach: ECharts draws legends, labels and axes on a canvas and
+writes its tooltip with an inline `font`, so no CSS applies to it. The charts get the face through
+the theme they are created with, `CHART_INIT_THEME` (`src/lib/components/charts/chartFont.ts`),
+whose font puts `'LF Flags'` before ECharts' default family; the same module requests the face
+before the first chart paints, since canvas text does not make the browser fetch it. See
+[Flags in chart text](components/charts.md#chart-flag-font).
+
 !!! warning "Never name an emoji font in a `font-family`"
 
     No stack may name Apple Color Emoji, Noto Color Emoji, Segoe UI Emoji or Segoe UI Symbol: an

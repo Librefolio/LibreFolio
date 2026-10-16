@@ -31,7 +31,8 @@ Modules:
   writes and a restore checks.
 * ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
   conversion between cumulative and annualized returns, a period's start (rebasing), the
-  net return of a holding and a gain or loss as a fraction of its base.
+  net return of a holding, a gain or loss as a fraction of its base, and the return
+  between two prices.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
