@@ -1842,11 +1842,20 @@ async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<
     await page.mouse.up();
 }
 
-/** One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: four times the Tooltip's own delay (`showDelayMs`, 500 ms). */
-const HELP_REST_MS = 2_000;
+/**
+ * One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: six times the Tooltip's own delay (`showDelayMs`,
+ * 500 ms). It is all the room a delay run late gets: the next attempt's move to the corner disarms a delay still
+ * pending (`handlePointerLeave`), so a wider deadline buys more rests, never a longer one. Widened on 17/10/2026 from
+ * 2 s, four times the delay, together with the deadline: on the deadline's evidence, not a measurement of its own.
+ */
+const HELP_REST_MS = 3_000;
 
-/** How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a delay. */
-const HELP_OPEN_DEADLINE_MS = 10_000;
+/**
+ * How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a
+ * delay. 17/10/2026, load 94–115: 10 s did not fit; 20 s — inside the 90 s budget of «Risk analysis functional
+ * integration», so a help that never opens still fails here, by name.
+ */
+const HELP_OPEN_DEADLINE_MS = 20_000;
 
 /**
  * Rest the pointer on `trigger` until the help it carries is open, and hand that help back.
@@ -1861,7 +1870,10 @@ const HELP_OPEN_DEADLINE_MS = 10_000;
  * So every attempt enters the trigger afresh and gives its help a few times that delay to open, and the
  * attempts repeat until the deadline. Afresh means from the page's corner, where no Tooltip is drawn: a
  * pointer already resting on the trigger fires no new `mouseenter`, and a hover alone would never arm
- * the delay again. No sleep: every attempt ends on an assertion.
+ * the delay again. Leaving for the corner also disarms a delay the last attempt left pending, so attempts
+ * never add up: a delay run late must fit in one rest, and the deadline only buys more of them. For the
+ * deadline, on the same category at 2 workers — 17/10/2026, load 94–115: 10 s did not fit; 20 s. No sleep:
+ * every attempt ends on an assertion.
  *
  * The help is portalled to `<body>`, so it is found by its testid on the whole page: the caller starts
  * from a pointer that left no other help open, and reads the help's text itself.
@@ -1914,6 +1926,11 @@ async function cutTitles(table: Locator, columns: readonly string[]): Promise<st
 test.describe.configure({mode: 'parallel'});
 
 test.describe('Risk analysis functional integration', () => {
+    // A budget, not a wait: room for each test's own deadlines (barriers, the
+    // benchmark picker, polls) to run out first on a busy machine, so a red names
+    // its step instead of «Test timeout of 30000ms exceeded».
+    test.describe.configure({timeout: 90_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -2793,6 +2810,9 @@ test.describe('Risk analysis functional integration', () => {
         await expect(health, "L4's status line does not name each step by its block's title, in the blocks' order").toHaveText(entries.join(' · '));
     });
 
+    /** How long the D377 test polls L4's offered tools before a red: a deadline for a page whose main thread can stay busy for seconds after a tool opens, not a wait. */
+    const L4_OFFER_DEADLINE_MS = 10_000;
+
     /**
      * L4's tool selector (D377): the reader picks L4's tools, and the pick is theirs to keep.
      *
@@ -2819,13 +2839,13 @@ test.describe('Risk analysis functional integration', () => {
         let level4 = await openLevel4Drawer(panel);
         const offered = () => level4.locator('[data-testid^="risk-l4-add-"]').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-testid')));
         await expect(level4.getByTestId('risk-l4-empty'), 'a first visit does not say that no tool is open').toBeVisible();
-        await expect.poll(offered, {message: 'a first visit does not offer the three tools, in the fixed order'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        await expect.poll(offered, {message: 'a first visit does not offer the three tools, in the fixed order', timeout: L4_OFFER_DEADLINE_MS}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
         for (const tool of L4_TOOLS) await expect(level4.getByTestId(`risk-l4-${tool}`), `the ${tool} is open on a first visit`).toHaveCount(0);
 
         // --- Adding the replay opens its box, and leaves the two others offered ---
         await level4.getByTestId('risk-l4-add-replay').click();
         await expect(level4.getByTestId('risk-l4-replay'), 'adding the replay did not open its box').toBeVisible();
-        await expect.poll(offered, {message: 'the replay is still offered once open, or another tool stopped being offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect.poll(offered, {message: 'the replay is still offered once open, or another tool stopped being offered', timeout: L4_OFFER_DEADLINE_MS}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
         await expect(level4.getByTestId('risk-l4-empty'), 'L4 says it is empty with the replay open').toHaveCount(0);
 
         // --- A reload brings the replay back open, and only the replay ---
@@ -2838,7 +2858,7 @@ test.describe('Risk analysis functional integration', () => {
         level4 = await openLevel4Drawer(await waitForRiskLevels(page));
         const replayBox = level4.getByTestId('risk-l4-replay');
         await expect(replayBox, 'the replay added before the reload is not open after it: the set was not remembered').toBeVisible();
-        await expect.poll(offered, {message: 'after the reload the shock and the simulation are not both still offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect.poll(offered, {message: 'after the reload the shock and the simulation are not both still offered', timeout: L4_OFFER_DEADLINE_MS}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
         await expect(level4.getByTestId('risk-l4-shock')).toHaveCount(0);
         await expect(level4.getByTestId('risk-l4-simulation')).toHaveCount(0);
 
@@ -2856,7 +2876,7 @@ test.describe('Risk analysis functional integration', () => {
         await replayBox.getByTestId('risk-l4-replay-close').click();
         await expect(replayBox, 'the closed replay is still on screen').toHaveCount(0);
         await expect(level4.getByTestId('risk-l4-empty'), 'with its one tool closed, L4 does not say it is empty').toBeVisible();
-        await expect.poll(offered, {message: 'the closed replay is not offered again beside the two others'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        await expect.poll(offered, {message: 'the closed replay is not offered again beside the two others', timeout: L4_OFFER_DEADLINE_MS}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
         await expect(health, 'the status line still names the replay the reader closed: its answer was kept').toHaveCount(0);
     });
 
@@ -3507,6 +3527,28 @@ test.describe('Risk analysis functional integration', () => {
             expect(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'premise: the page is drawn in the light theme').toBe(false);
         }
 
+        /**
+         * A colour role as this page resolves it: a probe painted with the role, read and removed, the way
+         * `expectComputedBorderColor` does in `transactions-modals.spec.ts` (design system, rule 10). A row's
+         * `background-color` is read by the same `getComputedStyle` under the same `:root` properties, so the
+         * two strings agree to the digit, a `color-mix()` written out as `oklab(…)` included. A row is held to
+         * its role, never to a hex: the value is T's to tune. Call it after `expectLightTheme`, since a role
+         * changes with the theme. Premise: the role resolves — an unknown one paints transparent, like a row
+         * that lost it, and the comparison would pass on two absences.
+         */
+        async function roleBackground(page: Page, role: `--lf-${string}`): Promise<string> {
+            const resolved = await page.evaluate((name) => {
+                const probe = document.createElement('span');
+                probe.style.backgroundColor = `var(${name})`;
+                document.body.appendChild(probe);
+                const colour = getComputedStyle(probe).backgroundColor;
+                probe.remove();
+                return colour;
+            }, role);
+            expect(resolved, `premise: ${role} resolves in the page`).not.toBe('rgba(0, 0, 0, 0)');
+            return resolved;
+        }
+
         test('the portfolio and the benchmark open the table, tinted like their dots and marked by their shape, their names written like any holding’s', async ({page}) => {
             try {
                 const {panel, benchmarkId} = await openWithUnheldBenchmark(page);
@@ -3522,10 +3564,14 @@ test.describe('Risk analysis functional integration', () => {
                 await expectLightTheme(page);
                 await page.mouse.move(0, 0);
 
-                // 1. The tints, computed. Red: the rows are white again — the review-4 defect.
+                // 1. The tints, computed. Red: the references are plain again, painted like any row — the
+                //    review-4 defect. The sky and the amber are categorical and stay written out. A plain row
+                //    is the card role, no longer white since T's lot «le tabelle» (16/10): a holding row is
+                //    compared with `--lf-surface-card` as the page resolves it, never with a hex.
                 await expect.soft(portfolioRow, 'the portfolio row is not tinted like its dot (sky, at a tenth)').toHaveCSS('background-color', 'rgba(2, 132, 199, 0.1)');
                 await expect.soft(benchmarkRow, 'the benchmark row is not tinted like its dot (amber, at a tenth)').toHaveCSS('background-color', 'rgba(217, 119, 6, 0.1)');
-                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', 'rgb(255, 255, 255)');
+                const plainRowColour = await roleBackground(page, '--lf-surface-card');
+                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', plainRowColour);
 
                 // 2. The name cell scrolls with its row and paints nothing of its own, so the tint shows
                 //    once. Red: the names are pinned again — a sticky cell with an inherited background,
@@ -3607,16 +3653,19 @@ test.describe('Risk analysis functional integration', () => {
             await holdingRow.getByTestId('risk-l3-row-volatility').click();
             await expect(holdingRow).toHaveAttribute('data-selected', 'true');
             await page.mouse.move(0, 0);
-            // Red: DataTable's own selection green, the one review 4 asked to make lighter.
-            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            // Every table selects with the light role `--lf-selected` since T's lot «le tabelle» (16/10): the
+            // focus green at 12%, lighter than DataTable's old green, as review 4 asked. Compared with the role
+            // as the page resolves it, never with a hex. Red: the L3 row lost the selection role.
+            const selectionColour = await roleBackground(page, '--lf-selected');
+            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', selectionColour);
 
-            // The selection shows over a reference's tint as well.
+            // The selection shows over a reference's tint as well: the same role, in the tint's place.
             const portfolioRow = l3PortfolioRow(panel);
             await l3PortfolioCell(panel, 'volatility').click();
             await expect(portfolioRow).toHaveAttribute('data-selected', 'true');
             await expect(holdingRow).toHaveAttribute('data-selected', 'false');
             await page.mouse.move(0, 0);
-            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', selectionColour);
         });
 
         /**

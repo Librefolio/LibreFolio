@@ -4284,3 +4284,126 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
 4. ✅ **Backlog**: **H-24** (`.DS_Store` e test nel controllo della build vecchia, da E via coordinatore) e **H-25**
    (il pre-passaggio parallelo solo per la categoria intera), approvate dal coordinatore alle 22:14; si fanno in
    quest'ordine dopo H-23.
+5. ✅ **Entrata** (23:12): commit `9541c0667` (fix), `d0a349cf3` (docs), `7ea30903e` (journal), entrati in dev.
+
+### Lotto «H-24: un file nascosto o un test non fanno ricostruire il frontend» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:12): prima H-24, da E (`.DS_Store`), poi H-25. Ci scrivo io: `scripts/cli_base.py`,
+> superficie condivisa, è il file della voce stessa.
+
+1. ✅ **Analisi** (23:15, sola lettura; HEAD `7ea30903e`, già in dev).
+   - `check_frontend_needs_build()` (`scripts/cli_base.py` ~584): `src_dir.rglob("*")`; ogni file più recente di
+     `build/index.html` che non sia in `_BUILD_GENERATED_SOURCES` → rebuild.
+   - **Misura reale prima della cura**: build `21:59:40`; l'unico file più recente in `frontend/src` è
+     `frontend/src/.DS_Store` (`22:01:48`, Finder, ignorato da git), e `check_frontend_needs_build()` risponde
+     **True**. Il prossimo run con server ricostruirebbe a vuoto: 472 s l'ultima volta.
+   - File nascosti in `src`: `.DS_Store`, `lib/api/.gitignore`, `lib/i18n/.generated` (lo stamp di
+     `scripts/i18n_catalog.py`: generato; i cataloghi `<lang>.json` restano nella scansione). Poi 504 file
+     `*.test.*`/`*.spec.*` di Vitest: Vite non li impacchetta e nessun codice dell'app li importa (verificato), ma
+     oggi una modifica a un test fa ricostruire il frontend.
+   - **Regola**: la scansione salta i percorsi con una parte nascosta, il nome che inizia con `.`, e i file di test,
+     `.test.` o `.spec.` nel nome. Tutto il resto conta come oggi: `.ts`, `.svelte`, `.json`, i `prefixes.txt` del
+     catalogo i18n, `.css`, `.html`… Una build creduta fresca a torto costa più di una ricostruzione in più.
+   - Test esistenti: `TestFrontendBuildStaleness` in `test_runtime_isolation.py` (~2300; radice finta sotto
+     `tmp_path`, mtime impostate a mano); selettore `utils runtime-isolation`. Doc: `test-walkthrough/front-overview.md:42`,
+     solo in inglese. `dev_workflow.en.md:132`, tradotta, resta vera («sources newer than…»): non la tocco, quindi
+     nessun debito di traduzione.
+   - Residuo (nel backlog): `_tool_contract_sources()` conta anche le mtime delle cartelle Python, per accorgersi di
+     un file tolto; un `.DS_Store` creato lì cambia la mtime della cartella.
+2. ✅ **Rossi** (test-author) e **doc** (docs-writer), in parallelo; la cura la preparo io, a secco
+   (`files/h24/apply_cure.py`: `_counts_for_the_build()` e `_TEST_ONLY_FOLDERS` accanto a
+   `_BUILD_GENERATED_SOURCES`, usate dalla scansione di `src`; ruff pulito, black non tocca le mie righe; la regola
+   provata a parte su 24 casi, `files/h24/check_rule.py`).
+   > **⚠️ Fuori pista** (23:25, dal docs-writer): restavano 33 file di supporto ai test senza `.test.` nel nome, in
+   > `src/__tests__/` (le imbracature dei test dei componenti, l'alias `$test` di `svelte.config.js`),
+   > `src/__mocks__/$app/` e le cartelle `__tests__/fixtures`. Ognuno avrebbe ancora fatto ricostruire la build.
+   > Nessun codice dell'app li importa, né per percorso né con `$test` (verificato), e `frontend/vitest.config.ts` li
+   > esclude già dalla copertura come codice non dell'app. **Regola estesa**: anche un file in una cartella, una parte
+   > genitrice e non il nome del file, che si chiama esattamente `__tests__` o `__mocks__`. Emendamento mandato al
+   > test-author prima che finisse, con controlli: `lib/my__tests__/x.ts` e il file `lib/__tests__.ts` contano
+   > ancora. La riga di doc va adeguata.
+   - **Test** (test-author, solo `test_runtime_isolation.py`): 32 casi in `TestFrontendBuildStaleness`.
+     - 14 rossi oggi: i nascosti (`.DS_Store` in `src` e in una sottocartella, `._App.svelte`, `lib/api/.gitignore`,
+       `lib/i18n/.generated`, file in `lib/.cache/`), i test (`x.test.ts`, `x.dom.test.ts`, `x.spec.ts`,
+       `routes/x/page.test.ts`), le cartelle `__tests__`/`__mocks__`.
+     - 13 controlli che devono restare True: tra cui `latest.ts`, `contest.svelte`, `x.testing.ts`, `testing/helpers.ts`,
+       `lib/tests/x.ts`, `lib/my__tests__/x.ts`, il file `lib/__tests__.ts`, un `prefixes.txt`.
+     - 3 casi «salta, non si ferma» e 2 «una cartella sopra `src`»: `.hidden-root` e `__tests__`.
+
+     Il fixture `frontend_project` è diventato `make_frontend_project(monkeypatch, root)`, uguale per i test esistenti.
+   - **Doc** (docs-writer): la parentesi in `front-overview.md:42`: «(under `frontend/src/`, hidden files and folders,
+     such as the macOS Finder's `.DS_Store`, do not count, nor do `*.test.*` / `*.spec.*` files and the `__tests__/` /
+     `__mocks__/` folders, which only the tests use)».
+3. ✅ **Rossi → cura → verdi → prova reale → doc** (23:24–23:40, carico < 50; `files/runs/h24-run.sh`, log in
+   `files/runs/h24/`).
+   - **Prova reale prima**: `check_frontend_needs_build()` → **True**, perché l'unico file più recente della build è
+     `frontend/src/.DS_Store`.
+   - **Rosso** (`utils runtime-isolation`): **14 failed / 218 passed**, i 14 casi nuovi su «H-24: …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils runtime-isolation` **232/232**, `utils dev-cli-docker` **96/96**, `utils
+     test-server-preparation` **83/83**.
+   - **Prova reale dopo**: **False**, con lo stesso `.DS_Store` ancora l'unico file più recente: il caso di E è risolto.
+   - `mkdocs build` exit 0; `check-links` 97; porta libera.
+4. ✅ **Entrata** (23:45): commit `c53012fcb` (fix), `43ebc1a3f` (docs), `cf6e5e455` (journal), entrati in dev.
+
+### Lotto «H-25: il pre-passaggio parallelo solo per la categoria intera» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:45), più la regola di `-k` approvata (23:52). Base: fast-forward fatto dal
+> coordinatore a `4bf824362`; me l'aveva chiesto come compito mio, ma le mie regole mi vietano di muovere la storia, e
+> ho iniziato su `cf6e5e455` senza toccare `BACKLOG_POST_1.2.md`, l'unico mio file cambiato dai 99 commit in arrivo.
+> Notte: il developer dorme, quindi una domanda solo sua va nel piano e al coordinatore, e si va avanti.
+
+1. ✅ **Analisi** (23:50, sola lettura).
+   - `_run_parallel_prepass()` (`_cli.py` ~926): per una categoria del registro chiama
+     `_parallel_for_scope(args, category, …)` qualunque sia `args.action`. `plan(scope)` pianifica tutta la categoria;
+     con le classi server (READ, WRITE_SCOPED) c'è anche `run_category_setup(scope)`, cioè per `services` `db create`.
+   - I pre-passaggi consolidati invece (`_backend_consolidation_scope`, e il gemello del frontend) girano solo per la
+     categoria intera o la suite: con un'azione singola o con `-k` (`test_names`) tengono la forma 1:1.
+   - Quindi oggi `--workers 2 services client-address` fa girare i test parallelizzabili di tutto `services` e ricrea
+     il DB (contro H-23), e `--workers 4 services all -k foo` li fa girare tutti, ignorando il `-k`.
+   - **Cura**: `_parallel_prepass_applies(args)`, la stessa regola dei consolidati: niente con `test_names`, sì solo
+     con `action in (None, "all")`. `all` e `all-backend` restano come sono; le categorie frontend già non hanno
+     pre-passaggio.
+   - Test esistenti: `test_coverage_combine.py` chiama `_parallel_for_scope` direttamente, non toccato;
+     `test_runtime_isolation.py:1223` sostituisce `_apply_parallel`. Doc: la riga `--workers` di `index.md` e la
+     sezione «`--workers`» di `runner_architecture.md`. La clausola di H-23 «with `--workers` above 1, the parallel
+     pass may run it as well» diventa falsa e va tolta.
+2. ✅ **Rossi, doc e cura a secco** (23:52–00:10, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 35 casi in 4 classi, 26 rossi oggi.
+     - `TestParallelPrepassApplies`, 16 casi, la regola su tutte le forme di `args`: `action` e `test_names` assenti,
+       `None`, `[]`.
+     - `TestRunParallelPrepassRunsNothingForOneActionOrTestNames`, 8: anche `services asset-source`, `write-scoped`,
+       per mostrare che la regola non guarda la classe; due casi «sostituto» fissano che `_run_parallel_prepass`
+       chiami `_parallel_prepass_applies` una volta, per nome.
+     - `TestRunParallelPrepassStillServesTheWholeCategoryOrSuite`, 8 guardie verdi.
+     - `TestApplyParallelLeavesOneActionToTheSerialPass`, 3.
+
+     Un fixture fa fallire, se raggiunti, `run_category_setup`, `plan`, `run_groups` e `subprocess.run`.
+   - **Doc** (docs-writer):
+     - la riga `--workers` di `index.md`;
+     - una voce nella sezione «`--workers`» di `runner_architecture.md` («the same scope rule as the consolidated
+       pre-passes»);
+     - la clausola di H-23 su `setup_exclusive` sostituita da «The skip holds at any `--workers`, since the parallel
+       pass does not run for one action». Il docs-writer ha verificato tutti i punti da cui si raggiunge il setup di
+       `services` per un'azione singola.
+   - **Cura** (`files/h25/apply_cure.py`): `_parallel_prepass_applies()` prima di `_run_parallel_prepass()`, e un
+     ritorno subito all'inizio di quest'ultima. +16/−1; ruff e black puliti; complessità 7.
+   > **⚠️ Fuori pista** (dal test-author): l'azione `all` di ogni categoria è registrata con `test_names=False`, quindi
+   > il passaggio seriale **scarta i nomi**: `--workers 4 services all foo` li ignorava prima della cura e li ignora
+   > dopo. La regola di `-k` approvata stanotte non fa funzionare `-k` su `all`, toglie solo il pre-passaggio
+   > parallelo in quella combinazione, che costa velocità senza cambiare cosa gira. La tengo: il pre-passaggio non sa
+   > applicare i nomi, quindi con dei nomi si fa da parte, come i consolidati. Se un giorno `all` applicherà i nomi, la
+   > regola sarà già quella giusta. Lo scarto silenzioso dei nomi dopo `all` è un difetto a parte: **H-26** nel backlog.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (23:59–00:15, ogni passo a carico < 50; `files/runs/h25-run.sh`,
+   log in `files/runs/h25/`). Niente prova reale «prima» sull'azione singola: prima della cura,
+   `--workers 2 services client-address` avrebbe fatto girare tutto `services` in parallelo, una prova pesante.
+   - **Rosso** (`utils test-runner-cli`): **26 failed / 112 passed**: 16 su «H-25: _parallel_prepass_applies is
+     missing», 10 su «H-25: the parallel pre-pass ran for …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **138/138**, `utils runtime-isolation` **232/232**, `utils coverage-combine`
+     **11/11**, `check-orphans` verde.
+   - **Prova reale, azione singola** (`dev.py test --workers 2 … services client-address`): **122/122**, **nessun**
+     «Parallel pass», la riga di H-23, DB della corsia **invariato** (inode, mtime e dimensione).
+   - **Prova reale, categoria intera** (`--workers 2 … schemas all`): exit 0, «Parallel pass — 12 isolation-safe
+     unit(s) across 2 worker(s)», **166 + 1667 passed**, verde in 31,6 s.
+   - **Doc**: `mkdocs build` exit 0; `check-links` 97; porta libera.

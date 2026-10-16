@@ -129,7 +129,7 @@ class AssetSetComparisonAnalytic(RiskAnalytic):
         observations = prepared.n_observations if prepared else 0
         # ⚠️ UNREACHABLE THROUGH THE SERVICE, AND DELIBERATELY KEPT — do not
         # "harmonise" it away with the one in asset_set_var, which is a different
-        # animal. `_available_observations` hands the service this very number
+        # animal. `available_observations` (risk/results.py) hands the service this very number
         # and compares it against this very minimum before compute() is called,
         # so the service refuses first. The var analytic's check survives because
         # it tests the *compounded* count, which the service cannot know. This

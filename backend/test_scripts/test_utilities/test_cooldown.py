@@ -34,8 +34,8 @@ The contract pinned here:
    when unknown. ``released(key)`` frees the trial slot of a call that ended without a verdict and keeps the count; it
    ignores an unknown key.
 10. ``snapshot()``: one ``CooldownState`` per key, ``remaining`` 0 once the pause is over, ``trial_in_flight`` only
-    while a slot is held and not expired. ``reset`` (one key), ``clear`` (every key), ``len``; any hashable is a key —
-    provider tuples, ``None`` — and keys are independent.
+    while a slot is held and not expired. ``reset`` (one key) and ``len``; any hashable is a key — provider tuples,
+    ``None`` — and keys are independent.
 11. At most ``max_keys`` keys: a new key beyond them evicts the least recently used one — used meaning checked or
     refused, a refusal that counts nothing included — and its refusals are forgotten with it.
 12. Thread-safe: once a pause is over, threads checking together let exactly one trial through, and threads refusing
@@ -818,7 +818,7 @@ def test_released_never_shortens_a_pause_and_ignores_an_unknown_key(cooldowns: C
 
 
 # =============================================================================
-# 10. snapshot, KEYS, reset, clear, len
+# 10. snapshot, KEYS, reset, len
 # =============================================================================
 
 
@@ -863,9 +863,9 @@ def test_keys_are_independent_and_any_hashable_is_one(cooldowns: Cooldowns, cloc
     print_success("four keys, four pauses; one success, one key forgotten")
 
 
-def test_reset_forgets_one_key_and_clear_forgets_them_all(cooldowns: Cooldowns) -> None:
-    """CDW-032 — contract 10: ``len`` counts the keys tracked; ``reset`` forgets one (``None`` included, an unknown key quietly) with its refusals; ``clear`` forgets them all."""
-    print_section("CDW-032: reset, clear, len")
+def test_reset_forgets_one_key_and_len_counts_the_rest(cooldowns: Cooldowns) -> None:
+    """CDW-032 — contract 10: ``len`` counts the keys tracked; ``reset`` forgets one (``None`` included, an unknown key quietly) with its refusals, and leaves the others as they were."""
+    print_section("CDW-032: reset, len")
 
     for key in ("a", "b", None):
         cooldowns.refused(key)
@@ -879,12 +879,7 @@ def test_reset_forgets_one_key_and_clear_forgets_them_all(cooldowns: Cooldowns) 
     assert len(cooldowns) == 1
     assert cooldowns.check(None) == 0.0
     assert cooldowns.refused("a") == 60.0
-
-    cooldowns.clear()
-    assert len(cooldowns) == 0
-    assert cooldowns.snapshot() == ()
-    assert cooldowns.check("b") == 0.0
-    print_success("reset one, clear all")
+    print_success("reset one, the others kept")
 
 
 # =============================================================================

@@ -1,13 +1,14 @@
 /**
  * The live updates of the asset detail page (F26, decision 31): one poll of the current price every 30 s while the
- * chart reaches today, paused while the tab is hidden or nobody uses the page, resumed by itself (`activePolling`). A
- * poll feeds the price summary (converted when the page shows another currency, with the flash of a tick) and the
- * chart's last point.
+ * chart reaches today and the asset has a provider, paused while the tab is hidden or nobody uses the page, resumed
+ * by itself (`activePolling`). A poll feeds the price summary (converted when the page shows another currency, with
+ * the flash of a tick) and the chart's last point.
  *
  * Moved out of the page with FE5c (piece 9b): the effect and the functions are the page's, with the page's state read
- * through `AssetDetailLiveInput`, an object of getters. The reads are the same, so the polling effect depends on
- * exactly the same state as before. Create the instance while the page initialises: its constructor registers the
- * polling effect, which the page's destruction tears down.
+ * through `AssetDetailLiveInput`, an object of getters. The reads were the page's own; Z-8 added the provider code,
+ * read through a `$derived` boolean so that the page reloading the assignment does not restart the poller. Create
+ * the instance while the page initialises: its constructor registers the polling effect, which the page's
+ * destruction tears down.
  *
  * @module components/assets/detail/assetDetailLive
  */
@@ -32,6 +33,7 @@ export interface AssetDetailLiveInput {
     readonly fxConversionMissing: boolean;
     /** The chart's end date is today or later: only then the price is live. */
     readonly isHeadToday: boolean;
+    /** `null` while it loads and for a manual asset: without a provider code there is no live poll (Z-8). */
     readonly providerAssignment: {provider_code?: string | null} | null;
     /** The chart is reloading. */
     readonly loading: boolean;
@@ -61,17 +63,23 @@ export class AssetDetailLive {
 
     constructor(input: AssetDetailLiveInput) {
         this.#input = input;
+        // Whether there is a provider code, not the assignment itself: the page reloads the assignment after a sync or
+        // an edit (a new object, usually the same code), which by itself must not restart the poller. Lazy: read by
+        // the effect, never while the instance is built.
+        const hasProvider = $derived(!!input.providerAssignment?.provider_code);
         $effect(() => {
             const id = input.assetInfo?.id;
             const nativeCurrency = input.assetInfo?.currency;
             const targetCurrency = input.displayCurrency;
             const fxMissing = input.fxConversionMissing;
-            if (!input.isHeadToday || !id) {
+            // Without a provider `POST /assets/prices/current` only echoes the stored price, and every answer counts as
+            // a portfolio mutation: no poller for a manual asset, nor before the assignment has loaded (Z-8).
+            if (!input.isHeadToday || !id || !hasProvider) {
                 this.currentPrice = null;
                 this.conversionFailed = false;
-                // Polling context changed (asset switched, or range no longer heads
-                // "today") — drop the direction/flash state so it can't carry over
-                // and compare against a stale/unrelated previous value.
+                // Polling context changed (asset switched, range no longer heads
+                // "today", or provider gone) — drop the direction/flash state so it
+                // can't carry over and compare against a stale/unrelated previous value.
                 this.#previousNative = null;
                 this.direction = 'neutral';
                 if (this.#flashTimeoutId) {
@@ -163,6 +171,8 @@ export class AssetDetailLive {
 
         // Convert via FX API
         try {
+            // The day of a lookup that fills backward (the latest stored rate on or before it): the UTC date and the
+            // user's give the same rate, so it stays UTC (Z-3 changed only what «today» means for the chart's end).
             const today = new Date().toISOString().slice(0, 10);
             const convResponse = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
                 {
@@ -209,7 +219,8 @@ export class AssetDetailLive {
     //
     // Constraints:
     // • Only with a provider assigned (otherwise the endpoint just echoes back
-    //   the DB's last known value — nothing to merge).
+    //   the DB's last known value — nothing to merge): the effect starts no
+    //   poll without a provider code (Z-8), so no answer reaches here then.
     // • Not during a full chart reload (``loading === true``), to avoid
     //   interleaving writers of the same chartData array.
     // • Point merge is idempotent: if the polled close equals the point's
@@ -223,7 +234,6 @@ export class AssetDetailLive {
     // =========================================================================
 
     async #applyLiveChartHead(item: any, newClose: number) {
-        if (!this.#input.providerAssignment?.provider_code) return;
         if (this.#input.loading || (this.#input.primaryMode === 'calendar-return' && this.#input.calendarReturnView.state === 'loading')) return;
         if (item.error || !item.as_of_date) return;
 

@@ -17,6 +17,7 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Privacy** | `app/privacyStore.svelte.ts` | Device-local "hide amounts" flag, read inside the currency formatters. See [Privacy masking](#privacy-masking). |
 | **Navigation** | `app/navigationStore.ts` | Controls the sidebar state (open/closed) and active page tracking. |
 | **Toasts** | `app/toastStore.svelte.ts` | Svelte 5 Rune-based store for displaying global notification messages. |
+| **Page busy** | `app/pageBusy.svelte.ts` | The «big» requests the page on screen has in flight, which its Refresh button waits for (`busy`). Scoped to the page: reset on a route change and when the client session ends. See [Page busy](#page-busy). |
 | **Instance configuration** | `$lib/features/instance/instanceConfig.svelte.ts` | The public configuration of the instance (`GET /api/v1/system/instance`), read once per page load, before the sign-in. See [Instance configuration](#instance-config). |
 | **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
 | **Instance block** | `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. See [Instance block](#instance-block). |
@@ -457,3 +458,149 @@ authoritative value is its reduced `numerator` and `denominator` — is shown th
 `display_decimal`, a projection the schema marks `non_authoritative`, with `≈` in front unless that
 projection equals the ratio; an amount is rounded exactly from the ratio to its currency's minor unit
 instead, `≈` marking a rounding that changed it.
+
+## ⏳ Page busy: the Refresh button {: #page-busy }
+
+Each page has one **Refresh** button in its own top bar. It spins, greyed and disabled, while the
+page's «big» requests are in flight — the ones the page decided to make to (re)build what it shows —
+and never for a reload the user did not ask for (developer decision 48, P3).
+`lib/stores/app/pageBusy.svelte.ts` (Svelte 5 runes) holds those requests as tokens; its header
+comment (`pageBusy.svelte.ts:1-26`) is the contract. Paths are relative to `frontend/src/` unless they
+start with `frontend/`.
+
+### 🧰 The API
+
+| Member | Use |
+|:-------|:----|
+| `track(label, work, options?)` | Holds a token while `work()` runs, resolves with its value, and ends the token in `finally`, on a rejection or a synchronous throw too (`pageBusy.svelte.ts:89`). What the pages call. |
+| `begin(label, options?)`, `end(token)` | The same by hand (l.71, l.85). `end` goes by token, not by label, and is idempotent: an unknown, expired or pre-`reset()` token touches nothing, since ids start at 1 and only grow (l.44). |
+| `join(label, work, options?)` | A load that completes what the page is already doing (N55): `track` while a token is pending, `work()` alone on an idle page. Decided at the call (l.102). |
+| `reset()` | Drops every token and clears its timer (l.107). |
+| `busy` | Reactive: at least one token is pending. What the buttons read. |
+| `labels` | The pending labels, in begin order: diagnostics and tests. |
+| `PAGE_BUSY_TIMEOUT_MS` | `120_000`, the default timeout of a token (l.36). |
+
+The pending list is a `$state.raw` replaced on every change, and the writers read it with `untrack`
+(l.45-50): `track` and `join` are called from `$effect`s, and an effect that started depending on the
+list would run again at every token — or loop, when it begins one on each run.
+
+### 📍 Where `track` and `join` go {: #page-busy-triggers }
+
+**On the trigger, never inside a load function.** The same `loadAll()` (Dashboard) or
+`loadOverview()` (broker detail) also reloads the page in background, after a price catch-up or for a
+cache a portfolio mutation marked stale, and that reload must not spin the button. So the token wraps
+the call where the user's request arrives:
+
+| Trigger | Examples |
+|:--------|:---------|
+| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`) |
+| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`) |
+| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`) |
+| A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658) |
+| A lazy load a panel asks by itself: `join` | `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1040`, `:1057`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:675`, `:704`) |
+
+Inside an `$effect`, read the inputs tracked and start the load untracked, as the lots panel does:
+
+```ts
+$effect(() => {
+    if (!(open && assetId != null && ready)) return;
+    const [currentAssetId, currentBrokerIds, currentCurrency] = [assetId, brokerIds, currency];
+    untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency)));
+});
+```
+
+**Never** for:
+
+- the live-price poller;
+- an action with an indicator of its own: price and FX sync, the PAC's «Calcola», the import wizard,
+  a save in a modal;
+- per-card and per-row refreshes, and the small background reads;
+- a background reload. On `{kind: 'prices'}` from the portfolio bus (the end of a price catch-up,
+  Z-13), `reloadAfterPriceCatchUp()` calls `loadAll()` or `loadOverview()` without a token
+  (`dashboard/+page.svelte:729`, `brokers/[id]/+page.svelte:449`), and the risk controller's own sync,
+  `handleSynced()` (l.612), reloads without a token too. See
+  [How a page uses the cache](domain-state.md#how-a-page-uses-the-cache).
+
+**`join` (N55).** A new report drops the P&L candles of the growth chart and the contribution of the
+positions panel, and a panel left on that view asks for them again at once. After the user's period,
+currency, scope or Refresh the page is busy, so that load takes a token of its own and the button
+waits for it too; after a background reload the page is idle, the load runs without a token, and the
+button stays still.
+
+The risk panels no longer have a refresh button of their own (Y11 step 3): the page's Refresh bumps
+`refreshVersion`, and the risk controller and the lots panel reload with `force` under their own
+tokens.
+
+### 🧭 Page scope and timeout
+
+- **Scoped to the page.** `routes/(app)/+layout.svelte:61` calls `pageBusy.reset()` in `onNavigate`
+  when the route id changes, before the new page mounts; a change of parameter on the same route (one
+  asset to another) keeps the tokens. `reset` is also a client-session reset
+  (`pageBusy.svelte.ts:129`): signing out or switching account drops every token. A request of the
+  old page that lands later ends a token that is gone: nothing happens.
+- **Timeout.** A token that never ends is dropped after `PAGE_BUSY_TIMEOUT_MS` or its own `timeoutMs`
+  (a positive, finite number; anything else falls back to the default, `timeoutOf()`, l.53), with one
+  `console.warn` naming its label (l.79). The request is not cancelled: only the button stops waiting
+  for it.
+
+### 🔘 The button contract {: #page-busy-button }
+
+Every Refresh button reads `pageBusy.busy` three times: `disabled`, `data-busy`, and the spin of its
+icon. Trimmed from the Dashboard's:
+
+```svelte
+<button onclick={handleSync} disabled={pageBusy.busy} data-busy={pageBusy.busy ? 'true' : 'false'} data-testid="sync-button">
+    <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
+</button>
+```
+
+| Page | Test id | Where |
+|:-----|:--------|:------|
+| Dashboard | `sync-button` | `routes/(app)/dashboard/+page.svelte:997` |
+| Broker detail | `broker-refresh` | `routes/(app)/brokers/[id]/+page.svelte:624` |
+| Brokers list | `brokers-refresh` | `routes/(app)/brokers/+page.svelte:384` |
+| Transactions | `tx-refresh-button` | `routes/(app)/transactions/+page.svelte:768` |
+| Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:784` |
+| FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1113` |
+| FX detail | `fx-detail-refresh-btn` | `routes/(app)/fx/[pair]/+page.svelte:1338` |
+| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1642` |
+| Tools hub | `tools-hub-refresh` | `lib/features/tools/ToolsHub.svelte:162` |
+| Tool page | `tool-host-refresh` | `lib/features/tools/ToolHost.svelte:263` |
+
+The two Tools buttons are also disabled while their own load runs or the user is signed out.
+
+The page root keeps its own `data-busy` (`dashboard-page`, `brokers-page`, `files-page`, …): it
+follows the page's own loading flags, not the tokens, and it is what `waitForSettled()`
+(`frontend/e2e/fixtures/app-events.ts:68`) waits on. After a price catch-up both stay `false`: the
+button because the reload holds no token, the root because the Dashboard runs it as
+`loadAll(false, false, {background: true})` (Z-18, step 5 of
+[How a page uses the cache](domain-state.md#how-a-page-uses-the-cache)). The broker detail page has
+no `data-busy` on its root.
+
+### 🧪 Testing it
+
+- **The store**: `lib/stores/app/pageBusy.test.ts` (Vitest, `./dev.py test front-portfolio store-unit`)
+  pins the tokens, the timeout under fake timers with its single warning, `track` on a rejection and
+  on a synchronous throw, `busy` re-read by an effect, `join` on an idle and on a busy page, and that
+  no writer called from an `$effect` makes that effect depend on the store. Its
+  `// @vitest-environment jsdom` docblock is load-bearing: under `node`, `$effect` never runs and the
+  «does not run again» cases would pass vacuously.
+- **The pages**: `frontend/e2e/portfolio/page-busy.spec.ts` (`./dev.py test front-portfolio page-busy`).
+  A localhost answer lands before an assertion can look, so each case owns the busy state by holding
+  the request that causes it:
+    1. `hold()` (l.165) parks, through `page.route`, the request the trigger sends — picked by method,
+       path and body — and lets every other one through. `heldRequest()` (l.201) fails by name when the
+       trigger never reaches the network. `release()` lets the request go with `route.fallback()`, not
+       `continue()`, so it still crosses the page's other routes; `dispose()` runs in `finally`.
+    2. `expectBusy()` and `expectIdle()` (l.207, l.213) read only `data-busy` and `disabled`: never the
+       spin class, a colour or a text.
+    3. For a request the button must **not** wait for, `recordBusy()` (l.355) keeps every value the
+       button's `data-busy` takes, through a `MutationObserver` in the page, so «it never waited» means
+       never, not «not when the test looked». `simulateCatchUp()` (l.325) stubs the catch-up status so
+       the tracker sends `{kind: 'prices'}`.
+    4. Then the **control**, in the same page under the same recording: a period change (the 6M preset)
+       must make the button wait, and the record must now contain `true` (l.666-678). Without it, the
+       silence of step 3 proves nothing.
+    5. The N55 cases also hold the cascaded P&L candles or contribution: after a background reload the
+       button stays idle while they are held; after a period change it waits for them once the
+       period's own report is back.

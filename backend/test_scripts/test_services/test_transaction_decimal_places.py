@@ -30,6 +30,15 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    cash balances keep today's results.
 4. The asset list reads an asset as held where the exact sum of its quantities on a broker exceeds
    ``QUANTITY_DUST_THRESHOLD``.
+5. An Auto cost basis is not checked. With ``cost_basis_mode`` ``auto`` or ``auto-detail`` the backend recomputes the
+   amount — the average of the source pool (``_compute_wac_for_auto_items``, ``auto_cost.py``) — and reads only the
+   currency of the ``cost_basis_override`` sent, so ``check_decimal_limits`` leaves that amount out
+   (``_decimal_limit_values``): an Auto create or update is accepted whatever amount it carries, and the row holds the
+   Auto cost, not that amount. A manual cost basis — ``manual``, or no mode with an explicit override — stays checked:
+   over the limit it is refused, never rounded (D2). Found by the E2E «TRANSFER (asset) create → commit (dual brokers +
+   asset + qty)» (``frontend/e2e/transactions/tx-commit-all-types.spec.ts:532``): the Form sends back the preview's
+   average, a repeating decimal (100 / 3) in full, and the commit was refused with ``decimalPlacesExceeded``
+   ``{"max": 12}`` on ``cost_basis_override``.
 
 Reds — fail today, pass once the contract holds:
 
@@ -45,6 +54,12 @@ Reds — fail today, pass once the contract holds:
 - ``TestAPerUnitCostKeepsTwelveDecimals`` (D5): a received TRANSFER and an ADJUSTMENT +1 at a manual per-unit cost of
   0.0000034573 EUR are saved, and the cost reads back exactly (today refused with ``{"max": 6}``; before the check,
   saved and read back 0.000003);
+- ``TestAnAutoCostBasisIsNotChecked`` (rule 5): a received TRANSFER, an ADJUSTMENT +1 and an update of a stored
+  ADJUSTMENT +1, in ``auto`` or ``auto-detail``, whose cost basis carries the pool's repeating average — 100 / 3 as the
+  preview answers it (26 decimals), or 1000000 / 3 as a double prints it (16 significant digits) — are accepted on
+  ``/validate`` and on ``/commit``; committed with an amount that is not the pool's average (125 / 3), the row holds the
+  Auto cost, 100 / 3 read back 33.333333333333 EUR, not the amount sent (today refused on its row,
+  ``decimalPlacesExceeded`` ``{"max": 12}`` or ``significantDigitsExceeded`` ``{"max": 15}``, and nothing is written);
 - ``TestBalancesAreSummedExactly.test_two_buys_of_ten_decimals_sum_exactly`` (today 199998.246914);
 - ``TestTheCodesAreListed``: ``TXValidationCode`` and ``GET /transactions/types``'s ``validation_codes`` carry both codes.
 
@@ -59,6 +74,9 @@ Guards — green today, and the cure must keep them green:
 - ``TestBrimParseDoesNotRefuse`` (D2): a BRIM row over a limit is not refused at parse (``BRIMProvider._create_transaction``,
   the constructor every plugin calls): the item is returned with its values as read, and no parse issue is recorded.
   The rounding of D6 is the plugin's, on the values it computes (``round_computed_value``), not this constructor's.
+- ``TestAnAutoCostBasisIsNotChecked``'s manual cases (rule 5, D2): the same amounts with ``cost_basis_mode`` ``manual``
+  are refused on their row, ``decimalPlacesExceeded`` ``{"max": 12}`` or ``significantDigitsExceeded`` ``{"max": 15}``;
+  no mode with an explicit override is pinned by ``TestOverTheLimitIsRefusedAtConfirmation``.
 
 Derived — read from the contract's general rule, not in the brief's list; drop them if the rule was meant narrower: a
 quantity over both limits gets ``decimalPlacesExceeded`` alone (the "otherwise"); a cash amount past 15 significant
@@ -578,6 +596,224 @@ class TestAPerUnitCostKeepsTwelveDecimals:
         stored = (await _stored(world, [subject_id]))[subject_id]
         cost = (stored["cost_basis_override"], stored["cost_basis_currency"])
         assert cost == (Decimal(PEPE_UNIT_COST), EUR), f"D5: the {shape} id={subject_id} was saved at {PEPE_UNIT_COST} EUR a unit and reads back a cost basis of {cost[0]} {cost[1]}"
+
+
+# ============================================================================
+# RED AND GUARDS — RULE 5: AN AUTO COST BASIS IS NOT CHECKED
+# ============================================================================
+
+# The modes in which the backend computes the cost basis itself, and reads only the currency of the one sent.
+AUTO_MODES = ("auto", "auto-detail")
+
+
+@dataclass(frozen=True)
+class RepeatingAverage:
+    """A pool whose average cost repeats forever — a BUY of 3 units on ``main`` for ``pool_cost`` EUR — and that average
+    as a client sends it back in Auto (``sent``): over the limit of a manual cost basis, which refuses it with ``code``
+    and ``params``."""
+
+    pool_cost: str
+    sent: str
+    code: str
+    params: dict
+
+
+# 100 / 3 in full, as the batch's own preview answers it (``wac_results``) and the Bulk modal copies it back into an Auto
+# row's cost basis (``TransactionBulkModal.svelte``): 28 significant digits, 26 decimals. The E2E's shape.
+HUNDRED_OVER_THREE = RepeatingAverage(pool_cost="100", sent="33.33333333333333333333333333", code=DECIMAL_PLACES_EXCEEDED, params=COST_MAX)
+# 1000000 / 3 as a double prints it: 10 decimals, within the 12, but 16 significant digits.
+MILLION_OVER_THREE = RepeatingAverage(pool_cost="1000000", sent="333333.3333333333", code=SIGNIFICANT_DIGITS_EXCEEDED, params=DIGITS_MAX)
+REPEATING_AVERAGES = [
+    pytest.param(HUNDRED_OVER_THREE, id="100-over-3-26-decimals"),
+    pytest.param(MILLION_OVER_THREE, id="1000000-over-3-16-significant-digits"),
+]
+
+# The Auto cost of HUNDRED_OVER_THREE's pool, 100 / 3, as ``RealDecimal(24, 12)`` reads it back: the double
+# 33.333333333333336, cut to 15 significant digits, then to 12 decimals.
+AUTO_COST_OF_HUNDRED_OVER_THREE = Decimal("33.333333333333")
+# An amount over the limit that is not that pool's average — 125 / 3 in full, as a preview taken before the pool changed
+# would answer — so the row tells the amount sent (it would read back 41.666666666667) from the Auto cost.
+NOT_THE_POOLS_AVERAGE = "41.66666666666666666666666667"
+
+# The rows the outcome is read on: the two creates of ``_per_unit_cost_batch``, and the update of a stored ADJUSTMENT +1.
+AUTO_COST_SUBJECTS = [
+    pytest.param("create", "transfer_received", id="create-transfer_received"),
+    pytest.param("create", "adjustment_in", id="create-adjustment_in"),
+    pytest.param("update", "adjustment_in", id="update-adjustment_in"),
+]
+
+
+async def _seed_pool(world: World, cost: str) -> int:
+    """The pool every Auto cost of these tests averages, written before ``DAY``: a BUY of 3 units on ``main`` for ``cost``
+    EUR; its id. A received TRANSFER averages its partner's broker, ``main``, before the transfer, an ADJUSTMENT its own
+    broker without itself (``_auto_cost_source``, ``auto_cost.py``); the BUY also brings the unit a TRANSFER's giving
+    leg moves (``main`` may not go short)."""
+    return await _seed_position(world, TransactionType.BUY, "3", amount=f"-{cost}")
+
+
+def _deposit(world: World) -> dict:
+    """A create of a DEPOSIT of 100 EUR on ``main``: a row without an asset, so in no pool."""
+    return {"broker_id": world.main_id, "type": "DEPOSIT", "date": DAY.isoformat(), "quantity": "0", "cash": {"code": EUR, "amount": "100"}, "description": world.batch_description}
+
+
+def _cost_basis_creates(world: World, shape: str, mode: str, amount: str) -> tuple[list[dict], int]:
+    """The creates of a ``shape`` row (``_per_unit_cost_batch``) receiving one unit with ``cost_basis_mode`` ``mode`` and a
+    cost basis of ``amount`` EUR, and that row's index. Behind a DEPOSIT (``_deposit``): the row's index is not a
+    default, and the pool its Auto cost averages stays the seeded one."""
+    creates, subject_index = _per_unit_cost_batch(world, shape, amount)
+    creates[subject_index] = {**creates[subject_index], "cost_basis_mode": mode}
+    return [_deposit(world), *creates], subject_index + 1
+
+
+async def _cost_basis_update(world: World, mode: str, amount: str) -> tuple[list[dict], int, int]:
+    """The updates that set a stored ADJUSTMENT +1 (on ``DAY``, at a manual cost of 100 EUR) to ``cost_basis_mode``
+    ``mode`` with a cost basis of ``amount`` EUR — sent at index 1, behind a notes edit of a stored DEPOSIT on ``main``,
+    in no pool — then the ADJUSTMENT's id and the DEPOSIT's."""
+    neighbour_id = await _seed_cash(world, TransactionType.DEPOSIT, "100", EUR, day=SEED_DAY)
+    subject_id = await _seed_position(world, TransactionType.ADJUSTMENT, "1", day=DAY, cost="100")
+    updates = [{"id": neighbour_id, "description": f"{world.marker} neighbour edited"}, {"id": subject_id, "cost_basis_mode": mode, "cost_basis_override": {"code": EUR, "amount": amount}}]
+    return updates, subject_id, neighbour_id
+
+
+class TestAnAutoCostBasisIsNotChecked:
+    """Rule 5: an Auto cost basis is not checked. Found by the E2E «TRANSFER (asset) create → commit (dual brokers +
+    asset + qty)» (``frontend/e2e/transactions/tx-commit-all-types.spec.ts:532``), whose commit was refused with
+    ``decimalPlacesExceeded`` ``{"max": 12}`` on ``cost_basis_override``.
+
+    With ``cost_basis_mode`` ``auto`` or ``auto-detail`` the amount of the ``cost_basis_override`` sent is not used:
+    ``_compute_wac_for_auto_items`` (``auto_cost.py``) reads its currency alone, recomputes the average of the source
+    pool and writes it on the row. The Form sends back the preview's average, which can repeat forever (100 / 3), and
+    ``check_decimal_limits`` refuses it whatever the mode: an amount the batch would have discarded. The cure:
+    ``_decimal_limit_values`` leaves out the cost basis of an Auto row.
+
+    REDS: an Auto create or update carrying such an amount is accepted, and the row holds the Auto cost, not the amount
+    sent. GUARDS: the same amounts as a ``manual`` cost basis stay refused on their row, never rounded (D2). No mode with
+    an explicit override is a manual cost basis too: ``TestOverTheLimitIsRefusedAtConfirmation`` pins it.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize("average", REPEATING_AVERAGES)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    @pytest.mark.parametrize("shape", PER_UNIT_COST_SHAPES)
+    async def test_auto_create_carrying_the_previews_average_is_accepted(self, world, shape, mode, average, endpoint):
+        """RED, the defect of ``tx-commit-all-types.spec.ts:532``: a received TRANSFER (the E2E's own row) or an
+        ADJUSTMENT +1 in ``mode``, whose cost basis carries the pool's repeating average, gets no decimal issue on
+        ``/validate`` nor on ``/commit``, nor any other issue, and ``/commit`` commits.
+
+        Red today: ``check_decimal_limits`` checks the amount whatever the mode and refuses it on the row —
+        ``decimalPlacesExceeded`` ``{"max": 12}`` for 100 / 3 in full, ``significantDigitsExceeded`` ``{"max": 15}`` for
+        1000000 / 3 — so nothing is committed.
+        """
+        await _seed_pool(world, average.pool_cost)
+        creates, subject_index = _cost_basis_creates(world, shape, mode, average.sent)
+
+        response = await _run_as_the_endpoint(world, creates=creates, endpoint=endpoint)
+
+        assert _decimal_issues(response) == [], f"C-97a rule 5, /{endpoint}: an {mode} cost basis is the backend's to compute, so the amount {average.sent} EUR of the {shape} (create {subject_index}) must not be checked; the batch answered: {_render(response.issues)}"
+        assert response.issues == [], f"C-97a rule 5, /{endpoint}: nothing else may refuse the {mode} {shape}: {_render(response.issues)}"
+        assert response.committed is (endpoint == "commit"), f"C-97a rule 5: /{endpoint} found no issue, so it must answer committed={endpoint == 'commit'}; it answered {response.committed}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize("average", REPEATING_AVERAGES)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    async def test_auto_update_carrying_the_previews_average_is_accepted(self, world, mode, average, endpoint):
+        """RED, the defect of ``tx-commit-all-types.spec.ts:532`` on an update: a stored ADJUSTMENT +1 set to ``mode``
+        with the pool's repeating average as its cost basis, sent at index 1 behind a notes edit, gets no decimal issue —
+        none on update 1, ``ref_id`` its id — on ``/validate`` nor on ``/commit``, nor any other issue, and ``/commit``
+        commits.
+
+        Red today: ``check_decimal_limits`` refuses the amount on update 1, ``ref_id`` the ADJUSTMENT's id, as if it were
+        a manual cost basis.
+        """
+        await _seed_pool(world, average.pool_cost)
+        updates, subject_id, _neighbour_id = await _cost_basis_update(world, mode, average.sent)
+
+        response = await _run_as_the_endpoint(world, updates=updates, endpoint=endpoint)
+
+        assert _decimal_issues(response) == [], f"C-97a rule 5, /{endpoint}: an {mode} cost basis is the backend's to compute, so the amount {average.sent} EUR of the update of ADJUSTMENT id={subject_id} must not be checked; the batch answered: {_render(response.issues)}"
+        assert response.issues == [], f"C-97a rule 5, /{endpoint}: nothing else may refuse the {mode} update of id={subject_id}: {_render(response.issues)}"
+        assert response.committed is (endpoint == "commit"), f"C-97a rule 5: /{endpoint} found no issue, so it must answer committed={endpoint == 'commit'}; it answered {response.committed}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    @pytest.mark.parametrize(("operation", "shape"), AUTO_COST_SUBJECTS)
+    async def test_the_row_holds_the_auto_cost_not_the_amount_sent(self, world, operation, shape, mode):
+        """RED, the outcome that proves the amount ignored, not merely tolerated (the defect of
+        ``tx-commit-all-types.spec.ts:532``): a create or an update in ``mode`` carrying 125 / 3 in full — not the pool's
+        average — commits through ``/commit``, and the row holds the Auto cost the backend computes: the pool's average,
+        100 / 3, read back 33.333333333333, in EUR, the currency sent. Not the amount sent (read back 41.666666666667),
+        nor, for the update, the 100 EUR the row was stored with. So the amount the cure leaves unchecked never reaches
+        the database.
+
+        Red today: the batch refuses the amount sent (``decimalPlacesExceeded`` ``{"max": 12}``) and writes nothing.
+        """
+        await _seed_pool(world, HUNDRED_OVER_THREE.pool_cost)
+        if operation == "update":
+            updates, subject_id, _neighbour_id = await _cost_basis_update(world, mode, NOT_THE_POOLS_AVERAGE)
+            response = await _run_as_the_endpoint(world, updates=updates)
+        else:
+            creates, subject_index = _cost_basis_creates(world, shape, mode, NOT_THE_POOLS_AVERAGE)
+            response = await _run_as_the_endpoint(world, creates=creates)
+            subject_id = _created_ids(response).get(subject_index)
+
+        assert response.committed is True and response.issues == [], f"C-97a rule 5: the {mode} {operation} of the {shape} carrying {NOT_THE_POOLS_AVERAGE} EUR must commit, its amount being the backend's to compute; it was refused: {_render(response.issues)}"
+        stored = (await _stored(world, [subject_id]))[subject_id]
+        cost, expected = (stored["cost_basis_override"], stored["cost_basis_currency"]), (AUTO_COST_OF_HUNDRED_OVER_THREE, EUR)
+        assert cost == expected, f"C-97a rule 5: in {mode} the {shape} id={subject_id} must hold the Auto cost, the pool's 100 / 3 read back {expected[0]} {expected[1]}, not the {NOT_THE_POOLS_AVERAGE} sent; it holds {cost[0]} {cost[1]}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize("average", REPEATING_AVERAGES)
+    @pytest.mark.parametrize("shape", PER_UNIT_COST_SHAPES)
+    async def test_manual_create_carrying_the_same_amount_is_still_refused(self, world, shape, average, endpoint):
+        """Guard (D2): the same amounts as a ``manual`` cost basis are the user's own, kept as sent, so over the limit
+        they are refused on their row — exactly ``(create, index, None, code, cost_basis_override, params)`` — and never
+        rounded: not committed, the row still in the batch, nothing written.
+
+        Green today: ``check_decimal_limits`` checks every cost basis. A cure for ``tx-commit-all-types.spec.ts:532``
+        that stops checking it whatever the mode turns it red.
+        """
+        barrier_id = await _seed_pool(world, average.pool_cost)
+        creates, subject_index = _cost_basis_creates(world, shape, "manual", average.sent)
+
+        response = await _run_as_the_endpoint(world, creates=creates, endpoint=endpoint)
+
+        refusal = ("create", subject_index, None, average.code, "cost_basis_override", average.params)
+        assert _decimal_issues(response) == [refusal], f"D2, /{endpoint}: a manual cost basis of {average.sent} EUR on the {shape} at create {subject_index} must be refused on its own row with exactly {refusal}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"D2, /{endpoint}: only the decimals may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, f"D2: /{endpoint} refused the batch, yet answered committed"
+        _assert_errors_name_their_fields(response)
+        assert ("create", subject_index) in _in_batch(response), f"D2: the refused row stays in the batch (applied and reported); the results are {response.results}"
+        assert barrier_id in await _stored(world, [barrier_id]), f"scaffold: the read-back no longer sees row id={barrier_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"D2: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("average", REPEATING_AVERAGES)
+    async def test_manual_update_carrying_the_same_amount_is_still_refused(self, world, average):
+        """Guard (D2): an update setting a stored ADJUSTMENT +1 to a ``manual`` cost basis of the same amounts, sent at
+        index 1 behind a notes edit, is refused on update 1 with ``ref_id`` its id; not committed; both rows read back as
+        they were stored.
+
+        Green today: ``check_decimal_limits`` checks every cost basis. A cure for ``tx-commit-all-types.spec.ts:532``
+        that stops checking it whatever the mode turns it red.
+        """
+        await _seed_pool(world, average.pool_cost)
+        updates, subject_id, neighbour_id = await _cost_basis_update(world, "manual", average.sent)
+        before = await _stored(world, [neighbour_id, subject_id])
+
+        response = await _run_as_the_endpoint(world, updates=updates)
+
+        refusal = ("update", 1, subject_id, average.code, "cost_basis_override", average.params)
+        assert _decimal_issues(response) == [refusal], f"D2: a manual cost basis of {average.sent} EUR on the update of ADJUSTMENT id={subject_id} must be refused on its own row with exactly {refusal}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"D2: only the decimals may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, "D2: /commit refused the batch, yet answered committed"
+        _assert_errors_name_their_fields(response)
+        assert ("update", 1) in _in_batch(response), f"D2: the refused update stays in the batch (applied and reported); the results are {response.results}"
+        after = await _stored(world, [neighbour_id, subject_id])
+        assert after == before, f"D2: the batch was refused, yet the stored rows changed: before {before}, after {after}"
 
 
 # ============================================================================

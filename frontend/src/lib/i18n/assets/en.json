@@ -328,7 +328,20 @@
       "timeout": "Search timed out. Please try again.",
       "rankHint": "Web search rank (metasearch over several engines) — the first result is the most likely match",
       "notConfigured": "{provider} must be configured before it can search",
-      "crownLegend": "👑 the fund's own currency"
+      "crownLegend": "👑 the fund's own currency",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "No results from the premium sources.",
+      "communitySection": "Non-premium sources (community) · {count, plural, one {# result} other {# results}}",
+      "communityWarning": "Third-party sources: LibreFolio does not vouch for their prices or data. Choosing one applies to this asset only.",
+      "reportQuestion": "Can't find it?",
+      "reportAction": "Let us know",
+      "reportVia": {
+        "mailto": "Opens your email app with the details of this search",
+        "page": "Opens the support page and copies the details of this search, to paste there",
+        "github": "Opens a public GitHub issue with the details of this search: review it before sending it"
+      },
+      "reportCopied": "Search details copied: paste them into the support page.",
+      "reportCopyFailed": "Could not copy the search details: describe your search on the support page."
     },
     "comparison": {
       "title": "Provider Data Comparison",
