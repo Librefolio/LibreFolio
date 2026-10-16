@@ -53,7 +53,9 @@ or replaying transactions.
 ## 📅 End-of-day Replay
 
 For an incremental replay beginning at `from_date`, the service first obtains
-cash and asset balances from all rows with `date < from_date`. It then queries
+cash and asset balances from all rows with `date < from_date`
+(`_get_balances_before_date()`, summed in Python, never in SQL: see
+[Balance Queries](service.md#balance-queries)). It then queries
 the broker's rows from `from_date` onward, groups them by date, and applies every
 row for a date before checking either balance dimension:
 
