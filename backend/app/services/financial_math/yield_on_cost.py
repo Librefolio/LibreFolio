@@ -653,6 +653,13 @@ def _calculate_income_position(
             )
         gross_income_per_unit += conversion_context.income_by_transaction[transaction.id] / eligible_quantity / split_ratio
 
+    if gross_income_per_unit < 0:
+        # Income keeps its sign (D-MF3): corrections larger than the income of the window leave no yield to show.
+        return _unavailable(
+            provenance.model_copy(update={"gross_income_per_unit": Currency(code=target_currency, amount=gross_income_per_unit)}),
+            YieldOnCostUnavailableReason.NEGATIVE_NET_INCOME,
+            wac,
+        )
     final_provenance = provenance.model_copy(
         update={
             "gross_income_per_unit": Currency(code=target_currency, amount=gross_income_per_unit),

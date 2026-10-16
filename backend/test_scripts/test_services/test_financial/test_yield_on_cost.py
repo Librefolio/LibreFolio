@@ -655,7 +655,7 @@ class TestYieldOnCostDependencyIdentity:
 
 @pytest.mark.asyncio
 async def test_positive_income_sources_window_inclusive_and_asset_linked_only(session):
-    """Only positive asset-linked DIVIDEND/INTEREST rows inside [T-364, T] contribute."""
+    """Only asset-linked DIVIDEND/INTEREST rows inside [T-364, T] contribute (with their sign: D-MF3); FEE and TAX do not."""
     ledger = await _make_ledger(session)
     assignment = AssetProviderAssignment(
         asset_id=ledger.asset_id,
@@ -746,6 +746,98 @@ async def test_zero_valued_income_row_is_available_and_marked_net_zero(
     assert result.provenance.gross_income_per_unit is not None
     assert result.provenance.gross_income_per_unit.amount == Decimal("0")
     assert result.provenance.net_zero is True
+
+
+# MF-O2 — signed window income (D-MF3). A legacy negative DIVIDEND/INTEREST row is a
+# correction and lowers the income of the window. Each case below holds 10 units bought
+# long before the window, so every income row divides by the same D-1 quantity of 10.
+
+
+@pytest.mark.asyncio
+async def test_corrections_exceeding_window_income_are_unavailable_negative_net_income(session):
+    """+10 then a -30 correction: -2 EUR per unit, which has no yield to show.
+
+    The holding is UNAVAILABLE with reason negative_net_income and keeps the negative
+    gross income per unit as evidence; it must not be an AVAILABLE negative, which the
+    result schema rejects and which takes the whole portfolio report down with it.
+    """
+    ledger = await _make_ledger(session)
+    session.add_all(
+        [
+            _transaction(ledger, TransactionType.BUY, on=date(2024, 1, 1), quantity="10", amount="-100"),
+            _transaction(ledger, TransactionType.DIVIDEND, on=date(2025, 3, 3), amount="10"),
+            _transaction(ledger, TransactionType.DIVIDEND, on=date(2025, 9, 1), amount="-30"),
+        ]
+    )
+    await session.flush()
+
+    # A WAC other than the helper's default, so "returned as given" cannot pass by coincidence.
+    calculation = await _calculate(session, ledger, wac=Decimal("12.5"))
+    result = calculation.result
+
+    assert result.status == YieldOnCostStatus.UNAVAILABLE
+    assert result.reason == YieldOnCostUnavailableReason.NEGATIVE_NET_INCOME
+    # The wire value the dashboard cell maps to its label.
+    assert result.model_dump(mode="json")["reason"] == "negative_net_income"
+    assert result.value is None
+    assert result.provenance.gross_income_transaction_count == 2
+    assert result.provenance.gross_income_per_unit is not None
+    assert result.provenance.gross_income_per_unit.code == "EUR"
+    assert result.provenance.gross_income_per_unit.amount == Decimal("-2")
+    assert result.provenance.net_zero is False
+    assert calculation.wac_per_unit == Decimal("12.5")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("income", "expected_gross_per_unit", "expected_value", "expected_net_zero"),
+    [
+        ("10", Decimal("0"), Decimal("0"), True),
+        ("30", Decimal("2"), Decimal("0.2"), False),
+    ],
+    ids=["correction-cancels-income", "correction-below-income"],
+)
+async def test_corrections_within_window_income_net_to_a_non_negative_yield(
+    session,
+    income,
+    expected_gross_per_unit,
+    expected_value,
+    expected_net_zero,
+):
+    """Controls: a correction up to the income stays AVAILABLE, netted with its sign.
+
+    Exactly zero is an available known zero (net_zero), not negative_net_income; below
+    the income the correction is subtracted, not dropped (dropping it would read 0.3).
+    """
+    ledger = await _make_ledger(session)
+    session.add_all(
+        [
+            _transaction(ledger, TransactionType.BUY, on=date(2024, 1, 1), quantity="10", amount="-100"),
+            _transaction(ledger, TransactionType.DIVIDEND, on=date(2025, 3, 3), amount=income),
+            _transaction(ledger, TransactionType.DIVIDEND, on=date(2025, 9, 1), amount="-10"),
+        ]
+    )
+    await session.flush()
+
+    calculation = await _calculate(session, ledger)
+    result = calculation.result
+
+    expected = _oracle_yoc(
+        incomes=[
+            (Decimal(income), Decimal("10"), Decimal("1")),
+            (Decimal("-10"), Decimal("10"), Decimal("1")),
+        ],
+        residual_wac_per_unit=Decimal("10"),
+    )
+    assert result.status == YieldOnCostStatus.AVAILABLE
+    assert result.value == expected == expected_value
+    assert result.reason is None
+    assert result.provenance.gross_income_transaction_count == 2
+    assert result.provenance.gross_income_per_unit is not None
+    assert result.provenance.gross_income_per_unit.code == "EUR"
+    assert result.provenance.gross_income_per_unit.amount == expected_gross_per_unit
+    assert result.provenance.net_zero is expected_net_zero
+    assert calculation.wac_per_unit == Decimal("10")
 
 
 @pytest.mark.asyncio

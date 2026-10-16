@@ -66,13 +66,13 @@ How much income does each unit pay you, compared with what it cost? **YOC** comp
 - **One value per asset and broker**, over the year that ends on the end date: moving the start date does not change it.
 - **Gross, not after tax**: separate tax and fee transactions are not subtracted.
 - **Hover a value** for the income per unit, the period and the exchange rates used — each payment at its own date's rate.
-- **`0.00%`** means income recorded at zero; a plain **`-`** means no income in the last year.
+- **`0.00%`** means income recorded at zero, or corrections that exactly cancel it; a plain **`-`** means no income in the last year.
 
 🔗 **Theory**: [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — the exact rules, and how YOC differs from dividend yield or CAGR
 
 ??? info "🚦 A dash with an ⓘ icon — when YOC is unavailable"
 
-    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again.
+    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again. A dash also appears when corrections recorded in the last year — older negative dividend or interest rows — add up to more than the income itself: the ⓘ then reads *Corrections exceed the income of the last year.*
 
 ---
 
