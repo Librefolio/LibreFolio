@@ -4489,4 +4489,47 @@ non toccano le 12 righe della baseline; nessun ingresso durante il congelamento.
    - **Commit pronto** (22:3x): 376 percorsi nel commit del codice (`files/fe8b/stage_code.txt`: 126 tolti, 124 nuovi, 126
      modificati), il journal a parte (`files/fe8b/stage_journal.txt`); nessun file ignorato o generato fra loro; `git diff
      --check` pulito; porta libera.
-4. ⏳ E2E (punto 2, `files/scripts/fe8b_point2.sh`) nello stesso slot, dopo il commit del coordinatore.
+4. ✅ **Prove del punto 2, gli E2E** (slot 1, 22:28–23:24, carico 44–150; dopo il commit del coordinatore: **`74e390c98`**,
+   252 file e le 124 rinomine riconosciute, più `bc8a58fba` del journal; `files/scripts/fe8b_point2.sh`):
+   - `db populate --force`; `front-transaction all --workers 4`: 343 + 32 passati (32 saltati del progetto mobile), **6
+     rossi, nessuno dello spostamento**:
+     - **3 sono un difetto di C-97a, mio, in dev dalle 18:29**: `tx-commit-all-types` «TRANSFER (asset) … dual brokers», `tx-wac-bulk`
+       WB4, `tx-wac-formmodal` FM6 — commit annullato con «Cost basis override: at most 12 decimal places». In `auto` e
+       `auto-detail` il Form rimanda la media dell'anteprima (100 / 3 per intero) e il backend ne legge solo la valuta
+       (`auto_cost.py`, `ccy_hint`) e ricalcola l'importo, ma `check_decimal_limits` lo controllava in ogni modo. Cura nel
+       checkpoint seguente («C-97a, il costo Auto»), approvata dal coordinatore, prima di C-97b.
+     - **3 sono attese sul backend sotto carico** (`tx-import-report-set` R1, step 2 non in 30 s dopo l'upload; R7, step 3
+       ancora «parsing» dopo 30 s; `tx-import-duplicate-precedence` E1, fermo sui duplicati 20 s, e il teardown oltre 120 s),
+       a carico 100–150. **Rigirati da soli** (23:21–23:24, carico 44–54, `files/scripts/fe8b_rerun.sh`): R1 e R7 **2 passati**
+       (31,9 s), E1 **1 passato** (15,1 s). Verdetto (skill `test-triage`): **lentezza**, non FE8b.
+   - `front-broker detail` **38**, `front-portfolio dashboard` **27**, `front-utility files` **29**, `front-asset
+     asset-data-editor` **26**, `front-utility onboarding-tour` **10**. Porta libera.
+   - **FE8b pronto per l'ingresso.** W-B56 (la media dell'anteprima senza arrotondamento, da decidere con MF) nel backlog.
+
+**FE8b entrato** (coordinatore, 23:2x): **`31335fe26`** in `dev_release2`; congelamento finito. Prossimi: C-97a, il costo Auto;
+poi C-97b e C-97c.
+
+### C-97a — il costo Auto non passa dal controllo dei decimali ✅ (2026-10-16)
+
+**Trovato dagli E2E di FE8b** (`tx-commit-all-types` «TRANSFER (asset) … dual brokers», `tx-wac-bulk` WB4, `tx-wac-formmodal`
+FM6): il commit di un trasferimento col costo su Auto è annullato con «Cost basis override: at most 12 decimal places». **Difetto
+mio (C-97a), in dev dalle 18:29.** In `cost_basis_mode` `auto` e `auto-detail` il Form rimanda la media dell'anteprima, che può
+essere periodica (100 / 3 per intero); il backend di quel valore legge solo la valuta (`ccy_hint`, `auto_cost.py`) e ricalcola
+l'importo (`_auto_cost` → `_write_auto_cost`), ma `check_decimal_limits` controllava l'importo in ogni modo. La docstring dello
+stadio e la pagina «Decimal limits» dicevano già «manual cost basis»: il codice non lo faceva. Approvato dal coordinatore come
+checkpoint a sé, subito dopo l'ingresso di FE8b, prima di C-97b.
+
+1. ✅ **Rossi** (test-author `abfb74f8`): `TestAnAutoCostBasisIsNotChecked` in `test_services/test_transaction_decimal_places.py`,
+   40 casi. Rossi 30: create (TRANSFER ricevuto e ADJUSTMENT +1) e update, `auto` e `auto-detail`, `/validate` e `/commit`, 100 / 3
+   per intero (26 decimali) e 1000000 / 3 come lo stampa un float (16 cifre significative), accettati; e l'esito: la riga tiene
+   il costo Auto calcolato (125 / 3 → `41.666666666667` EUR, scelto diverso da 100 / 3 per distinguerlo dall'importo mandato).
+   Guardie 10: lo stesso importo in `manual` resta rifiutato (D2). Visti (23:25, carico 54): **30 falliti, 10 passati**, per la
+   ragione giusta (un issue di decimali sulle righe Auto, commit non fatto).
+2. ✅ **Cura** (`files/scripts/c97a_auto_cost_fix.py --apply`): `_decimal_limit_values` (`transaction_batch_stages.py`) salta
+   `cost_basis_override` quando `cost_basis_mode` è `auto` o `auto-detail` (la tupla letterale, come nelle altre 4 occorrenze
+   del codice), con la ragione in docstring. Una frase nella pagina `developer/backend/transactions/service.md`, «Decimal
+   limits» (senza traduzioni). `black`/`ruff` puliti.
+3. ✅ **Verdi** (23:27, carico 49): `services transaction-decimal-places` **84** (i 40 nuovi e i 44 di prima),
+   `transaction-cost-basis-rule` **80**. **Simulazione del cherry-pick** su `dev_release2` (`778156983`), i 3 file: 0 conflitti,
+   lint pulito, `mkdocs build` strict e `check-links` exit 0. Da girare in uno slot, come conferma: `api transactions-validate` e
+   i 3 E2E che l'hanno trovato.
