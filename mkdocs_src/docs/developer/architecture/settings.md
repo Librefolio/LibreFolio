@@ -57,7 +57,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       invalid one with a coded error when the value is used rather than stop the startup.
       `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
       module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
-      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43).
+      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
+      `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
+      self-hosted install.
       `./dev.py test services profile-defaults` guards this table too: one entry per profile;
       `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every

@@ -45,6 +45,6 @@ Untouched rows were sent as updates: a misleading «Save», and no-op writes on 
 
 | Role | Path |
 |------|------|
-| `fieldEq`, `costBasisValue`, `buildUpdateDiff`, `diffDualItem` | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
-| Unit tests | `frontend/src/lib/utils/__tests__/txPayloadHelpers.test.ts` |
+| `fieldEq`, `costBasisValue`, `buildUpdateDiff`, `diffDualItem` | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
+| Unit tests | `frontend/src/lib/features/transactions/txPayloadHelpers.test.ts` |
 | WB11 | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |

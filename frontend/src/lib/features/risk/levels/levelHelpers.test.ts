@@ -28,7 +28,6 @@ import {
     translateErrorCode,
     leadDivergence,
     lossMagnitude,
-    requiredRecovery,
     uncoveredWeight,
     warningSentence,
 } from './levelHelpers';
@@ -46,25 +45,6 @@ function unavailable(analyticCode: string, instanceId = `base-historical-${analy
 function varResult(instanceId: string, valueAtRisk: number, cvar: number): RiskAnalyticResult {
     return ok('historical_var', {kind: 'var_cvar', value_at_risk: valueAtRisk, conditional_value_at_risk: cvar}, instanceId);
 }
-
-describe('requiredRecovery', () => {
-    it('states the asymmetry that makes a drawdown expensive', () => {
-        expect(requiredRecovery(0.1)).toBeCloseTo(0.1111, 4);
-        expect(requiredRecovery(0.5)).toBeCloseTo(1, 10);
-        expect(requiredRecovery(0.8)).toBeCloseTo(4, 10);
-    });
-
-    it('has no answer for a total loss, and says so instead of returning Infinity', () => {
-        expect(requiredRecovery(1)).toBeNull();
-        expect(requiredRecovery(1.2)).toBeNull();
-    });
-
-    it('returns null rather than zero when there was no loss', () => {
-        expect(requiredRecovery(0)).toBeNull();
-        expect(requiredRecovery(-0.1)).toBeNull();
-        expect(requiredRecovery(Number.NaN)).toBeNull();
-    });
-});
 
 describe('buildHurtRows', () => {
     it('orders the scale day → month → worst, so the change of scale is legible', () => {
@@ -89,10 +69,82 @@ describe('buildHurtRows', () => {
         expect(rows.map((row) => row.id)).toEqual(['worst']);
     });
 
-    it('turns the negative drawdown into a positive magnitude and derives the recovery', () => {
-        const rows = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.5, maximum_drawdown_duration_days: 19})]);
+    it('turns the negative drawdown into a positive magnitude and carries the recovery the backend states', () => {
+        const rows = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.5, maximum_drawdown_duration_days: 19, maximum_drawdown_trough_to_peak_ratio: 1})]);
         expect(rows[0]).toMatchObject({id: 'worst', loss: 0.5, durationDays: 19});
-        expect(rows[0].requiredRecovery).toBeCloseTo(1, 10);
+        expect(rows[0].requiredRecovery).toBe(1);
+    });
+
+    // The recovery is the backend's figure (`drawdown_summary` 1.2.0), read as it
+    // arrives: the formula has one home, and it is not this file. The fixtures
+    // state a recovery the depth does not imply, so only a read can return it.
+    it('shows the recovery the backend states as is, never one recomputed from the depth', () => {
+        // −50% implies +100%; the field says +90%, and the field is what is shown.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.5, maximum_drawdown_trough_to_peak_ratio: 0.9})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.5});
+        expect(row.requiredRecovery).toBe(0.9);
+    });
+
+    it('keeps a total loss on the scale with no recovery, which the backend leaves null', () => {
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -1, maximum_drawdown_trough_to_peak_ratio: null})]);
+        expect(row).toMatchObject({id: 'worst', loss: 1});
+        expect(row.requiredRecovery).toBeNull();
+    });
+
+    it('gives no recovery when the depth falls back to the KPI, which states none', () => {
+        const [row] = buildHurtRows([ok('historical_kpi', {max_drawdown: -0.4})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.4});
+        expect(row.requiredRecovery).toBeNull();
+    });
+
+    it('gives no recovery when the summary depth contradicts its sign and the KPI depth stands in', () => {
+        // `+0.3` breaks the `le=0` convention, so lossMagnitude reads it as absent
+        // and the depth comes from the KPI. The summary still states a recovery,
+        // but it is the climb out of the summary's own trough: next to another
+        // analytic's depth it would describe a fall nobody measured.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: 0.3, maximum_drawdown_trough_to_peak_ratio: 0.9}), ok('historical_kpi', {max_drawdown: -0.4})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.4});
+        expect(row.requiredRecovery).toBeNull();
+    });
+
+    it('gives the duration of the KPI fall when the summary depth contradicts its sign and the KPI depth stands in', () => {
+        // `+0.3` breaks the `le=0` convention again, so the depth is the KPI's. The
+        // summary's 99 days are the length of its own trough: next to another
+        // analytic's depth they would time a fall nobody measured. The duration
+        // follows the depth's source, as the recovery does.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: 0.3, maximum_drawdown_duration_days: 99}), ok('historical_kpi', {max_drawdown: -0.4, max_drawdown_duration_days: 30})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.4});
+        expect(row.durationDays).toBe(30);
+    });
+
+    it('keeps the summary depth and its duration together when the KPI states a deeper fall', () => {
+        // The counterpart of the case above: a valid summary wins whole. The KPI
+        // states another, deeper episode only so that each figure's source shows.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.25, maximum_drawdown_duration_days: 12}), ok('historical_kpi', {max_drawdown: -0.4, max_drawdown_duration_days: 30})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.25});
+        expect(row.durationDays).toBe(12);
+    });
+
+    it('gives no recovery for a fall of zero, where there is nothing to climb back from', () => {
+        // The backend states 0 here. The row itself is kept today, at a zero loss;
+        // the subject is the recovery, which stays empty rather than reading +0%.
+        const rows = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: 0, maximum_drawdown_trough_to_peak_ratio: 0})]);
+        expect(rows.map((row) => row.id)).toEqual(['worst']);
+        expect(rows[0]).toMatchObject({id: 'worst', loss: 0});
+        expect(rows[0].requiredRecovery).toBeNull();
+    });
+
+    // `missing` is not only a fixture's state: the generated client declares
+    // `maximum_drawdown_trough_to_peak_ratio` optional.
+    it.each<[string, Record<string, unknown>]>([
+        ['NaN', {maximum_drawdown_trough_to_peak_ratio: Number.NaN}],
+        ['infinite', {maximum_drawdown_trough_to_peak_ratio: Number.POSITIVE_INFINITY}],
+        ['a string', {maximum_drawdown_trough_to_peak_ratio: '0.9'}],
+        ['missing', {}],
+    ])('reads a recovery that is %s as none, never as NaN', (_label, ratio) => {
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.5, ...ratio})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.5});
+        expect(row.requiredRecovery).toBeNull();
     });
 
     it('falls back to the KPI drawdown when the summary was not requested', () => {
@@ -117,9 +169,35 @@ describe('buildHurtRows', () => {
 
 describe('buildCurrentDrawdown', () => {
     it('reads the live fall, its peak date and the gain needed to undo it', () => {
-        const current = buildCurrentDrawdown([ok('drawdown_summary', {current_drawdown: -0.2, current_peak_date: '2024-02-05', current_drawdown_duration_days: 41})]);
+        const current = buildCurrentDrawdown([ok('drawdown_summary', {current_drawdown: -0.2, current_peak_date: '2024-02-05', current_drawdown_duration_days: 41, remaining_to_peak_ratio: 0.25})]);
         expect(current).toMatchObject({loss: 0.2, peakDate: '2024-02-05', durationDays: 41});
-        expect(current?.requiredRecovery).toBeCloseTo(0.25, 10);
+        expect(current?.requiredRecovery).toBe(0.25);
+    });
+
+    // `remaining_to_peak_ratio` is the backend's, read as it arrives — the same
+    // one home for the formula as the worst row's recovery in buildHurtRows.
+    it('shows the remaining climb the backend states as is, never one recomputed from the fall', () => {
+        // −20% implies +25%; the field says +30%, and the field is what is shown.
+        const current = buildCurrentDrawdown([ok('drawdown_summary', {current_drawdown: -0.2, remaining_to_peak_ratio: 0.3})]);
+        expect(current).toMatchObject({loss: 0.2});
+        expect(current?.requiredRecovery).toBe(0.3);
+    });
+
+    it('keeps a total loss in view with no remaining climb, which the backend leaves null', () => {
+        const current = buildCurrentDrawdown([ok('drawdown_summary', {current_drawdown: -1, remaining_to_peak_ratio: null})]);
+        expect(current).toMatchObject({loss: 1});
+        expect(current?.requiredRecovery).toBeNull();
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+        ['NaN', {remaining_to_peak_ratio: Number.NaN}],
+        ['infinite', {remaining_to_peak_ratio: Number.POSITIVE_INFINITY}],
+        ['a string', {remaining_to_peak_ratio: '0.3'}],
+        ['missing', {}],
+    ])('reads a remaining climb that is %s as none, never as NaN', (_label, ratio) => {
+        const current = buildCurrentDrawdown([ok('drawdown_summary', {current_drawdown: -0.2, ...ratio})]);
+        expect(current).toMatchObject({loss: 0.2});
+        expect(current?.requiredRecovery).toBeNull();
     });
 
     it('keeps the peak date, which a numeric-only view of the output would discard', () => {

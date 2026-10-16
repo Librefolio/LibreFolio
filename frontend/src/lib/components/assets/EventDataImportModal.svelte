@@ -52,14 +52,14 @@
         <InfoBanner variant="info">
             <div class="flex items-start gap-2">
                 <div class="flex-1 space-y-1">
-                    <p><strong>{$t('import.csv.eventsFormatLabel')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;type;amount;notes</code></p>
+                    <p><strong>{$t('import.csv.eventsFormatLabel')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;type;amount;notes</code></p>
                     <p class="text-[11px] opacity-80">
                         <strong>{$t('import.csv.eventsTypesLabel')}:</strong>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">DIVIDEND</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">INTEREST</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">SPLIT</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">PRICE_ADJUSTMENT</code>
-                        <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">MATURITY_SETTLEMENT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">DIVIDEND</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">INTEREST</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">SPLIT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">PRICE_ADJUSTMENT</code>
+                        <code class="bg-lf-neutral/50 px-1 rounded">MATURITY_SETTLEMENT</code>
                     </p>
                     <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>

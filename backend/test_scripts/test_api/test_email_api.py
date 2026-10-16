@@ -74,9 +74,9 @@ in ``schemas/email.py``. The contract pinned here:
    port); the token stays live and never reaches the logs; a spent budget is 429 with ``Retry-After``, a refusal of the
    server 502. On a blocked instance (``LIBREFOLIO_BLOCKED``) sending itself refuses — the test email and a link alike
    —: 409 ``EMAIL_UNAVAILABLE`` with ``INSTANCE_BLOCKED``, nothing sent or spent, the link still live.
-7. ``POST /email/password-reset`` ``{identifier}``, no session, ships held (``flows.FORGOT_PASSWORD_HELD``, until lot
-   E4): 409 ``FORGOT_PASSWORD_DISABLED``, the same for every identifier, before anything else — nothing counted,
-   nothing scheduled. Lifted: 409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE``
+7. ``POST /email/password-reset`` ``{identifier}``, no session, ships open (lot E4 removed the hold and its 409
+   ``FORGOT_PASSWORD_DISABLED`` once changing an account's email asked for the current password): 409
+   ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE``
    — no ``problem``, the configuration is not a stranger's business — when the instance cannot send such an email (a
    blocked instance included, should the request get past the guard of ``/api/v1``: refused at the admission, nothing
    counted); 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After`` past 10 requests per client address in 15 minutes (the
@@ -106,7 +106,7 @@ inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BLOC
 (monkeypatch); the app of this test mounts the routers without ``/api/v1``'s instance-block guard, so a blocked
 instance is refused by the sending itself;
 ``delivery.INSTANCE_BUDGET`` and the three «forgot password» limiters are private limiters on a fake clock, with the
-shipped limits, and the hold of «forgot password» is lifted, set back by the tests of the hold; ``smtp.SMTP_TIMEOUT_SECONDS`` is 5 s, a bound, never a wait; ``socket.getaddrinfo`` resolves the
+shipped limits — «forgot password» has no hold left to lift (lot E4) —; ``smtp.SMTP_TIMEOUT_SECONDS`` is 5 s, a bound, never a wait; ``socket.getaddrinfo`` resolves the
 loopback only and records any other name, so a host name configured for the status is never looked up, let alone
 contacted. Every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1, on a port the OS picks; a refused
 connection is ``closed_port()``. Nothing is timed.
@@ -380,12 +380,6 @@ def forgot_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> ForgotLi
     monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", limits.by_identifier)
     monkeypatch.setattr(flows, "FORGOT_BY_MAILBOX", limits.by_mailbox)
     return limits
-
-
-@pytest.fixture(autouse=True)
-def _forgot_password_lifted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """«Forgot password» ships held (``flows.FORGOT_PASSWORD_HELD``, until lot E4): lifted here so that the route's other answers and its work can be tested; the tests of the hold set it back themselves."""
-    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", False)
 
 
 @pytest.fixture(autouse=True)
@@ -2119,37 +2113,6 @@ async def test_a_blocked_instance_offers_no_email_in_its_public_configuration(pr
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("also", ["email-and-links-ready", "email-off", "blocked"])
-async def test_forgot_password_ships_held_with_one_answer_for_everyone(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits, also: str) -> None:
-    """EMA-046 — contract 7: «forgot password» held, as shipped (``flows.FORGOT_PASSWORD_HELD`` set back to ``True``): the member's username, an inactive account's and a name no account has each get 409 ``{error_code: FORGOT_PASSWORD_DISABLED, message}`` — the same status and body for all three —, first, whether email is ready, off or the instance blocked. No limiter counts anything, no work is scheduled (the work, replaced by a recorder, is never called), nothing is sent and no reset row is made."""
-    print_section(f"EMA-046: held, {also}")
-    monkeypatch.setattr(flows, "FORGOT_PASSWORD_HELD", True)
-    dormant = await _add_account(private.engine, "zq_dormant", active=False)
-    scheduled: list[str] = []
-
-    async def recording_work(identifier: str, **arguments: object) -> None:
-        scheduled.append(identifier)
-
-    monkeypatch.setattr(flows, "forgotten_password_work", recording_work)
-    with FakeSmtpServer() as fake:
-        if also != "email-off":
-            _links_ready(monkeypatch, fake)
-        if also == "blocked":
-            monkeypatch.setenv(BLOCKED_VARIABLE, "1")
-        answers = [await _forgot(private, identifier) for identifier in (MEMBER, dormant.username, NOBODY)]
-
-    shapes = [(response.status_code, response.json()) for response in answers]
-    assert shapes[0][0] == 409 and _detail(answers[0]).get("error_code") == "FORGOT_PASSWORD_DISABLED", shapes
-    assert set(_detail(answers[0])) == {"error_code", "message"}, shapes[0]
-    assert shapes[1] == shapes[0] and shapes[2] == shapes[0], f"the answers tell the accounts apart: {shapes}"
-    assert scheduled == [], f"the work was scheduled for {scheduled}"
-    assert (len(forgot_limits.by_address), len(forgot_limits.by_identifier), len(forgot_limits.by_mailbox)) == (0, 0, 0)
-    assert (fake.connections, budget.count()) == (0, 0)
-    assert await _reset_rows(private.engine, private.member.id) == []
-    print_success("409 FORGOT_PASSWORD_DISABLED three times, one body; nothing counted, nothing scheduled")
-
-
-@pytest.mark.asyncio
 async def test_forgot_password_counts_an_ipv6_client_by_its_64_and_a_mapped_ipv4_as_the_ipv4(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
     """EMA-047 — contract 7: ten requests from ten addresses of one IPv6 /64, each for another name no account has, are 202; an eleventh from yet another address of that /64 is 429 — one subscriber, one count —, while an address of the next /64 gets 202. Likewise an IPv4 client and its IPv4-mapped form share one count: ten requests from the two in turn are 202, the next is 429. The counts are under ``2001:db8:1:2::/64`` and ``198.51.100.70``."""
     print_section("EMA-047: IPv6 by its /64, a mapped IPv4 as the IPv4")
@@ -2188,3 +2151,29 @@ async def test_a_reset_link_of_an_inactive_account_is_409_and_not_emailed(privat
     assert (fake.connections, budget.count()) == (0, 0)
     assert await _token_status(private.engine, issued.token, PASSWORD_RESET) == TokenStatus.VALID
     print_success("409 EMAIL_ACCOUNT_INACTIVE, nothing sent, the link live")
+
+
+# =============================================================================
+# 11. «FORGOT PASSWORD» SHIPS OPEN (lot E4b)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_ships_open_with_email_and_a_public_url(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
+    """EMA-049 — contract 7: as shipped — ``flows`` carries no hold any more (no ``FORGOT_PASSWORD_HELD``, no ``ForgottenPasswordHeldError``) and nothing in this module lifts one —, email ready towards a running fake and ``LIBREFOLIO_PUBLIC_URL`` set: ``POST /email/password-reset`` for the member's username, without a session, is 202 ``{message}``; once it has returned one email went to the member's address, carrying a ``{PUBLIC_URL}/reset-password#token=…`` link whose token is a live reset link of the member, its only reset row; one unit of the budget spent. Where the hold used to answer first (EMA-046, removed with it) the configuration now answers, as EMA-034 (email off or unusable, links missing or invalid) and EMA-044 (a blocked instance) pin."""
+    print_section("EMA-049: «forgot password» ships open")
+    leftovers = [name for name in ("FORGOT_PASSWORD_HELD", "ForgottenPasswordHeldError") if hasattr(flows, name)]
+
+    with FakeSmtpServer() as fake:
+        _links_ready(monkeypatch, fake)
+        response = await _forgot(private, MEMBER)
+
+    assert leftovers == [], f"«forgot password» ships open since lot E4: flows still carries {leftovers}"
+    assert (response.status_code, set(response.json())) == (202, {"message"}), f"{response.status_code} {response.text}"
+    assert [message.rcpt_tos for message in fake.messages] == [[private.member.email]], f"{len(fake.messages)} message(s)"
+    token = _token_in(_text(fake.messages[0]), PASSWORD_RESET)
+    rows = await _reset_rows(private.engine, private.member.id)
+    assert await _token_status(private.engine, token, PASSWORD_RESET) == TokenStatus.VALID
+    assert len(rows) == 1, f"the member's reset rows: {[row.id for row in rows]}"
+    assert budget.count() == 1
+    print_success("202, one email to the member with a live reset link on the public URL")

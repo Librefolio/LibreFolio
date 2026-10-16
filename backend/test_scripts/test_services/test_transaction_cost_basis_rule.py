@@ -54,6 +54,27 @@ Not covered, on purpose:
   take a cost — ``TestDecisionP5AnExplicitNullEmptiesTheCost``, below;
 - Auto with no average (P-1, ``auto_cost.py``) and SPLIT-linked ADJUSTMENTs: outside N2, unchanged.
 
+Decision 47 (workstream W, release 1.3) — the giving leg of a TRANSFER, ``TestDecision47TheGivingLegOfATransfer``,
+RED until its cure. J's CP-16 (``financial_math/fifo/engine.py``) reads a negative ADJUSTMENT carrying a
+``cost_basis_override`` as units handed over at that cost; W's part writes that cost where a TRANSFER loses its giving
+leg in a batch:
+
+- a split of a TRANSFER pair hands its giving leg over at the Auto cost of the leg's OWN broker
+  (``TransactionService._handover_cost``: its broker, up to its date, without itself), computed in the batch's WAC
+  stage (``compute_wac_and_fx_issues``) after the other stages: an ADJUSTMENT −4 at ``source``'s 100 EUR — or 200 when
+  the same batch adds a purchase before the move —, the receiving leg keeping its own cost. A cost an update of the
+  same batch gives the giving leg stays (the coordinator's decision 4, 16/10: a guard, green today);
+- a split whose giving leg's cost needs a conversion no rate gives is refused, on /commit and on /validate:
+  ``WAC_FX_UNAVAILABLE`` on the split's index, ``ref_id`` the giving leg, ``field`` ``cost_basis_override``, params
+  ``pairs`` and ``pair_details`` as for an Auto row;
+- a promote of an ADJUSTMENT −4 carrying a cost and an ADJUSTMENT +4 into a TRANSFER takes the cost (and its currency)
+  off the side whose new type takes none (``cost_basis_allowed``: the giving side); the receiving side keeps its own.
+
+Why here: these are rules about where a batch writes or removes a cost basis — this file's subject, its ``World``
+(``source`` holding 10 units at 100 EUR, the Auto cost), its stored pair (``_store``) and its vocabulary. The broker
+deletion's side of decision 47 is pinned in ``test_broker_service.py`` (BR-U-073, 076, 078, 086–088), the lone legs a
+1.2 deletion left in ``test_lone_transfer_legs.py``.
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
@@ -80,15 +101,17 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.schemas.transactions.transactions as transaction_schemas
 import backend.app.schemas.transactions.type_metadata as type_metadata
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, Transaction, TransactionType
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, FxConversionRoute, FxRate, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
-from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, cost_basis_allowed
+from backend.app.services.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 
@@ -117,6 +140,18 @@ SPLIT_RATIO = Decimal("2")
 # A 2:1 split doubles the 10 units the BUY gave the source broker: the ADJUSTMENT that realizes it adds 10 more.
 SPLIT_QUANTITY = BUY_QUANTITY * (SPLIT_RATIO - 1)
 LINK_CHANGES = ("unlink", "relink-price-adjustment")
+
+# Decision 47 — the giving leg of a TRANSFER (TestDecision47TheGivingLegOfATransfer).
+WAC_FX_UNAVAILABLE = TXValidationCode.WAC_FX_UNAVAILABLE.value
+PYG = "PYG"  # a currency no rate and no route reaches, proven before use
+# 10 units bought in PYG a week before the EUR BUY: the EUR BUY stays the last acquisition, so the average is in EUR
+# and PYG/EUR is the conversion it misses.
+PYG_DAY = BUY_DAY - timedelta(days=7)
+PYG_PAID = Decimal("-50000")
+# 10 more units at 300 EUR that a split's own batch buys before the move: with the BUY's 1 000 for 10, the pool of
+# the giving leg averages (1 000 + 3 000) / 20 = 200 EUR.
+LATER_BUY_DAY = BUY_DAY + timedelta(days=7)
+LATER_BUY_PAID = Decimal("-3000")
 
 
 # ============================================================================
@@ -984,3 +1019,200 @@ class TestTheRuleAgreesWithTheMetadata:
 
         entry = TX_TYPE_METADATA[tx_type]
         assert answer is expected, f"_requires_cost_basis({tx_type.value}, quantity={quantity}) answered {answer}; TX_TYPE_METADATA says {expected} (cost_basis_mode={entry.cost_basis_mode!r}, cost_basis_pair={entry.cost_basis_pair!r})"
+
+
+# ============================================================================
+# RED — DECISION 47: THE GIVING LEG OF A TRANSFER (SPLIT AND PROMOTE)
+# ============================================================================
+
+
+async def _run_batch(world: World, *, commit: bool, creates: list[dict] | None = None, updates: list[dict] | None = None, splits: list[dict] | None = None, promotes: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` (``commit=True``) or ``/validate`` (``commit=False``) runs it, with
+    splits; no user, so no access check. It never commits: the session fixture rolls everything back."""
+    return await TransactionService(world.session).execute_batch(
+        creates_raw=creates or [],
+        updates_raw=updates or [],
+        deletes=[],
+        splits_raw=splits or [],
+        promotes_raw=promotes or [],
+        commit=commit,
+    )
+
+
+async def _legs_now(world: World, giving: Transaction, receiving: Transaction) -> dict[str, tuple]:
+    """The two legs as the batch left them in the session's transaction — re-read, the in-memory copies refreshed —
+    as ``(type, quantity, related_transaction_id, cost_basis_override, cost_basis_currency)``."""
+    ids = {"giving": giving.id, "receiving": receiving.id}
+    statement = select(Transaction).where(Transaction.id.in_(list(ids.values()))).execution_options(populate_existing=True)
+    rows = {row.id: row for row in (await world.session.execute(statement)).scalars()}
+    return {label: (rows[tx_id].type, rows[tx_id].quantity, rows[tx_id].related_transaction_id, rows[tx_id].cost_basis_override, rows[tx_id].cost_basis_currency) for label, tx_id in ids.items()}
+
+
+async def _assert_no_rate_nor_route(session: AsyncSession, currency: str, other: str = EUR) -> None:
+    """Precondition: no rate and no route for ``currency``/``other`` exist, committed by anyone (as test_broker_service.py's
+    ``_assert_no_fx_data``): the conversion the case needs is really missing, not merely assumed so."""
+    base, quote = sorted((currency, other))
+    rates = (await session.execute(select(func.count()).select_from(FxRate).where(FxRate.base == base, FxRate.quote == quote))).scalar_one()
+    routes = (await session.execute(select(func.count()).select_from(FxConversionRoute).where(or_(and_(FxConversionRoute.base == base, FxConversionRoute.quote == quote), and_(FxConversionRoute.base == quote, FxConversionRoute.quote == base))))).scalar_one()
+    assert (rates, routes) == (0, 0), f"precondition broken: {base}/{quote} has {rates} rate(s) and {routes} route(s) — this case needs a pair nobody stores"
+
+
+async def _fx_conversion_pair(world: World) -> tuple[Transaction, Transaction]:
+    """An FX_CONVERSION pair on ``dest`` (−100 EUR → +110 USD), linked both ways: a pair whose split needs no cost."""
+    now = utcnow()
+    sold = Transaction(broker_id=world.dest.id, type=TransactionType.FX_CONVERSION, date=MOVE_DAY, quantity=Decimal("0"), amount=Decimal("-100"), currency=EUR, description=f"{world.marker} EUR sold", created_at=now, updated_at=now)
+    bought = Transaction(broker_id=world.dest.id, type=TransactionType.FX_CONVERSION, date=MOVE_DAY, quantity=Decimal("0"), amount=Decimal("110"), currency="USD", description=f"{world.marker} USD bought", created_at=now, updated_at=now)
+    world.session.add_all([sold, bought])
+    await world.session.flush()
+    sold.related_transaction_id, bought.related_transaction_id = bought.id, sold.id
+    await world.session.flush()
+    return sold, bought
+
+
+def _issue_view(issue: TXValidationIssue) -> dict:
+    """What decision 47 fixes of an issue: where it is, its code, its field and its params — never its text."""
+    return {"operation": issue.operation, "index": issue.index, "ref_id": issue.ref_id, "code": issue.code, "field": issue.field, "params": issue.params}
+
+
+class TestDecision47TheGivingLegOfATransfer:
+    """RED until decision 47 (but for one guard): where a batch takes a TRANSFER's giving leg out of its pair, the leg
+    leaves at its own broker's Auto cost — unless an update of the same batch gives it a cost of its own, which stays
+    (the coordinator's decision 4, 16/10) —, and a promote that makes a leg the giving side of a TRANSFER takes its cost
+    away.
+
+    ``source`` holds 10 units bought for 1 000 EUR (the ``world`` fixture): 100 EUR is its Auto cost, the cost its
+    giving leg is handed over at. The receiving leg carries 42 EUR (``STORED_COST``), never 100: a cure that copied the
+    partner's cost, or averaged ``dest`` — whose only units are that leg's — would show.
+    """
+
+    @pytest.mark.asyncio
+    async def test_split_keeps_the_cost_an_update_of_the_same_batch_gives_the_giving_leg(self, world):
+        """Guard, green today and after decision 47 (decision 4): the batch splits the pair and, in an update, gives the
+        giving leg a cost of 77 EUR — no ``cost_basis_mode``, as an API client sends a cost, the mode being refused on an
+        ADJUSTMENT −4 (rule 12). It commits; the giving leg is an ADJUSTMENT −4 at 77 EUR, never overwritten with
+        ``source``'s Auto cost, 100 EUR; the receiving leg keeps its 42.
+
+        The update runs after the split (``execute_batch``: split, then update), on the ADJUSTMENT the split left; the
+        handover cost is computed in the WAC stage, later still, and must leave a cost the batch wrote alone.
+        """
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving, receiving = stored.rows
+        own_cost = Currency(code=EUR, amount=Decimal("77"))
+        assert own_cost.amount not in (UNIT_COST, STORED_COST.amount), "scaffold: the update's cost must differ from the Auto cost and from the receiving leg's"
+
+        response = await _run_batch(world, commit=True, splits=[{"id_a": giving.id, "id_b": receiving.id}], updates=[{"id": giving.id, "cost_basis_override": {"code": own_cost.code, "amount": str(own_cost.amount)}}])
+
+        assert response.committed is True and response.issues == [], f"A split with an update giving its giving leg a cost was refused: {_render(response.issues)}"
+        assert sorted((result.operation, result.index, result.status) for result in response.results) == [("split", 0, "success"), ("update", 0, "success")], f"results: {response.results}"
+        assert await _legs_now(world, giving, receiving) == {
+            "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, own_cost.amount, own_cost.code),
+            "receiving": (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
+        }
+
+    @pytest.mark.asyncio
+    async def test_split_hands_the_giving_leg_over_at_its_own_brokers_auto_cost(self, world):
+        """RED until decision 47: the split commits; the giving leg becomes an ADJUSTMENT −4 at ``source``'s Auto cost,
+        100 EUR (its BUY, the leg left out), with its currency; the receiving leg an ADJUSTMENT +4 that keeps its 42 EUR.
+
+        Today the giving leg is left without a cost: an ADJUSTMENT-out that CP-16 closes at price 0, its units read as
+        destroyed.
+        """
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving, receiving = stored.rows
+
+        response = await _run_batch(world, commit=True, splits=[{"id_a": giving.id, "id_b": receiving.id}])
+
+        assert response.committed is True and response.issues == [], f"The split of the TRANSFER pair {giving.id}/{receiving.id} was refused: {_render(response.issues)}"
+        assert [(result.operation, result.index, tuple(result.ids), result.status) for result in response.results] == [("split", 0, (giving.id, receiving.id), "success")]
+        assert await _legs_now(world, giving, receiving) == {
+            "giving": (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, UNIT_COST, EUR),
+            "receiving": (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
+        }
+
+    @pytest.mark.asyncio
+    async def test_split_prices_the_giving_leg_after_the_rest_of_its_batch(self, world):
+        """RED until decision 47: the giving leg's cost is computed in the batch's WAC stage, after the other stages, so it
+        sees the batch's final state — the same batch buys 10 more units on ``source`` for 3 000 EUR before the move,
+        and the leg leaves at (1 000 + 3 000) / 20 = 200 EUR, not at the 100 a cost computed in the split stage reads."""
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving, receiving = stored.rows
+        purchase = {
+            "broker_id": world.source.id,
+            "asset_id": world.asset.id,
+            "type": "BUY",
+            "date": LATER_BUY_DAY.isoformat(),
+            "quantity": str(BUY_QUANTITY),
+            "cash": {"code": EUR, "amount": str(LATER_BUY_PAID)},
+            "description": f"{world.marker} buy in the split's batch",
+        }
+        expected_cost = (BUY_QUANTITY * UNIT_COST - LATER_BUY_PAID) / (2 * BUY_QUANTITY)
+        assert expected_cost == Decimal("200"), "the oracle: (1 000 + 3 000) / 20"
+
+        response = await _run_batch(world, commit=True, creates=[purchase], splits=[{"id_a": giving.id, "id_b": receiving.id}])
+
+        assert response.committed is True and response.issues == [], f"A split beside a purchase was refused: {_render(response.issues)}"
+        legs = await _legs_now(world, giving, receiving)
+        assert legs["giving"] == (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, expected_cost, EUR), f"The giving leg id={giving.id} must leave at the average of the batch's final state, {expected_cost} EUR: {legs['giving']}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", [pytest.param(True, id="commit"), pytest.param(False, id="validate")])
+    async def test_split_whose_handover_cost_needs_a_missing_conversion_is_refused(self, world, commit):
+        """RED until decision 47: part of ``source``'s units were paid in PYG, which no rate converts — the giving leg has
+        no Auto cost to leave at, and the split is refused as an Auto row without one would be: one WAC_FX_UNAVAILABLE on
+        split 1 (index 0 is the split of an FX_CONVERSION pair, which needs no cost), ``ref_id`` the giving leg,
+        ``field`` ``cost_basis_override``, params ``pairs`` and ``pair_details``; nothing committed. /validate
+        (``commit=False``) shows the same issue. Today the split goes through and leaves the giving leg without a cost.
+
+        A real missing conversion: PYG is first proven absent from every rate and route, then the oracle — the call
+        ``_handover_cost`` makes, ``compute_wac_iterative`` on ``source`` up to the move without the leg — confirms there
+        is no average and names PYG/EUR on the PYG purchase's day.
+        """
+        await _assert_no_rate_nor_route(world.session, PYG)
+        now = utcnow()
+        world.session.add(Transaction(broker_id=world.source.id, asset_id=world.asset.id, type=TransactionType.BUY, date=PYG_DAY, quantity=BUY_QUANTITY, amount=PYG_PAID, currency=PYG, description=f"{world.marker} buy in PYG", created_at=now, updated_at=now))
+        sold, bought = await _fx_conversion_pair(world)
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving, receiving = stored.rows
+        oracle = await compute_wac_iterative(world.session, broker_id=world.source.id, asset_id=world.asset.id, as_of_date=MOVE_DAY, asset_currency=EUR, excluded_tx_ids=[giving.id], use_cache=False)
+        assert (oracle.wac, [(missing.pair, missing.dates) for missing in oracle.wac_missing_pairs]) == (None, [("PYG/EUR", [PYG_DAY])]), f"precondition broken: the giving leg's Auto cost must need PYG/EUR on {PYG_DAY}: {oracle}"
+
+        response = await _run_batch(world, commit=commit, splits=[{"id_a": sold.id, "id_b": bought.id}, {"id_a": giving.id, "id_b": receiving.id}])
+
+        assert response.committed is False, f"A split whose giving leg has no cost to leave at was committed: {response.results}"
+        assert [_issue_view(issue) for issue in response.issues] == [
+            {
+                "operation": "split",
+                "index": 1,
+                "ref_id": giving.id,
+                "code": WAC_FX_UNAVAILABLE,
+                "field": "cost_basis_override",
+                "params": {"pairs": ["PYG/EUR"], "pair_details": [{"pair": "PYG/EUR", "dates": [PYG_DAY.isoformat()]}]},
+            }
+        ], f"Expected one {WAC_FX_UNAVAILABLE} on split 1, the TRANSFER pair's: {_render(response.issues)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("giving_first", [pytest.param(True, id="giving-side-as-id-a"), pytest.param(False, id="giving-side-as-id-b")])
+    async def test_promote_into_a_transfer_takes_the_cost_off_the_giving_side(self, world, giving_first):
+        """RED until decision 47: an ADJUSTMENT −4 on ``source`` carrying a cost — 100 EUR, as a split of decision 47
+        leaves it — and an ADJUSTMENT +4 on ``dest`` carrying 42 EUR, promoted into a TRANSFER, in either order: the
+        promote commits; the giving side loses ``cost_basis_override`` and ``cost_basis_currency`` — its new type takes
+        no cost basis, ``cost_basis_allowed(TRANSFER, −4)`` is False — and the receiving side keeps its 42 EUR.
+
+        Today the promote keeps both costs: a TRANSFER giving leg carrying a cost no screen can show or edit.
+        """
+        giving = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=-TRANSFER_QUANTITY, cost=Currency(code=EUR, amount=UNIT_COST))
+        receiving = _stored_row(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=TRANSFER_QUANTITY, cost=STORED_COST)
+        world.session.add_all([giving, receiving])
+        await world.session.flush()
+        sides = (cost_basis_allowed(TransactionType.TRANSFER, -TRANSFER_QUANTITY), cost_basis_allowed(TransactionType.TRANSFER, TRANSFER_QUANTITY))
+        assert sides == (False, True), f"precondition broken: TX_TYPE_METADATA must forbid a cost on a TRANSFER's giving side and allow it on its receiving side; cost_basis_allowed gives {sides}"
+        first, second = (giving, receiving) if giving_first else (receiving, giving)
+
+        response = await _run_batch(world, commit=True, promotes=[{"id_a": first.id, "id_b": second.id}])
+
+        assert response.committed is True and response.issues == [], f"The promote of {first.id} and {second.id} into a TRANSFER was refused: {_render(response.issues)}"
+        assert [(result.operation, result.index, tuple(result.ids), result.status) for result in response.results] == [("promote", 0, (first.id, second.id), "success")]
+        assert await _legs_now(world, giving, receiving) == {
+            "giving": (TransactionType.TRANSFER, -TRANSFER_QUANTITY, receiving.id, None, None),
+            "receiving": (TransactionType.TRANSFER, TRANSFER_QUANTITY, giving.id, STORED_COST.amount, STORED_COST.code),
+        }

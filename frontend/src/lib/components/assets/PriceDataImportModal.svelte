@@ -65,10 +65,10 @@
                             <strong>{$t('import.csv.currencyReminder', {values: {currency: currencyLabel}})}</strong>
                         </p>
                     {/if}
-                    <p><strong>{$t('import.csv.labelMinimum')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close</code></p>
-                    <p><strong>{$t('import.csv.labelExtended')}:</strong> <code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">date;currency;close;open;high;low;volume</code></p>
+                    <p><strong>{$t('import.csv.labelMinimum')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;close</code></p>
+                    <p><strong>{$t('import.csv.labelExtended')}:</strong> <code class="bg-lf-neutral/50 px-1 rounded">date;currency;close;open;high;low;volume</code></p>
                     <p class="text-[11px] opacity-80">
-                        {@html $t('import.csv.separatorHint', {values: {sep: '<code class="bg-white/30 dark:bg-slate-700/50 px-1 rounded">;</code>'}})}
+                        {@html $t('import.csv.separatorHint', {values: {sep: '<code class="bg-lf-neutral/50 px-1 rounded">;</code>'}})}
                     </p>
                     <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>

@@ -22,21 +22,26 @@
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
  *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
  *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box;
- *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the seven states of the page of a
- *     verification link — `checking`, the four refusals of the link, `missing`, `error` — with
- *     `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
+ *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the eight states of the page of a
+ *     verification link — `checking`, the four refusals of the link, `missing`, `error`, and `blocked` since lot E-10 —
+ *     with `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
  *     `email.verification.resendErrors.<CODE>` for the five codes the owner can act on, the minutes until the next
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
  *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
+ *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
  *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
  *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
- *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited), and
- *     `…errors.generic` for anything else —; `forgotFailureMessage` one per failure — the hold's own message, one
- *     `…errors.unavailable` for both ways the instance cannot send, the minutes for a rate limit, `…errors.generic` for
- *     anything else, a 422 included —; every key they produce, and the components' own, is in the four catalogues with
- *     exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate limits).
+ *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited) but
+ *     `email.sendLink.errors.RECIPIENT_REFUSED` for a refused recipient (the invitee's or the account's address, not
+ *     the administrator's own as for the test email), and `…errors.generic` for anything else —;
+ *     `forgotFailureMessage` one per failure — one `…errors.unavailable` for both ways the instance cannot send, the
+ *     minutes for a rate limit, `…errors.generic` for anything else, a 422 included, and the code of the hold lot E4b
+ *     removed with its message (`FORGOT_PASSWORD_DISABLED`) too —; every key they produce, and the components' own, is
+ *     in the four catalogues with exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate
+ *     limits).
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -371,8 +376,8 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
 });
 
 // =====================================================================================================================
-/** The seven states of the page of a verification link. */
-const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error'];
+/** The eight states of the page of a verification link: `blocked` since lot E-10, the instance blocked by its provider. */
+const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
 
 /** What `resendFailureMessage` asked the translator for, how many times, and what it returned. */
 function askedResend(failure: ResendFailure): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
@@ -396,7 +401,7 @@ const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string
 ];
 
 describe('the verification of an address (lot E5a) — its words', () => {
-    it('ETX-07: VERIFY_PAGE_KEYS words each of the seven states of the page with a key of its own', () => {
+    it('ETX-07: VERIFY_PAGE_KEYS words each of the eight states of the page with a key of its own', () => {
         expect(VERIFY_PAGE_KEYS).toEqual(Object.fromEntries(VERIFY_PAGE_STATES.map((state) => [state, `email.verification.page.${state}`])));
     });
 
@@ -435,17 +440,18 @@ const LINK_SEND_FAILURES: Array<{label: string; failure: LinkSendFailure; key: s
     ...LINK_SEND_CODES.map((errorCode) => ({label: errorCode, failure: {errorCode}, key: `email.sendLink.errors.${errorCode}`})),
     {label: 'EMAIL_RATE_LIMITED, 1800 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 1800}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 30}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
-    ...SMTP_CODES.map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED ${smtpCode}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: `email.smtpErrors.${smtpCode}`})),
+    ...SMTP_CODES.filter((smtpCode) => smtpCode !== 'RECIPIENT_REFUSED').map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED ${smtpCode}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: `email.smtpErrors.${smtpCode}`})),
+    {label: 'EMAIL_DELIVERY_FAILED RECIPIENT_REFUSED (the recipient, not your own address)', failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode: 'RECIPIENT_REFUSED'}, key: 'email.sendLink.errors.RECIPIENT_REFUSED'},
     ...[undefined, 'SMTP_SOMETHING_NEW', ...INHERITED_NAMES].map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED with ${String(smtpCode)}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: 'email.smtpErrors.SEND_FAILED'})),
     ...['UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.sendLink.errors.generic'})),
 ];
 
 const FORGOT_FAILURES: Array<{label: string; failure: ForgotFailure; key: string; values?: Values}> = [
-    {label: 'FORGOT_PASSWORD_DISABLED (the hold)', failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'}, key: 'email.forgot.errors.FORGOT_PASSWORD_DISABLED'},
     {label: 'EMAIL_UNAVAILABLE', failure: {errorCode: 'EMAIL_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
     {label: 'EMAIL_LINKS_UNAVAILABLE', failure: {errorCode: 'EMAIL_LINKS_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
     {label: 'EMAIL_RATE_LIMITED, 840 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 14}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
+    {label: 'FORGOT_PASSWORD_DISABLED (the hold, removed with its message in lot E4b)', failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'}, key: 'email.forgot.errors.generic'},
     ...['INVALID', 'UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.forgot.errors.generic'})),
 ];
 

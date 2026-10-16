@@ -13,7 +13,11 @@
  *   - otherwise `POST /email/verification/confirm {token}` — `checking` meanwhile; verified: the login page's message
  *     `$_('email.verification.verified', {values: {username}})` is left with `setAuthFlash`, then `goto('/')`; a 400
  *     `TOKEN_INVALID` shows its status (`expired`, `consumed`, `revoked`, `unknown`; an unknown status is `unknown`);
- *     any other failure is `error`, whose retry asks again for the same token;
+ *     any other failure but the block's (below) is `error`, whose retry asks again for the same token;
+ *   - on a blocked instance (lot E-10) the confirm is refused before its route: a 401 to a visitor without a session
+ *     (on this public route only the block answers 401), a 423 `instance_blocked` to a signed-in browser. Either shows
+ *     `blocked`, in the block's own words: no retry, the way back to the sign-in, no message left, no navigation,
+ *     nothing asked again; a retry of a failed check that the block answers ends there too;
  *   - `hashchange`: a link pasted into a tab already on the page changes only the fragment; the page reads it again: a
  *     token replaces the old one and goes through the flow of the mount; no token changes nothing;
  *   - only the latest attempt writes: an answer to an older token, arriving late, neither navigates, nor leaves a
@@ -25,6 +29,8 @@
  * test; the rest of `$lib/api` is real, `ApiError` included), `authFlash.ts` (spies), `$app/navigation` (`goto` and
  * `replaceState` spies), and the frame's decoration (no-op components). `$lib/i18n` keeps its real exports with a
  * translator that answers the key, and its values when it is given some: `email.verification.verified {username=…}`.
+ * The client's response interceptor never runs (the alias is replaced): the «no navigation» of a blocked instance is
+ * the page's own.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -123,6 +129,12 @@ function refusal(status: number, detail: unknown): Error {
 function tokenInvalid(status: unknown): Error {
     return refusal(400, {error_code: 'TOKEN_INVALID', status, message: 'This verification link is not valid'});
 }
+
+/** How a blocked instance refuses the confirm (`refuse_when_blocked`, workstream H), before its route: one per caller. */
+const BLOCKED_REFUSALS: Array<[string, () => Error]> = [
+    ['a visitor without a session, refused with a 401', () => refusal(401, 'Not authenticated')],
+    ['a signed-in browser, refused with a 423 instance_blocked', () => refusal(423, {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'})],
+];
 
 const pageRoot = () => screen.getByTestId('verify-email-page');
 const card = () => within(pageRoot()).getByTestId('verify-email-status');
@@ -304,5 +316,42 @@ describe('/verify-email — a link pasted into the tab already on the page (hash
 
         expect(mocks.setAuthFlash.mock.calls).toEqual([['email.verification.verified {username=zq_bob}']]);
         expect(card(), 'the late refusal of the older link is not shown').not.toHaveAttribute('data-status', 'expired');
+    });
+});
+
+describe('/verify-email — on a blocked instance (lot E-10)', () => {
+    it.each(BLOCKED_REFUSALS)('VEP-11: %s — blocked, in the block’s own words: the way back only, no retry, no message, no navigation, nothing asked again', async (_label, fail) => {
+        mocks.confirm.mockRejectedValue(fail());
+        openAt(`/verify-email#token=${TOKEN}`);
+
+        render(VerifyEmailPage);
+
+        await expectStatus('blocked');
+        await settle();
+        expect(card(), 'still blocked once everything already started has run').toHaveAttribute('data-status', 'blocked');
+        expect(within(card()).getByTestId('verify-email-message')).toHaveTextContent('email.verification.page.blocked');
+        expect(within(card()).queryByTestId('verify-email-retry'), 'trying again changes nothing while the instance is blocked').toBeNull();
+        expect(within(card()).getByTestId('verify-email-goto-login')).toBeInTheDocument();
+        expect(mocks.confirm, 'asked once, never again').toHaveBeenCalledTimes(1);
+        expect(mocks.setAuthFlash).not.toHaveBeenCalled();
+        expect(mocks.goto).not.toHaveBeenCalled();
+    });
+
+    it.each(BLOCKED_REFUSALS)('VEP-12: a check that failed, tried again and answered by the block — %s — ends on blocked: its retry withdrawn', async (_label, fail) => {
+        mocks.confirm.mockRejectedValueOnce(new Error('Network Error')).mockRejectedValueOnce(fail());
+        openAt(`/verify-email#token=${TOKEN}`);
+        render(VerifyEmailPage);
+        await expectStatus('error');
+
+        await fireEvent.click(within(card()).getByTestId('verify-email-retry'));
+
+        await expectStatus('blocked');
+        await settle();
+        expect(mocks.confirm).toHaveBeenCalledTimes(2);
+        expect(mocks.confirm.mock.calls[1][0], 'the same token again').toStrictEqual({token: TOKEN});
+        expect(within(card()).queryByTestId('verify-email-retry'), 'the retry the error offered is withdrawn').toBeNull();
+        expect(within(card()).getByTestId('verify-email-goto-login')).toBeInTheDocument();
+        expect(mocks.setAuthFlash).not.toHaveBeenCalled();
+        expect(mocks.goto).not.toHaveBeenCalled();
     });
 });

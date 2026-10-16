@@ -135,11 +135,13 @@ export interface ResultReason {
  * Two deliberate choices:
  *
  * **Nothing is filtered on `degrades_result`.** That flag decides the *status*,
- * which is already on screen, and it is not a synonym for "worth reading": the
- * one warning in the tree that sets it to `false` reports that an asset's sector
- * metadata was missing and it was treated as "Other" at 100%. The number is not
- * degraded — the *meaning* of a sector shock computed that way is. Hiding it
- * would withhold exactly the sentence that explains the shape on screen.
+ * which is already on screen, and it is not a synonym for "worth reading". The
+ * warnings that set it to `false` say what the status cannot: that an asset's
+ * sector metadata was missing and it was treated as "Other" at 100% — the number
+ * is not degraded, the *meaning* of a sector shock computed that way is — or that
+ * a total loss leaves no gain to recover from (`total_loss_no_recovery`, with no
+ * recovery figure on screen). Hiding them would withhold exactly the sentence that
+ * explains what is on screen, or missing from it.
  *
  * **Translated only through the backend's own key.** With a translator, each
  * sentence comes from the warning's `message_i18n_key` and `message_params` (see
@@ -342,21 +344,13 @@ export interface HurtRow {
     secondaryLoss: number | null;
     /** Days the worst fall lasted; only the `worst` row has it. */
     durationDays: number | null;
-    /** Gain needed to get back to the prior peak, as a positive fraction. */
+    /**
+     * Gain needed to get back to the prior peak, as a positive fraction: the backend's
+     * `maximum_drawdown_trough_to_peak_ratio` (P19, rule 10), as it comes. Null when the
+     * backend has none — a total loss — or when the depth came from the KPI, which carries
+     * no recovery: there is no fallback.
+     */
     requiredRecovery: number | null;
-}
-
-/**
- * The gain required to undo a loss.
- *
- * The asymmetry that makes drawdowns expensive: −10% needs +11,1%, −50% needs
- * +100%. Losing everything can never be undone, so a total loss returns null
- * rather than Infinity — there is no number to show.
- */
-export function requiredRecovery(lossFraction: number): number | null {
-    if (!Number.isFinite(lossFraction) || lossFraction <= 0) return null;
-    if (lossFraction >= 1) return null;
-    return 1 / (1 - lossFraction) - 1;
 }
 
 /**
@@ -399,7 +393,8 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
     // the duration, and falls back to the KPI, which carries the depth alone.
     const drawdown = okOutput(resultByCode(historicalResults, 'drawdown_summary'));
     const kpi = okOutput(resultByCode(historicalResults, 'historical_kpi'));
-    const depth = lossMagnitude(drawdown?.maximum_drawdown, 'negative') ?? lossMagnitude(kpi?.max_drawdown, 'negative');
+    const summaryDepth = lossMagnitude(drawdown?.maximum_drawdown, 'negative');
+    const depth = summaryDepth ?? lossMagnitude(kpi?.max_drawdown, 'negative');
     if (depth !== null) {
         // Already a magnitude: the sign was consumed by its declared convention.
         const loss = depth;
@@ -407,8 +402,10 @@ export function buildHurtRows(historicalResults: RiskAnalyticResult[]): HurtRow[
             id: 'worst',
             loss,
             secondaryLoss: null,
-            durationDays: finite(drawdown?.maximum_drawdown_duration_days) ?? finite(kpi?.max_drawdown_duration_days),
-            requiredRecovery: requiredRecovery(loss),
+            durationDays: summaryDepth !== null ? finite(drawdown?.maximum_drawdown_duration_days) : finite(kpi?.max_drawdown_duration_days),
+            // The asymmetry that makes drawdowns expensive (−50% needs +100%), as the backend states it. It belongs to
+            // the summary's own depth: none when the depth came from the KPI, nor for a zero fall with nothing to recover.
+            requiredRecovery: summaryDepth !== null && loss > 0 ? finite(drawdown?.maximum_drawdown_trough_to_peak_ratio) : null,
         });
     }
 
@@ -420,6 +417,7 @@ export interface CurrentDrawdown {
     loss: number;
     peakDate: string | null;
     durationDays: number | null;
+    /** The backend's `remaining_to_peak_ratio`, as it comes; null for a total loss. */
     requiredRecovery: number | null;
 }
 
@@ -441,7 +439,7 @@ export function buildCurrentDrawdown(historicalResults: RiskAnalyticResult[]): C
         loss,
         peakDate: typeof peak === 'string' ? peak : null,
         durationDays: finite(output.current_drawdown_duration_days),
-        requiredRecovery: requiredRecovery(loss),
+        requiredRecovery: finite(output.remaining_to_peak_ratio),
     };
 }
 

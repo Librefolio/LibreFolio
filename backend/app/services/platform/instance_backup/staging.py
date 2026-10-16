@@ -65,6 +65,7 @@ from backend.app.services.platform.instance_backup.paths import (
     stages_dir,
 )
 from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
+from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
 
 logger = get_logger(__name__)
 
@@ -133,7 +134,11 @@ class StagingReport(BaseModel):
 
     ``warnings`` and ``blockers`` are stable codes. A warning is shown and lets the restore go on: ``rows_changed`` (the
     upgrade changed the rows of a table), ``foreign_key_violations`` (the backup's database has broken references, kept
-    as they are), ``foreign_key_violations_added`` (the upgrade added some). A blocker forbids it: ``no_administrator``.
+    as they are), ``foreign_key_violations_added`` (the upgrade added some), ``control_totals_changed`` (the ledger's
+    control totals of the copy differ from those the backup recorded: ``control_totals_differences``),
+    ``control_totals_unreadable`` (the copy's could not be read). A blocker forbids it: ``no_administrator``.
+    ``control_totals``: ``same``, ``changed``, ``absent`` (not in the archive), ``other_version`` (another version of
+    J's method: not compared) or ``unreadable``.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -155,6 +160,10 @@ class StagingReport(BaseModel):
     database_size: int = Field(ge=0)
     instance_key_included: bool
     administrators: list[str]
+    #: Defaults, so that a report written before lot B-13 still reads.
+    control_totals: TotalsStatus = "absent"
+    control_totals_differences: list[TotalsDifference] = []
+    control_totals_differences_count: int = Field(default=0, ge=0)
     warnings: list[str]
     blockers: list[str]
 
@@ -261,7 +270,8 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         raise StagingError("database_damaged", "The copy of the backup's database fails its integrity check after its upgrade")
     if after.alembic_revision != head:
         raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
-    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database))
+    totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
+    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals)
     _write_report(root, report)
     return report
 
@@ -475,6 +485,7 @@ def _report(
     head: str,
     fixes: list[str],
     administrators: list[str],
+    totals: TotalsComparison | None = None,
 ) -> StagingReport:
     tables = {name: TableRows(before=before.tables.get(name), after=after.tables.get(name)) for name in sorted(set(before.tables) | set(after.tables))}
     warnings = []
@@ -486,6 +497,11 @@ def _report(
         warnings.append("foreign_key_violations_added")
     elif after.foreign_key_violations:
         warnings.append("foreign_key_violations")
+    totals = totals or TotalsComparison("absent")
+    if totals.status == "changed":
+        warnings.append("control_totals_changed")
+    elif totals.status == "unreadable":
+        warnings.append("control_totals_unreadable")
     files = manifest.files[1:]
     staged_at = datetime.now(UTC)
     return StagingReport(
@@ -506,6 +522,9 @@ def _report(
         database_size=after.size,
         instance_key_included=manifest.instance_key.included,
         administrators=administrators,
+        control_totals=totals.status,
+        control_totals_differences=list(totals.differences),
+        control_totals_differences_count=totals.differences_count,
         warnings=warnings,
         blockers=[] if administrators else ["no_administrator"],
     )

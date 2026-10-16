@@ -457,6 +457,15 @@ def utils_backup_cli(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup CLI tests", verbose=verbose)
 
 
+def utils_backup_cli_restore(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the restore from the command line: restore ARCHIVE with its confirmation, pending, pending --cancel."""
+    print_section("Utils: Backup CLI restore")
+    print_info("Testing: scripts/backup_cli.py (cmd_restore without --dry-run, cmd_pending), python scripts/backup_cli.py pending")
+    print_info("Tests: --yes, the word typed on a pty, a pipe refused, declined, blocked, already pending, confirm errors; pending and --cancel")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_restore.py", test_names)
+    return run_command(cmd, "Backup CLI restore tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -532,7 +541,7 @@ Tests for utility modules and helper functions:
         "cooldown",
         utils_cooldown,
         name="Cooldown",
-        desc="Cooldowns: an unknown key may call and is not tracked; once a pause is over (its trial taken or not) the n-th refusal in a row waits min(base·2^(n−1), max), a positive finite Retry-After a floor honoured above the max up to the hard max, a jitter of up to 10 % on top and never below the floor, base/max given to a call for that call only, a refusal more than max after the end of the pause starts over, no overflow on any streak; while a pause runs, a refusal or a success of a call already in flight counts nothing and never shortens it, only a Retry-After ending later extends it (to now + floor, no jitter), so a burst of 429s counts one; check counts the pause down, then lets one trial through at a time for trial_seconds; succeeded after the pause forgets and returns the count, released frees the trial and keeps it; a backwards clock never lengthens a wait; snapshot, reset/clear/len, independent keys with None among them, LRU eviction at max_keys, one trial and one counted refusal under concurrent threads; retry_after_seconds reads delta-seconds and HTTP-dates, None otherwise; RateLimitedError combines with a domain exception",
+        desc="Cooldowns: an unknown key may call and is not tracked; once a pause is over (its trial taken or not) the n-th refusal in a row waits min(base·2^(n−1), max), a positive finite Retry-After a floor honoured above the max up to the hard max, a jitter of up to 10 % on top and never below the floor, base/max given to a call for that call only, a refusal more than max after the end of the pause starts over, no overflow on any streak; while a pause runs, a refusal or a success of a call already in flight counts nothing and never shortens it, only a Retry-After ending later extends it (to now + floor, no jitter), so a burst of 429s counts one; check counts the pause down, then lets one trial through at a time for trial_seconds; succeeded after the pause forgets and returns the count, released frees the trial and keeps it; a backwards clock never lengthens a wait; snapshot, reset/len, independent keys with None among them, LRU eviction at max_keys, one trial and one counted refusal under concurrent threads; retry_after_seconds reads delta-seconds and HTTP-dates, None otherwise; RateLimitedError combines with a domain exception",
         # PURE: no lane DB, no server, no environment read; an injected fake clock and random source, threads of its own, no sleeps.
         isolation="pure",
     )
@@ -875,10 +884,22 @@ Tests for utility modules and helper functions:
         "backup-cli",
         utils_backup_cli,
         name="Backup CLI",
-        desc="scripts/backup_cli.py: the archive goes to <data dir>/backups/, into an existing --output folder, or to the --output file (relative to the working directory, which dev.py sets to the project root; ~ expanded), never replacing a file (-2, -3 … in a folder); --output is checked before the run and nothing is created for it until the archive moves there; an archive that cannot get there goes to backups/ (exit 1) or stays in its job folder, never lost, with no folder left behind; run as root on a data directory owned by another user it drops its groups, takes the owner's group then user, and stops with a message if it cannot; backups/ that is a link or a file, and OS errors before the run, are messages with exit 1; no subcommand exits 1; inspect exits 0 on an intact archive (--no-verify compares the entry names without reading them) and 1 on a missing file, a file that is not a zip, a zip without manifest, an altered, added or damaged entry; create exits 1 without data directory or database, writing nothing; python scripts/backup_cli.py create then inspect exit 0; restore without --dry-run or on a missing file exits 1 creating nothing, restore --dry-run exits 0 on a restorable archive (report printed, administrators named, the copy removed) and 1 with the StagingError code on a refused one, without an active administrator, while another check runs, or when .restore is a link; the script runs restore --dry-run end to end",
+        desc="scripts/backup_cli.py: the archive goes to <data dir>/backups/, into an existing --output folder, or to the --output file (relative to the working directory, which dev.py sets to the project root; ~ expanded), never replacing a file (-2, -3 … in a folder); --output is checked before the run and nothing is created for it until the archive moves there; an archive that cannot get there goes to backups/ (exit 1) or stays in its job folder, never lost, with no folder left behind; run as root on a data directory owned by another user it drops its groups, takes the owner's group then user, and stops with a message if it cannot; backups/ that is a link or a file, and OS errors before the run, are messages with exit 1; no subcommand exits 1; inspect exits 0 on an intact archive (--no-verify compares the entry names without reading them) and 1 on a missing file, a file that is not a zip, a zip without manifest, an altered, added or damaged entry; create exits 1 without data directory or database, writing nothing; python scripts/backup_cli.py create then inspect exit 0; restore of a missing file, with or without --dry-run, exits 1 creating nothing, restore --dry-run exits 0 on a restorable archive (report printed, administrators named, the copy removed) and 1 with the StagingError code on a refused one, without an active administrator, while another check runs, or when .restore is a link; the script runs restore --dry-run end to end",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked
         # before each command), children with the same data directory and without LIBREFOLIO_*/COVERAGE_*, identity
         # calls replaced: no lane DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-restore",
+        utils_backup_cli_restore,
+        name="Backup CLI Restore",
+        desc="scripts/backup_cli.py restore ARCHIVE without --dry-run: the check and its report, then the confirmation (--yes; the word restore typed on a terminal, spaces ignored, case kept; a pipe refused naming --yes; anything else declined, Nothing restored) → exit 0, the restore pending for the next start (.restore/restore.json 0600, confirmed_by cli), the copy kept, the live data untouched; exit 1 with the copy removed when declined, blocked (no administrator) or refused by the confirmation (its code in parentheses); an active restore stops the command before its check (restore_already_pending), --dry-run unchanged meanwhile; pending (none, each phase, waiting and reason codes in parentheses) and pending --cancel (the restore and its copy dropped; restore_not_pending with exit 1, nothing created); the script end to end",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked),
+        # a database at the head made once by alembic in its own process, a pty or a pipe for stdin; restart.send_signal
+        # and os.kill as restart sees them record and must stay unused: no lane DB, no server, no network, no writes
+        # outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

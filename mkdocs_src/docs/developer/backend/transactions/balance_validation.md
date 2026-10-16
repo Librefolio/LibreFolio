@@ -103,7 +103,7 @@ The two stable validation codes are:
 | `balanceAssetNegative` | An asset quantity closes a day below zero |
 
 The frontend turns each code into `transactions.errors.<code>`
-(`resolveIssueMessage()` in `lib/utils/transactions/resolveValidationMessage.ts`):
+(`resolveIssueMessage()` in `lib/features/transactions/resolveValidationMessage.ts`):
 *Saving would cause … to go negative … on {date} at {brokerName}*. The bulk
 workspace groups these issues under *This configuration causes data
 inconsistencies* (`transactions.validate.balanceIssuesHeader`), each with the

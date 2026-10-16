@@ -123,6 +123,12 @@ your users sign in again after each restart. See
   `mailto:…`): where the users of the instance ask for help, such as an asset the search does not
   find. Without it, the help links go to LibreFolio's issues on GitHub. See «Main Options» in
   [Environment Variables](configuration.md).
+- A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
+  in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
+  systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
+  the server so that its next start applies it, with **Restore and restart** in Settings › Backup
+  (`POST /api/v1/backup/restore/restart`): a clean stop, which a policy that restarts only after a
+  failure (`on-failure`, the default of `fly deploy`) does not follow with a start.
 
 ---
 
@@ -259,6 +265,15 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
   catches up the history sync missed in the meantime and fills the gap the block left, going back
   to each asset's and FX pair's last saved day, up to a year.
+- A restore that an administrator confirmed before the block, and that still waits, is not applied
+  while the instance is blocked: the first start after the unblock applies it. On the server,
+  `backup pending` shows it waiting (`instance_blocked`), and `backup pending --cancel` drops it: see
+  «Follow or Cancel a Restore» in [CLI Admin Tools](cli_tools.md). Two consequences:
+  - its checked copy keeps its disk space in the data directory for the whole block: `backup pending
+    --cancel` frees it;
+  - if you update LibreFolio during the block, the first start after the unblock also migrates the
+    restored database, checked at the version of then, as any update does; the data of before stays
+    aside until that start completes, and if the start fails the next one puts it back.
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -297,6 +312,7 @@ On a blocked instance, only these API calls answer as usual:
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
 | Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
+| The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
@@ -447,11 +463,12 @@ The `code` comes in the `detail` of the answer, with a `message` in English:
 
 ## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
 
-To check an archive for a restore, an administrator uploads it to the instance
-(`PUT /api/v1/backup/restore/upload`), which then checks it on a copy, as `backup restore --dry-run`
-does on the [command line](cli_tools.md). On an
-instance you host, the administrator is your customer: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is how you
-cap the size of the archives they can upload.
+To check an archive for a restore, an administrator uploads it to the instance from Settings › Backup
+([Restore from Settings › Backup](backup_restore.md#restore-settings)), through
+`PUT /api/v1/backup/restore/upload`; the instance then checks it on a copy, as
+`backup restore --dry-run` does on the [command line](cli_tools.md). On an instance you host, the
+administrator is your customer: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is how you cap the size of the
+archives they can upload.
 
 | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | Largest archive accepted |
 | --- | --- |
@@ -480,8 +497,12 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   with `no_space`.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
-- On a [blocked instance](#instance-block), the upload is refused like the rest of the app: the
-  block lets the data leave, never come in.
+- An administrator reads the limit in force in `upload_limit_mb` of
+  `GET /api/v1/backup/restore/status`: `0` for no limit, `null` when the value cannot be read.
+  Settings › Backup shows it on its restore card, such as *Archives up to 500 MB.*, and refuses a
+  larger file before sending it.
+- On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
+  are the check and the restore: the block lets the data leave, never come in.
 
 ---
 
@@ -491,7 +512,7 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🔐 **[Keep Users Signed In After a Restart](index.md#session-persistence)** — Generating
   `JWT_SECRET`
 - 💾 **[CLI Admin Tools](cli_tools.md)** — «Back Up the Instance»: the same archives from the
-  command line, and a restore tried on a copy
+  command line, a restore tried on a copy, and the restore itself
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list

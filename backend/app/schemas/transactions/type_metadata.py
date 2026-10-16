@@ -430,7 +430,7 @@ def cost_basis_allowed(tx_type: TransactionType, quantity: Decimal) -> bool:
     """Whether a transaction of ``tx_type`` with ``quantity`` may carry a cost basis, so a ``cost_basis_mode`` (rule 12).
 
     Allowed when the rule of its side (``_cost_basis_rule``) is not ``forbidden``, a ``required_qty_pos`` one only with
-    a quantity above zero: the test the frontend makes as ``cbAllowed`` (``utils/transactions/txPayloadHelpers.ts``).
+    a quantity above zero: the test the frontend makes as ``cbAllowed`` (``features/transactions/txPayloadHelpers.ts``).
     """
     rule = _cost_basis_rule(tx_type, quantity)
     return rule is not None and rule != "forbidden" and not (rule == "required_qty_pos" and quantity <= 0)

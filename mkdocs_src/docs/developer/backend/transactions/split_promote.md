@@ -20,12 +20,15 @@ The relevant `execute_batch()` stages run in this order:
 
 ```text
 delete → split → update → updated-pair validation → create → promote → create-link resolution
+       → WAC and FX issues
 ```
 
 Split deliberately precedes update. A batch can therefore split a pair and then
 apply updates whose type swaps are legal only for the resulting standalone types.
 Promote follows create so its references can resolve either persisted rows or rows
-that were flushed earlier in the same batch.
+that were flushed earlier in the same batch. The cost of a split `TRANSFER`'s giving
+leg waits for the WAC stage, which sees every other row of the batch (see
+[The giving leg of a `TRANSFER`](#transfer-giving-leg)).
 
 ---
 
@@ -41,8 +44,11 @@ For each `TXSplitBatchItem`, `apply_splits()`:
    by negative/positive amount for cash pairs;
 4. changes both row types using `SPLIT_TYPE_MAP`;
 5. clears both `related_transaction_id` values;
-6. clears `asset_id` for the cash split outcomes; and
-7. records both brokers' affected dates and a two-ID `split` result.
+6. clears `asset_id` for the cash split outcomes;
+7. for a `TRANSFER` pair, records the giving leg, with the split's index, in
+   `context.handover_rows`, for the WAC stage to price (see
+   [The giving leg of a `TRANSFER`](#transfer-giving-leg)); and
+8. records both brokers' affected dates and a two-ID `split` result.
 
 The rows keep their IDs. No create or delete is involved.
 
@@ -54,11 +60,43 @@ The rows keep their IDs. No create or delete is involved.
 
 Deleting a broker with its transactions converts the surviving half of each pair
 with another broker by the same rules, through the same helpers of
-`batch_edits.py`: `pair_sides()` (step 3) and `make_standalone()` (steps 4–6). Two
-differences: a received `TRANSFER` without a cost basis first gets its sender's
-Auto cost, and the giving leg of a `TRANSFER` only loses its link until point 47
-of release 1.3 is answered. See
+`batch_edits.py`: `pair_sides()` (step 3) and `make_standalone()` (steps 4–6), and
+gives a giving `TRANSFER` leg the cost a split gives it (below). Two differences: a
+received `TRANSFER` without a cost basis first gets its sender's Auto cost, which a
+split does not write; and a giving leg whose cost needs a missing conversion stays a
+`TRANSFER` without its link, where a split is refused. See
 [Transaction Service — Broker Deletion](service.md#broker-deletion).
+
+### 📤 The giving leg of a `TRANSFER` {: #transfer-giving-leg }
+
+A split `TRANSFER` pair leaves two `ADJUSTMENT`s. The receiving one keeps its cost
+basis. The giving one takes units out, and without a cost basis the FIFO lots would
+read them as destroyed — a write-off — so it leaves at the **Auto cost of its own
+broker**, at which the lots hand its units over (decision 47 of release 1.3; see
+[Hand-over at cost](fifo_lot_engine.md#handover-at-cost)):
+
+- `apply_splits()` only records the leg (step 7). `compute_wac_and_fx_issues()`
+  (`batch_costs.py`) prices it after the Auto rows of
+  `_compute_wac_for_auto_items()`, once every row of the batch is in place: a
+  purchase the same batch adds on that broker before the leg's date counts.
+- The cost is `TransactionService._handover_cost()`: `_auto_cost()` on the leg's
+  broker, up to its date, without the leg itself — the cost a broker deletion
+  writes too. `_write_auto_cost()` stores `cost_basis_override` and
+  `cost_basis_currency` together.
+- An update of the same batch that gives the leg a `cost_basis_override` wins: the
+  stage leaves that leg alone. Such an update sends the cost without a
+  `cost_basis_mode`: rule 12 refuses a mode on an `ADJUSTMENT` taking units out (see
+  [Per-type rules](service.md#per-type-rules)).
+- When the cost needs a missing conversion, the split is refused: one
+  `wacFxUnavailable` issue on operation `split`, at the split's index, `ref_id` the
+  giving leg, `field` `cost_basis_override`, with `pairs` and `pair_details` in
+  `params` as for an Auto row. Nothing commits, and `/transactions/validate`
+  reports the same issue.
+- Like the inline WAC, the stage prices the leg only when no non-balance issue
+  exists yet.
+
+Tests: `./dev.py test services transaction-cost-basis-rule`
+(`TestDecision47TheGivingLegOfATransfer`).
 
 ### 📦 Request shape
 
@@ -108,10 +146,14 @@ both. After resolving the references, the stage:
    for a saved row; the promote is then skipped and neither row changes;
 4. assigns the inferred type to both existing ORM rows;
 5. writes reciprocal `related_transaction_id` values;
-6. applies recognized `resolved_fields`;
-7. marks same-batch correlation keys as consumed so the later create-link stage
+6. clears `cost_basis_override` and `cost_basis_currency` on a side whose new type
+   takes no cost basis (`cost_basis_allowed()` is false: the giving side of a
+   `TRANSFER`), such as an `ADJUSTMENT` taking units out that a split left with a
+   cost; the receiving side keeps its own (decision 47);
+7. applies recognized `resolved_fields`;
+8. marks same-batch correlation keys as consumed so the later create-link stage
    does not process them again; and
-8. emits a `promote` result containing the same two row IDs.
+9. emits a `promote` result containing the same two row IDs.
 
 No original row is deleted and no replacement row is created.
 
@@ -202,7 +244,7 @@ WAC. The later `_compute_wac_for_auto_items()` worklist is built only from parse
 create and update items. Promote-specific cost-basis resolution therefore comes
 from `resolved_fields.cost_basis_override`, supplied by the frontend merge flow
 or another API client; without that key, the receiver keeps the cost basis it
-already has.
+already has, and the sender is left without one (step 6).
 
 Because `apply_promotes()` writes `related_transaction_id` before the WAC step, a
 create or update in Auto that the promote makes the receiving side averages its
@@ -247,6 +289,7 @@ their stage loops continue. Common stable codes are:
 | `txNotFound` | A split ID does not resolve |
 | `splitIdsMismatch` | Split IDs are not reciprocal partners |
 | `typeCannotSplit` | The current pair type has no split mapping |
+| `wacFxUnavailable` | On operation `split`: the giving leg of a `TRANSFER` pair has no Auto cost, a conversion is missing ([The giving leg of a `TRANSFER`](#transfer-giving-leg)) |
 | `promoteRefNotFound` | A saved or same-batch promote reference cannot be resolved |
 | `alreadyPaired` | A promote candidate already has a persistent partner |
 | `noPromoteRule` | No metadata rule and constraint set matches the two rows |

@@ -8,7 +8,10 @@ fixes).
 
 Backups are written under ``backups/``, the instance's own folder for them, which is never archived. The background
 jobs of the API keep their state and their work files in ``backups/.jobs/<job id>/``. A restore unpacks and checks an
-archive in ``.restore/stage/<stage id>/``, never archived either.
+archive in ``.restore/stage/<stage id>/``, never archived either. A confirmed restore waits there too
+(``.restore/restore.json``) for the next start, which swaps the folders of ``SWAPPED_FOLDERS`` with the copy's. The page
+that asked the restart reads the outcome with a one-time ticket, whose hash waits in ``.restore/outcome-ticket.json``
+(lot B5c).
 """
 
 from __future__ import annotations
@@ -41,6 +44,18 @@ STAGE_LOCK_FILE = ".stage.lock"
 #: Inside ``.restore``: the archives uploaded for a check (lot B2b), and the state of each check.
 UPLOAD_FOLDER = "upload"
 CHECKS_FOLDER = "checks"
+#: Inside ``.restore`` (lot B3): the state of the restore confirmed for the next start, the lock its startup steps take
+#: turns on, the live folders it replaced (kept until its first start completes) and the restored ones a rollback sets
+#: aside.
+RESTORE_STATE_FILE = "restore.json"
+APPLY_LOCK_FILE = "apply.lock"
+#: Inside ``.restore`` (lot B5c): the hash of the one-time ticket with which the page that asked a restart reads the
+#: restore's outcome, without a session.
+OUTCOME_TICKET_FILE = "outcome-ticket.json"
+PREVIOUS_FOLDER = "previous"
+FAILED_FOLDER = "failed"
+#: The live folders a restore replaces, in this order: the database's, then those an archive carries.
+SWAPPED_FOLDERS = ("sqlite", *ARCHIVED_FOLDERS)
 
 _JOB_ID = re.compile(r"[0-9a-f]{32}")
 
@@ -124,6 +139,37 @@ def check_state_path(data_dir: Path, stage_id: str) -> Path:
     if not is_job_id(stage_id):
         raise ValueError("not a restore stage id")
     return checks_dir(data_dir) / f"{stage_id}.json"
+
+
+def stage_data_dir(data_dir: Path, stage_id: str) -> Path:
+    """The data directory a checked archive rebuilds, inside its stage. ``ValueError`` for anything that is not a stage
+    id."""
+    return stage_dir(data_dir, stage_id) / STAGE_DATA_FOLDER
+
+
+def restore_state_path(data_dir: Path) -> Path:
+    """The state of the restore confirmed for the next start: ``<data dir>/.restore/restore.json``."""
+    return restore_dir(data_dir) / RESTORE_STATE_FILE
+
+
+def apply_lock_path(data_dir: Path) -> Path:
+    """The lock the startup steps of a restore take turns on, across the workers of a server."""
+    return restore_dir(data_dir) / APPLY_LOCK_FILE
+
+
+def outcome_ticket_path(data_dir: Path) -> Path:
+    """The one-time ticket of the outcome of a restore (its hash): ``<data dir>/.restore/outcome-ticket.json``."""
+    return restore_dir(data_dir) / OUTCOME_TICKET_FILE
+
+
+def previous_dir(data_dir: Path) -> Path:
+    """Where a restore keeps the live folders it replaced, until its first start completes: ``.restore/previous``."""
+    return restore_dir(data_dir) / PREVIOUS_FOLDER
+
+
+def failed_dir(data_dir: Path) -> Path:
+    """Where a rollback sets the restored folders aside, until the start removes them: ``.restore/failed``."""
+    return restore_dir(data_dir) / FAILED_FOLDER
 
 
 def is_plain_dir(path: Path) -> bool:

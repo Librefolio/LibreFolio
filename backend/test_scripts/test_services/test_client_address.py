@@ -27,22 +27,25 @@ module ``backend/app/services/platform/client_address.py``. The contract:
     a comma-separated list, an address with a port, brackets (with a port or without), a zone id, a leading zero, empty
     or blank, text, a space inside, a network. ``length`` counts the values as received, spaces included. No log record,
     at any level, holds a value of the header nor an address inside one. Another malformed request warns no more, and a
-    usable or absent header re-arms nothing; ``reset_client_address_cache()`` re-arms the warning.
+    usable or absent header re-arms nothing: a new process starts over, and warns again. The tests reproduce one by
+    clearing ``_configured_header()``'s cache and emptying ``_warned`` (N58: no production reset).
 (e) The configured name is read once per process: after the first call, a change of the environment changes nothing
-    until ``reset_client_address_cache()``, and the next call reads it. Every way: another name, set, unset.
+    until a new process starts over, and its first call reads it; the tests reproduce one as in (d). Every way: another
+    name, set, unset.
 (f) ``client_rate_key(address)``, the key of an address for a per-client limit: no key for ``None`` nor ``""``; an
     IPv4 address as is; an IPv4-mapped one as its IPv4; any other IPv6 address by its /64, in canonical form, a zone
     ignored; anything else as written. The values are pinned here, one by one.
-(g) ``mask_client_address(address)``, the form an address may take in a log: nothing for ``None`` nor ``""``; an IPv4
-    address by its /24; an IPv4-mapped one as its IPv4, so by its /24; any other IPv6 address by its /48; anything else
-    as written.
+(g) Nothing in the module exists only for the tests (N58, H-22): no ``reset_client_address_cache()``, since the tests
+    start the module's state over themselves, and no ``mask_client_address()``, since no log writes a client's address,
+    so it has no caller. Red until H-22 removes both.
 
 How. Every test runs with ``LIBREFOLIO_TEST_MODE=1`` (``get_settings()`` reads no ``.env``), ``LIBREFOLIO_TEST_DATA_DIR``
 under ``tmp_path`` (``get_settings()`` never looks at the lane's data), the profile and the setting removed, all through
-``monkeypatch``. ``reset_client_address_cache()`` runs before and after each test, the last time with the environment of
-the run put back, so that no test inherits the name another read nor the warning another spent. A case that configures
-the setting checks first that ``get_settings()`` reads it so (a barrier), then resets the cache: it holds whether the
-reset reads the name again at once or leaves it to the next call. ``Settings`` itself is built with ``_env_file=None``.
+``monkeypatch``. Before and after each test the module's state starts over as a new process finds it, the last time
+with the environment of the run put back, so that no test inherits the name another read nor the warning another
+spent: the tests clear ``_configured_header()``'s cache and empty ``_warned``, the module's own list, in place (N58: no
+production reset). A case that configures the setting checks first that ``get_settings()`` reads it so (a barrier),
+then starts the module's state over: the next call reads the name. ``Settings`` itself is built with ``_env_file=None``.
 A connection is a Starlette ``Request`` or ``WebSocket`` on a raw scope, no server: header names in lower case, as
 uvicorn puts them there (h11 and httptools lower-case every name, and Starlette's ``Headers`` compares lower-case names),
 a repeated header as repeated lines, another header between them as when a proxy appends its own. The module's
@@ -113,27 +116,29 @@ EVERY_CLIENT_HEADER: tuple[Header, ...] = ((FLY, "203.0.113.7"), *OTHER_CLIENT_H
 # =============================================================================
 
 
-def _reset_if_there() -> None:
-    """``reset_client_address_cache()``, once the module and the function exist. Before they do, nothing: each test then
-    fails on its own barrier, never in a fixture."""
+def start_over() -> None:
+    """The module's state as a new process finds it: ``_configured_header()``'s cache cleared, so the next call reads the
+    name again, and ``_warned`` emptied, so the next malformed header warns again. The module's own list, emptied in
+    place: whatever runs next finds it empty too. No production function does this for the tests (N58): they start the
+    module's state over themselves. Before the module exists, nothing: each test then fails on its own barrier, never in
+    a fixture."""
     try:
         module = importlib.import_module(MODULE)
     except ModuleNotFoundError as exc:
         if exc.name != MODULE:  # the module is there and something it imports is not: that error is the finding
             raise
         return
-    reset = getattr(module, "reset_client_address_cache", None)
-    if callable(reset):
-        reset()
+    module._configured_header.cache_clear()
+    module._warned.clear()
 
 
 @pytest.fixture
 def fresh_client_address_cache() -> Iterator[None]:
-    """The module's cache started over before and after the test: no test inherits the name another read nor the warning
-    another spent, and whatever runs after this file finds the cache as a new process does."""
-    _reset_if_there()
+    """The module's state started over before and after the test (``start_over``): no test inherits the name another read
+    nor the warning another spent, and whatever runs after this file finds the module as a new process does."""
+    start_over()
     yield
-    _reset_if_there()
+    start_over()
 
 
 @pytest.fixture(autouse=True)
@@ -216,9 +221,10 @@ class UnderTest:
 
 
 def under_test(monkeypatch: pytest.MonkeyPatch) -> UnderTest:
-    """``client_address`` and ``reset_client_address_cache``, the module's logger recorded."""
+    """``client_address``, and ``start_over`` as its reset (N58: the module has none for the tests), the module's logger
+    recorded."""
     module = client_address_module()
-    return UnderTest(function_of(module, "client_address"), function_of(module, "reset_client_address_cache"), record_logs(monkeypatch, module))
+    return UnderTest(function_of(module, "client_address"), start_over, record_logs(monkeypatch, module))
 
 
 # =============================================================================
@@ -263,7 +269,7 @@ def refusal_of(written: str) -> str:
 
 def configure(monkeypatch: pytest.MonkeyPatch, api: UnderTest, written: str | None, profile: str | None = None) -> None:
     """Make ``written`` the setting and ``profile`` the profile (``None``: unset), check that ``get_settings()`` reads them
-    so, then start the module's cache over: whether its reset reads the name at once or at the next call, it is this one."""
+    so, then start the module's state over, as in a new process: the next call reads the name, and it is this one."""
     set_or_unset(monkeypatch, HEADER_VARIABLE, written)
     set_or_unset(monkeypatch, PROFILE_VARIABLE, profile)
 
@@ -704,7 +710,7 @@ def test_the_warning_names_the_configured_header_in_lower_case(monkeypatch: pyte
 
 
 def test_a_malformed_header_warns_once_per_process_until_the_cache_is_reset(monkeypatch: pytest.MonkeyPatch) -> None:
-    print_section("One warning per process, re-armed by reset_client_address_cache()")
+    print_section("One warning per process; a new process warns again")
     api = under_test(monkeypatch)
     configure(monkeypatch, api, FLY)
     first = ("203.0.113.7", "198.51.100.9")
@@ -724,7 +730,10 @@ def test_a_malformed_header_warns_once_per_process_until_the_cache_is_reset(monk
     rearmed = ("not-an-ip",)
     again = api.client_address(http_request(header_lines(FLY, rearmed)))
     assert exactly(again, PEER_HOST), f"after the reset, a malformed header still gives the peer, not {again!r}"
-    assert api.log.at("warning") == [unusable(FLY_LOWER, first), unusable(FLY_LOWER, rearmed)], f"reset_client_address_cache() re-arms the warning: the next malformed header warns again, with its own counts: {api.log.at('warning')}"
+    assert api.log.at("warning") == [
+        unusable(FLY_LOWER, first),
+        unusable(FLY_LOWER, rearmed),
+    ], f"a new process warns again: with the module's state started over as in one (_configured_header()'s cache cleared, _warned emptied), the next malformed header warns again, with its own counts: {api.log.at('warning')}"
     print_success("✓ three malformed headers, one warning; after the reset, one more")
 
 
@@ -755,10 +764,10 @@ def test_the_name_is_read_once_per_process_until_the_cache_is_reset(monkeypatch:
 
     kept = api.client_address(http_request(EVERY_CLIENT_HEADER))
 
-    assert exactly(kept, before), f"{HEADER_VARIABLE} went from {first!r} to {then!r} after the first call, and client_address gives {kept!r}, not {before!r}: the name is read once per process, and a change waits for reset_client_address_cache()"
+    assert exactly(kept, before), f"{HEADER_VARIABLE} went from {first!r} to {then!r} after the first call, and client_address gives {kept!r}, not {before!r}: the name is read once per process, and a change waits for a new process"
     api.reset()
     renewed = api.client_address(http_request(EVERY_CLIENT_HEADER))
-    assert exactly(renewed, after), f"after reset_client_address_cache(), with {HEADER_VARIABLE}={then!r}, client_address gives {renewed!r}, not {after!r}: the next call reads the name again"
+    assert exactly(renewed, after), f"with the module's state started over as in a new process (_configured_header()'s cache cleared, _warned emptied) and {HEADER_VARIABLE}={then!r}, client_address gives {renewed!r}, not {after!r}: the first call of a new process reads the name"
     print_success(f"✓ {initial!r}, still {kept!r}, after the reset {renewed!r}")
 
 
@@ -796,32 +805,26 @@ def test_the_rate_key_of_an_address(address: str | None, key: str | None) -> Non
 
 
 # =============================================================================
-# (g) mask_client_address: THE FORM AN ADDRESS MAY TAKE IN A LOG
+# (g) NOTHING IN THE MODULE ONLY FOR THE TESTS (N58, H-22)
 # =============================================================================
 
 
-#: The address, and its masked form.
-MASKS = [
-    pytest.param(None, None, id="no-address"),
-    pytest.param("", None, id="an-empty-address"),
-    pytest.param("testclient", "testclient", id="a-name-as-written"),
-    pytest.param("/run/librefolio/zq.sock", "/run/librefolio/zq.sock", id="a-socket-path-as-written"),
-    pytest.param("203.0.113.7", "203.0.113.0/24", id="ipv4-by-its-24"),
-    pytest.param("10.0.0.255", "10.0.0.0/24", id="ipv4-another-24"),
-    pytest.param("::ffff:203.0.113.7", "203.0.113.0/24", id="ipv4-mapped-as-its-ipv4-by-its-24"),
-    pytest.param("2001:db8:1:2::7", "2001:db8:1::/48", id="ipv6-by-its-48"),
-    pytest.param("2001:0DB8:0001:FFFF:0000:0000:0000:0007", "2001:db8:1::/48", id="ipv6-in-full-and-in-capitals"),
-    pytest.param("2001:db8:2::1", "2001:db8:2::/48", id="ipv6-the-next-48"),
-    pytest.param("::1", "::/48", id="ipv6-loopback"),
+#: A function the module must not have, and why: these tests were its only callers.
+ONLY_FOR_THE_TESTS = [
+    pytest.param("reset_client_address_cache", "a production function only the tests call: the tests start the module's state over themselves", id="reset_client_address_cache"),
+    pytest.param("mask_client_address", "no log writes a client's address, so mask_client_address has no caller", id="mask_client_address"),
 ]
 
 
-@pytest.mark.parametrize(("address", "masked"), MASKS)
-def test_the_masked_form_of_an_address(address: str | None, masked: str | None) -> None:
-    print_section(f"mask_client_address({address!r})")
-    mask_client_address = function_of(client_address_module(), "mask_client_address")
+@pytest.mark.parametrize(("name", "why"), ONLY_FOR_THE_TESTS)
+def test_the_module_has_no_function_only_for_the_tests(name: str, why: str) -> None:
+    print_section(f"{MODULE_PATH}: no {name}() (N58, H-22)")
+    module = client_address_module()
+    # Barrier: the module's own functions are in place, so an absence below is a removal, not an emptied module.
+    function_of(module, "client_address")
+    function_of(module, "client_rate_key")
 
-    result = mask_client_address(address)
+    present = hasattr(module, name)
 
-    assert exactly(result, masked), f"mask_client_address({address!r}) is {result!r}, expected {masked!r}: an IPv4 address by its /24, an IPv4-mapped one as its IPv4, any other IPv6 address by its /48, anything else as written, nothing without an address"
-    print_success(f"✓ {address!r} → {result!r}")
+    assert not present, f"{MODULE_PATH} still has {name}() (N58, H-22): {why}"
+    print_success(f"✓ no {name}()")
