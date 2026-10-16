@@ -123,7 +123,7 @@ docker compose start librefolio
 
     Con Docker, il database è `./LibreFolio-data/sqlite/app.db`. Questo comando copia solo il database: copia le cartelle sottostanti come al solito.
 
-### ✅ Cosa includere nel backup
+### ✅ Cosa includere nel backup {: #what-to-back-up }
 
 Come minimo, esegui il backup di:
 
