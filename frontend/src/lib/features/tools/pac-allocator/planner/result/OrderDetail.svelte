@@ -49,14 +49,14 @@
 <PlannerDialog open={order !== null} {title} testid="pac-planner-order-detail" {onclose} maxWidth="3xl">
     {#if order}
         <dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[auto_1fr_auto_1fr]" data-testid="pac-planner-order-detail-facts">
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.instruction`, {default: 'Instruction'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.instruction`, {default: 'Instruction'})}</dt>
             <dd data-testid="pac-planner-order-detail-instruction">{[instructionText(order, $t, digits), instructionStepText(order, $t, digits)].join(' · ')}</dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.economicQuantity`, {default: 'Economic quantity'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.economicQuantity`, {default: 'Economic quantity'})}</dt>
             <dd>
                 {economicQuantityText(order.economic_quantity, $t)}
             </dd>
 
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.sourcePrice`, {default: 'Source price'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.sourcePrice`, {default: 'Source price'})}</dt>
             <dd class="flex flex-wrap items-center gap-2 tabular-nums sm:col-span-3">
                 <span>{priceText(order.source_price, $t, digits)}</span>
                 {#if quoteOrigin}
@@ -64,25 +64,25 @@
                 {/if}
             </dd>
 
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.midPrice`, {default: 'Mid price'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.midPrice`, {default: 'Mid price'})}</dt>
             <dd class="tabular-nums">{formatExactPricePlain(order.mid_price, digits)}</dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.chargePrice`, {default: 'Charge price'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.chargePrice`, {default: 'Charge price'})}</dt>
             <dd class="tabular-nums">
                 {route ? $t(`${KEY}.chargeWithMargin`, {default: '{price} · margin {margin}', values: {price: formatExactPricePlain(order.charge_price, digits), margin: ratePercentText(route.execution_margin_rate)}}) : formatExactPricePlain(order.charge_price, digits)}
             </dd>
 
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.midValue`, {default: 'Mid value'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.midValue`, {default: 'Mid value'})}</dt>
             <dd class="tabular-nums">{formatExactMoneyPlain(order.mid_value, {digits})}</dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.marginCost`, {default: 'Margin cost'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.marginCost`, {default: 'Margin cost'})}</dt>
             <dd class="tabular-nums">{formatExactMoneyPlain(order.execution_margin_cost, {digits})}</dd>
 
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.cashDebit`, {default: 'Cash debit'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.cashDebit`, {default: 'Cash debit'})}</dt>
             <dd class="tabular-nums">{formatPlannerMoneyPlain(order.cash_debit.amount, order.cash_debit.currency, {digits})}</dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.fee`, {default: 'Fee'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.fee`, {default: 'Fee'})}</dt>
             <dd class="tabular-nums">{formatPlannerMoneyPlain(order.fee.amount, order.fee.currency, {digits})}</dd>
 
             {#each related as action (action.conversion_id)}
-                <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.conversion`, {default: 'Conversion'})}</dt>
+                <dt class="font-medium text-lf-secondary">{$t(`${KEY}.conversion`, {default: 'Conversion'})}</dt>
                 <dd data-testid="pac-planner-order-detail-conversion" data-mode={action.mode}>
                     {#if action.sequence !== null}
                         {$t(`${KEY}.conversionAction`, {
@@ -96,11 +96,11 @@
                         })}
                     {/if}
                 </dd>
-                <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.spreadLossConversion`, {default: 'Spread loss (whole conversion)'})}</dt>
+                <dt class="font-medium text-lf-secondary">{$t(`${KEY}.spreadLossConversion`, {default: 'Spread loss (whole conversion)'})}</dt>
                 <dd class="tabular-nums">{formatExactMoneyPlain(action.spread_loss, {digits})}</dd>
             {/each}
 
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.route`, {default: 'Route'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.route`, {default: 'Route'})}</dt>
             <dd data-testid="pac-planner-order-detail-route">
                 {#if !route}
                     —
@@ -110,7 +110,7 @@
                     {$t(`${KEY}.routeFacts`, {default: 'priority {priority} · cap {cap}', values: {priority: route.priority, cap: routeCapText(route.cap, $t, digits)}})}
                 {/if}
             </dd>
-            <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.minimums`, {default: 'Minimums'})}</dt>
+            <dt class="font-medium text-lf-secondary">{$t(`${KEY}.minimums`, {default: 'Minimums'})}</dt>
             <dd data-testid="pac-planner-order-detail-minimums">
                 {#if !route}
                     —
@@ -125,7 +125,7 @@
             </dd>
         </dl>
 
-        <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+        <div class="space-y-2 border-t border-lf-subtle pt-3">
             <button type="button" class={BUTTON_LINK} aria-expanded={showProvenance} data-testid="pac-planner-order-detail-provenance-toggle" onclick={() => (showProvenance = !showProvenance)}>
                 {showProvenance ? $t(`${KEY}.hideProvenance`, {default: 'Hide provenance'}) : $t(`${KEY}.showProvenance`, {default: 'Show provenance ({count})', values: {count: provenance.length}})}
             </button>
