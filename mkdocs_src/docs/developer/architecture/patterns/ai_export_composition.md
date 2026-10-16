@@ -433,8 +433,9 @@ The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict 
 an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,
 taxes, total P&L and net total P&L are `null` as soon as one lot's part is unknown (a
 missing FX rate, or no market value), and so is `total_residual_cost_basis`. Only the
-market-value totals — open value, unrealized P&L, potential gain and loss — keep
-summing the open lots that have them, with their coverage stated in
+market-value totals — open value, unrealized P&L, potential gain and loss — sum the
+valued open lots, whose open value and unrealized P&L are both known: since v3 all four
+sum that same set, the one `valued_open_lot_count` counts. Their coverage is stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
 
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
