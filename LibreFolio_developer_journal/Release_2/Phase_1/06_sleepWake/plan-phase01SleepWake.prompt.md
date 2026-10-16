@@ -2052,13 +2052,35 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      backend su questa rotta (solo le rotte email lo mandano). Aggiunto il passo `docs` ad `apply_z7c1.py`; `check`
      a secco: tutti i passi applicabili, bozze di test-author comprese. La tabella dei test della pagina si incolla
      dopo i verdi (righe pronte nel README di docs-writer).
-2. Rossi: passo `e2e` → `front-asset live-pause` ((g) e (h) rossi, il resto verde); passo `unit` →
-   `front-utility core-unit`. ⏳
-3. Codice: passo `code` → i verdi; `front check`, Prettier, cancello dei colori; `front-asset asset-detail` sul
-   lampo del prezzo, che passa da `pollLivePriceOnce`. ⏳
-4. Doc: la bozza di `live-ticker.md` (docs-writer, verificata il 16/10 ~06:11) entra col passo `docs`; la tabella
-   «How it is tested» si aggiorna dopo i verdi. ⏳
-5. Checkpoint FROZEN, con la riga di `_frontend_utility.py` dichiarata (il coordinatore avvisa i colori). ⏳
+2. Rossi:
+   - ✅ 16/10 07:10 — passo `unit` (le due bozze di test e la riga di core-unit): `front-utility core-unit` 2 file
+     rossi su 175, 102 test rossi su 6359, proprio come previsto da test-author: `activePolling.test.ts` 38 su 92,
+     `livePriceService.test.ts` 64 su 75; gli altri 173 file verdi.
+   - ⏳ E2E, nello slot che dà il coordinatore: `revert-code` (lo script toglie il codice solo se è identico alla
+     bozza, e rimette i file di HEAD), passo `e2e`, `front-asset live-pause` filtrato su `\(g\)|\(h\)`: (g) e (h)
+     rossi. Ogni esecuzione E2E ricostruisce il frontend (i sorgenti sono cambiati; nessun modo di saltarlo).
+3. Codice:
+   - ✅ 16/10 07:13 — passo `code`: `front-utility core-unit` 175/175 file, 6359/6359 test. Prettier: solo
+     `livePriceService.test.ts` (a capo negli argomenti di `.then`); la bozza E2E formattata fuori dal repo con la
+     `.prettierrc` del frontend (un'istruzione, solo a capo). `front check`: 0 errori, 0 avvisi. Cancello dei colori
+     pulito. Nessuno spec E2E stubba l'endpoint in errore: l'attesa crescente tocca solo (g) e (h).
+     > **⚠️ Fuori pista**: `RATE_LIMITED` era esportato ma nessun file fuori dal modulo, test compresi, lo importa
+     > (i due componenti della prova usano la stringa): sarebbe un export morto per knip. Ora è privato; bozza del
+     > codice e pagina di doc allineate.
+   - ⏳ Nello slot dei verdi: passo `code` di nuovo, `front-asset live-pause` intero, poi `front-asset asset-detail`
+     filtrato su «Live price direction flash» (tre casi che passano da `pollLivePriceOnce`).
+4. ✅ 16/10 07:24 — Doc: passo `docs` (`live-ticker.md`) e, sui verdi di Vitest, la tabella «How it is tested»: la
+   riga di `activePolling.test.ts`, la riga nuova di `livePriceService.test.ts`, (g) e (h) nella riga E2E (stato
+   `running` e pillola nascosta, verificati nella bozza dello spec), il paragrafo sotto. `mkdocs build` stretto 0
+   avvisi; `check-links` 97 validi. Il sito è già aggiornato, così lo slot E2E non lo ricostruisce.
+5. ✅ 16/10 07:27 — Checkpoint **intermedio**, chiesto dal coordinatore prima dello slot E2E: codice, rossi (Vitest e
+   lo spec E2E con (g) e (h), applicato senza ancora averlo eseguito), doc e piano. Prima del commit:
+   - le due descrizioni di `live-pause` in `_frontend_asset.py` (righe di Z1), dal `RUNNER.md` di test-author; la
+     descrizione di `core-unit` in `_frontend_utility.py` resta com'è, perché è una riga condivisa da tutti i lotti;
+   - `check-orphans`: tutti i file registrati e raggiungibili da un `all`;
+   - `revert-code` ripristina dalla base fissa `dc6b32050`, non da HEAD, visto che il commit porta il codice in HEAD.
+   ⏳ Slot unico di circa 25 min, dopo J ed E5b, verso le 08:30: i rossi (g) e (h) senza il codice, poi il codice di
+   nuovo e i verdi (`live-pause` intero, i tre casi del lampo in `asset-detail`). Poi l'handoff d'ingresso.
 
 ### Z-9 — la doc delle pause dei fornitori (lotto di sola doc, dopo Z7c-1)
 
