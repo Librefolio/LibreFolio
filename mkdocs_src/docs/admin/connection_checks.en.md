@@ -200,6 +200,62 @@ so that the browser gets a `Secure` cookie.
     Use `never` only for the rare proxy that claims HTTPS while the browser is on plain HTTP. See
     [Configuration](configuration.md#session-cookie-secure) for every option.
 
+### 🧭 The Visitor's Address {: #client-address }
+
+LibreFolio limits some requests per visitor's address: the registration emails,
+**Send the link again** and the forgotten passwords ([Email](email.md)). Behind a reverse proxy,
+the connections come from the proxy: unless LibreFolio learns each visitor's address, all of them
+share the proxy's, and a single count.
+
+Out of the box, the address that counts is the connection's, as uvicorn, LibreFolio's web server,
+gives it. uvicorn takes the visitor's address from `X-Forwarded-For` only when the connection comes
+from an address listed in `FORWARDED_ALLOW_IPS`, `127.0.0.1` when that variable is not set:
+«Forgotten Passwords» in [Email](email.md#forgot-password) explains how to list your proxy there.
+
+If your proxy writes the visitor's address in a header of its own instead, name that header in
+`LIBREFOLIO_CLIENT_IP_HEADER`, in `.env` or in the container's environment:
+
+```bash
+LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP
+```
+
+| Your proxy | The header | What to set up |
+| --- | --- | --- |
+| Fly.io | `Fly-Client-IP` | Nothing: Fly's proxy sets it. |
+| Nginx | `X-Real-IP` | Add `proxy_set_header X-Real-IP $remote_addr;` to the `location` block that passes requests to LibreFolio. |
+
+!!! warning "🚧 Only when every request crosses the proxy"
+
+    LibreFolio believes the header whoever sends it. Set the variable only if your visitors can
+    reach LibreFolio through that proxy alone: a visitor who reaches it directly, on its own port
+    (`PORT`, 6040 by default) or by any other path, can send the header and choose any address, to
+    get around the limits or to use up someone else's.
+
+- **Restart after a change**: LibreFolio reads the variable once per server process. With Docker,
+  run `docker compose up -d` (a plain `docker compose restart` keeps the old environment); on a
+  host installation, restart `./dev.py server`.
+- **The header must hold one address, written by the proxy itself**: never a value the proxy passes
+  on from the visitor. `X-Forwarded-For` and `Forwarded` are refused: they hold a list whose first
+  address the visitor chooses. For `X-Forwarded-For`, list your proxy in `FORWARDED_ALLOW_IPS`
+  instead.
+- **A wrong value stops the server at startup**, with an error that names the variable: one of
+  those two headers, or a value that is not the name of one header, such as a name with a space or
+  a `:` in it. Case and spaces around the name do not matter; an empty value is the same as not
+  setting it.
+- **A request without the header** counts with the connection's address.
+- **A header LibreFolio cannot use**, because the request carries it twice or it holds a list, an
+  address with a port or anything other than one IP address, counts with the connection's address
+  too. The log then has one warning per server process,
+  `Client address header unusable: using the connection's address`, with the header's name in
+  `header`, how many times the request carried it in `lines` and their total length in `length`,
+  never the value itself: check how your proxy sets the header.
+- **Another proxy in front of Fly.io**, such as Cloudflare: `Fly-Client-IP` then holds that proxy's
+  address, not the visitor's.
+- **No profile sets it**, the [managed profile](hosting_providers.md#managed-profile) included: the
+  header depends on the proxy in front of each instance.
+- **The indicator does not use it**: it keeps reading `X-Forwarded-For`, as
+  [The Server's View](#server-view) explains.
+
 ---
 
 ## 🛠️ When a Check Fails {: #when-a-check-fails }
@@ -234,9 +290,10 @@ Engine on Linux keeps the visitor's address. HTTPS addresses are not affected: t
 shows **Connection: secure**: the traffic is encrypted, but nobody vouches that the server is really
 yours.
 
-There is no list of trusted proxies to set up. `X-Forwarded-For` only feeds the indicator, so a
-forged value misleads only the indicator of whoever sent it; `X-Forwarded-Proto` can only turn
-`Secure` on, so a forged `https` breaks only the sender's own sign-in.
+Neither the indicator nor the session cookie needs a list of trusted proxies: a forged
+`X-Forwarded-For` misleads only the indicator of whoever sent it, and since `X-Forwarded-Proto` can
+only turn `Secure` on, a forged `https` breaks only the sender's own sign-in. The limits per
+visitor's address are another matter: see [The Visitor's Address](#client-address).
 
 ---
 

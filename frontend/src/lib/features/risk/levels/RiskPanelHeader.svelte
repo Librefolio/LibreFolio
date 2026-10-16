@@ -8,7 +8,7 @@
     import {fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
-    import {RefreshCw, RotateCw} from 'lucide-svelte';
+    import {RotateCw} from 'lucide-svelte';
 
     /**
      * Everything above the answer: what it is, how stale it is, how to refresh it.
@@ -85,16 +85,6 @@
             <button type="button" class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50" onclick={() => (syncOpen = true)} disabled={syncAssets.length === 0 && syncFxPairs.length === 0} data-testid="risk-sync-button">
                 <RotateCw size={14} />
                 {$t('common.sync')}
-            </button>
-            <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
-                onclick={() => controller.loadBase(true)}
-                disabled={controller.initialLoading || controller.refreshing}
-                data-testid="risk-refresh-button"
-            >
-                <RefreshCw size={14} class={controller.refreshing ? 'animate-spin' : ''} />
-                {$t('common.refresh')}
             </button>
         </div>
     {/if}

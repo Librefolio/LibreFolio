@@ -653,8 +653,8 @@
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            class="p-1 rounded-md hover:bg-lf-hover transition-colors
-                                                            {signal.params._inverted ? 'text-lf-link' : 'text-lf-muted hover:text-lf-secondary'}"
+                                                            class="p-1 rounded-md transition-colors
+                                                            {signal.params._inverted ? 'text-lf-link' : 'text-lf-muted hover:bg-lf-hover hover:text-lf-secondary'}"
                                                             title={$t('common.swapDirection')}
                                                             onclick={() => updateSignalParam(signal.id, '_inverted', !signal.params._inverted)}
                                                         >
@@ -662,12 +662,12 @@
                                                         </button>
                                                         {#if onsyncpair}
                                                             {@const pairSlug = String(signal.params.pairSlug)}
-                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-link transition-colors" title={$t('common.sync')} disabled={syncingPairs.has(pairSlug)} onclick={() => handleSyncPairWithSpin(pairSlug)}>
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.sync')} disabled={syncingPairs.has(pairSlug)} onclick={() => handleSyncPairWithSpin(pairSlug)}>
                                                                 <RotateCw size={12} class={syncingPairs.has(pairSlug) ? 'animate-spin' : ''} />
                                                             </button>
                                                         {/if}
                                                         {#if ondetailpair}
-                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-link transition-colors" title={$t('common.detail')} onclick={() => ondetailpair?.(String(signal.params.pairSlug))}>
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.detail')} onclick={() => ondetailpair?.(String(signal.params.pairSlug))}>
                                                                 <ExternalLink size={12} />
                                                             </button>
                                                         {/if}
@@ -701,7 +701,7 @@
                                                                         {:else if info?.asset_type}
                                                                             <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                                         {:else}
-                                                                            <BarChart3 size={14} class="text-lf-muted shrink-0" />
+                                                                            <BarChart3 size={14} class="text-lf-secondary shrink-0" />
                                                                         {/if}
                                                                         <span class="text-xs">{option.label}</span>
                                                                     </span>
@@ -725,7 +725,7 @@
                                                             {@const aid = Number(assetIdStr)}
                                                             <button
                                                                 type="button"
-                                                                class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-link transition-colors"
+                                                                class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors"
                                                                 data-testid={`signal-sync-asset-${signal.id}`}
                                                                 title={$t('common.sync')}
                                                                 disabled={syncingAssetIds.has(aid)}
@@ -735,7 +735,7 @@
                                                             </button>
                                                         {/if}
                                                         {#if ondetailasset && assetIdStr}
-                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-link transition-colors" title={$t('common.detail')} onclick={() => ondetailasset?.(Number(assetIdStr))}>
+                                                            <button type="button" class="p-1 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-primary transition-colors" title={$t('common.detail')} onclick={() => ondetailasset?.(Number(assetIdStr))}>
                                                                 <ExternalLink size={12} />
                                                             </button>
                                                         {/if}

@@ -38,7 +38,7 @@ from backend.app.services.transactions.event_suggestions import TransactionEvent
 from backend.app.services.transactions.promotion import TransactionPromotionMixin
 from backend.app.services.transactions.queries import TransactionQueryMixin
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
-from backend.app.services.transactions.transaction_batch_stages import finalize_response, parse_inputs, preload_and_authorize, validate_balances
+from backend.app.services.transactions.transaction_batch_stages import check_decimal_limits, finalize_response, parse_inputs, preload_and_authorize, validate_balances
 from backend.app.services.transactions.validation import TransactionValidationMixin
 from backend.app.utils.datetime_utils import utcnow
 
@@ -139,6 +139,7 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         )
 
         parse_inputs(context)
+        check_decimal_limits(context)
         if await preload_and_authorize(self, context):
             return TXBatchResponse(
                 committed=False,

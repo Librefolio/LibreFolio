@@ -60,6 +60,9 @@ export interface PluginSettingsEntry {
     family: SettingsFamily;
     plugin_code: string;
     plugin_name: string;
+    /** The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); null
+     * when it has none, and the form shows a neutral icon. */
+    icon_url: string | null;
     /** Every required field has a usable value: otherwise the plugin answers its calls with NOT_CONFIGURED. */
     configured: boolean;
     fields: SettingField[];
@@ -160,6 +163,7 @@ export function entryOf(raw: unknown): PluginSettingsEntry {
         family: oneOf<SettingsFamily>(entry.family, FAMILIES, 'asset'),
         plugin_code: String(entry.plugin_code ?? ''),
         plugin_name: String(entry.plugin_name ?? entry.plugin_code ?? ''),
+        icon_url: textOrNull(entry.icon_url),
         configured: entry.configured === true,
         fields: Array.isArray(entry.fields) ? entry.fields.map(fieldOf) : [],
     };

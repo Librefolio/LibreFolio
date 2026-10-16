@@ -31,15 +31,39 @@ report back into per-unit verdicts (``_consolidate_backend._junit_results``):
 a directory unit owns a case only on a ``/`` boundary, the deepest directory
 containing a case wins whatever the order of the units, and a file unit keeps
 its own cases. Pure: a hand-written junit report in ``tmp_path``.
+
+The H-21 regressions pin how a single action seeds its category first. A single
+action (``dev.py test … api brim``) runs against the lane's database as it is:
+after a run that recreated it empty (``services``, ``db create``), every unit
+signing in as ``e2e_test_admin``/``e2e_test_user`` failed with 401. A category may
+declare ``setup_needed`` next to its ``setup`` (``_common.make_category``): a
+no-argument callable returning why the setup must run before one action, or None.
+``_common.ensure_category_setup`` asks it only while the setup has not run in this
+invocation, prints one ``print_info`` line naming the category and the reason, then
+runs the setup through ``run_category_setup``; a check that raises seeds anyway and
+says it could not check. ``_cli.run_test_from_registry`` calls it before a single
+action — never for ``all``, never for ``--list`` — and refuses the action when the
+setup fails. The ``api`` category declares ``_backend_api._api_fixture_users_missing``:
+it opens the lane's SQLite file read-only and names the ``API_FIXTURE_USERS`` it
+lacks (no file, no ``users`` table and a file that is not a database are reasons
+too), and it never writes. Pure: throwaway categories through
+``monkeypatch.setitem``, a private ``_SETUP_DONE``, SQLite files built with the
+stdlib under ``tmp_path``; ``populate_mock_data.py`` is parsed as source text,
+never imported.
 """
 
 from __future__ import annotations
 
+import ast
+import contextlib
+import re
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from scripts.test_runner import _backend_api as backend_api
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
 from scripts.test_runner import _common, _frontend_common
@@ -389,6 +413,497 @@ class TestJunitAttributionToDirectoryUnits:
         report = _junit_report(tmp_path, [(case, case != red_case) for case in (CASE_IN_FINANCIAL, CASE_ELSEWHERE_IN_FINANCIAL)])
 
         assert _junit_results(report, known) == expected
+
+
+# ── H-21: a single action seeds its category first, when the category says it must ──────────────────────────────────
+# Every name the contract adds is looked up at call time: a missing one fails its cases on a named "H-21:" barrier and
+# leaves the cases above alone.
+
+#: The accounts the api units sign in as: contract point 4, ``_backend_api.API_FIXTURE_USERS``.
+FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+#: What SQLite leaves next to a database it writes to; a rollback-journal database that is only read leaves none.
+SQLITE_SIDECARS = ("-journal", "-wal", "-shm")
+POPULATE_MOCK_DATA = PROJECT_ROOT / "backend" / "test_scripts" / "test_db" / "populate_mock_data.py"
+
+
+class _SetupNeededProbeError(RuntimeError):
+    """What a fake ``setup_needed`` raises: its type name must reach the line ``ensure_category_setup`` prints."""
+
+
+class _FakeCategory:
+    """A throwaway category whose setup, ``setup_needed`` and actions only record, in order, that they ran.
+
+    Built with the real ``make_category``/``add_test`` and injected with ``monkeypatch.setitem(TEST_REGISTRY, …)``.
+    ``setup_needed`` is set on ``_meta`` by hand, where contract point 1 stores it, so the dispatch cases reach
+    ``run_test_from_registry`` even while ``make_category`` does not take the keyword (that is the make_category
+    cases' barrier, not theirs).
+    """
+
+    name = "h21-fake-category"
+
+    def __init__(self, *, reason: str | None = None, setup_result: bool = True, raises: Exception | None = None) -> None:
+        self.reason = reason
+        self.setup_result = setup_result
+        self.raises = raises
+        self.events: list[str] = []
+        self.one_calls: list[list[str] | None] = []
+
+    def setup(self) -> bool:
+        self.events.append("setup")
+        return self.setup_result
+
+    def setup_needed(self) -> str | None:
+        self.events.append("setup_needed")
+        if self.raises is not None:
+            raise self.raises
+        return self.reason
+
+    def run_one(self, verbose: bool = False, test_names: list[str] | None = None) -> bool:
+        self.events.append("one")
+        self.one_calls.append(test_names)
+        return True
+
+    def run_all(self, verbose: bool = False) -> bool:
+        # What every real ``*_test`` does first: the category's own ``all`` runs its setup itself.
+        _common.run_category_setup(self.name)
+        self.events.append("all")
+        return True
+
+    def register(self, monkeypatch, *, with_setup: bool = True, with_setup_needed: bool = True) -> _FakeCategory:
+        category = _common.make_category("H-21 fake category", "A category of this test only", setup=self.setup if with_setup else None)
+        if with_setup_needed:
+            category["_meta"]["setup_needed"] = self.setup_needed
+        _common.add_test(category, "one", self.run_one, name="One action", desc="A single action of the fake category")
+        _common.add_test(category, "all", self.run_all, test_names=False, name="All", desc="The fake category's own all")
+        monkeypatch.setitem(TEST_REGISTRY, self.name, category)
+        return self
+
+
+@pytest.fixture
+def fresh_setup_done(monkeypatch):
+    """A private ``_common._SETUP_DONE``: no setup recorded by this run, or by a neighbouring case, leaks in or out."""
+    monkeypatch.setattr(_common, "_SETUP_DONE", set())
+
+
+@pytest.fixture
+def runner_lines(monkeypatch):
+    """Record the ``print_info`` / ``print_error`` lines of ``_common`` and ``_cli`` instead of printing them.
+
+    ``ensure_category_setup`` prints through the names bound in ``_common``; ``_cli`` holds its own bindings of the
+    same functions (``from ._common import print_error, print_info``), so both modules are patched.
+    """
+    lines = SimpleNamespace(info=[], error=[])
+
+    def record_info(message, *_args, **_kwargs):
+        lines.info.append(str(message))
+
+    def record_error(message, *_args, **_kwargs):
+        lines.error.append(str(message))
+
+    for module in (_common, runner_cli):
+        monkeypatch.setattr(module, "print_info", record_info)
+        monkeypatch.setattr(module, "print_error", record_error)
+    return lines
+
+
+def _make_category_with_setup_needed(**kwargs) -> dict:
+    """``_common.make_category`` called with ``setup_needed``, or the H-21 barrier while it does not take it."""
+    kwargs.setdefault("setup_needed", None)
+    try:
+        return _common.make_category("H-21 probe", "A category of this test only", **kwargs)
+    except TypeError as exc:
+        if "setup_needed" not in str(exc):
+            raise
+        pytest.fail(f"H-21: make_category has no setup_needed ({exc})")
+
+
+def _ensure_category_setup():
+    """``_common.ensure_category_setup``, looked up at call time, or the H-21 barrier while it is missing."""
+    ensure = getattr(_common, "ensure_category_setup", None)
+    if ensure is None:
+        pytest.fail("H-21: ensure_category_setup is missing")
+    return ensure
+
+
+def _assert_consulted(fake: _FakeCategory) -> None:
+    """The dispatch barrier: a single action of ``fake`` must have asked its ``setup_needed`` first."""
+    assert "setup_needed" in fake.events, f"H-21: run_test_from_registry ran a single action of {fake.name!r} without asking its setup_needed first (ran: {fake.events})"
+
+
+def _users_check_reading(monkeypatch, db_path: Path):
+    """``_backend_api._api_fixture_users_missing`` with ``get_test_db_path`` pointed at ``db_path``, or the H-21 barrier."""
+    check = getattr(backend_api, "_api_fixture_users_missing", None)
+    if check is None:
+        pytest.fail("H-21: _api_fixture_users_missing is missing")
+    if not hasattr(backend_api, "get_test_db_path"):
+        pytest.fail("H-21: _backend_api has no module-level get_test_db_path, so the check cannot be pointed at a database of the test")
+    monkeypatch.setattr(backend_api, "get_test_db_path", lambda: db_path)
+    return check
+
+
+def _api_fixture_users() -> tuple:
+    """``_backend_api.API_FIXTURE_USERS``, looked up at call time, or the H-21 barrier while it is missing."""
+    users = getattr(backend_api, "API_FIXTURE_USERS", None)
+    if users is None:
+        pytest.fail("H-21: API_FIXTURE_USERS is missing")
+    return users
+
+
+def _sidecars(db_path: Path) -> list[str]:
+    """The SQLite sidecar files present next to ``db_path``."""
+    return [db_path.name + suffix for suffix in SQLITE_SIDECARS if db_path.with_name(db_path.name + suffix).exists()]
+
+
+def _write_lane_db(db_path: Path, usernames: tuple[str, ...] | None) -> None:
+    """A rollback-journal SQLite file whose ``users`` table holds ``usernames`` — or with no ``users`` table when None.
+
+    The real table (``User`` in ``backend/app/db/models.py``) has more columns; the check needs ``username`` only.
+    """
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        journal_mode = conn.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+        with conn:
+            if usernames is None:
+                conn.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)")
+            else:
+                conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username VARCHAR(50) NOT NULL UNIQUE)")
+                conn.executemany("INSERT INTO users (username) VALUES (?)", [(name,) for name in usernames])
+    assert journal_mode == "delete", f"precondition: the database of the test must use a rollback journal, got {journal_mode!r}"
+    assert _sidecars(db_path) == [], f"precondition: nothing next to the database before the check, found {_sidecars(db_path)}"
+
+
+def _assert_is_reason_naming(reason, db_path: Path) -> None:
+    """A reason is a non-empty text that names the database it read."""
+    assert isinstance(reason, str) and reason.strip(), f"the api category must seed here, so the check must say why (got {reason!r})"
+    assert str(db_path) in reason, f"the reason must name the database it read ({db_path}): {reason!r}"
+
+
+def _named_users(reason: str, db_path: Path) -> set[str]:
+    """The fixture usernames ``reason`` names as whole words (``e2e_test_user2`` is not ``e2e_test_user``), outside the path it names."""
+    words = reason.replace(str(db_path), "")
+    return {name for name in FIXTURE_USERS if re.search(rf"\b{re.escape(name)}\b", words)}
+
+
+def _assigned_value(node: ast.AST, name: str) -> ast.expr | None:
+    """The value ``node`` assigns to ``name``, when ``node`` is that assignment."""
+    if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+        return node.value
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+        return node.value
+    return None
+
+
+def _seeded_usernames() -> set[str]:
+    """The usernames ``test_user_defs`` seeds in populate_mock_data.py, read from its source text: never imported."""
+    tree = ast.parse(POPULATE_MOCK_DATA.read_text(encoding="utf-8"), filename=str(POPULATE_MOCK_DATA))
+    values = [_assigned_value(node, "test_user_defs") for node in ast.walk(tree)]
+    definitions = [value for value in values if value is not None]
+    if not definitions:
+        pytest.fail(f"{POPULATE_MOCK_DATA.name} no longer assigns test_user_defs: the seeded users cannot be read from it")
+    return {row[0] for definition in definitions for row in ast.literal_eval(definition)}
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestMakeCategoryStoresSetupNeeded:
+    """Contract point 1: ``setup_needed`` lives in ``_meta`` next to ``setup``, stored like ``setup_exclusive``."""
+
+    def test_setup_needed_is_stored_next_to_setup(self):
+        def setup():
+            return True
+
+        def setup_needed():
+            return None
+
+        meta = _make_category_with_setup_needed(setup=setup, setup_needed=setup_needed)["_meta"]
+
+        assert meta["setup"] is setup
+        assert meta["setup_needed"] is setup_needed
+        assert meta["setup_exclusive"] is False
+
+    def test_a_setup_without_setup_needed_declares_none(self):
+        """``services`` and the other categories with a setup keep today's behaviour: there is nothing to ask."""
+
+        def setup():
+            return True
+
+        meta = _make_category_with_setup_needed(setup=setup)["_meta"]
+
+        assert meta["setup"] is setup
+        assert meta.get("setup_needed") is None
+
+    def test_setup_needed_without_a_setup_is_not_stored(self):
+        """A reason to run a setup the category does not have would mean nothing: like ``setup_exclusive``, it needs one."""
+
+        def setup_needed():
+            return "a reason with no setup to run"
+
+        meta = _make_category_with_setup_needed(setup_needed=setup_needed)["_meta"]
+
+        assert "setup" not in meta
+        assert meta.get("setup_needed") is None
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestEnsureCategorySetup:
+    """Contract point 2: ``_common.ensure_category_setup`` runs the setup before one action only when the category says why."""
+
+    def test_a_reason_prints_one_line_and_runs_the_setup_once(self, monkeypatch, runner_lines, capsys):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(reason="the fixture users are absent").register(monkeypatch)
+
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup_needed", "setup"]
+        assert len(runner_lines.info) == 1, f"one visible line, got {runner_lines.info}"
+        assert fake.name in runner_lines.info[0]
+        assert fake.reason in runner_lines.info[0]
+        assert fake.name in _common._SETUP_DONE, "run_category_setup records the category: once per invocation"
+
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup_needed", "setup"], "a second call in the same invocation asks nothing and runs nothing"
+        assert len(runner_lines.info) == 1
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == "", "the one line goes through print_info: nothing else is printed"
+
+    def test_a_failed_setup_comes_back_as_false(self, monkeypatch, runner_lines):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(reason="the fixture users are absent", setup_result=False).register(monkeypatch)
+
+        assert ensure(fake.name) is False
+        assert fake.events == ["setup_needed", "setup"]
+        assert fake.name in _common._SETUP_DONE
+
+    @pytest.mark.parametrize("reason", [None, ""], ids=["none", "empty"])
+    def test_no_reason_runs_nothing_and_prints_nothing(self, monkeypatch, runner_lines, capsys, reason):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(reason=reason).register(monkeypatch)
+
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup_needed"]
+        assert runner_lines.info == []
+        assert fake.name not in _common._SETUP_DONE, "_SETUP_DONE means the setup ran: recording one that did not would make the category's own all skip it later in this invocation"
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == ""
+
+    def test_a_check_that_raises_seeds_anyway_and_says_it_could_not_check(self, monkeypatch, runner_lines, capsys):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(raises=_SetupNeededProbeError("the probe broke")).register(monkeypatch)
+
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup_needed", "setup"], "a check that cannot answer must not skip the setup"
+        assert len(runner_lines.info) == 1, f"one visible line, got {runner_lines.info}"
+        line = runner_lines.info[0]
+        assert fake.name in line
+        assert "could not check" in line.lower()
+        assert _SetupNeededProbeError.__name__ in line
+        assert fake.name in _common._SETUP_DONE
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == ""
+
+    @pytest.mark.parametrize(
+        ("with_setup", "with_setup_needed"),
+        [
+            pytest.param(True, False, id="setup-without-setup-needed"),
+            pytest.param(False, True, id="setup-needed-without-setup"),
+        ],
+    )
+    def test_a_category_without_both_halves_calls_nothing(self, monkeypatch, runner_lines, capsys, with_setup, with_setup_needed):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(reason="would seed, if anyone asked").register(monkeypatch, with_setup=with_setup, with_setup_needed=with_setup_needed)
+
+        assert ensure(fake.name) is True
+        assert fake.events == []
+        assert runner_lines.info == []
+        assert fake.name not in _common._SETUP_DONE
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == ""
+
+    def test_a_setup_that_already_ran_is_not_checked_again(self, monkeypatch, runner_lines):
+        ensure = _ensure_category_setup()
+        fake = _FakeCategory(reason="would seed, if anyone asked").register(monkeypatch)
+        assert _common.run_category_setup(fake.name) is True
+        assert fake.events == ["setup"], "precondition: the setup ran, through the runner's once-per-invocation door"
+
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup"], "the setup already ran in this invocation: setup_needed must not even be asked"
+        assert runner_lines.info == []
+
+        # Presence barrier: with no setup recorded, the same category IS asked, so the negative above has teeth.
+        monkeypatch.setattr(_common, "_SETUP_DONE", set())
+        assert ensure(fake.name) is True
+        assert fake.events == ["setup", "setup_needed", "setup"]
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunTestFromRegistrySeedsBeforeASingleAction:
+    """Contract point 3: a single action asks its category first and seeds when told to; ``all`` and ``--list`` never ask."""
+
+    def test_a_single_action_runs_after_the_check_and_the_setup(self, monkeypatch, runner_lines):
+        fake = _FakeCategory(reason="the fixture users are absent").register(monkeypatch)
+
+        result = runner_cli.run_test_from_registry(category=fake.name, action="one", test_names=["only_this"])
+
+        _assert_consulted(fake)
+        assert fake.events == ["setup_needed", "setup", "one"]
+        assert result is True
+        assert fake.one_calls == [["only_this"]], "seeding first must not swallow the -k selector"
+        assert any(fake.name in line and fake.reason in line for line in runner_lines.info), f"the user is told why: {runner_lines.info}"
+
+    def test_a_failed_setup_stops_the_action_and_names_the_category(self, monkeypatch, runner_lines):
+        fake = _FakeCategory(reason="the fixture users are absent", setup_result=False).register(monkeypatch)
+
+        result = runner_cli.run_test_from_registry(category=fake.name, action="one")
+
+        _assert_consulted(fake)
+        assert fake.events == ["setup_needed", "setup"], "the action must not run against a category whose setup failed"
+        assert result is False
+        assert any(fake.name in line for line in runner_lines.error), f"an error line must name the category: {runner_lines.error}"
+
+    def test_all_never_asks_setup_needed(self, monkeypatch, runner_lines):
+        fake = _FakeCategory(reason=None).register(monkeypatch)
+        runner_cli.run_test_from_registry(category=fake.name, action="one")
+        _assert_consulted(fake)  # presence barrier: a single action of this very category does ask
+        fake.events.clear()
+
+        assert runner_cli.run_test_from_registry(category=fake.name, action="all") is True
+        assert fake.events == ["setup", "all"], "all seeds through its own *_test, without asking setup_needed first"
+
+    def test_a_listing_never_asks_setup_needed(self, monkeypatch, runner_lines):
+        fake = _FakeCategory(reason=None).register(monkeypatch)
+        runner_cli.run_test_from_registry(category=fake.name, action="one")
+        _assert_consulted(fake)  # presence barrier: a single action of this very category does ask
+        fake.events.clear()
+        listed = []
+
+        def record_listing(category, action=None):
+            listed.append((category, action))
+            return True
+
+        monkeypatch.setitem(runner_cli.BACKEND_TEST_PATHS, fake.name, "backend/test_scripts/test_utilities/")
+        monkeypatch.setattr(runner_cli, "_list_pytest_tests", record_listing)
+
+        assert runner_cli.run_test_from_registry(category=fake.name, action="one", list_tests=True) is True
+        assert listed == [(fake.name, "one")], "presence barrier: the listing itself ran"
+        assert fake.events == [], "a listing never seeds: nothing asked, nothing set up, nothing run"
+
+    def test_the_check_is_looked_up_on_common_at_call_time(self, monkeypatch, runner_lines):
+        """``_common.ensure_category_setup`` as it is when the action runs, not a copy bound into ``_cli`` at import."""
+        fake = _FakeCategory(reason="never asked: the replacement answers first").register(monkeypatch)
+        asked = []
+
+        def refuse(category):
+            asked.append(category)
+            return False
+
+        monkeypatch.setattr(_common, "ensure_category_setup", refuse, raising=False)
+
+        result = runner_cli.run_test_from_registry(category=fake.name, action="one")
+
+        assert asked == [fake.name], f"H-21: run_test_from_registry did not ask _common.ensure_category_setup at call time (asked: {asked})"
+        assert result is False
+        assert fake.events == [], "a refused setup leaves the action unrun"
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestApiFixtureUsersMissing:
+    """Contract point 4: why the api category must seed before one action, read from the lane's SQLite file without writing it."""
+
+    def test_no_database_file_is_a_reason_and_creates_nothing(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "lane" / "sqlite" / "app.db"
+        check = _users_check_reading(monkeypatch, db_path)
+
+        reason = check()
+
+        _assert_is_reason_naming(reason, db_path)
+        assert not db_path.exists(), "the check created the database it was only meant to read"
+        assert list(tmp_path.iterdir()) == [], "the check wrote under the lane's data directory"
+
+    @pytest.mark.parametrize(
+        ("present", "missing"),
+        [
+            pytest.param(None, FIXTURE_USERS, id="no-users-table"),
+            pytest.param((), FIXTURE_USERS, id="empty-users-table"),
+            pytest.param(("e2e_test_user2", "e2e_user_alice"), FIXTURE_USERS, id="other-seeded-users-only"),
+            pytest.param(("e2e_test_admin",), ("e2e_test_user",), id="only-the-admin"),
+            pytest.param(("e2e_test_user",), ("e2e_test_admin",), id="only-the-user"),
+        ],
+    )
+    def test_a_reason_names_the_database_and_exactly_the_missing_users(self, tmp_path, monkeypatch, present, missing):
+        db_path = tmp_path / "sqlite" / "app.db"
+        check = _users_check_reading(monkeypatch, db_path)
+        _write_lane_db(db_path, present)
+
+        reason = check()
+
+        _assert_is_reason_naming(reason, db_path)
+        assert _named_users(reason, db_path) == set(missing), f"the reason must name exactly the missing users {missing}: {reason!r}"
+
+    def test_both_users_present_is_no_reason(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "sqlite" / "app.db"
+        check = _users_check_reading(monkeypatch, db_path)
+        _write_lane_db(db_path, ("e2e_test_user2", *FIXTURE_USERS, "e2e_user_alice"))
+
+        assert check() is None
+
+    def test_a_file_that_is_not_a_database_is_a_reason_naming_it(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "sqlite" / "app.db"
+        check = _users_check_reading(monkeypatch, db_path)
+        db_path.parent.mkdir(parents=True)
+        db_path.write_bytes(b"not a SQLite database, only some bytes where one should be\n" * 64)
+        before = db_path.read_bytes()
+
+        reason = check()
+
+        _assert_is_reason_naming(reason, db_path)
+        assert db_path.read_bytes() == before, "the check rewrote a file it could not read"
+        assert _sidecars(db_path) == []
+
+    @pytest.mark.parametrize(
+        "present",
+        [
+            pytest.param(FIXTURE_USERS, id="both-present"),
+            pytest.param(("e2e_test_admin",), id="one-missing"),
+            pytest.param(None, id="no-users-table"),
+        ],
+    )
+    def test_the_check_never_writes_the_database(self, tmp_path, monkeypatch, present):
+        db_path = tmp_path / "sqlite" / "app.db"
+        check = _users_check_reading(monkeypatch, db_path)
+        _write_lane_db(db_path, present)
+        before_bytes = db_path.read_bytes()
+        before_mtime = db_path.stat().st_mtime_ns
+
+        check()
+
+        assert db_path.read_bytes() == before_bytes, "the check changed the database's bytes"
+        assert db_path.stat().st_mtime_ns == before_mtime, "the check touched the database's mtime"
+        assert _sidecars(db_path) == [], "a sidecar appeared next to a rollback-journal database: the check wrote to it"
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestApiFixtureUsersAreSeededByPopulate:
+    """Contract point 4: ``API_FIXTURE_USERS`` are the accounts the api units sign in as, and ``db populate`` seeds them."""
+
+    def test_the_fixture_users_are_the_two_accounts_the_units_sign_in_as(self):
+        assert tuple(_api_fixture_users()) == FIXTURE_USERS
+
+    def test_every_fixture_user_is_seeded_by_populate_mock_data(self):
+        users = _api_fixture_users()
+        seeded = _seeded_usernames()
+
+        unseeded = [name for name in users if name not in seeded]
+        assert unseeded == [], f"test_user_defs in {POPULATE_MOCK_DATA.name} no longer seeds {unseeded}: the api setup could never satisfy its own check"
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestApiCategoryDeclaresSetupNeeded:
+    """Contract point 5: the api category reseeds through ``_api_setup``, before one action only when ``_api_fixture_users_missing`` says why."""
+
+    def test_the_api_category_asks_for_its_fixture_users_before_a_single_action(self):
+        meta = TEST_REGISTRY["api"]["_meta"]
+
+        assert meta.get("setup_needed") is not None, "H-21: the api category declares no setup_needed"
+        assert meta["setup_needed"] is getattr(backend_api, "_api_fixture_users_missing", None)
+        assert meta["setup"] is backend_api._api_setup
 
 
 if __name__ == "__main__":

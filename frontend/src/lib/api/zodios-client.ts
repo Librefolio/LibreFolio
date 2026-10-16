@@ -19,6 +19,7 @@ import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
+import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
 import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
 
 // =============================================================================
@@ -123,6 +124,8 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
     (response) => {
         notifyPortfolioMutation(response.config.method, response.config.url, response.data);
+        // While the server catches up on prices it says so on every response: «Updating prices…» (Z5).
+        priceRefresh.observe(response.headers);
         return response;
     },
     (error: AxiosError) => {

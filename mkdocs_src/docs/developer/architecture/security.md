@@ -609,7 +609,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -1250,8 +1250,52 @@ graph LR
 
 To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:
 
-- `X-Forwarded-For`
+- `X-Forwarded-For`: uvicorn takes the client's address from it for the proxies `FORWARDED_ALLOW_IPS` lists, and the
+  connection indicator reads its last value (see [The Client's Address](#client-address)).
 - `X-Forwarded-Proto` (the scheme the browser used: `$scheme` in Nginx). LibreFolio reads it to mark the session cookie `Secure`.
+
+### 🧭 The Client's Address {: #client-address }
+
+A limit per client, such as the per-address limits of the email feature, must count each visitor on its own. Behind a
+reverse proxy the TCP peer is the proxy, so `request.client.host` is the proxy's address for every visitor, unless
+uvicorn rewrote it: its `ProxyHeadersMiddleware` takes the client from `X-Forwarded-For` only when the peer is listed in
+`FORWARDED_ALLOW_IPS` (`127.0.0.1` when unset; the Docker image starts uvicorn with its defaults, see `Dockerfile`).
+Decision P17 adds the other way, for a proxy that passes the address in a header of its own:
+`LIBREFOLIO_CLIENT_IP_HEADER`, a `Settings` field in `backend/app/config/__init__.py`, empty by default and set by no
+profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
+`proxy_set_header X-Real-IP $remote_addr;`. `backend/app/services/platform/client_address.py` reads it:
+
+| Function | Returns |
+|----------|---------|
+| `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one (a test client) |
+| `client_rate_key(address)` | The key of a limit per client: an IPv4 address whole, an IPv6 one by its /64, which one subscriber usually holds whole; anything else as written, and `None` without an address |
+| `mask_client_address(address)` | The form an address may take in a log: an IPv4 address by its /24, an IPv6 one by its /48, since an IP address is personal data |
+
+- **Validated at startup.** The field's validator strips the value (empty: unset), then wants the name of one HTTP
+  header, an RFC 9110 `token`, and refuses `X-Forwarded-For` and `Forwarded` in any case: lists whose first value the
+  client chooses, which uvicorn handles with `FORWARDED_ALLOW_IPS`. A refused value fails `Settings()`, which
+  `backend/app/main.py` builds at import, so the server does not start.
+- **Read once per process.** `_configured_header()` (`functools.cache`) reads the field, lowercased, at the first call,
+  never per request: a change takes a restart. `reset_client_address_cache()` clears it and re-arms the warning, for
+  the tests.
+- **A malformed header** (repeated, a list, a port, a zone, any other text, empty) falls back to the connection's
+  address and logs one warning per process, `Client address header unusable: using the connection's address`, with
+  `header`, `lines` and `length`, never the value. A missing header falls back silently.
+- **Safety.** `client_address()` believes the header whoever sends it, so the variable is safe only when every request
+  crosses that proxy: a client that reaches the app directly (a published port, another path) can choose its address,
+  to get around a limit or to spend another client's.
+- **Callers.** A limit per client takes its address from `client_address(request)` and its key from
+  `client_rate_key()`, and a log holds only the `mask_client_address()` form. The three per-address email limits read
+  their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
+  the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
+- **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
+  `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
+  the last `X-Forwarded-For` value: advisory only, it gates nothing.
+
+For administrators: «The Visitor's Address» in
+[Checking Connection Security](../../admin/connection_checks.md#reverse-proxy).
+
+Tests: `./dev.py test services client-address` (`backend/test_scripts/test_services/test_client_address.py`).
 
 ## 🐛 Reporting a Vulnerability
 

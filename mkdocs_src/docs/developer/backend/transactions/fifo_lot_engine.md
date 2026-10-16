@@ -142,7 +142,7 @@ Returned snapshot of complete run.
 | `closures` | All FIFO closures sorted by close date. |
 | `issues` | Data-quality / unsupported-scenario issues. |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) with source tx, rule, weights, native+target amounts. |
-| `economic_accumulators_by_lot` | Per-lot `gross_income`, `allocated_fees`, `allocated_taxes` (target currency, positive magnitudes). |
+| `economic_accumulators_by_lot` | Per-lot `gross_income` (signed: a negative income correction lowers it), `allocated_fees`, `allocated_taxes` (positive magnitudes), all in the target currency. |
 | `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts with no eligible lot, kept at asset level. |
 
 Useful helpers on result:
@@ -361,13 +361,17 @@ per-lot accumulators, an audit trail, and asset-level orphans.
   (`backend/app/services/financial_math/yield_on_cost.py`) counts eligible quantity with the same public function.
 - weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
   conserved exactly;
+- **signed amounts**: a pool sums its `native_amount` / `target_amount` values with their sign, as the Dashboard
+  does (`NativeCash.flows()` keeps income signed; developer decision D-MF3): a negative correction lowers the
+  income of the lots, and an orphan pool can be negative;
 - **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
   issue and an audit group tagged `ASSET_INCOME_HOLDINGS`.
 
 ### 💸 FEE / TAX
 
 `_allocate_cost_pools()` pools asset-linked cost and matches it to operations with a deterministic ladder
-(`_match_cost_operations`), weighting by `target_amount`:
+(`_match_cost_operations`), weighting by `target_amount`. Unlike income, a cost pool sums its amounts in
+absolute value, as the Dashboard counts fees and taxes:
 
 | Cost | Matching order (first non-empty wins) |
 |------|----------------------------------------|

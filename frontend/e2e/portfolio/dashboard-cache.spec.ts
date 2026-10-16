@@ -30,7 +30,9 @@
  * here counts a request it did not watch the page send.
  *
  * Settled states read: `dashboard-page` / `positions-panel` `data-busy`, `risk-levels-panel`
- * `data-catalog="ready"` and `data-busy`, `risk-l1-cards` visible with no `risk-l1-loading`.
+ * `data-catalog="ready"` and `data-busy`, `risk-l1-cards` visible with no `risk-l1-loading`, and the
+ * page's Refresh (`sync-button`) `disabled` / `data-busy`, which waits for every big request of the
+ * page, the risk panel's base wave included: the panel has no Refresh of its own (Y11, decision 48).
  */
 
 import type {Route} from '@playwright/test';
@@ -203,6 +205,26 @@ async function riskSettled(page: Page): Promise<Locator> {
     await expect(panel.getByTestId('risk-l1-cards')).toBeVisible({timeout: PAGE_TIMEOUT});
     await expect(panel.getByTestId('risk-l1-loading')).toHaveCount(0);
     return panel;
+}
+
+/**
+ * The page's Refresh, «Aggiorna»: `disabled`, with `data-busy="true"`, while any big request of the Dashboard is pending
+ * (Y11, `pageBusy`) — the risk panel's base wave among them, which «Aggiorna» asks again through `refreshVersion`.
+ */
+function pageRefresh(page: Page): Locator {
+    return page.getByTestId('sync-button');
+}
+
+/**
+ * Presses «Aggiorna» once nothing of the page is pending, and hands back where the traffic stood right before the click:
+ * a request of a load still pending would otherwise be counted as the click's.
+ */
+async function pressRefresh(page: Page, traffic: Traffic): Promise<ReturnType<typeof mark>> {
+    const refresh = pageRefresh(page);
+    await expect(refresh, 'the Dashboard never stopped loading: «Aggiorna» cannot be pressed').toBeEnabled({timeout: PAGE_TIMEOUT});
+    const before = mark(traffic);
+    await refresh.click();
+    return before;
 }
 
 function contributionRows(page: Page): Locator {
@@ -470,8 +492,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             await expect(currency, 'the currency restarted from the base currency on return').toContainText('USD');
 
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            const before = await pressRefresh(page, traffic);
             await expect.poll(() => traffic.reports.length - before.reports, {message: '«Aggiorna» asked no report', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
             const refreshed = traffic.reports[before.reports];
             expect(refreshed.target_currency, '«Aggiorna» refreshed in another currency than the one restored').toBe('USD');
@@ -493,8 +514,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await page.getByTestId('dashboard-tab-risk').click();
             await riskSettled(page);
 
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            const before = await pressRefresh(page, traffic);
 
             await expect.poll(() => traffic.riskQueries.length - before.riskQueries, {message: '«Aggiorna» on the Risk tab reloaded the report and left the risk as it was cached', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
@@ -549,11 +569,11 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             await expect(panel.getByTestId('risk-scope-label'), 'with the filter on, the risk panel does not say it still reads the whole portfolio').toBeVisible();
 
-            // …and «Aggiorna» asks the risk again, still over every broker the user owns.
-            const before = mark(traffic);
-            await page.getByTestId('sync-button').click();
+            // …and «Aggiorna» asks the risk again, still over every broker the user owns. The page's Refresh waits for
+            // that question too: idle again, it has landed — the panel's own `data-busy` covers only its first load.
+            const before = await pressRefresh(page, traffic);
             await expect.poll(() => traffic.riskQueries.length - before.riskQueries, {message: '«Aggiorna» on the Risk tab asked no risk', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
-            await expect(panel.getByTestId('risk-refresh-button'), 'the risk asked again by «Aggiorna» never landed').toBeEnabled({timeout: PAGE_TIMEOUT});
+            await expect(pageRefresh(page), 'the risk asked again by «Aggiorna» never landed').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
             await riskSettled(page);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
             readings.push(await ownedBrokerIds(page));
