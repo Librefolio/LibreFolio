@@ -3690,3 +3690,12 @@ Updated: [[decisions/financial-math-one-home]], [[entities/portfolio-service]], 
 [[problems/asset-set-scope-has-no-primary-series]], [[problems/stale-price-banner-never-emitted]],
 [[problems/fx-backward-fill-unbounded-stale-rates]], [[decisions/asset-global-page-shows-no-money]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | CP-10b: the signals runtime moves into services/signals/
+The signals runtime (service, runtime, annotations, series), the plugin contract and the risk adapters moved into
+`services/signals/`, which ends the risk-signals import cycle. Source-file rows follow the new paths; a dated note on
+the plugin-folder decision says the family root no longer keeps a contract.
+Updated: [[decisions/plugin-folders-and-split-i18n]], [[decisions/ai-export-technical-series-and-density-contract]],
+[[decisions/drawdown-full-history-warmup]], [[decisions/risk-library-versus-own-maths]],
+[[decisions/signal-backend-plugin-architecture]], [[domains/signals]].
+Graph: not updated; graphify is not available in this worktree.

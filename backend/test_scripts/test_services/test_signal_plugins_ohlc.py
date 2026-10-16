@@ -46,8 +46,8 @@ from backend.app.services.signal_plugins.natr.plugin import (
     NatrSignalParams,
     NatrSignalPlugin,
 )
-from backend.app.services.signal_service import SignalService
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
 from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     VISIBLE_POINTS,
     execution_context,
