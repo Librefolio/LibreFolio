@@ -716,13 +716,7 @@
             onClose={() => (contextMenu = null)}
         />
     {/if}
-    <button
-        type="button"
-        class="absolute top-1 right-1 p-1 rounded bg-white/80 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-700 transition-colors"
-        onclick={resetView}
-        title={$_('dashboard.resetZoom')}
-        data-testid="exposure-treemap-reset-zoom"
-    >
+    <button type="button" class="absolute top-1 right-1 p-1 rounded bg-lf-card/80 border border-lf-subtle text-lf-muted hover:text-lf-secondary hover:bg-lf-card transition-colors" onclick={resetView} title={$_('dashboard.resetZoom')} data-testid="exposure-treemap-reset-zoom">
         <RotateCcw size={12} />
     </button>
 </div>

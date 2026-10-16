@@ -102,7 +102,7 @@
 {#if checkingAuth}
     <!-- Loading while checking authentication -->
     <div class="min-h-screen flex items-center justify-center" data-testid="auth-loading">
-        <div class="text-libre-green text-xl">Loading...</div>
+        <div class="text-lf-link text-xl">Loading...</div>
     </div>
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />

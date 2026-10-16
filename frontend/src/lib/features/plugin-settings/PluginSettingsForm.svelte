@@ -1,13 +1,14 @@
 <!--
   PluginSettingsForm — one plugin's settings, as the caller may see and change them (workstream X, lot CP11b; plan 03
-  §4.4, D-X15). A control per declared field, by type. A secret is write-only: «set on …», then «Replace» or «Clear»;
-  its text is sent once and dropped. A field an environment variable of the server sets, and an instance field for a user
-  who is not an administrator, are read-only with the reason. «Save» writes the plugin's edits all or nothing, then the
-  plugin's state is read again and handed to `onsaved`. The rules live in `pluginSettingsForm.ts`; colours are roles only
-  (theme-roles skill), every class a whole literal.
+  §4.4, D-X15). Its heading shows the plugin's icon (`icon_url`), or a neutral puzzle piece when it has none or the
+  image does not load. A control per declared field, by type. A secret is write-only: «set on …», then «Replace» or
+  «Clear»; its text is sent once and dropped. A field an environment variable of the server sets, and an instance field
+  for a user who is not an administrator, are read-only with the reason. «Save» writes the plugin's edits all or
+  nothing, then the plugin's state is read again and handed to `onsaved`. The rules live in `pluginSettingsForm.ts`;
+  colours are roles only (theme-roles skill), every class a whole literal.
 -->
 <script lang="ts">
-    import {Lock} from 'lucide-svelte';
+    import {Lock, Puzzle} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
@@ -60,7 +61,10 @@
     /** The fields the last write refused, with the server's code. */
     let refusals = $state<Record<string, string>>({});
     let saving = $state(false);
+    /** The icon address that failed to load: the neutral icon takes its place until the plugin publishes another. */
+    let failedIconUrl = $state<string | null>(null);
 
+    const showIcon = $derived(!!entry.icon_url && entry.icon_url !== failedIconUrl);
     const draft = $derived(draftOf(entry, form));
     const problems = $derived(draftProblems(entry, draft));
     const dirty = $derived(Object.keys(draft).length > 0 || replacing.length > 0);
@@ -135,7 +139,14 @@
     data-testid="plugin-settings-form-{entry.plugin_code}"
 >
     <header class="flex flex-wrap items-center justify-between gap-2">
-        <h4 class="text-base font-semibold" id="{uid}-name">{entry.plugin_name}</h4>
+        <h4 class="flex items-center gap-2 text-base font-semibold" id="{uid}-name">
+            {#if showIcon}
+                <img alt="" class="h-5 w-5 shrink-0 rounded-sm object-contain" data-testid="plugin-settings-plugin-icon" onerror={() => (failedIconUrl = entry.icon_url)} referrerpolicy="no-referrer" src={entry.icon_url} />
+            {:else}
+                <Puzzle aria-hidden="true" class="h-5 w-5 shrink-0 text-lf-muted" data-testid="plugin-settings-plugin-icon-fallback" />
+            {/if}
+            {entry.plugin_name}
+        </h4>
         {#if entry.configured}
             <span class={STATUS_BADGE_CLASSES.configured} data-testid="plugin-settings-status" data-configured="true">{$_('pluginSettings.status.configured')}</span>
         {:else}

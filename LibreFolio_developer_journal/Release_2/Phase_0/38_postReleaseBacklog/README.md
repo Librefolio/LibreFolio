@@ -118,6 +118,13 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   non esiste `assets.providerParams.justetf.*`, quindi il form mostra le chiavi e il tooltip resta in inglese. Lo
   stesso vale per CSS Scraper: `frontend/src/lib/i18n/en.json:362-376` ha solo `borsa_italiana` (Q, 08/10).
   Origine: 29, S20.
+  - ✅ **Chiusa il 16/10** da X (1.3, lotto K-16/O-9).
+    - justETF e CSS scraper hanno un `label` inglese per ogni campo di `params_schema`, e i frammenti
+      `assets.providerParams.<codice>.{label,description}` in 4 lingue (`css_scraper/i18n/` è nuovo).
+    - Allineate anche le 4 traduzioni della descrizione di `codice_fondo` di Borsa Italiana, rimaste indietro rispetto
+      al backend.
+    - Guardia in `test_provider_contracts.py`: le traduzioni coprono esattamente i campi del modulo, in ogni lingua.
+    - Dettagli: piano 03 della fase 01, sezione «K-16 e O-9».
 - **O-10 · `provider-contracts` registrato senza classe d'isolamento** — minimo. `scripts/test_runner/_backend_services.py:1031`
   non ha `isolation=`, benché il test sia offline. Origine: 29, S20.
 - **O-11 · Titolo di U1: "block Continue"** — minimo. `frontend/e2e/transactions/tx-import-report-set.spec.ts:2863`:
@@ -261,6 +268,14 @@ K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefi
 - **K-16 · Borsa Italiana: ETC/ETN classificati come `ETF` generico** — basso. `borsa_italiana.py:82`
   (`"etc/etn": AssetType.ETF`), benché esista `ETF_COMMODITY`; per gli ETN serve una scelta. La verifica sul server con
   l'ETC sull'oro `IE00B579F325` (17.7) non è stata fatta. Origine: step 13 e step 17.
+  - ✅ **Chiusa il 16/10** da X (1.3, lotto K-16/O-9, D-X7).
+    - `etc/etn` ora dà `ETF_COMMODITY`, anche nella ricerca e nei metadati.
+    - La scelta per gli ETN: anche quelli su un indice o su una valuta diventano `ETF_COMMODITY`, perché Borsa usa
+      un'etichetta sola. È un'approssimazione accettata.
+    - Un ETC già salvato come `ETF` cambia tipo solo con «Aggiorna metadati», un'azione dell'utente che mostra il
+      vecchio e il nuovo valore. Lo scheduler non aggiorna i metadati.
+    - La verifica sul server con `IE00B579F325` resta da fare.
+    - Test in `test_borsa_italiana_errors.py::test_map_asset_type`. Dettagli: piano 03, sezione «K-16 e O-9».
 - **K-17 · `PasswordInput`: pulsante «occhio» con `title` inglese fisso e `tabindex="-1"`** — basso.
   `lib/components/ui/input/PasswordInput.svelte:47` («Hide password», «Show password»): servono due chiavi di
   catalogo, e il pulsante è fuori dall'ordine di tabulazione. Origine: step 13.

@@ -39,9 +39,9 @@
     let {variant, title, subtitle = '', messages = [], dismissible = false, ondismiss, children, titleAction, testId = 'tx-result-banner'}: Props = $props();
 
     const variantStyles = {
-        success: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40',
-        warning: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40',
-        error: 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40',
+        success: 'text-lf-success-on-soft bg-lf-success-soft border-lf-success-line',
+        warning: 'text-lf-warning-on-soft bg-lf-warning-soft border-lf-warning-line',
+        error: 'text-lf-danger-on-soft bg-lf-danger-soft border-lf-danger-line',
     };
 </script>
 
