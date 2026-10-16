@@ -546,11 +546,9 @@ colour share it. Expressions (`color-mix()`, `var()`) have `key: null`.
 | `svelte-script`, `ts` | Any other script (`.ts` and `.js`) | `script` | ❌ |
 | `static` | `app.html`, `offline.html`, `manifest.json` | `static` | ❌ |
 
-A **chart file** is one under `components/charts`, `components/dashboard` or `features/dashboard/`,
-`components/risk` or `features/risk/`, `components/brokers/lots` or `features/brokers/lots/` (Y3 moves the
-dashboard there, a 1.3 batch the risk feature, and Y5, also a 1.3 batch, the lots; both paths count until
-they have), a `charts/` folder or `features/tools/pac-allocator/planner/result/`, one whose name holds
-`chart` in any case (`chartCategories.ts`, `GrowthChart.svelte`), or any file that imports from
+A **chart file** is one under `components/charts`, a `charts/` folder anywhere, `features/dashboard/`,
+`features/risk/`, `features/brokers/lots/` or `features/tools/pac-allocator/planner/result/`, one whose
+name holds `chart` in any case (`chartCategories.ts`, `GrowthChart.svelte`), or any file that imports from
 `'echarts'`. It is a heuristic: a `chart-color` previews only where it reaches an ECharts option.
 
 **Theme hint.** In stylesheets, `dark` or `light` when the rule, or a block around it, is limited to one
@@ -1217,15 +1215,15 @@ An abridged export (occurrence lists and classes cut):
       "to": "#3b4556",
       "occurrences": [
         {
-          "file": "src/lib/components/brokers/BrokerImportFilesModal.svelte",
-          "line": 438,
-          "col": 30,
+          "file": "src/lib/components/ui/feedback/LoadingSpinner.svelte",
+          "line": 60,
+          "col": 23,
           "raw": "#374151",
           "layer": "css-literal",
           "theme_context": "dark",
-          "selector": ":global(.dark) .modal-header",
-          "property": "border-bottom-color",
-          "snippet": "border-bottom-color: #374151;"
+          "selector": ":global(.dark) .spinner",
+          "property": "border-color",
+          "snippet": "border-color: #374151;"
         }
       ],
       "granularity": "value",
