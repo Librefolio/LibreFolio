@@ -1445,9 +1445,9 @@
 
 <ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex} testId="asset-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        <button type="button" onclick={handleClose} disabled={saving} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
+        <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
+        <button type="button" onclick={handleClose} disabled={saving} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
         </button>
     </div>
@@ -1466,12 +1466,12 @@
                 {#if !editMode && initialSearchBadges.length > 0}
                     <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
                     <div class="space-y-1.5">
-                        <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
                             <Search size={12} />
                             <span>{$t('assets.modal.searchOnline')}</span>
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                            <span class="flex items-center gap-1 text-xs text-lf-muted shrink-0">
                                 <Search size={11} class="opacity-60" />
                                 {$t('assets.modal.searchSuggestions')}:
                             </span>
@@ -1522,10 +1522,10 @@
             />
 
             <!-- More Info (collapsible — Identifiers + Classification) -->
-            <div class="border border-gray-200 dark:border-slate-700 rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
+            <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary bg-lf-panel hover:bg-lf-neutral transition-colors cursor-pointer select-none"
                     role="button"
                     tabindex="0"
                     data-testid="asset-modal-more-info"
@@ -1551,12 +1551,12 @@
                 </div>
 
                 {#if moreInfoExpanded}
-                    <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
+                    <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
                         <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
 
                         <!-- Sub-section: Classification -->
                         <div class="space-y-3">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
                                 {$t('common.classification')}
                             </div>
 
@@ -1593,7 +1593,7 @@
 
             <!-- Error -->
             {#if formError}
-                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-lf-danger-on-soft bg-lf-danger-soft px-4 py-2 rounded-lg">
                     {formError}
                 </div>
             {/if}
