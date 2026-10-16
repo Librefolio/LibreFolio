@@ -18,7 +18,6 @@
     import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
-    import '$lib/theme/components/table.css';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -786,27 +785,27 @@
 
     :global {
         .unified-lots-table-wrap tr.lot-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 26%, var(--lf-cmp-lots-table-row-tinted-bg));
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 26%, var(--lf-surface-card));
         }
         .dark .unified-lots-table-wrap tr.lot-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 14%, var(--lf-cmp-lots-table-row-tinted-bg-dark));
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 14%, var(--lf-surface-card));
         }
         .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td {
-            --lot-highlight-base: var(--lf-cmp-lots-table-lot-highlight-base);
-            --lot-highlight-peak: var(--lf-cmp-lots-table-lot-highlight-peak);
+            /* A highlighted row is the selection tint (palette, `--lf-selected`); the pulse peaks on a deeper one. */
+            --lot-highlight-base: var(--lf-selected);
+            --lot-highlight-peak: color-mix(in oklab, var(--lf-checked) 20%, transparent);
             background: var(--lot-highlight-base) !important;
             animation: tinted-lot-highlight-pulse 0.6s ease-in-out 3;
         }
-        .dark .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td {
-            --lot-highlight-base: var(--lf-cmp-lots-table-lot-highlight-base-dark);
-            --lot-highlight-peak: var(--lf-cmp-lots-table-lot-highlight-peak-dark);
-            background: var(--lot-highlight-base) !important;
+        /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15). */
+        .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td .text-lf-muted {
+            color: var(--lf-text-secondary);
         }
         .unified-lots-table-wrap tr.lot-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 68%, var(--lf-cmp-lots-table-row-tinted-bg));
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 68%, var(--lf-surface-card));
         }
         .dark .unified-lots-table-wrap tr.lot-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-cmp-lots-table-row-tinted-bg-dark));
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-surface-card));
         }
     }
 </style>

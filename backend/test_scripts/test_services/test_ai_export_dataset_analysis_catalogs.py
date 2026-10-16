@@ -205,15 +205,49 @@ class TestIntegratedComponentCatalog:
             assert real.builder is not placeholder.builder
 
     @pytest.mark.parametrize("component_id", ["portfolio.provenance", "broker.provenance"])
-    def test_provenance_components_are_version_2_on_both_sides_of_the_catalog(
+    def test_provenance_components_are_version_3_on_both_sides_of_the_catalog(
         self,
         component_registry: ComponentRegistry,
         component_id: str,
     ):
-        """D12(a), issue #32: the provenance semantics moved to the single average cost, so the
-        component version is 2 — on the real spec AND on its frozen placeholder, which the
-        replacement validation requires to be equal. The payload shape does not change:
-        schema_version stays 1. Pins the numbers, so a bump on one side only cannot stay green."""
+        """D12(a), issue #32: the provenance semantics moved to the single average cost (version 2);
+        J-17: the valuation hierarchy names ESTIMATED_AT_COST and an ADJUSTMENT is never a price
+        (version 3) — on the real spec AND on its frozen placeholder, which the replacement validation
+        requires to be equal. The payload shape does not change: schema_version stays 1. Pins the
+        numbers, so a bump on one side only cannot stay green.
+
+        Before J-17: version 2 on the three sides."""
+        placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
+        registered = component_registry.get(component_id)
+
+        # The integrated catalog still validates with the new numbers.
+        validate_portfolio_broker_replacements(PORTFOLIO_BROKER_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
+        assert registered is real
+        assert {
+            "placeholder version": placeholder.version,
+            "real version": real.version,
+            "registered version": registered.version,
+            "schema_version": real.schema_version,
+        } == {
+            "placeholder version": 3,
+            "real version": 3,
+            "registered version": 3,
+            "schema_version": 1,
+        }
+
+    @pytest.mark.parametrize("component_id", ["portfolio.positions", "broker.positions"])
+    def test_positions_components_are_version_2_on_both_sides_of_the_catalog(
+        self,
+        component_registry: ComponentRegistry,
+        component_id: str,
+    ):
+        """J-17: a holding valued at cost has no price, so its position row exports no unit_price; the
+        positions components move to version 2 — on the real spec AND on its frozen placeholder, which the
+        replacement validation requires to be equal. The payload shape does not change: schema_version
+        stays 1. Pins the numbers, so a bump on one side only cannot stay green.
+
+        Before J-17: version 1 on the three sides."""
         placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
         registered = component_registry.get(component_id)
