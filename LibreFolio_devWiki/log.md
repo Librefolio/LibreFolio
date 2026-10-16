@@ -3607,3 +3607,10 @@ native-cash revaluation decision («stays open») and the native-cash entity (no
 line with the resolved problem page.
 Updated: [[concepts/pre-frame-frame-separation]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | F-088 becomes the one Rolling Return (decision 29)
+J CP-10a removed the observation-based `RISK_ROLLING_RETURN` and made the calendar plugin visible in the Signals panel;
+the page said the old signal «stays, unchanged». Now it records the removal, the parity proof, the store's version-3
+migration of saved overlays, the plugin-owned `signals.riskRollingReturn.*` keys and the `price_return` home.
+Updated: [[features/F-088]].
+Graph: not updated; graphify is not available in this worktree.
