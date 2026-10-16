@@ -4705,7 +4705,7 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 > - **Prossimo**: F21/C-90, poi O-8.
 > - **C-66 in dev**: merge `4b2e0df80` (treno 138). Il coordinatore ha chiuso C-66 e O-20 nei backlog.
 
-### F21, C-90 e P20 — frontend e `mailto:` ⏳ (dalle 21:15)
+### F21, C-90 e P20 — frontend e `mailto:` ✅ (2026-10-16, 21:15–00:05; sotto-lotti 1 e 2 in dev, il 3 consegnato)
 
 > - **Tre sotto-lotti**, ciascuno col suo checkpoint:
 >   1. **P20 backend**: `LIBREFOLIO_SUPPORT_URL` accetta `mailto:` e un indirizzo, secondo la specifica di H.
@@ -4803,7 +4803,7 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
    > - Nessuna E2E guarda la struttura dell'esito della prova (`asset-modal.spec.ts` clicca solo il pulsante), e nessuno
    >   scatto della galleria mostra una prova conclusa.
 
-3. ⏳ **F21 e P20 nel frontend** (dalle 22:10; i rossi li scrive il test-author, il codice è pronto in bozza).
+3. ✅ **F21 e P20 nel frontend** (22:10–00:03; consegnato al coordinatore alle 00:05).
    > **Disegno** (dentro il perimetro approvato; `AssetModal.svelte` concesso dal coordinatore alle 21:57 per una prop):
    > - **Due moduli puri** accanto al componente (FE5a li sposterà con gli altri):
    >   - `assetSearchSections.ts`: `searchRank`, `orderSearchResults` (stabile: premium prima, poi priorità più bassa;
@@ -4929,3 +4929,67 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
    > - la valuta base si legge una sola volta, in `resetForm` (`get(userSettings)`), quindi il valore registrato lì
    >   resta coerente anche se le impostazioni arrivano dopo;
    > - la doc utente è già allineata: «unless they are still the defaults of a new, blank form».
+   > - **Rosso** (23:22, carico 38): (c) ed (e) rossi, 2 su 91 insieme al file ASA. I 49 casi ASA verdi confermano anche
+   >   il restringimento di `support_url`.
+   > - **Il codice** (23:24): `blankCurrency` e `blankAssetType` sono registrati in `resetForm`.
+   >   - ⚠️ Fuori pista: il derivato stava alla riga ~218 e leggeva `currencyUserSet` e `blankCurrency`, dichiarati circa
+   >     170 righe più sotto. A runtime va bene, perché `$derived` è pigro, ma svelte-check vede l'espressione sul posto
+   >     (rischio TS2448). L'ho spostato dopo le dichiarazioni (riga 393).
+   > - **Verde** (23:26, all'inizio dello slot 1): `AssetModal.test.ts` **42/42**.
+   >
+   > **Sotto-lotto 1 committato ed entrato** (coordinatore, 23:40): `62933bf46` (codice) e `b3e2fae02` (journal). Il
+   > coordinatore ha risolto `hosting_providers.en.md`, tenendo la mia riga del supporto e quella di B sulla politica di
+   > riavvio. Al prossimo aggiornamento di base va unito a mano `_frontend_utility.py` (FE8b di W più le mie 2 righe).
+   >
+   > **L'E2E** (test-author, 23:05–23:25, scritto, non ancora lanciato): un blocco in fondo a
+   > `e2e/assets/asset-modal.spec.ts`, due test.
+   > 1. **Premium prima**:
+   >    - nello stream instradato il premium risponde per ultimo, così l'ordine viene dal livello e non dall'arrivo;
+   >    - la segnalazione sta in mezzo; la community è chiusa (`data-count` 1), e aperta mostra l'avviso e il risultato #2;
+   >    - il link GitHub decodificato contiene l'URL della issue, `Search:`, le righe dei provider della ricerca
+   >      instradata, e la riga `LibreFolio …`, con profilo e `html[lang]`, letta con `expect.poll`.
+   > 2. **`mailto:` e riapertura**:
+   >    - `/system/instance` instradato con `mailto:support@example.org`, ricerca vuota;
+   >    - l'href `mailto:` ha CRLF e oggetto;
+   >    - un clic sul campo del nome chiude la tendina, il focus la riapre in `empty` con la riga, senza una seconda
+   >      ricerca.
+   >
+   > - **Le rotte**:
+   >   - solo i percorsi esatti, solo GET;
+   >   - le risposte vere riscritte, togliendo `content-encoding` e `content-length`, perché il backend comprime in
+   >     gzip da 1 KB in su;
+   >   - premium = il primo codice cercabile in ordine di codice (oggi `borsa_italiana`), community = il secondo
+   >     (`justetf`).
+   > - Visto dal test-author, fuori perimetro: la vecchia rotta «Bug G» su `/settings/user`, nello stesso file, fa
+   >   `fulfill({response, json})`. Si romperebbe allo stesso modo se quella risposta arrivasse a 1 KB.
+   > - **Slot 2** chiesto per `front-asset asset-modal` (tutto il file) e `front-utility plugin-settings` (la ricerca
+   >   con «Configure» e 👑), circa 20 minuti. La build del frontend fatta nello slot 1 contiene già il codice finale: fino
+   >   allo slot non tocco `frontend/src` né il CHANGELOG.
+   > - **La galleria** (via coordinatore): G riceve la nota sulla riga della segnalazione negli scatti degli import, e
+   >   lo scatto delle sezioni premium da pianificare.
+   >
+   > **Slot 2** (23:41–23:48, carico 51–75, porta 6183):
+   > - `front-asset asset-modal` → **20/20**: tutto il file, compresi i due test nuovi di F21 e P20 (19 e 20);
+   > - `front-utility plugin-settings` → **5/5**: la ricerca con «Configure» e la legenda della 👑 passano per la stessa
+   >   tendina;
+   > - nessuna ricostruzione: la build dello slot 1 conteneva già il codice finale;
+   > - porta libera alle 23:48:02; il coordinatore è stato avvisato subito, perché Y aspettava.
+   >
+   > **⚠️ Fuori pista (23:41)**: prima dello slot l'unico file più recente della build era `frontend/src/.DS_Store`.
+   > - È un file di Finder, scritto alle 23:37, ignorato da `frontend/.gitignore` e non tracciato.
+   > - `check_frontend_needs_build` guarda tutti i file sotto `src` e avrebbe ricostruito il frontend per niente (6–7
+   >   minuti sotto carico): l'ho tolto. Finder lo ricrea quando serve.
+   > - Detto al coordinatore all'inizio dello slot.
+   > - Il controllo potrebbe ignorare i file di sistema come `.DS_Store`: si annota, non è un lavoro di X.
+   >
+   > **Controlli finali** (23:49–00:03, carico ≤ 50, uno alla volta):
+   > - `front check` → **0 errori, 0 avvisi**, sul codice finale (dopo lo spostamento del derivato in `AssetModal`);
+   > - `mkdocs build` stretto → verde, nessun avviso, nessuna riga INFO su ancore; 3076 URL relativi risolti;
+   > - `mkdocs check-links` → **97** link validi;
+   > - colori → puliti; `git diff --check` → pulito; porta 6183 libera.
+   >
+   > **Per dopo**:
+   > - lo scatto di galleria delle sezioni premium (il DoD lo chiede), da fare con G: serve un provider premium
+   >   instradato, come nell'E2E;
+   > - la traduzione di `create-edit` (le ancore `#search-online-results` e `#let-us-know`) e della riga di
+   >   `LIBREFOLIO_SUPPORT_URL` in `configuration`, alla prossima corsa di Aphra.
