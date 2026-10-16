@@ -514,10 +514,9 @@ through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
 
 The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
 `>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
-uses; a copy that escapes fewer characters is the defect this rule removes. Two files are exempt:
+uses; a copy that escapes fewer characters is the defect this rule removes. One file is exempt:
 `lib/utils/inlineMath.ts`, whose KaTeX variant keeps the apostrophe on purpose (`f'(x)` is prime
-notation), and `TransactionBulkModal.svelte`, until its inline copy is replaced by `escapeHtml`. The
-rule for every hand-built HTML string, and its other gates, is in
+notation). The rule for every hand-built HTML string, and its other gates, is in
 [Output Escaping](../../architecture/security.md#output-escaping).
 
 ### Guards {: #chart-text-guards }
@@ -529,7 +528,7 @@ rule for every hand-built HTML string, and its other gates, is in
 | `lib/components/charts/chartFlagFont.test.ts` | With the real ECharts, rendered server-side to SVG: a chart created with `CHART_INIT_THEME` draws its legend, axis and pie labels with `'LF Flags'` first, also after `setOption(option, true)`. A static scan of the production sources: every `echarts.init(` passes exactly `CHART_INIT_THEME` as its second argument, and no module reaches ECharts' `init` under another name. The scan skips `lib/dev/designer-lab/`, whose engine creates a 1×1 probe that never paints. |
 | `lib/components/charts/chartFont.load.test.ts` | The face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. |
 | `*.tooltipEscape.test.ts`: `AllocationPieChart`, `CandlestickChart` and `PriceChartFull` beside the charts, `CorrelationHeatmap` in `lib/features/risk/` | Fed a value that carries markup, the tooltip injects no element and shows the value as text; the heatmap's also requires the shared `escapeHtml`'s output, quotes included. |
-| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside the two exempt files; an exempt file that no longer holds one fails too, so the list cannot go stale. |
+| `lib/utils/core/escapeHtml.single.test.ts` | No production source holds an HTML escaper (`&` mapped to `&amp;`) outside `escapeHtml.ts` and the exempt `inlineMath.ts`; an exempt file that no longer holds one fails too, so an exemption cannot go stale. |
 
 ## Pie Charts (AllocationPieChart)
 
