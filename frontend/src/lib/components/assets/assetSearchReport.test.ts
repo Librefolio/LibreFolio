@@ -4,8 +4,10 @@
  * The report of a search that found nothing useful, and the link that sends it from the user's own client:
  *
  *   - `supportChannel` reads the instance's `support_url` once more — the backend validated it, the frontend
- *     checks the scheme again, so that nothing but http(s) and `mailto:` with exactly one address ever becomes a
- *     link; anything else (`javascript:` first of all) falls back to a new GitHub issue;
+ *     checks it again, so that nothing but an http(s) page, as its normalised absolute address, and `mailto:` with
+ *     exactly one address ever becomes a link; anything else (`javascript:` first of all, an address with a user or a
+ *     password) is no address: a new GitHub issue when the caller allows that fallback, else no channel at all (X-R37,
+ *     N61 — a managed instance has no public fallback);
  *   - `buildSearchReport` writes a fixed English text, pinned here line by line: it is what a maintainer reads,
  *     whatever the language of the user's UI;
  *   - `reportHref` encodes it for its channel: RFC 6068 line breaks (CRLF) for a mail, plain ones for GitHub,
@@ -92,13 +94,24 @@ describe('GITHUB_NEW_ISSUE_URL', () => {
 });
 
 describe('supportChannel', () => {
+    /** No address — missing or refused: the GitHub issue when the caller allows that fallback, else no channel at all. */
+    function expectMissing(value: string | null | undefined): void {
+        expect(supportChannel(value, {githubFallback: true}), 'with the GitHub fallback').toStrictEqual(GITHUB);
+        expect(supportChannel(value, {githubFallback: false}), 'without it: no channel').toBeNull();
+    }
+
+    /** A valid address: its own channel, whatever the fallback says. */
+    function expectChannel(value: string, channel: SupportChannel): void {
+        for (const githubFallback of [true, false]) expect(supportChannel(value, {githubFallback}), `githubFallback: ${githubFallback}`).toStrictEqual(channel);
+    }
+
     it.each<[string, string | null | undefined]>([
         ['null', null],
         ['undefined', undefined],
         ['empty', ''],
         ['blank', '  \t\n '],
-    ])('goes to a new GitHub issue when the address is %s', (_label, value) => {
-        expect(supportChannel(value)).toStrictEqual(GITHUB);
+    ])('has no address when it is %s: GitHub with the fallback, nothing without', (_label, value) => {
+        expectMissing(value);
     });
 
     it.each<[string, string]>([
@@ -106,8 +119,8 @@ describe('supportChannel', () => {
         ['  mailto:support@example.org \n', 'support@example.org'],
         ['MAILTO:Support@Example.org', 'Support@Example.org'],
         ['MailTo:help.desk+librefolio@sub.example.co.uk', 'help.desk+librefolio@sub.example.co.uk'],
-    ])('reads %j as the one address to write to, as given, without its scheme', (value, address) => {
-        expect(supportChannel(value)).toStrictEqual({kind: 'mailto', address});
+    ])('reads %j as the one address to write to, as given, without its scheme — fallback or not', (value, address) => {
+        expectChannel(value, {kind: 'mailto', address});
     });
 
     it.each<[string, string]>([
@@ -129,19 +142,51 @@ describe('supportChannel', () => {
         ['angle brackets', 'mailto:<support@example.org>'],
         ['quotes', 'mailto:"support"@example.org'],
         ['a slash', 'mailto:support@example.org/help'],
-    ])('falls back to GitHub on a mailto: with %s', (_label, value) => {
-        expect(supportChannel(value)).toStrictEqual(GITHUB);
+    ])('refuses a mailto: with %s: GitHub with the fallback, nothing without', (_label, value) => {
+        expectMissing(value);
     });
 
     it.each<[string, string]>([
         ['https://help.example.org/assets', 'https://help.example.org/assets'],
         ['http://intranet.lan/support', 'http://intranet.lan/support'],
+        ['https://help.example.org/assets?from=librefolio', 'https://help.example.org/assets?from=librefolio'],
         ['  https://help.example.org/assets?from=librefolio#form  ', 'https://help.example.org/assets?from=librefolio#form'],
         ['https://help.example.org:8443/support', 'https://help.example.org:8443/support'],
-        // As given, trimmed only: not the URL serialiser's form (which would lower-case it and add a slash).
-        ['HTTPS://Help.Example.org', 'HTTPS://Help.Example.org'],
-    ])('opens %j as a page, the address as given', (value, url) => {
-        expect(supportChannel(value)).toStrictEqual({kind: 'page', url});
+        // Normalised (X-R37): the URL serialiser's absolute form — scheme and host lower-cased, the root path written
+        // out, the default port dropped, a space escaped…
+        ['HTTPS://Help.Example.org', 'https://help.example.org/'],
+        ['https://help.example.org:443/support', 'https://help.example.org/support'],
+        ['https://help.example.org/a b', 'https://help.example.org/a%20b'],
+        // …and above all with its two slashes: written without them, as given, it is a path of the instance itself.
+        ['https:host', 'https://host/'],
+        ['https:/help.example.org/assets', 'https://help.example.org/assets'],
+        ['http:help.example.org/support', 'http://help.example.org/support'],
+    ])('opens %j as the page %j, its normalised absolute address — fallback or not', (value, url) => {
+        expectChannel(value, {kind: 'page', url});
+    });
+
+    it.each<[string, string]>([
+        ['https:host', 'host'],
+        ['https:/help.example.org/assets', 'help.example.org'],
+    ])('returns %j as an address that needs no base: as an href on the instance’s own page it opens %s', (value, host) => {
+        const instancePage = 'https://librefolio.instance.example/assets';
+        expect(new URL(value, instancePage).host, `premise: ${value}, as given, is a path of the instance`).toBe('librefolio.instance.example');
+
+        const channel = supportChannel(value, {githubFallback: false});
+
+        expect(channel?.kind).toBe('page');
+        const url = channel?.kind === 'page' ? channel.url : '';
+        expect(new URL(url, instancePage).href, 'resolved against the instance, the address is itself').toBe(url);
+        expect(new URL(url, instancePage).host).toBe(host);
+    });
+
+    it.each<[string, string]>([
+        ['a user and a password', 'https://user:pass@help.example.org'],
+        ['a user', 'https://user@help.example.org'],
+        ['a password alone', 'https://:pass@help.example.org/support'],
+        ['a user and an empty password', 'http://user:@intranet.lan/support'],
+    ])('counts a page with %s in its address as no address: GitHub with the fallback, nothing without', (_label, value) => {
+        expectMissing(value);
     });
 
     it.each<[string, string]>([
@@ -158,8 +203,8 @@ describe('supportChannel', () => {
         ['https: with no host', 'https://'],
         ['a malformed host', 'http://exa mple.org/'],
         ['a malformed IPv6 host', 'https://[not-an-ip]/'],
-    ])('falls back to GitHub on %s', (_label, value) => {
-        expect(supportChannel(value)).toStrictEqual(GITHUB);
+    ])('refuses %s: GitHub with the fallback, nothing without', (_label, value) => {
+        expectMissing(value);
     });
 });
 
@@ -327,7 +372,9 @@ describe('reportHref', () => {
     });
 
     it('end to end: an address read, a report written, a link that gives that very report back', () => {
-        const href = reportHref(supportChannel('  MAILTO:Support@Example.org '), buildSearchReport(INPUT));
+        const channel = supportChannel('  MAILTO:Support@Example.org ', {githubFallback: false});
+        expect(channel, 'a valid address needs no fallback').toStrictEqual({kind: 'mailto', address: 'Support@Example.org'});
+        const href = reportHref(channel!, buildSearchReport(INPUT));
 
         const parts = /^mailto:Support@Example\.org\?subject=([^&]*)&body=([^&]*)$/.exec(href);
         expect(parts, `not mailto:<address>?subject=…&body=…: ${href}`).not.toBeNull();
