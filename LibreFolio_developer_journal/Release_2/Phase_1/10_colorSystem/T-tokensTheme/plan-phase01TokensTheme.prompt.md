@@ -583,8 +583,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
-| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | 🔄 applicato su `7646f39ee` (il ramo di DV), prove leggere verdi; checkpoint; slot dopo l'ingresso di DV (~07:35) |
-| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1, W1-g (`InfoBanner`, `SyncResultRow`) e W2-b applicati su `7646f39ee` con il lotto input, prove leggere verdi; W2-d e W1-f2 pronti su copie per lo slot dopo; la nota wiki committata (`0d5cebce7`) |
+| 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
+| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d e W1-f2 pronti su copie (base `eabf863f3`) per lo slot dopo; la nota wiki committata (`0d5cebce7`) |
 
 ## Avanzamento
 
@@ -1843,6 +1843,13 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` e perderebbe: servirà una variante della modale.
 > Nessun test legge questi colori; `OnboardingCoachmark.test.ts` usa `modal-content` come selettore (il nome resta).
 > Patch `w1e.patch`; `git apply --check` pulito.
+> - **Da rivedere** (aggiunto il 16/10, 07:3x, dalla galleria candidata di G): il bordo N3 è 1 px sopra e 1 px sotto, e il
+>   vecchio `<style>` non aveva bordo in nessuno dei due temi, quindi ogni modale di `ModalBase` è 2 px più alta. Nella
+>   galleria cambiano misura solo le scene scattate con `fitScreenToDialog` (`galleryTallShots.ts`), che porta lo schermo
+>   all'altezza a cui il dialogo non nasconde niente: `transactions/form-modal-transfer` da 884 a 886 px,
+>   `fx/add-pair-chain` +2 o +3 px secondo la lingua (`dialogTarget` divide per il cap, una quota dello schermo: 2 px di
+>   dialogo diventano circa 2,35 px di schermo, poi l'arrotondamento per eccesso). Voluto; se la designer volesse il filo
+>   senza ingombro, basterebbe un'ombra interna al posto del bordo.
 
 > ✅ **3 · W2-a** (sotto-agente su copie di `abc4c84de`): gli 8 file da 240 classi legacy a 0. Il banner del bootstrap
 > sulla tinta d'avviso (il modello per H); il blocco con la card dal bordo `danger-line`; il coachmark con fondale
@@ -2128,3 +2135,28 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **W2-b:** il changelog dalla versione nella barra laterale; cercare una parola comune come «fix», in scuro: i titoli
 >   evidenziati col filo, i `mark` nel testo, le pastiglie dei risultati, la testata dei capitoli al passaggio, il codice
 >   nel testo. La pagina «server irraggiungibile» (quando `/auth/me` tace oltre 5 secondi).
+
+> ✅ **13 · I commit, e W2-d e W1-f2 sulla base nuova** (06:5x): il coordinatore ha committato i quattro lotti sopra
+> `7646f39ee`: `37972b529` input (11 file), `7bc586870` W1-f1 (2), `83cbb0855` W1-g (3), `eabf863f3` W2-b (4, con la
+> baseline e il piano). Le bozze di W2-d e W1-f2 passate alla base `eabf863f3`: W2-d invariata; per W1-f2 la copia di
+> `fx-csv-import.spec.ts` rifatta sulla HEAD (che ha già la riga 289 di W1-g) con le righe 53 e 56; patch rigenerate,
+> `git apply -p2 --check` pulito. Script dello slot successivo: `/tmp/libreFolio_T_r2/slot4.sh`.
+
+### Terzo slot — ✅ 16/10/2026 (lotto input, W1-f1, W1-g, W2-b)
+
+> **Via** del coordinatore: valida `f0d19e499`, la base merge col target `1d37087f8` (DV entrato: W5-PAC e W5-charts; poi
+> Z7c-2); corsia 6155, carico 43–49 alla partenza (le due corsie pesanti della 1.3 attive); `slot3.sh`, stop a 65 minuti.
+
+> ✅ **Esito** (07:12–07:58, 45 minuti, nessun passo saltato): `api sync` rc 0; `--check` pulito; Vitest dei due gate
+> 65/65; `front check` 0 e 0 (copre anche la firma nuova di `hitClass`); `core-unit` 6.220/6.220; `component-unit`
+> 4.006/4.006; E2E a 1 worker: `transactions-modals` 24/25, `pac-allocator-real` 1, `fx-settings` 3, `asset-detail` 33,
+> `fx-sync` 3, `fx-sync-mock` 5, `fx-csv-import` 21, `settings` 56, `changelog-locale` 2, `app-start-auth` 3,
+> `theme-roles` 24 (2 saltati di proposito: i campi sotto il puntatore sul progetto mobile). Porta libera.
+> - **⚠️ Fuori pista — il rosso di T13** (`transactions-modals.spec.ts:1211`, «invalid TX in BulkModal shows issues
+>   banner…»): «Test timeout of 30000ms exceeded» in `openCreateFlow` (riga 66), il modale non compare; prima di ogni
+>   controllo di colore. Triage (skill `test-triage`, §2 l'orologio): T13 ha il timeout predefinito di 30 s, dentro cui
+>   gira anche il `beforeEach` (login, tracciatore, pagina delle transazioni con due attese fino a 20 s), mentre i vicini
+>   sullo stesso percorso hanno `test.setTimeout(60_000)`; gli altri 24 test aprono lo stesso modale con la stessa
+>   funzione. Rilanciato da solo a fine slot (07:58, carico 30): verde in 3,5 s. **Verdetto: assunzione** (un budget di
+>   30 s per un percorso a cui i vicini ne danno 60). La riga `test.setTimeout(60_000)` in T13 la chiede il coordinatore a
+>   W, come rafforzamento del suo spec; non entra nel lotto.
