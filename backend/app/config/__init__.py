@@ -407,7 +407,12 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         production_dirs.append(_resolve_data_dir(configured_prod))
     if any(_paths_overlap(candidate, prod) for prod in production_dirs):
         raise ValueError("Test data directory must not overlap the production data directory")
-    if any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents)):
+    # Path.exists() re-raises EACCES: a folder that cannot be traversed is refused with a message, never let through
+    try:
+        marked = any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents))
+    except OSError as exc:
+        raise ValueError(f"Cannot verify the test data directory: {exc.strerror or type(exc).__name__}") from exc
+    if marked:
         raise ValueError("Test data directory is inside a marked production data directory")
 
     for relative in (
@@ -449,7 +454,11 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         test_target = (candidate / relative).resolve()
         if not test_target.is_relative_to(candidate):
             raise ValueError(f"Test data path escapes its configured root: {relative}")
-        if any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs):
+        try:
+            aliased = any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs)
+        except OSError as exc:
+            raise ValueError(f"Cannot verify test data path: {relative} ({exc.strerror or type(exc).__name__})") from exc
+        if aliased:
             raise ValueError(f"Test data path aliases production data: {relative}")
     return candidate
 
