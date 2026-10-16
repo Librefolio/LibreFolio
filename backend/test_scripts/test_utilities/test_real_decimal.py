@@ -432,3 +432,29 @@ def test_round_computed_value(computed, model, column, expected):
     assert found == Decimal(expected), f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}: expected {expected}"
     issue = _decimal_limit_issue()(found, model, column)
     assert issue is None, f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}, which decimal_limit_issue still refuses: {issue}"
+
+
+@pytest.mark.parametrize(
+    ("computed", "model", "column", "form"),
+    [
+        pytest.param(Decimal("1.00"), Transaction, "cost_basis_override", "1.00", id="cost-basis-1.00"),
+        pytest.param(Decimal("0.9369"), Transaction, "cost_basis_override", "0.9369", id="cost-basis-0.9369"),
+        pytest.param(Decimal("100.00") / Decimal(100), Transaction, "cost_basis_override", "1.00", id="cost-basis-bond-100.00-over-100"),
+        pytest.param(Decimal("12.5"), Transaction, "amount", "12.5", id="amount-12.5"),
+    ],
+)
+def test_round_computed_value_keeps_the_form_of_a_value_that_fits(computed, model, column, form):
+    """Red before the fix: the first version always quantized, which pads the value. Contract (D6, 16/10 19:38):
+    a computed value with no more decimals than the column scale, and no more than 15 significant digits, comes
+    back as it is, form included: it is quantized only when it has MORE decimals than the scale.
+
+    Found by ``TestCreditAgricoleCanonicalCharacterization[securities]``: a bond unit cost of 100.00 / 100 came
+    back 1.000000000000, and 0.9369 as 0.936900000000, which the import wizard would show. Compared with ``str()``:
+    the form is what is asserted, the value check is the one of ``test_round_computed_value``.
+    """
+    found = _round_computed_value()(computed, model, column)
+
+    assert str(found) == form, f"round_computed_value({computed}, {model.__name__}, {column!r}) returns {found}: a computed value that already fits must keep its form, {form}, or the import wizard shows padded zeros"
+    assert found == Decimal(form), f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}: expected {form}"
+    issue = _decimal_limit_issue()(found, model, column)
+    assert issue is None, f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}, which decimal_limit_issue refuses: {issue}"
