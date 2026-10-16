@@ -25,9 +25,10 @@ After each change, the tab reloads its lists, so it always shows what the server
 ## 📏 Places and Subscription {: #places }
 
 The header counts the places taken: **3 / 10 accounts** when the instance has a user limit,
-**3 accounts** when it has none. Active accounts and open invitations take a place; deactivated
-accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance
-Is Full» in [Environment Variables](configuration.md).
+**3 accounts** when it has none. Active accounts and open invitations take a place, and so does an
+account [waiting for its email](#waiting) while its link is live; deactivated accounts do not. The
+limit is set on the server with `LIBREFOLIO_MAX_USERS`: see «When the Instance Is Full» in
+[Environment Variables](configuration.md).
 
 - 💳 **Manage subscription** appears next to the count only when the server has a billing page
   (`LIBREFOLIO_BILLING_URL`), as a hosting provider sets one for a managed instance. It opens that
@@ -35,7 +36,7 @@ Is Full» in [Environment Variables](configuration.md).
 - 🚫 When the instance is full, a banner says *The instance is full: no new invitation until you
   deactivate or delete an account, or revoke an invitation.*, with **Manage subscription** when
   there is a billing page. **Invite** is off, and a deactivated account cannot be reactivated until
-  a place is free.
+  a place is free, unless it is [waiting for its email](#waiting) with a live link.
 - 🔒 **Invite** is also off while registration is closed. If the **Registration** global setting is
   **Closed**, the tab tells you to change it there ([Global Settings](settings.md), «Who Can Sign
   Up»). If the server closes it with `LIBREFOLIO_REGISTRATION`, the tab names the variable: only the
@@ -52,7 +53,7 @@ date.
 |---|---|
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
-| **Deactivated** | The account cannot sign in, and takes no place |
+| **Deactivated** | The account cannot sign in, and takes no place — unless it is [waiting for its email](#waiting) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
@@ -88,6 +89,23 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 - 🛡️ **Protected** is reserved for the administrator who pays for a
   [managed instance](hosting_providers.md#managed-profile). No account is protected on a
   self-hosted instance.
+
+### ⏳ Accounts Waiting for Their Email {: #waiting }
+
+With **Require Email Verification** on ([Global Settings](settings.md)), a new account waits until
+its owner opens the link LibreFolio emails to its address. Until then:
+
+- its row shows **Deactivated**: this version has no badge of its own for a waiting account;
+- it takes a place while its link is live, that is for 24 hours after the last link sent;
+- **Reactivate** lets it in at once: it can sign in, and the links already sent stop working. While
+  its link is live, this takes no extra place, since its place is already counted: **Reactivate**
+  works even on a full instance, and so does `user activate` on the
+  [command line](cli_tools.md), without a limit warning. Once the link has expired, reactivating it
+  needs a free place, as for any deactivated account;
+- **Delete** removes it, as any account. `user deactivate` on the command line keeps it but ends
+  the wait: its links stop working, and it can sign in only once reactivated.
+
+How the verification works, and its limits: [Email Verification](email.md#verification).
 
 ---
 

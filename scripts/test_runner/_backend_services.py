@@ -536,6 +536,15 @@ def services_email_verification(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "E-mail verification tests", verbose=verbose)
 
 
+def services_email_verification_hooks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the email-verification hooks in A's services (lot E5b): user_usage, register_user, the changes of status, holds_place, the setting's guard."""
+    print_section("Services: E-mail Verification Hooks")
+    print_info("Testing: registration_service.user_usage/register_user, user_service.update_user_status/set_user_active, verification.holds_place/place_holders, settings_service._refuse_what_cannot_turn_on")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification_hooks.py", test_names)
+    return run_command(cmd, "E-mail verification hooks tests", verbose=verbose)
+
+
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
     """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
     print_section("Services: E-mail Links")
@@ -1511,6 +1520,16 @@ Note: No backend server required.
         # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
         # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
         # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-verification-hooks",
+        services_email_verification_hooks,
+        name="E-mail Verification Hooks",
+        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active only, set_user_active either way (deactivating ends the wait); holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server, no SMTP conversation; the email variables removed then set with monkeypatch; the loopback only resolves.
         isolation="pure",
     )
     add_test(

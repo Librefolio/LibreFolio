@@ -48,7 +48,7 @@ Solo gli amministratori (superutenti) hanno il lucchetto; tutti gli altri otteng
 |---|---|---|---|
 | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Accorciala su dispositivi condivisi; un nuovo valore si applica dal login successivo di ogni utente. |
 | 🛡️ Sicurezza | **Abilita registrazione** | Attiva | Consente a nuove persone di registrarsi. Disattivala una volta che tutti hanno un account, soprattutto se l'istanza è raggiungibile da Internet. Il primo account di una nuova istanza può sempre essere creato. |
-| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | Non ancora attiva: l'invio di email è una funzionalità pianificata, quindi l'interruttore è di sola lettura e contrassegnato **In arrivo**. |
+| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | I nuovi account devono aprire un link inviato via email al loro indirizzo prima di poter accedere; il primo account non aspetta mai, e gli account esistenti non cambiano. Si attiva solo mentre l'email funziona e `LIBREFOLIO_PUBLIC_URL` è utilizzabile: fino ad allora l'interruttore resta disabilitato. Vedi *Email Verification* in [Email](email.md). |
 | 🔄 Job di aggiornamento | **Scheduler abilitato** | Attivo | Attiva o disattiva gli aggiornamenti automatici di prezzi e tassi di cambio: vedi [Scheduler dei dati di mercato](#market-data-scheduler). |
 | 🧠 Memoria | **Dimensione Max Upload** | 10 MB | Il file più grande che gli utenti possono caricare, incluso il report del broker. Aumentala se un'esportazione di grandi dimensioni viene rifiutata. |
 | 🌍 Predefiniti | **Valuta predefinita** | `EUR` | La valuta in cui i nuovi utenti registrano i propri dati. |

@@ -218,6 +218,16 @@ _PINNED_BY_ENV: dict[str, tuple[str, Callable[[], bool]]] = {
 }
 
 
+class GlobalSettingUnavailableError(RuntimeError):
+    """A bulk update turns on a setting the instance cannot honour now; ``code`` says why (workstream E: email
+    verification needs an email with a link able to go out, ``EMAIL_VERIFICATION_UNAVAILABLE``)."""
+
+    def __init__(self, key: str, code: str) -> None:
+        super().__init__(f"Setting '{key}' cannot be turned on now: {code}")
+        self.key = key
+        self.code = code
+
+
 class GlobalSettingValueError(ValueError):
     """A bulk update carries values their settings refuse; ``errors`` holds every (key, reason)."""
 
@@ -226,12 +236,29 @@ class GlobalSettingValueError(ValueError):
         super().__init__("Invalid global settings: " + "; ".join(f"{key}: {reason}" for key, reason in errors))
 
 
+async def _refuse_what_cannot_turn_on(rows: dict[str, GlobalSetting], keys: list[str], stored_values: list[str]) -> None:
+    """``GlobalSettingUnavailableError`` for a setting turned on that the instance cannot honour now: email verification
+    without an email with a link able to go out (workstream E). Only off to on: a bulk save that sends it on again, while
+    email has stopped working, still saves the rest."""
+    verification_key = SETTINGS_REGISTRY.global_.REQUIRE_EMAIL_VERIFICATION.key
+    for key, stored in zip(keys, stored_values, strict=True):
+        if key == verification_key and stored == "true" and rows[key].value != "true":
+            # Email imports the accounts services, so the import waits for the call.
+            from backend.app.services.email.verification import EmailVerificationUnavailableError, ensure_verification_can_be_enabled  # noqa: PLC0415
+
+            try:
+                await ensure_verification_can_be_enabled()
+            except EmailVerificationUnavailableError as exc:
+                raise GlobalSettingUnavailableError(key, exc.code) from None
+
+
 async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int, session: AsyncSession) -> list[GlobalSettingRead]:
     """Update several global settings at once, all or nothing.
 
     Unknown keys are checked first (GlobalSettingNotFoundError), then every value against its type and
-    constraint (GlobalSettingValueError, listing every refusal). Only then are the values written, in one
-    commit. Returns one entry per item, in request order.
+    constraint (GlobalSettingValueError, listing every refusal), then whether a setting turned on can be honoured now
+    (GlobalSettingUnavailableError: email verification, off to on, needs an email with a link able to go out). Only
+    then are the values written, in one commit. Returns one entry per item, in request order.
     """
     keys = [key for key, _value in items]
     result = await session.execute(select(GlobalSetting).where(GlobalSetting.key.in_(keys)))  # type: ignore[attr-defined]
@@ -252,6 +279,7 @@ async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int,
             errors.append((key, str(exc)))
     if errors:
         raise GlobalSettingValueError(errors)
+    await _refuse_what_cannot_turn_on(rows, keys, stored_values)
 
     now = utcnow()
     for key, stored in zip(keys, stored_values, strict=True):
