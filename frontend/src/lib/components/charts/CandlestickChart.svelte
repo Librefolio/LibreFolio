@@ -21,6 +21,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
@@ -281,7 +282,7 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
@@ -519,9 +520,9 @@
             const label = truncateName(mainSeriesLabel || currency || 'Price');
             let suffix = '';
             if (displayCurrencyProp && mainCurrencyProp && displayCurrencyProp !== mainCurrencyProp) {
-                suffix = ` <span style="font-size:10px">(${displayCurrencyFlag || ''} ${displayCurrencyProp})</span>`;
+                suffix = ` <span style="font-size:10px">(${escapeHtml(displayCurrencyFlag || '')} ${escapeHtml(displayCurrencyProp)})</span>`;
             } else if (mainCurrencyProp) {
-                suffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                suffix = ` <span style="font-size:10px">(${escapeHtml(mainCurrencyFlagProp || '')} ${escapeHtml(mainCurrencyProp)})</span>`;
             }
             return signalLabelToHtml({label, iconUrl: mainIconUrl, assetType: mainAssetType, isCrown: true}) + suffix;
         })();

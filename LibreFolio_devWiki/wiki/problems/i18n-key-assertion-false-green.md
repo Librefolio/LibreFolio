@@ -84,8 +84,8 @@ time bomb.
 
 | Role | Path |
 |------|------|
-| Component publishing the key | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` |
-| Converted assertions | `frontend/src/lib/components/brokers/BrokerSharingPanel.test.ts` |
+| Component publishing the key | `frontend/src/lib/features/brokers/BrokerSharingPanel.svelte` |
+| Converted assertions | `frontend/src/lib/features/brokers/BrokerSharingPanel.test.ts` |
 | Catalogue-comparison precedent | `frontend/src/lib/utils/files/imageCrop.test.ts` |
 | Rule it violates | `.github/agents/test-author.agent.md` — rule 5 |
 

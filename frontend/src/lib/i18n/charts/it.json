@@ -194,7 +194,8 @@
     "units": {
       "days": "giorni",
       "sessions": "sedute",
-      "percentPerYear": "%/anno"
+      "percentPerYear": "%/anno",
+      "observations": "osservazioni"
     },
     "visual": {
       "components": "Componenti",
@@ -212,12 +213,6 @@
     "comparisonAsset": {
       "placeholder": "Seleziona asset di confronto",
       "loadError": "Impossibile caricare gli asset."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimento mobile",
-      "description": "Rendimento composto del solo prezzo su una finestra mobile.",
-      "output": "Rendimento",
-      "outputDescription": "Rendimento composto del periodo di detenzione, in punti percentuali."
     }
   }
 }

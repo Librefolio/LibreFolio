@@ -63,5 +63,5 @@ Pages updated: [[concepts/echarts-chart-gotchas]], [[features/F-055]].
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` |
 | Axis policy | `frontend/src/lib/components/charts/responsiveXAxis.ts` |
-| Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Growth chart | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | Runner (`growth-chart-memo`) | `scripts/test_runner/_frontend_asset.py` |

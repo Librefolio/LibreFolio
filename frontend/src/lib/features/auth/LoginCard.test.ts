@@ -453,10 +453,12 @@ describe('LoginCard — the success message has a handle (A5b)', () => {
  * at runtime today — the card already sends a `{key}` through `$_` — and the
  * three keys of O-15 fail only the type check until `AuthErrorKey` grows: what
  * A3 changes in the card is that the verbatim branch can no longer be reached.
+ * `email.verification.loginRequired` (workstream E, E5b) is left out: it draws the
+ * verification notice instead of the box, covered in `LoginCard.verification.test.ts` (LVR).
  */
 describe('LoginCard — the sign-in error is a key, drawn through the translator', () => {
-    /** Every key the store can emit, each drawn below. */
-    const EMITTED: Record<AuthErrorKey, true> = {
+    /** Every key the store can emit, each drawn below in the box — but `email.verification.loginRequired` (workstream E, E5b), which draws the verification notice instead (LVR, `LoginCard.verification.test.ts`). */
+    const EMITTED: Record<Exclude<AuthErrorKey, 'email.verification.loginRequired'>, true> = {
         'auth.invalidCredentials': true,
         'auth.invalidInput': true,
         'auth.loginFailed': true,
