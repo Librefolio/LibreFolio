@@ -2825,7 +2825,37 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal`.
 > Il piano: `../Phase_1/10_colorSystem/IW-importColors/`. Gli ID di questa sezione sono `IW-n`.
 
-- (nessuna voce ancora)
+- ✅ **IW-1 · Quattro pulsanti pieni verdi e blu in attesa dei ruoli hover** — basso; IW, 16/10 (D2). Restano legacy
+  `asset-group-confirm-all`, `asset-group-confirm-{id}` (`AssetGroupStep`), `import-wizard-warning-confirm` (il ramo
+  info) e `create-primary-confirm` (`ImportWizardModal`). T ha aggiunto `hover:bg-lf-success-hover` e
+  `hover:bg-lf-info-hover` (`f043c1b58`): si convertono dopo la base merge. Dettagli: [piano IW](../Phase_1/10_colorSystem/IW-importColors/plan-phase00ImportColors.prompt.md), sezione «Restano legacy».
+  ✅ 16/10, `9c79d5b35` (checkpoint 2 di IW, passo 5 del piano): i quattro su `success`/`info` con i
+  loro hover; `create-primary-confirm` resta nei «da rivedere» (IW-7).
+- **IW-2 · Le stelle «primario» degli identificativi senza ruolo** — basso; IW, 16/10 (D6). `AssetGroupStep`,
+  `fill-amber-400 text-amber-500` su legenda e badge (6 classi): serve un ruolo «marcatore», o i categoriali.
+  Dettagli: piano IW, sezione «Restano legacy».
+- **IW-3 · Badge degli identificativi categoriali, con l'anello ambra del primario** — basso; IW, 16/10.
+  `AssetGroupStep`: classi da `KIND_TONES.identifier` più `ring-amber-400 dark:ring-offset-gray-900` sull'elemento
+  (2 classi nel file): coi categoriali di B4. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-4 · Lo `<style>` di `ImportBrokerMismatchModal` sui token `--lf-cmp-broker-mismatch-*`** — basso; IW, 16/10
+  (D3). 12 token con override `.dark` in `lib/theme/components/dialogs.css`: con W6/B5 di T, che toglie i token non
+  più letti. Dettagli: piano IW, decisione D3.
+- **IW-5 · Il chip viola del tasso implicito delle coppie** — basso; IW, 16/10. `lib/utils/transactions/pairCellHtml.ts`,
+  `text-violet-600 dark:text-violet-400`: categoriale, e rispecchia `renderDualHtml` di `TransactionBulkModal` (TR); si
+  muovono insieme. Dettagli: piano IW, sezione «Restano legacy».
+- **IW-6 · Colori passati per prop di classe ad `AssetSelect`** — basso, design; IW, 16/10. `confidenceBadgeClass`
+  (`ImportWizardModal` → `ReviewStep` → `badgeClass` di `ui/select/AssetSelect`) porta colori, ora sui ruoli; la regola 3
+  della skill comune vuole una variante (`variant="…"`). Con T. Dettagli: piano IW, sezione «Catene di classi».
+- **IW-7 · Scelte «da rivedere» della migrazione dell'import** — basso, aspetto; IW, 16/10. Stato dei duplicati tutto
+  `warning` (D1), timeline del set, stepper e barre su `checked`, fuoco blu diventato verde, pulsanti contornati al 3:1,
+  bordi tratteggiati dei gruppi di asset sul `-line`, testi `-800` su card a `text-lf-X`, maniglia su `bg-lf-input`,
+  testo attenuato su `neutral` (~4:1), `create-primary-confirm` su `info` (è l'azione primaria del suo dialogo: forse
+  `action`). Dettagli: piano IW, «Da rivedere per il developer» e note dei lotti.
+- **IW-8 · Note di test-author su `tx-brim-import.spec.ts` e `tx-import-resolution.spec.ts`** — basso, test; IW, 16/10
+  (area W: da spostare). In T4 la guardia `if` salta l'asserzione solo quando qualcosa si rompe, e la guardia esterna usa
+  il testo tradotto `text=Resolve Assets` (c'è `import-wizard-resolve-section`); T1 non importa mai con questo campione;
+  i commenti «amber badge» di `tx-import-resolution.spec.ts` (riga 43 e IWR-001) diventano falsi dopo IW-5. Dettagli:
+  piano IW, passo 1, «Spec T4».
 
 ---
 
@@ -2835,7 +2865,43 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: il resto di `components/transactions/**` e `routes/(app)/transactions/**`.
 > Il piano: `../Phase_1/10_colorSystem/TR-transactionColors/`. Gli ID di questa sezione sono `TR-n`.
 
-- (nessuna voce ancora)
+- ✅ **TR-1 · Il sottotitolo di `/transactions` è ancora legacy** — minimo; TR, 16/10. `routes/(app)/transactions/+page.svelte:738`
+  (`text-gray-500 dark:text-gray-400`) resta com'è, perché il test «dark-theme pick of a text-gray-500 element» di
+  `e2e/designer-lab/designer-lab-picker.spec.ts` lo usa come elemento rimappato da `app.css`. Migra a `text-lf-muted`
+  quando L sposta il soggetto del test: si sblocca con l'ingresso di L-20 (coordinatore, 16/10 12:12). Dettagli: [piano di TR](../Phase_1/10_colorSystem/TR-transactionColors/plan-phase00TransactionColors.prompt.md),
+  sezione «Cosa resta, e perché».
+  ✅ 16/10, `546204732` (lotto 6 di TR): L-20 (`d2e4ae947`, in `dev_release2` con `460529690`) toglie il sottotitolo
+  dal test; il `<p>` passa a `text-lf-muted`.
+- ✅ **TR-2 · Due conferme verdi piene senza ruolo per l'hover** — basso; TR, 16/10. `PromoteMergeModal.svelte:262`
+  (`bg-green-600 hover:bg-green-700`) e `TransactionActionModal.svelte:387` (lo stesso verde, col ramo ambra dello split
+  nello stesso ternario) restano legacy e interi: manca un `success-hover`. Serve un ruolo di T, oppure una decisione:
+  `bg-lf-action`, o il ramo ambra su `bg-lf-warning hover:bg-lf-warning-hover text-lf-on-status`. Dettagli: piano di
+  TR, sezione «Cosa resta, e perché».
+  ✅ 16/10, `70bae91b4` (lotto 5 di TR, secondo checkpoint): con i ruoli nuovi di T (`f043c1b58`), le due conferme passano a
+  `bg-lf-success hover:bg-lf-success-hover text-lf-on-status`, e il ramo dello split a `bg-lf-warning
+  hover:bg-lf-warning-hover`, nello stesso ternario (OK del coordinatore, 12:12).
+- **TR-3 · Lo `<style>` di `TransactionsTable` tiene 13 letterali** — basso; TR, 16/10. Sono:
+  - la base della tinta del broker, `white`/`#0f0f18`: la stessa ricetta di `UnifiedLotsTable` di BK. **Passa a T**, nel
+    lotto dei component tokens (coordinatore, 16/10 12:12);
+  - l'hover traslucido dell'icona del tipo, `rgb(0 0 0/.05)`/`rgb(255 255 255/.08)`: nessun ruolo traslucido;
+  - il pallino evento viola: categoria;
+  - l'impulso indaco di riga: nessun ruolo d'evidenza.
+
+  Dettagli: piano di TR, sezione «Cosa resta, e perché».
+- **TR-4 · Le categorie lasciate nelle transazioni** — basso; TR, 16/10. 120 classi aspettano i ruoli categoriali:
+  - i tipi d'evento di `AssetEventPicker`;
+  - la codifica A/B/«unisci» di `PromoteMergeModal`;
+  - il chip FX viola;
+  - la promozione indaco;
+  - lo split viola;
+  - la riga «in attesa» e i badge d'effetto del WAC.
+
+  Con loro va portato a un `data-*` il selettore `span.text-indigo-500` di `e2e/transactions/tx-wac-bulk.spec.ts:676`.
+  Dettagli: piano di TR, sezione «Cosa resta, e perché».
+- **TR-5 · `scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600` sulla tabella WAC** — minimo; TR, 16/10.
+  `WacPreviewSection.svelte`, tabella delle transazioni qualificanti: colori di palette che il gate non conta (il
+  prefisso `scrollbar-thumb` non è nella lista) e che non hanno un ruolo. Funzionano, col loro `dark:` esplicito.
+  Probabile anche altrove: da aggiungere ai prefissi del gate quando esisterà un ruolo. Dettagli: piano di TR, passo 2.
 
 ---
 
@@ -2897,7 +2963,41 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `features/brokers/**`, lotti compresi, e `routes/(app)/brokers/**`.
 > Il piano: `../Phase_1/10_colorSystem/BK-brokerColors/`. Gli ID di questa sezione sono `BK-n`.
 
-- (nessuna voce ancora)
+- **BK-1 · Ruoli del broker OWNER/EDITOR/VIEWER ancora in palette** — medio; BK, 16/10. 69 classi: il badge di
+  `BrokerCard`, il badge della quota di `routes/(app)/brokers/[id]/+page.svelte`, le tre sezioni di `BrokerSharingPanel`
+  (icone, chip e avatar; il grigio VIEWER resta col set), più `utils/broker/brokerRoleHelpers.ts` (T). Categoria: aspetta
+  i ruoli categoriali. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  sezione «Restano legacy».
+- **BK-2 · Badge dei lotti ancora in palette** — medio; BK, 16/10. 84 classi: direzione, stato (CLOSED compreso), in
+  transito e custodia di `UnifiedLotsTable` (60), la chip «in transito» di `LotGanttChart` (4), i marcatori degli eventi e
+  le icone «in transito» di `LotCustodyModal` (20). Aspettano il giro dei badge (DV-7), da allineare a
+  `LOT_STATE_COLORS`. `SIGN_BADGE` (T, 16/10) non fa per loro: nessuno dice un guadagno o una perdita; LONG/SHORT è la
+  direzione della posizione, non un segno (regola 7 della skill `design-system`), e ha un bordo che `SIGN_BADGE` non ha.
+  Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  sezione «Restano legacy» e passo S5b.
+- **BK-3 · Interruttore «Attivo» di `BrokerForm`** — minimo; BK, 16/10. 4 classi (`features/brokers/BrokerForm.svelte`,
+  il `role="switch"` e la sua manopola) → lotto degli interruttori di T, che nel suo inventario ha ancora il percorso
+  `components/brokers/BrokerForm.svelte (298)`. Details: [piano di T](../Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md),
+  «Il lotto degli interruttori (Q2)».
+- ✅ **BK-4 · Testo sullo scrim** — minimo; BK, 16/10. L'icona `text-white` sullo scrim del selettore d'icona di
+  `BrokerForm` non aveva un ruolo. Chiusa il 16/10 con `text-lf-on-overlay`, il ruolo provvisorio di T (`f043c1b58`),
+  nel mini-checkpoint di BK dopo la base merge `2eef01e59`. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  passo S5b.
+- **BK-5 · Campione della legenda «stimato al costo»** — minimo; BK, 16/10. In `LotComparisonChart` il trattino
+  `border-slate-500 dark:border-slate-400` (2 classi) ricopia `LOT_COMPARISON_COLORS.estimatedValue` di DV: migra quando
+  DV porta quella coppia su un ruolo, così legenda e linea restano uguali. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  sezione «Restano legacy».
+- **BK-6 · `<style>` con `--lf-cmp-*` nell'area** — basso; BK, 16/10. `BrokerImportFilesModal` (28 letture da
+  `files.css`) e `UnifiedLotsTable` (8 da `table.css`, più le variabili dei broker di DV): portarli ai ruoli lascerebbe
+  senza lettori le definizioni di T (gate (c) di `themeComponentTokens`) → B5/W6 di T. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  sezione «Stato attuale».
+- **BK-7 · `toHaveClass(/selected/)` sulle righe di DataTable** — minimo; BK, 16/10. `e2e/brokers/brokers-detail.spec.ts`
+  righe 392–419 (spec della 1.3): la regex prenderebbe anche un ruolo `bg-lf-selected` quando `DataTable` (T, W6) migra;
+  meglio leggere `aria-selected`. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  sezione «Stato attuale».
+- **BK-8 · Lotto L4, `LotCustodyModal`** — medio; BK, 16/10. 205 classi riservate a Y fino al suo ingresso (coordinatore,
+  16/10); poi migrazione dalla versione di Y, 205 → 20. Details: [piano BK](../Phase_1/10_colorSystem/BK-brokerColors/plan-phase00BrokerColors.prompt.md),
+  passo S7.
 
 ---
 
@@ -3001,6 +3101,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     di `filesystem` e `docker_advanced` rimanda a `cli_tools.md#backup` e `#backup-docker`, ancore che
     `cli_tools.{it,fr,es}.md` non hanno finché non si chiude B-7. Va tradotto insieme a B-7 o dopo, altrimenti la build
     rigorosa IT/FR/ES non trova le ancore. L'ancora `#what-to-back-up` c'è già nelle 4 lingue.
+  - 16/10, P17: la sottosezione nuova «🧭 The Visitor's Address» (`#client-address`) e l'ultimo paragrafo riscritto dei
+    «Limits» in `connection_checks`, e una riga in `configuration` che punta a `connection_checks.md#client-address`.
+    **Ordine**: `configuration` va tradotta insieme a `connection_checks` o dopo, che deve tenere
+    `{: #client-address }`; altrimenti la build rigorosa di quella lingua non trova l'ancora.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -4164,12 +4268,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
   nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
-- **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10 (Z5).
-  A fine recupero il frontend chiama `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio
-  (`portfolioStore.invalidate()` alza solo un contatore non reattivo): la pagina già sullo schermo mostra le cifre nuove
-  al prossimo caricamento o con «Aggiorna». Cura possibile: le pagine del portafoglio ascoltano il segnale e ricaricano
-  in background se visibili. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
-  «Z5 — codice».
+- ✅ **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10
+  (Z5). **Chiusa il 16/10 col lotto Z-13** (commit `9d19c2093`; Z-13b, per il vincolo di Y11, nel checkpoint
+  successivo): a fine recupero il frontend manda `{kind: 'prices'}` sul bus del portafoglio, e il Dashboard e la pagina
+  di un broker sullo schermo chiedono di nuovo il loro report in background, senza force e senza passare
+  dall'«Aggiorna» dell'utente. I pannelli di rischio e dei lotti restano a Z-15. Era: a fine recupero il frontend
+  chiamava `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio (`portfolioStore.invalidate()`
+  alza solo un contatore non reattivo): la pagina già sullo schermo mostrava le cifre nuove al prossimo caricamento o
+  con «Aggiorna». Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z5 —
+  codice» e «Z-13».
+- **Z-14 · Le pagine di un asset e di un cambio non vedono un recupero dei prezzi** — basso; docs-writer di Z, 16/10
+  (Z-13). I grafici dei prezzi e dei cambi usano cache di sessione proprie (`assetPriceStoreRegistry.ts`,
+  `fxStoreRegistry.ts`) che il bus del portafoglio non tocca. Dopo un recupero, un intervallo già caricato nella
+  sessione torna dalla cache finché non si preme «Aggiorna» su quella pagina. Il problema c'era già prima di Z5, che
+  però lo rende più visibile. Cura possibile: le due cache ascoltano `{kind: 'prices'}` e segnano stale. Il dettaglio
+  di un asset è di X fino a FE5c. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-13», passo 4.
+- **Z-15 · Dopo un recupero dei prezzi i pannelli di rischio e dei lotti restano indietro** — basso; coordinatore e Y,
+  16/10 (Z-13b, vincolo Y11). La ricarica in background di Z-13 chiede di nuovo solo il report della pagina: non tocca
+  `refreshVersion` né `requestPortfolioRefresh()`, che sono l'«Aggiorna» dell'utente e con Y11 farebbero girare
+  l'icona (`pageBusy`). I pannelli di rischio e dei lotti già sullo schermo tengono le cifre vecchie, segnate stale,
+  finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
+  `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
 
 ## B · Backup e Docker (fase 01)
 

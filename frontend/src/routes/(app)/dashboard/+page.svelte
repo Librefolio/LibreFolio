@@ -50,7 +50,7 @@
         type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
@@ -707,6 +707,22 @@
             syncLoading = false;
         }
     }
+
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): the stale report is asked again in background,
+     * without force, and the figures stay until the new ones land. `refreshVersion` and `requestPortfolioRefresh()` are
+     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Run after the
+     * dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        if (!pageAlive) return;
+        void loadAll();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener('dashboard:prices', (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
 
     async function loadAiExportCompatibility() {
         aiExportCatalogLoading = true;

@@ -205,8 +205,7 @@ html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-800,
-html.dark .text-gray-900 {
+html.dark .text-gray-800 {
     color: var(--theme-text-primary) !important;
 }
 
@@ -249,11 +248,6 @@ html.dark textarea:where(:not([class*='-lf-']))::placeholder {
 
 html.dark .text-libre-green {
     color: #39af50 !important; /* Lighter green for dark mode */
-}
-
-/* Dark mode: Cards and modals */
-html.dark .bg-white\/90 {
-    background-color: rgba(30, 41, 59, 0.95) !important;
 }
 
 /* Dark mode: Rounded containers */

@@ -227,13 +227,13 @@
     {@const explanation = checkpoint.explanation}
     {@const openingCash = nonZero(explanation.openingCash)}
     <div data-testid="gapfix-checkpoint" data-as-of={checkpoint.asOf} data-kind={checkpoint.kind}>
-        <h4 class="border-b border-gray-100 px-3 py-2 text-sm font-medium text-gray-800 dark:border-slate-700 dark:text-gray-100">{checkpointTitle(checkpoint)}</h4>
+        <h4 class="border-b border-lf-subtle px-3 py-2 text-sm font-medium text-lf-primary">{checkpointTitle(checkpoint)}</h4>
 
         {#if checkpoint.cash.length > 0 || checkpoint.positions.length > 0}
             <div class="overflow-x-auto px-3 py-2">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="text-xs text-gray-500 dark:text-gray-400">
+                        <tr class="text-xs text-lf-muted">
                             <th class="py-1 text-left font-normal"></th>
                             <th class="py-1 text-right font-normal">LibreFolio</th>
                             <th class="py-1 text-right font-normal">{$t(`${P}bank`)}</th>
@@ -243,7 +243,7 @@
                     <tbody>
                         {#each checkpoint.cash as row, index (index)}
                             <tr data-testid="gapfix-cash-row" data-currency={row.currency} data-difference={row.difference}>
-                                <td class="py-1 pr-3 text-gray-700 dark:text-gray-200">{$t(`${P}cashLabel`, {values: {currency: row.currency}})}</td>
+                                <td class="py-1 pr-3 text-lf-secondary">{$t(`${P}cashLabel`, {values: {currency: row.currency}})}</td>
                                 <td class="py-1 text-right font-mono"><CurrencyAmount amount={Number(row.librefolio)} code={row.currency} /></td>
                                 <td class="py-1 text-right font-mono"><CurrencyAmount amount={Number(row.bank)} code={row.currency} /></td>
                                 <td class="py-1 text-right font-mono"><CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></td>
@@ -251,7 +251,7 @@
                         {/each}
                         {#each checkpoint.positions as position, index (index)}
                             <tr data-testid="gapfix-position-row" data-asset-id={position.assetId} data-exactness={position.exactness}>
-                                <td class="py-1 pr-3 text-gray-700 dark:text-gray-200">{assetName(position.assetId)}</td>
+                                <td class="py-1 pr-3 text-lf-secondary">{assetName(position.assetId)}</td>
                                 <td class="py-1 text-right font-mono">{maskableQuantity(quantity(position.librefolio))}</td>
                                 <td class="py-1 text-right font-mono">
                                     {#if position.exactness === 'at_least'}
@@ -269,7 +269,7 @@
         {/if}
 
         {#if explanation.absorbedCount > 0 || openingCash.length > 0 || explanation.unexplainedCash.length > 0 || explanation.notes.length > 0}
-            <div class="space-y-1 border-t border-gray-100 px-3 py-2 text-xs text-gray-600 dark:border-slate-700 dark:text-gray-300" data-testid="gapfix-explanation">
+            <div class="space-y-1 border-t border-lf-subtle px-3 py-2 text-xs text-lf-secondary" data-testid="gapfix-explanation">
                 {#if explanation.absorbedCount > 0}
                     <p>
                         {$t(`${P}absorbed`, {values: {n: explanation.absorbedCount}})}
@@ -286,7 +286,7 @@
                     <p>{$t(`${P}unexplained`)} {@render amountList(explanation.unexplainedCash)}</p>
                 {/if}
                 {#each explanation.notes as note, index (index)}
-                    <p class="flex items-start gap-1.5 text-amber-700 dark:text-amber-300" data-testid="gapfix-note" data-code={note.code}><AlertTriangle size={12} class="mt-0.5 shrink-0" /> {noteText(note)}</p>
+                    <p class="flex items-start gap-1.5 text-lf-warning" data-testid="gapfix-note" data-code={note.code}><AlertTriangle size={12} class="mt-0.5 shrink-0" /> {noteText(note)}</p>
                 {/each}
             </div>
         {/if}
@@ -296,11 +296,11 @@
 {#snippet verificationDetails(verification: GapFixVerification)}
     <div class="px-3 py-2 text-sm" data-testid="gapfix-verification" data-as-of={verification.asOf} data-ok={String(verification.ok)}>
         <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="text-gray-800 dark:text-gray-100">{$t(`${P}verificationTitle`, {values: {date: formatIsoDay(verification.asOf)}})}</span>
+            <span class="text-lf-primary">{$t(`${P}verificationTitle`, {values: {date: formatIsoDay(verification.asOf)}})}</span>
             {#if verification.ok}
-                <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle size={14} /> {$t(`${P}verificationOk`)}</span>
+                <span class="inline-flex items-center gap-1 text-xs font-semibold text-lf-success"><CheckCircle size={14} /> {$t(`${P}verificationOk`)}</span>
             {:else}
-                <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-300"><XCircle size={14} /> {$t(`${P}verificationKo`)}</span>
+                <span class="inline-flex items-center gap-1 text-xs font-semibold text-lf-danger"><XCircle size={14} /> {$t(`${P}verificationKo`)}</span>
             {/if}
         </div>
         {#if !verification.ok}
@@ -308,7 +308,7 @@
                 <tbody>
                     {#each verification.cash as row, index (index)}
                         <tr data-testid="gapfix-verification-cash-row" data-currency={row.currency} data-difference={row.difference}>
-                            <td class="py-1 pr-3 text-gray-700 dark:text-gray-200">{$t(`${P}cashLabel`, {values: {currency: row.currency}})}</td>
+                            <td class="py-1 pr-3 text-lf-secondary">{$t(`${P}cashLabel`, {values: {currency: row.currency}})}</td>
                             <td class="py-1 text-right font-mono">LibreFolio <CurrencyAmount amount={Number(row.librefolio)} code={row.currency} /></td>
                             <td class="py-1 text-right font-mono">{$t(`${P}bank`)} <CurrencyAmount amount={Number(row.bank)} code={row.currency} /></td>
                             <td class="py-1 text-right font-mono"><CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></td>
@@ -316,23 +316,23 @@
                     {/each}
                 </tbody>
             </table>
-            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{$t(`${P}verificationKoHint`)}</p>
+            <p class="mt-1 text-xs text-lf-secondary">{$t(`${P}verificationKoHint`)}</p>
         {/if}
     </div>
 {/snippet}
 
 <div class="space-y-4" data-testid="import-wizard-gapfix" data-proposal-count={proposalCount} data-selected-count={selectedCount}>
-    <p class="text-sm text-gray-600 dark:text-gray-300">{$t(`${P}intro`)}</p>
+    <p class="text-sm text-lf-secondary">{$t(`${P}intro`)}</p>
 
     {#each view.groups as group (group.key)}
         {@const points = pointsOf(group)}
         {@const active = activePointOf(group)}
         {@const rows = rowsOf(group, active)}
-        <section class="rounded-lg border border-gray-200 dark:border-slate-700" data-testid="gapfix-group" data-broker-id={group.brokerId} data-plugin-code={group.pluginCode}>
-            <header class="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-gray-100">{brokerName(group.brokerId)}</header>
+        <section class="rounded-lg border border-lf-subtle" data-testid="gapfix-group" data-broker-id={group.brokerId} data-plugin-code={group.pluginCode}>
+            <header class="border-b border-lf-subtle bg-lf-panel px-4 py-2 text-sm font-semibold text-lf-primary">{brokerName(group.brokerId)}</header>
 
             {#if group.error !== null}
-                <div role="alert" class="m-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="gapfix-error">
+                <div role="alert" class="m-4 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger" data-testid="gapfix-error">
                     <p class="flex items-center gap-1.5 font-medium"><AlertTriangle size={14} /> {$t(`${P}error`)}</p>
                     <p class="mt-1 break-words font-mono text-xs">{group.error}</p>
                     <p class="mt-1 text-xs">{$t(`${P}errorContinue`)}</p>
@@ -340,7 +340,7 @@
             {:else}
                 <div class="space-y-3 p-4">
                     {#if points.length > 0}
-                        <p class="text-xs text-gray-500 dark:text-gray-400">{$t(`${P}filterHint`)}</p>
+                        <p class="text-xs text-lf-muted">{$t(`${P}filterHint`)}</p>
                         <div class="flex flex-wrap gap-2">
                             {#each points as point (point.key)}
                                 {@const isActive = active?.key === point.key}
@@ -349,7 +349,7 @@
                                     {@const positions = changedPositions(checkpoint)}
                                     <button
                                         type="button"
-                                        class="min-w-44 rounded-lg border px-3 py-2 text-left text-sm transition-colors {isActive ? 'border-libre-green bg-libre-green/5 ring-1 ring-libre-green' : 'border-gray-200 hover:border-gray-400 dark:border-slate-700 dark:hover:border-slate-500'}"
+                                        class="min-w-44 rounded-lg border px-3 py-2 text-left text-sm transition-colors {isActive ? 'border-lf-focus bg-lf-selected ring-1 ring-lf-focus' : 'border-lf-subtle hover:border-lf-input-hover'}"
                                         aria-pressed={isActive ? 'true' : 'false'}
                                         onclick={() => toggleActive(group, point.key)}
                                         data-testid="gapfix-summary"
@@ -360,14 +360,14 @@
                                         data-positions={positions}
                                         data-notes={checkpoint.explanation.notes.length}
                                     >
-                                        <span class="block text-xs font-semibold text-gray-800 dark:text-gray-100">{checkpointTitle(checkpoint)}</span>
+                                        <span class="block text-xs font-semibold text-lf-primary">{checkpointTitle(checkpoint)}</span>
                                         {#each differences(checkpoint.cash) as row, index (index)}
-                                            <span class="block font-mono text-xs text-gray-700 dark:text-gray-200">{$t(`${P}cashLabel`, {values: {currency: row.currency}})} <CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></span>
+                                            <span class="block font-mono text-xs text-lf-secondary">{$t(`${P}cashLabel`, {values: {currency: row.currency}})} <CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></span>
                                         {/each}
-                                        <span class="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                        <span class="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-lf-muted">
                                             {#if positions > 0}<span>{$t(`${P}positions`, {values: {n: positions}})}</span>{/if}
                                             <span>{$t(`${P}corrections`, {values: {n: checkpoint.proposals.length}})}</span>
-                                            {#if checkpoint.explanation.notes.length > 0}<span class="text-amber-700 dark:text-amber-300">⚠ {$t(`${P}notesCount`, {values: {n: checkpoint.explanation.notes.length}})}</span>{/if}
+                                            {#if checkpoint.explanation.notes.length > 0}<span class="text-lf-warning">⚠ {$t(`${P}notesCount`, {values: {n: checkpoint.explanation.notes.length}})}</span>{/if}
                                         </span>
                                     </button>
                                 {:else}
@@ -375,10 +375,10 @@
                                     <button
                                         type="button"
                                         class="min-w-44 rounded-lg border px-3 py-2 text-left text-sm transition-colors {isActive
-                                            ? 'border-libre-green bg-libre-green/5 ring-1 ring-libre-green'
+                                            ? 'border-lf-focus bg-lf-selected ring-1 ring-lf-focus'
                                             : verification.ok
-                                              ? 'border-emerald-200 hover:border-emerald-400 dark:border-emerald-900/60'
-                                              : 'border-red-200 hover:border-red-400 dark:border-red-900/60'}"
+                                              ? 'border-lf-success-line hover:border-lf-success'
+                                              : 'border-lf-danger-line hover:border-lf-danger'}"
                                         aria-pressed={isActive ? 'true' : 'false'}
                                         onclick={() => toggleActive(group, point.key)}
                                         data-testid="gapfix-summary"
@@ -387,13 +387,13 @@
                                         data-as-of={verification.asOf}
                                         data-ok={String(verification.ok)}
                                     >
-                                        <span class="block text-xs font-semibold text-gray-800 dark:text-gray-100">{$t(`${P}verificationTitle`, {values: {date: formatIsoDay(verification.asOf)}})}</span>
+                                        <span class="block text-xs font-semibold text-lf-primary">{$t(`${P}verificationTitle`, {values: {date: formatIsoDay(verification.asOf)}})}</span>
                                         {#if verification.ok}
-                                            <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle size={12} /> {$t(`${P}verificationOk`)}</span>
+                                            <span class="inline-flex items-center gap-1 text-xs font-semibold text-lf-success"><CheckCircle size={12} /> {$t(`${P}verificationOk`)}</span>
                                         {:else}
-                                            <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-300"><XCircle size={12} /> {$t(`${P}verificationKo`)}</span>
+                                            <span class="inline-flex items-center gap-1 text-xs font-semibold text-lf-danger"><XCircle size={12} /> {$t(`${P}verificationKo`)}</span>
                                             {#each differences(verification.cash) as row, index (index)}
-                                                <span class="block font-mono text-xs text-gray-700 dark:text-gray-200"><CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></span>
+                                                <span class="block font-mono text-xs text-lf-secondary"><CurrencyAmount amount={Number(row.difference)} code={row.currency} options={{showSign: true}} /></span>
                                             {/each}
                                         {/if}
                                     </button>
@@ -403,7 +403,7 @@
                     {/if}
 
                     {#if active}
-                        <div class="rounded-lg border border-libre-green/40 dark:border-libre-green/30" data-testid="gapfix-point-details" data-key={active.key}>
+                        <div class="rounded-lg border border-lf-focus/40" data-testid="gapfix-point-details" data-key={active.key}>
                             {#if active.kind === 'checkpoint'}
                                 {@render checkpointDetails(active.checkpoint)}
                             {:else}
@@ -413,19 +413,19 @@
                     {/if}
 
                     {#if groupKeys(group).length > 0}
-                        <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700" data-testid="gapfix-table">
-                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800/60">
-                                <span class="text-xs text-gray-600 dark:text-gray-300">{$t(`${P}selectedCount`, {values: {n: groupSelectedCount(group)}})}</span>
+                        <div class="overflow-hidden rounded-lg border border-lf-subtle" data-testid="gapfix-table">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-lf-subtle bg-lf-panel px-3 py-1.5">
+                                <span class="text-xs text-lf-secondary">{$t(`${P}selectedCount`, {values: {n: groupSelectedCount(group)}})}</span>
                                 <div class="flex items-center gap-2">
-                                    <button type="button" class="flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => onSetSelected(groupKeys(group), true)} data-testid="gapfix-select-all">
+                                    <button type="button" class="flex items-center gap-1 text-xs text-lf-link hover:underline" onclick={() => onSetSelected(groupKeys(group), true)} data-testid="gapfix-select-all">
                                         <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
                                     </button>
-                                    <span class="text-gray-300 dark:text-gray-600">|</span>
-                                    <button type="button" class="flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => selectVisible(group)} data-testid="gapfix-select-visible" title={$t('importWizard.selectVisibleTip')}>
+                                    <span class="text-lf-muted">|</span>
+                                    <button type="button" class="flex items-center gap-1 text-xs text-lf-link hover:underline" onclick={() => selectVisible(group)} data-testid="gapfix-select-visible" title={$t('importWizard.selectVisibleTip')}>
                                         <ListChecks size={12} /><span class="hidden sm:inline">{$t('importWizard.selectVisible')}</span>
                                     </button>
-                                    <span class="text-gray-300 dark:text-gray-600">|</span>
-                                    <button type="button" class="flex items-center gap-1 text-xs text-gray-500 hover:underline" onclick={() => onSetSelected(groupKeys(group), false)} data-testid="gapfix-deselect-all">
+                                    <span class="text-lf-muted">|</span>
+                                    <button type="button" class="flex items-center gap-1 text-xs text-lf-muted hover:underline" onclick={() => onSetSelected(groupKeys(group), false)} data-testid="gapfix-deselect-all">
                                         <Square size={12} /><span class="hidden sm:inline">{$t('common.deselectAll')}</span>
                                     </button>
                                 </div>
@@ -456,5 +456,5 @@
         </section>
     {/each}
 
-    <p class="flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400" data-testid="gapfix-info-hidden-titles"><Info size={14} class="mt-0.5 shrink-0" /> {$t(`${P}hiddenTitles`)}</p>
+    <p class="flex items-start gap-1.5 text-xs text-lf-muted" data-testid="gapfix-info-hidden-titles"><Info size={14} class="mt-0.5 shrink-0" /> {$t(`${P}hiddenTitles`)}</p>
 </div>
