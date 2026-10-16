@@ -4784,6 +4784,8 @@ da Y il 15/10.
   con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
   quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
   «Y1 — passo 4».
+  - **Nessuna attesa** (16/10, coordinatore): DV-8 (`28f4bed75`, sul ramo di DV) tocca solo `lib/theme/chartPalettes.ts`, né
+    `GrowthChart.svelte` né `growthChartSeries.ts`. Y-2 non è in calendario.
 - **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
   `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
@@ -4845,7 +4847,8 @@ da Y il 15/10.
   - Dettagli: piano di Y, §7 «Y3».
 - **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
   passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
-  developer sulla funzione**, che porta il coordinatore.
+  developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
+  è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
     delle attese) esce in anticipo a ogni corsa: `if (!(await presentationFilter.isVisible({timeout: 5_000})…)) return`.
   - I testid che cerca, `lots-value-presentation-filter` e i tre `lots-value-*-toggle`, sono entrati in `6b28d60df`
@@ -4854,6 +4857,48 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+- **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
+  (riscrittura di Y-12). **→ T** (coordinatore, 16/10 14:20): lo chiude T, nel suo lotto dei token dei componenti, su
+  `brokers-detail.spec.ts:392-419` con `toHaveAttribute('data-selected', …)`; Y non lo tocca.
+  - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
+    fanno `toHaveClass(/selected/)` sulla riga.
+  - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
+    (`DataTable.svelte:1098-1149`).
+  - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
+- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - `brokers-refresh` rilegge solo l'elenco (`GET /brokers?include_inaccessible=true`). Le cifre delle schede vengono
+    dalla cache dei report finché questa è fresca.
+  - Nella Dashboard e nella pagina del broker, invece, «Aggiorna» ricalcola tutto (documentazione utente, «Coming back
+    and refreshing»).
+  - Da decidere: forzare il report delle schede, oppure dire nella documentazione che lì «Aggiorna» rilegge l'elenco.
+    Dettagli: piano di Y, «Passo 4 · BK e TR».
+- **Y-15 · Il `title` di `brokers-refresh` è scritto in inglese nel codice** — minimo, già presente prima di Y11;
+  `test-author` di Y, 16/10.
+  - Il pulsante, solo icona, ha `title="Refresh"`, che è anche il suo nome accessibile. `common.refresh` in inglese vale
+    «Reload», mentre la pagina del broker usa `dashboard.syncData`.
+  - Quindi correggerlo vuol dire anche scegliere la chiave e la parola, nelle quattro lingue. Dettagli: piano di Y,
+    «Passo 4 · BK e TR».
+  - **Rimedio** (coordinatore, 16/10): Y propone la parola, «Refresh» o «Reload», nelle quattro lingue, insieme agli
+    altri pulsanti «Aggiorna» delle pagine; la scelta spetta al developer.
+- **Y-16 · Una vista Candele salvata si carica, su una Dashboard nuova, solo grazie a una dipendenza involontaria** —
+  minimo, già presente prima di Y11; `test-author` di Y, 16/10.
+  - Il `$effect` di `GrowthChart` (976–980) chiama `onRequestPnlCandles()`. Il caricatore parte in modo sincrono,
+    sia con `join` sia, prima, con `track`.
+  - Le sue letture (`canAsk`, `pnlCandles`, la cache dei report) diventano così dipendenze di quell'effetto. È il
+    cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
+  - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
+    Y, «Passo 4b».
+- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+  prima di Y11; `test-author` di Y, 16/10.
+  - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
+    `contribution-table`. Dettagli: piano di Y, «Passo 4b».
+- **Y-18 · Le candele non hanno un indicatore di caricamento proprio** — minimo; Y, 16/10, una conseguenza di N55 da
+  rivedere con il developer.
+  - Con N55, se l'utente passa direttamente alle Candele a pagina ferma, il pulsante della pagina non gira più.
+  - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
+    indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
+  - Dettagli: piano di Y, «Passo 4b».
 
 ## MF · Matematica finanziaria (fase 01)
 
